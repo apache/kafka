@@ -37,7 +37,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
-import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
@@ -155,10 +154,8 @@ public class ProcessorTopologyTestDriver {
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
     private final Set<String> internalTopics = new HashSet<>();
     private final Map<String, TopicPartition> globalPartitionsByTopic = new HashMap<>();
-    private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private StreamTask task;
     private GlobalStateUpdateTask globalStateTask;
-
 
     /**
      * Create a new test diver instance
@@ -205,7 +202,7 @@ public class ProcessorTopologyTestDriver {
 
         consumer.assign(offsetsByTopicPartition.keySet());
 
-        final StateDirectory stateDirectory = new StateDirectory(APPLICATION_ID, TestUtils.tempDirectory().getPath(), Time.SYSTEM);
+        final StateDirectory stateDirectory = new StateDirectory(config, Time.SYSTEM);
         final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
         final ThreadCache cache = new ThreadCache(new LogContext("mock "), 1024 * 1024, streamsMetrics);
 
@@ -221,12 +218,16 @@ public class ProcessorTopologyTestDriver {
                 globalPartitionsByTopic.put(topicName, partition);
                 offsetsByTopicPartition.put(partition, new AtomicLong());
             }
-            final GlobalStateManagerImpl stateManager = new GlobalStateManagerImpl(globalTopology,
+            final GlobalStateManagerImpl stateManager = new GlobalStateManagerImpl(new LogContext("mock "),
+                                                                                   globalTopology,
                                                                                    globalConsumer,
                                                                                    stateDirectory,
-                                                                                   stateRestoreListener);
+                                                                                   stateRestoreListener,
+                                                                                   config);
+            final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(config, stateManager, streamsMetrics, cache);
+            stateManager.setGlobalProcessorContext(globalProcessorContext);
             globalStateTask = new GlobalStateUpdateTask(globalTopology,
-                                                        new GlobalProcessorContextImpl(config, stateManager, streamsMetrics, cache),
+                                                        globalProcessorContext,
                                                         stateManager,
                                                         new LogAndContinueExceptionHandler(),
                                                         new LogContext());
@@ -235,14 +236,13 @@ public class ProcessorTopologyTestDriver {
 
         if (!partitionsByTopic.isEmpty()) {
             task = new StreamTask(TASK_ID,
-                                  APPLICATION_ID,
                                   partitionsByTopic.values(),
                                   topology,
                                   consumer,
                                   new StoreChangelogReader(
                                       createRestoreConsumer(topology.storeToChangelogTopic()),
-                                      stateRestoreListener,
-                                          new LogContext("topology-test-driver ")),
+                                      new MockStateRestoreListener(),
+                                      new LogContext("topology-test-driver ")),
                                   config,
                                   streamsMetrics, stateDirectory,
                                   cache,

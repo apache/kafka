@@ -46,13 +46,12 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     final StateManager stateManager;
 
     public AbstractProcessorContext(final TaskId taskId,
-                                    final String applicationId,
                                     final StreamsConfig config,
                                     final StreamsMetrics metrics,
                                     final StateManager stateManager,
                                     final ThreadCache cache) {
         this.taskId = taskId;
-        this.applicationId = applicationId;
+        this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.config = config;
         this.metrics = metrics;
         this.stateManager = stateManager;
@@ -197,5 +196,10 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     @Override
     public void initialized() {
         initialized = true;
+    }
+
+    @Override
+    public void uninitialize() {
+        initialized = false;
     }
 }

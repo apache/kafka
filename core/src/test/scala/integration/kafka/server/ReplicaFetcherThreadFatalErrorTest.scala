@@ -19,7 +19,6 @@ package kafka.server
 
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.admin.AdminUtils
 import kafka.cluster.BrokerEndPoint
 import kafka.server.ReplicaFetcherThread.{FetchRequest, PartitionData}
 import kafka.utils.{Exit, TestUtils, ZkUtils}
@@ -60,7 +59,7 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
     // Unlike `TestUtils.createTopic`, this doesn't wait for metadata propagation as the broker shuts down before
     // the metadata is propagated.
     def createTopic(zkUtils: ZkUtils, topic: String): Unit = {
-      AdminUtils.createTopic(zkUtils, topic, partitions = 1, replicationFactor = 2)
+      adminZkClient.createTopic(topic, partitions = 1, replicationFactor = 2)
       TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
     }
 
@@ -110,7 +109,7 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
     val server = new KafkaServer(config, time) {
 
       override def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
-        new ReplicaManager(config, metrics, time, zkUtils, kafkaScheduler, logManager, isShuttingDown,
+        new ReplicaManager(config, metrics, time, zkClient, kafkaScheduler, logManager, isShuttingDown,
           quotaManagers, new BrokerTopicStats, metadataCache, logDirFailureChannel) {
 
           override protected def createReplicaFetcherManager(metrics: Metrics, time: Time, threadNamePrefix: Option[String],

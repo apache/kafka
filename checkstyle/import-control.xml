@@ -187,6 +187,10 @@
     <allow pkg="javax.servlet" />
     <allow pkg="javax.ws.rs" />
     <allow pkg="net.sourceforge.argparse4j" />
+    <allow pkg="org.apache.kafka.clients.admin" />
+    <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
+    <allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
+    <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="org.apache.kafka.trogdor" />
     <allow pkg="org.apache.log4j" />
@@ -227,6 +231,10 @@
 
     <subpackage name="test">
       <allow pkg="kafka.admin" />
+    </subpackage>
+
+    <subpackage name="tools">
+      <allow pkg="kafka.tools" />
     </subpackage>
 
     <subpackage name="state">

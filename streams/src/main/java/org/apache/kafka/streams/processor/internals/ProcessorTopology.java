@@ -27,48 +27,109 @@ import java.util.Set;
 public class ProcessorTopology {
 
     private final List<ProcessorNode> processorNodes;
+    private final Map<String, SourceNode> sourcesByTopic;
+    private final Map<String, SinkNode> sinksByTopic;
     private final List<StateStore> stateStores;
     private final List<StateStore> globalStateStores;
-    private final Map<String, SourceNode> sourceByTopics;
-    private final Map<String, SinkNode> sinkByTopics;
     private final Map<String, String> storeToChangelogTopic;
+    private final Set<String> repartitionTopics;
+
+    public static ProcessorTopology with(final List<ProcessorNode> processorNodes,
+                                         final Map<String, SourceNode> sourcesByTopic,
+                                         final List<StateStore> stateStoresByName,
+                                         final Map<String, String> storeToChangelogTopic) {
+        return new ProcessorTopology(processorNodes,
+                sourcesByTopic,
+                Collections.<String, SinkNode>emptyMap(),
+                stateStoresByName,
+                Collections.<StateStore>emptyList(),
+                storeToChangelogTopic,
+                Collections.<String>emptySet());
+    }
+
+    static ProcessorTopology withSources(final List<ProcessorNode> processorNodes,
+                                         final Map<String, SourceNode> sourcesByTopic) {
+        return new ProcessorTopology(processorNodes,
+                sourcesByTopic,
+                Collections.<String, SinkNode>emptyMap(),
+                Collections.<StateStore>emptyList(),
+                Collections.<StateStore>emptyList(),
+                Collections.<String, String>emptyMap(),
+                Collections.<String>emptySet());
+    }
+
+    static ProcessorTopology withLocalStores(final List<StateStore> stateStores,
+                                             final Map<String, String> storeToChangelogTopic) {
+        return new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
+                Collections.<String, SourceNode>emptyMap(),
+                Collections.<String, SinkNode>emptyMap(),
+                stateStores,
+                Collections.<StateStore>emptyList(),
+                storeToChangelogTopic,
+                Collections.<String>emptySet());
+    }
+
+    static ProcessorTopology withGlobalStores(final List<StateStore> stateStores,
+                                              final Map<String, String> storeToChangelogTopic) {
+        return new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
+                Collections.<String, SourceNode>emptyMap(),
+                Collections.<String, SinkNode>emptyMap(),
+                Collections.<StateStore>emptyList(),
+                stateStores,
+                storeToChangelogTopic,
+                Collections.<String>emptySet());
+    }
+
+    static ProcessorTopology withRepartitionTopics(final List<ProcessorNode> processorNodes,
+                                                   final Map<String, SourceNode> sourcesByTopic,
+                                                   final Set<String> repartitionTopics) {
+        return new ProcessorTopology(processorNodes,
+                sourcesByTopic,
+                Collections.<String, SinkNode>emptyMap(),
+                Collections.<StateStore>emptyList(),
+                Collections.<StateStore>emptyList(),
+                Collections.<String, String>emptyMap(),
+                repartitionTopics);
+    }
 
     public ProcessorTopology(final List<ProcessorNode> processorNodes,
-                             final Map<String, SourceNode> sourceByTopics,
-                             final Map<String, SinkNode> sinkByTopics,
+                             final Map<String, SourceNode> sourcesByTopic,
+                             final Map<String, SinkNode> sinksByTopic,
                              final List<StateStore> stateStores,
-                             final Map<String, String> storeToChangelogTopic,
-                             final List<StateStore> globalStateStores) {
+                             final List<StateStore> globalStateStores,
+                             final Map<String, String> stateStoreToChangelogTopic,
+                             final Set<String> repartitionTopics) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
-        this.sourceByTopics = Collections.unmodifiableMap(sourceByTopics);
-        this.sinkByTopics   = Collections.unmodifiableMap(sinkByTopics);
-        this.stateStores    = Collections.unmodifiableList(stateStores);
-        this.storeToChangelogTopic = Collections.unmodifiableMap(storeToChangelogTopic);
+        this.sourcesByTopic = Collections.unmodifiableMap(sourcesByTopic);
+        this.sinksByTopic = Collections.unmodifiableMap(sinksByTopic);
+        this.stateStores = Collections.unmodifiableList(stateStores);
         this.globalStateStores = Collections.unmodifiableList(globalStateStores);
+        this.storeToChangelogTopic = Collections.unmodifiableMap(stateStoreToChangelogTopic);
+        this.repartitionTopics = Collections.unmodifiableSet(repartitionTopics);
     }
 
     public Set<String> sourceTopics() {
-        return sourceByTopics.keySet();
+        return sourcesByTopic.keySet();
     }
 
     public SourceNode source(String topic) {
-        return sourceByTopics.get(topic);
+        return sourcesByTopic.get(topic);
     }
 
     public Set<SourceNode> sources() {
-        return new HashSet<>(sourceByTopics.values());
+        return new HashSet<>(sourcesByTopic.values());
     }
 
     public Set<String> sinkTopics() {
-        return sinkByTopics.keySet();
+        return sinksByTopic.keySet();
     }
 
     public SinkNode sink(String topic) {
-        return sinkByTopics.get(topic);
+        return sinksByTopic.get(topic);
     }
 
     public Set<SinkNode> sinks() {
-        return new HashSet<>(sinkByTopics.values());
+        return new HashSet<>(sinksByTopic.values());
     }
 
     public List<ProcessorNode> processors() {
@@ -79,12 +140,16 @@ public class ProcessorTopology {
         return stateStores;
     }
 
+    public List<StateStore> globalStateStores() {
+        return globalStateStores;
+    }
+
     public Map<String, String> storeToChangelogTopic() {
         return storeToChangelogTopic;
     }
 
-    public List<StateStore> globalStateStores() {
-        return globalStateStores;
+    boolean isRepartitionTopic(String topic) {
+        return repartitionTopics.contains(topic);
     }
 
     private String childrenToString(String indent, List<ProcessorNode<?, ?>> children) {
@@ -126,7 +191,7 @@ public class ProcessorTopology {
         final StringBuilder sb = new StringBuilder(indent + "ProcessorTopology:\n");
 
         // start from sources
-        for (SourceNode<?, ?> source : sourceByTopics.values()) {
+        for (SourceNode<?, ?> source : sourcesByTopic.values()) {
             sb.append(source.toString(indent + "\t")).append(childrenToString(indent + "\t", source.children()));
         }
         return sb.toString();

@@ -34,6 +34,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -932,7 +933,9 @@ public class TopologyBuilder {
      * for the high-level DSL parsing functionalities.
      */
     public SubscriptionUpdates subscriptionUpdates() {
-        return internalTopologyBuilder.subscriptionUpdates();
+        SubscriptionUpdates clonedSubscriptionUpdates = new SubscriptionUpdates();
+        clonedSubscriptionUpdates.updateTopics(internalTopologyBuilder.subscriptionUpdates().getUpdates());
+        return clonedSubscriptionUpdates;
     }
 
     /**
@@ -949,7 +952,7 @@ public class TopologyBuilder {
      */
     public synchronized void updateSubscriptions(final SubscriptionUpdates subscriptionUpdates,
                                                  final String threadId) {
-        internalTopologyBuilder.updateSubscriptions(subscriptionUpdates, threadId);
+        internalTopologyBuilder.updateSubscribedTopics(new HashSet<>(subscriptionUpdates.getUpdates()), "stream-thread [" + threadId + "] ");
     }
 
 }

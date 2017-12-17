@@ -84,7 +84,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
                 newAgg = remove.apply(key, value.oldValue, newAgg);
             }
 
-            // then try to add the new new value
+            // then try to add the new value
             if (value.newValue != null) {
                 newAgg = add.apply(key, value.newValue, newAgg);
             }

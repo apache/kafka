@@ -31,7 +31,7 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.mutable
+import scala.collection.{Map, mutable}
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConverters._
 
@@ -334,12 +334,14 @@ object DumpLogSegments {
         }
       }.mkString("{", ",", "}")
 
-      val keyString = Json.encode(Map("metadata" -> groupId))
-      val valueString = Json.encode(Map(
-          "protocolType" -> protocolType,
-          "protocol" -> group.protocol,
-          "generationId" -> group.generationId,
-          "assignment" -> assignment))
+      val keyString = Json.encodeAsString(Map("metadata" -> groupId).asJava)
+
+      val valueString = Json.encodeAsString(Map(
+        "protocolType" -> protocolType,
+        "protocol" -> group.protocol,
+        "generationId" -> group.generationId,
+        "assignment" -> assignment
+      ).asJava)
 
       (Some(keyString), Some(valueString))
     }
@@ -390,7 +392,7 @@ object DumpLogSegments {
             " compresscodec: " + batch.compressionType)
 
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
-            print(" producerId: " + batch.producerId + " sequence: " + record.sequence +
+            print(" producerId: " + batch.producerId + " producerEpoch: " + batch.producerEpoch + " sequence: " + record.sequence +
               " isTransactional: " + batch.isTransactional +
               " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
           } else {

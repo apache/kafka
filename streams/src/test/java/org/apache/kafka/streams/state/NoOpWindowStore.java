@@ -20,7 +20,37 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 
+import java.util.NoSuchElementException;
+
 public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
+
+    private static class EmptyWindowStoreIterator implements WindowStoreIterator<KeyValue> {
+
+        @Override
+        public void close() {
+        }
+
+        @Override
+        public Long peekNextKey() {
+            throw new NoSuchElementException();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return false;
+        }
+
+        @Override
+        public KeyValue<Long, KeyValue> next() {
+            throw new NoSuchElementException();
+        }
+
+        @Override
+        public void remove() {
+        }
+    }
+
+    private static final WindowStoreIterator<KeyValue> EMPTY_WINDOW_STORE_ITERATOR = new EmptyWindowStoreIterator();
 
     @Override
     public String name() {
@@ -54,11 +84,21 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
 
     @Override
     public WindowStoreIterator fetch(final Object key, final long timeFrom, final long timeTo) {
-        return null;
+        return EMPTY_WINDOW_STORE_ITERATOR;
     }
 
     @Override
     public WindowStoreIterator<KeyValue> fetch(Object from, Object to, long timeFrom, long timeTo) {
-        return null;
+        return EMPTY_WINDOW_STORE_ITERATOR;
+    }
+    
+    @Override
+    public WindowStoreIterator<KeyValue> all() {
+        return EMPTY_WINDOW_STORE_ITERATOR;
+    }
+    
+    @Override
+    public WindowStoreIterator<KeyValue> fetchAll(long timeFrom, long timeTo) {
+        return EMPTY_WINDOW_STORE_ITERATOR;
     }
 }

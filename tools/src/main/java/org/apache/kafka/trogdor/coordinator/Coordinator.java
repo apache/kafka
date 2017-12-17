@@ -22,33 +22,18 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.KafkaThread;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
-import org.apache.kafka.trogdor.fault.DoneState;
-import org.apache.kafka.trogdor.fault.Fault;
-import org.apache.kafka.trogdor.fault.FaultSet;
-import org.apache.kafka.trogdor.fault.FaultSpec;
-import org.apache.kafka.trogdor.fault.SendingState;
-import org.apache.kafka.trogdor.rest.CoordinatorFaultsResponse;
-import org.apache.kafka.trogdor.rest.CreateCoordinatorFaultRequest;
+import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
+import org.apache.kafka.trogdor.rest.CreateTaskRequest;
+import org.apache.kafka.trogdor.rest.CreateTaskResponse;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
+import org.apache.kafka.trogdor.rest.StopTaskRequest;
+import org.apache.kafka.trogdor.rest.StopTaskResponse;
+import org.apache.kafka.trogdor.rest.TasksResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 
@@ -61,39 +46,14 @@ public final class Coordinator {
     private static final Logger log = LoggerFactory.getLogger(Coordinator.class);
 
     /**
-     * The clock to use for this coordinator.
-     */
-    private final Time time;
-
-    /**
-     * The start time in milliseconds.
+     * The start time of the Coordinator in milliseconds.
      */
     private final long startTimeMs;
 
     /**
-     * The platform.
+     * The task manager.
      */
-    private final Platform platform;
-
-    /**
-     * NodeManager objects for each node in the cluster.
-     */
-    private final Map<String, NodeManager> nodeManagers;
-
-    /**
-     * The lock protecting shutdown and faultQueue.
-     */
-    private final ReentrantLock lock = new ReentrantLock();
-
-    /**
-     * The condition variable which the coordinator thread waits on.
-     */
-    private final Condition cond = lock.newCondition();
-
-    /**
-     * The coordinator runnable.
-     */
-    private final CoordinatorRunnable runnable;
+    private final TaskManager taskManager;
 
     /**
      * The REST server.
@@ -101,108 +61,18 @@ public final class Coordinator {
     private final JsonRestServer restServer;
 
     /**
-     * The coordinator thread.
-     */
-    private final KafkaThread thread;
-
-    /**
-     * True if the server is shutting down.
-     */
-    private boolean shutdown = false;
-
-    /**
-     * The set of faults which have been scheduled.
-     */
-    private final FaultSet pendingFaults = new FaultSet();
-
-    /**
-     * The set of faults which have been sent to the NodeManagers.
-     */
-    private final FaultSet processedFaults = new FaultSet();
-
-    class CoordinatorRunnable implements Runnable {
-        @Override
-        public void run() {
-            log.info("Starting main service thread.");
-            try {
-                long nextWakeMs = 0;
-                while (true) {
-                    long now = time.milliseconds();
-                    List<Fault> toStart = new ArrayList<>();
-                    lock.lock();
-                    try {
-                        if (shutdown) {
-                            break;
-                        }
-                        if (nextWakeMs > now) {
-                            if (cond.await(nextWakeMs - now, TimeUnit.MILLISECONDS)) {
-                                log.trace("CoordinatorRunnable woke up early.");
-                            }
-                            now = time.milliseconds();
-                            if (shutdown) {
-                                break;
-                            }
-                        }
-                        nextWakeMs = now + (60L * 60L * 1000L);
-                        Iterator<Fault> iter = pendingFaults.iterateByStart();
-                        while (iter.hasNext()) {
-                            Fault fault = iter.next();
-                            if (now < fault.spec().startMs()) {
-                                nextWakeMs = Math.min(nextWakeMs, fault.spec().startMs());
-                                break;
-                            }
-                            toStart.add(fault);
-                            iter.remove();
-                            processedFaults.add(fault);
-                        }
-                    } finally {
-                        lock.unlock();
-                    }
-                    for (Fault fault: toStart) {
-                        startFault(now, fault);
-                    }
-                }
-            } catch (Throwable t) {
-                log.error("CoordinatorRunnable shutting down with exception", t);
-            } finally {
-                log.info("CoordinatorRunnable shutting down.");
-                restServer.stop();
-                for (NodeManager nodeManager : nodeManagers.values()) {
-                    nodeManager.beginShutdown();
-                }
-                for (NodeManager nodeManager : nodeManagers.values()) {
-                    nodeManager.waitForShutdown();
-                }
-            }
-        }
-    }
-
-    /**
      * Create a new Coordinator.
      *
      * @param platform      The platform object to use.
-     * @param time          The timekeeper to use for this Coordinator.
+     * @param scheduler     The scheduler to use for this Coordinator.
      * @param restServer    The REST server to use.
      * @param resource      The AgentRestResoure to use.
      */
-    public Coordinator(Platform platform, Time time, JsonRestServer restServer,
+    public Coordinator(Platform platform, Scheduler scheduler, JsonRestServer restServer,
                        CoordinatorRestResource resource) {
-        this.platform = platform;
-        this.time = time;
-        this.startTimeMs = time.milliseconds();
-        this.runnable = new CoordinatorRunnable();
+        this.startTimeMs = scheduler.time().milliseconds();
+        this.taskManager = new TaskManager(platform, scheduler);
         this.restServer = restServer;
-        this.nodeManagers = new HashMap<>();
-        for (Node node : platform.topology().nodes().values()) {
-            if (Node.Util.getTrogdorAgentPort(node) > 0) {
-                this.nodeManagers.put(node.name(), new NodeManager(time, node));
-            }
-        }
-        if (this.nodeManagers.isEmpty()) {
-            log.warn("No agent nodes configured.");
-        }
-        this.thread = new KafkaThread("TrogdorCoordinatorThread", runnable, false);
-        this.thread.start();
         resource.setCoordinator(this);
     }
 
@@ -210,93 +80,31 @@ public final class Coordinator {
         return this.restServer.port();
     }
 
-    private void startFault(long now, Fault fault) {
-        Set<String> affectedNodes = fault.targetNodes(platform.topology());
-        Set<NodeManager> affectedManagers = new HashSet<>();
-        Set<String> nonexistentNodes = new HashSet<>();
-        Set<String> nodeNames = new HashSet<>();
-        for (String affectedNode : affectedNodes) {
-            NodeManager nodeManager = nodeManagers.get(affectedNode);
-            if (nodeManager == null) {
-                nonexistentNodes.add(affectedNode);
-            } else {
-                affectedManagers.add(nodeManager);
-                nodeNames.add(affectedNode);
-            }
-        }
-        if (!nonexistentNodes.isEmpty()) {
-            log.warn("Fault {} refers to {} non-existent node(s): {}", fault.id(),
-                    nonexistentNodes.size(), Utils.join(nonexistentNodes, ", "));
-        }
-        log.info("Applying fault {} on {} node(s): {}", fault.id(),
-                nodeNames.size(), Utils.join(nodeNames, ", "));
-        if (nodeNames.isEmpty()) {
-            fault.setState(new DoneState(now, ""));
-        } else {
-            fault.setState(new SendingState(nodeNames));
-        }
-        for (NodeManager nodeManager : affectedManagers) {
-            nodeManager.enqueueFault(fault);
-        }
+    public CoordinatorStatusResponse status() throws Exception {
+        return new CoordinatorStatusResponse(startTimeMs);
     }
 
-    public void beginShutdown() {
-        lock.lock();
-        try {
-            this.shutdown = true;
-            cond.signalAll();
-        } finally {
-            lock.unlock();
-        }
+    public CreateTaskResponse createTask(CreateTaskRequest request) throws Exception {
+        return new CreateTaskResponse(taskManager.createTask(request.id(), request.spec()));
     }
 
-    public void waitForShutdown() {
-        try {
-            this.thread.join();
-        } catch (InterruptedException e) {
-            log.error("Interrupted while waiting for thread shutdown", e);
-            Thread.currentThread().interrupt();
-        }
+    public StopTaskResponse stopTask(StopTaskRequest request) throws Exception {
+        return new StopTaskResponse(taskManager.stopTask(request.id()));
     }
 
-    public long startTimeMs() {
-        return startTimeMs;
+    public TasksResponse tasks() throws Exception {
+        return taskManager.tasks();
     }
 
-    public CoordinatorFaultsResponse getFaults() {
-        Map<String, CoordinatorFaultsResponse.FaultData> faultData = new TreeMap<>();
-        lock.lock();
-        try {
-            getFaultsImpl(faultData, pendingFaults);
-            getFaultsImpl(faultData, processedFaults);
-        } finally {
-            lock.unlock();
-        }
-        return new CoordinatorFaultsResponse(faultData);
+    public void beginShutdown(boolean stopAgents) throws Exception {
+        restServer.beginShutdown();
+        taskManager.beginShutdown(stopAgents);
     }
 
-    private void getFaultsImpl(Map<String, CoordinatorFaultsResponse.FaultData> faultData,
-                               FaultSet faultSet) {
-        for (Iterator<Fault> iter = faultSet.iterateByStart();
-             iter.hasNext(); ) {
-            Fault fault = iter.next();
-            CoordinatorFaultsResponse.FaultData data =
-                new CoordinatorFaultsResponse.FaultData(fault.spec(), fault.state());
-            faultData.put(fault.id(), data);
-        }
+    public void waitForShutdown() throws Exception {
+        restServer.waitForShutdown();
+        taskManager.waitForShutdown();
     }
-
-    public void createFault(CreateCoordinatorFaultRequest request) throws ClassNotFoundException {
-        lock.lock();
-        try {
-            Fault fault = FaultSpec.Util.createFault(request.id(), request.spec());
-            pendingFaults.add(fault);
-            cond.signalAll();
-        } finally {
-            lock.unlock();
-        }
-    }
-
 
     public static void main(String[] args) throws Exception {
         ArgumentParser parser = ArgumentParsers
@@ -336,15 +144,20 @@ public final class Coordinator {
         JsonRestServer restServer = new JsonRestServer(
             Node.Util.getTrogdorCoordinatorPort(platform.curNode()));
         CoordinatorRestResource resource = new CoordinatorRestResource();
-        final Coordinator coordinator = new Coordinator(platform, Time.SYSTEM,
+        log.info("Starting coordinator process.");
+        final Coordinator coordinator = new Coordinator(platform, Scheduler.SYSTEM,
             restServer, resource);
         restServer.start(resource);
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
-                log.error("Running shutdown hook...");
-                coordinator.beginShutdown();
-                coordinator.waitForShutdown();
+                log.warn("Running coordinator shutdown hook.");
+                try {
+                    coordinator.beginShutdown(false);
+                    coordinator.waitForShutdown();
+                } catch (Exception e) {
+                    log.error("Got exception while running coordinator shutdown hook.", e);
+                }
             }
         });
         coordinator.waitForShutdown();

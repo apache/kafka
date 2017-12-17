@@ -37,11 +37,9 @@ import java.util.Map;
  */
 public class MockKafkaAdminClientEnv implements AutoCloseable {
     private final Time time;
-    private final AdminClientConfig adminClientConfig;
-    private final Metadata metadata;
-    private final MockClient mockClient;
-    private final KafkaAdminClient client;
     private final Cluster cluster;
+    private final MockClient mockClient;
+    private final KafkaAdminClient adminClient;
 
     public MockKafkaAdminClientEnv(Cluster cluster, String...vals) {
         this(Time.SYSTEM, cluster, vals);
@@ -53,12 +51,12 @@ public class MockKafkaAdminClientEnv implements AutoCloseable {
 
     public MockKafkaAdminClientEnv(Time time, Cluster cluster, Map<String, Object> config) {
         this.time = time;
-        this.adminClientConfig = new AdminClientConfig(config);
         this.cluster = cluster;
-        this.metadata = new Metadata(adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+        AdminClientConfig adminClientConfig = new AdminClientConfig(config);
+        Metadata metadata = new Metadata(adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                 adminClientConfig.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG), false);
-        this.mockClient = new MockClient(time, this.metadata);
-        this.client = KafkaAdminClient.createInternal(adminClientConfig, mockClient, metadata, time);
+        this.mockClient = new MockClient(time, metadata);
+        this.adminClient = KafkaAdminClient.createInternal(adminClientConfig, mockClient, metadata, time);
     }
 
     public Time time() {
@@ -70,7 +68,7 @@ public class MockKafkaAdminClientEnv implements AutoCloseable {
     }
 
     public AdminClient adminClient() {
-        return client;
+        return adminClient;
     }
 
     public MockClient kafkaClient() {
@@ -79,7 +77,7 @@ public class MockKafkaAdminClientEnv implements AutoCloseable {
 
     @Override
     public void close() {
-        this.client.close();
+        this.adminClient.close();
     }
 
     private static Map<String, Object> newStrMap(String... vals) {

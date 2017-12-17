@@ -90,13 +90,13 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslSetup {
 
   private def sendApiVersionsRequest(socket: Socket, request: ApiVersionsRequest,
                                      apiVersion: Option[Short] = None): ApiVersionsResponse = {
-    val response = send(request, ApiKeys.API_VERSIONS, socket, apiVersion)
+    val response = sendAndReceive(request, ApiKeys.API_VERSIONS, socket, apiVersion)
     ApiVersionsResponse.parse(response, request.version)
   }
 
   private def sendSaslHandshakeRequestValidateResponse(socket: Socket) {
     val request = new SaslHandshakeRequest("PLAIN")
-    val response = send(request, ApiKeys.SASL_HANDSHAKE, socket)
+    val response = sendAndReceive(request, ApiKeys.SASL_HANDSHAKE, socket)
     val handshakeResponse = SaslHandshakeResponse.parse(response, request.version)
     assertEquals(Errors.NONE, handshakeResponse.error)
     assertEquals(Collections.singletonList("PLAIN"), handshakeResponse.enabledMechanisms)

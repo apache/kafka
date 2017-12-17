@@ -74,7 +74,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
             T newAgg = oldAgg;
 
-            // try to add the new new value
+            // try to add the new value
             if (value != null) {
                 newAgg = aggregator.apply(key, value, newAgg);
             }

@@ -40,21 +40,23 @@ public class HostInfo {
     private final String host;
     private final int port;
 
-    public HostInfo(String host, int port) {
+    public HostInfo(final String host,
+                    final int port) {
         this.host = host;
         this.port = port;
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+    public boolean equals(final Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
 
-        HostInfo hostInfo = (HostInfo) o;
-
-        if (port != hostInfo.port) return false;
-        return host.equals(hostInfo.host);
-
+        final HostInfo hostInfo = (HostInfo) o;
+        return port == hostInfo.port && host.equals(hostInfo.host);
     }
 
     @Override

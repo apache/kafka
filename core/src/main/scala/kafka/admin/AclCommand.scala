@@ -27,7 +27,7 @@ import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
 
-object AclCommand {
+object AclCommand extends Logging {
 
   val Newline = scala.util.Properties.lineSeparator
   val ResourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
@@ -77,7 +77,7 @@ object AclCommand {
       authZ.configure(authorizerProperties.asJava)
       f(authZ)
     }
-    finally CoreUtils.swallow(authZ.close())
+    finally CoreUtils.swallow(authZ.close(), this)
   }
 
   private def addAcl(opts: AclCommandOptions) {

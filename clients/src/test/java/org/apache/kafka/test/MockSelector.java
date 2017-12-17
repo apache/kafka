@@ -19,6 +19,7 @@ package org.apache.kafka.test;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -63,12 +64,34 @@ public class MockSelector implements Selectable {
 
     @Override
     public void close(String id) {
-        this.disconnected.put(id, ChannelState.LOCAL_CLOSE);
+        // Note that there are no notifications for client-side disconnects
+
+        removeSendsForNode(id, completedSends);
+        removeSendsForNode(id, initiatedSends);
+
         for (int i = 0; i < this.connected.size(); i++) {
             if (this.connected.get(i).equals(id)) {
                 this.connected.remove(i);
                 break;
             }
+        }
+    }
+
+    /**
+     * Simulate a server disconnect. This id will be present in {@link #disconnected()} on
+     * the next {@link #poll(long)}.
+     */
+    public void serverDisconnect(String id) {
+        this.disconnected.put(id, ChannelState.READY);
+        close(id);
+    }
+
+    private void removeSendsForNode(String id, Collection<Send> sends) {
+        Iterator<Send> iter = sends.iterator();
+        while (iter.hasNext()) {
+            Send send = iter.next();
+            if (id.equals(send.destination()))
+                iter.remove();
         }
     }
 

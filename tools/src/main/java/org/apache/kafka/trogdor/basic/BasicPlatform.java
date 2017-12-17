@@ -18,6 +18,7 @@
 package org.apache.kafka.trogdor.basic;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Shell;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.Node;
@@ -36,6 +37,7 @@ public class BasicPlatform implements Platform {
 
     private final Node curNode;
     private final BasicTopology topology;
+    private final Scheduler scheduler;
     private final CommandRunner commandRunner;
 
     public interface CommandRunner {
@@ -57,7 +59,7 @@ public class BasicPlatform implements Platform {
     }
 
     public BasicPlatform(String curNodeName, BasicTopology topology,
-                         CommandRunner commandRunner) {
+                         Scheduler scheduler, CommandRunner commandRunner) {
         this.curNode = topology.node(curNodeName);
         if (this.curNode == null) {
             throw new RuntimeException(String.format("No node named %s found " +
@@ -65,16 +67,18 @@ public class BasicPlatform implements Platform {
                 Utils.join(topology.nodes().keySet(), ",")));
         }
         this.topology = topology;
+        this.scheduler = scheduler;
         this.commandRunner = commandRunner;
     }
 
-    public BasicPlatform(String curNodeName, JsonNode configRoot) {
+    public BasicPlatform(String curNodeName, Scheduler scheduler, JsonNode configRoot) {
         JsonNode nodes = configRoot.get("nodes");
         if (nodes == null) {
             throw new RuntimeException("Expected to find a 'nodes' field " +
                 "in the root JSON configuration object");
         }
         this.topology = new BasicTopology(nodes);
+        this.scheduler = scheduler;
         this.curNode = topology.node(curNodeName);
         if (this.curNode == null) {
             throw new RuntimeException(String.format("No node named %s found " +
@@ -97,6 +101,11 @@ public class BasicPlatform implements Platform {
     @Override
     public Topology topology() {
         return topology;
+    }
+
+    @Override
+    public Scheduler scheduler() {
+        return scheduler;
     }
 
     @Override

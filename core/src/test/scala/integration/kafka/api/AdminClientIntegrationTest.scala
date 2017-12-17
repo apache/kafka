@@ -21,37 +21,42 @@ import java.util.{Collections, Properties}
 import java.util.Arrays.asList
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
 import org.apache.kafka.clients.admin.KafkaAdminClientTest
 import org.apache.kafka.common.utils.{Time, Utils}
-import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import org.apache.kafka.clients.admin._
 import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.NewTopic
+import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.{KafkaFuture, TopicPartition, TopicPartitionReplica}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
-import org.junit.{After, Before, Rule, Test}
-import org.apache.kafka.common.requests.MetadataResponse
+import org.junit.{After, Before, Ignore, Rule, Test}
+import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.junit.rules.Timeout
 import org.junit.Assert._
 
 import scala.util.Random
 import scala.collection.JavaConverters._
+import java.lang.{Long => JLong}
+
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 
 /**
  * An integration test of the KafkaAdminClient.
  *
  * Also see {@link org.apache.kafka.clients.admin.KafkaAdminClientTest} for a unit test of the admin client.
  */
-class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
+class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
   import AdminClientIntegrationTest._
 
@@ -59,6 +64,10 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
   def globalTimeout = Timeout.millis(120000)
 
   var client: AdminClient = null
+
+  val topic = "topic"
+  val partition = 0
+  val topicPartition = new TopicPartition(topic, partition)
 
   @Before
   override def setUp(): Unit = {
@@ -73,11 +82,12 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     super.tearDown()
   }
 
-  val brokerCount = 3
-  lazy val serverConfig = new Properties
+  val serverCount = 3
+  val consumerCount = 1
+  val producerCount = 1
 
   override def generateConfigs = {
-    val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
+    val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = 2)
     cfgs.foreach { config =>
       config.setProperty(KafkaConfig.ListenersProp, s"${listenerName.value}://localhost:${TestUtils.RandomPort}")
@@ -191,7 +201,7 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       assertEquals(3, partition.replicas.size)
       partition.replicas.asScala.foreach { replica =>
         assertTrue(replica.id >= 0)
-        assertTrue(replica.id < brokerCount)
+        assertTrue(replica.id < serverCount)
       }
       assertEquals("No duplicate replica ids", partition.replicas.size, partition.replicas.asScala.map(_.id).distinct.size)
 
@@ -245,10 +255,10 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     val topic = "topic"
     val leaderByPartition = TestUtils.createTopic(zkUtils, topic, 10, 1, servers, new Properties())
     val partitionsByBroker = leaderByPartition.groupBy { case (partitionId, leaderId) => leaderId }.mapValues(_.keys.toSeq)
-    val brokers = (0 until brokerCount).map(Integer.valueOf)
+    val brokers = (0 until serverCount).map(Integer.valueOf)
     val logDirInfosByBroker = client.describeLogDirs(brokers.asJava).all.get
 
-    (0 until brokerCount).foreach { brokerId =>
+    (0 until serverCount).foreach { brokerId =>
       val server = servers.find(_.config.brokerId == brokerId).get
       val expectedPartitions = partitionsByBroker(brokerId)
       val logDirInfos = logDirInfosByBroker.get(brokerId)
@@ -278,13 +288,11 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
       val tp = new TopicPartition(topicPartitionReplica.topic(), topicPartitionReplica.partition())
       assertEquals(server.logManager.getLog(tp).get.dir.getParent, replicaDirInfo.getCurrentReplicaLogDir)
     }
-
-    client.close()
   }
 
   @Test
   def testAlterReplicaLogDirs(): Unit = {
-    val adminClient = AdminClient.create(createConfig())
+    client = AdminClient.create(createConfig())
     val topic = "topic"
     val tp = new TopicPartition(topic, 0)
     val randomNums = servers.map(server => server -> Random.nextInt(2)).toMap
@@ -300,23 +308,21 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
     }.toMap
 
     // Verify that replica can be created in the specified log directory
-    adminClient.alterReplicaLogDirs(firstReplicaAssignment.asJava, new AlterReplicaLogDirsOptions()).values().asScala.values.foreach { future =>
-      try {
-        future.get()
-        fail("Future should fail with ReplicaNotAvailableException")
-      } catch {
-        case e: ExecutionException => assertTrue(e.getCause.isInstanceOf[ReplicaNotAvailableException])
-      }
+    val futures = client.alterReplicaLogDirs(firstReplicaAssignment.asJava,
+      new AlterReplicaLogDirsOptions).values.asScala.values
+    futures.foreach { future =>
+      val exception = intercept[ExecutionException](future.get)
+      assertTrue(exception.getCause.isInstanceOf[ReplicaNotAvailableException])
     }
 
-    TestUtils.createTopic(zkUtils, topic, 1, brokerCount, servers, new Properties())
+    TestUtils.createTopic(zkUtils, topic, 1, serverCount, servers, new Properties)
     servers.foreach { server =>
       val logDir = server.logManager.getLog(tp).get.dir.getParent
       assertEquals(firstReplicaAssignment(new TopicPartitionReplica(topic, 0, server.config.brokerId)), logDir)
     }
 
     // Verify that replica can be moved to the specified log directory after the topic has been created
-    adminClient.alterReplicaLogDirs(secondReplicaAssignment.asJava, new AlterReplicaLogDirsOptions()).all().get()
+    client.alterReplicaLogDirs(secondReplicaAssignment.asJava, new AlterReplicaLogDirsOptions).all.get
     servers.foreach { server =>
       TestUtils.waitUntilTrue(() => {
         val logDir = server.logManager.getLog(tp).get.dir.getParent
@@ -326,48 +332,45 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
 
     // Verify that replica can be moved to the specified log directory while the producer is sending messages
     val running = new AtomicBoolean(true)
-    @volatile var numMessages = 0
-    val thread = new Thread() {
-      override def run(): Unit = {
-        val producer = TestUtils.createNewProducer(
-          TestUtils.getBrokerListStrFromServers(servers, protocol = securityProtocol),
-          securityProtocol = securityProtocol,
-          trustStoreFile = trustStoreFile,
-          retries = 0, // Producer should not have to retry when broker is moving replica between log directories.
-          requestTimeoutMs = 2000,
-          acks = -1
-        )
-
-        while (running.get()) {
+    val numMessages = new AtomicInteger
+    import scala.concurrent.ExecutionContext.Implicits._
+    val producerFuture = Future {
+      val producer = TestUtils.createNewProducer(
+        TestUtils.getBrokerListStrFromServers(servers, protocol = securityProtocol),
+        securityProtocol = securityProtocol,
+        trustStoreFile = trustStoreFile,
+        retries = 0, // Producer should not have to retry when broker is moving replica between log directories.
+        requestTimeoutMs = 10000,
+        acks = -1
+      )
+      try {
+        while (running.get) {
           val future = producer.send(new ProducerRecord(topic, s"xxxxxxxxxxxxxxxxxxxx-$numMessages".getBytes))
-          numMessages += 1
-          future.get()
+          numMessages.incrementAndGet()
+          future.get(10, TimeUnit.SECONDS)
         }
-        producer.close()
-      }
+        numMessages.get
+      } finally producer.close()
     }
 
     try {
-      thread.start()
-      TestUtils.waitUntilTrue(() => numMessages > 100, "timed out waiting for message produce", 6000L)
-      adminClient.alterReplicaLogDirs(firstReplicaAssignment.asJava, new AlterReplicaLogDirsOptions()).all().get()
+      TestUtils.waitUntilTrue(() => numMessages.get > 100, "timed out waiting for message produce", 6000L)
+      client.alterReplicaLogDirs(firstReplicaAssignment.asJava, new AlterReplicaLogDirsOptions).all.get
       servers.foreach { server =>
         TestUtils.waitUntilTrue(() => {
           val logDir = server.logManager.getLog(tp).get.dir.getParent
           firstReplicaAssignment(new TopicPartitionReplica(topic, 0, server.config.brokerId)) == logDir
         }, "timed out waiting for replica movement", 6000L)
       }
-    } finally {
-      running.set(false)
-      thread.join()
-    }
+    } finally running.set(false)
+
+    val finalNumMessages = Await.result(producerFuture, Duration(20, TimeUnit.SECONDS))
 
     // Verify that all messages that are produced can be consumed
-    val consumerRecords = TestUtils.consumeTopicRecords(servers, topic, numMessages, securityProtocol, trustStoreFile)
+    val consumerRecords = TestUtils.consumeTopicRecords(servers, topic, finalNumMessages, securityProtocol, trustStoreFile)
     consumerRecords.zipWithIndex.foreach { case (consumerRecord, index) =>
-      assertEquals(s"xxxxxxxxxxxxxxxxxxxx-$index", new String(consumerRecord.value()))
+      assertEquals(s"xxxxxxxxxxxxxxxxxxxx-$index", new String(consumerRecord.value))
     }
-    adminClient.close()
   }
 
   @Test
@@ -701,6 +704,134 @@ class AdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
         assertTrue(e.getCause.isInstanceOf[InvalidTopicException])
         assertEquals("The topic is queued for deletion.", e.getCause.getMessage)
     }
+  }
+
+  @Test
+  def testSeekAfterDeleteRecords(): Unit = {
+    TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
+
+    client = AdminClient.create(createConfig)
+
+    val consumer = consumers.head
+    subscribeAndWaitForAssignment(topic, consumer)
+
+    sendRecords(producers.head, 10, topicPartition)
+    consumer.seekToBeginning(Collections.singleton(topicPartition))
+    assertEquals(0L, consumer.position(topicPartition))
+
+    val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
+    val lowWatermark = result.lowWatermarks().get(topicPartition).get().lowWatermark()
+    assertEquals(5L, lowWatermark)
+
+    consumer.seekToBeginning(Collections.singletonList(topicPartition))
+    assertEquals(5L, consumer.position(topicPartition))
+
+    consumer.seek(topicPartition, 7L)
+    assertEquals(7L, consumer.position(topicPartition))
+
+    client.close()
+  }
+
+  @Test
+  @Ignore // Disabled temporarily until flakiness is resolved
+  def testLogStartOffsetCheckpoint(): Unit = {
+    TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
+
+    client = AdminClient.create(createConfig)
+
+    subscribeAndWaitForAssignment(topic, consumers.head)
+
+    sendRecords(producers.head, 10, topicPartition)
+    var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
+    var lowWatermark = result.lowWatermarks().get(topicPartition).get().lowWatermark()
+    assertEquals(5L, lowWatermark)
+
+    for (i <- 0 until serverCount) {
+      killBroker(i)
+    }
+    restartDeadBrokers()
+
+    client.close()
+    brokerList = TestUtils.bootstrapServers(servers, listenerName)
+    client = AdminClient.create(createConfig)
+
+    TestUtils.waitUntilTrue(() => {
+      // Need to retry if leader is not available for the partition
+      result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(0L)).asJava)
+
+      val future = result.lowWatermarks().get(topicPartition)
+      try {
+        lowWatermark = future.get(1000L, TimeUnit.MILLISECONDS).lowWatermark()
+        lowWatermark == 5L
+      } catch {
+        case e: LeaderNotAvailableException => false
+      }
+
+    }, "Expected low watermark of the partition to be 5L")
+
+    client.close()
+  }
+
+  @Test
+  def testLogStartOffsetAfterDeleteRecords(): Unit = {
+    TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
+
+    client = AdminClient.create(createConfig)
+
+    subscribeAndWaitForAssignment(topic, consumers.head)
+
+    sendRecords(producers.head, 10, topicPartition)
+    val result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava)
+    val lowWatermark = result.lowWatermarks().get(topicPartition).get().lowWatermark()
+    assertEquals(3L, lowWatermark)
+
+    for (i <- 0 until serverCount)
+      assertEquals(3, servers(i).replicaManager.getReplica(topicPartition).get.logStartOffset)
+
+    client.close()
+  }
+
+  @Test
+  def testOffsetsForTimesAfterDeleteRecords(): Unit = {
+    TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
+
+    client = AdminClient.create(createConfig)
+
+    val consumer = consumers.head
+    subscribeAndWaitForAssignment(topic, consumer)
+
+    sendRecords(producers.head, 10, topicPartition)
+    assertEquals(0L, consumer.offsetsForTimes(Map(topicPartition -> new JLong(0L)).asJava).get(topicPartition).offset())
+
+    var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
+    result.all().get()
+    assertEquals(5L, consumer.offsetsForTimes(Map(topicPartition -> new JLong(0L)).asJava).get(topicPartition).offset())
+
+    result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava)
+    result.all().get()
+    assertNull(consumer.offsetsForTimes(Map(topicPartition -> new JLong(0L)).asJava).get(topicPartition))
+
+    client.close()
+  }
+
+  private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
+    consumer.subscribe(Collections.singletonList(topic))
+    TestUtils.waitUntilTrue(() => {
+      consumer.poll(0)
+      !consumer.assignment.isEmpty
+    }, "Expected non-empty assignment")
+  }
+
+  private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
+                          numRecords: Int,
+                          topicPartition: TopicPartition): Unit = {
+    val futures = (0 until numRecords).map( i => {
+      val record = new ProducerRecord(topicPartition.topic, topicPartition.partition, s"$i".getBytes, s"$i".getBytes)
+      debug(s"Sending this record: $record")
+      producer.send(record)
+    })
+
+    futures.foreach(_.get)
   }
 
   @Test

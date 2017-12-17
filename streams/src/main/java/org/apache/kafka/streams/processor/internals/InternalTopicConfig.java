@@ -31,17 +31,20 @@ public class InternalTopicConfig {
     public enum CleanupPolicy { compact, delete }
 
     private final String name;
+    private int numberOfPartitions = -1;
     private final Map<String, String> logConfig;
     private final Set<CleanupPolicy> cleanupPolicies;
 
     private Long retentionMs;
 
-    public InternalTopicConfig(final String name, final Set<CleanupPolicy> defaultCleanupPolicies, final Map<String, String> logConfig) {
+    public InternalTopicConfig(final String name,
+                               final Set<CleanupPolicy> defaultCleanupPolicies,
+                               final Map<String, String> logConfig) {
         Objects.requireNonNull(name, "name can't be null");
         Topic.validate(name);
 
         if (defaultCleanupPolicies.isEmpty()) {
-            throw new IllegalArgumentException("Must provide at least one cleanup policy");
+            throw new IllegalArgumentException("Must provide at least one cleanup policy.");
         }
         this.name = name;
         this.cleanupPolicies = defaultCleanupPolicies;
@@ -91,7 +94,21 @@ public class InternalTopicConfig {
         return name;
     }
 
-    public void setRetentionMs(final long retentionMs) {
+    public int numberOfPartitions() {
+        if (numberOfPartitions == -1) {
+            throw new IllegalStateException("Number of partitions not specified.");
+        }
+        return numberOfPartitions;
+    }
+
+    void setNumberOfPartitions(final int numberOfPartitions) {
+        if (numberOfPartitions < 1) {
+            throw new IllegalArgumentException("Number of partitions must be at least 1.");
+        }
+        this.numberOfPartitions = numberOfPartitions;
+    }
+
+    void setRetentionMs(final long retentionMs) {
         if (!logConfig.containsKey(InternalTopicManager.RETENTION_MS)) {
             this.retentionMs = retentionMs;
         }

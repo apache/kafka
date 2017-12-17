@@ -139,7 +139,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     updateProducer()
 
     leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId)
-    assertTrue("Leader must remain on broker 1, in case of zookeeper session expiration it can move to broker 0",
+    assertTrue("Leader must remain on broker 1, in case of ZooKeeper session expiration it can move to broker 0",
       leader == 0 || leader == 1)
 
     assertEquals(hw, hwFile1.read.getOrElse(topicPartition, 0L))
@@ -150,7 +150,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
     server2.startup()
     updateProducer()
     leader = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId, oldLeaderOpt = Some(leader))
-    assertTrue("Leader must remain on broker 0, in case of zookeeper session expiration it can move to broker 1",
+    assertTrue("Leader must remain on broker 0, in case of ZooKeeper session expiration it can move to broker 1",
       leader == 0 || leader == 1)
 
     sendMessages(1)

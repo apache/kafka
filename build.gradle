@@ -118,6 +118,7 @@ if (new File('.git').exists()) {
         '**/.git/**',
         '**/build/**',
         'CONTRIBUTING.md',
+        'PULL_REQUEST_TEMPLATE.md',
         'gradlew',
         'gradlew.bat',
         '**/README.md',
@@ -548,7 +549,9 @@ project(':core') {
     compile libs.joptSimple
     compile libs.metrics
     compile libs.scala
+    compile libs.slf4jApi
     compile libs.slf4jlog4j
+    compile libs.scalaLogging
     compile libs.zkclient
     compile libs.zookeeper
 
@@ -861,6 +864,9 @@ project(':tools') {
     testCompile project(':clients')
     testCompile libs.junit
     testCompile project(':clients').sourceSets.test.output
+    testCompile libs.easymock
+    testCompile libs.powermockJunit4
+    testCompile libs.powermockEasymock
   }
 
   javadoc {

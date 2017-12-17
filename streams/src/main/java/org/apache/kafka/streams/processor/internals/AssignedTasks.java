@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.LockException;
@@ -37,22 +36,19 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
-class AssignedTasks implements RestoringTasks {
+abstract class AssignedTasks<T extends Task> {
     private final Logger log;
     private final String taskTypeName;
-    private final TaskAction maybeCommitAction;
-    private final TaskAction commitAction;
-    private Map<TaskId, Task> created = new HashMap<>();
-    private Map<TaskId, Task> suspended = new HashMap<>();
-    private Map<TaskId, Task> restoring = new HashMap<>();
+    private final TaskAction<T> commitAction;
+    private Map<TaskId, T> created = new HashMap<>();
+    private Map<TaskId, T> suspended = new HashMap<>();
+    private Map<TaskId, T> restoring = new HashMap<>();
     private Set<TopicPartition> restoredPartitions = new HashSet<>();
     private Set<TaskId> previousActiveTasks = new HashSet<>();
     // IQ may access this map.
-    private Map<TaskId, Task> running = new ConcurrentHashMap<>();
-    private Map<TopicPartition, Task> runningByPartition = new HashMap<>();
-    private Map<TopicPartition, Task> restoringByPartition = new HashMap<>();
-    private int committed = 0;
-
+    Map<TaskId, T> running = new ConcurrentHashMap<>();
+    private Map<TopicPartition, T> runningByPartition = new HashMap<>();
+    Map<TopicPartition, T> restoringByPartition = new HashMap<>();
 
     AssignedTasks(final LogContext logContext,
                   final String taskTypeName) {
@@ -60,36 +56,20 @@ class AssignedTasks implements RestoringTasks {
 
         this.log = logContext.logger(getClass());
 
-        maybeCommitAction = new TaskAction() {
-            @Override
-            public String name() {
-                return "maybeCommit";
-            }
-
-            @Override
-            public void apply(final Task task) {
-                if (task.commitNeeded()) {
-                    committed++;
-                    task.commit();
-                    log.debug("Committed active task {} per user request in", task.id());
-                }
-            }
-        };
-
-        commitAction = new TaskAction() {
+        commitAction = new TaskAction<T>() {
             @Override
             public String name() {
                 return "commit";
             }
 
             @Override
-            public void apply(final Task task) {
+            public void apply(final T task) {
                 task.commit();
             }
         };
     }
 
-    void addNewTask(final Task task) {
+    void addNewTask(final T task) {
         created.put(task.id(), task);
     }
 
@@ -98,7 +78,7 @@ class AssignedTasks implements RestoringTasks {
             return Collections.emptySet();
         }
         final Set<TopicPartition> partitions = new HashSet<>();
-        for (final Map.Entry<TaskId, Task> entry : created.entrySet()) {
+        for (final Map.Entry<TaskId, T> entry : created.entrySet()) {
             if (entry.getValue().hasStateStores()) {
                 partitions.addAll(entry.getValue().partitions());
             }
@@ -116,8 +96,8 @@ class AssignedTasks implements RestoringTasks {
         if (!created.isEmpty()) {
             log.debug("Initializing {}s {}", taskTypeName, created.keySet());
         }
-        for (final Iterator<Map.Entry<TaskId, Task>> it = created.entrySet().iterator(); it.hasNext(); ) {
-            final Map.Entry<TaskId, Task> entry = it.next();
+        for (final Iterator<Map.Entry<TaskId, T>> it = created.entrySet().iterator(); it.hasNext(); ) {
+            final Map.Entry<TaskId, T> entry = it.next();
             try {
                 if (!entry.getValue().initialize()) {
                     log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
@@ -141,9 +121,9 @@ class AssignedTasks implements RestoringTasks {
         log.trace("{} changelog partitions that have completed restoring so far: {}", taskTypeName, restored);
         final Set<TopicPartition> resume = new HashSet<>();
         restoredPartitions.addAll(restored);
-        for (final Iterator<Map.Entry<TaskId, Task>> it = restoring.entrySet().iterator(); it.hasNext(); ) {
-            final Map.Entry<TaskId, Task> entry = it.next();
-            final Task task = entry.getValue();
+        for (final Iterator<Map.Entry<TaskId, T>> it = restoring.entrySet().iterator(); it.hasNext(); ) {
+            final Map.Entry<TaskId, T> entry = it.next();
+            final T task = entry.getValue();
             if (restoredPartitions.containsAll(task.changelogPartitions())) {
                 transitionToRunning(task, resume);
                 it.remove();
@@ -174,7 +154,7 @@ class AssignedTasks implements RestoringTasks {
                 && restoring.isEmpty();
     }
 
-    Collection<Task> running() {
+    Collection<T> running() {
         return running.values();
     }
 
@@ -196,9 +176,9 @@ class AssignedTasks implements RestoringTasks {
         return firstException.get();
     }
 
-    private RuntimeException closeNonRunningTasks(final Collection<Task> tasks) {
+    private RuntimeException closeNonRunningTasks(final Collection<T> tasks) {
         RuntimeException exception = null;
-        for (final Task task : tasks) {
+        for (final T task : tasks) {
             try {
                 task.close(false, false);
             } catch (final RuntimeException e) {
@@ -211,10 +191,10 @@ class AssignedTasks implements RestoringTasks {
         return exception;
     }
 
-    private RuntimeException suspendTasks(final Collection<Task> tasks) {
+    private RuntimeException suspendTasks(final Collection<T> tasks) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        for (Iterator<Task> it = tasks.iterator(); it.hasNext(); ) {
-            final Task task = it.next();
+        for (Iterator<T> it = tasks.iterator(); it.hasNext(); ) {
+            final T task = it.next();
             try {
                 task.suspend();
                 suspended.put(task.id(), task);
@@ -235,7 +215,7 @@ class AssignedTasks implements RestoringTasks {
         return firstException.get();
     }
 
-    private RuntimeException closeZombieTask(final Task task) {
+    RuntimeException closeZombieTask(final T task) {
         log.warn("{} {} got migrated to another thread already. Closing it as zombie.", taskTypeName, task.id());
         try {
             task.close(false, true);
@@ -255,7 +235,7 @@ class AssignedTasks implements RestoringTasks {
      */
     boolean maybeResumeSuspendedTask(final TaskId taskId, final Set<TopicPartition> partitions) {
         if (suspended.containsKey(taskId)) {
-            final Task task = suspended.get(taskId);
+            final T task = suspended.get(taskId);
             log.trace("found suspended {} {}", taskTypeName, taskId);
             if (task.partitions().equals(partitions)) {
                 suspended.remove(taskId);
@@ -279,7 +259,7 @@ class AssignedTasks implements RestoringTasks {
         return false;
     }
 
-    private void addToRestoring(final Task task) {
+    private void addToRestoring(final T task) {
         restoring.put(task.id(), task);
         for (TopicPartition topicPartition : task.partitions()) {
             restoringByPartition.put(topicPartition, task);
@@ -289,7 +269,7 @@ class AssignedTasks implements RestoringTasks {
         }
     }
 
-    private void transitionToRunning(final Task task, final Set<TopicPartition> readyPartitions) {
+    private void transitionToRunning(final T task, final Set<TopicPartition> readyPartitions) {
         log.debug("transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);
         for (TopicPartition topicPartition : task.partitions()) {
@@ -303,12 +283,7 @@ class AssignedTasks implements RestoringTasks {
         }
     }
 
-    @Override
-    public Task restoringTaskFor(final TopicPartition partition) {
-        return restoringByPartition.get(partition);
-    }
-
-    Task runningTaskFor(final TopicPartition partition) {
+    T runningTaskFor(final TopicPartition partition) {
         return runningByPartition.get(partition);
     }
 
@@ -316,7 +291,7 @@ class AssignedTasks implements RestoringTasks {
         return running.keySet();
     }
 
-    Map<TaskId, Task> runningTaskMap() {
+    Map<TaskId, T> runningTaskMap() {
         return Collections.unmodifiableMap(running);
     }
 
@@ -330,18 +305,18 @@ class AssignedTasks implements RestoringTasks {
     }
 
     private void describe(final StringBuilder builder,
-                          final Collection<Task> tasks,
+                          final Collection<T> tasks,
                           final String indent,
                           final String name) {
         builder.append(indent).append(name);
-        for (final Task t : tasks) {
+        for (final T t : tasks) {
             builder.append(indent).append(t.toString(indent + "\t\t"));
         }
         builder.append("\n");
     }
 
-    private List<Task> allTasks() {
-        final List<Task> tasks = new ArrayList<>();
+    private List<T> allTasks() {
+        final List<T> tasks = new ArrayList<>();
         tasks.addAll(running.values());
         tasks.addAll(suspended.values());
         tasks.addAll(restoring.values());
@@ -349,7 +324,7 @@ class AssignedTasks implements RestoringTasks {
         return tasks;
     }
 
-    Collection<Task> restoringTasks() {
+    Collection<T> restoringTasks() {
         return Collections.unmodifiableCollection(restoring.values());
     }
 
@@ -384,78 +359,11 @@ class AssignedTasks implements RestoringTasks {
         return running.size();
     }
 
-    /**
-     * @throws TaskMigratedException if committing offsets failed (non-EOS)
-     *                               or if the task producer got fenced (EOS)
-     */
-    int maybeCommit() {
-        committed = 0;
-        applyToRunningTasks(maybeCommitAction);
-        return committed;
-    }
-
-    /**
-     * @throws TaskMigratedException if the task producer got fenced (EOS only)
-     */
-    int process() {
-        int processed = 0;
-        final Iterator<Map.Entry<TaskId, Task>> it = running.entrySet().iterator();
-        while (it.hasNext()) {
-            final Task task = it.next().getValue();
-            try {
-                if (task.process()) {
-                    processed++;
-                }
-            } catch (final TaskMigratedException e) {
-                final RuntimeException fatalException = closeZombieTask(task);
-                if (fatalException != null) {
-                    throw fatalException;
-                }
-                it.remove();
-                throw e;
-            } catch (final RuntimeException e) {
-                log.error("Failed to process {} {} due to the following error:", taskTypeName, task.id(), e);
-                throw e;
-            }
-        }
-        return processed;
-    }
-
-    /**
-     * @throws TaskMigratedException if the task producer got fenced (EOS only)
-     */
-    int punctuate() {
-        int punctuated = 0;
-        final Iterator<Map.Entry<TaskId, Task>> it = running.entrySet().iterator();
-        while (it.hasNext()) {
-            final Task task = it.next().getValue();
-            try {
-                if (task.maybePunctuateStreamTime()) {
-                    punctuated++;
-                }
-                if (task.maybePunctuateSystemTime()) {
-                    punctuated++;
-                }
-            } catch (final TaskMigratedException e) {
-                final RuntimeException fatalException = closeZombieTask(task);
-                if (fatalException != null) {
-                    throw fatalException;
-                }
-                it.remove();
-                throw e;
-            } catch (final KafkaException e) {
-                log.error("Failed to punctuate {} {} due to the following error:", taskTypeName, task.id(), e);
-                throw e;
-            }
-        }
-        return punctuated;
-    }
-
-    private void applyToRunningTasks(final TaskAction action) {
+    void applyToRunningTasks(final TaskAction<T> action) {
         RuntimeException firstException = null;
 
-        for (Iterator<Task> it = running().iterator(); it.hasNext(); ) {
-            final Task task = it.next();
+        for (Iterator<T> it = running().iterator(); it.hasNext(); ) {
+            final T task = it.next();
             try {
                 action.apply(task);
             } catch (final TaskMigratedException e) {
@@ -485,9 +393,9 @@ class AssignedTasks implements RestoringTasks {
     }
 
     void closeNonAssignedSuspendedTasks(final Map<TaskId, Set<TopicPartition>> newAssignment) {
-        final Iterator<Task> standByTaskIterator = suspended.values().iterator();
+        final Iterator<T> standByTaskIterator = suspended.values().iterator();
         while (standByTaskIterator.hasNext()) {
-            final Task suspendedTask = standByTaskIterator.next();
+            final T suspendedTask = standByTaskIterator.next();
             if (!newAssignment.containsKey(suspendedTask.id()) || !suspendedTask.partitions().equals(newAssignment.get(suspendedTask.id()))) {
                 log.debug("Closing suspended and not re-assigned {} {}", taskTypeName, suspendedTask.id());
                 try {
@@ -503,7 +411,7 @@ class AssignedTasks implements RestoringTasks {
 
     void close(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        for (final Task task : allTasks()) {
+        for (final T task : allTasks()) {
             try {
                 task.close(clean, false);
             } catch (final TaskMigratedException e) {
@@ -531,7 +439,7 @@ class AssignedTasks implements RestoringTasks {
         }
     }
 
-    private boolean closeUnclean(final Task task) {
+    private boolean closeUnclean(final T task) {
         log.info("Try to close {} {} unclean.", task.getClass().getSimpleName(), task.id());
         try {
             task.close(false, false);

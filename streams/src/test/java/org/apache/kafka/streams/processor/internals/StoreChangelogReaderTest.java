@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.PartitionInfo;
@@ -25,10 +26,12 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.MockStateRestoreListener;
+import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
@@ -41,6 +44,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
@@ -50,6 +54,7 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -59,7 +64,7 @@ public class StoreChangelogReaderTest {
     @Mock(type = MockType.NICE)
     private RestoringTasks active;
     @Mock(type = MockType.NICE)
-    private Task task;
+    private StreamTask task;
 
     private final MockStateRestoreListener callback = new MockStateRestoreListener();
     private final CompositeRestoreListener restoreListener = new CompositeRestoreListener(callback);
@@ -94,11 +99,19 @@ public class StoreChangelogReaderTest {
 
     @Test
     public void shouldThrowExceptionIfConsumerHasCurrentSubscription() {
+        final StateRestorer mockRestorer = EasyMock.mock(StateRestorer.class);
+        mockRestorer.setUserRestoreListener(stateRestoreListener);
+        expect(mockRestorer.partition()).andReturn(new TopicPartition("sometopic", 0)).andReturn(new TopicPartition("sometopic", 0));
+        EasyMock.replay(mockRestorer);
+        changelogReader.register(mockRestorer);
+
+
         consumer.subscribe(Collections.singleton("sometopic"));
+
         try {
             changelogReader.restore(active);
             fail("Should have thrown IllegalStateException");
-        } catch (final IllegalStateException e) {
+        } catch (final StreamsException expected) {
             // ok
         }
     }
@@ -112,6 +125,30 @@ public class StoreChangelogReaderTest {
         changelogReader.restore(active);
         assertThat(callback.restored.size(), equalTo(messages));
     }
+
+    @Test
+    public void shouldRecoverFromInvalidOffsetExceptionAndFinishRestore() {
+        final int messages = 10;
+        setupConsumer(messages, topicPartition);
+        consumer.setException(new InvalidOffsetException("Try Again!") {
+            @Override
+            public Set<TopicPartition> partitions() {
+                return Collections.singleton(topicPartition);
+            }
+        });
+        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true,
+            "storeName"));
+
+        EasyMock.expect(active.restoringTaskFor(topicPartition)).andReturn(task);
+        EasyMock.replay(active);
+
+        // first restore call "fails" but we should not die with an exception
+        assertEquals(0, changelogReader.restore(active).size());
+        // retry restore should succeed
+        assertEquals(1, changelogReader.restore(active).size());
+        assertThat(callback.restored.size(), equalTo(messages));
+    }
+
 
     @Test
     public void shouldRestoreMessagesFromCheckpoint() {

@@ -18,14 +18,14 @@ import time
 from ducktape.utils.util import wait_until
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
-from kafkatest.directory_layout.kafka_path import  TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
-from kafkatest.services.monitor.jmx import JmxMixin
+from kafkatest.directory_layout.kafka_path import TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
+from kafkatest.services.monitor.http import HttpMetricsCollector
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import DEV_BRANCH, V_0_9_0_0
 
 
-class ProducerPerformanceService(JmxMixin, PerformanceService):
+class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
 
     PERSISTENT_ROOT = "/mnt/producer_performance"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "producer_performance.stdout")
@@ -35,11 +35,9 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
 
     def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, version=DEV_BRANCH, settings=None,
-                 intermediate_stats=False, client_id="producer-performance", jmx_object_names=None, jmx_attributes=None):
+                 intermediate_stats=False, client_id="producer-performance"):
 
-        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [],
-                          root=ProducerPerformanceService.PERSISTENT_ROOT)
-        PerformanceService.__init__(self, context, num_nodes)
+        super(ProducerPerformanceService, self).__init__(context=context, num_nodes=num_nodes)
 
         self.logs = {
             "producer_performance_stdout": {
@@ -50,12 +48,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
                 "collect_default": True},
             "producer_performance_log": {
                 "path": ProducerPerformanceService.LOG_FILE,
-                "collect_default": True},
-            "jmx_log": {
-                "path": "/mnt/jmx_tool.log",
-                "collect_default": jmx_object_names is not None
-            }
-
+                "collect_default": True}
         }
 
         self.kafka = kafka
@@ -83,9 +76,9 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
         args = self.args.copy()
         args.update({
             'bootstrap_servers': self.kafka.bootstrap_servers(self.security_config.security_protocol),
-            'jmx_port': self.jmx_port,
             'client_id': self.client_id,
-            'kafka_run_class': self.path.script("kafka-run-class.sh", node)
+            'kafka_run_class': self.path.script("kafka-run-class.sh", node),
+            'metrics_props': ' '.join(["%s=%s" % (k, v) for k, v in self.http_metrics_client_configs.iteritems()])
             })
 
         cmd = ""
@@ -95,14 +88,15 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             # tool from the development branch
             tools_jar = self.path.jar(TOOLS_JAR_NAME, DEV_BRANCH)
             tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, DEV_BRANCH)
+            tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, DEV_BRANCH)
 
-            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_jar
-            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_dependant_libs_jar
+            for jar in (tools_jar, tools_dependant_libs_jar):
+                cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % jar
             cmd += "export CLASSPATH; "
 
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % ProducerPerformanceService.LOG4J_CONFIG
-        cmd += "JMX_PORT=%(jmx_port)d KAFKA_OPTS=%(kafka_opts)s KAFKA_HEAP_OPTS=\"-XX:+HeapDumpOnOutOfMemoryError\" %(kafka_run_class)s org.apache.kafka.tools.ProducerPerformance " \
-              "--topic %(topic)s --num-records %(num_records)d --record-size %(record_size)d --throughput %(throughput)d --producer-props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s" % args
+        cmd += "KAFKA_OPTS=%(kafka_opts)s KAFKA_HEAP_OPTS=\"-XX:+HeapDumpOnOutOfMemoryError\" %(kafka_run_class)s org.apache.kafka.tools.ProducerPerformance " \
+              "--topic %(topic)s --num-records %(num_records)d --record-size %(record_size)d --throughput %(throughput)d --producer-props bootstrap.servers=%(bootstrap_servers)s client.id=%(client_id)s %(metrics_props)s" % args
 
         self.security_config.setup_node(node)
         if self.security_config.security_protocol != SecurityConfig.PLAINTEXT:
@@ -126,7 +120,6 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
         return len(self.pids(node)) > 0
 
     def _worker(self, idx, node):
-
         node.account.ssh("mkdir -p %s" % ProducerPerformanceService.PERSISTENT_ROOT, allow_fail=False)
 
         # Create and upload log properties
@@ -145,12 +138,9 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
         if first_line is None:
             raise Exception("No output from ProducerPerformance")
 
-        self.start_jmx_tool(idx, node)
         wait_until(lambda: not self.alive(node), timeout_sec=1200, backoff_sec=2, err_msg="ProducerPerformance failed to finish")
         elapsed = time.time() - start
         self.logger.debug("ProducerPerformance process ran for %s seconds" % elapsed)
-
-        self.read_jmx_output(idx, node)
 
         # parse producer output from file
         last = None

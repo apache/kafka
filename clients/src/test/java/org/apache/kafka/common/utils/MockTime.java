@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -23,6 +24,15 @@ import java.util.concurrent.atomic.AtomicLong;
  * A clock that you can manually advance by calling sleep
  */
 public class MockTime implements Time {
+
+    interface MockTimeListener {
+        void tick();
+    }
+
+    /**
+     * Listeners which are waiting for time changes.
+     */
+    private final CopyOnWriteArrayList<MockTimeListener> listeners = new CopyOnWriteArrayList<>();
 
     private final long autoTickMs;
 
@@ -43,6 +53,10 @@ public class MockTime implements Time {
         this.timeMs = new AtomicLong(currentTimeMs);
         this.highResTimeNs = new AtomicLong(currentHighResTimeNs);
         this.autoTickMs = autoTickMs;
+    }
+
+    public void addListener(MockTimeListener listener) {
+        listeners.add(listener);
     }
 
     @Override
@@ -71,6 +85,7 @@ public class MockTime implements Time {
     public void sleep(long ms) {
         timeMs.addAndGet(ms);
         highResTimeNs.addAndGet(TimeUnit.MILLISECONDS.toNanos(ms));
+        tick();
     }
 
     public void setCurrentTimeMs(long newMs) {
@@ -81,5 +96,12 @@ public class MockTime implements Time {
             throw new IllegalArgumentException("Setting the time to " + newMs + " while current time " + oldMs + " is newer; this is not allowed");
 
         highResTimeNs.set(TimeUnit.MILLISECONDS.toNanos(newMs));
+        tick();
+    }
+
+    private void tick() {
+        for (MockTimeListener listener : listeners) {
+            listener.tick();
+        }
     }
 }

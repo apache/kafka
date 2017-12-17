@@ -57,7 +57,6 @@ public class SslTransportLayer implements TransportLayer {
     private final SSLEngine sslEngine;
     private final SelectionKey key;
     private final SocketChannel socketChannel;
-    private final boolean enableRenegotiation;
 
     private HandshakeStatus handshakeStatus;
     private SSLEngineResult handshakeResult;
@@ -69,25 +68,23 @@ public class SslTransportLayer implements TransportLayer {
     private ByteBuffer emptyBuf = ByteBuffer.allocate(0);
 
     public static SslTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
-        // Disable renegotiation by default until we have fixed the known issues with the existing implementation
-        SslTransportLayer transportLayer = new SslTransportLayer(channelId, key, sslEngine, false);
+        SslTransportLayer transportLayer = new SslTransportLayer(channelId, key, sslEngine);
         transportLayer.startHandshake();
         return transportLayer;
     }
 
     // Prefer `create`, only use this in tests
-    SslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine, boolean enableRenegotiation) throws IOException {
+    SslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
         this.channelId = channelId;
         this.key = key;
         this.socketChannel = (SocketChannel) key.channel();
         this.sslEngine = sslEngine;
-        this.enableRenegotiation = enableRenegotiation;
     }
 
-    /**
-     * starts sslEngine handshake process
-     */
+    // Visible for testing
     protected void startHandshake() throws IOException {
+        if (state != null)
+            throw new IllegalStateException("startHandshake() can only be called once, state " + state);
 
         this.netReadBuffer = ByteBuffer.allocate(netReadBufferSize());
         this.netWriteBuffer = ByteBuffer.allocate(netWriteBufferSize());
@@ -134,6 +131,11 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     @Override
+    public SelectionKey selectionKey() {
+        return key;
+    }
+
+    @Override
     public boolean isOpen() {
         return socketChannel.isOpen();
     }
@@ -172,13 +174,8 @@ public class SslTransportLayer implements TransportLayer {
         } catch (IOException ie) {
             log.warn("Failed to send SSL Close message ", ie);
         } finally {
-            try {
-                socketChannel.socket().close();
-                socketChannel.close();
-            } finally {
-                key.attach(null);
-                key.cancel();
-            }
+            socketChannel.socket().close();
+            socketChannel.close();
         }
     }
 
@@ -240,9 +237,10 @@ public class SslTransportLayer implements TransportLayer {
     */
     @Override
     public void handshake() throws IOException {
-        // Reset state to support renegotiation. This can be removed if renegotiation support is removed.
         if (state == State.READY)
-            state = State.HANDSHAKE;
+            throw renegotiationException();
+        if (state == State.CLOSING)
+            throw closingException();
 
         int read = 0;
         try {
@@ -369,12 +367,13 @@ public class SslTransportLayer implements TransportLayer {
         }
     }
 
-    private void renegotiate() throws IOException {
-        if (!enableRenegotiation)
-            throw new SSLHandshakeException("Renegotiation is not supported");
-        handshake();
+    private SSLHandshakeException renegotiationException() throws IOException {
+        return new SSLHandshakeException("Renegotiation is not supported");
     }
 
+    private IllegalStateException closingException() {
+        throw new IllegalStateException("Channel is in closing state");
+    }
 
     /**
      * Executes the SSLEngine tasks needed.
@@ -513,10 +512,10 @@ public class SslTransportLayer implements TransportLayer {
                 netReadBuffer.compact();
                 // handle ssl renegotiation.
                 if (unwrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING && unwrapResult.getStatus() == Status.OK) {
-                    log.trace("SSLChannel Read begin renegotiation channelId {}, appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {}",
-                              channelId, appReadBuffer.position(), netReadBuffer.position(), netWriteBuffer.position());
-                    renegotiate();
-                    break;
+                    log.trace("Renegotiation requested, but it is not supported, channelId {}, " +
+                        "appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {}", channelId,
+                        appReadBuffer.position(), netReadBuffer.position(), netWriteBuffer.position());
+                    throw renegotiationException();
                 }
 
                 if (unwrapResult.getStatus() == Status.OK) {
@@ -615,8 +614,10 @@ public class SslTransportLayer implements TransportLayer {
     @Override
     public int write(ByteBuffer src) throws IOException {
         int written = 0;
-        if (state == State.CLOSING) throw new IllegalStateException("Channel is in closing state");
-        if (state != State.READY) return written;
+        if (state == State.CLOSING)
+            throw closingException();
+        if (state != State.READY)
+            return written;
 
         if (!flush(netWriteBuffer))
             return written;
@@ -626,10 +627,8 @@ public class SslTransportLayer implements TransportLayer {
         netWriteBuffer.flip();
 
         //handle ssl renegotiation
-        if (wrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING && wrapResult.getStatus() == Status.OK) {
-            renegotiate();
-            return written;
-        }
+        if (wrapResult.getHandshakeStatus() != HandshakeStatus.NOT_HANDSHAKING && wrapResult.getStatus() == Status.OK)
+            throw renegotiationException();
 
         if (wrapResult.getStatus() == Status.OK) {
             written = wrapResult.bytesConsumed();

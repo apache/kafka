@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.IMocksControl;
 import org.junit.After;
@@ -34,12 +35,14 @@ import org.junit.Test;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -85,9 +88,13 @@ public class SelectorTest {
 
     @After
     public void tearDown() throws Exception {
-        this.selector.close();
-        this.server.close();
-        this.metrics.close();
+        try {
+            verifySelectorEmpty();
+        } finally {
+            this.selector.close();
+            this.server.close();
+            this.metrics.close();
+        }
     }
 
     public SecurityProtocol securityProtocol() {
@@ -99,16 +106,29 @@ public class SelectorTest {
      */
     @Test
     public void testServerDisconnect() throws Exception {
-        String node = "0";
+        final String node = "0";
 
         // connect and do a simple request
         blockingConnect(node);
         assertEquals("hello", blockingRequest(node, "hello"));
 
+        KafkaChannel channel = selector.channel(node);
+
         // disconnect
         this.server.closeConnections();
-        while (!selector.disconnected().containsKey(node))
-            selector.poll(1000L);
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                try {
+                    selector.poll(1000L);
+                    return selector.disconnected().containsKey(node);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }, 5000, "Failed to observe disconnected node in disconnected set");
+
+        assertNull(channel.selectionKey().attachment());
 
         // reconnect and do another request
         blockingConnect(node);
@@ -181,8 +201,8 @@ public class SelectorTest {
         for (int i = 0; i < conns; i++)
             connect(Integer.toString(i), addr);
         // send echo requests and receive responses
-        Map<String, Integer> requests = new HashMap<String, Integer>();
-        Map<String, Integer> responses = new HashMap<String, Integer>();
+        Map<String, Integer> requests = new HashMap<>();
+        Map<String, Integer> responses = new HashMap<>();
         int responseCount = 0;
         for (int i = 0; i < conns; i++) {
             String node = Integer.toString(i);
@@ -247,11 +267,6 @@ public class SelectorTest {
         sendAndReceive(node, requestPrefix, 0, reqs);
     }
 
-
-
-    /**
-     * Test sending an empty string
-     */
     @Test
     public void testEmptyRequest() throws Exception {
         String node = "0";
@@ -328,6 +343,7 @@ public class SelectorTest {
         assertNull("Channel not removed from closingChannels", selector.closingChannel(id));
         assertTrue("Unexpected disconnect notification", selector.disconnected().isEmpty());
         assertEquals(ChannelState.EXPIRED, channel.state());
+        assertNull(channel.selectionKey().attachment());
         selector.poll(0);
         assertTrue("Unexpected disconnect notification", selector.disconnected().isEmpty());
     }
@@ -342,6 +358,41 @@ public class SelectorTest {
 
         assertTrue("The idle connection should have been closed", selector.disconnected().containsKey(id));
         assertEquals(ChannelState.EXPIRED, selector.disconnected().get(id));
+    }
+
+    @Test
+    public void testImmediatelyConnectedCleaned() throws Exception {
+        Metrics metrics = new Metrics(); // new metrics object to avoid metric registration conflicts
+        Selector selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
+            @Override
+            protected boolean doConnect(SocketChannel channel, InetSocketAddress address) throws IOException {
+                // Use a blocking connect to trigger the immediately connected path
+                channel.configureBlocking(true);
+                boolean connected = super.doConnect(channel, address);
+                channel.configureBlocking(false);
+                return connected;
+            }
+        };
+
+        try {
+            testImmediatelyConnectedCleaned(selector, true);
+            testImmediatelyConnectedCleaned(selector, false);
+        } finally {
+            selector.close();
+            metrics.close();
+        }
+    }
+
+    private void testImmediatelyConnectedCleaned(Selector selector, boolean closeAfterFirstPoll) throws Exception {
+        String id = "0";
+        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        verifyNonEmptyImmediatelyConnectedKeys(selector);
+        if (closeAfterFirstPoll) {
+            selector.poll(0);
+            verifyEmptyImmediatelyConnectedKeys(selector);
+        }
+        selector.close(id);
+        verifySelectorEmpty(selector);
     }
 
     @Test
@@ -404,8 +455,6 @@ public class SelectorTest {
         assertTrue("Disconnect not notified", selector.disconnected().containsKey(id));
         assertTrue("Unexpected receive", selector.completedReceives().isEmpty());
     }
-
-
 
     @Test
     public void testMuteOnOOM() throws Exception {
@@ -512,8 +561,11 @@ public class SelectorTest {
         expectLastCall().andThrow(new IOException());
 
         SelectionKey selectionKey = control.createMock(SelectionKey.class);
+        expect(kafkaChannel.selectionKey()).andStubReturn(selectionKey);
         expect(selectionKey.channel()).andReturn(SocketChannel.open());
         expect(selectionKey.readyOps()).andStubReturn(SelectionKey.OP_CONNECT);
+        selectionKey.cancel();
+        expectLastCall();
 
         control.replay();
 
@@ -523,10 +575,10 @@ public class SelectorTest {
 
         assertFalse(selector.connected().contains(kafkaChannel.id()));
         assertTrue(selector.disconnected().containsKey(kafkaChannel.id()));
+        assertNull(selectionKey.attachment());
 
         control.verify();
     }
-
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
@@ -547,6 +599,7 @@ public class SelectorTest {
     private void blockingConnect(String node) throws IOException {
         blockingConnect(node, new InetSocketAddress("localhost", server.port));
     }
+
     protected void blockingConnect(String node, InetSocketAddress serverAddr) throws IOException {
         selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE);
         while (!selector.connected().contains(node))
@@ -585,5 +638,41 @@ public class SelectorTest {
         }
     }
 
+    private void verifyNonEmptyImmediatelyConnectedKeys(Selector selector) throws Exception {
+        Field field = Selector.class.getDeclaredField("immediatelyConnectedKeys");
+        field.setAccessible(true);
+        Collection<?> immediatelyConnectedKeys = (Collection<?>) field.get(selector);
+        assertFalse(immediatelyConnectedKeys.isEmpty());
+    }
+
+    private void verifyEmptyImmediatelyConnectedKeys(Selector selector) throws Exception {
+        Field field = Selector.class.getDeclaredField("immediatelyConnectedKeys");
+        ensureEmptySelectorField(selector, field);
+    }
+
+    protected void verifySelectorEmpty() throws Exception {
+        verifySelectorEmpty(this.selector);
+    }
+
+    private void verifySelectorEmpty(Selector selector) throws Exception {
+        for (KafkaChannel channel : selector.channels()) {
+            selector.close(channel.id());
+            assertNull(channel.selectionKey().attachment());
+        }
+        selector.poll(0);
+        selector.poll(0); // Poll a second time to clear everything
+        for (Field field : Selector.class.getDeclaredFields()) {
+            ensureEmptySelectorField(selector, field);
+        }
+    }
+
+    private void ensureEmptySelectorField(Selector selector, Field field) throws Exception {
+        field.setAccessible(true);
+        Object obj = field.get(selector);
+        if (obj instanceof Collection)
+            assertTrue("Field not empty: " + field + " " + obj, ((Collection<?>) obj).isEmpty());
+        else if (obj instanceof Map)
+            assertTrue("Field not empty: " + field + " " + obj, ((Map<?, ?>) obj).isEmpty());
+    }
 
 }

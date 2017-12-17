@@ -66,6 +66,13 @@ public class SessionKeySchemaTest {
     }
 
     @Test
+    public void shouldFetchAllKeysUsingNullKeys() {
+        final HasNextCondition hasNextCondition = sessionKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE);
+        final List<Integer> results = getValues(hasNextCondition);
+        assertThat(results, equalTo(Arrays.asList(1, 2, 3, 4, 5, 6)));
+    }
+    
+    @Test
     public void testUpperBoundWithLargeTimestamps() {
         Bytes upper = sessionKeySchema.upperRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), Long.MAX_VALUE);
 

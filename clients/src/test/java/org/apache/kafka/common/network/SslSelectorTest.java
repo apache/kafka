@@ -20,10 +20,11 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestSslUtils;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -31,7 +32,6 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
@@ -79,73 +79,35 @@ public class SslSelectorTest extends SelectorTest {
         return SecurityProtocol.PLAINTEXT;
     }
 
-    /**
-     * Tests that SSL renegotiation initiated by the server are handled correctly by the client
-     * @throws Exception
-     */
     @Test
-    public void testRenegotiation() throws Exception {
-        ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT) {
+    public void testDisconnectWithIntermediateBufferedBytes() throws Exception {
+        int requestSize = 100 * 1024;
+        final String node = "0";
+        connect(node, new InetSocketAddress("localhost", server.port));
+        String request = TestUtils.randomString(requestSize);
+        selector.send(createSend(node, request));
+
+        TestUtils.waitForCondition(new TestCondition() {
             @Override
-            protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key, String host) throws IOException {
-                SocketChannel socketChannel = (SocketChannel) key.channel();
-                SslTransportLayer transportLayer = new SslTransportLayer(id, key,
-                    sslFactory.createSslEngine(host, socketChannel.socket().getPort()),
-                    true);
-                transportLayer.startHandshake();
-                return transportLayer;
-            }
-        };
-        channelBuilder.configure(sslClientConfigs);
-        Selector selector = new Selector(5000, metrics, time, "MetricGroup2", channelBuilder, new LogContext());
-        try {
-            int reqs = 500;
-            String node = "0";
-            // create connections
-            InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
-            selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-
-            // send echo requests and receive responses
-            int requests = 0;
-            int responses = 0;
-            int renegotiates = 0;
-            while (!selector.isChannelReady(node)) {
-                selector.poll(1000L);
-            }
-            selector.send(createSend(node, node + "-" + 0));
-            requests++;
-
-            // loop until we complete all requests
-            while (responses < reqs) {
-                selector.poll(0L);
-                if (responses >= 100 && renegotiates == 0) {
-                    renegotiates++;
-                    server.renegotiate();
-                }
-                assertEquals("No disconnects should have occurred.", 0, selector.disconnected().size());
-
-                // handle any responses we may have gotten
-                for (NetworkReceive receive : selector.completedReceives()) {
-                    String[] pieces = asString(receive).split("-");
-                    assertEquals("Should be in the form 'conn-counter'", 2, pieces.length);
-                    assertEquals("Check the source", receive.source(), pieces[0]);
-                    assertEquals("Check that the receive has kindly been rewound", 0, receive.payload().position());
-                    assertEquals("Check the request counter", responses, Integer.parseInt(pieces[1]));
-                    responses++;
-                }
-
-                // prepare new sends for the next round
-                for (int i = 0; i < selector.completedSends().size() && requests < reqs && selector.isChannelReady(node); i++, requests++) {
-                    selector.send(createSend(node, node + "-" + requests));
+            public boolean conditionMet() {
+                try {
+                    selector.poll(0L);
+                    return selector.channel(node).hasBytesBuffered();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
                 }
             }
-        } finally {
-            selector.close();
-        }
+        }, 2000L, "Failed to reach socket state with bytes buffered");
+
+        selector.close(node);
+        verifySelectorEmpty();
     }
 
+    /**
+     * Renegotiation is not supported since it is potentially unsafe and it has been removed in TLS 1.3
+     */
     @Test
-    public void testDisabledRenegotiation() throws Exception {
+    public void testRenegotiationFails() throws Exception {
         String node = "0";
         // create connections
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
@@ -261,4 +223,5 @@ public class SslSelectorTest extends SelectorTest {
     private SslSender createSender(InetSocketAddress serverAddress, byte[] payload) {
         return new SslSender(serverAddress, payload);
     }
+
 }

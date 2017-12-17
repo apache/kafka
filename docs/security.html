@@ -563,7 +563,7 @@
     KafkaServer {
         org.apache.kafka.common.security.scram.ScramLoginModule required
         username="admin"
-        password="admin-secret"
+        password="admin-secret";
     };</pre>
                 The properties <tt>username</tt> and <tt>password</tt> in the <tt>KafkaServer</tt> section are used by
                 the broker to initiate connections to other brokers. In this example, <i>admin</i> is the user for
@@ -671,7 +671,16 @@
     By default, the SSL user name will be of the form "CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown". One can change that by setting a customized PrincipalBuilder in server.properties like the following.
     <pre>principal.builder.class=CustomizedPrincipalBuilderClass</pre>
     By default, the SASL user name will be the primary part of the Kerberos principal. One can change that by setting <code>sasl.kerberos.principal.to.local.rules</code> to a customized rule in server.properties.
-    The format of <code>sasl.kerberos.principal.to.local.rules</code> is a list where each rule works in the same way as the auth_to_local in <a href="http://web.mit.edu/Kerberos/krb5-latest/doc/admin/conf_files/krb5_conf.html">Kerberos configuration file (krb5.conf)</a>. Each rules starts with RULE: and contains an expression in the format [n:string](regexp)s/pattern/replacement/g. See the kerberos documentation for more details. An example of adding a rule to properly translate user@MYDOMAIN.COM to user while also keeping the default rule in place is:
+    The format of <code>sasl.kerberos.principal.to.local.rules</code> is a list where each rule works in the same way as the auth_to_local in <a href="http://web.mit.edu/Kerberos/krb5-latest/doc/admin/conf_files/krb5_conf.html">Kerberos configuration file (krb5.conf)</a>. This also support additional lowercase rule, to force the translated result to be all lower case. This is done by adding a "/L" to the end of the rule. check below formats for syntax.
+    Each rules starts with RULE: and contains an expression as the following formats. See the kerberos documentation for more details.
+    <pre>
+        RULE:[n:string](regexp)s/pattern/replacement/
+        RULE:[n:string](regexp)s/pattern/replacement/g
+        RULE:[n:string](regexp)s/pattern/replacement//L
+        RULE:[n:string](regexp)s/pattern/replacement/g/L
+    </pre>
+
+    An example of adding a rule to properly translate user@MYDOMAIN.COM to user while also keeping the default rule in place is:
     <pre>sasl.kerberos.principal.to.local.rules=RULE:[1:$1@$0](.*@MYDOMAIN.COM)s/@.*//,DEFAULT</pre>
 
     <h4><a id="security_authz_cli" href="#security_authz_cli">Command Line Interface</a></h4>

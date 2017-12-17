@@ -118,6 +118,18 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
         final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to)), timeFrom, timeTo);
         return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
     }
+    
+    @Override
+    public KeyValueIterator<Windowed<K>, V> all() {
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.all();
+        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
+    }
+    
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo) {
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetchAll(timeFrom, timeTo);
+        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
+    }
 
     void maybeUpdateSeqnumForDups() {
         if (retainDuplicates) {

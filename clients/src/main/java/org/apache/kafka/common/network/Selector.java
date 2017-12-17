@@ -16,6 +16,23 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Count;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Meter;
+import org.apache.kafka.common.metrics.stats.SampledStat;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -36,23 +53,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.memory.MemoryPool;
-import org.apache.kafka.common.metrics.Measurable;
-import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Meter;
-import org.apache.kafka.common.metrics.stats.SampledStat;
-import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
-import org.slf4j.Logger;
 
 /**
  * A nioSelector interface for doing non-blocking multi-connection network I/O.
@@ -195,12 +195,37 @@ public class Selector implements Selectable, AutoCloseable {
      */
     @Override
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
-        if (this.channels.containsKey(id))
-            throw new IllegalStateException("There is already a connection for id " + id);
-        if (this.closingChannels.containsKey(id))
-            throw new IllegalStateException("There is already a connection for id " + id + " that is still being closed");
-
+        ensureNotRegistered(id);
         SocketChannel socketChannel = SocketChannel.open();
+        try {
+            configureSocketChannel(socketChannel, sendBufferSize, receiveBufferSize);
+            boolean connected = doConnect(socketChannel, address);
+            SelectionKey key = registerChannel(id, socketChannel, SelectionKey.OP_CONNECT);
+
+            if (connected) {
+                // OP_CONNECT won't trigger for immediately connected channels
+                log.debug("Immediately connected to node {}", id);
+                immediatelyConnectedKeys.add(key);
+                key.interestOps(0);
+            }
+        } catch (IOException | RuntimeException e) {
+            socketChannel.close();
+            throw e;
+        }
+    }
+
+    // Visible to allow test cases to override. In particular, we use this to implement a blocking connect
+    // in order to simulate "immediately connected" sockets.
+    protected boolean doConnect(SocketChannel channel, InetSocketAddress address) throws IOException {
+        try {
+            return channel.connect(address);
+        } catch (UnresolvedAddressException e) {
+            throw new IOException("Can't resolve address: " + address, e);
+        }
+    }
+
+    private void configureSocketChannel(SocketChannel socketChannel, int sendBufferSize, int receiveBufferSize)
+            throws IOException {
         socketChannel.configureBlocking(false);
         Socket socket = socketChannel.socket();
         socket.setKeepAlive(true);
@@ -209,25 +234,6 @@ public class Selector implements Selectable, AutoCloseable {
         if (receiveBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
             socket.setReceiveBufferSize(receiveBufferSize);
         socket.setTcpNoDelay(true);
-        boolean connected;
-        try {
-            connected = socketChannel.connect(address);
-        } catch (UnresolvedAddressException e) {
-            socketChannel.close();
-            throw new IOException("Can't resolve address: " + address, e);
-        } catch (IOException e) {
-            socketChannel.close();
-            throw e;
-        }
-        SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_CONNECT);
-        KafkaChannel channel = buildChannel(socketChannel, id, key);
-
-        if (connected) {
-            // OP_CONNECT won't trigger for immediately connected channels
-            log.debug("Immediately connected to node {}", channel.id());
-            immediatelyConnectedKeys.add(key);
-            key.interestOps(0);
-        }
     }
 
     /**
@@ -245,19 +251,29 @@ public class Selector implements Selectable, AutoCloseable {
      * </p>
      */
     public void register(String id, SocketChannel socketChannel) throws IOException {
+        ensureNotRegistered(id);
+        registerChannel(id, socketChannel, SelectionKey.OP_READ);
+    }
+
+    private void ensureNotRegistered(String id) {
         if (this.channels.containsKey(id))
             throw new IllegalStateException("There is already a connection for id " + id);
         if (this.closingChannels.containsKey(id))
             throw new IllegalStateException("There is already a connection for id " + id + " that is still being closed");
-
-        SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_READ);
-        buildChannel(socketChannel, id, key);
     }
 
-    private KafkaChannel buildChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
-        KafkaChannel channel;
+    private SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
+        SelectionKey key = socketChannel.register(nioSelector, interestedOps);
+        KafkaChannel channel = buildAndAttachKafkaChannel(socketChannel, id, key);
+        this.channels.put(id, channel);
+        return key;
+    }
+
+    private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
         try {
-            channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
+            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
+            key.attach(channel);
+            return channel;
         } catch (Exception e) {
             try {
                 socketChannel.close();
@@ -266,9 +282,6 @@ public class Selector implements Selectable, AutoCloseable {
             }
             throw new IOException("Channel could not be created for socket " + socketChannel, e);
         }
-        key.attach(channel);
-        this.channels.put(id, channel);
-        return channel;
     }
 
     /**
@@ -386,20 +399,22 @@ public class Selector implements Selectable, AutoCloseable {
 
         if (numReadyKeys > 0 || !immediatelyConnectedKeys.isEmpty() || dataInBuffers) {
             Set<SelectionKey> readyKeys = this.nioSelector.selectedKeys();
-            keysWithBufferedRead.removeAll(readyKeys); //so no channel gets polled twice
 
-            //poll from channels that have buffered data (but nothing more from the underlying socket)
-            if (!keysWithBufferedRead.isEmpty()) {
+            // Poll from channels that have buffered data (but nothing more from the underlying socket)
+            if (dataInBuffers) {
+                keysWithBufferedRead.removeAll(readyKeys); //so no channel gets polled twice
                 Set<SelectionKey> toPoll = keysWithBufferedRead;
                 keysWithBufferedRead = new HashSet<>(); //poll() calls will repopulate if needed
                 pollSelectionKeys(toPoll, false, endSelect);
             }
-            //poll from channels where the underlying socket has more data
-            pollSelectionKeys(readyKeys, false, endSelect);
-            pollSelectionKeys(immediatelyConnectedKeys, true, endSelect);
 
+            // Poll from channels where the underlying socket has more data
+            pollSelectionKeys(readyKeys, false, endSelect);
             // Clear all selected keys so that they are included in the ready count for the next select
             readyKeys.clear();
+
+            pollSelectionKeys(immediatelyConnectedKeys, true, endSelect);
+            immediatelyConnectedKeys.clear();
         } else {
             madeReadProgressLastPoll = true; //no work is also "progress"
         }
@@ -424,11 +439,9 @@ public class Selector implements Selectable, AutoCloseable {
      */
     // package-private for testing
     void pollSelectionKeys(Set<SelectionKey> selectionKeys,
-                                   boolean isImmediatelyConnected,
-                                   long currentTimeNanos) {
-        Iterator<SelectionKey> iterator = determineHandlingOrder(selectionKeys).iterator();
-        while (iterator.hasNext()) {
-            SelectionKey key = iterator.next();
+                           boolean isImmediatelyConnected,
+                           long currentTimeNanos) {
+        for (SelectionKey key : determineHandlingOrder(selectionKeys)) {
             KafkaChannel channel = channel(key);
             long channelStartTimeNanos = recordTimePerConnection ? time.nanoseconds() : 0;
 
@@ -507,16 +520,13 @@ public class Selector implements Selectable, AutoCloseable {
     private Collection<SelectionKey> determineHandlingOrder(Set<SelectionKey> selectionKeys) {
         //it is possible that the iteration order over selectionKeys is the same every invocation.
         //this may cause starvation of reads when memory is low. to address this we shuffle the keys if memory is low.
-        Collection<SelectionKey> inHandlingOrder;
-
         if (!outOfMemory && memoryPool.availableMemory() < lowMemThreshold) {
-            List<SelectionKey> temp = new ArrayList<>(selectionKeys);
-            Collections.shuffle(temp);
-            inHandlingOrder = temp;
+            List<SelectionKey> shuffledKeys = new ArrayList<>(selectionKeys);
+            Collections.shuffle(shuffledKeys);
+            return shuffledKeys;
         } else {
-            inHandlingOrder = selectionKeys;
+            return selectionKeys;
         }
-        return inHandlingOrder;
     }
 
     private void attemptRead(SelectionKey key, KafkaChannel channel) throws IOException {
@@ -642,19 +652,17 @@ public class Selector implements Selectable, AutoCloseable {
     /**
      * Check for data, waiting up to the given timeout.
      *
-     * @param ms Length of time to wait, in milliseconds, which must be non-negative
+     * @param timeoutMs Length of time to wait, in milliseconds, which must be non-negative
      * @return The number of keys ready
-     * @throws IllegalArgumentException
-     * @throws IOException
      */
-    private int select(long ms) throws IOException {
-        if (ms < 0L)
+    private int select(long timeoutMs) throws IOException {
+        if (timeoutMs < 0L)
             throw new IllegalArgumentException("timeout should be >= 0");
 
-        if (ms == 0L)
+        if (timeoutMs == 0L)
             return this.nioSelector.selectNow();
         else
-            return this.nioSelector.select(ms);
+            return this.nioSelector.select(timeoutMs);
     }
 
     /**
@@ -713,13 +721,20 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     private void doClose(KafkaChannel channel, boolean notifyDisconnect) {
+        SelectionKey key = channel.selectionKey();
         try {
+            immediatelyConnectedKeys.remove(key);
+            keysWithBufferedRead.remove(key);
             channel.close();
         } catch (IOException e) {
             log.error("Exception closing connection to node {}:", channel.id(), e);
+        } finally {
+            key.cancel();
+            key.attach(null);
         }
         this.sensors.connectionClosed.record();
         this.stagedReceives.remove(channel);
+        this.explicitlyMutedChannels.remove(channel);
         if (notifyDisconnect)
             this.disconnected.put(channel.id(), channel.state());
     }

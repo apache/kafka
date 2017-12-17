@@ -86,7 +86,7 @@ class AutoOffsetResetTest extends KafkaServerTestHarness with Logging {
     for(_ <- 0 until numMessages)
       producer.send(new KeyedMessage[String, Array[Byte]](topic, topic, "test".getBytes))
 
-    // update offset in zookeeper for consumer to jump "forward" in time
+    // update offset in ZooKeeper for consumer to jump "forward" in time
     val dirs = new ZKGroupTopicDirs(group, topic)
     val consumerProps = TestUtils.createConsumerProperties(zkConnect, group, testConsumer)
     consumerProps.put("auto.offset.reset", resetTo)
