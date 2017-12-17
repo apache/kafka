@@ -586,8 +586,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         switch (type) {
             case STREAM_TIME:
+                // STREAM_TIME punctuation is data driven, will first punctuate as soon as stream time is known
+                // i.e. we have received at least one record from each input topic
                 return streamTimePunctuationQueue.schedule(schedule);
             case WALL_CLOCK_TIME:
+                // WALL_CLOCK_TIME is driven by the wall clock time, will first punctuate after interval has passed
                 return systemTimePunctuationQueue.schedule(schedule.next(time.milliseconds()));
             default:
                 throw new IllegalArgumentException("Unrecognized PunctuationType: " + type);
