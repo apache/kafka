@@ -60,13 +60,17 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
     }
 
     public PunctuationSchedule next(long currTimestamp) {
-        PunctuationSchedule nextSchedule;
-        // we need to special handle the case when it is firstly triggered (i.e. the timestamp
-        // is equal to the interval) by reschedule based on the currTimestamp
-        if (timestamp == 0L)
-            nextSchedule = new PunctuationSchedule(value, currTimestamp + interval, interval, punctuator, cancellable);
+        long nextPunctuationTime;
+        // avoid scheduling a new punctuations immediately, this can happen:
+        // - when using STREAM_TIME punctuation and there was a gap i.e., no data was
+        //   received for more than 2*interval (also happens on first STREAM_TIME punctuation i.e., when timestamp == 0L)
+        // - when using WALL_CLOCK_TIME and there was a gap i.e., punctuation was delayed for more than 2*interval (GC pause, overload, ...)
+        if (timestamp + interval < currTimestamp)
+            nextPunctuationTime = currTimestamp + interval;
         else
-            nextSchedule = new PunctuationSchedule(value, timestamp + interval, interval, punctuator, cancellable);
+            nextPunctuationTime = timestamp + interval;
+
+        PunctuationSchedule nextSchedule = new PunctuationSchedule(value, nextPunctuationTime, interval, punctuator, cancellable);
 
         cancellable.setSchedule(nextSchedule);
 
