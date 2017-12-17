@@ -240,7 +240,7 @@ public class StreamsResetter {
     private int maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig, final boolean dryRun) throws Exception {
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
-        int topicNotFound = 0;
+        int topicNotFound = EXIT_CODE_SUCCESS;
 
         final List<String> notFoundInputTopics = new ArrayList<>();
         final List<String> notFoundIntermediateTopics = new ArrayList<>();
@@ -249,7 +249,7 @@ public class StreamsResetter {
 
         if (inputTopics.size() == 0 && intermediateTopics.size() == 0) {
             System.out.println("No input or intermediate topics specified. Skipping seek.");
-            return 0;
+            return EXIT_CODE_SUCCESS;
         }
 
         if (inputTopics.size() != 0) {
@@ -328,13 +328,11 @@ public class StreamsResetter {
             }
 
         } catch (final Exception e) {
-
             System.err.println("ERROR: Resetting offsets failed.");
             throw e;
         }
         System.out.println("Done.");
         return topicNotFound;
-
     }
 
     // visible for testing
