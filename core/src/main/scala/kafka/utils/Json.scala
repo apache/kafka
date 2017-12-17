@@ -47,8 +47,8 @@ object Json {
     }
 
   /**
-    * Parse a JSON string into either a generic type T, or a JsonProcessingException in the case of exception.
-    */
+   * Parse a JSON string into either a generic type T, or a JsonProcessingException in the case of exception.
+   */
   def parseStringAs[T](input: String)(implicit tag: ClassTag[T]): Either[Throwable, T] = {
     try Right(mapper.readValue(input, tag.runtimeClass).asInstanceOf[T])
     catch { case e: JsonProcessingException => Left(e) }
@@ -66,8 +66,8 @@ object Json {
     catch { case e: JsonProcessingException => Left(e) }
 
   /**
-    * Parse a JSON string into either a generic type T, or a JsonProcessingException in the case of exception.
-    */
+   * Parse a JSON string into either a generic type T, or a JsonProcessingException in the case of exception.
+   */
   def parseBytesAs[T](input: Array[Byte])(implicit tag: ClassTag[T]): Either[JsonProcessingException, T] = {
     try Right(mapper.readValue(input, tag.runtimeClass).asInstanceOf[T])
     catch { case e: JsonProcessingException => Left(e) }
@@ -100,16 +100,16 @@ object Json {
   }
 
   /**
-    * Encode an object into a JSON string. This method accepts any type supported by Jackson's ObjectMapper in
+   * Encode an object into a JSON string. This method accepts any type supported by Jackson's ObjectMapper in
    * the default configuration. That is, Java collections are supported, but Scala collections are not (to avoid
    * a jackson-scala dependency).
-    */
+   */
   def encodeAsString(obj: Any): String = mapper.writeValueAsString(obj)
 
   /**
-    * Encode an object into a JSON value in bytes. This method accepts any type supported by Jackson's ObjectMapper in
-    * the default configuration. That is, Java collections are supported, but Scala collections are not (to avoid
-    * a jackson-scala dependency).
-    */
+   * Encode an object into a JSON value in bytes. This method accepts any type supported by Jackson's ObjectMapper in
+   * the default configuration. That is, Java collections are supported, but Scala collections are not (to avoid
+   * a jackson-scala dependency).
+   */
   def encodeAsBytes(obj: Any): Array[Byte] = mapper.writeValueAsBytes(obj)
 }

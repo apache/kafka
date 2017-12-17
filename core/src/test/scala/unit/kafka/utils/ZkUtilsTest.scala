@@ -168,5 +168,4 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
     assertTrue(result.contains(TopicAndPartition(topic, partition1)))
     assertEquals(Seq(replica1, replica2), result(TopicAndPartition(topic, partition1)))
   }
-
 }

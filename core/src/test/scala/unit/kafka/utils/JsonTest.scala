@@ -151,5 +151,4 @@ class JsonTest {
     assertTrue(result.isLeft)
     assertEquals(classOf[JsonParseException], result.left.get.getClass)
   }
-
 }
