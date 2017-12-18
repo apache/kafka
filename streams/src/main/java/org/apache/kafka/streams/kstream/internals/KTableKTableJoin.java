@@ -84,7 +84,10 @@ class KTableKTableJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, 
             R oldValue = null;
 
             final V2 value2 = valueGetter.get(key);
+
             if (value2 == null) {
+                System.out.println("KTABLE JOIN " + change + " WITH " + value2 + ": NO RESULT");
+
                 return;
             }
 
@@ -95,6 +98,8 @@ class KTableKTableJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, 
             if (sendOldValues && change.oldValue != null) {
                 oldValue = joiner.apply(change.oldValue, value2);
             }
+
+            System.out.println("KTABLE JOIN " + change + " WITH " + value2 + ": RESULT " + new Change<>(newValue, oldValue));
 
             context().forward(key, new Change<>(newValue, oldValue));
         }

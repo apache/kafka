@@ -17,7 +17,9 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -63,138 +65,27 @@ import static org.hamcrest.core.Is.is;
  */
 @Category({IntegrationTest.class})
 @RunWith(value = Parameterized.class)
-public class JoinIntegrationTest {
-    @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
-
-    @Rule
-    public final TemporaryFolder testFolder = new TemporaryFolder(TestUtils.tempDirectory());
-
-    @Parameterized.Parameters
-    public static Collection<Object[]> data() {
-        List<Object[]> values = new ArrayList<>();
-        for (boolean cacheEnabled : Arrays.asList(true, false))
-            values.add(new Object[] {cacheEnabled});
-        return values;
-    }
-
-    private static final String APP_ID = "join-integration-test";
-    private static final String INPUT_TOPIC_1 = "inputTopicLeft";
-    private static final String INPUT_TOPIC_2 = "inputTopicRight";
-    private static final String OUTPUT_TOPIC = "outputTopic";
-
-    private final static Properties PRODUCER_CONFIG = new Properties();
-    private final static Properties RESULT_CONSUMER_CONFIG = new Properties();
-    private final static Properties STREAMS_CONFIG = new Properties();
-
-    private StreamsBuilder builder;
+public class JoinIntegrationTest extends AbstractJoinIntegrationTest {
     private KStream<Long, String> leftStream;
     private KStream<Long, String> rightStream;
     private KTable<Long, String> leftTable;
     private KTable<Long, String> rightTable;
 
-    private final boolean cacheEnabled;
-
-    private final List<Input<String>> input = Arrays.asList(
-        new Input<>(INPUT_TOPIC_1, (String) null),
-        new Input<>(INPUT_TOPIC_2, (String) null),
-        new Input<>(INPUT_TOPIC_1, "A"),
-        new Input<>(INPUT_TOPIC_2, "a"),
-        new Input<>(INPUT_TOPIC_1, "B"),
-        new Input<>(INPUT_TOPIC_2, "b"),
-        new Input<>(INPUT_TOPIC_1, (String) null),
-        new Input<>(INPUT_TOPIC_2, (String) null),
-        new Input<>(INPUT_TOPIC_1, "C"),
-        new Input<>(INPUT_TOPIC_2, "c"),
-        new Input<>(INPUT_TOPIC_2, (String) null),
-        new Input<>(INPUT_TOPIC_1, (String) null),
-        new Input<>(INPUT_TOPIC_2, (String) null),
-        new Input<>(INPUT_TOPIC_2, "d"),
-        new Input<>(INPUT_TOPIC_1, "D")
-    );
-
-    private final ValueJoiner<String, String, String> valueJoiner = new ValueJoiner<String, String, String>() {
-        @Override
-        public String apply(final String value1, final String value2) {
-            return value1 + "-" + value2;
-        }
-    };
-
     public JoinIntegrationTest(boolean cacheEnabled) {
-        this.cacheEnabled = cacheEnabled;
-    }
-
-    @BeforeClass
-    public static void setupConfigsAndUtils() {
-        PRODUCER_CONFIG.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        PRODUCER_CONFIG.put(ProducerConfig.ACKS_CONFIG, "all");
-        PRODUCER_CONFIG.put(ProducerConfig.RETRIES_CONFIG, 0);
-        PRODUCER_CONFIG.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
-        PRODUCER_CONFIG.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-
-        RESULT_CONSUMER_CONFIG.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        RESULT_CONSUMER_CONFIG.put(ConsumerConfig.GROUP_ID_CONFIG, APP_ID + "-result-consumer");
-        RESULT_CONSUMER_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        RESULT_CONSUMER_CONFIG.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
-        RESULT_CONSUMER_CONFIG.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-
-        STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        STREAMS_CONFIG.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
-        STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        super(cacheEnabled);
     }
 
     @Before
     public void prepareTopology() throws InterruptedException {
-        CLUSTER.createTopics(INPUT_TOPIC_1, INPUT_TOPIC_2, OUTPUT_TOPIC);
-        if (!cacheEnabled)
-            STREAMS_CONFIG.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        super.prepareEnvironment();
 
-        STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath());
+        APP_ID = "stream-stream-join-integration-test";
 
         builder = new StreamsBuilder();
-        leftTable = builder.table(INPUT_TOPIC_1);
-        rightTable = builder.table(INPUT_TOPIC_2);
+        leftTable = builder.table(INPUT_TOPIC_LEFT);
+        rightTable = builder.table(INPUT_TOPIC_RIGHT);
         leftStream = leftTable.toStream();
         rightStream = rightTable.toStream();
-    }
-
-    @After
-    public void cleanup() throws InterruptedException {
-        CLUSTER.deleteTopicsAndWait(120000, INPUT_TOPIC_1, INPUT_TOPIC_2, OUTPUT_TOPIC);
-    }
-
-    private void checkResult(final String outputTopic, final List<String> expectedResult) throws InterruptedException {
-        if (expectedResult != null) {
-            final List<String> result = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(RESULT_CONSUMER_CONFIG, outputTopic, expectedResult.size(), 30 * 1000L);
-            assertThat(result, is(expectedResult));
-        }
-    }
-
-    /*
-     * Runs the actual test. Checks the result after each input record to ensure fixed processing order.
-     * If an input tuple does not trigger any result, "expectedResult" should contain a "null" entry
-     */
-    private void runTest(final List<List<String>> expectedResult) throws Exception {
-        assert expectedResult.size() == input.size();
-
-        IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
-        final KafkaStreams streams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
-        try {
-            streams.start();
-
-            long ts = System.currentTimeMillis();
-
-            final Iterator<List<String>> resultIterator = expectedResult.iterator();
-            for (final Input<String> singleInput : input) {
-                IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(singleInput.topic, Collections.singleton(singleInput.record), PRODUCER_CONFIG, ++ts);
-                checkResult(OUTPUT_TOPIC, resultIterator.next());
-            }
-        } finally {
-            streams.close();
-        }
     }
 
     @Test
@@ -220,34 +111,6 @@ public class JoinIntegrationTest {
         );
 
         leftStream.join(rightStream, valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
-
-        runTest(expectedResult);
-    }
-
-    @Test
-    public void testMultiInnerKStreamKStream() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-multi-inner-KStream-KStream");
-
-        final List<List<String>> expectedResult = Arrays.asList(
-                null,
-                null,
-                null,
-                Collections.singletonList("A-a-a"),
-                Collections.singletonList("B-a-a"),
-                Arrays.asList("A-b-a", "B-b-a", "A-a-b", "B-a-b", "A-b-b", "B-b-b"),
-                null,
-                null,
-                Arrays.asList("C-a-a", "C-b-b"),
-                Arrays.asList("A-c-c", "B-c-c", "C-c-c"),
-                null,
-                null,
-                null,
-                Arrays.asList("A-d-d", "B-d-d", "C-d-d"),
-                Arrays.asList("D-a-a", "D-b-b", "D-c-c", "D-d-d")
-        );
-
-        leftStream.join(rightStream, valueJoiner, JoinWindows.of(10000))
-                  .join(rightStream, valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
     }
@@ -397,6 +260,38 @@ public class JoinIntegrationTest {
     }
 
     @Test
+    public void testMultiInnerKStreamKStream() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-multi-inner-KStream-KStream");
+
+        final List<List<String>> expectedResult = Arrays.asList(
+                null,
+                null,
+                null,
+                Collections.singletonList("A-a-a"),
+                Collections.singletonList("B-a-a"),
+                Arrays.asList("A-b-a", "B-b-a", "A-a-b", "B-a-b", "A-b-b", "B-b-b"),
+                null,
+                null,
+                Arrays.asList("C-a-a", "C-a-b", "C-b-a", "C-b-b"),
+                Arrays.asList("A-c-a", "A-c-b", "B-c-a", "B-c-b", "C-c-a", "C-c-b", "A-a-c", "B-a-c",
+                        "A-b-c", "B-b-c", "C-a-c", "C-b-c", "A-c-c", "B-c-c", "C-c-c"),
+                null,
+                null,
+                null,
+                Arrays.asList("A-d-a", "A-d-b", "A-d-c", "B-d-a", "B-d-b", "B-d-c", "C-d-a", "C-d-b", "C-d-c",
+                        "A-a-d", "B-a-d", "A-b-d", "B-b-d", "C-a-d", "C-b-d", "A-c-d", "B-c-d", "C-c-d",
+                        "A-d-d", "B-d-d", "C-d-d"),
+                Arrays.asList("D-a-a", "D-a-b", "D-a-c", "D-a-d", "D-b-a", "D-b-b", "D-b-c", "D-b-d", "D-c-a",
+                        "D-c-b", "D-c-c", "D-c-d", "D-d-a", "D-d-b", "D-d-c", "D-d-d")
+        );
+
+        leftStream.join(rightStream, valueJoiner, JoinWindows.of(10000))
+                .join(rightStream, valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
+
+        runTest(expectedResult);
+    }
+
+    @Test
     public void testInnerKStreamKTable() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-KStream-KTable");
 
@@ -454,25 +349,47 @@ public class JoinIntegrationTest {
     public void testInnerKTableKTable() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-KTable-KTable");
 
-        final List<List<String>> expectedResult = Arrays.asList(
-            null,
-            null,
-            null,
-            Collections.singletonList("A-a"),
-            Collections.singletonList("B-a"),
-            Collections.singletonList("B-b"),
-            Collections.singletonList((String) null),
-            null,
-            null,
-            Collections.singletonList("C-c"),
-            Collections.singletonList((String) null),
-            null,
-            null,
-            null,
-            Collections.singletonList("D-d")
-        );
+        // TODO: the duplicate is due to KAFKA-4309, should be removed when it is fixed
+        List<List<String>> expectedResult;
+        if (cacheEnabled) {
+            expectedResult = Arrays.asList(
+                    null,
+                    null,
+                    null,
+                    Arrays.asList("A-a", "A-a"),    // dup
+                    Collections.singletonList("B-a"),
+                    Collections.singletonList("B-b"),
+                    Collections.singletonList((String) null),
+                    null,
+                    Collections.singletonList((String) null),   // dup
+                    Collections.singletonList("C-c"),
+                    Collections.singletonList((String) null),
+                    null,
+                    null,
+                    Collections.singletonList((String) null),   // dup
+                    Collections.singletonList("D-d")
+            );
+        } else {
+            expectedResult = Arrays.asList(
+                    null,
+                    null,
+                    null,
+                    Collections.singletonList("A-a"),
+                    Collections.singletonList("B-a"),
+                    Collections.singletonList("B-b"),
+                    Collections.singletonList((String) null),
+                    null,
+                    null,
+                    Collections.singletonList("C-c"),
+                    Collections.singletonList((String) null),
+                    null,
+                    null,
+                    null,
+                    Collections.singletonList("D-d")
+            );
+        }
 
-        leftTable.join(rightTable, valueJoiner).to(OUTPUT_TOPIC);
+        leftTable.join(rightTable, valueJoiner).toStream().to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
     }
@@ -481,25 +398,47 @@ public class JoinIntegrationTest {
     public void testLeftKTableKTable() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left-KTable-KTable");
 
-        final List<List<String>> expectedResult = Arrays.asList(
-            null,
-            null,
-            Collections.singletonList("A-null"),
-            Collections.singletonList("A-a"),
-            Collections.singletonList("B-a"),
-            Collections.singletonList("B-b"),
-            Collections.singletonList((String) null),
-            null,
-            Collections.singletonList("C-null"),
-            Collections.singletonList("C-c"),
-            Collections.singletonList("C-null"),
-            Collections.singletonList((String) null),
-            null,
-            null,
-            Collections.singletonList("D-d")
-        );
+        // TODO: the duplicate is due to KAFKA-4309, should be removed when it is fixed
+        List<List<String>> expectedResult;
+        if (cacheEnabled) {
+            expectedResult = Arrays.asList(
+                    null,
+                    null,
+                    Arrays.asList("A-null", "A-null"),  // dup
+                    Collections.singletonList("A-a"),
+                    Collections.singletonList("B-a"),
+                    Collections.singletonList("B-b"),
+                    Collections.singletonList((String) null),
+                    null,
+                    Arrays.asList("C-null", "C-null"),      // dup
+                    Collections.singletonList("C-c"),
+                    Collections.singletonList("C-null"),
+                    Collections.singletonList((String) null),
+                    null,
+                    null,
+                    Arrays.asList("D-d", "D-d")
+            );
+        } else {
+            expectedResult = Arrays.asList(
+                    null,
+                    null,
+                    Collections.singletonList("A-null"),
+                    Collections.singletonList("A-a"),
+                    Collections.singletonList("B-a"),
+                    Collections.singletonList("B-b"),
+                    Collections.singletonList((String) null),
+                    null,
+                    Collections.singletonList("C-null"),
+                    Collections.singletonList("C-c"),
+                    Collections.singletonList("C-null"),
+                    Collections.singletonList((String) null),
+                    null,
+                    null,
+                    Collections.singletonList("D-d")
+            );
+        }
 
-        leftTable.leftJoin(rightTable, valueJoiner).to(OUTPUT_TOPIC);
+        leftTable.leftJoin(rightTable, valueJoiner).toStream().to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
     }
@@ -508,38 +447,48 @@ public class JoinIntegrationTest {
     public void testOuterKTableKTable() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer-KTable-KTable");
 
-        final List<List<String>> expectedResult = Arrays.asList(
-            null,
-            null,
-            Collections.singletonList("A-null"),
-            Collections.singletonList("A-a"),
-            Collections.singletonList("B-a"),
-            Collections.singletonList("B-b"),
-            Collections.singletonList("null-b"),
-            Collections.singletonList((String) null),
-            Collections.singletonList("C-null"),
-            Collections.singletonList("C-c"),
-            Collections.singletonList("C-null"),
-            Collections.singletonList((String) null),
-            null,
-            Collections.singletonList("null-d"),
-            Collections.singletonList("D-d")
-        );
+        // TODO: the duplicate is due to KAFKA-4309, should be removed when it is fixed
+        List<List<String>> expectedResult;
+        if (cacheEnabled) {
+            expectedResult = Arrays.asList(
+                    null,
+                    null,
+                    Arrays.asList("A-null", "A-null"),
+                    Collections.singletonList("A-a"),
+                    Collections.singletonList("B-a"),
+                    Collections.singletonList("B-b"),
+                    Collections.singletonList("null-b"),
+                    Collections.singletonList((String) null),
+                    Collections.singletonList("C-null"),
+                    Collections.singletonList("C-c"),
+                    Collections.singletonList("C-null"),
+                    Collections.singletonList((String) null),
+                    null,
+                    Collections.singletonList("null-d"),
+                    Collections.singletonList("D-d")
+            );
+        } else {
+            expectedResult = Arrays.asList(
+                    null,
+                    null,
+                    Collections.singletonList("A-null"),
+                    Collections.singletonList("A-a"),
+                    Collections.singletonList("B-a"),
+                    Collections.singletonList("B-b"),
+                    Collections.singletonList("null-b"),
+                    Collections.singletonList((String) null),
+                    Collections.singletonList("C-null"),
+                    Collections.singletonList("C-c"),
+                    Collections.singletonList("C-null"),
+                    Collections.singletonList((String) null),
+                    null,
+                    Collections.singletonList("null-d"),
+                    Collections.singletonList("D-d")
+            );
+        }
 
-        leftTable.outerJoin(rightTable, valueJoiner).to(OUTPUT_TOPIC);
+        leftTable.outerJoin(rightTable, valueJoiner).toStream().to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
-    }
-
-    private final class Input<V> {
-        String topic;
-        KeyValue<Long, V> record;
-
-        private final long anyUniqueKey = 0L;
-
-        Input(final String topic, final V value) {
-            this.topic = topic;
-            record = KeyValue.pair(anyUniqueKey, value);
-        }
     }
 }
