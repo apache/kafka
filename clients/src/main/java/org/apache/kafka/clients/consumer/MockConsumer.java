@@ -291,7 +291,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         endOffsets.putAll(newOffsets);
     }
 
-    public synchronized void simulateEndOffsetsUpdatedByAnotherThread(Map<TopicPartition, Long> newOffsets){
+    public synchronized void simulateEndOffsetsUpdatedByAnotherThread(Map<TopicPartition, Long> newOffsets) {
         updatedEndOffsets.putAll(newOffsets);
     }
 
@@ -355,7 +355,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public synchronized Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
         Map<TopicPartition, Long> result = new HashMap<>();
         if (!updatedEndOffsets.isEmpty()) {
-            endOffsetChecks+=1;
+            endOffsetChecks += 1;
         }
         for (TopicPartition tp : partitions) {
             Long endOffset = endOffsetChecks < 2 ? endOffsets.get(tp) : updatedEndOffsets.get(tp);
