@@ -44,8 +44,10 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
@@ -804,7 +806,7 @@ public class InternalTopologyBuilder {
     }
 
     private Map<Integer, Set<String>> makeNodeGroups() {
-        final HashMap<Integer, Set<String>> nodeGroups = new LinkedHashMap<>();
+        final TreeMap<Integer, Set<String>> nodeGroups = new TreeMap<>();
         final HashMap<String, Set<String>> rootToNodeGroup = new HashMap<>();
 
         int nodeGroupId = 0;
@@ -837,8 +839,21 @@ public class InternalTopologyBuilder {
                 nodeGroup.add(nodeName);
             }
         }
-
-        return nodeGroups;
+        final Comparator<Integer> keyPartition = new Comparator<Integer>() {
+            @Override
+            public int compare(Integer o1, Integer o2) {
+                boolean o1ContainsGlobalSource = nodeGroupContainsGlobalSourceNode(nodeGroups.get(o1));
+                boolean o2ContainsGlobalSource = nodeGroupContainsGlobalSourceNode(nodeGroups.get(o2));
+                if (o1ContainsGlobalSource == o2ContainsGlobalSource) {
+                    return Integer.compare(o1, o2);
+                }
+                if (!o1ContainsGlobalSource) return 1;
+                return -1;
+            }
+        };
+        TreeMap<Integer, Set<String>> sortedMap = new TreeMap<Integer, Set<String>>(keyPartition);
+        sortedMap.putAll(nodeGroups);
+        return sortedMap;
     }
 
     public synchronized ProcessorTopology build() {
