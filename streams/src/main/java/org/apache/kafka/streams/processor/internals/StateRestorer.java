@@ -115,6 +115,10 @@ public class StateRestorer {
         return offsetLimit;
     }
 
+    boolean isChangeLogTopic() {
+        return offsetLimit == Long.MAX_VALUE;
+    }
+
     private Long readTo(final long endOffset) {
         return endOffset < offsetLimit ? endOffset : offsetLimit;
     }

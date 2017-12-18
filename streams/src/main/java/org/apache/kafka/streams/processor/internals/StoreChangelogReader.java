@@ -96,7 +96,6 @@ public class StoreChangelogReader implements ChangelogReader {
             restoreConsumer.seekToBeginning(partitions);
         }
 
-
         if (needsRestoring.isEmpty()) {
             restoreConsumer.unsubscribe();
         }
@@ -174,8 +173,8 @@ public class StoreChangelogReader implements ChangelogReader {
             if (restorer.checkpoint() != StateRestorer.NO_CHECKPOINT) {
                 restoreConsumer.seek(restorer.partition(), restorer.checkpoint());
                 logRestoreOffsets(restorer.partition(),
-                        restorer.checkpoint(),
-                        endOffsets.get(restorer.partition()));
+                                  restorer.checkpoint(),
+                                  endOffsets.get(restorer.partition()));
                 restorer.setStartingOffset(restoreConsumer.position(restorer.partition()));
                 restorer.restoreStarted();
             } else {
@@ -187,8 +186,8 @@ public class StoreChangelogReader implements ChangelogReader {
         for (final StateRestorer restorer : needsPositionUpdate) {
             final long position = restoreConsumer.position(restorer.partition());
             logRestoreOffsets(restorer.partition(),
-                    position,
-                    endOffsets.get(restorer.partition()));
+                              position,
+                              endOffsets.get(restorer.partition()));
             restorer.setStartingOffset(position);
             restorer.restoreStarted();
         }
@@ -256,6 +255,15 @@ public class StoreChangelogReader implements ChangelogReader {
                 throw new TaskMigratedException(task, topicPartition, endOffset, pos);
             }
 
+            // we need to check if a the changelog topic has been updated during restore
+            if (restorer.isChangeLogTopic()) {
+                Long possiblyUpdatedEndOffset = restoreConsumer.endOffsets(Collections.singletonList(topicPartition)).get(topicPartition);
+                if (endOffset.longValue() != possiblyUpdatedEndOffset.longValue()) {
+                    throw new TaskMigratedException(task, topicPartition, possiblyUpdatedEndOffset, pos);
+                }
+            }
+
+
             log.debug("Completed restoring state from changelog {} with {} records ranging from offset {} to {}",
                       topicPartition,
                       restorer.restoredNumRecords(),
@@ -272,13 +280,15 @@ public class StoreChangelogReader implements ChangelogReader {
                              final Long endOffset) {
         final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
         long nextPosition = -1;
-
+        int numberRecords = records.size();
+        int numberRestored = 0;
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             final long offset = record.offset();
             if (restorer.hasCompleted(offset, endOffset)) {
                 nextPosition = record.offset();
                 break;
             }
+            numberRestored++;
             if (record.key() != null) {
                 restoreRecords.add(KeyValue.pair(record.key(), record.value()));
             }
@@ -294,8 +304,17 @@ public class StoreChangelogReader implements ChangelogReader {
 
         }
 
+        // if it's changelog topic and we did not restore all records in list, need to return last offset contained in list
+        // to force a TaskMigratedException in restorePartition method, as we encountered race condition and the
+        // changelog topic has been updated
+        if (restorer.isChangeLogTopic() && numberRestored != numberRecords) {
+            nextPosition = records.get(numberRecords - 1).offset();
+        }
+
         return nextPosition;
     }
+
+
 
     private boolean hasPartition(final TopicPartition topicPartition) {
         final List<PartitionInfo> partitions = partitionInfo.get(topicPartition.topic());
