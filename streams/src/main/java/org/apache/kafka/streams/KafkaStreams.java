@@ -496,6 +496,9 @@ public class KafkaStreams {
 
     /**
      * Create a {@code KafkaStreams} instance.
+     * <p>
+     * Note: even if you never call {@link #start()} on a {@code KafkaStreams} instance,
+     * you still must {@link #close()} it to avoid resource leaks.
      *
      * @param topology the topology specifying the computational logic
      * @param props   properties for {@link StreamsConfig}
@@ -508,6 +511,9 @@ public class KafkaStreams {
 
     /**
      * Create a {@code KafkaStreams} instance.
+     * <p>
+     * Note: even if you never call {@link #start()} on a {@code KafkaStreams} instance,
+     * you still must {@link #close()} it to avoid resource leaks.
      *
      * @param topology the topology specifying the computational logic
      * @param config  the Kafka Streams configuration
@@ -520,6 +526,9 @@ public class KafkaStreams {
 
     /**
      * Create a {@code KafkaStreams} instance.
+     * <p>
+     * Note: even if you never call {@link #start()} on a {@code KafkaStreams} instance,
+     * you still must {@link #close()} it to avoid resource leaks.
      *
      * @param topology       the topology specifying the computational logic
      * @param config         the Kafka Streams configuration
