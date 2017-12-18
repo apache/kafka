@@ -191,7 +191,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
             producer.flush();
             needRetry = needRetry2;
 
-            if (--remainingRetries == 0) {
+            if (--remainingRetries == 0 && !needRetry.isEmpty()) {
                 System.err.println("Failed to produce all records after multiple retries");
                 Exit.exit(1);
             }
