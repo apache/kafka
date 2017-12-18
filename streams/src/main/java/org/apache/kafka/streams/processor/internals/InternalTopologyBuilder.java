@@ -811,9 +811,11 @@ public class InternalTopologyBuilder {
 
         // Go through source nodes first. This makes the group id assignment easy to predict in tests
         final HashSet<String> allSourceNodes = new HashSet<>(nodeToSourceTopics.keySet());
+        final HashSet<String> globalNodeGroups = (HashSet<String>) globalNodeGroups();
         allSourceNodes.addAll(nodeToSourcePatterns.keySet());
 
         for (final String nodeName : Utils.sorted(allSourceNodes)) {
+            if (globalNodeGroups.contains(nodeName)) continue;
             final String root = nodeGrouper.root(nodeName);
             Set<String> nodeGroup = rootToNodeGroup.get(root);
             if (nodeGroup == null) {
@@ -826,6 +828,7 @@ public class InternalTopologyBuilder {
 
         // Go through non-source nodes
         for (final String nodeName : Utils.sorted(nodeFactories.keySet())) {
+            if (globalNodeGroups.contains(nodeName)) continue;
             if (!nodeToSourceTopics.containsKey(nodeName)) {
                 final String root = nodeGrouper.root(nodeName);
                 Set<String> nodeGroup = rootToNodeGroup.get(root);
