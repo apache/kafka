@@ -44,10 +44,8 @@ case class FetchMetadata(fetchMinBytes: Int,
                          replicaId: Int,
                          fetchPartitionStatus: Seq[(TopicPartition, FetchPartitionStatus)]) {
 
-  override def toString = "[minBytes: " + fetchMinBytes + ", " +
-                          "onlyLeader:" + fetchOnlyLeader + ", " +
-                          "onlyCommitted: " + fetchOnlyCommitted + ", " +
-                          "partitionStatus: " + fetchPartitionStatus + "]"
+  override def toString = s"[minBytes: $fetchMinBytes, onlyLeader: $fetchOnlyLeader, " +
+                          s"onlyCommitted: $fetchOnlyCommitted, partitionStatus: $fetchPartitionStatus]"
 }
 /**
  * A delayed fetch operation that can be created by the replica manager and watched
