@@ -59,16 +59,17 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
         return isCancelled;
     }
 
-    public PunctuationSchedule next(long currTimestamp) {
+    public PunctuationSchedule next(final long currTimestamp) {
         long nextPunctuationTime;
         // avoid scheduling a new punctuations immediately, this can happen:
         // - when using STREAM_TIME punctuation and there was a gap i.e., no data was
         //   received for more than 2*interval (also happens on first STREAM_TIME punctuation i.e., when timestamp == 0L)
         // - when using WALL_CLOCK_TIME and there was a gap i.e., punctuation was delayed for more than 2*interval (GC pause, overload, ...)
-        if (timestamp + interval < currTimestamp)
+        if (timestamp + interval < currTimestamp) {
             nextPunctuationTime = currTimestamp + interval;
-        else
+        } else {
             nextPunctuationTime = timestamp + interval;
+        }
 
         PunctuationSchedule nextSchedule = new PunctuationSchedule(value, nextPunctuationTime, interval, punctuator, cancellable);
 
