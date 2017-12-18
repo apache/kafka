@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.tests;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.Consumed;
@@ -62,8 +64,19 @@ public class StreamsBrokerDownResilienceTest {
         // it is expected that max.poll.interval, retries, request.timeout and max.block.ms set
         // streams_broker_down_resilience_test and passed as args
         if (additionalConfigs != null && !additionalConfigs.equalsIgnoreCase("none")) {
-            System.out.println("Updating configs with " + additionalConfigs);
-            streamsProperties.putAll(updatedConfigs(additionalConfigs));
+            Map<String, String> updated = updatedConfigs(additionalConfigs);
+            System.out.println("Updating configs with " + updated);
+            streamsProperties.putAll(updated);
+        }
+
+        if (!confirmCorrectConfigs(streamsProperties)) {
+            System.err.println(String.format("ERROR: Did not have all required configs expected  to contain %s %s %s %s",
+                                             StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
+                                             StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG),
+                                             StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                                             StreamsConfig.producerPrefix(ProducerConfig.MAX_BLOCK_MS_CONFIG)));
+
+            System.exit(1);
         }
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -97,6 +110,13 @@ public class StreamsBrokerDownResilienceTest {
         }));
 
 
+    }
+
+    private static boolean confirmCorrectConfigs(Properties properties) {
+        return properties.contains(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) &&
+               properties.contains(StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG)) &&
+               properties.contains(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG)) &&
+               properties.contains(StreamsConfig.producerPrefix(ProducerConfig.MAX_BLOCK_MS_CONFIG));
     }
 
     /**
