@@ -2294,22 +2294,22 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
     </p>
 
     <pre class="brush: java;">
-          // Get the window store named "CountsWindowStore"
-          ReadOnlyWindowStore&lt;String, Long&gt; windowStore =
-              streams.store("CountsWindowStore", QueryableStoreTypes.windowStore());
+         // Get the window store named "CountsWindowStore"
+         ReadOnlyWindowStore&lt;String, Long&gt; windowStore =
+             streams.store("CountsWindowStore", QueryableStoreTypes.windowStore());
 
-          // Fetch values for the key "world" for all of the windows available in this application instance.
-          // To get *all* available windows we fetch windows from the beginning of time until now.
-          long timeFrom = 0; // beginning of time = oldest available
-          long timeTo = System.currentTimeMillis(); // now (in processing-time)
-          WindowStoreIterator&lt;Long&gt; iterator = windowStore.fetch("world", timeFrom, timeTo);
-          while (iterator.hasNext()) {
+         // Fetch values for the key "world" for all of the windows available in this application instance.
+         // To get *all* available windows we fetch windows from the beginning of time until now.
+         long timeFrom = 0; // beginning of time = oldest available
+         long timeTo = System.currentTimeMillis(); // now (in processing-time)
+         WindowStoreIterator&lt;Long&gt; iterator = windowStore.fetch("world", timeFrom, timeTo);
+         while (iterator.hasNext()) {
             KeyValue&lt;Long, Long&gt; next = iterator.next();
             long windowTimestamp = next.key;
             System.out.println("Count of 'world' @ time " + windowTimestamp + " is " + next.value);
-          }
-          iterator.close();
-        </pre>
+         }
+         iterator.close();
+    </pre>
 
     <h4><a id="streams_developer-guide_interactive-queries_custom-stores" href="#streams_developer-guide_interactive-queries_custom-stores">Querying local custom state stores</a></h4>
     <p>
