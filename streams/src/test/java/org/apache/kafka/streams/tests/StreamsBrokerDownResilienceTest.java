@@ -17,8 +17,6 @@
 
 package org.apache.kafka.streams.tests;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.Consumed;
@@ -60,13 +58,9 @@ public class StreamsBrokerDownResilienceTest {
         streamsProperties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsProperties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
 
-        final int timeout = 15000;
-        // when setting Producer Retries and Request timeout Consumer max.poll.interval > min(max.block.ms, (retries + 1 * request.timeout)
-        streamsProperties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), timeout * 3);
-        streamsProperties.put(StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG), 2);
-        streamsProperties.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), timeout);
-        streamsProperties.put(StreamsConfig.producerPrefix(ProducerConfig.MAX_BLOCK_MS_CONFIG), timeout * 2);
 
+        // it is expected that max.poll.interval, retries, request.timeout and max.block.ms set
+        // streams_broker_down_resilience_test and passed as args
         if (additionalConfigs != null && !additionalConfigs.equalsIgnoreCase("none")) {
             System.out.println("Updating configs with " + additionalConfigs);
             streamsProperties.putAll(updatedConfigs(additionalConfigs));

@@ -81,7 +81,20 @@ class StreamsBrokerDownResilience(Test):
     def test_streams_resilient_to_broker_down(self):
         self.kafka.start()
 
-        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, "none")
+        # Consumer max.poll.interval > min(max.block.ms, ((retries + 1) * request.timeout)
+        consumer_poll_ms = "consumer.max.poll.interval.ms=50000"
+        retries_config = "producer.retries=2"
+        request_timeout = "producer.request.timeout.ms=15000"
+        max_block_ms = "producer.max.block.ms=30000"
+
+        # Broker should be down over 2x of retries * timeout ms
+        # So with (2 * 15000) = 30 seconds, we'll set downtime to 70 seconds
+        broker_down_time_in_seconds = 70
+
+        # java code expects configs in key=value,key=value format
+        updated_configs = consumer_poll_ms + "," + retries_config + "," + request_timeout + "," + max_block_ms
+
+        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, updated_configs)
         processor.start()
 
         # until KIP-91 is merged we'll only send 5 messages to assert Kafka Streams is running before taking the broker down
@@ -92,7 +105,7 @@ class StreamsBrokerDownResilience(Test):
 
         self.kafka.stop_node(node)
 
-        time.sleep(70)
+        time.sleep(broker_down_time_in_seconds)
 
         self.kafka.start_node(node)
 
