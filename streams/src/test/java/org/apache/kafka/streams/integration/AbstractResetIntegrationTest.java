@@ -612,6 +612,30 @@ abstract class AbstractResetIntegrationTest {
         Assert.assertEquals(0, exitCode);
     }
 
+    void assertInputTopicDoesNotExist() throws Exception {
+
+        final Properties streamsConfiguration = prepareTest();
+        final List<String> parameterList = new ArrayList<>(
+                Arrays.asList("--application-id", APP_ID + testNo,
+                        "--bootstrap-servers", bootstrapServers,
+                        "--input-topics", INPUT_TOPIC));
+
+        final String[] parameters = parameterList.toArray(new String[parameterList.size()]);
+        final Properties cleanUpConfig = new Properties();
+        cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
+
+        // RUN
+        KafkaStreams streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfiguration);
+        streams.start();
+
+        final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
+        Assert.assertEquals(1, exitCode);
+
+        streams.close();
+
+    }
+
     private void assertInternalTopicsGotDeleted(final String intermediateUserTopic) throws Exception {
         // do not use list topics request, but read from the embedded cluster's zookeeper path directly to confirm
         if (intermediateUserTopic != null) {

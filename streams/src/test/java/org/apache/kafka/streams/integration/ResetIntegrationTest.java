@@ -81,4 +81,9 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     public void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
         super.testReprocessingByDurationAfterResetWithoutIntermediateUserTopic();
     }
+
+    @Test
+    public void testInputTopicAbsentWithoutIntermediateUserTopic() throws Exception {
+        super.assertInputTopicDoesNotExist();
+    }
 }
