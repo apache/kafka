@@ -20,6 +20,7 @@ package kafka.server
 import java.util.Properties
 
 import kafka.utils.TestUtils
+import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.junit.Assert._
 import org.junit.Test
@@ -34,7 +35,7 @@ class DynamicBrokerConfigTest {
     val config = KafkaConfig(props)
     val dynamicConfig = config.dynamicConfig
     assertSame(config, dynamicConfig.currentKafkaConfig)
-    assertEquals(oldKeystore, config.sslKeystoreLocation)
+    assertEquals(oldKeystore, config.values.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
     assertEquals(oldKeystore,
       config.valuesFromThisConfigWithPrefixOverride("listener.name.external.").get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
     assertEquals(oldKeystore, config.originalsFromThisConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
@@ -55,7 +56,7 @@ class DynamicBrokerConfigTest {
       assertEquals(newKeystore,
         config.originalsWithPrefix("listener.name.external.").get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
 
-      assertEquals(oldKeystore, config.sslKeystoreLocation)
+      assertEquals(oldKeystore, config.getString(KafkaConfig.SslKeystoreLocationProp))
       assertEquals(oldKeystore, config.originals.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
       assertEquals(oldKeystore, config.values.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
       assertEquals(oldKeystore, config.originalsStrings.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
@@ -149,6 +150,67 @@ class DynamicBrokerConfigTest {
       }
       updateConfig()
       assertEquals(oldValue, config.originals.get(name))
+    }
+  }
+
+  @Test
+  def testPasswordConfigEncryption(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    val configWithoutSecret = KafkaConfig(props)
+    props.put(KafkaConfig.PasswordEncoderSecretProp, "config-encoder-secret")
+    val configWithSecret = KafkaConfig(props)
+    val dynamicProps = new Properties
+    dynamicProps.put(KafkaConfig.SaslJaasConfigProp, "myLoginModule required;")
+
+    try {
+      configWithoutSecret.dynamicConfig.toPersistentProps(dynamicProps, perBrokerConfig = true)
+    } catch {
+      case e: ConfigException => // expected exception
+    }
+    val persistedProps = configWithSecret.dynamicConfig.toPersistentProps(dynamicProps, perBrokerConfig = true)
+    assertFalse("Password not encoded",
+      persistedProps.getProperty(KafkaConfig.SaslJaasConfigProp).contains("myLoginModule"))
+    val decodedProps = configWithSecret.dynamicConfig.fromPersistentProps(persistedProps, perBrokerConfig = true)
+    assertEquals("myLoginModule required;", decodedProps.getProperty(KafkaConfig.SaslJaasConfigProp))
+  }
+
+  @Test
+  def testPasswordConfigEncoderSecretChange(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.SaslJaasConfigProp, "staticLoginModule required;")
+    props.put(KafkaConfig.PasswordEncoderSecretProp, "config-encoder-secret")
+    val config = KafkaConfig(props)
+    val dynamicProps = new Properties
+    dynamicProps.put(KafkaConfig.SaslJaasConfigProp, "dynamicLoginModule required;")
+
+    val persistedProps = config.dynamicConfig.toPersistentProps(dynamicProps, perBrokerConfig = true)
+    assertFalse("Password not encoded",
+      persistedProps.getProperty(KafkaConfig.SaslJaasConfigProp).contains("LoginModule"))
+    val decodedProps = config.dynamicConfig.updateBrokerConfig(0, persistedProps)
+    assertEquals("dynamicLoginModule required;", config.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)
+
+    // New config with same secret should use the dynamic password config
+    val newConfigWithSameSecret = KafkaConfig(props)
+    newConfigWithSameSecret.dynamicConfig.updateBrokerConfig(0, persistedProps)
+    assertEquals("dynamicLoginModule required;", newConfigWithSameSecret.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)
+
+    // New config with new secret should revert to static password config since dynamic config cannot be decoded
+    props.put(KafkaConfig.PasswordEncoderSecretProp, "new-encoder-secret")
+    val newConfigWithNewSecret = KafkaConfig(props)
+    newConfigWithNewSecret.dynamicConfig.updateBrokerConfig(0, persistedProps)
+    assertEquals("staticLoginModule required;", newConfigWithNewSecret.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)
+  }
+
+  private def verifyConfigUpdate(name: String, value: Object, expectFailure: Boolean) {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    val config = KafkaConfig(props)
+    val props1 = new Properties
+    props1.put(name, value)
+    try {
+      config.dynamicConfig.updateBrokerConfig(0, props1)
+      assertFalse("Invalid update did not fail", expectFailure)
+    } catch {
+      case e: Exception => assertTrue(s"Unexpected exception $e", expectFailure)
     }
   }
 }

@@ -204,6 +204,15 @@ public class AbstractConfig {
      * put all the remaining keys with the prefix stripped and their parsed values in the result map.
      *
      * This is useful if one wants to allow prefixed configs to override default ones.
+     * <p>
+     * Two forms of prefixes are supported:
+     * <ul>
+     *     <li>listener.name.{listenerName}.some.prop: If the provided prefix is `listener.name.{listenerName}.`,
+     *         the key `some.prop` with the value parsed using the definition of `some.prop` is returned.</li>
+     *     <li>listener.name.{listenerName}.anotherprefix.some.prop: If the provided prefix is `listener.name.{listenerName}.`,
+     *         the key `anotherprefix.some.prop` with the value parsed using the definition of `some.prop` is returned.</li>
+     * </ul>
+     * </p>
      */
     public Map<String, Object> valuesWithPrefixOverride(String prefix) {
         Map<String, Object> result = new RecordingMap<>(values(), prefix, true);
@@ -213,6 +222,12 @@ public class AbstractConfig {
                 ConfigDef.ConfigKey configKey = definition.configKeys().get(keyWithNoPrefix);
                 if (configKey != null)
                     result.put(keyWithNoPrefix, definition.parseValue(configKey, entry.getValue(), true));
+                else {
+                    String keyWithNoSecondaryPrefix = keyWithNoPrefix.substring(keyWithNoPrefix.indexOf('.') + 1);
+                    configKey = definition.configKeys().get(keyWithNoSecondaryPrefix);
+                    if (configKey != null)
+                        result.put(keyWithNoPrefix, definition.parseValue(configKey, entry.getValue(), true));
+                }
             }
         }
         return result;

@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class CredentialCache {
 
-    private final Map<String, Cache<? extends Object>> cacheMap = new HashMap<>();
+    private final Map<String, Cache<? extends Object>> cacheMap = new ConcurrentHashMap<>();
 
     public <C> Cache<C> createCache(String mechanism, Class<C> credentialClass) {
         Cache<C> cache = new Cache<C>(credentialClass);

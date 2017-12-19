@@ -144,12 +144,11 @@ public class SslFactory implements Reconfigurable {
     }
 
     @Override
-    public boolean validateReconfiguration(Map<String, ?> configs) {
+    public void validateReconfiguration(Map<String, ?> configs) {
         try {
             SecurityStore newKeystore = maybeCreateNewKeystore(configs);
             if (newKeystore != null)
                 createSSLContext(newKeystore);
-            return true;
         } catch (Exception e) {
             throw new KafkaException("Validation of dynamic config update failed", e);
         }

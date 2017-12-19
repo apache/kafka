@@ -189,7 +189,7 @@ public class JaasContextTest {
                 "plaintext.KafkaServer { test.LoginModuleOverride requisite; };"
         ));
         JaasContext context = JaasContext.load(JaasContext.Type.SERVER, new ListenerName("plaintext"),
-                Collections.<String, Object>emptyMap());
+                Collections.<String, Object>emptyMap(), "SOME-MECHANISM");
         assertEquals("plaintext.KafkaServer", context.name());
         assertEquals(JaasContext.Type.SERVER, context.type());
         assertEquals(1, context.configurationEntries().size());
@@ -204,7 +204,7 @@ public class JaasContextTest {
                 "other.KafkaServer { test.LoginModuleOther requisite; };"
         ));
         JaasContext context = JaasContext.load(JaasContext.Type.SERVER, new ListenerName("plaintext"),
-                Collections.<String, Object>emptyMap());
+                Collections.<String, Object>emptyMap(), "SOME-MECHANISM");
         assertEquals("KafkaServer", context.name());
         assertEquals(JaasContext.Type.SERVER, context.type());
         assertEquals(1, context.configurationEntries().size());
@@ -216,7 +216,7 @@ public class JaasContextTest {
     public void testLoadForServerWithWrongListenerName() throws IOException {
         writeConfiguration("Server", "test.LoginModule required;");
         JaasContext.load(JaasContext.Type.SERVER, new ListenerName("plaintext"),
-                Collections.<String, Object>emptyMap());
+                Collections.<String, Object>emptyMap(), "SOME-MECHANISM");
     }
 
     /**
@@ -225,14 +225,12 @@ public class JaasContextTest {
     @Test(expected = IllegalArgumentException.class)
     public void testLoadForClientWithListenerName() {
         JaasContext.load(JaasContext.Type.CLIENT, new ListenerName("foo"),
-                Collections.<String, Object>emptyMap());
+                Collections.<String, Object>emptyMap(), "SOME-MECHANISM");
     }
 
     private AppConfigurationEntry configurationEntry(JaasContext.Type contextType, String jaasConfigProp) {
-        Map<String, Object> configs = new HashMap<>();
-        if (jaasConfigProp != null)
-            configs.put(SaslConfigs.SASL_JAAS_CONFIG, new Password(jaasConfigProp));
-        JaasContext context = JaasContext.load(contextType, null, contextType.name(), configs);
+        Password saslJaasConfig = jaasConfigProp == null ? null : new Password(jaasConfigProp);
+        JaasContext context = JaasContext.load(contextType, null, contextType.name(), saslJaasConfig);
         List<AppConfigurationEntry> entries = context.configurationEntries();
         assertEquals(1, entries.size());
         return entries.get(0);

@@ -71,8 +71,8 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     }
 
     @Override
-    public boolean validateReconfiguration(Map<String, ?> configs) {
-        return sslFactory.validateReconfiguration(configs);
+    public void validateReconfiguration(Map<String, ?> configs) {
+        sslFactory.validateReconfiguration(configs);
     }
 
     @Override
