@@ -108,6 +108,7 @@ public class QueryableStateIntegrationTest {
     private static final int NUM_REPLICAS = NUM_BROKERS;
     private Properties streamsConfiguration;
     private List<String> inputValues;
+    private int numberOfWordsPerIteration = 0;
     private Set<String> inputValuesKeys;
     private KafkaStreams kafkaStreams;
     private Comparator<KeyValue<String, String>> stringComparator;
@@ -178,7 +179,9 @@ public class QueryableStateIntegrationTest {
             "king of the world");
         inputValuesKeys = new HashSet<>();
         for (final String sentence : inputValues) {
-            Collections.addAll(inputValuesKeys, sentence.split("\\W+"));
+            final String[] words = sentence.split("\\W+");
+            numberOfWordsPerIteration += words.length;
+            Collections.addAll(inputValuesKeys, words);
         }
     }
 
@@ -401,7 +404,7 @@ public class QueryableStateIntegrationTest {
         producerThread.start();
 
         try {
-            waitUntilAtLeastNumRecordProcessed(outputTopicConcurrent, 1);
+            waitUntilAtLeastNumRecordProcessed(outputTopicConcurrent, numberOfWordsPerIteration);
 
             final ReadOnlyKeyValueStore<String, Long>
                 keyValueStore = kafkaStreams.store(storeName + "-" + streamConcurrent, QueryableStoreTypes.<String, Long>keyValueStore());
@@ -414,11 +417,8 @@ public class QueryableStateIntegrationTest {
             final Map<String, Long> expectedCount = new HashMap<>();
             while (producerRunnable.getCurrIteration() < numIterations) {
                 verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState,
-                    expectedCount, windowStore, keyValueStore, false);
+                    expectedCount, windowStore, keyValueStore, true);
             }
-            // finally check if all keys are there
-            verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState,
-                expectedCount, windowStore, keyValueStore, true);
         } finally {
             producerRunnable.shutdown();
             producerThread.interrupt();
@@ -921,14 +921,14 @@ public class QueryableStateIntegrationTest {
         for (final String key : keys) {
             final Map<String, Long> map = fetchMap(windowStore, key);
             if (map.equals(Collections.<String, Long>emptyMap()) && failIfKeyNotFound) {
-                fail("Key not found " + key);
+                fail("Key in windowed-store not found " + key);
             }
             windowState.putAll(map);
             final Long value = keyValueStore.get(key);
             if (value != null) {
                 countState.put(key, value);
             } else if (failIfKeyNotFound) {
-                fail("Key not found " + key);
+                fail("Key in key-value-store not found " + key);
             }
         }
 
