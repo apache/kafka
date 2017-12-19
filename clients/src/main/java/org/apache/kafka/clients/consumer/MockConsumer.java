@@ -55,8 +55,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private boolean closed;
     private final Map<TopicPartition, Long> beginningOffsets;
     private final Map<TopicPartition, Long> endOffsets;
-    private final Map<TopicPartition, Long> updatedEndOffsets;
-    private int endOffsetChecks = 0;
 
     private Queue<Runnable> pollTasks;
     private KafkaException exception;
@@ -71,7 +69,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.closed = false;
         this.beginningOffsets = new HashMap<>();
         this.endOffsets = new HashMap<>();
-        this.updatedEndOffsets = new HashMap<>();
         this.pollTasks = new LinkedList<>();
         this.exception = null;
         this.wakeup = new AtomicBoolean(false);
@@ -291,10 +288,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         endOffsets.putAll(newOffsets);
     }
 
-    public synchronized void simulateEndOffsetsUpdatedByAnotherThread(Map<TopicPartition, Long> newOffsets) {
-        updatedEndOffsets.putAll(newOffsets);
-    }
-
     @Override
     public synchronized Map<MetricName, ? extends Metric> metrics() {
         ensureNotClosed();
@@ -354,11 +347,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public synchronized Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
         Map<TopicPartition, Long> result = new HashMap<>();
-        if (!updatedEndOffsets.isEmpty()) {
-            endOffsetChecks += 1;
-        }
         for (TopicPartition tp : partitions) {
-            Long endOffset = endOffsetChecks < 2 ? endOffsets.get(tp) : updatedEndOffsets.get(tp);
+            Long endOffset = endOffsets.get(tp);
             if (endOffset == null)
                 throw new IllegalStateException("The partition " + tp + " does not have an end offset.");
             result.put(tp, endOffset);

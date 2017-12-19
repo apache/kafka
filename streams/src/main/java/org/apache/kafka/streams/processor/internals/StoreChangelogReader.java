@@ -255,15 +255,6 @@ public class StoreChangelogReader implements ChangelogReader {
                 throw new TaskMigratedException(task, topicPartition, endOffset, pos);
             }
 
-            // we need to check if a the changelog topic has been updated during restore
-            if (restorer.isChangeLogTopic()) {
-                Long possiblyUpdatedEndOffset = restoreConsumer.endOffsets(Collections.singletonList(topicPartition)).get(topicPartition);
-                if (endOffset.longValue() != possiblyUpdatedEndOffset.longValue()) {
-                    throw new TaskMigratedException(task, topicPartition, possiblyUpdatedEndOffset, pos);
-                }
-            }
-
-
             log.debug("Completed restoring state from changelog {} with {} records ranging from offset {} to {}",
                       topicPartition,
                       restorer.restoredNumRecords(),
@@ -294,7 +285,11 @@ public class StoreChangelogReader implements ChangelogReader {
             }
         }
 
-        if (nextPosition == -1) {
+
+        // if we have changelog topic then we should have restored all records in the list
+        // otherwise if we did not fully restore to that point we need to set nextPosition
+        // to the position of the restoreConsumer and we'll cause a TaskMigratedException exception
+        if (nextPosition == -1 || (restorer.offsetLimit() == Long.MAX_VALUE && numberRecords != numberRestored)) {
             nextPosition = restoreConsumer.position(restorer.partition());
         }
 
@@ -302,13 +297,6 @@ public class StoreChangelogReader implements ChangelogReader {
             restorer.restore(restoreRecords);
             restorer.restoreBatchCompleted(nextPosition, records.size());
 
-        }
-
-        // if it's changelog topic and we did not restore all records in list, need to return last offset contained in list
-        // to force a TaskMigratedException in restorePartition method, as we encountered race condition and the
-        // changelog topic has been updated
-        if (restorer.isChangeLogTopic() && numberRestored != numberRecords) {
-            nextPosition = records.get(numberRecords - 1).offset();
         }
 
         return nextPosition;
