@@ -18,14 +18,14 @@
 package kafka.server
 
 import java.io.{File, IOException}
-import java.net.SocketTimeoutException
+import java.net.{InetAddress, SocketTimeoutException}
 import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_9_0
-import kafka.cluster.Broker
+import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
@@ -36,7 +36,7 @@ import kafka.network.SocketServer
 import kafka.security.CredentialProvider
 import kafka.security.auth.Authorizer
 import kafka.utils._
-import kafka.zk.KafkaZkClient
+import kafka.zk.{BrokerInfo, KafkaZkClient}
 import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.internals.ClusterResourceListeners
@@ -44,6 +44,7 @@ import org.apache.kafka.common.metrics.{JmxReporter, Metrics, _}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Node}
@@ -145,6 +146,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private var _clusterId: String = null
   private var _brokerTopicStats: BrokerTopicStats = null
 
+
   def clusterId: String = _clusterId
 
   // Visible for testing
@@ -242,8 +244,44 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
 
+        /* tell everyone we are alive */
+        val listeners = config.advertisedListeners.map { endpoint =>
+          if (endpoint.port == 0)
+            endpoint.copy(port = socketServer.boundPort(endpoint.listenerName))
+          else
+            endpoint
+        }
+
+        // to be cleaned up in KAFKA-6320
+        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkUtils, config.rack,
+          config.interBrokerProtocolVersion)
+        kafkaHealthcheck.startup()
+        // KAFKA-6320
+
+        val updatedEndpoints = listeners.map(endpoint =>
+          if (endpoint.host == null || endpoint.host.trim.isEmpty)
+            endpoint.copy(host = InetAddress.getLocalHost.getCanonicalHostName)
+          else
+            endpoint
+        )
+
+        // the default host and port are here for compatibility with older clients that only support PLAINTEXT
+        // we choose the first plaintext port, if there is one
+        // or we register an empty endpoint, which means that older clients will not be able to connect
+        val plaintextEndpoint = updatedEndpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).getOrElse(
+          new EndPoint(null, -1, null, null))
+
+        val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
+        val brokerInfo = new BrokerInfo(config.brokerId,
+          plaintextEndpoint.host, plaintextEndpoint.port,
+          updatedEndpoints, jmxPort, config.rack, config.interBrokerProtocolVersion)
+        zkClient.registerBrokerInZk(brokerInfo)
+
+        // Now that the broker id is successfully registered via KafkaHealthcheck, checkpoint it
+        checkpointBrokerId(config.brokerId)
+
         /* start kafka controller */
-        kafkaController = new KafkaController(config, zkClient, time, metrics, threadNamePrefix)
+        kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, threadNamePrefix)
         kafkaController.startup()
 
         adminManager = new AdminManager(config, metrics, metadataCache, zkClient)
@@ -285,19 +323,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         dynamicConfigManager = new DynamicConfigManager(zkClient, dynamicConfigHandlers)
         dynamicConfigManager.startup()
 
-        /* tell everyone we are alive */
-        val listeners = config.advertisedListeners.map { endpoint =>
-          if (endpoint.port == 0)
-            endpoint.copy(port = socketServer.boundPort(endpoint.listenerName))
-          else
-            endpoint
-        }
-        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkUtils, config.rack,
-          config.interBrokerProtocolVersion)
-        kafkaHealthcheck.startup()
-
-        // Now that the broker id is successfully registered via KafkaHealthcheck, checkpoint it
-        checkpointBrokerId(config.brokerId)
 
         brokerState.newState(RunningAsBroker)
         shutdownLatch = new CountDownLatch(1)

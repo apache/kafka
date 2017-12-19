@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.common.network;
 
+import java.nio.channels.SelectionKey;
+import javax.net.ssl.SSLEngine;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestCondition;
@@ -83,8 +86,14 @@ public class SslSelectorTest extends SelectorTest {
     public void testDisconnectWithIntermediateBufferedBytes() throws Exception {
         int requestSize = 100 * 1024;
         final String node = "0";
-        connect(node, new InetSocketAddress("localhost", server.port));
         String request = TestUtils.randomString(requestSize);
+
+        this.selector.close();
+
+        this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        this.channelBuilder.configure(sslClientConfigs);
+        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
+        connect(node, new InetSocketAddress("localhost", server.port));
         selector.send(createSend(node, request));
 
         TestUtils.waitForCondition(new TestCondition() {
@@ -142,7 +151,7 @@ public class SslSelectorTest extends SelectorTest {
         Map<String, Object> sslServerConfigs = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
         channelBuilder = new SslChannelBuilder(Mode.SERVER);
         channelBuilder.configure(sslServerConfigs);
-        selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup", 
+        selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
                 new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
@@ -222,6 +231,44 @@ public class SslSelectorTest extends SelectorTest {
 
     private SslSender createSender(InetSocketAddress serverAddress, byte[] payload) {
         return new SslSender(serverAddress, payload);
+    }
+
+    private static class TestSslChannelBuilder extends SslChannelBuilder {
+
+        public TestSslChannelBuilder(Mode mode) {
+            super(mode);
+        }
+
+        @Override
+        protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key, String host) throws IOException {
+            SocketChannel socketChannel = (SocketChannel) key.channel();
+            SSLEngine sslEngine = sslFactory.createSslEngine(host, socketChannel.socket().getPort());
+            TestSslTransportLayer transportLayer = new TestSslTransportLayer(id, key, sslEngine);
+            transportLayer.startHandshake();
+            return transportLayer;
+        }
+
+        /*
+         * TestSslTransportLayer will read from socket once every two tries. This increases
+         * the chance that there will be bytes buffered in the transport layer after read().
+         */
+        class TestSslTransportLayer extends SslTransportLayer {
+            boolean muteSocket = false;
+
+            public TestSslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
+                super(channelId, key, sslEngine);
+            }
+
+            @Override
+            protected int readFromSocketChannel() throws IOException {
+                if (muteSocket) {
+                    muteSocket = false;
+                    return 0;
+                }
+                muteSocket = true;
+                return super.readFromSocketChannel();
+            }
+        }
     }
 
 }
