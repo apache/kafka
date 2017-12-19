@@ -798,12 +798,12 @@ public class InternalTopologyBuilder {
 
     public synchronized Map<Integer, Set<String>> nodeGroups() {
         if (nodeGroups == null) {
-            nodeGroups = makeNodeGroups();
+            nodeGroups = makeNodeGroups(true);
         }
         return nodeGroups;
     }
 
-    private Map<Integer, Set<String>> makeNodeGroups() {
+    private Map<Integer, Set<String>> makeNodeGroups(boolean removeGlobalNodeGroups) {
         final HashMap<Integer, Set<String>> nodeGroups = new LinkedHashMap<>();
         final HashMap<String, Set<String>> rootToNodeGroup = new HashMap<>();
 
@@ -814,7 +814,7 @@ public class InternalTopologyBuilder {
         allSourceNodes.addAll(nodeToSourcePatterns.keySet());
 
         for (final String nodeName : Utils.sorted(allSourceNodes)) {
-            if (isGlobalSource(nodeName)) continue;
+            if (removeGlobalNodeGroups && isGlobalSource(nodeName)) continue;
             final String root = nodeGrouper.root(nodeName);
             Set<String> nodeGroup = rootToNodeGroup.get(root);
             if (nodeGroup == null) {
@@ -829,7 +829,7 @@ public class InternalTopologyBuilder {
         for (final String nodeName : Utils.sorted(nodeFactories.keySet())) {
             if (!nodeToSourceTopics.containsKey(nodeName)) {
                 final String root = nodeGrouper.root(nodeName);
-                if (!rootToNodeGroup.containsKey(root)) continue;
+                if (removeGlobalNodeGroups && !rootToNodeGroup.containsKey(root)) continue;
                 Set<String> nodeGroup = rootToNodeGroup.get(root);
                 if (nodeGroup == null) {
                     nodeGroup = new HashSet<>();
@@ -878,7 +878,7 @@ public class InternalTopologyBuilder {
 
     private Set<String> globalNodeGroups() {
         final Set<String> globalGroups = new HashSet<>();
-        for (final Map.Entry<Integer, Set<String>> nodeGroup : nodeGroups().entrySet()) {
+        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups(false).entrySet()) {
             final Set<String> nodes = nodeGroup.getValue();
             for (final String node : nodes) {
                 if (isGlobalSource(node)) {
@@ -1023,7 +1023,7 @@ public class InternalTopologyBuilder {
         final Map<Integer, TopicsInfo> topicGroups = new LinkedHashMap<>();
 
         if (nodeGroups == null) {
-            nodeGroups = makeNodeGroups();
+            nodeGroups = makeNodeGroups(false);
         }
 
         for (final Map.Entry<Integer, Set<String>> entry : nodeGroups.entrySet()) {
@@ -1295,7 +1295,7 @@ public class InternalTopologyBuilder {
     }
 
     private void describeSubtopologies(final TopologyDescription description) {
-        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
+        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups(false).entrySet()) {
 
             final Set<String> allNodesOfGroups = nodeGroup.getValue();
             final boolean isNodeGroupOfGlobalStores = nodeGroupContainsGlobalSourceNode(allNodesOfGroups);
@@ -1370,7 +1370,7 @@ public class InternalTopologyBuilder {
     }
 
     private void describeGlobalStores(final TopologyDescription description) {
-        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
+        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups(false).entrySet()) {
             final Set<String> nodes = nodeGroup.getValue();
 
             final Iterator<String> it = nodes.iterator();
