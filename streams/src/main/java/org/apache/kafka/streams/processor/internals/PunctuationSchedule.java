@@ -71,7 +71,7 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
             nextPunctuationTime = timestamp + interval;
         }
 
-        PunctuationSchedule nextSchedule = new PunctuationSchedule(value, nextPunctuationTime, interval, punctuator, cancellable);
+        final PunctuationSchedule nextSchedule = new PunctuationSchedule(value, nextPunctuationTime, interval, punctuator, cancellable);
 
         cancellable.setSchedule(nextSchedule);
 
