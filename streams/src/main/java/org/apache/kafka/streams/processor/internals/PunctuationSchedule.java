@@ -66,10 +66,10 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
         //   received for more than 2*interval (also happens on first STREAM_TIME punctuation i.e., when timestamp == 0L)
         // - when using WALL_CLOCK_TIME and there was a gap i.e., punctuation was delayed for more than 2*interval (GC pause, overload, ...)
         if (timestamp + interval > currTimestamp) {
-          nextPunctuationTime = timestamp + interval;
+            nextPunctuationTime = timestamp + interval;
         } else {
-          // we missed one ore more punctuations
-          nextPunctuationTime = currTimestamp + interval;
+            // we missed one ore more punctuations
+            nextPunctuationTime = currTimestamp + interval;
         }
 
         final PunctuationSchedule nextSchedule = new PunctuationSchedule(value, nextPunctuationTime, interval, punctuator, cancellable);
