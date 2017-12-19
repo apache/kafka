@@ -40,12 +40,14 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -101,6 +103,7 @@ public class QueryableStateIntegrationTest {
     private String streamConcurrent = "stream-concurrent";
     private String outputTopic = "output";
     private String outputTopicConcurrent = "output-concurrent";
+    private String outputTopicConcurrentWindowed = "output-concurrent-windowed";
     private String outputTopicThree = "output-three";
     // sufficiently large window size such that everything falls into 1 window
     private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(2, TimeUnit.DAYS);
@@ -121,12 +124,13 @@ public class QueryableStateIntegrationTest {
         streamThree = streamThree + "-" + testNo;
         outputTopic = outputTopic + "-" + testNo;
         outputTopicConcurrent = outputTopicConcurrent + "-" + testNo;
+        outputTopicConcurrentWindowed = outputTopicConcurrentWindowed + "-" + testNo;
         outputTopicThree = outputTopicThree + "-" + testNo;
         streamTwo = streamTwo + "-" + testNo;
         CLUSTER.createTopics(streamOne, streamConcurrent);
         CLUSTER.createTopic(streamTwo, STREAM_TWO_PARTITIONS, NUM_REPLICAS);
         CLUSTER.createTopic(streamThree, STREAM_THREE_PARTITIONS, 1);
-        CLUSTER.createTopics(outputTopic, outputTopicConcurrent, outputTopicThree);
+        CLUSTER.createTopics(outputTopic, outputTopicConcurrent, outputTopicConcurrentWindowed, outputTopicThree);
     }
 
     @Before
@@ -199,6 +203,7 @@ public class QueryableStateIntegrationTest {
      */
     private KafkaStreams createCountStream(final String inputTopic,
                                            final String outputTopic,
+                                           final String windowOutputTopic,
                                            final String storeName,
                                            final String windowStoreName,
                                            final Properties streamsConfiguration) {
@@ -224,7 +229,14 @@ public class QueryableStateIntegrationTest {
         // Create a Windowed State Store that contains the word count for every 1 minute
         groupedByWord
             .windowedBy(TimeWindows.of(WINDOW_SIZE))
-            .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as(windowStoreName + "-" + inputTopic));
+            .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as(windowStoreName + "-" + inputTopic))
+            .toStream(new KeyValueMapper<Windowed<String>, Long, String>() {
+                @Override
+                public String apply(final Windowed<String> key, final Long value) {
+                    return key.key();
+                }
+            })
+            .to(windowOutputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         return new KafkaStreams(builder.build(), streamsConfiguration);
     }
@@ -236,12 +248,13 @@ public class QueryableStateIntegrationTest {
 
         StreamRunnable(final String inputTopic,
                        final String outputTopic,
+                       final String outputTopicWindowed,
                        final String storeName,
                        final String windowStoreName,
                        final int queryPort) {
             final Properties props = (Properties) streamsConfiguration.clone();
             props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + queryPort);
-            myStream = createCountStream(inputTopic, outputTopic, storeName, windowStoreName, props);
+            myStream = createCountStream(inputTopic, outputTopic, outputTopicWindowed, storeName, windowStoreName, props);
             myStream.setStateListener(stateListener);
         }
 
@@ -350,7 +363,7 @@ public class QueryableStateIntegrationTest {
         final String storeName = "word-count-store";
         final String windowStoreName = "windowed-word-count-store";
         for (int i = 0; i < numThreads; i++) {
-            streamRunnables[i] = new StreamRunnable(streamThree, outputTopicThree, storeName, windowStoreName, i);
+            streamRunnables[i] = new StreamRunnable(streamThree, outputTopicThree, outputTopicConcurrentWindowed, storeName, windowStoreName, i);
             streamThreads[i] = new Thread(streamRunnables[i]);
             streamThreads[i].start();
         }
@@ -398,13 +411,14 @@ public class QueryableStateIntegrationTest {
 
         final ProducerRunnable producerRunnable = new ProducerRunnable(streamConcurrent, inputValues, numIterations);
         final Thread producerThread = new Thread(producerRunnable);
-        kafkaStreams = createCountStream(streamConcurrent, outputTopicConcurrent, storeName, windowStoreName, streamsConfiguration);
+        kafkaStreams = createCountStream(streamConcurrent, outputTopicConcurrent, outputTopicConcurrentWindowed, storeName, windowStoreName, streamsConfiguration);
 
         kafkaStreams.start();
         producerThread.start();
 
         try {
             waitUntilAtLeastNumRecordProcessed(outputTopicConcurrent, numberOfWordsPerIteration);
+            waitUntilAtLeastNumRecordProcessed(outputTopicConcurrentWindowed, numberOfWordsPerIteration);
 
             final ReadOnlyKeyValueStore<String, Long>
                 keyValueStore = kafkaStreams.store(storeName + "-" + streamConcurrent, QueryableStoreTypes.<String, Long>keyValueStore());
