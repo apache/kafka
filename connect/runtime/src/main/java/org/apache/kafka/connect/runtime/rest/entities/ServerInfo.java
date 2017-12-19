@@ -20,9 +20,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.common.utils.AppInfoParser;
 
 public class ServerInfo {
-    private String version;
-    private String commit;
-    private String kafkaClusterId;
+    private final String version;
+    private final String commit;
+    private final String kafkaClusterId;
 
     public ServerInfo(String kafkaClusterId) {
         version = AppInfoParser.getVersion();

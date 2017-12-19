@@ -58,7 +58,6 @@ import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -117,12 +116,7 @@ public class WorkerTest extends ThreadedTest {
     public void testLookupKafkaClusterId() {
         final Node broker1 = new Node(0, "dummyHost-1", 1234);
         final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        List<Node> cluster = new ArrayList<Node>(2) {
-            {
-                add(broker1);
-                add(broker2);
-            }
-        };
+        List<Node> cluster = Arrays.asList(broker1, broker2);
         MockAdminClient adminClient = new MockAdminClient(cluster);
 
         assertEquals(MockAdminClient.CLUSTER_ID, Worker.lookupKafkaClusterId(adminClient));
@@ -132,12 +126,7 @@ public class WorkerTest extends ThreadedTest {
     public void testLookupKafkaClusterIdTimeout() {
         final Node broker1 = new Node(0, "dummyHost-1", 1234);
         final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        List<Node> cluster = new ArrayList<Node>(2) {
-            {
-                add(broker1);
-                add(broker2);
-            }
-        };
+        List<Node> cluster = Arrays.asList(broker1, broker2);
         MockAdminClient adminClient = new MockAdminClient(cluster);
         adminClient.timeoutNextRequest(1);
 

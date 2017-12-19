@@ -47,8 +47,8 @@ public class MockAdminClient extends AdminClient {
     private int timeoutNextRequests = 0;
 
     /**
-     * Creates the
-     * @param brokers
+     * Creates MockAdminClient for a cluster with the given brokers. By default the first broker in the list is the controller
+     * @param brokers list of brokers in the cluster
      */
     public MockAdminClient(List<Node> brokers) {
         this.brokers = brokers;
