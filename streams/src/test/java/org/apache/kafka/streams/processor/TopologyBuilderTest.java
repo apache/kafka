@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
+import org.apache.kafka.streams.processor.internals.UnwindowedChangelogTopicConfig;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -406,27 +407,13 @@ public class TopologyBuilderTest {
         final String store3 = ProcessorStateManager.storeChangelogTopic("X", "store-3");
         expectedTopicGroups.put(0, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-1", "topic-1x", "topic-2"),
                                                   Collections.<String, InternalTopicConfig>emptyMap(),
-                                                  Collections.singletonMap(store1,
-                                                                           new InternalTopicConfig(
-                                                                                   store1,
-                                                                                   InternalTopicConfig.InternalTopicType.UNWINDOWED_STORE_CHANGELOG,
-                                                                                   Collections.<String, String>emptyMap()))));
+                                                  Collections.singletonMap(store1, (InternalTopicConfig)  new UnwindowedChangelogTopicConfig(store1, Collections.<String, String>emptyMap()))));
         expectedTopicGroups.put(1, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-3", "topic-4"),
                                                   Collections.<String, InternalTopicConfig>emptyMap(),
-                                                  Collections.singletonMap(store2,
-                                                                           new InternalTopicConfig(
-                                                                                   store2,
-                                                                                   InternalTopicConfig.InternalTopicType.UNWINDOWED_STORE_CHANGELOG,
-                                                                                   Collections.<String, String>emptyMap()))));
+                                                  Collections.singletonMap(store2, (InternalTopicConfig)  new UnwindowedChangelogTopicConfig(store2, Collections.<String, String>emptyMap()))));
         expectedTopicGroups.put(2, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-5"),
                                                   Collections.<String, InternalTopicConfig>emptyMap(),
-                                                  Collections.singletonMap(store3,
-                                                                           new InternalTopicConfig(
-                                                                                   store3,
-                                                                                   InternalTopicConfig.InternalTopicType.UNWINDOWED_STORE_CHANGELOG,
-                                                                                   Collections.<String, String>emptyMap()))));
-
-
+                                                  Collections.singletonMap(store3, (InternalTopicConfig)  new UnwindowedChangelogTopicConfig(store3, Collections.<String, String>emptyMap()))));
 
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);
@@ -573,7 +560,6 @@ public class TopologyBuilderTest {
         assertEquals(2, properties.size());
         assertEquals("40000", properties.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals("appId-store-changelog", topicConfig.name());
-        assertEquals(InternalTopicConfig.InternalTopicType.WINDOWED_STORE_CHANGELOG, topicConfig.type());
     }
 
     @Test
@@ -589,7 +575,6 @@ public class TopologyBuilderTest {
         final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
         assertEquals(1, properties.size());
         assertEquals("appId-store-changelog", topicConfig.name());
-        assertEquals(InternalTopicConfig.InternalTopicType.UNWINDOWED_STORE_CHANGELOG, topicConfig.type());
     }
 
     @Test
@@ -603,7 +588,6 @@ public class TopologyBuilderTest {
         final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
         assertEquals(4, properties.size());
         assertEquals("appId-foo", topicConfig.name());
-        assertEquals(InternalTopicConfig.InternalTopicType.REPARTITION, topicConfig.type());
     }
 
 

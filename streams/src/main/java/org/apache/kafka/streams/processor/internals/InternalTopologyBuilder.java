@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.processor.internals.InternalTopicConfig.InternalTopicType;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -1043,7 +1042,7 @@ public class InternalTopologyBuilder {
                         if (internalTopicNames.contains(topic)) {
                             // prefix the internal topic name with the application id
                             final String internalTopic = decorateTopic(topic);
-                            repartitionTopics.put(internalTopic, new InternalTopicConfig(internalTopic, InternalTopicType.REPARTITION, Collections.<String, String>emptyMap()));
+                            repartitionTopics.put(internalTopic, new RepartitionTopicConfig(internalTopic, Collections.<String, String>emptyMap()));
                             sourceTopics.add(internalTopic);
                         } else {
                             sourceTopics.add(topic);
@@ -1119,9 +1118,9 @@ public class InternalTopologyBuilder {
     private InternalTopicConfig createChangelogTopicConfig(final StateStoreFactory factory,
                                                            final String name) {
         if (!factory.isWindowStore()) {
-            return new InternalTopicConfig(name, InternalTopicType.UNWINDOWED_STORE_CHANGELOG, factory.logConfig());
+            return new UnwindowedChangelogTopicConfig(name, factory.logConfig());
         } else {
-            final InternalTopicConfig config = new InternalTopicConfig(name, InternalTopicType.WINDOWED_STORE_CHANGELOG, factory.logConfig());
+            final WindowedChangelogTopicConfig config = new WindowedChangelogTopicConfig(name, factory.logConfig());
             config.setRetentionMs(factory.retentionPeriod());
             return config;
         }

@@ -16,11 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.internals.Topic;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -28,50 +25,21 @@ import java.util.Objects;
  * InternalTopicConfig captures the properties required for configuring
  * the internal topics we create for change-logs and repartitioning etc.
  */
-public class InternalTopicConfig {
+public abstract class InternalTopicConfig {
 
     // we need to distinguish windowed and un-windowed store changelog since their cleanup policy may be different
     public enum InternalTopicType { REPARTITION, WINDOWED_STORE_CHANGELOG, UNWINDOWED_STORE_CHANGELOG }
 
-    private static final Map<String, String> REPARTITION_TOPIC_DEFAULT_OVERRIDES;
-    static {
-        final Map<String, String> tempTopicDefaultOverrides = new HashMap<>();
-        tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
-        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "52428800");     // 50 MB
-        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_BYTES_CONFIG, "52428800");           // 50 MB
-        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_MS_CONFIG, "600000");                // 10 min
-        REPARTITION_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
-    }
+    final String name;
+    final Map<String, String> topicConfigs;
 
-    private static final Map<String, String> UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES;
-    static {
-        final Map<String, String> tempTopicDefaultOverrides = new HashMap<>();
-        tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
-        UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
-    }
-
-    private static final Map<String, String> WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES;
-    static {
-        final Map<String, String> tempTopicDefaultOverrides = new HashMap<>();
-        tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE);
-        WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
-    }
-
-    private final String name;
     private int numberOfPartitions = -1;
-    private final InternalTopicType topicType;
-    private final Map<String, String> topicConfigs;
 
-    private Long retentionMs;
-
-    public InternalTopicConfig(final String name,
-                               final InternalTopicType topicType,
-                               final Map<String, String> topicConfigs) {
+    InternalTopicConfig(final String name, final Map<String, String> topicConfigs) {
         Objects.requireNonNull(name, "name can't be null");
         Topic.validate(name);
 
         this.name = name;
-        this.topicType = topicType;
         this.topicConfigs = topicConfigs;
     }
 
@@ -82,41 +50,10 @@ public class InternalTopicConfig {
      * @param additionalRetentionMs - added to retention to allow for clock drift etc
      * @return Properties to be used when creating the topic
      */
-    public Map<String, String> getProperties(final Map<String, String> defaultProperties, final long additionalRetentionMs) {
-        // internal topic config overridden rule: library overrides < global config overrides < per-topic config overrides
-        final Map<String, String> topicConfig = new HashMap<>();
-
-        switch (topicType) {
-            case REPARTITION:
-                topicConfig.putAll(REPARTITION_TOPIC_DEFAULT_OVERRIDES);
-                break;
-
-            case UNWINDOWED_STORE_CHANGELOG:
-                topicConfig.putAll(UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES);
-                break;
-
-            case WINDOWED_STORE_CHANGELOG:
-                topicConfig.putAll(WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES);
-                break;
-        }
-
-        topicConfig.putAll(defaultProperties);
-
-        topicConfig.putAll(topicConfigs);
-
-        if (retentionMs != null && topicType == InternalTopicType.WINDOWED_STORE_CHANGELOG) {
-            topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs + additionalRetentionMs));
-        }
-
-        return topicConfig;
-    }
+    abstract public Map<String, String> getProperties(final Map<String, String> defaultProperties, final long additionalRetentionMs);
 
     public String name() {
         return name;
-    }
-
-    public InternalTopicType type() {
-        return topicType;
     }
 
     public int numberOfPartitions() {
@@ -133,39 +70,11 @@ public class InternalTopicConfig {
         this.numberOfPartitions = numberOfPartitions;
     }
 
-    void setRetentionMs(final long retentionMs) {
-        if (topicType != InternalTopicType.WINDOWED_STORE_CHANGELOG) {
-            throw new IllegalStateException("Setting retention.ms called for not windowed store changelog topics: " + this.toString());
-        }
-
-        if (!topicConfigs.containsKey(TopicConfig.RETENTION_MS_CONFIG)) {
-            this.retentionMs = retentionMs;
-        }
-    }
-
-    @Override
-    public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        final InternalTopicConfig that = (InternalTopicConfig) o;
-        return Objects.equals(name, that.name) &&
-               Objects.equals(topicType, that.topicType) &&
-               Objects.equals(topicConfigs, that.topicConfigs) &&
-               Objects.equals(retentionMs, that.retentionMs);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(name, topicType, topicConfigs, retentionMs);
-    }
-
     @Override
     public String toString() {
         return "InternalTopicConfig(" +
                 "name=" + name +
-                ", topicType=" + topicType +
                 ", topicConfigs=" + topicConfigs +
-                ", retentionMs=" + retentionMs +
                 ")";
     }
 }

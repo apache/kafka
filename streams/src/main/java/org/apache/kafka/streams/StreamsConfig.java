@@ -762,7 +762,7 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(adminClientPrefix(AdminClientConfig.RETRIES_CONFIG), config.getInt(AdminClientConfig.RETRIES_CONFIG));
 
         // verify that producer batch config is no larger than segment size, then add topic configs required for creating topics
-        Map<String, Object> topicProps = originalsWithPrefix(TOPIC_PREFIX, false);
+        final Map<String, Object> topicProps = originalsWithPrefix(TOPIC_PREFIX, false);
 
         if (topicProps.containsKey(topicPrefix(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG))) {
             final int segmentSize = Integer.parseInt(topicProps.get(topicPrefix(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG)).toString());
