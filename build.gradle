@@ -549,11 +549,18 @@ project(':core') {
     compile libs.joptSimple
     compile libs.metrics
     compile libs.scala
-    compile libs.slf4jApi
-    compile libs.slf4jlog4j
     compile libs.scalaLogging
-    compile libs.zkclient
-    compile libs.zookeeper
+    compile libs.slf4jApi
+    compile(libs.zkclient) {
+      exclude module: 'zookeeper'
+    }
+    compile(libs.zookeeper) {
+      exclude module: 'slf4j-log4j12'
+      exclude module: 'log4j'
+      exclude module: 'netty'
+    }
+
+    compileOnly libs.log4j
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.bcpkix
@@ -571,6 +578,7 @@ project(':core') {
     testCompile libs.apachedsJdbmPartition
     testCompile libs.junit
     testCompile libs.scalatest
+    testCompile libs.slf4jlog4j
     testCompile libs.jfreechart
 
     scoverage libs.scoveragePlugin
@@ -595,7 +603,6 @@ project(':core') {
     compile.exclude module: 'jmxri'
     compile.exclude module: 'jmxtools'
     compile.exclude module: 'mail'
-    compile.exclude module: 'netty'
     // To prevent a UniqueResourceException due the same resource existing in both
     // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
     testCompile.exclude module: 'api-ldap-schema-data'
@@ -604,6 +611,7 @@ project(':core') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntime) {
       include('slf4j-log4j12*')
+      include('log4j*jar')
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
@@ -853,7 +861,7 @@ project(':tools') {
     compile project(':log4j-appender')
     compile libs.argparse4j
     compile libs.jacksonDatabind
-    compile libs.slf4jlog4j
+    compile libs.slf4jApi
 
     compile libs.jacksonJaxrsJsonProvider
     compile libs.jerseyContainerServlet
@@ -867,6 +875,8 @@ project(':tools') {
     testCompile libs.easymock
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
+
+    testRuntime libs.slf4jlog4j
   }
 
   javadoc {
@@ -876,6 +886,7 @@ project(':tools') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntime) {
       include('slf4j-log4j12*')
+      include('log4j*jar')
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
@@ -916,6 +927,7 @@ project(':streams') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntime) {
       include('slf4j-log4j12*')
+      include('log4j*jar')
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
@@ -946,7 +958,7 @@ project(':streams:examples') {
   dependencies {
     compile project(':streams')
     compile project(':connect:json')  // this dependency should be removed after we unify data API
-    compile libs.slf4jlog4j           // this dependency should be removed after KIP-4
+    compile libs.slf4jlog4j
   }
 
   javadoc {
@@ -1046,6 +1058,7 @@ project(':connect:api') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntime) {
       include('slf4j-log4j12*')
+      include('log4j*jar')
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
@@ -1083,6 +1096,7 @@ project(':connect:transforms') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntime) {
       include('slf4j-log4j12*')
+      include('log4j*jar')
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
@@ -1121,6 +1135,7 @@ project(':connect:json') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntime) {
       include('slf4j-log4j12*')
+      include('log4j*jar')
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
@@ -1172,6 +1187,7 @@ project(':connect:runtime') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntime) {
       include('slf4j-log4j12*')
+      include('log4j*jar')
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
@@ -1231,6 +1247,7 @@ project(':connect:file') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     from (configurations.testRuntime) {
       include('slf4j-log4j12*')
+      include('log4j*jar')
     }
     from (configurations.runtime) {
       exclude('kafka-clients*')
