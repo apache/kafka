@@ -796,23 +796,23 @@ public class KafkaStreams {
         } else {
             stateDirCleaner.shutdownNow();
 
-            // notify all the threads to stop; avoid deadlocks by stopping any
-            // further state reports from the thread since we're shutting down
-            for (final StreamThread thread : threads) {
-                thread.setStateListener(null);
-                thread.shutdown();
-            }
-            if (globalStreamThread != null) {
-                globalStreamThread.setStateListener(null);
-                globalStreamThread.shutdown();
-            }
-
             // wait for all threads to join in a separate thread;
             // save the current thread so that if it is a stream thread
             // we don't attempt to join it and cause a deadlock
             final Thread shutdownThread = new Thread(new Runnable() {
                 @Override
                 public void run() {
+                    // notify all the threads to stop; avoid deadlocks by stopping any
+                    // further state reports from the thread since we're shutting down
+                    for (final StreamThread thread : threads) {
+                        thread.setStateListener(null);
+                        thread.shutdown();
+                    }
+                    if (globalStreamThread != null) {
+                        globalStreamThread.setStateListener(null);
+                        globalStreamThread.shutdown();
+                    }
+
                     for (final StreamThread thread : threads) {
                         try {
                             if (!thread.isRunning()) {

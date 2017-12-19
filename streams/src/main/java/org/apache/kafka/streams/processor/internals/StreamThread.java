@@ -175,9 +175,11 @@ public class StreamThread extends Thread {
      * @param newState New state
      */
     boolean setState(final State newState) {
-        final State oldState = state;
+        final State oldState;
 
         synchronized (stateLock) {
+            oldState = state;
+
             if (state == State.PENDING_SHUTDOWN && newState != State.DEAD) {
                 // when the state is already in PENDING_SHUTDOWN, all other transitions will be
                 // refused but we do not throw exception here
@@ -207,6 +209,10 @@ public class StreamThread extends Thread {
 
         if (stateListener != null) {
             stateListener.onChange(this, state, oldState);
+        }
+
+        if (oldState == State.CREATED && newState == State.PENDING_SHUTDOWN) {
+            completeShutdown(true);
         }
 
         return true;
@@ -714,7 +720,10 @@ public class StreamThread extends Thread {
     @Override
     public void run() {
         log.info("Starting");
-        setState(State.RUNNING);
+        if (!setState(State.RUNNING)) {
+            log.info("StreamThread already shutdown. Not running");
+            return;
+        }
         boolean cleanRun = false;
         try {
             runLoop();
