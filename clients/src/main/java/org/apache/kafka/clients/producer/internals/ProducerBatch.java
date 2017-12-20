@@ -77,13 +77,13 @@ public final class ProducerBatch {
     private boolean retry;
     private boolean reopened = false;
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
-        this(tp, recordsBuilder, now, false);
+    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long creationTime) {
+        this(tp, recordsBuilder, creationTime, false);
     }
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now, boolean isSplitBatch) {
-        this.createdMs = now;
-        this.lastAttemptMs = now;
+    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long creationTime, boolean isSplitBatch) {
+        this.createdMs = creationTime;
+        this.lastAttemptMs = creationTime;
         this.recordsBuilder = recordsBuilder;
         this.topicPartition = tp;
         this.lastAppendTime = createdMs;
@@ -158,7 +158,17 @@ public final class ProducerBatch {
     }
 
     /**
-     * Complete the request. If the batch was previously aborted, this is a no-op.
+     * Finalize the state of a batch. Final state, once set, is immutable. This function may be called
+     * once or twice on a batch. It may be called twice if
+     * 1. An inflight batch expires before a response from the broker is received. The batch's final
+     * state is set to FAILED. But it could succeed on the broker and second time around batch.done() may
+     * try to set SUCCEEDED final state.
+     * 2. If a transaction abortion happens or if the producer is closed forcefully, the final state is
+     * ABORTED but again it could succeed if broker responds with a success.
+     *
+     * Attempted transitions from [FAILED | ABORTED] --> SUCCEEDED are logged.
+     * Attempted transitions from one failure state to the same or a different failed state are ignored.
+     * Attempted transitions from SUCCEEDED to the same or a failed state throw an exception.
      *
      * @param baseOffset The base offset of the messages assigned by the server
      * @param logAppendTime The log append time or -1 if CreateTime is being used
@@ -166,26 +176,32 @@ public final class ProducerBatch {
      * @return true if the batch was completed successfully and false if the batch was previously aborted
      */
     public boolean done(long baseOffset, long logAppendTime, RuntimeException exception) {
-        final FinalState finalState;
-        if (exception == null) {
+        final FinalState tryFinalState = (exception == null) ? FinalState.SUCCEEDED : FinalState.FAILED;
+
+        if (tryFinalState == FinalState.SUCCEEDED) {
             log.trace("Successfully produced messages to {} with base offset {}.", topicPartition, baseOffset);
-            finalState = FinalState.SUCCEEDED;
         } else {
             log.trace("Failed to produce messages to {}.", topicPartition, exception);
-            finalState = FinalState.FAILED;
         }
 
-        if (!this.finalState.compareAndSet(null, finalState)) {
-            if (this.finalState.get() == FinalState.ABORTED) {
-                log.debug("ProduceResponse returned for {} after batch had already been aborted.", topicPartition);
-                return false;
-            } else {
-                throw new IllegalStateException("Batch has already been completed in final state " + this.finalState.get());
+        if (this.finalState.compareAndSet(null, tryFinalState)) {
+            completeFutureAndFireCallbacks(baseOffset, logAppendTime, exception);
+            return true;
+        }
+
+        if (this.finalState.get() != FinalState.SUCCEEDED) {
+            if (tryFinalState == FinalState.SUCCEEDED) {
+                // Log if a previously unsuccessful batch succeeded later on.
+                log.debug("ProduceResponse returned {} for {} after batch had already been {}.", tryFinalState,
+                    topicPartition, this.finalState.get());
             }
+            // FAILED --> ABORTED and ABORTED --> FAILED transitions are ignored.
+        } else {
+            // A SUCCESSFUL batch must not attempt another state change.
+            throw new IllegalStateException("A " + this.finalState.get() + " batch must not attempt another state change to " + tryFinalState);
         }
 
-        completeFutureAndFireCallbacks(baseOffset, logAppendTime, exception);
-        return true;
+        return false;
     }
 
     private void completeFutureAndFireCallbacks(long baseOffset, long logAppendTime, RuntimeException exception) {
@@ -300,29 +316,33 @@ public final class ProducerBatch {
     }
 
     /**
-     * A batch whose metadata is not available should be expired if one of the following is true:
-     * <ol>
-     *     <li> the batch is not in retry AND request timeout has elapsed after it is ready (full or linger.ms has reached).
-     *     <li> the batch is in retry AND request timeout has elapsed after the backoff period ended.
-     * </ol>
+     * Expire the batch if current time has passed the delivery timeout of the batch.
+     * The delivery timeout is measured from batch creation time instead of batch close time
+     * because in some cases batch close may be arbitrarily delayed.
      * This methods closes this batch and sets {@code expiryErrorMessage} if the batch has timed out.
      */
-    boolean maybeExpire(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs, boolean isFull) {
-        if (!this.inRetry() && isFull && requestTimeoutMs < (now - this.lastAppendTime))
-            expiryErrorMessage = (now - this.lastAppendTime) + " ms has passed since last append";
-        else if (!this.inRetry() && requestTimeoutMs < (createdTimeMs(now) - lingerMs))
-            expiryErrorMessage = (createdTimeMs(now) - lingerMs) + " ms has passed since batch creation plus linger time";
-        else if (this.inRetry() && requestTimeoutMs < (waitedTimeMs(now) - retryBackoffMs))
-            expiryErrorMessage = (waitedTimeMs(now) - retryBackoffMs) + " ms has passed since last attempt plus backoff time";
-
-        boolean expired = expiryErrorMessage != null;
-        if (expired)
-            abortRecordAppends();
-        return expired;
+    boolean maybeExpire(long deliveryTimeoutMs, long now) {
+        if (deliveryTimeoutMs <= (now - this.createdMs)) {
+            expire(now);
+            return true;
+        }
+        return false;
     }
 
     /**
-     * If {@link #maybeExpire(int, long, long, long, boolean)} returned true, the sender will fail the batch with
+     * Expire the batch. This methods closes this batch and sets {@code expiryErrorMessage}.
+     */
+    void expire(long now) {
+        expiryErrorMessage = (now - this.createdMs) + " ms has passed since batch creation";
+        abortRecordAppends();
+    }
+
+    public FinalState finalState() {
+        return this.finalState.get();
+    }
+
+    /**
+     * If {@link #maybeExpire(long, long)} returned true, the sender will fail the batch with
      * the exception returned by this method.
      * @return An exception indicating the batch expired.
      */
@@ -468,4 +488,9 @@ public final class ProducerBatch {
         return reopened;
     }
 
+    boolean soonToExpire(long deliveryTimeoutMs, long now, int requestTimeoutMs) {
+        // We don't add anything in deliveryTimeoutMs because it may overflow
+        // when deliveryTimeoutMs==Long.MAX_VALUE
+        return deliveryTimeoutMs <= now + requestTimeoutMs - createdMs;
+    }
 }

@@ -332,10 +332,17 @@ public class RecordAccumulatorTest {
 
     @Test
     public void testRetryBackoff() throws Exception {
-        long lingerMs = Long.MAX_VALUE / 4;
-        long retryBackoffMs = Long.MAX_VALUE / 2;
-        final RecordAccumulator accum = new RecordAccumulator(logContext, 1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024,
-                CompressionType.NONE, lingerMs, retryBackoffMs, metrics, time, new ApiVersions(), null);
+        long lingerMs = Integer.MAX_VALUE / 16;
+        long retryBackoffMs = Integer.MAX_VALUE / 8;
+        int requestTimeoutMs = Integer.MAX_VALUE / 4;
+        long deliveryTimeoutMs = Integer.MAX_VALUE;
+        long totalSize = 10 * 1024;
+        int batchSize = 1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
+        String metricGrpName = "producer-metrics";
+
+        final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
+            CompressionType.NONE, lingerMs, retryBackoffMs, requestTimeoutMs, deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
+            new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         long now = time.milliseconds();
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs);
@@ -509,77 +516,51 @@ public class RecordAccumulatorTest {
         assertTrue(accum.hasIncomplete());
     }
 
-    @Test
-    public void testExpiredBatches() throws InterruptedException {
-        long retryBackoffMs = 100L;
+    private void doExpireBatchSingle(long deliveryTimeoutMs) throws InterruptedException {
         long lingerMs = 3000L;
-        int requestTimeout = 60;
+        List<Boolean> muteStates = Arrays.asList(false, true);
+        Set<Node> readyNodes = null;
+        List<ProducerBatch> expiredBatches = null;
 
         // test case assumes that the records do not fill the batch completely
         int batchSize = 1025;
 
-        RecordAccumulator accum = createTestRecordAccumulator(
-                batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * batchSize, CompressionType.NONE, lingerMs);
-        int appends = expectedNumAppends(batchSize);
+        RecordAccumulator accum = createTestRecordAccumulator(deliveryTimeoutMs,
+            batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * batchSize, CompressionType.NONE, lingerMs);
 
-        // Test batches not in retry
-        for (int i = 0; i < appends; i++) {
+        // Make the batches ready due to linger.
+        // These batches are not in retry
+        for (Boolean mute: muteStates) {
             accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs);
+            assertEquals("No partition should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
+
+            time.sleep(lingerMs);
+            readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+            assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
+            expiredBatches = accum.expiredBatches(time.milliseconds());
+            assertEquals("The batch should not expire when just linger has passed", 0, expiredBatches.size());
+
+            if (mute)
+                accum.mutePartition(tp1);
+            else
+                accum.unmutePartition(tp1);
+
+            // Advance the clock to expire the batch.
+            time.sleep(deliveryTimeoutMs - lingerMs);
+            expiredBatches = accum.expiredBatches(time.milliseconds());
+            assertEquals("The batch may expire when the partition is muted", 1, expiredBatches.size());
             assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
         }
-        // Make the batches ready due to batch full
-        accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0);
-        Set<Node> readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
-        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
-        // Advance the clock to expire the batch.
-        time.sleep(requestTimeout + 1);
-        accum.mutePartition(tp1);
-        List<ProducerBatch> expiredBatches = accum.expiredBatches(requestTimeout, time.milliseconds());
-        assertEquals("The batch should not be expired when the partition is muted", 0, expiredBatches.size());
+    }
 
-        accum.unmutePartition(tp1);
-        expiredBatches = accum.expiredBatches(requestTimeout, time.milliseconds());
-        assertEquals("The batch should be expired", 1, expiredBatches.size());
-        assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
+    @Test
+    public void testExpiredBatchSingle() throws InterruptedException {
+        doExpireBatchSingle(3200L);
+    }
 
-        // Advance the clock to make the next batch ready due to linger.ms
-        time.sleep(lingerMs);
-        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
-        time.sleep(requestTimeout + 1);
-
-        accum.mutePartition(tp1);
-        expiredBatches = accum.expiredBatches(requestTimeout, time.milliseconds());
-        assertEquals("The batch should not be expired when metadata is still available and partition is muted", 0, expiredBatches.size());
-
-        accum.unmutePartition(tp1);
-        expiredBatches = accum.expiredBatches(requestTimeout, time.milliseconds());
-        assertEquals("The batch should be expired when the partition is not muted", 1, expiredBatches.size());
-        assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
-
-        // Test batches in retry.
-        // Create a retried batch
-        accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0);
-        time.sleep(lingerMs);
-        readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
-        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
-        Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, readyNodes, Integer.MAX_VALUE, time.milliseconds());
-        assertEquals("There should be only one batch.", drained.get(node1.id()).size(), 1);
-        time.sleep(1000L);
-        accum.reenqueue(drained.get(node1.id()).get(0), time.milliseconds());
-
-        // test expiration.
-        time.sleep(requestTimeout + retryBackoffMs);
-        expiredBatches = accum.expiredBatches(requestTimeout, time.milliseconds());
-        assertEquals("The batch should not be expired.", 0, expiredBatches.size());
-        time.sleep(1L);
-
-        accum.mutePartition(tp1);
-        expiredBatches = accum.expiredBatches(requestTimeout, time.milliseconds());
-        assertEquals("The batch should not be expired when the partition is muted", 0, expiredBatches.size());
-
-        accum.unmutePartition(tp1);
-        expiredBatches = accum.expiredBatches(requestTimeout, time.milliseconds());
-        assertEquals("The batch should be expired when the partition is not muted.", 1, expiredBatches.size());
+    @Test
+    public void testExpiredBatchSingleMaxValue() throws InterruptedException {
+        doExpireBatchSingle(Long.MAX_VALUE);
     }
 
     @Test
@@ -623,10 +604,18 @@ public class RecordAccumulatorTest {
         // Simulate talking to an older broker, ie. one which supports a lower magic.
         ApiVersions apiVersions = new ApiVersions();
         int batchSize = 1025;
+        int requestTimeoutMs = 1600;
+        long deliveryTimeoutMs = 3200L;
+        long lingerMs = 10L;
+        long retryBackoffMs = 100L;
+        long totalSize = 10 * batchSize;
+        String metricGrpName = "producer-metrics";
+
         apiVersions.update("foobar", NodeApiVersions.create(Arrays.asList(new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE.id,
                 (short) 0, (short) 2))));
-        RecordAccumulator accum = new RecordAccumulator(logContext, batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * batchSize,
-                CompressionType.NONE, 10, 100L, metrics, time, apiVersions, new TransactionManager());
+        RecordAccumulator accum = new RecordAccumulator(logContext, batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
+            CompressionType.NONE, lingerMs, retryBackoffMs, requestTimeoutMs, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, new TransactionManager(),
+            new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0);
     }
 
@@ -742,6 +731,77 @@ public class RecordAccumulatorTest {
         }
     }
 
+    @Test
+    public void testSoonToExpireBatchesArePickedUpForExpiry() throws InterruptedException {
+        long lingerMs = 500L;
+        int batchSize = 1025;
+
+        RecordAccumulator accum = createTestRecordAccumulator(
+            batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * batchSize, CompressionType.NONE, lingerMs);
+
+        accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs);
+        Set<Node> readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+        Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertTrue(drained.isEmpty());
+        assertTrue(accum.soonToExpireInFlightBatches().isEmpty());
+
+        // advanced clock and send one batch out but it should not be included in soon to expire inflight
+        // batches because batch's expiry is quite far.
+        time.sleep(lingerMs + 1);
+        readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+        drained = accum.drain(cluster, readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertEquals("A batch did not drain after linger", 1, drained.size());
+        assertTrue(accum.soonToExpireInFlightBatches().isEmpty());
+
+        // Queue another batch and advance clock such that batch expiry time is earlier than request timeout.
+        accum.append(tp2, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs);
+        time.sleep(lingerMs * 4);
+
+        // Now drain and check that accumulator picked up the drained batch because its expiry is soon.
+        readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+        drained = accum.drain(cluster, readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertEquals("A batch did not drain after linger", 1, drained.size());
+        assertEquals("A soon to expire batch was ignored", 1, accum.soonToExpireInFlightBatches().size());
+    }
+
+    @Test
+    public void testExpiredBatchesRetry() throws InterruptedException {
+        long lingerMs = 3000L;
+        long rtt = 1000;
+        long deliveryTimeoutMs = 3200L;
+        Set<Node> readyNodes = null;
+        List<ProducerBatch> expiredBatches = null;
+        List<Boolean> muteStates = Arrays.asList(false, true);
+
+        // test case assumes that the records do not fill the batch completely
+        int batchSize = 1025;
+
+        RecordAccumulator accum = createTestRecordAccumulator(
+            batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * batchSize, CompressionType.NONE, lingerMs);
+
+        // Test batches in retry.
+        for (Boolean mute: muteStates) {
+            accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0);
+            time.sleep(lingerMs);
+            readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+            assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
+            Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, readyNodes, Integer.MAX_VALUE, time.milliseconds());
+            assertEquals("There should be only one batch.", 1, drained.get(node1.id()).size());
+            time.sleep(rtt);
+            accum.reenqueue(drained.get(node1.id()).get(0), time.milliseconds());
+
+            if (mute)
+                accum.mutePartition(tp1);
+            else
+                accum.unmutePartition(tp1);
+
+            // test expiration
+            time.sleep(deliveryTimeoutMs - rtt);
+            expiredBatches = accum.expiredBatches(time.milliseconds());
+            assertEquals("The batch in retry may expire.", 1, expiredBatches.size());
+        }
+    }
+
     private int prepareSplitBatches(RecordAccumulator accum, long seed, int recordSize, int numRecords)
         throws InterruptedException {
         Random random = new Random();
@@ -837,20 +897,34 @@ public class RecordAccumulatorTest {
         }
     }
 
+
+    private RecordAccumulator createTestRecordAccumulator(int batchSize, long totalSize, CompressionType type, long lingerMs) {
+        long deliveryTimeoutMs = 3200L;
+        return createTestRecordAccumulator(deliveryTimeoutMs, batchSize, totalSize, type, lingerMs);
+    }
+
     /**
      * Return a test RecordAccumulator instance
      */
-    private RecordAccumulator createTestRecordAccumulator(int batchSize, long totalSize, CompressionType type, long lingerMs) {
+    private RecordAccumulator createTestRecordAccumulator(long deliveryTimeoutMs, int batchSize, long totalSize, CompressionType type, long lingerMs) {
+        long retryBackoffMs = 100L;
+        int requestTimeoutMs = 1600;
+        String metricGrpName = "producer-metrics";
+
         return new RecordAccumulator(
-                logContext,
-                batchSize,
-                totalSize,
-                type,
-                lingerMs,
-                100L,
-                metrics,
-                time,
-                new ApiVersions(),
-                null);
+            logContext,
+            batchSize,
+            type,
+            lingerMs,
+            retryBackoffMs,
+            requestTimeoutMs,
+            deliveryTimeoutMs,
+            metrics,
+            metricGrpName,
+            time,
+            new ApiVersions(),
+            null,
+            new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
     }
 }
+

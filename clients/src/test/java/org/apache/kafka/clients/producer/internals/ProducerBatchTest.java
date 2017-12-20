@@ -226,40 +226,30 @@ public class ProducerBatchTest {
     }
 
     /**
-     * A {@link ProducerBatch} configured using a very large linger value and a timestamp preceding its create
-     * time is interpreted correctly as not expired when the linger time is larger than the difference
-     * between now and create time by {@link ProducerBatch#maybeExpire(int, long, long, long, boolean)}.
+     * A {@link ProducerBatch} configured using a timestamp preceding its create time is interpreted correctly
+     * as not expired by {@link ProducerBatch#maybeExpire(long, long)}.
      */
     @Test
-    public void testLargeLingerOldNowExpire() {
+    public void testBatchExpiration() {
+        long deliveryTimeoutMs = 10240;
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
         // Set `now` to 2ms before the create time.
-        assertFalse(batch.maybeExpire(10240, 100L, now - 2L, Long.MAX_VALUE, false));
+        assertFalse(batch.maybeExpire(deliveryTimeoutMs, now - 2));
+        // Set `now` to deliveryTimeoutMs.
+        assertTrue(batch.maybeExpire(deliveryTimeoutMs, now + deliveryTimeoutMs));
     }
 
     /**
-     * A {@link ProducerBatch} configured using a very large retryBackoff value with retry = true and a timestamp
-     * preceding its create time is interpreted correctly as not expired when the retryBackoff time is larger than the
-     * difference between now and create time by {@link ProducerBatch#maybeExpire(int, long, long, long, boolean)}.
+     * A {@link ProducerBatch} configured using a timestamp preceding its create time is interpreted correctly
+     * * as not expired by {@link ProducerBatch#maybeExpire(long, long)}.
      */
     @Test
-    public void testLargeRetryBackoffOldNowExpire() {
+    public void testBatchExpirationAfterReenqueue() {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
         // Set batch.retry = true
         batch.reenqueued(now);
         // Set `now` to 2ms before the create time.
-        assertFalse(batch.maybeExpire(10240, Long.MAX_VALUE, now - 2L, 10240L, false));
-    }
-
-    /**
-     * A {@link ProducerBatch#maybeExpire(int, long, long, long, boolean)} call with a now value before the create
-     * time of the ProducerBatch is correctly recognized as not expired when invoked with parameter isFull = true.
-     */
-    @Test
-    public void testLargeFullOldNowExpire() {
-        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
-        // Set `now` to 2ms before the create time.
-        assertFalse(batch.maybeExpire(10240, 10240L, now - 2L, 10240L, true));
+        assertFalse(batch.maybeExpire(10240, now - 2L));
     }
 
     @Test

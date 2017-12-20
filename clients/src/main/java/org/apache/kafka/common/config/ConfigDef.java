@@ -57,7 +57,7 @@ import java.util.Set;
  * Map&lt;String, String&gt; props = new HashMap&lt;&gt();
  * props.put(&quot;config_with_default&quot;, &quot;some value&quot;);
  * props.put(&quot;config_with_dependents&quot;, &quot;some other value&quot;);
- * 
+ *
  * Map&lt;String, Object&gt; configs = defs.parse(props);
  * // will return &quot;some value&quot;
  * String someConfig = (String) configs.get(&quot;config_with_default&quot;);
@@ -595,10 +595,10 @@ public class ConfigDef {
         if (!configKeys.containsKey(name)) {
             return;
         }
-        
+
         ConfigKey key = configKeys.get(name);
         ConfigValue value = configs.get(name);
-        
+
         if (key.recommender != null) {
             try {
                 List<Object> recommendedValues = key.recommender.validValues(name, parsed);
@@ -845,9 +845,9 @@ public class ConfigDef {
         private final Number min;
         private final Number max;
 
-        private Range(Number min, Number max) {
+        private Range(Number min, Number maxInclusive) {
             this.min = min;
-            this.max = max;
+            this.max = maxInclusive;
         }
 
         /**
@@ -860,7 +860,7 @@ public class ConfigDef {
         }
 
         /**
-         * A numeric range that checks both the upper and lower bound
+         * A numeric range that checks both the upper (inclusive) and lower bound
          */
         public static Range between(Number min, Number max) {
             return new Range(min, max);
