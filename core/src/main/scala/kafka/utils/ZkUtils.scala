@@ -42,6 +42,7 @@ import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
 
 import scala.collection._
 import scala.collection.JavaConverters._
+import org.apache.kafka.common.TopicPartition
 
 object ZkUtils {
 
@@ -219,6 +220,18 @@ object ZkUtils {
     ))
   }
 
+  def getReassignmentJson(partitionsToBeReassigned: Map[TopicPartition, Seq[Int]]): String = {
+    Json.encodeAsString(Map(
+      "version" -> 1,
+      "partitions" -> partitionsToBeReassigned.map { case (tp, replicas) =>
+        Map(
+          "topic" -> tp.topic,
+          "partition" -> tp.partition,
+          "replicas" -> replicas
+        )
+      }
+    ))
+  }
 }
 
 class ZooKeeperClientWrapper(val zkClient: ZkClient) {
@@ -874,7 +887,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
     // read the partitions and their new replica list
     val jsonPartitionListOpt = readDataMaybeNull(PreferredReplicaLeaderElectionPath)._1
     jsonPartitionListOpt match {
-      case Some(jsonPartitionList) => PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(jsonPartitionList)
+      case Some(jsonPartitionList) => PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(jsonPartitionList).map(tp => new TopicAndPartition(tp))
       case None => Set.empty[TopicAndPartition]
     }
   }
