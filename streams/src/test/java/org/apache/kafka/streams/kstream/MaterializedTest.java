@@ -18,10 +18,14 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.junit.Test;
+
+import static org.junit.Assert.assertTrue;
 
 public class MaterializedTest {
 
@@ -50,5 +54,20 @@ public class MaterializedTest {
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfSessionBytesStoreSupplierIsNull() {
         Materialized.as((SessionBytesStoreSupplier) null);
+    }
+
+    @Test
+    public void shouldSetStoreNameUsingWith() {
+        final String expectedName = "some.name";
+        final Serde<Integer> intSerde = new Serdes.IntegerSerde();
+        final Serde<String> stringSerde = new Serdes.StringSerde();
+
+        assertTrue(Materialized.with(expectedName, intSerde, stringSerde).storeName.equals(expectedName));
+        assertTrue(Materialized.with(expectedName, intSerde, stringSerde).keySerde.equals(intSerde));
+        assertTrue(Materialized.with(expectedName, intSerde, stringSerde).valueSerde.equals(stringSerde));
+
+        assertTrue(Materialized.with(intSerde, stringSerde).storeName == null);
+        assertTrue(Materialized.with(intSerde, stringSerde).keySerde.equals(intSerde));
+        assertTrue(Materialized.with(intSerde, stringSerde).valueSerde.equals(stringSerde));
     }
 }
