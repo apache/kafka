@@ -798,23 +798,22 @@ public class InternalTopologyBuilder {
 
     public synchronized Map<Integer, Set<String>> nodeGroups() {
         if (nodeGroups == null) {
-            nodeGroups = makeNodeGroups(true);
+            nodeGroups = makeNodeGroups();
         }
         return nodeGroups;
     }
 
-    private Map<Integer, Set<String>> makeNodeGroups(boolean removeGlobalNodeGroups) {
+    private Map<Integer, Set<String>> makeNodeGroups() {
         final HashMap<Integer, Set<String>> nodeGroups = new LinkedHashMap<>();
         final HashMap<String, Set<String>> rootToNodeGroup = new HashMap<>();
 
-        int nodeGroupId = 0;
+        int nodeGroupId = 1;
 
         // Go through source nodes first. This makes the group id assignment easy to predict in tests
         final HashSet<String> allSourceNodes = new HashSet<>(nodeToSourceTopics.keySet());
         allSourceNodes.addAll(nodeToSourcePatterns.keySet());
 
         for (final String nodeName : Utils.sorted(allSourceNodes)) {
-            if (removeGlobalNodeGroups && isGlobalSource(nodeName)) continue;
             final String root = nodeGrouper.root(nodeName);
             Set<String> nodeGroup = rootToNodeGroup.get(root);
             if (nodeGroup == null) {
@@ -829,12 +828,16 @@ public class InternalTopologyBuilder {
         for (final String nodeName : Utils.sorted(nodeFactories.keySet())) {
             if (!nodeToSourceTopics.containsKey(nodeName)) {
                 final String root = nodeGrouper.root(nodeName);
-                if (removeGlobalNodeGroups && !rootToNodeGroup.containsKey(root)) continue;
                 Set<String> nodeGroup = rootToNodeGroup.get(root);
                 if (nodeGroup == null) {
                     nodeGroup = new HashSet<>();
                     rootToNodeGroup.put(root, nodeGroup);
-                    nodeGroups.put(nodeGroupId++, nodeGroup);
+                    if (isGlobalSource(root)) {
+                        nodeGroups.put((-1) * nodeGroupId, nodeGroup);
+                    } else {
+                        nodeGroups.put(nodeGroupId, nodeGroup);
+                    }
+                    nodeGroupId++;
                 }
                 nodeGroup.add(nodeName);
             }
@@ -878,13 +881,9 @@ public class InternalTopologyBuilder {
 
     private Set<String> globalNodeGroups() {
         final Set<String> globalGroups = new HashSet<>();
-        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups(false).entrySet()) {
+        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
             final Set<String> nodes = nodeGroup.getValue();
-            for (final String node : nodes) {
-                if (isGlobalSource(node)) {
-                    globalGroups.addAll(nodes);
-                }
-            }
+            if (nodeGroup.getKey() < 0) globalGroups.addAll(nodes); 
         }
         return globalGroups;
     }
@@ -1023,7 +1022,7 @@ public class InternalTopologyBuilder {
         final Map<Integer, TopicsInfo> topicGroups = new LinkedHashMap<>();
 
         if (nodeGroups == null) {
-            nodeGroups = makeNodeGroups(false);
+            nodeGroups = makeNodeGroups();
         }
 
         for (final Map.Entry<Integer, Set<String>> entry : nodeGroups.entrySet()) {
@@ -1295,24 +1294,15 @@ public class InternalTopologyBuilder {
     }
 
     private void describeSubtopologies(final TopologyDescription description) {
-        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups(false).entrySet()) {
+        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
 
             final Set<String> allNodesOfGroups = nodeGroup.getValue();
-            final boolean isNodeGroupOfGlobalStores = nodeGroupContainsGlobalSourceNode(allNodesOfGroups);
+            final boolean isNodeGroupOfGlobalStores = nodeGroup.getKey() < 0;
 
             if (!isNodeGroupOfGlobalStores) {
                 describeSubtopology(description, nodeGroup.getKey(), allNodesOfGroups);
             }
         }
-    }
-
-    private boolean nodeGroupContainsGlobalSourceNode(final Set<String> allNodesOfGroups) {
-        for (final String node : allNodesOfGroups) {
-            if (isGlobalSource(node)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static class NodeComparator implements Comparator<TopologyDescription.Node>, Serializable {
@@ -1370,7 +1360,7 @@ public class InternalTopologyBuilder {
     }
 
     private void describeGlobalStores(final TopologyDescription description) {
-        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups(false).entrySet()) {
+        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
             final Set<String> nodes = nodeGroup.getValue();
 
             final Iterator<String> it = nodes.iterator();
