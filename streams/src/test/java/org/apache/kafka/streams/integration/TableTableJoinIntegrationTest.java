@@ -84,6 +84,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         rightTable = builder.table(INPUT_TOPIC_RIGHT);
     }
 
+    // TODO: the duplicate is due to KAFKA-4309, should be removed when it is fixed
     private List<List<String>> dedupExpectedJoinResult = Arrays.asList(
             null,
             null,
@@ -124,7 +125,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testInner() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
 
-        // TODO: the duplicate is due to KAFKA-4309, should be removed when it is fixed
         List<List<String>> expectedResult;
         if (cacheEnabled) {
             expectedResult = dedupExpectedJoinResult;
@@ -157,7 +157,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void testLeft() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
 
-        // TODO: the duplicate is due to KAFKA-4309, should be removed when it is fixed
         List<List<String>> expectedResult;
         if (cacheEnabled) {
             expectedResult = dedupExpectedJoinResult;

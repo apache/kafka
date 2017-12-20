@@ -25,6 +25,8 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -83,13 +85,15 @@ public abstract class AbstractJoinIntegrationTest {
 
     static String APP_ID;
 
-    static final String INPUT_TOPIC_LEFT = "inputTopicLeft";
+    static final Time TIME = new MockTime();
+    static final Long COMMIT_INTERVAL = 100L;
+    static final Properties STREAMS_CONFIG = new Properties();
     static final String INPUT_TOPIC_RIGHT = "inputTopicRight";
+    static final String INPUT_TOPIC_LEFT = "inputTopicLeft";
     static final String OUTPUT_TOPIC = "outputTopic";
 
     private final static Properties PRODUCER_CONFIG = new Properties();
     private final static Properties RESULT_CONSUMER_CONFIG = new Properties();
-    final static Properties STREAMS_CONFIG = new Properties();
 
     private KafkaProducer<Long, String> producer;
 
@@ -152,8 +156,7 @@ public abstract class AbstractJoinIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        // TODO: set commit interval to smaller value after KAFKA-4309
-        STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
     }
 
     void prepareEnvironment() throws InterruptedException {
@@ -187,7 +190,7 @@ public abstract class AbstractJoinIntegrationTest {
         assert expectedResult.size() == input.size();
 
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
-        final KafkaStreams streams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), new StreamsConfig(STREAMS_CONFIG), TIME);
 
         try {
             streams.start();
@@ -197,6 +200,7 @@ public abstract class AbstractJoinIntegrationTest {
             final Iterator<List<String>> resultIterator = expectedResult.iterator();
             for (final Input<String> singleInput : input) {
                 producer.send(new ProducerRecord<>(singleInput.topic, null, ++ts, singleInput.record.key, singleInput.record.value)).get();
+                TIME.sleep(COMMIT_INTERVAL + 1);
 
                 List<String> expected = resultIterator.next();
                 System.out.println("checking result: " + expected);
