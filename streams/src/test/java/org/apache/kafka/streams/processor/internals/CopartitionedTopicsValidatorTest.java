@@ -122,10 +122,7 @@ public class CopartitionedTopicsValidatorTest {
     private StreamPartitionAssignor.InternalTopicMetadata createTopicMetadata(final String repartitionTopic,
                                                                               final int partitions) {
         final InternalTopicConfig repartitionTopicConfig
-                = new InternalTopicConfig(repartitionTopic,
-                                          Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                                          Collections.<String, String>emptyMap());
-
+                = new RepartitionTopicConfig(repartitionTopic, Collections.<String, String>emptyMap());
 
         final StreamPartitionAssignor.InternalTopicMetadata metadata
                 = new StreamPartitionAssignor.InternalTopicMetadata(repartitionTopicConfig);
