@@ -492,6 +492,21 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   }
 
   /**
+   * Gets all partitions in the cluster
+   * @return all partitions in the cluster
+   */
+  def getAllPartitions(): Set[TopicPartition] = {
+    val topics = getChildren(TopicsZNode.path)
+    if (topics == null) Set.empty
+    else {
+      topics.flatMap { topic =>
+        // The partitions path may not exist if the topic is in the process of being deleted
+        getChildren(TopicPartitionsZNode.path(topic)).map(_.toInt).map(new TopicPartition(topic, _))
+      }.toSet
+    }
+  }
+
+  /**
    * Gets the data and version at the given zk path
    * @param path zk node path
    * @return A tuple of 2 elements, where first element is zk node data as an array of bytes
@@ -667,13 +682,10 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   /**
    * Creates the partition reassignment znode with the given reassignment.
    * @param reassignment the reassignment to set on the reassignment znode.
-   * @throws KeeperException if there is an error while setting or creating the znode
+   * @throws KeeperException if there is an error while creating the znode
    */
   def createPartitionReassignment(reassignment: Map[TopicPartition, Seq[Int]])  = {
-    val createRequest = CreateRequest(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment),
-      acls(ReassignPartitionsZNode.path), CreateMode.PERSISTENT)
-    val createResponse = retryRequestUntilConnected(createRequest)
-    createResponse.maybeThrow
+    createRecursive(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment))
   }
 
   /**
@@ -791,6 +803,15 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
       DeleteRequest(IsrChangeNotificationSequenceZNode.path(sequenceNumber), ZkVersion.NoVersion)
     }
     retryRequestsUntilConnected(deleteRequests)
+  }
+
+  /**
+   * Creates preferred replica election znode with partitions undergoing election
+   * @param partitions
+   * @throws KeeperException if there is an error while creating the znode
+   */
+  def createPreferredReplicaElection(partitions: Set[TopicPartition]): Unit  = {
+    createRecursive(PreferredReplicaElectionZNode.path, PreferredReplicaElectionZNode.encode(partitions))
   }
 
   /**

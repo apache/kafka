@@ -24,6 +24,7 @@ import kafka.security.auth._
 import kafka.server.ConfigType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.zookeeper.KeeperException.NodeExistsException
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.Test
 
@@ -408,6 +409,25 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     zkClient.deleteTopicConfigs(Seq(topic1, topic2))
     assertTrue(zkClient.getEntityConfigs(ConfigType.Topic, topic1).isEmpty)
+  }
+
+  @Test
+  def testPreferredReplicaElectionMethods() {
+
+    assertTrue(zkClient.getPreferredReplicaElection.isEmpty)
+
+    val topic1 = "topic1"
+    val electionPartitions = Set(new TopicPartition(topic1, 0), new TopicPartition(topic1, 1))
+
+    zkClient.createPreferredReplicaElection(electionPartitions)
+    assertEquals(electionPartitions, zkClient.getPreferredReplicaElection)
+
+    intercept[NodeExistsException] {
+      zkClient.createPreferredReplicaElection(electionPartitions)
+    }
+
+    zkClient.deletePreferredReplicaElection()
+    assertTrue(zkClient.getPreferredReplicaElection.isEmpty)
   }
 
   private def dataAsString(path: String): Option[String] = {
