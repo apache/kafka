@@ -228,7 +228,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             this.userEndPoint = userEndPoint;
         }
 
-        internalTopicManager = new InternalTopicManager(taskManager.adminClient, configs);
+        internalTopicManager = new InternalTopicManager(taskManager.adminClient, streamsConfig);
 
         copartitionedTopicsValidator = new CopartitionedTopicsValidator(logPrefix);
     }
