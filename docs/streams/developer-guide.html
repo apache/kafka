@@ -82,10 +82,11 @@
         </li>
         <li><a href="#streams_configure_execute">5. Application Configuration and Execution</a>
             <ul>
-                <li><a href="#streams_client_config">5.1 Producer and Consumer Configuration</a>
-                <li><a href="#streams_broker_config">5.2 Broker Configuration</a>
-                <li><a href="#streams_topic_config">5.3 Internal Topic Configuration</a>
-                <li><a href="#streams_execute">5.4 Executing Your Kafka Streams Application</a>
+                <li><a href="#streams_error_handling_config">5.1 Error Handling Configuration</a>
+                <li><a href="#streams_client_config">5.2 Producer and Consumer Configuration</a>
+                <li><a href="#streams_broker_config">5.3 Broker Configuration</a>
+                <li><a href="#streams_topic_config">5.4 Internal Topic Configuration</a>
+                <li><a href="#streams_execute">5.5 Executing Your Kafka Streams Application</a>
             </ul>
         </li>
     </ul>
@@ -2801,6 +2802,55 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
 
     // Create an instance of StreamsConfig from the Properties instance
     StreamsConfig config = new StreamsConfig(settings);
+    </pre>
+
+    <h4><a id="streams_error_handling_config" href="#streams_error_handling_config">Error handling configuration</a></h4>
+    <p>
+        In addition to the standard configuration options, Streams also has a few options for applications that need specialized behavior in certain error conditions.
+        You can provide custom exception handling logic when:
+    </p>
+
+    <ul>
+      <li>Deserializing messages from the input topic by providing an implementation of <code>DeserializationExceptionHandler</code></li>
+      <li>Producing messages to the output topic by providing an implementation of <code>ProductionExceptionHandler</code></li>
+    </ul>
+
+    <p>
+        Each of the exception handlers can return a <code>FAIL</code> or <code>CONTINUE</code> value to Kafka Streams. The default implementation of each interface will
+        return the former value, <code>FAIL</code>, and will cause Kafka Streams to terminate on any kind of exception.
+    </p>
+
+    <p>
+        As an example, if you wanted to continue processing in situations where you attempted to produce a record that was too large, you could provide a
+        <code>ProductionExceptionHandler</code> like the following:
+    </p>
+
+    <pre class="brush: java;">
+    import java.util.Properties;
+    import org.apache.kafka.streams.StreamsConfig;
+    import org.apache.kafka.common.errors.RecordTooLargeException;
+    import org.apache.kafka.streams.errors.ProductionExceptionHandler;
+    import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExceptionHandlerResponse;
+
+    class IgnoreRecordTooLargeHandler implements ProductionExceptionHandler {
+        public void configure(Map<String, Object> config) {}
+
+        public ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
+                                                         final Exception exception) {
+            if (exception instanceof RecordTooLargeException) {
+                return ProductionExceptionHandlerResponse.CONTINUE;
+            } else {
+                return ProductionExceptionHandlerResponse.FAIL;
+            }
+        }
+    }
+
+    Properties settings = new Properties();
+
+    // other various kafka streams settings, e.g. bootstrap servers, application id, etc
+
+    settings.put(StreamsConfig.DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                 IgnoreRecordTooLargeHandler.class);
     </pre>
 
     <h4><a id="streams_client_config" href="#streams_client_config">Producer and Consumer Configuration</a></h4>
