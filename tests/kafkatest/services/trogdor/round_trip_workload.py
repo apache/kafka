@@ -18,26 +18,23 @@ from ducktape.services.service import Service
 from kafkatest.services.trogdor.task_spec import TaskSpec
 
 
-class ProduceBenchWorkloadSpec(TaskSpec):
-    def __init__(self, start_ms, duration_ms, producer_node, bootstrap_servers,
-                 target_messages_per_sec, max_messages, producer_conf,
-                 total_topics, active_topics):
-        super(ProduceBenchWorkloadSpec, self).__init__(start_ms, duration_ms)
-        self.message["class"] = "org.apache.kafka.trogdor.workload.ProduceBenchSpec"
-        self.message["producerNode"] = producer_node
+class RoundTripWorkloadSpec(TaskSpec):
+    def __init__(self, start_ms, duration_ms, client_node, bootstrap_servers,
+                 target_messages_per_sec, partition_assignments, max_messages):
+        super(RoundTripWorkloadSpec, self).__init__(start_ms, duration_ms)
+        self.message["class"] = "org.apache.kafka.trogdor.workload.RoundTripWorkloadSpec"
+        self.message["clientNode"] = client_node
         self.message["bootstrapServers"] = bootstrap_servers
         self.message["targetMessagesPerSec"] = target_messages_per_sec
+        self.message["partitionAssignments"] = partition_assignments
         self.message["maxMessages"] = max_messages
-        self.message["producerConf"] = producer_conf
-        self.message["totalTopics"] = total_topics
-        self.message["activeTopics"] = active_topics
 
 
-class ProduceBenchWorkloadService(Service):
+class RoundTripWorkloadService(Service):
     def __init__(self, context, kafka):
         Service.__init__(self, context, num_nodes=1)
         self.bootstrap_servers = kafka.bootstrap_servers(validate=False)
-        self.producer_node = self.nodes[0].account.hostname
+        self.client_node = self.nodes[0].account.hostname
 
     def free(self):
         Service.free(self)

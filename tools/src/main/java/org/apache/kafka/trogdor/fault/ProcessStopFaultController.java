@@ -15,23 +15,21 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.trogdor.workload;
+package org.apache.kafka.trogdor.fault;
 
 import org.apache.kafka.trogdor.common.Topology;
 import org.apache.kafka.trogdor.task.TaskController;
-
-import java.util.Collections;
 import java.util.Set;
 
-public class ProduceBenchController implements TaskController {
-    private final ProduceBenchSpec spec;
+public class ProcessStopFaultController implements TaskController {
+    private final Set<String> nodeNames;
 
-    public ProduceBenchController(ProduceBenchSpec spec) {
-        this.spec = spec;
+    public ProcessStopFaultController(Set<String> nodeNames) {
+        this.nodeNames = nodeNames;
     }
 
     @Override
     public Set<String> targetNodes(Topology topology) {
-        return Collections.singleton(spec.producerNode());
+        return nodeNames;
     }
 }

@@ -25,44 +25,40 @@ import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.util.Collections;
-import java.util.Map;
+import java.util.List;
+import java.util.NavigableMap;
 import java.util.Set;
 
 /**
- * The specification for a benchmark that produces messages to a set of topics.
+ * The specification for a workload that sends messages to a broker and then
+ * reads them back.
  */
-public class ProduceBenchSpec extends TaskSpec {
-    private final String producerNode;
+public class RoundTripWorkloadSpec extends TaskSpec {
+    private final String clientNode;
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
+    private final NavigableMap<Integer, List<Integer>> partitionAssignments;
     private final int maxMessages;
-    private final Map<String, String> producerConf;
-    private final int totalTopics;
-    private final int activeTopics;
 
     @JsonCreator
-    public ProduceBenchSpec(@JsonProperty("startMs") long startMs,
-                         @JsonProperty("durationMs") long durationMs,
-                         @JsonProperty("producerNode") String producerNode,
-                         @JsonProperty("bootstrapServers") String bootstrapServers,
-                         @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
-                         @JsonProperty("maxMessages") int maxMessages,
-                         @JsonProperty("producerConf") Map<String, String> producerConf,
-                         @JsonProperty("totalTopics") int totalTopics,
-                         @JsonProperty("activeTopics") int activeTopics) {
+    public RoundTripWorkloadSpec(@JsonProperty("startMs") long startMs,
+             @JsonProperty("durationMs") long durationMs,
+             @JsonProperty("clientNode") String clientNode,
+             @JsonProperty("bootstrapServers") String bootstrapServers,
+             @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
+             @JsonProperty("partitionAssignments") NavigableMap<Integer, List<Integer>> partitionAssignments,
+             @JsonProperty("maxMessages") int maxMessages) {
         super(startMs, durationMs);
-        this.producerNode = producerNode;
+        this.clientNode = clientNode;
         this.bootstrapServers = bootstrapServers;
         this.targetMessagesPerSec = targetMessagesPerSec;
+        this.partitionAssignments = partitionAssignments;
         this.maxMessages = maxMessages;
-        this.producerConf = producerConf;
-        this.totalTopics = totalTopics;
-        this.activeTopics = activeTopics;
     }
 
     @JsonProperty
-    public String producerNode() {
-        return producerNode;
+    public String clientNode() {
+        return clientNode;
     }
 
     @JsonProperty
@@ -76,23 +72,13 @@ public class ProduceBenchSpec extends TaskSpec {
     }
 
     @JsonProperty
+    public NavigableMap<Integer, List<Integer>> partitionAssignments() {
+        return partitionAssignments;
+    }
+
+    @JsonProperty
     public int maxMessages() {
         return maxMessages;
-    }
-
-    @JsonProperty
-    public Map<String, String> producerConf() {
-        return producerConf;
-    }
-
-    @JsonProperty
-    public int totalTopics() {
-        return totalTopics;
-    }
-
-    @JsonProperty
-    public int activeTopics() {
-        return activeTopics;
     }
 
     @Override
@@ -100,13 +86,13 @@ public class ProduceBenchSpec extends TaskSpec {
         return new TaskController() {
             @Override
             public Set<String> targetNodes(Topology topology) {
-                return Collections.singleton(producerNode);
+                return Collections.singleton(clientNode);
             }
         };
     }
 
     @Override
     public TaskWorker newTaskWorker(String id) {
-        return new ProduceBenchWorker(id, this);
+        return new RoundTripWorker(id, this);
     }
 }
