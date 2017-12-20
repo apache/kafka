@@ -40,7 +40,7 @@ public class PunctuationQueueTest {
             }
         };
 
-        final PunctuationSchedule sched = new PunctuationSchedule(node, 100L, punctuator);
+        final PunctuationSchedule sched = new PunctuationSchedule(node, 0L, 100L, punctuator);
         final long now = sched.timestamp - 100L;
 
         queue.schedule(sched);
@@ -66,6 +66,64 @@ public class PunctuationQueueTest {
 
         queue.mayPunctuate(now + 200L, PunctuationType.STREAM_TIME, processorNodePunctuator);
         assertEquals(2, processor.punctuatedAt.size());
+
+        queue.mayPunctuate(now + 1001L, PunctuationType.STREAM_TIME, processorNodePunctuator);
+        assertEquals(3, processor.punctuatedAt.size());
+
+        queue.mayPunctuate(now + 1002L, PunctuationType.STREAM_TIME, processorNodePunctuator);
+        assertEquals(3, processor.punctuatedAt.size());
+
+        queue.mayPunctuate(now + 1100L, PunctuationType.STREAM_TIME, processorNodePunctuator);
+        assertEquals(4, processor.punctuatedAt.size());
+    }
+
+    @Test
+    public void testPunctuationIntervalCustomAlignment() {
+        final TestProcessor processor = new TestProcessor();
+        final ProcessorNode<String, String> node = new ProcessorNode<>("test", processor, null);
+        final PunctuationQueue queue = new PunctuationQueue();
+        final Punctuator punctuator = new Punctuator() {
+            @Override
+            public void punctuate(long timestamp) {
+                node.processor().punctuate(timestamp);
+            }
+        };
+
+        final PunctuationSchedule sched = new PunctuationSchedule(node, 50L, 100L, punctuator);
+        final long now = sched.timestamp - 50L;
+
+        queue.schedule(sched);
+
+        ProcessorNodePunctuator processorNodePunctuator = new ProcessorNodePunctuator() {
+            @Override
+            public void punctuate(ProcessorNode node, long time, PunctuationType type, Punctuator punctuator) {
+                punctuator.punctuate(time);
+            }
+        };
+
+        queue.mayPunctuate(now, PunctuationType.STREAM_TIME, processorNodePunctuator);
+        assertEquals(0, processor.punctuatedAt.size());
+
+        queue.mayPunctuate(now + 49L, PunctuationType.STREAM_TIME, processorNodePunctuator);
+        assertEquals(0, processor.punctuatedAt.size());
+
+        queue.mayPunctuate(now + 50L, PunctuationType.STREAM_TIME, processorNodePunctuator);
+        assertEquals(1, processor.punctuatedAt.size());
+
+        queue.mayPunctuate(now + 149L, PunctuationType.STREAM_TIME, processorNodePunctuator);
+        assertEquals(1, processor.punctuatedAt.size());
+
+        queue.mayPunctuate(now + 150L, PunctuationType.STREAM_TIME, processorNodePunctuator);
+        assertEquals(2, processor.punctuatedAt.size());
+
+        queue.mayPunctuate(now + 1051L, PunctuationType.STREAM_TIME, processorNodePunctuator);
+        assertEquals(3, processor.punctuatedAt.size());
+
+        queue.mayPunctuate(now + 1052L, PunctuationType.STREAM_TIME, processorNodePunctuator);
+        assertEquals(3, processor.punctuatedAt.size());
+
+        queue.mayPunctuate(now + 1150L, PunctuationType.STREAM_TIME, processorNodePunctuator);
+        assertEquals(4, processor.punctuatedAt.size());
     }
 
     private static class TestProcessor extends AbstractProcessor<String, String> {

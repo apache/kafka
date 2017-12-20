@@ -27,8 +27,8 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
     // this Cancellable will be re-pointed at the successor schedule in next()
     private final RepointableCancellable cancellable;
 
-    PunctuationSchedule(ProcessorNode node, long interval, Punctuator punctuator) {
-        this(node, 0L, interval, punctuator, new RepointableCancellable());
+    PunctuationSchedule(ProcessorNode node, long time, long interval, Punctuator punctuator) {
+        this(node, time, interval, punctuator, new RepointableCancellable());
         cancellable.setSchedule(this);
     }
 
@@ -61,18 +61,15 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
 
     public PunctuationSchedule next(final long currTimestamp) {
         long nextPunctuationTime;
-        if (timestamp == 0L) {
-            // special handling when initially triggered: reschedule based on the currTimestamp
-            nextPunctuationTime = currTimestamp + interval;
-        } else if (timestamp + interval > currTimestamp) {
+        if (timestamp + interval > currTimestamp) {
             // no gap between punctuations, continue as usual
             nextPunctuationTime = timestamp + interval;
         } else {
             // we missed one ore more punctuations
             // avoid scheduling a new punctuations immediately, this can happen:
             // - when using STREAM_TIME punctuation and there was a gap i.e., no data was
-            //   received for more than 2*interval
-            // - when using WALL_CLOCK_TIME and there was a gap i.e., punctuation was delayed for more than 2*interval (GC pause, overload, ...)
+            //   received for at least 2*interval
+            // - when using WALL_CLOCK_TIME and there was a gap i.e., punctuation was delayed for at least 2*interval (GC pause, overload, ...)
             final long intervalsMissed = (currTimestamp - timestamp) / interval;
             nextPunctuationTime = timestamp + (intervalsMissed + 1) * interval;
         }
