@@ -55,19 +55,19 @@
         The introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-220%3A+Add+AdminClient+into+Kafka+Streams%27+ClientSupplier">KIP-220</a>
         enables you to provide configuration parameters for the embedded admin client created by Kafka Streams, similar to the embedded producer and consumer clients.
         You can provide the configs via the <code>StreamsConfig</code> by adding the configs with the prefix as defined by <code>StreamsConfig#adminClientPrefix(String)</code>
-        to distinguish them with configurations of other clients that share the same config names.
+        to distinguish them from configurations of other clients that share the same config names.
     </p>
 
     <p>
         New methods in <code>KafkaStreams</code>:
     </p>
     <ul>
-        <li> added overloads for the constructor that allow to override the <code>Time</code> object used for tracking system wall-clock time; this is useful for unit testing your application code. </li>
+        <li> added overload for the constructor that allows to override the <code>Time</code> object used for tracking system wall-clock time; this is useful for unit testing your application code. </li>
     </ul>
 
     <p> New methods in <code>KafkaClientSupplier</code>: </p>
     <ul>
-        <li> added <code>#getAdminClient(config)</code> that allows to overwrite a <code>AdminClient</code> used for administrative requests such as internal topic creations, etc. </li>
+        <li> added <code>#getAdminClient(config)</code> that allows to overwrite an <code>AdminClient</code> used for administrative requests such as internal topic creations, etc. </li>
     </ul>
 
     <h3><a id="streams_api_changes_100" href="#streams_api_changes_100">Streams API changes in 1.0.0</a></h3>

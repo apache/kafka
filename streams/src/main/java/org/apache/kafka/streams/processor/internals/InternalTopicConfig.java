@@ -26,10 +26,6 @@ import java.util.Objects;
  * the internal topics we create for change-logs and repartitioning etc.
  */
 public abstract class InternalTopicConfig {
-
-    // we need to distinguish windowed and un-windowed store changelog since their cleanup policy may be different
-    public enum InternalTopicType { REPARTITION, WINDOWED_STORE_CHANGELOG, UNWINDOWED_STORE_CHANGELOG }
-
     final String name;
     final Map<String, String> topicConfigs;
 
