@@ -700,6 +700,9 @@
 
   Kafka uses Yammer Metrics for metrics reporting in the server and Scala clients. The Java clients use Kafka Metrics, a built-in metrics registry that minimizes transitive dependencies pulled into client applications. Both expose metrics via JMX and can be configured to report stats using pluggable stats reporters to hook up to your monitoring system.
   <p>
+  All Kafka rate metrics have a corresponding cumulative count metric with suffix <code>-total</code>. For example,
+  <code>records-consumed-rate</code> has a corresponding metric named <code>records-consumed-total</code>.
+  <p>
   The easiest way to see the available metrics is to fire up jconsole and point it at a running kafka client or server; this will allow browsing all metrics with JMX.
   <p>
   We do graphing and alerting on the following metrics:
@@ -723,6 +726,32 @@
         <td>Request rate</td>
         <td>kafka.network:type=RequestMetrics,name=RequestsPerSec,request={Produce|FetchConsumer|FetchFollower}</td>
         <td></td>
+      </tr>
+      <tr>
+        <td>Error rate</td>
+        <td>kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=([-.\w]+),error=([-.\w]+)</td>
+        <td>Number of errors in responses counted per-request-type, per-error-code. If a response contains
+            multiple errors, all are counted. error=NONE indicates successful responses.</td>
+      </tr>
+      <tr>
+        <td>Request size in bytes</td>
+        <td>kafka.network:type=RequestMetrics,name=RequestBytes,request=([-.\w]+)</td>
+        <td>Size of requests for each request type.</td>
+      </tr>
+      <tr>
+        <td>Temporary memory size in bytes</td>
+        <td>kafka.network:type=RequestMetrics,name=TemporaryMemoryBytes,request={Produce|Fetch}</td>
+        <td>Temporary memory used for message format conversions and decompression.</td>
+      </tr>
+      <tr>
+        <td>Message conversion time</td>
+        <td>kafka.network:type=RequestMetrics,name=MessageConversionsTimeMs,request={Produce|Fetch}</td>
+        <td>Time in milliseconds spent on message format conversions.</td>
+      </tr>
+      <tr>
+        <td>Message conversion rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name={Produce|Fetch}MessageConversionsPerSec,topic=([-.\w]+)</td>
+        <td>Number of records which required message format conversion.</td>
       </tr>
       <tr>
         <td>Byte out rate</td>
@@ -875,6 +904,17 @@
         <td>exempt-throttle-time indicates the percentage of time spent in broker network and I/O threads to process requests
             that are exempt from throttling.</td>
       </tr>
+      <tr>
+        <td>ZooKeeper client request latency</td>
+        <td>kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs</td>
+        <td>Latency in millseconds for ZooKeeper requests from broker.</td>
+      </tr>
+      <tr>
+        <td>ZooKeeper connection status</td>
+        <td>kafka.server:type=SessionExpireListener,name=SessionState</td>
+        <td>Connection status of broker's ZooKeeper session which may be one of
+            Disconnected|SyncConnected|AuthFailed|ConnectedReadOnly|SaslAuthenticated|Expired.</td>
+      </tr>
   </tbody></table>
 
   <h4><a id="selector_monitoring" href="#selector_monitoring">Common monitoring metrics for producer/consumer/connect/streams</a></h4>
@@ -961,6 +1001,16 @@
       <tr>
         <td>connection-count</td>
         <td>The current number of active connections.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>successful-authentication-rate</td>
+        <td>Connections that were successfully authenticated using SASL or SSL.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>failed-authentication-rate</td>
+        <td>Connections that failed authentication.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
     </tbody>

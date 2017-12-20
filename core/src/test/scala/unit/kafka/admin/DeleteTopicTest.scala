@@ -25,7 +25,7 @@ import org.junit.Assert._
 import org.junit.{After, Test}
 import java.util.Properties
 
-import kafka.common.{TopicAndPartition, TopicAlreadyMarkedForDeletionException}
+import kafka.common.TopicAlreadyMarkedForDeletionException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 
@@ -127,14 +127,14 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     // reassign partition 0
     val oldAssignedReplicas = zkUtils.getReplicasForPartition(topic, 0)
     val newReplicas = Seq(1, 2, 3)
-    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkUtils, None,
-      Map(new TopicAndPartition(topicPartition) -> newReplicas))
+    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, None,
+      Map(topicPartition -> newReplicas),  adminZkClient = adminZkClient)
     assertTrue("Partition reassignment should fail for [test,0]", reassignPartitionsCommand.reassignPartitions())
     // wait until reassignment is completed
     TestUtils.waitUntilTrue(() => {
-      val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)
-      ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkUtils, new TopicAndPartition(topicPartition),
-        Map(new TopicAndPartition(topicPartition) -> newReplicas), partitionsBeingReassigned) == ReassignmentFailed
+      val partitionsBeingReassigned = zkClient.getPartitionReassignment
+      ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkClient, topicPartition,
+        Map(topicPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentFailed
     }, "Partition reassignment shouldn't complete.")
     val controllerId = zkUtils.getController()
     val controller = servers.filter(s => s.config.brokerId == controllerId).head
@@ -176,6 +176,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
 
   @Test
   def testAddPartitionDuringDeleteTopic() {
+    zkUtils.setupCommonPaths()
     val topic = "test"
     servers = createTestTopicAndCluster(topic)
     val brokers = adminZkClient.getBrokerMetadatas()

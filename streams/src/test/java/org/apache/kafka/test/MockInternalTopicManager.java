@@ -38,7 +38,7 @@ public class MockInternalTopicManager extends InternalTopicManager {
 
     public MockInternalTopicManager(final StreamsConfig streamsConfig,
                                     final MockConsumer<byte[], byte[]> restoreConsumer) {
-        super(KafkaAdminClient.create(streamsConfig.originals()), streamsConfig.originals());
+        super(KafkaAdminClient.create(streamsConfig.originals()), streamsConfig);
 
         this.restoreConsumer = restoreConsumer;
     }

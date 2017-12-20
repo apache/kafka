@@ -37,18 +37,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 public class InternalTopicManager {
-
-    private static final Long WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
-
-    public final static String CLEANUP_POLICY_PROP = "cleanup.policy";
-    public final static String RETENTION_MS = "retention.ms";
-
     private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA or dev-mailing list (https://kafka.apache.org/contact).";
 
@@ -62,9 +54,8 @@ public class InternalTopicManager {
     private final int retries;
 
     public InternalTopicManager(final AdminClient adminClient,
-                                final Map<String, ?> config) {
+                                final StreamsConfig streamsConfig) {
         this.adminClient = adminClient;
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
 
         LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
         log = logContext.logger(getClass());
@@ -102,11 +93,13 @@ public class InternalTopicManager {
             final Set<NewTopic> newTopics = new HashSet<>();
 
             for (final InternalTopicConfig internalTopicConfig : topicsToBeCreated) {
-                final Properties topicProperties = internalTopicConfig.toProperties(windowChangeLogAdditionalRetention);
-                final Map<String, String> topicConfig = new HashMap<>(defaultTopicConfigs);
-                for (final String key : topicProperties.stringPropertyNames()) {
-                    topicConfig.put(key, topicProperties.getProperty(key));
-                }
+                final Map<String, String> topicConfig = internalTopicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
+
+                log.debug("Going to create topic {} with {} partitions and config {}.",
+                        internalTopicConfig.name(),
+                        internalTopicConfig.numberOfPartitions(),
+                        topicConfig);
+
                 newTopics.add(
                     new NewTopic(
                         internalTopicConfig.name(),

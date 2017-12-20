@@ -1027,7 +1027,7 @@ public class InternalTopologyBuilder {
         for (final Map.Entry<Integer, Set<String>> entry : nodeGroups.entrySet()) {
             final Set<String> sinkTopics = new HashSet<>();
             final Set<String> sourceTopics = new HashSet<>();
-            final Map<String, InternalTopicConfig> internalSourceTopics = new HashMap<>();
+            final Map<String, InternalTopicConfig> repartitionTopics = new HashMap<>();
             final Map<String, InternalTopicConfig> stateChangelogTopics = new HashMap<>();
             for (final String node : entry.getValue()) {
                 // if the node is a source node, add to the source topics
@@ -1042,9 +1042,7 @@ public class InternalTopologyBuilder {
                         if (internalTopicNames.contains(topic)) {
                             // prefix the internal topic name with the application id
                             final String internalTopic = decorateTopic(topic);
-                            internalSourceTopics.put(internalTopic, new InternalTopicConfig(internalTopic,
-                                                                                            Collections.singleton(InternalTopicConfig.CleanupPolicy.delete),
-                                                                                            Collections.<String, String>emptyMap()));
+                            repartitionTopics.put(internalTopic, new RepartitionTopicConfig(internalTopic, Collections.<String, String>emptyMap()));
                             sourceTopics.add(internalTopic);
                         } else {
                             sourceTopics.add(topic);
@@ -1076,7 +1074,7 @@ public class InternalTopologyBuilder {
                 topicGroups.put(entry.getKey(), new TopicsInfo(
                         Collections.unmodifiableSet(sinkTopics),
                         Collections.unmodifiableSet(sourceTopics),
-                        Collections.unmodifiableMap(internalSourceTopics),
+                        Collections.unmodifiableMap(repartitionTopics),
                         Collections.unmodifiableMap(stateChangelogTopics)));
             }
         }
@@ -1120,14 +1118,9 @@ public class InternalTopologyBuilder {
     private InternalTopicConfig createChangelogTopicConfig(final StateStoreFactory factory,
                                                            final String name) {
         if (!factory.isWindowStore()) {
-            return new InternalTopicConfig(name,
-                                           Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                                           factory.logConfig());
+            return new UnwindowedChangelogTopicConfig(name, factory.logConfig());
         } else {
-            final InternalTopicConfig config = new InternalTopicConfig(name,
-                    Utils.mkSet(InternalTopicConfig.CleanupPolicy.compact,
-                                InternalTopicConfig.CleanupPolicy.delete),
-                    factory.logConfig());
+            final WindowedChangelogTopicConfig config = new WindowedChangelogTopicConfig(name, factory.logConfig());
             config.setRetentionMs(factory.retentionPeriod());
             return config;
         }

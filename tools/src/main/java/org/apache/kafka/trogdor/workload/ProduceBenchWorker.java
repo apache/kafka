@@ -19,15 +19,12 @@ package org.apache.kafka.trogdor.workload;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -35,6 +32,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.ThreadUtils;
+import org.apache.kafka.trogdor.common.WorkerUtils;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,6 +52,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class ProduceBenchWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ProduceBenchWorker.class);
 
+    private static final short NUM_PARTITIONS = 1;
+
     private static final short REPLICATION_FACTOR = 3;
 
     private static final int MESSAGE_SIZE = 512;
@@ -72,6 +72,16 @@ public class ProduceBenchWorker implements TaskWorker {
 
     private KafkaFutureImpl<String> doneFuture;
 
+    /**
+     * Generate a topic name based on a topic number.
+     *
+     * @param topicIndex        The topic number.
+     * @return                  The topic name.
+     */
+    public static String topicIndexToName(int topicIndex) {
+        return String.format("topic%05d", topicIndex);
+    }
+
     public ProduceBenchWorker(String id, ProduceBenchSpec spec) {
         this.id = id;
         this.spec = spec;
@@ -88,22 +98,12 @@ public class ProduceBenchWorker implements TaskWorker {
             ThreadUtils.createThreadFactory("ProduceBenchWorkerThread%d", false));
         this.status = status;
         this.doneFuture = doneFuture;
-        executor.submit(new ValidateSpec());
+        executor.submit(new Prepare());
     }
 
-    private static String topicIndexToName(int topicIndex) {
-        return String.format("topic%05d", topicIndex);
-    }
-
-    private void abort(String what, Exception e) throws KafkaException {
-        log.warn(what + " caught an exception: ", e);
-        doneFuture.completeExceptionally(new KafkaException(what + " caught an exception.", e));
-        throw new KafkaException(e);
-    }
-
-    public class ValidateSpec implements Callable<Void> {
+    public class Prepare implements Runnable {
         @Override
-        public Void call() throws Exception {
+        public void run() {
             try {
                 if (spec.activeTopics() == 0) {
                     throw new ConfigException("Can't have activeTopics == 0.");
@@ -113,47 +113,15 @@ public class ProduceBenchWorker implements TaskWorker {
                         "activeTopics was %d, but totalTopics was only %d.  activeTopics must " +
                             "be less than or equal to totalTopics.", spec.activeTopics(), spec.totalTopics()));
                 }
-                executor.submit(new CreateBenchmarkTopics());
-            } catch (Exception e) {
-                abort("ValidateSpec", e);
-            }
-            return null;
-        }
-    }
-
-    public class CreateBenchmarkTopics implements Callable<Void> {
-        private final static int MAX_BATCH_SIZE = 10;
-
-        @Override
-        public Void call() throws Exception {
-            try {
-                Properties props = new Properties();
-                props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
-                try (AdminClient adminClient = AdminClient.create(props)) {
-                    List<String> topicsToCreate = new ArrayList<>();
-                    for (int i = 0; i < spec.totalTopics(); i++) {
-                        topicsToCreate.add(topicIndexToName(i));
-                    }
-                    log.info("Creating " + spec.totalTopics() + " topics...");
-                    List<Future<Void>> futures = new ArrayList<>();
-                    while (!topicsToCreate.isEmpty()) {
-                        List<NewTopic> newTopics = new ArrayList<>();
-                        for (int i = 0; (i < MAX_BATCH_SIZE) && !topicsToCreate.isEmpty(); i++) {
-                            String topic = topicsToCreate.remove(0);
-                            newTopics.add(new NewTopic(topic, 1, REPLICATION_FACTOR));
-                        }
-                        futures.add(adminClient.createTopics(newTopics).all());
-                    }
-                    for (Future<Void> future : futures) {
-                        future.get();
-                    }
-                    log.info("Successfully created " + spec.totalTopics() + " topics.");
+                List<NewTopic> newTopics = new ArrayList<>();
+                for (int i = 0; i < spec.totalTopics(); i++) {
+                    newTopics.add(new NewTopic(topicIndexToName(i), NUM_PARTITIONS, REPLICATION_FACTOR));
                 }
+                WorkerUtils.createTopics(log, spec.bootstrapServers(), newTopics);
                 executor.submit(new SendRecords());
-            } catch (Exception e) {
-                abort("CreateBenchmarkTopics", e);
+            } catch (Throwable e) {
+                WorkerUtils.abort(log, "Prepare", e, doneFuture);
             }
-            return null;
         }
     }
 
@@ -175,13 +143,6 @@ public class ProduceBenchWorker implements TaskWorker {
                 log.error("SendRecordsCallback: error", exception);
             }
         }
-    }
-
-    private int perSecToPerPeriod(float perSec, long periodMs) {
-        float period = ((float) periodMs) / 1000.0f;
-        float perPeriod = perSec * period;
-        perPeriod = Math.max(1.0f, perPeriod);
-        return (int) perPeriod;
     }
 
     /**
@@ -217,7 +178,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
         SendRecords() {
             this.histogram = new Histogram(5000);
-            int perPeriod = perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
+            int perPeriod = WorkerUtils.perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.statusUpdaterFuture = executor.scheduleWithFixedDelay(
                 new StatusUpdater(histogram), 1, 1, TimeUnit.MINUTES);
             Properties props = new Properties();
@@ -251,7 +212,7 @@ public class ProduceBenchWorker implements TaskWorker {
                     producer.close();
                 }
             } catch (Exception e) {
-                abort("SendRecords", e);
+                WorkerUtils.abort(log, "SendRecords", e, doneFuture);
             } finally {
                 statusUpdaterFuture.cancel(false);
                 new StatusUpdater(histogram).run();
@@ -274,10 +235,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
         StatusUpdater(Histogram histogram) {
             this.histogram = histogram;
-            this.percentiles = new float[3];
-            this.percentiles[0] = 0.50f;
-            this.percentiles[1] = 0.95f;
-            this.percentiles[2] = 0.99f;
+            this.percentiles = new float[] {0.50f, 0.95f, 0.99f};
         }
 
         @Override
@@ -291,7 +249,7 @@ public class ProduceBenchWorker implements TaskWorker {
                 String statusDataString = JsonUtil.toJsonString(statusData);
                 status.set(statusDataString);
             } catch (Exception e) {
-                abort("StatusUpdater", e);
+                WorkerUtils.abort(log, "StatusUpdater", e, doneFuture);
             }
         }
     }

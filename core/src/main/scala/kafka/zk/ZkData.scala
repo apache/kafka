@@ -165,7 +165,7 @@ object ConfigEntityZNode {
   def decode(bytes: Array[Byte]): Properties = {
     val props = new Properties()
     if (bytes != null) {
-      Json.parseBytes(bytes).map { js =>
+      Json.parseBytes(bytes).foreach { js =>
         val configOpt = js.asJsonObjectOption.flatMap(_.get("config").flatMap(_.asJsonObjectOption))
         configOpt.foreach(config => config.iterator.foreach { case (k, v) => props.setProperty(k, v.to[String]) })
       }

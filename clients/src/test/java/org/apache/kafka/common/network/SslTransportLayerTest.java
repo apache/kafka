@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
+import java.util.List;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
@@ -28,6 +29,7 @@ import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -537,6 +539,52 @@ public class SslTransportLayerTest {
 
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
         server.verifyAuthenticationMetrics(0, 1);
+    }
+
+    /**
+     * selector.poll() should be able to fetch more data than netReadBuffer from the socket.
+     */
+    @Test
+    public void testSelectorPollReadSize() throws Exception {
+        String node = "0";
+        server = createEchoServer(SecurityProtocol.SSL);
+        createSelector(sslClientConfigs, 16384, 16384, 16384);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, 102400, 102400);
+        NetworkTestUtils.checkClientConnection(selector, node, 81920, 1);
+
+        // Send a message of 80K. This is 5X as large as the socket buffer. It should take at least three selector.poll()
+        // to read this message from socket if the SslTransportLayer.read() does not read all data from socket buffer.
+        String message = TestUtils.randomString(81920);
+        selector.send(new NetworkSend(node, ByteBuffer.wrap(message.getBytes())));
+
+        // Send the message to echo server
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                try {
+                    selector.poll(100L);
+                } catch (IOException e) {
+                    return false;
+                }
+                return selector.completedSends().size() > 0;
+            }
+        }, "Timed out waiting for message to be sent");
+
+        // Wait for echo server to send the message back
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return server.numSent() >= 2;
+            }
+        }, "Timed out waiting for echo server to send message");
+
+        // Read the message from socket with only one poll()
+        selector.poll(1000L);
+
+        List<NetworkReceive> receiveList = selector.completedReceives();
+        assertEquals(1, receiveList.size());
+        assertEquals(message, new String(Utils.toArray(receiveList.get(0).payload())));
     }
 
     /**
