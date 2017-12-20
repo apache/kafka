@@ -564,6 +564,11 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferSize.toString)
     producerProps.put(ProducerConfig.RETRIES_CONFIG, retries.toString)
     producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs.toString)
+    producerProps.put(ProducerConfig.LINGER_MS_CONFIG, lingerMs.toString)
+
+    // In case of overflow set maximum possible value for deliveryTimeoutMs
+    val deliveryTimeoutMs = if (lingerMs + requestTimeoutMs < 0) Long.MaxValue else lingerMs + requestTimeoutMs
+    producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs.toString)
 
     /* Only use these if not already set */
     val defaultProps = Map(

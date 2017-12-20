@@ -118,6 +118,10 @@ public class TransactionManagerTest {
         Map<String, String> metricTags = new LinkedHashMap<>();
         metricTags.put("client-id", CLIENT_ID);
         int batchSize = 16 * 1024;
+        int requestTimeoutMs = 1500;
+        long deliveryTimeoutMs = 3000L;
+        long totalSize = 1024 * 1024;
+        String metricGrpName = "producer-metrics";
         MetricConfig metricConfig = new MetricConfig().tags(metricTags);
         this.brokerNode = new Node(0, "localhost", 2211);
         this.transactionManager = new TransactionManager(logContext, transactionalId, transactionTimeoutMs,
@@ -125,7 +129,7 @@ public class TransactionManagerTest {
         Metrics metrics = new Metrics(metricConfig, time);
         SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(metrics);
 
-        this.accumulator = new RecordAccumulator(logContext, batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time, apiVersions, transactionManager);
+        this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0L, 0L, requestTimeoutMs, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager, new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL,
                 MAX_RETRIES, senderMetrics, this.time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
         this.metadata.update(this.cluster, Collections.<String>emptySet(), time.milliseconds());

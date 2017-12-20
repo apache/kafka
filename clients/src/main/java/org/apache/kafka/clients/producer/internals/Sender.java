@@ -280,7 +280,7 @@ public class Sender implements Runnable {
             }
         }
 
-        List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(this.requestTimeoutMs, now);
+        List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(now);
         // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
         // for expired batches. see the documentation of @TransactionState.resetProducerId to understand why
         // we need to reset the producer id here.
@@ -301,6 +301,9 @@ public class Sender implements Runnable {
         // that isn't yet sendable (e.g. lingering, backing off). Note that this specifically does not include nodes
         // with sendable data that aren't ready to send since they would cause busy looping.
         long pollTimeout = Math.min(result.nextReadyCheckDelayMs, notReadyTimeout);
+        pollTimeout = Math.min(pollTimeout, this.accumulator.nextExpiryTimeMs() - now);
+        pollTimeout = Math.max(pollTimeout, 0);
+
         if (!result.readyNodes.isEmpty()) {
             log.trace("Nodes with data ready to send: {}", result.readyNodes);
             // if some partitions are already ready to be sent, the select time would be 0;
@@ -644,6 +647,7 @@ public class Sender implements Runnable {
      */
     private boolean canRetry(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
         return batch.attempts() < this.retries &&
+               batch.finalState() == null &&
                 ((response.error.exception() instanceof RetriableException) ||
                         (transactionManager != null && transactionManager.canRetry(response, batch)));
     }
