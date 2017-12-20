@@ -132,7 +132,7 @@
     // keep the processor context locally because we need it in punctuate() and commit()
     this.context = context;
 
-    // schedule a punctuation method every 1000 milliseconds.
+    // schedule a punctuation method every 1000 milliseconds, the first punctuation will happen immediately.
     this.context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
         @Override
         public void punctuate(long timestamp) {
