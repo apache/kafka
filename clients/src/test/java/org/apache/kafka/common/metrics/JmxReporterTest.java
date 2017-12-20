@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.metrics;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Total;
 import org.junit.Test;
@@ -35,6 +36,7 @@ public class JmxReporterTest {
         Metrics metrics = new Metrics();
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {
+            JmxReporter reporter = new JmxReporter();
             metrics.addReporter(new JmxReporter());
 
             assertFalse(server.isRegistered(new ObjectName(":type=grp1")));
@@ -49,7 +51,9 @@ public class JmxReporterTest {
             assertEquals(0.0, server.getAttribute(new ObjectName(":type=grp2"), "pack.bean2.total"));
 
             KafkaMetric metric = metrics.removeMetric(metrics.metricName("pack.bean1.avg", "grp1"));
-            assertEquals(0, metrics.getCount(metric));
+            MetricName metricName = metric.metricName();
+            String mBeanName = JmxReporter.getMBeanName("", metricName);
+            assertFalse(reporter.mbeans.containsKey(mBeanName));
 
             assertFalse(server.isRegistered(new ObjectName(":type=grp1")));
             assertTrue(server.isRegistered(new ObjectName(":type=grp2")));

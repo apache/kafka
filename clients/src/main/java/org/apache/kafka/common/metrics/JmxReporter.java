@@ -49,7 +49,7 @@ public class JmxReporter implements MetricsReporter {
     private static final Logger log = LoggerFactory.getLogger(JmxReporter.class);
     private static final Object LOCK = new Object();
     private String prefix;
-    private final Map<String, KafkaMbean> mbeans = new HashMap<String, KafkaMbean>();
+    final Map<String, KafkaMbean> mbeans = new HashMap<String, KafkaMbean>();
 
     public JmxReporter() {
         this("");
@@ -81,12 +81,6 @@ public class JmxReporter implements MetricsReporter {
             KafkaMbean mbean = addAttribute(metric);
             reregister(mbean);
         }
-    }
-
-    int countOfMetric(KafkaMetric metric) {
-        MetricName metricName = metric.metricName();
-        String mBeanName = getMBeanName(prefix, metricName);
-        return mbeans.containsKey(mBeanName) ? 1 : 0;
     }
 
     @Override
