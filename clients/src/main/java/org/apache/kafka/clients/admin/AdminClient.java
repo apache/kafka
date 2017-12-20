@@ -105,7 +105,7 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * This operation is not transactional so it may succeed for some topics while fail for others.
      *
-     * It may take several seconds after this method returns
+     * It may take several seconds after {@code CreateTopicsResult} returns
      * success for all the brokers to become aware that the topics have been created.
      * During this time, {@link AdminClient#listTopics()} and {@link AdminClient#describeTopics(Collection)}
      * may not return information about the new topics.
