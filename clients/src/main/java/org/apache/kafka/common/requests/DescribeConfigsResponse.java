@@ -99,6 +99,14 @@ public class DescribeConfigsResponse extends AbstractResponse {
         private final boolean isDefault;
         private final boolean readOnly;
 
+        public ConfigEntry(String name, String value) {
+            this.name = name;
+            this.value = value;
+            this.isSensitive = false;
+            this.isDefault = false;
+            this.readOnly = false;
+        }
+
         public ConfigEntry(String name, String value, boolean isSensitive, boolean isDefault, boolean readOnly) {
             this.name = name;
             this.value = value;

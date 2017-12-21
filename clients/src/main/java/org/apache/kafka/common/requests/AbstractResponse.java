@@ -146,6 +146,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new SaslAuthenticateResponse(struct);
             case CREATE_PARTITIONS:
                 return new CreatePartitionsResponse(struct);
+            case DESCRIBE_QUOTAS:
+                return new DescribeQuotasResponse(struct);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

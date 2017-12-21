@@ -16,6 +16,7 @@
   */
 package kafka.server
 
+import java.util
 import java.util.{Collections, Properties}
 
 import kafka.admin.{AdminOperationException, AdminUtils}
@@ -26,18 +27,18 @@ import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource}
-import org.apache.kafka.common.errors.{ApiException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, PolicyViolationException, ReassignmentInProgressException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest._
-import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse, Resource, ResourceType}
-import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
+import org.apache.kafka.common.requests._
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
+import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 
-import scala.collection._
 import scala.collection.JavaConverters._
+import scala.collection._
 
 class AdminManager(val config: KafkaConfig,
                    val metrics: Metrics,
@@ -283,7 +284,7 @@ class AdminManager(val config: KafkaConfig,
   def describeConfigs(resourceToConfigNames: Map[Resource, Option[Set[String]]]): Map[Resource, DescribeConfigsResponse.Config] = {
     resourceToConfigNames.map { case (resource, configNames) =>
 
-      def createResponseConfig(config: AbstractConfig, isReadOnly: Boolean, isDefault: String => Boolean): DescribeConfigsResponse.Config = {
+      def createResponseConfig(config: AbstractConfig, isReadOnly: Boolean, isDefault: String => Boolean): Seq[DescribeConfigsResponse.ConfigEntry] = {
         val filteredConfigPairs = config.values.asScala.filter { case (configName, _) =>
           /* Always returns true if configNames is None */
           configNames.map(_.contains(configName)).getOrElse(true)
@@ -298,7 +299,7 @@ class AdminManager(val config: KafkaConfig,
           new DescribeConfigsResponse.ConfigEntry(name, valueAsString, isSensitive, isDefault(name), isReadOnly)
         }
 
-        new DescribeConfigsResponse.Config(ApiError.NONE, configEntries.asJava)
+        configEntries
       }
 
       try {
@@ -310,17 +311,21 @@ class AdminManager(val config: KafkaConfig,
             // Consider optimizing this by caching the configs or retrieving them from the `Log` when possible
             val topicProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
             val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), topicProps)
-            createResponseConfig(logConfig, isReadOnly = false, name => !topicProps.containsKey(name))
+            new DescribeConfigsResponse.Config(ApiError.NONE, createResponseConfig(logConfig, isReadOnly = false, name => !topicProps.containsKey(name)).asJava)
 
           case ResourceType.BROKER =>
             val brokerId = try resource.name.toInt catch {
               case _: NumberFormatException =>
                 throw new InvalidRequestException(s"Broker id must be an integer, but it is: ${resource.name}")
             }
-            if (brokerId == config.brokerId)
-              createResponseConfig(config, isReadOnly = true, name => !config.originals.containsKey(name))
-            else
+            if (brokerId == config.brokerId) {
+              val configs = createResponseConfig(config, isReadOnly = true, name => !config.originals.containsKey(name))
+              new DescribeConfigsResponse.Config(ApiError.NONE,
+                (configs ++ adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.toString).asScala
+                  .map(f => new DescribeConfigsResponse.ConfigEntry(f._1, f._2, false, false, false))).asJava)
+            } else {
               throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId}, but received $brokerId")
+            }
 
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
         }
@@ -367,6 +372,37 @@ class AdminManager(val config: KafkaConfig,
                   adminZkClient.changeTopicConfig(topic, properties)
             }
             resource -> ApiError.NONE
+          case ResourceType.BROKER =>
+            val brokerId = {
+              try resource.name.toInt
+              catch {
+                case _: NumberFormatException =>
+                  throw new IllegalArgumentException(s"Error parsing broker ${resource.name}. The broker's Entity Name must be a single integer value")
+              }
+            }
+
+            val properties = new Properties
+            config.entries.asScala.foreach { configEntry =>
+              properties.setProperty(configEntry.name(), configEntry.value())
+            }
+
+            alterConfigPolicy match {
+              case Some(policy) =>
+                adminZkClient.validateBrokerConfig(brokerId, properties)
+
+                val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
+                policy.validate(new AlterConfigPolicy.RequestMetadata(
+                  new ConfigResource(ConfigResource.Type.TOPIC, resource.name), configEntriesMap.asJava))
+
+                if (!validateOnly)
+                  adminZkClient.changeBrokerConfig(Seq(brokerId), properties)
+              case None =>
+                if (validateOnly)
+                  adminZkClient.validateBrokerConfig(brokerId, properties)
+                else
+                  adminZkClient.changeBrokerConfig(Seq(brokerId), properties)
+            }
+            resource -> ApiError.NONE
           case resourceType =>
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics, but resource type is $resourceType")
         }
@@ -385,6 +421,41 @@ class AdminManager(val config: KafkaConfig,
           resource -> ApiError.fromThrowable(e)
       }
     }.toMap
+  }
+
+  def describeQuotas(configs: Map[QuotaConfigResourceTuple, util.Collection[String]]): Map[QuotaConfigResourceTuple, DescribeConfigsResponse.Config] = {
+
+    def toConfig(props: Properties, configNames: util.Collection[String]) = {
+      if (configNames.isEmpty)
+        new DescribeConfigsResponse.Config(ApiError.NONE, props.asScala.map(f => new DescribeConfigsResponse.ConfigEntry(f._1, f._2, false, false, false)).asJavaCollection)
+      else
+        new DescribeConfigsResponse.Config(ApiError.NONE, props.asScala.filter(f => configNames.contains(f._1)).map(f => new DescribeConfigsResponse.ConfigEntry(f._1, f._2, false, false, false)).asJavaCollection)
+    }
+
+    def toConfigType(resourceType: ResourceType): String = {
+      resourceType match {
+        case ResourceType.CLIENT => ConfigType.Client
+        case ResourceType.USER => ConfigType.User
+        case ResourceType.BROKER => ConfigType.Broker
+        case ResourceType.TOPIC => ConfigType.Topic
+        case _ => throw new IllegalArgumentException("Unknown resource type")
+      }
+    }
+
+    configs.flatMap { f =>
+      val quotaTuple = f._1
+      val quotaConfigResource = f._1.quotaConfigResource
+      val childQuotaConfigResource = f._1.childQuotaConfigResource
+      if (quotaConfigResource.`type` != ResourceType.UNKNOWN) {
+        if (childQuotaConfigResource.`type` != ResourceType.UNKNOWN) {
+          Map(quotaTuple -> toConfig(adminZkClient.fetchEntityConfig(ConfigType.User, s"${quotaConfigResource.name}/clients/${childQuotaConfigResource.name}"), f._2))
+        } else {
+          Map(quotaTuple -> toConfig(adminZkClient.fetchEntityConfig(toConfigType(quotaConfigResource.`type`), quotaConfigResource.name), f._2))
+        }
+      } else {
+        throw new InvalidRequestException("DescribeQuotas request was invalid")
+      }
+    }
   }
 
   def shutdown() {

@@ -135,6 +135,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_LOG_DIRS => handleDescribeLogDirsRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
         case ApiKeys.CREATE_PARTITIONS => handleCreatePartitionsRequest(request)
+        case ApiKeys.DESCRIBE_QUOTAS => handleDescribeQuotasRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -1927,7 +1928,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def configsAuthorizationApiError(session: RequestChannel.Session, resource: RResource): ApiError = {
     val error = resource.`type` match {
-      case RResourceType.BROKER => Errors.CLUSTER_AUTHORIZATION_FAILED
+      case RResourceType.BROKER | RResourceType.USER | RResourceType.CLIENT => Errors.CLUSTER_AUTHORIZATION_FAILED
       case RResourceType.TOPIC => Errors.TOPIC_AUTHORIZATION_FAILED
       case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.name}")
     }
@@ -1954,6 +1955,19 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     sendResponseMaybeThrottle(request, requestThrottleMs =>
       new DescribeConfigsResponse(requestThrottleMs, (authorizedConfigs ++ unauthorizedConfigs).asJava))
+  }
+
+  def handleDescribeQuotasRequest(request: RequestChannel.Request): Unit = {
+    val describeQuotasRequest = request.body[DescribeQuotasRequest]
+    val (authorizedResources, unauthorizedResources) = describeQuotasRequest.quotaConfigSettings.asScala.partition {
+      _ => authorize(request.session, DescribeConfigs, Resource.ClusterResource)
+    }
+    val authorizedConfigs = adminManager.describeQuotas(authorizedResources)
+    val unauthorizedConfigs = unauthorizedResources.map { resource =>
+      val error = configsAuthorizationApiError(request.session, resource._1.quotaConfigResource)
+      resource._1 -> new DescribeConfigsResponse.Config(error, Collections.emptyList[DescribeConfigsResponse.ConfigEntry])
+    }
+    sendResponseMaybeThrottle(request, requestThrottleMs => new DescribeQuotasResponse(requestThrottleMs, (authorizedConfigs ++ unauthorizedConfigs).asJava))
   }
 
   def handleAlterReplicaLogDirsRequest(request: RequestChannel.Request): Unit = {

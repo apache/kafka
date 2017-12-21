@@ -337,6 +337,18 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   }
 
   /**
+    * validates broker configs
+    * @param brokerId
+    * @param configs
+    */
+  def validateBrokerConfig(brokerId: Int, configs: Properties): Unit = {
+    DynamicConfig.Broker.validate(configs)
+    if (!zkClient.brokerExists(brokerId))
+      throw new AdminOperationException(s"Broker ID ${brokerId} does not exist.")
+    LogConfig.validate(configs)
+  }
+
+  /**
    * Update the config for an existing topic and create a change notification so the change will propagate to other brokers
    *
    * @param topic: The topic for which configs are being changed

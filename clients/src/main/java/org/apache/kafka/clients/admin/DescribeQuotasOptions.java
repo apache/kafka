@@ -15,28 +15,29 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.requests;
+package org.apache.kafka.clients.admin;
 
-public enum ResourceType {
-    UNKNOWN((byte) 0), ANY((byte) 1), TOPIC((byte) 2), GROUP((byte) 3), BROKER((byte) 4), USER((byte) 5), CLIENT((byte) 6);
+import org.apache.kafka.common.annotation.InterfaceStability;
 
-    private static final ResourceType[] VALUES = values();
+import java.util.Map;
 
-    private final byte id;
+/**
+ * Options for {@link AdminClient#describeQuotas(Map, DescribeQuotasOptions)} )}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
+ */
+@InterfaceStability.Evolving
+public class DescribeQuotasOptions extends AbstractOptions<DescribeQuotasOptions> {
 
-    ResourceType(byte id) {
-        this.id = id;
+    /**
+     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * AdminClient should be used.
+     *
+     */
+    // This method is retained to keep binary compatibility with 0.11
+    public DescribeQuotasOptions timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
+        return this;
     }
 
-    public byte id() {
-        return id;
-    }
-
-    public static ResourceType forId(byte id) {
-        if (id < 0)
-            throw new IllegalArgumentException("id should be positive, id: " + id);
-        if (id >= VALUES.length)
-            return UNKNOWN;
-        return VALUES[id];
-    }
 }

@@ -28,7 +28,7 @@ public final class ConfigResource {
      * Type of resource.
      */
     public enum Type {
-        BROKER, TOPIC, UNKNOWN;
+        BROKER, TOPIC, USER, CLIENT, UNKNOWN
     }
 
     private final Type type;

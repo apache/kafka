@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.requests.QuotaConfigResourceTuple;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -273,6 +274,11 @@ public class MockAdminClient extends AdminClient {
         } else {
             throw new UnsupportedOperationException("Not implemented yet");
         }
+    }
+
+    @Override
+    public DescribeQuotasResult describeQuotas(Map<QuotaConfigResourceTuple, Collection<String>> configs, DescribeQuotasOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override

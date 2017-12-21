@@ -14,4 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-exec $(dirname $0)/kafka-run-class.sh kafka.admin.ConfigCommand "$@"
+
+if [ "${USE_OLD_COMMAND:=false}" = true ] ;
+  then
+    export MAIN_CLASS=kafka.admin.ConfigCommand
+  else
+    export MAIN_CLASS=org.apache.kafka.tools.ConfigCommand
+fi
+
+exec $(dirname $0)/kafka-run-class.sh ${MAIN_CLASS} "$@"

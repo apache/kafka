@@ -344,6 +344,15 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
+    * Checks the broker existence
+    * @param brokerId
+    * @return true if the broker exists else false
+    */
+  def brokerExists(brokerId: Int): Boolean = {
+    pathExists(BrokerIdZNode.path(brokerId))
+  }
+
+  /**
    * Sets the topic znode with the given assignment.
    * @param topic the topic whose assignment is being set.
    * @param assignment the partition to replica mapping to set for the given topic

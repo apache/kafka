@@ -49,7 +49,9 @@ import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.requests.DeleteRecordsResponse;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.requests.DescribeQuotasResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.QuotaConfigResourceTuple;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourceType;
@@ -77,6 +79,7 @@ import java.util.concurrent.Future;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.requests.ResourceType.BROKER;
 import static org.apache.kafka.common.requests.ResourceType.TOPIC;
+import static org.apache.kafka.common.requests.ResourceType.USER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -385,6 +388,23 @@ public class KafkaAdminClientTest {
             DescribeConfigsResult result2 = env.adminClient().describeConfigs(Collections.singleton(
                 new ConfigResource(ConfigResource.Type.BROKER, "0")));
             result2.all().get();
+        }
+    }
+
+    @Test
+    public void testDescribeQuotas() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+            env.kafkaClient().prepareResponse(new DescribeQuotasResponse(0,
+                    Collections.singletonMap(
+                            new QuotaConfigResourceTuple(new org.apache.kafka.common.requests.Resource(USER, "user1")),
+                            new DescribeConfigsResponse.Config(ApiError.NONE,
+                                    Collections.<DescribeConfigsResponse.ConfigEntry>emptySet()))));
+            DescribeQuotasResult result = env.adminClient().describeQuotas(Collections.singletonMap(
+                    new QuotaConfigResourceTuple(new org.apache.kafka.common.requests.Resource(USER, "user1")), (Collection<String>) Collections.<String>emptyList()));
+            result.all().get();
         }
     }
 

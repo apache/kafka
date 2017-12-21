@@ -87,8 +87,11 @@ import org.apache.kafka.common.requests.DescribeConfigsRequest;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
+import org.apache.kafka.common.requests.DescribeQuotasRequest;
+import org.apache.kafka.common.requests.DescribeQuotasResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.QuotaConfigResourceTuple;
 import org.apache.kafka.common.requests.Resource;
 import org.apache.kafka.common.requests.ResourceType;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -1600,6 +1603,12 @@ public class KafkaAdminClient extends AdminClient {
             case BROKER:
                 resourceType = ResourceType.BROKER;
                 break;
+            case USER:
+                resourceType = ResourceType.USER;
+                break;
+            case CLIENT:
+                resourceType = ResourceType.CLIENT;
+                break;
             default:
                 throw new IllegalArgumentException("Unexpected resource type " + configResource.type());
         }
@@ -1980,5 +1989,47 @@ public class KafkaAdminClient extends AdminClient {
         }, nowMetadata);
 
         return new DeleteRecordsResult(new HashMap<TopicPartition, KafkaFuture<DeletedRecords>>(futures));
+    }
+
+    @Override
+    public DescribeQuotasResult describeQuotas(final Map<QuotaConfigResourceTuple, Collection<String>> configs, final DescribeQuotasOptions options) {
+        final Map<QuotaConfigResourceTuple, KafkaFuture<Config>> resultMap = new HashMap<>();
+        for (final Map.Entry<QuotaConfigResourceTuple, Collection<String>> entry : configs.entrySet()) {
+            final KafkaFutureImpl<Config> resultFuture = new KafkaFutureImpl<>();
+            resultMap.put(entry.getKey(), resultFuture);
+            final long now = time.milliseconds();
+            runnable.call(new Call("describeQuotas", calcDeadlineMs(now, options.timeoutMs()),
+                    new LeastLoadedNodeProvider()) {
+                @Override
+                AbstractRequest.Builder createRequest(int timeoutMs) {
+                    return new DescribeQuotasRequest.Builder(Collections.singletonMap(entry.getKey(), entry.getValue()));
+                }
+
+                @Override
+                void handleResponse(AbstractResponse abstractResponse) {
+                    DescribeQuotasResponse response = (DescribeQuotasResponse) abstractResponse;
+                    DescribeConfigsResponse.Config config = response.quotaConfigSettings().get(entry.getKey());
+                    if (config == null) {
+                        resultFuture.completeExceptionally(new UnknownServerException(
+                                "Malformed broker response: missing config for " + entry.getKey()));
+                    } else if (config.error().isFailure()) {
+                        resultFuture.completeExceptionally(config.error().exception());
+                    } else {
+                        List<ConfigEntry> configEntries = new ArrayList<>();
+                        for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
+                            configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value(),
+                                    configEntry.isDefault(), configEntry.isSensitive(), configEntry.isReadOnly()));
+                        }
+                        resultFuture.complete(new Config(configEntries));
+                    }
+                }
+
+                @Override
+                void handleFailure(Throwable throwable) {
+                    resultFuture.completeExceptionally(throwable);
+                }
+            }, now);
+        }
+        return new DescribeQuotasResult(resultMap);
     }
 }

@@ -53,6 +53,8 @@ import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
+import org.apache.kafka.common.requests.DescribeQuotasRequest;
+import org.apache.kafka.common.requests.DescribeQuotasResponse;
 import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -171,7 +173,9 @@ public enum ApiKeys {
     SASL_AUTHENTICATE(36, "SaslAuthenticate", SaslAuthenticateRequest.schemaVersions(),
             SaslAuthenticateResponse.schemaVersions()),
     CREATE_PARTITIONS(37, "CreatePartitions", CreatePartitionsRequest.schemaVersions(),
-            CreatePartitionsResponse.schemaVersions());
+            CreatePartitionsResponse.schemaVersions()),
+    DESCRIBE_QUOTAS(38, "DescribeQuotas", DescribeQuotasRequest.schemaVersions(),
+            DescribeQuotasResponse.schemaVersions());
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

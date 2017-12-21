@@ -23,6 +23,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.requests.QuotaConfigResourceTuple;
 
 import java.util.Collection;
 import java.util.Map;
@@ -535,4 +536,29 @@ public abstract class AdminClient implements AutoCloseable {
      */
     public abstract DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete,
                                                       DeleteRecordsOptions options);
+
+    /**
+     * Get the configuration for the specified quota resources.
+     *
+     * This operation is supported by brokers with version 1.1.0 or higher.
+     *
+     * @param configs                      The user or client resources we want to describe.
+     * @return                             The DescribeConfigsResult
+     * @since 1.1.0
+     */
+    public DescribeQuotasResult describeQuotas(Map<QuotaConfigResourceTuple, Collection<String>> configs) {
+        return describeQuotas(configs, new DescribeQuotasOptions());
+    }
+
+    /**
+     * Get the configuration for the specified quota resources.
+     *
+     * This operation is supported by brokers with version 1.1.0 or higher.
+     *
+     * @param configs                      The user or client resources we want to describe.
+     * @param options                      Additional options to describe the quota configs.
+     * @return                             The DescribeConfigsResult
+     * @since 1.1.0
+     */
+    public abstract DescribeQuotasResult describeQuotas(Map<QuotaConfigResourceTuple, Collection<String>> configs, DescribeQuotasOptions options);
 }
