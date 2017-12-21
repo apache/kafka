@@ -32,15 +32,17 @@ public interface Reconfigurable extends Configurable {
     /**
      * Validates the provided configuration. The provided map contains
      * all configs including any reconfigurable configs that may be different
-     * from the initial configuration.
+     * from the initial configuration. Reconfiguration will be not performed
+     * if this method returns false or throws any exception.
      */
-    boolean validate(Map<String, ?> configs);
+    boolean validateReconfiguration(Map<String, ?> configs);
 
     /**
      * Reconfigures this instance with the given key-value pairs. The provided
      * map contains all configs including any reconfigurable configs that
      * may have changed since the object was initially configured using
-     * {@link Configurable#configure(Map)}.
+     * {@link Configurable#configure(Map)}. This method will only be invoked if
+     * the configs have passed validation using {@link #validateReconfiguration(Map)}.
      */
     void reconfigure(Map<String, ?> configs);
 

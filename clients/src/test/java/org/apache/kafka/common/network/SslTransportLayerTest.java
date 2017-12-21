@@ -757,7 +757,7 @@ public class SslTransportLayerTest {
 
     @Test
     public void testClosePlaintext() throws Exception {
-        testClose(SecurityProtocol.PLAINTEXT, new PlaintextChannelBuilder(null));
+        testClose(SecurityProtocol.PLAINTEXT, new PlaintextChannelBuilder());
     }
 
     private void testClose(SecurityProtocol securityProtocol, ChannelBuilder clientChannelBuilder) throws Exception {
@@ -792,17 +792,81 @@ public class SslTransportLayerTest {
         }, 5000, "All requests sent were not processed");
     }
 
-    private void createSelector(Map<String, Object> sslClientConfigs) {
-        createSelector(sslClientConfigs, null, null, null);
+    /**
+     * Tests reconfiguration of server keystore. Verifies that existing connections continue
+     * to work with old keystore and new connections work with new keystore.
+     */
+    @Test
+    public void testServerKeystoreDynamicUpdate() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SSL;
+        TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
+        ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
+                false, securityProtocol, config, null);
+        server = new NioEchoServer(listenerName, securityProtocol, config,
+                "localhost", serverChannelBuilder, null);
+        server.start();
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+
+        // Verify that client with matching truststore can authenticate, send and receive
+        String oldNode = "0";
+        Selector oldClientSelector = createSelector(sslClientConfigs);
+        oldClientSelector.connect(oldNode, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, oldNode, 100, 10);
+
+        CertStores newServerCertStores = new CertStores(true, "server", "localhost");
+        sslServerConfigs = newServerCertStores.getTrustingConfig(clientCertStores);
+        assertTrue("SslChannelBuilder not reconfigurable", serverChannelBuilder instanceof ListenerReconfigurable);
+        ListenerReconfigurable reconfigurableBuilder = (ListenerReconfigurable) serverChannelBuilder;
+        assertEquals(listenerName, reconfigurableBuilder.listenerName());
+        reconfigurableBuilder.validateReconfiguration(sslServerConfigs);
+        reconfigurableBuilder.reconfigure(sslServerConfigs);
+
+        // Verify that new client with old truststore fails
+        oldClientSelector.connect("1", addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.waitForChannelClose(oldClientSelector, "1", ChannelState.State.AUTHENTICATION_FAILED);
+
+        // Verify that new client with new truststore can authenticate, send and receive
+        sslClientConfigs = clientCertStores.getTrustingConfig(newServerCertStores);
+        Selector newClientSelector = createSelector(sslClientConfigs);
+        newClientSelector.connect("2", addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(newClientSelector, "2", 100, 10);
+
+        // Verify that old client continues to work
+        NetworkTestUtils.checkClientConnection(oldClientSelector, oldNode, 100, 10);
+
+        CertStores invalidCertStores = new CertStores(true, "server", "127.0.0.1");
+        Map<String, Object>  invalidConfigs = invalidCertStores.getTrustingConfig(clientCertStores);
+        try {
+            reconfigurableBuilder.validateReconfiguration(invalidConfigs);
+            fail("Should have failed validation with an exception with different SubjectAltName");
+        } catch (KafkaException e) {
+            // expected exception
+        }
+        try {
+            reconfigurableBuilder.reconfigure(invalidConfigs);
+            fail("Should have failed to reconfigure with different SubjectAltName");
+        } catch (KafkaException e) {
+            // expected exception
+        }
+
+        // Verify that new connections continue to work with the server with previously configured keystore after failed reconfiguration
+        newClientSelector.connect("3", addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(newClientSelector, "3", 100, 10);
     }
 
-    private void createSelector(Map<String, Object> sslClientConfigs, final Integer netReadBufSize,
+    private Selector createSelector(Map<String, Object> sslClientConfigs) {
+        return createSelector(sslClientConfigs, null, null, null);
+    }
+
+    private Selector createSelector(Map<String, Object> sslClientConfigs, final Integer netReadBufSize,
                                 final Integer netWriteBufSize, final Integer appBufSize) {
         TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
         channelBuilder.configureBufferSizes(netReadBufSize, netWriteBufSize, appBufSize);
         this.channelBuilder = channelBuilder;
         this.channelBuilder.configure(sslClientConfigs);
         this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+        return selector;
     }
 
     private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {

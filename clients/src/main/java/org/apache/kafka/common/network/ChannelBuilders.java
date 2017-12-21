@@ -71,13 +71,13 @@ public class ChannelBuilders {
      * @return the configured `ChannelBuilder`
      */
     public static ChannelBuilder serverChannelBuilder(ListenerName listenerName,
-                                                      boolean interBrokerListener,
+                                                      boolean isInterBrokerListener,
                                                       SecurityProtocol securityProtocol,
                                                       AbstractConfig config,
                                                       CredentialCache credentialCache,
                                                       DelegationTokenCache tokenCache) {
         return create(securityProtocol, Mode.SERVER, JaasContext.Type.SERVER, config, listenerName,
-                interBrokerListener, null, true, credentialCache, tokenCache);
+                isInterBrokerListener, null, true, credentialCache, tokenCache);
     }
 
     private static ChannelBuilder create(SecurityProtocol securityProtocol,
@@ -85,7 +85,7 @@ public class ChannelBuilders {
                                          JaasContext.Type contextType,
                                          AbstractConfig config,
                                          ListenerName listenerName,
-                                         boolean interBrokerListener,
+                                         boolean isInterBrokerListener,
                                          String clientSaslMechanism,
                                          boolean saslHandshakeRequestEnable,
                                          CredentialCache credentialCache,
@@ -100,18 +100,18 @@ public class ChannelBuilders {
         switch (securityProtocol) {
             case SSL:
                 requireNonNullMode(mode, securityProtocol);
-                channelBuilder = new SslChannelBuilder(mode, listenerName, interBrokerListener);
+                channelBuilder = new SslChannelBuilder(mode, listenerName, isInterBrokerListener);
                 break;
             case SASL_SSL:
             case SASL_PLAINTEXT:
                 requireNonNullMode(mode, securityProtocol);
                 JaasContext jaasContext = JaasContext.load(contextType, listenerName, configs);
                 channelBuilder = new SaslChannelBuilder(mode, jaasContext, securityProtocol, listenerName,
-                        interBrokerListener, clientSaslMechanism, saslHandshakeRequestEnable,
+                        isInterBrokerListener, clientSaslMechanism, saslHandshakeRequestEnable,
                         credentialCache, tokenCache);
                 break;
             case PLAINTEXT:
-                channelBuilder = new PlaintextChannelBuilder(listenerName);
+                channelBuilder = new PlaintextChannelBuilder();
                 break;
             default:
                 throw new IllegalArgumentException("Unexpected securityProtocol " + securityProtocol);

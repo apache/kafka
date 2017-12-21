@@ -47,12 +47,12 @@ import java.util.Set;
 
 import javax.security.auth.Subject;
 
-public class SaslChannelBuilder implements ChannelBuilder {
+public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurable {
     private static final Logger log = LoggerFactory.getLogger(SaslChannelBuilder.class);
 
     private final SecurityProtocol securityProtocol;
     private final ListenerName listenerName;
-    private final boolean interBrokerListener;
+    private final boolean isInterBrokerListener;
     private final String clientSaslMechanism;
     private final Mode mode;
     private final JaasContext jaasContext;
@@ -69,7 +69,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
                               JaasContext jaasContext,
                               SecurityProtocol securityProtocol,
                               ListenerName listenerName,
-                              boolean interBrokerListener,
+                              boolean isInterBrokerListener,
                               String clientSaslMechanism,
                               boolean handshakeRequestEnable,
                               CredentialCache credentialCache,
@@ -78,7 +78,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
         this.jaasContext = jaasContext;
         this.securityProtocol = securityProtocol;
         this.listenerName = listenerName;
-        this.interBrokerListener = interBrokerListener;
+        this.isInterBrokerListener = isInterBrokerListener;
         this.handshakeRequestEnable = handshakeRequestEnable;
         this.clientSaslMechanism = clientSaslMechanism;
         this.credentialCache = credentialCache;
@@ -114,7 +114,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
 
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
                 // Disable SSL client authentication as we are using SASL authentication
-                this.sslFactory = new SslFactory(mode, "none");
+                this.sslFactory = new SslFactory(mode, "none", isInterBrokerListener);
                 this.sslFactory.configure(configs);
             }
         } catch (Exception e) {
@@ -129,9 +129,9 @@ public class SaslChannelBuilder implements ChannelBuilder {
     }
 
     @Override
-    public boolean validate(Map<String, ?> configs) {
+    public boolean validateReconfiguration(Map<String, ?> configs) {
         if (this.securityProtocol == SecurityProtocol.SASL_SSL)
-            return sslFactory.validate(configs);
+            return sslFactory.validateReconfiguration(configs);
         else
             return true;
     }

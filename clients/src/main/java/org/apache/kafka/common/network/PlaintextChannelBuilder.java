@@ -29,45 +29,14 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.channels.SelectionKey;
-import java.util.Collections;
 import java.util.Map;
-import java.util.Set;
 
 public class PlaintextChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(PlaintextChannelBuilder.class);
-    private final ListenerName listenerName;
     private Map<String, ?> configs;
-
-    /**
-     * Constructs a PLAINTEXT channel builder. ListenerName is provided only
-     * for server channel builder and will be null for client channel builder.
-     */
-    public PlaintextChannelBuilder(ListenerName listenerName) {
-        this.listenerName = listenerName;
-    }
 
     public void configure(Map<String, ?> configs) throws KafkaException {
         this.configs = configs;
-    }
-
-    @Override
-    public Set<String> reconfigurableConfigs() {
-        return Collections.emptySet();
-    }
-
-    @Override
-    public boolean validate(Map<String, ?> configs) {
-        return false;
-    }
-
-    @Override
-    public void reconfigure(Map<String, ?> configs) {
-        throw new IllegalStateException("PlaintextChannelBuilder is not reconfigurable");
-    }
-
-    @Override
-    public ListenerName listenerName() {
-        return listenerName;
     }
 
     @Override

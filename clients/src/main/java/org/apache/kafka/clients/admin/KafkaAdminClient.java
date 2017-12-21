@@ -1494,7 +1494,7 @@ public class KafkaAdminClient extends AdminClient {
         final Collection<Resource> unifiedRequestResources = new ArrayList<>(configResources.size());
 
         for (ConfigResource resource : configResources) {
-            if (resource.type() == ConfigResource.Type.BROKER && !resource.name().isEmpty()) {
+            if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
                 brokerFutures.put(resource, new KafkaFutureImpl<Config>());
                 brokerResources.add(configResourceToResource(resource));
             } else {
@@ -1623,7 +1623,7 @@ public class KafkaAdminClient extends AdminClient {
         ConfigEntry.ConfigSource configSource;
         switch (source) {
             case TOPIC_CONFIG:
-                configSource = ConfigEntry.ConfigSource.TOPIC_CONFIG;
+                configSource = ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG;
                 break;
             case DYNAMIC_BROKER_CONFIG:
                 configSource = ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG;
@@ -1652,19 +1652,21 @@ public class KafkaAdminClient extends AdminClient {
         final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>();
 
         for (ConfigResource resource : configs.keySet()) {
-            if (resource.type() == ConfigResource.Type.BROKER && !resource.name().isEmpty()) {
-                allFutures.putAll(alterConfigs(configs, options, Collections.singleton(resource)));
+            if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
+                NodeProvider nodeProvider = new ConstantNodeIdProvider(Integer.parseInt(resource.name()));
+                allFutures.putAll(alterConfigs(configs, options, Collections.singleton(resource), nodeProvider));
             } else
                 unifiedRequestResources.add(resource);
         }
         if (!unifiedRequestResources.isEmpty())
-          allFutures.putAll(alterConfigs(configs, options, unifiedRequestResources));
+          allFutures.putAll(alterConfigs(configs, options, unifiedRequestResources, new LeastLoadedNodeProvider()));
         return new AlterConfigsResult(new HashMap<ConfigResource, KafkaFuture<Void>>(allFutures));
     }
 
     private Map<ConfigResource, KafkaFutureImpl<Void>> alterConfigs(Map<ConfigResource, Config> configs,
                                                                     final AlterConfigsOptions options,
-                                                                    Collection<ConfigResource> resources) {
+                                                                    Collection<ConfigResource> resources,
+                                                                    NodeProvider nodeProvider) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> futures = new HashMap<>();
         final Map<Resource, AlterConfigsRequest.Config> requestMap = new HashMap<>(resources.size());
         for (ConfigResource resource : resources) {
@@ -1674,12 +1676,6 @@ public class KafkaAdminClient extends AdminClient {
             requestMap.put(configResourceToResource(resource), new AlterConfigsRequest.Config(configEntries));
             futures.put(resource, new KafkaFutureImpl<Void>());
         }
-        NodeProvider nodeProvider;
-        ConfigResource resource = resources.iterator().next();
-        if (resource.type() == ConfigResource.Type.BROKER && !resource.name().isEmpty()) {
-            nodeProvider = new ConstantNodeIdProvider(Integer.parseInt(resource.name()));
-        } else
-            nodeProvider = new LeastLoadedNodeProvider();
 
         final long now = time.milliseconds();
         runnable.call(new Call("alterConfigs", calcDeadlineMs(now, options.timeoutMs()),

@@ -175,17 +175,18 @@ public class DescribeConfigsResponse extends AbstractResponse {
         DEFAULT_CONFIG((byte) 5);
 
         final byte id;
+        private static final ConfigSource[] VALUES = values();
 
         ConfigSource(byte id) {
             this.id = id;
         }
 
         public static ConfigSource forId(byte id) {
-            for (ConfigSource source: values()) {
-                if (source.id == id)
-                    return source;
-            }
-            throw new IllegalArgumentException("Unknown config source received: " + id);
+            if (id < 0)
+                throw new IllegalArgumentException("id should be positive, id: " + id);
+            if (id >= VALUES.length)
+                return UNKNOWN_CONFIG;
+            return VALUES[id];
         }
     }
 
@@ -322,10 +323,8 @@ public class DescribeConfigsResponse extends AbstractResponse {
                 configEntriesStruct.set(CONFIG_NAME_KEY_NAME, configEntry.name);
                 configEntriesStruct.set(CONFIG_VALUE_KEY_NAME, configEntry.value);
                 configEntriesStruct.set(IS_SENSITIVE_KEY_NAME, configEntry.isSensitive);
-                if (configEntriesStruct.hasField(CONFIG_SOURCE_KEY_NAME))
-                    configEntriesStruct.set(CONFIG_SOURCE_KEY_NAME, configEntry.source.id);
-                if (configEntriesStruct.hasField(IS_DEFAULT_KEY_NAME))
-                    configEntriesStruct.set(IS_DEFAULT_KEY_NAME, configEntry.source == ConfigSource.DEFAULT_CONFIG);
+                configEntriesStruct.setIfExists(CONFIG_SOURCE_KEY_NAME, configEntry.source.id);
+                configEntriesStruct.setIfExists(IS_DEFAULT_KEY_NAME, configEntry.source == ConfigSource.DEFAULT_CONFIG);
                 configEntriesStruct.set(READ_ONLY_KEY_NAME, configEntry.readOnly);
                 configEntryStructs.add(configEntriesStruct);
                 if (configEntriesStruct.hasField(CONFIG_SYNONYMS_KEY_NAME)) {

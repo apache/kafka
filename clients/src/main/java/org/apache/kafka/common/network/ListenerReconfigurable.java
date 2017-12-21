@@ -16,32 +16,16 @@
  */
 package org.apache.kafka.common.network;
 
-import java.nio.channels.SelectionKey;
-
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.memory.MemoryPool;
-
+import org.apache.kafka.common.Reconfigurable;
 
 /**
- * A ChannelBuilder interface to build Channel based on configs
+ * Interface for reconfigurable entities associated with a listener.
  */
-public interface ChannelBuilder extends AutoCloseable, Configurable {
+public interface ListenerReconfigurable extends Reconfigurable {
 
     /**
-     * returns a Channel with TransportLayer and Authenticator configured.
-     * @param  id  channel id
-     * @param  key SelectionKey
-     * @param  maxReceiveSize max size of a single receive buffer to allocate
-     * @param  memoryPool memory pool from which to allocate buffers, or null for none
-     * @return KafkaChannel
+     * Returns the listener name associated with this reconfigurable. Listener-specific
+     * configs corresponding to this listener name are provided for reconfiguration.
      */
-    KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException;
-
-    /**
-     * Closes ChannelBuilder
-     */
-    @Override
-    void close();
-
+    ListenerName listenerName();
 }

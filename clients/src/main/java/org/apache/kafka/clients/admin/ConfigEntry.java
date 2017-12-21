@@ -56,7 +56,7 @@ public class ConfigEntry {
      * @param isDefault whether the config value is the default or if it's been explicitly set
      * @param isSensitive whether the config value is sensitive, the broker never returns the value if it is sensitive
      * @param isReadOnly whether the config is read-only and cannot be updated
-     * @deprecated
+     * @deprecated since 1.1.0. This constructor will be removed in a future release.
      */
     public ConfigEntry(String name, String value, boolean isDefault, boolean isSensitive, boolean isReadOnly) {
         this(name, value, ConfigSource.UNKNOWN, isSensitive, isReadOnly, Collections.<ConfigSynonym>emptyList());
@@ -73,7 +73,7 @@ public class ConfigEntry {
      * @param synonyms Synonym configs in order of precedence
      */
     ConfigEntry(String name, String value, ConfigSource source, boolean isSensitive, boolean isReadOnly,
-                       List<ConfigSynonym> synonyms) {
+                List<ConfigSynonym> synonyms) {
         Objects.requireNonNull(name, "name should not be null");
         this.name = name;
         this.value = value;
@@ -146,7 +146,6 @@ public class ConfigEntry {
 
         return this.name.equals(that.name) &&
                 this.value != null ? this.value.equals(that.value) : that.value == null &&
-                this.isDefault == that.isDefault &&
                 this.isSensitive == that.isSensitive &&
                 this.isReadOnly == that.isReadOnly;
     }
@@ -157,7 +156,6 @@ public class ConfigEntry {
         int result = 1;
         result = prime * result + name.hashCode();
         result = prime * result + ((value == null) ? 0 : value.hashCode());
-        result = prime * result + (isDefault ? 1 : 0);
         result = prime * result + (isSensitive ? 1 : 0);
         result = prime * result + (isReadOnly ? 1 : 0);
         return result;
@@ -180,7 +178,7 @@ public class ConfigEntry {
      * Source of configuration entries.
      */
     public enum ConfigSource {
-        TOPIC_CONFIG,                   // dynamic topic config that is configured for a specific topic
+        DYNAMIC_TOPIC_CONFIG,           // dynamic topic config that is configured for a specific topic
         DYNAMIC_BROKER_CONFIG,          // dynamic broker config that is configured for a specific broker
         DYNAMIC_DEFAULT_BROKER_CONFIG,  // dynamic broker config that is configured as default for all brokers in the cluster
         STATIC_BROKER_CONFIG,           // static broker config provided as broker properties at start up (e.g. server.properties file)
@@ -191,7 +189,6 @@ public class ConfigEntry {
     /**
      * Class representing a configuration synonym of a {@link ConfigEntry}.
      */
-
     public static class ConfigSynonym {
 
         private final String name;

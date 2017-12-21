@@ -36,11 +36,11 @@ import java.nio.channels.SocketChannel;
 import java.util.Map;
 import java.util.Set;
 
-public class SslChannelBuilder implements ChannelBuilder {
+public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable {
     private static final Logger log = LoggerFactory.getLogger(SslChannelBuilder.class);
 
     private final ListenerName listenerName;
-    private final boolean interBrokerListener;
+    private final boolean isInterBrokerListener;
     private SslFactory sslFactory;
     private Mode mode;
     private Map<String, ?> configs;
@@ -49,16 +49,16 @@ public class SslChannelBuilder implements ChannelBuilder {
      * Constructs a SSL channel builder. ListenerName is provided only
      * for server channel builder and will be null for client channel builder.
      */
-    public SslChannelBuilder(Mode mode, ListenerName listenerName, boolean interBrokerListener) {
+    public SslChannelBuilder(Mode mode, ListenerName listenerName, boolean isInterBrokerListener) {
         this.mode = mode;
         this.listenerName = listenerName;
-        this.interBrokerListener = interBrokerListener;
+        this.isInterBrokerListener = isInterBrokerListener;
     }
 
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
             this.configs = configs;
-            this.sslFactory = new SslFactory(mode, null, interBrokerListener);
+            this.sslFactory = new SslFactory(mode, null, isInterBrokerListener);
             this.sslFactory.configure(this.configs);
         } catch (Exception e) {
             throw new KafkaException(e);
@@ -71,8 +71,8 @@ public class SslChannelBuilder implements ChannelBuilder {
     }
 
     @Override
-    public boolean validate(Map<String, ?> configs) {
-        return sslFactory.validate(configs);
+    public boolean validateReconfiguration(Map<String, ?> configs) {
+        return sslFactory.validateReconfiguration(configs);
     }
 
     @Override

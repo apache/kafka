@@ -289,7 +289,11 @@ public class Struct {
     }
 
     public Struct setIfExists(Field def, Object value) {
-        BoundField field = this.schema.get(def.name);
+        return setIfExists(def.name, value);
+    }
+
+    public Struct setIfExists(String fieldName, Object value) {
+        BoundField field = this.schema.get(fieldName);
         if (field != null)
             this.values[field.index] = value;
         return this;

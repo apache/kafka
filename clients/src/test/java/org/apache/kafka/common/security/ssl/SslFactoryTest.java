@@ -20,6 +20,7 @@ import java.io.File;
 import java.security.KeyStore;
 import java.util.Map;
 
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLHandshakeException;
 
@@ -87,7 +88,8 @@ public class SslFactoryTest {
                 Mode.SERVER, trustStoreFile, "server");
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(serverSslConfig);
-        sslFactory.createSSLContext(securityStore(serverSslConfig), true);
+        SSLContext sslContext = sslFactory.createSSLContext(securityStore(serverSslConfig), true);
+        assertNotNull("SSL context not created", sslContext);
     }
 
     @Test
@@ -97,7 +99,7 @@ public class SslFactoryTest {
                 Mode.SERVER, trustStoreFile, "server");
         Map<String, Object> untrustedConfig = TestSslUtils.createSslConfig(false, true,
                 Mode.SERVER, File.createTempFile("truststore", ".jks"), "server");
-        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER, null, true);
         sslFactory.configure(serverSslConfig);
         try {
             sslFactory.createSSLContext(securityStore(untrustedConfig), true);
@@ -116,14 +118,14 @@ public class SslFactoryTest {
                 Mode.SERVER, File.createTempFile("truststore", ".jks"), "server", "Another CN");
         KeyStore ks1 = securityStore(serverSslConfig).load();
         KeyStore ks2 = securityStore(serverSslConfig).load();
-        assertEquals(SslFactory.CertificateEntries.certificateEntries(ks1), SslFactory.CertificateEntries.certificateEntries(ks2));
+        assertEquals(SslFactory.CertificateEntries.create(ks1), SslFactory.CertificateEntries.create(ks2));
 
         // Use different alias name, validation should succeed
         ks2.setCertificateEntry("another", ks1.getCertificate("localhost"));
-        assertEquals(SslFactory.CertificateEntries.certificateEntries(ks1), SslFactory.CertificateEntries.certificateEntries(ks2));
+        assertEquals(SslFactory.CertificateEntries.create(ks1), SslFactory.CertificateEntries.create(ks2));
 
         KeyStore ks3 = securityStore(newCnConfig).load();
-        assertNotEquals(SslFactory.CertificateEntries.certificateEntries(ks1), SslFactory.CertificateEntries.certificateEntries(ks3));
+        assertNotEquals(SslFactory.CertificateEntries.create(ks1), SslFactory.CertificateEntries.create(ks3));
     }
 
     private SslFactory.SecurityStore securityStore(Map<String, Object> sslConfig) {

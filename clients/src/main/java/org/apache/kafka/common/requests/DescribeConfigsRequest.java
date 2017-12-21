@@ -152,8 +152,7 @@ public class DescribeConfigsRequest extends AbstractRequest {
             resourceStructs.add(resourceStruct);
         }
         struct.set(RESOURCES_KEY_NAME, resourceStructs.toArray(new Struct[0]));
-        if (struct.hasField(INCLUDE_SYNONYMS))
-            struct.set(INCLUDE_SYNONYMS, includeSynonyms);
+        struct.setIfExists(INCLUDE_SYNONYMS, includeSynonyms);
         return struct;
     }
 
@@ -162,6 +161,7 @@ public class DescribeConfigsRequest extends AbstractRequest {
         short version = version();
         switch (version) {
             case 0:
+            case 1:
                 ApiError error = ApiError.fromThrowable(e);
                 Map<Resource, DescribeConfigsResponse.Config> errors = new HashMap<>(resources().size());
                 DescribeConfigsResponse.Config config = new DescribeConfigsResponse.Config(error,

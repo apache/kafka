@@ -29,7 +29,7 @@ import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigDef, ConfigException, SslConfigs}
-import org.apache.kafka.common.network.ChannelBuilder
+import org.apache.kafka.common.network.{ChannelBuilder, ListenerReconfigurable}
 import org.apache.kafka.common.utils.Base64
 
 import scala.collection._
@@ -248,12 +248,12 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         val customConfigs = new util.HashMap[String, Object](newConfig.originalsFromThisConfig) // non-Kafka configs
         newConfig.valuesFromThisConfig.keySet.asScala.foreach(customConfigs.remove)
         reconfigurables.foreach {
-          case channelBuilder: ChannelBuilder =>
-            val listenerName = channelBuilder.listenerName
+          case listenerReconfigurable: ListenerReconfigurable =>
+            val listenerName = listenerReconfigurable.listenerName
             val oldValues = currentConfig.valuesWithPrefixOverride(listenerName.configPrefix)
             val newValues = newConfig.valuesFromThisConfigWithPrefixOverride(listenerName.configPrefix)
             val updatedKeys = updatedConfigs(newValues, oldValues).keySet
-            processReconfigurable(channelBuilder, updatedKeys, newValues, customConfigs, validateOnly)
+            processReconfigurable(listenerReconfigurable, updatedKeys, newValues, customConfigs, validateOnly)
           case reconfigurable =>
             processReconfigurable(reconfigurable, updatedMap.keySet, newConfig.valuesFromThisConfig, customConfigs, validateOnly)
         }
@@ -276,9 +276,10 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       val newConfigs = new util.HashMap[String, Object]
       allNewConfigs.asScala.foreach { case (k, v) => newConfigs.put(k, v.asInstanceOf[AnyRef]) }
       newConfigs.putAll(newCustomConfigs)
-      if (validateOnly)
-        reconfigurable.validate(newConfigs)
-      else
+      if (validateOnly) {
+        if (!reconfigurable.validateReconfiguration(newConfigs))
+          throw new ConfigException("Validation of dynamic config update failed")
+      } else
         reconfigurable.reconfigure(newConfigs)
     }
   }
