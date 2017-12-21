@@ -548,7 +548,9 @@ project(':core') {
     compile libs.jacksonDatabind
     compile libs.joptSimple
     compile libs.metrics
-    compile libs.scala
+    compile libs.scalaLibrary
+    // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
+    compile libs.scalaReflect
     compile libs.scalaLogging
     compile libs.slf4jApi
     compile(libs.zkclient) {
