@@ -44,8 +44,10 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
@@ -804,10 +806,10 @@ public class InternalTopologyBuilder {
     }
 
     private Map<Integer, Set<String>> makeNodeGroups() {
-        final HashMap<Integer, Set<String>> nodeGroups = new LinkedHashMap<>();
+        final TreeMap<Integer, Set<String>> nodeGroups = new TreeMap<>();
         final HashMap<String, Set<String>> rootToNodeGroup = new HashMap<>();
 
-        int nodeGroupId = 1;
+        int nodeGroupId = 0;
 
         // Go through source nodes first. This makes the group id assignment easy to predict in tests
         final HashSet<String> allSourceNodes = new HashSet<>(nodeToSourceTopics.keySet());
@@ -832,18 +834,26 @@ public class InternalTopologyBuilder {
                 if (nodeGroup == null) {
                     nodeGroup = new HashSet<>();
                     rootToNodeGroup.put(root, nodeGroup);
-                    if (isGlobalSource(root)) {
-                        nodeGroups.put((-1) * nodeGroupId, nodeGroup);
-                    } else {
-                        nodeGroups.put(nodeGroupId, nodeGroup);
-                    }
-                    nodeGroupId++;
+                    nodeGroups.put(nodeGroupId++, nodeGroup);
                 }
                 nodeGroup.add(nodeName);
             }
         }
-
-        return nodeGroups;
+        final Comparator<Integer> keyPartition = new Comparator<Integer>() {
+            @Override
+            public int compare(Integer o1, Integer o2) {
+                boolean o1ContainsGlobalSource = nodeGroupContainsGlobalSourceNode(nodeGroups.get(o1));
+                boolean o2ContainsGlobalSource = nodeGroupContainsGlobalSourceNode(nodeGroups.get(o2));
+                if (o1ContainsGlobalSource == o2ContainsGlobalSource) {
+                    return Integer.compare(o1, o2);
+                }
+                if (!o1ContainsGlobalSource) return 1;
+                return -1;
+            }
+        };
+        TreeMap<Integer, Set<String>> sortedMap = new TreeMap<Integer, Set<String>>(keyPartition);
+        sortedMap.putAll(nodeGroups);
+        return sortedMap;
     }
 
     public synchronized ProcessorTopology build() {
@@ -881,9 +891,13 @@ public class InternalTopologyBuilder {
 
     private Set<String> globalNodeGroups() {
         final Set<String> globalGroups = new HashSet<>();
-        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
+        for (final Map.Entry<Integer, Set<String>> nodeGroup : nodeGroups().entrySet()) {
             final Set<String> nodes = nodeGroup.getValue();
-            if (nodeGroup.getKey() < 0) globalGroups.addAll(nodes); 
+            for (final String node : nodes) {
+                if (isGlobalSource(node)) {
+                    globalGroups.addAll(nodes);
+                }
+            }
         }
         return globalGroups;
     }
@@ -1297,12 +1311,21 @@ public class InternalTopologyBuilder {
         for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
 
             final Set<String> allNodesOfGroups = nodeGroup.getValue();
-            final boolean isNodeGroupOfGlobalStores = nodeGroup.getKey() < 0;
+            final boolean isNodeGroupOfGlobalStores = nodeGroupContainsGlobalSourceNode(allNodesOfGroups);
 
             if (!isNodeGroupOfGlobalStores) {
                 describeSubtopology(description, nodeGroup.getKey(), allNodesOfGroups);
             }
         }
+    }
+
+    private boolean nodeGroupContainsGlobalSourceNode(final Set<String> allNodesOfGroups) {
+        for (final String node : allNodesOfGroups) {
+            if (isGlobalSource(node)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static class NodeComparator implements Comparator<TopologyDescription.Node>, Serializable {
