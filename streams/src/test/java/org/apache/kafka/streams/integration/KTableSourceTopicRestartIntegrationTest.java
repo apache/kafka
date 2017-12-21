@@ -45,6 +45,7 @@ import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -68,6 +69,8 @@ public class KTableSourceTopicRestartIntegrationTest {
 
     private static final Properties PRODUCER_CONFIG = new Properties();
     private static final Properties STREAMS_CONFIG = new Properties();
+    private Map<String, String> expectedInitialResultsMap;
+    private Map<String, String> expectedResultsWithDataWrittenDuringRestoreMap;
 
 
     @BeforeClass
@@ -102,6 +105,9 @@ public class KTableSourceTopicRestartIntegrationTest {
                 readKeyValues.put(key, value);
             }
         });
+
+        expectedInitialResultsMap = createExpectedResultsMap("a", "b", "c");
+        expectedResultsWithDataWrittenDuringRestoreMap = createExpectedResultsMap("a", "b", "c", "d", "f", "g", "h");
     }
 
     @After
@@ -119,7 +125,7 @@ public class KTableSourceTopicRestartIntegrationTest {
 
             produceKeyValues("a", "b", "c");
 
-            assertNumberValuesRead(readKeyValues, 3, "Table did not read all values");
+            assertNumberValuesRead(readKeyValues, expectedInitialResultsMap, "Table did not read all values");
 
             streamsOne.close();
             streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
@@ -129,7 +135,7 @@ public class KTableSourceTopicRestartIntegrationTest {
 
             produceKeyValues("f", "g", "h");
 
-            assertNumberValuesRead(readKeyValues, 7, "Table did not get all values after restart");
+            assertNumberValuesRead(readKeyValues, expectedResultsWithDataWrittenDuringRestoreMap, "Table did not get all values after restart");
 
         } finally {
             streamsOne.close(5, TimeUnit.SECONDS);
@@ -146,7 +152,7 @@ public class KTableSourceTopicRestartIntegrationTest {
 
             produceKeyValues("a", "b", "c");
 
-            assertNumberValuesRead(readKeyValues, 3, "Table did not read all values");
+            assertNumberValuesRead(readKeyValues, expectedInitialResultsMap, "Table did not read all values");
 
             streamsOne.close();
             streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
@@ -156,7 +162,7 @@ public class KTableSourceTopicRestartIntegrationTest {
 
             produceKeyValues("f", "g", "h");
 
-            assertNumberValuesRead(readKeyValues, 7, "Table did not get all values after restart");
+            assertNumberValuesRead(readKeyValues, expectedResultsWithDataWrittenDuringRestoreMap, "Table did not get all values after restart");
 
         } finally {
             streamsOne.close(5, TimeUnit.SECONDS);
@@ -172,7 +178,7 @@ public class KTableSourceTopicRestartIntegrationTest {
 
             produceKeyValues("a", "b", "c");
 
-            assertNumberValuesRead(readKeyValues, 3, "Table did not read all values");
+            assertNumberValuesRead(readKeyValues, expectedInitialResultsMap, "Table did not read all values");
 
             streamsOne.close();
             streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
@@ -180,7 +186,9 @@ public class KTableSourceTopicRestartIntegrationTest {
 
             produceKeyValues("f", "g", "h");
 
-            assertNumberValuesRead(readKeyValues, 6, "Table did not get all values after restart");
+            final Map<String, String> expectedValues = createExpectedResultsMap("a", "b", "c", "f", "g", "h");
+
+            assertNumberValuesRead(readKeyValues, expectedValues, "Table did not get all values after restart");
 
         } finally {
             streamsOne.close(5, TimeUnit.SECONDS);
@@ -188,13 +196,13 @@ public class KTableSourceTopicRestartIntegrationTest {
     }
 
     private void assertNumberValuesRead(final Map<String, String> valueMap,
-                                        final int expectedCount,
+                                        final Map<String, String> expectedMap,
                                         final String errorMessage) throws InterruptedException {
 
         TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
-                return valueMap.size() == expectedCount;
+                return valueMap.equals(expectedMap);
             }
         }, errorMessage);
 
@@ -211,6 +219,14 @@ public class KTableSourceTopicRestartIntegrationTest {
                                                            keyValueList,
                                                            PRODUCER_CONFIG,
                                                            time);
+    }
+
+    private Map<String, String> createExpectedResultsMap(final String... keys) {
+        final Map<String, String> expectedMap = new HashMap<>();
+        for (final String key : keys) {
+            expectedMap.put(key, key + "1");
+        }
+        return expectedMap;
     }
 
     private class UpdatingSourceTopicOnRestoreStartStateRestoreListener implements StateRestoreListener {
