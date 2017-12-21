@@ -18,6 +18,7 @@ package org.apache.kafka.connect.connector;
 
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 
 import java.util.Objects;
@@ -50,7 +51,7 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
     public ConnectRecord(String topic, Integer kafkaPartition,
                          Schema keySchema, Object key,
                          Schema valueSchema, Object value,
-                         Long timestamp, Headers headers) {
+                         Long timestamp, Iterable<Header> headers) {
         this.topic = topic;
         this.kafkaPartition = kafkaPartition;
         this.keySchema = keySchema;
@@ -58,7 +59,13 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
         this.valueSchema = valueSchema;
         this.value = value;
         this.timestamp = timestamp;
-        this.headers = headers != null ? headers : new ConnectHeaders();
+        if (headers == null) {
+            this.headers = new ConnectHeaders();
+        } else if (headers instanceof ConnectHeaders) {
+            this.headers = (ConnectHeaders)headers;
+        } else {
+            this.headers = new ConnectHeaders(headers);
+        }
     }
 
     public String topic() {
@@ -127,7 +134,7 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
      * @param headers the headers; may be null or empty
      * @return the new record
      */
-    public abstract R newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp, Headers headers);
+    public abstract R newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp, Iterable<Header> headers);
 
     @Override
     public String toString() {

@@ -19,6 +19,7 @@ package org.apache.kafka.connect.sink;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 
 /**
@@ -43,7 +44,7 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
     }
 
     public SinkRecord(String topic, int partition, Schema keySchema, Object key, Schema valueSchema, Object value, long kafkaOffset,
-                      Long timestamp, TimestampType timestampType, Headers headers) {
+                      Long timestamp, TimestampType timestampType, Iterable<Header> headers) {
         super(topic, partition, keySchema, key, valueSchema, value, timestamp, headers);
         this.kafkaOffset = kafkaOffset;
         this.timestampType = timestampType;
@@ -64,7 +65,7 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
 
     @Override
     public SinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value,
-                                Long timestamp, Headers headers) {
+                                Long timestamp, Iterable<Header> headers) {
         return new SinkRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, kafkaOffset(), timestamp, timestampType, headers);
     }
 

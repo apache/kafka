@@ -18,6 +18,7 @@ package org.apache.kafka.connect.source;
 
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 
 import java.util.Map;
@@ -77,7 +78,7 @@ public class SourceRecord extends ConnectRecord<SourceRecord> {
                         String topic, Integer partition,
                         Schema keySchema, Object key,
                         Schema valueSchema, Object value,
-                        Long timestamp, Headers headers) {
+                        Long timestamp, Iterable<Header> headers) {
         super(topic, partition, keySchema, key, valueSchema, value, timestamp, headers);
         this.sourcePartition = sourcePartition;
         this.sourceOffset = sourceOffset;
@@ -98,7 +99,7 @@ public class SourceRecord extends ConnectRecord<SourceRecord> {
 
     @Override
     public SourceRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value,
-                                  Long timestamp, Headers headers) {
+                                  Long timestamp, Iterable<Header> headers) {
         return new SourceRecord(sourcePartition, sourceOffset, topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp, headers);
     }
 
