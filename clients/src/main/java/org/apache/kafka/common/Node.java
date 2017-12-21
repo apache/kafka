@@ -23,6 +23,7 @@ public class Node {
 
     private static final Node NO_NODE = new Node(-1, "", -1);
 
+    private int hash = 0;
     private final int id;
     private final String idString;
     private final String host;
@@ -100,12 +101,15 @@ public class Node {
 
     @Override
     public int hashCode() {
+        if (hash != 0)
+            return hash;
         final int prime = 31;
         int result = 1;
         result = prime * result + ((host == null) ? 0 : host.hashCode());
         result = prime * result + id;
         result = prime * result + port;
         result = prime * result + ((rack == null) ? 0 : rack.hashCode());
+        this.hash = result;
         return result;
     }
 
