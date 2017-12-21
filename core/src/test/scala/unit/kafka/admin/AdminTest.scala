@@ -445,35 +445,35 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     // create a topic with a few config overrides and check that they are applied
     val maxMessageSize = 1024
     val retentionMs = 1000 * 1000
-    AdminUtils.createTopic(server.zkUtils, topic, partitions, 1, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
+    adminZkClient.createTopic(topic, partitions, 1, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
 
     //Standard topic configs will be propagated at topic creation time, but the quota manager will not have been updated.
     checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", false)
 
     //Update dynamically and all properties should be applied
-    AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
+    adminZkClient.changeTopicConfig(topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
 
     checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", true)
 
     // now double the config values for the topic and check that it is applied
     val newConfig = makeConfig(2 * maxMessageSize, 2 * retentionMs, "*", "*")
-    AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(2 * maxMessageSize, 2 * retentionMs, "*", "*"))
+    adminZkClient.changeTopicConfig(topic, makeConfig(2 * maxMessageSize, 2 * retentionMs, "*", "*"))
     checkConfig(2 * maxMessageSize, 2 * retentionMs, "*", "*", quotaManagerIsThrottled = true)
 
     // Verify that the same config can be read from ZK
-    val configInZk = AdminUtils.fetchEntityConfig(server.zkUtils, ConfigType.Topic, topic)
+    val configInZk = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
     assertEquals(newConfig, configInZk)
 
     //Now delete the config
-    AdminUtils.changeTopicConfig(server.zkUtils, topic, new Properties)
+    adminZkClient.changeTopicConfig(topic, new Properties)
     checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "", quotaManagerIsThrottled = false)
 
     //Add config back
-    AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
+    adminZkClient.changeTopicConfig(topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
     checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", quotaManagerIsThrottled = true)
 
     //Now ensure updating to "" removes the throttled replica list also
-    AdminUtils.changeTopicConfig(server.zkUtils, topic, propsWith((LogConfig.FollowerReplicationThrottledReplicasProp, ""), (LogConfig.LeaderReplicationThrottledReplicasProp, "")))
+    adminZkClient.changeTopicConfig(topic, propsWith((LogConfig.FollowerReplicationThrottledReplicasProp, ""), (LogConfig.LeaderReplicationThrottledReplicasProp, "")))
     checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "",  quotaManagerIsThrottled = false)
   }
 
@@ -494,27 +494,27 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val limit: Long = 1000000
 
     // Set the limit & check it is applied to the log
-    changeBrokerConfig(zkUtils, brokerIds, propsWith(
+    adminZkClient.changeBrokerConfig(brokerIds, propsWith(
       (LeaderReplicationThrottledRateProp, limit.toString),
       (FollowerReplicationThrottledRateProp, limit.toString)))
     checkConfig(limit)
 
     // Now double the config values for the topic and check that it is applied
     val newLimit = 2 * limit
-    changeBrokerConfig(zkUtils, brokerIds,  propsWith(
+    adminZkClient.changeBrokerConfig(brokerIds,  propsWith(
       (LeaderReplicationThrottledRateProp, newLimit.toString),
       (FollowerReplicationThrottledRateProp, newLimit.toString)))
     checkConfig(newLimit)
 
     // Verify that the same config can be read from ZK
     for (brokerId <- brokerIds) {
-      val configInZk = AdminUtils.fetchEntityConfig(servers(brokerId).zkUtils, ConfigType.Broker, brokerId.toString)
+      val configInZk = adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.toString)
       assertEquals(newLimit, configInZk.getProperty(LeaderReplicationThrottledRateProp).toInt)
       assertEquals(newLimit, configInZk.getProperty(FollowerReplicationThrottledRateProp).toInt)
     }
 
     //Now delete the config
-    changeBrokerConfig(servers(0).zkUtils, brokerIds, new Properties)
+    adminZkClient.changeBrokerConfig(brokerIds, new Properties)
     checkConfig(DefaultReplicationThrottledRate)
   }
 

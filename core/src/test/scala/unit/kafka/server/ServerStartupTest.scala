@@ -17,8 +17,6 @@
 
 package kafka.server
 
-import java.net.BindException
-
 import kafka.common.KafkaException
 import kafka.utils.{TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness

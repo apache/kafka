@@ -21,12 +21,15 @@ import java.util.Properties
 
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
+import kafka.common.KafkaException
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
 import kafka.security.auth.{Acl, Resource}
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
+import kafka.server.ConfigType
 import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
 import org.apache.zookeeper.data.Stat
+
 import scala.collection.JavaConverters._
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
@@ -337,4 +340,42 @@ object AclChangeNotificationSequenceZNode {
   def deletePath(sequenceNode: String) = s"${AclChangeNotificationZNode.path}/${sequenceNode}"
   def encode(resourceName : String): Array[Byte] = resourceName.getBytes(UTF_8)
   def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
+}
+
+object ClusterIdZNode {
+  def path = "/cluster/id"
+
+  def toJson(id: String): Array[Byte] = {
+    Json.encodeAsBytes(Map("version" -> "1", "id" -> id).asJava)
+  }
+
+  def fromJson(clusterIdJson:  Array[Byte]): String = {
+    Json.parseBytes(clusterIdJson).map(_.asJsonObject("id").to[String]).getOrElse {
+      throw new KafkaException(s"Failed to parse the cluster id json $clusterIdJson")
+    }
+  }
+}
+
+object BrokerSequenceIdZNode {
+  def path = s"${BrokersZNode.path}/seqid"
+}
+
+object ProducerIdBlockZNode {
+  def path = "/latest_producer_id_block"
+}
+
+object ZkData {
+  // These are persistent ZK paths that should exist on kafka broker startup.
+  val PersistentZkPaths = Seq(
+    "/consumers",  // old consumer path
+    BrokerIdsZNode.path,
+    TopicsZNode.path,
+    ConfigEntityChangeNotificationZNode.path,
+    ConfigEntityTypeZNode.path(ConfigType.Topic),
+    ConfigEntityTypeZNode.path(ConfigType.Client),
+    DeleteTopicsZNode.path,
+    BrokerSequenceIdZNode.path,
+    IsrChangeNotificationZNode.path,
+    ProducerIdBlockZNode.path,
+    LogDirEventNotificationZNode.path)
 }

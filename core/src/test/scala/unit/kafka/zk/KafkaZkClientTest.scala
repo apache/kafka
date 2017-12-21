@@ -19,13 +19,17 @@ package kafka.zk
 import java.util.{Properties, UUID}
 import java.nio.charset.StandardCharsets.UTF_8
 
+import kafka.api.ApiVersion
+import kafka.cluster.EndPoint
 import kafka.log.LogConfig
 import kafka.security.auth._
 import kafka.server.ConfigType
+import kafka.utils.CoreUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.zookeeper.KeeperException.NodeExistsException
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
+import org.junit.Assert._
 import org.junit.Test
 
 class KafkaZkClientTest extends ZooKeeperTestHarness {
@@ -409,6 +413,44 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     zkClient.deleteTopicConfigs(Seq(topic1, topic2))
     assertTrue(zkClient.getEntityConfigs(ConfigType.Topic, topic1).isEmpty)
+  }
+
+  @Test
+  def testBrokerRegistrationMethods() {
+    zkClient.createTopLevelPaths()
+
+    val brokerInfo = new BrokerInfo(1, "test.host", 9999,
+      Seq(new EndPoint("test.host", 9999, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT)),
+      9998, None, ApiVersion.latestVersion)
+
+    zkClient.registerBrokerInZk(brokerInfo)
+    val broker = zkClient.getBroker(1).getOrElse(fail("Unregistered broker"))
+
+    assertEquals(brokerInfo.id, broker.id)
+    assertEquals(brokerInfo.endpoints(), broker.endPoints.mkString(","))
+  }
+
+  @Test
+  def testClusterIdMethods() {
+    val clusterId = CoreUtils.generateUuidAsBase64
+
+    zkClient.createOrGetClusterId(clusterId)
+    assertEquals(clusterId, zkClient.getClusterId.getOrElse(fail("No cluster id found")))
+   }
+
+  @Test
+  def testBrokerSequenceIdMethods() {
+    val sequenceId = zkClient.generateBrokerSequenceId()
+    assertEquals(sequenceId + 1, zkClient.generateBrokerSequenceId)
+  }
+
+  @Test
+  def testCreateTopLevelPaths() {
+    zkClient.createTopLevelPaths()
+
+    ZkData.PersistentZkPaths.foreach {
+      path => assertTrue(zkClient.pathExists(path))
+    }
   }
 
   @Test
