@@ -118,8 +118,8 @@ class StreamsEosTest(KafkaTest):
         verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % verifier.STDOUT_FILE, allow_fail=False)
 
     def add_streams(self, processor):
-        processor.start()
         with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
+            processor.start()
             self.wait_for_startup(monitor, processor)
 
     def add_streams2(self, running_processor, processor_to_be_started):
