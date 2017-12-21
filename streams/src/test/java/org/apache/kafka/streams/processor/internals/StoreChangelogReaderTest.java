@@ -91,8 +91,7 @@ public class StoreChangelogReaderTest {
         };
 
         final StoreChangelogReader changelogReader = new StoreChangelogReader(consumer, stateRestoreListener, logContext);
-        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true,
-                                                   "storeName"));
+        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName"));
         changelogReader.restore(active);
         assertTrue(functionCalled.get());
     }
@@ -119,8 +118,7 @@ public class StoreChangelogReaderTest {
     public void shouldRestoreAllMessagesFromBeginningWhenCheckpointNull() {
         final int messages = 10;
         setupConsumer(messages, topicPartition);
-        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true,
-                                                   "storeName"));
+        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName"));
         changelogReader.restore(active);
         assertThat(callback.restored.size(), equalTo(messages));
     }
@@ -409,6 +407,7 @@ public class StoreChangelogReaderTest {
     public void shouldNotThrowTaskMigratedExceptionDuringRestoreForChangelogTopicWhenEndOffsetNotExceededEOSEnabled() {
         final int totalMessages = 10;
         setupConsumer(totalMessages, topicPartition);
+        // records have offsets of 0..9 10 is commit marker so 11 is end offset
         consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 11L));
 
         consumer.assign(Collections.<TopicPartition>emptyList());
@@ -476,6 +475,7 @@ public class StoreChangelogReaderTest {
         //EOS enabled so commit marker at offset 5 so records start at 6
         addRecords(5, topicPartition, 6);
         consumer.assign(Collections.<TopicPartition>emptyList());
+        // commit marker is 5 so ending offset is 6
         consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 6L));
 
         changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, 11, true, "storeName"));
@@ -490,12 +490,8 @@ public class StoreChangelogReaderTest {
     @Test
     public void shouldNotThrowTaskMigratedExceptionIfEndOffsetNotExceededDuringRestoreForSourceTopicEOSEnabled() {
         final int totalMessages = 10;
-        assignPartition(totalMessages, topicPartition);
-        // records 0..4 last offset before commit is 4
-        addRecords(5, topicPartition, 0);
-        //EOS enabled so commit marker at offset 5 so records start at 6
-        addRecords(5, topicPartition, 6);
-        consumer.assign(Collections.<TopicPartition>emptyList());
+        setupConsumer(totalMessages, topicPartition);
+        // records have offsets 0..9 10 is commit marker so 11 is ending offset
         consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 11L));
 
         changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, 11, true, "storeName"));
