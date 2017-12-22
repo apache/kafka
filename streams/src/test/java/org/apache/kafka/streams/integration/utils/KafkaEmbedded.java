@@ -177,7 +177,9 @@ public class KafkaEmbedded {
                 DEFAULT_ZK_SESSION_TIMEOUT_MS,
                 DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
                 Integer.MAX_VALUE,
-                Time.SYSTEM);
+                Time.SYSTEM,
+                "testMetricGroup",
+                "testMetricType");
         final KafkaZkClient kafkaZkClient = new KafkaZkClient(zkClient, false, Time.SYSTEM);
         final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
         adminZkClient.createTopic(topic, partitions, replication, topicConfig, RackAwareMode.Enforced$.MODULE$);
@@ -192,7 +194,9 @@ public class KafkaEmbedded {
                 DEFAULT_ZK_SESSION_TIMEOUT_MS,
                 DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
                 Integer.MAX_VALUE,
-                Time.SYSTEM);
+                Time.SYSTEM,
+                "testMetricGroup",
+                "testMetricType");
         final KafkaZkClient kafkaZkClient = new KafkaZkClient(zkClient, false, Time.SYSTEM);
         final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
         adminZkClient.deleteTopic(topic);
