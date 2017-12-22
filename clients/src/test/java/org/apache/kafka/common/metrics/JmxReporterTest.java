@@ -53,7 +53,7 @@ public class JmxReporterTest {
             KafkaMetric metric = metrics.removeMetric(metrics.metricName("pack.bean1.avg", "grp1"));
             MetricName metricName = metric.metricName();
             String mBeanName = JmxReporter.getMBeanName("", metricName);
-            assertFalse(reporter.mbeans.containsKey(mBeanName));
+            assertFalse(reporter.containsMBean(mBeanName));
 
             assertFalse(server.isRegistered(new ObjectName(":type=grp1")));
             assertTrue(server.isRegistered(new ObjectName(":type=grp2")));

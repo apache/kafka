@@ -49,7 +49,7 @@ public class JmxReporter implements MetricsReporter {
     private static final Logger log = LoggerFactory.getLogger(JmxReporter.class);
     private static final Object LOCK = new Object();
     private String prefix;
-    final Map<String, KafkaMbean> mbeans = new HashMap<String, KafkaMbean>();
+    private final Map<String, KafkaMbean> mbeans = new HashMap<String, KafkaMbean>();
 
     public JmxReporter() {
         this("");
@@ -75,6 +75,9 @@ public class JmxReporter implements MetricsReporter {
         }
     }
 
+    boolean containsMBean(String mbeanName) {
+        return mbeans.containsKey(mbeanName);
+    }
     @Override
     public void metricChange(KafkaMetric metric) {
         synchronized (LOCK) {
