@@ -715,11 +715,9 @@ object ConsumerGroupCommand extends Logging {
     private def prepareOffsetsToReset(groupId: String, partitionsToReset: Seq[TopicPartition]): Map[TopicPartition, OffsetAndMetadata] = {
       if (opts.options.has(opts.resetToOffsetOpt)) {
         val offset = opts.options.valueOf(opts.resetToOffsetOpt)
-        partitionsToReset.map {
-          topicPartition =>
-            val newOffset: Long = checkOffsetRange(topicPartition, offset)
-            (topicPartition, new OffsetAndMetadata(newOffset))
-        }.toMap
+        checkOffsetRange(partitionsToReset.map((_, offset)).toMap).map {
+          case (topicPartition, newOffset) => (topicPartition, new OffsetAndMetadata(newOffset))
+        }
       } else if (opts.options.has(opts.resetToEarliestOpt)) {
         val logStartOffsets = getLogStartOffsets(partitionsToReset)
         partitionsToReset.map { topicPartition =>
@@ -738,14 +736,15 @@ object ConsumerGroupCommand extends Logging {
         }.toMap
       } else if (opts.options.has(opts.resetShiftByOpt)) {
         val currentCommittedOffsets = adminClient.listGroupOffsets(groupId)
-        partitionsToReset.map { topicPartition =>
+        val requestedOffsets = partitionsToReset.map { topicPartition =>
           val shiftBy = opts.options.valueOf(opts.resetShiftByOpt)
           val currentOffset = currentCommittedOffsets.getOrElse(topicPartition,
             throw new IllegalArgumentException(s"Cannot shift offset for partition $topicPartition since there is no current committed offset"))
-          val shiftedOffset = currentOffset + shiftBy
-          val newOffset: Long = checkOffsetRange(topicPartition, shiftedOffset)
-          (topicPartition, new OffsetAndMetadata(newOffset))
+          (topicPartition, currentOffset + shiftBy)
         }.toMap
+        checkOffsetRange(requestedOffsets).map {
+          case (topicPartition, newOffset) => (topicPartition, new OffsetAndMetadata(newOffset))
+        }
       } else if (opts.options.has(opts.resetToDatetimeOpt)) {
         val timestamp = convertTimestamp(opts.options.valueOf(opts.resetToDatetimeOpt))
         partitionsToReset.map { topicPartition =>
@@ -772,10 +771,12 @@ object ConsumerGroupCommand extends Logging {
         val resetPlanPath = opts.options.valueOf(opts.resetFromFileOpt)
         val resetPlanCsv = Utils.readFileAsString(resetPlanPath)
         val resetPlan = parseResetPlan(resetPlanCsv)
-        resetPlan.keySet.map { topicPartition =>
-          val newOffset: Long = checkOffsetRange(topicPartition, resetPlan(topicPartition).offset())
-          (topicPartition, new OffsetAndMetadata(newOffset))
+        val requestedOffsets = resetPlan.keySet.map { topicPartition =>
+          (topicPartition, resetPlan(topicPartition).offset())
         }.toMap
+        checkOffsetRange(requestedOffsets).map {
+          case (topicPartition, newOffset) => (topicPartition, new OffsetAndMetadata(newOffset))
+        }
       } else if (opts.options.has(opts.resetToCurrentOpt)) {
         val currentCommittedOffsets = adminClient.listGroupOffsets(groupId)
         partitionsToReset.map { topicPartition =>
@@ -793,19 +794,27 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    private def checkOffsetRange(topicPartition: TopicPartition, offset: Long) = {
-      getLogEndOffset(topicPartition) match {
-        case LogOffsetResult.LogOffset(endOffset) if offset > endOffset =>
-          warn(s"New offset ($offset) is higher than latest offset. Value will be set to $endOffset")
-          endOffset
+    private def checkOffsetRange(requestedOffsets: Map[TopicPartition, Long]) = {
+      val logStartOffsets = getLogStartOffsets(requestedOffsets.keySet.toSeq)
+      val logEndOffsets = getLogEndOffsets(requestedOffsets.keySet.toSeq)
+      requestedOffsets.map { case (topicPartition, offset) => (topicPartition,
+        logEndOffsets.get(topicPartition) match {
+          case Some(LogOffsetResult.LogOffset(endOffset)) if offset > endOffset =>
+            warn(s"New offset ($offset) is higher than latest offset for topic partition $topicPartition. Value will be set to $endOffset")
+            endOffset
 
-        case _ => getLogStartOffset(topicPartition) match {
-          case LogOffsetResult.LogOffset(startOffset) if offset < startOffset =>
-            warn(s"New offset ($offset) is lower than earliest offset. Value will be set to $startOffset")
-            startOffset
+          case Some(_) => logStartOffsets.get(topicPartition) match {
+            case Some(LogOffsetResult.LogOffset(startOffset)) if offset < startOffset =>
+              warn(s"New offset ($offset) is lower than earliest offset for topic partition $topicPartition. Value will be set to $startOffset")
+              startOffset
 
-          case _ => offset
-        }
+            case _ => offset
+          }
+
+          case None => // the control should not reach here
+            warn(s"Unexpected non-existing offset value for topic partition $topicPartition")
+            null.asInstanceOf[Long]
+        })
       }
     }
 
