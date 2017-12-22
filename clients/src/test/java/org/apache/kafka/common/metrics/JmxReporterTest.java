@@ -37,7 +37,7 @@ public class JmxReporterTest {
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {
             JmxReporter reporter = new JmxReporter();
-            metrics.addReporter(new JmxReporter());
+            metrics.addReporter(reporter);
 
             assertFalse(server.isRegistered(new ObjectName(":type=grp1")));
 
