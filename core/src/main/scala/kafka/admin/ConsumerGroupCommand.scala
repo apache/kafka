@@ -431,7 +431,7 @@ object ConsumerGroupCommand extends Logging {
                                     topicPartitions: Seq[TopicPartition],
                                     channelSocketTimeoutMs: Int,
                                     channelRetryBackoffMs: Int): Map[TopicPartition, Long] = {
-      val offsetMap = mutable.Map[TopicPartition, Long]()
+      val offsetMap = mutable.Map[TopicAndPartition, Long]()
       val channel = ClientUtils.channelToOffsetManager(group, zkUtils, channelSocketTimeoutMs, channelRetryBackoffMs)
       channel.send(OffsetFetchRequest(group, topicPartitions.map(new TopicAndPartition(_))))
       val offsetFetchResponse = OffsetFetchResponse.readFrom(channel.receive().payload())
@@ -444,19 +444,21 @@ object ConsumerGroupCommand extends Logging {
             // (meaning the lag may be off until all the consumers in the group have the same setting for offsets storage)
             try {
               val offset = zkUtils.readData(topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1.toLong
-              offsetMap.put(new TopicPartition(topicAndPartition.topic, topicAndPartition.partition), offset)
+              offsetMap.put(topicAndPartition, offset)
             } catch {
               case z: ZkNoNodeException =>
                 printError(s"Could not fetch offset from zookeeper for group '$group' partition '$topicAndPartition' due to missing offset data in zookeeper.", Some(z))
             }
           case offsetAndMetaData if offsetAndMetaData.error == Errors.NONE =>
-            offsetMap.put(new TopicPartition(topicAndPartition.topic, topicAndPartition.partition), offsetAndMetadata.offset)
+            offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
           case _ =>
             printError(s"Could not fetch offset from kafka for group '$group' partition '$topicAndPartition' due to ${offsetAndMetadata.error.message}.")
         }
       }
       channel.disconnect()
-      offsetMap.toMap
+      offsetMap.map { case (topicAndPartition, offset) =>
+        (new TopicPartition(topicAndPartition.topic, topicAndPartition.partition), offset)
+      }.toMap
     }
 
     private def deleteForGroup() {
