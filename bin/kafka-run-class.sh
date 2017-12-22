@@ -239,6 +239,10 @@ while [ $# -gt 0 ]; do
       DAEMON_MODE="true"
       shift
       ;;
+    --soft-file-limit)
+      ulimit -n $2
+      shift 2
+      ;;
     *)
       break
       ;;

@@ -16,7 +16,7 @@
 
 if [ $# -lt 1 ];
 then
-	echo "USAGE: $0 [-daemon] server.properties [--override property=value]*"
+	echo "USAGE: $0 [-daemon] [--soft-file-limit number] server.properties [--override property=value]*"
 	exit 1
 fi
 base_dir=$(dirname $0)
@@ -36,6 +36,10 @@ case $COMMAND in
   -daemon)
     EXTRA_ARGS="-daemon "$EXTRA_ARGS
     shift
+    ;;
+  --soft-file-limit)
+    EXTRA_ARGS="--soft-file-limit ${2} "$EXTRA_ARGS
+    shift 2
     ;;
   *)
     ;;
