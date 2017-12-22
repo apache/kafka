@@ -48,7 +48,9 @@ class ZooKeeperClient(connectString: String,
                       sessionTimeoutMs: Int,
                       connectionTimeoutMs: Int,
                       maxInFlightRequests: Int,
-                      time: Time) extends Logging with KafkaMetricsGroup {
+                      time: Time,
+                      metricGroup: String = "kafka.server",
+                      metricType: String = "KafkaHealthcheck") extends Logging with KafkaMetricsGroup {
   this.logIdent = "[ZooKeeperClient] "
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
@@ -96,7 +98,7 @@ class ZooKeeperClient(connectString: String,
     * This is added to preserve the original metric name in JMX
     */
   override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
-    explicitMetricName("kafka.server", "KafkaHealthcheck", name, metricTags)
+    explicitMetricName(metricGroup, metricType, name, metricTags)
   }
 
   /**
@@ -319,12 +321,12 @@ class ZooKeeperClient(connectString: String,
           return
         } catch {
           case e: Exception =>
-            debug("Error when recreating ZooKeeper", e)
+            info("Error when recreating ZooKeeper", e)
             Thread.sleep(1000)
         }
       }
       info(s"Timed out waiting for connection during session initialization while in state: ${zooKeeper.getState}")
-      stateChangeHandlers.foreach {case (name, handler) => handler.onReconnectionTimeout()}
+      stateChangeHandlers.values.foreach(_.onReconnectionTimeout())
     }
   }
 
@@ -349,13 +351,13 @@ class ZooKeeperClient(connectString: String,
           }
           if (state == KeeperState.AuthFailed) {
             error("Auth failed.")
-            stateChangeHandlers.foreach {case (name, handler) => handler.onAuthFailure()}
+            stateChangeHandlers.values.foreach(_.onAuthFailure())
           } else if (state == KeeperState.Expired) {
             inWriteLock(initializationLock) {
               info("Session expired.")
-              stateChangeHandlers.foreach {case (name, handler) => handler.beforeInitializingSession()}
+              stateChangeHandlers.values.foreach(_.beforeInitializingSession())
               initialize()
-              stateChangeHandlers.foreach {case (name, handler) => handler.afterInitializingSession()}
+              stateChangeHandlers.values.foreach(_.afterInitializingSession())
             }
           }
         case Some(path) =>

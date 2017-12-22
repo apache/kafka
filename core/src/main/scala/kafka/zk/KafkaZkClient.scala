@@ -1321,7 +1321,8 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     } else if (createResponse.resultCode == Code.NONODE) {
       createRecursive0(parentPath(path))
       createResponse = retryRequestUntilConnected(createRequest)
-      createResponse.maybeThrow
+      if (throwIfPathExists || createResponse.resultCode != Code.NODEEXISTS)
+        createResponse.maybeThrow
     } else if (createResponse.resultCode != Code.NODEEXISTS)
       createResponse.maybeThrow
 
