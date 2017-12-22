@@ -109,7 +109,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
 
     class BrokerStateInterceptor() extends BrokerState {
       override def newState(newState: BrokerStates): Unit = {
-        val brokers = zkUtils.getAllBrokersInCluster()
+        val brokers = zkClient.getAllBrokersInCluster
         assertEquals(1, brokers.size)
         assertEquals(brokerId, brokers.head.id)
       }

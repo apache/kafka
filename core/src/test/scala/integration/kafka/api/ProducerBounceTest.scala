@@ -68,7 +68,7 @@ class ProducerBounceTest extends KafkaServerTestHarness {
     val numPartitions = 3
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-    TestUtils.createTopic(zkUtils, topic1, numPartitions, numServers, servers, topicConfig)
+    TestUtils.createTopic(zkClient, topic1, numPartitions, numServers, servers, topicConfig)
 
     val scheduler = new ProducerScheduler()
     scheduler.start
@@ -89,7 +89,7 @@ class ProducerBounceTest extends KafkaServerTestHarness {
       assertFalse(scheduler.failed)
 
       // Make sure the leader still exists after bouncing brokers
-      (0 until numPartitions).foreach(partition => TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic1, partition))
+      (0 until numPartitions).foreach(partition => TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic1, partition))
     }
 
     scheduler.shutdown

@@ -169,8 +169,8 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
   private def createTopics() =  {
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-    TestUtils.createTopic(zkUtils, inputTopic, numPartitions, 3, servers, topicConfig)
-    TestUtils.createTopic(zkUtils, outputTopic, numPartitions, 3, servers, topicConfig)
+    TestUtils.createTopic(zkClient, inputTopic, numPartitions, 3, servers, topicConfig)
+    TestUtils.createTopic(zkClient, outputTopic, numPartitions, 3, servers, topicConfig)
   }
 
   private class BounceScheduler extends ShutdownableThread("daemon-broker-bouncer", false) {
@@ -186,7 +186,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
         Thread.sleep(500)
       }
 
-      (0 until numPartitions).foreach(partition => TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, outputTopic, partition))
+      (0 until numPartitions).foreach(partition => TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, outputTopic, partition))
     }
 
     override def shutdown(){

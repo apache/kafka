@@ -71,7 +71,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     val topic = "topicWithOldMessageFormat"
     val props = new Properties
     props.setProperty(LogConfig.MessageFormatVersionProp, "0.9.0")
-    TestUtils.createTopic(this.zkUtils, topic, numPartitions = 1, replicationFactor = 1, this.servers, props)
+    TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, this.servers, props)
     val tp = new TopicPartition(topic, 0)
 
     // Produce and consume some records

@@ -85,8 +85,8 @@ class MetadataRequestTest extends BaseRequestTest {
     val internalTopic = Topic.GROUP_METADATA_TOPIC_NAME
     val notInternalTopic = "notInternal"
     // create the topics
-    TestUtils.createTopic(zkUtils, internalTopic, 3, 2, servers)
-    TestUtils.createTopic(zkUtils, notInternalTopic, 3, 2, servers)
+    TestUtils.createTopic(zkClient, internalTopic, 3, 2, servers)
+    TestUtils.createTopic(zkClient, notInternalTopic, 3, 2, servers)
 
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
     assertTrue("Response should have no errors", metadataResponse.errors.isEmpty)
@@ -104,8 +104,8 @@ class MetadataRequestTest extends BaseRequestTest {
   @Test
   def testNoTopicsRequest() {
     // create some topics
-    TestUtils.createTopic(zkUtils, "t1", 3, 2, servers)
-    TestUtils.createTopic(zkUtils, "t2", 3, 2, servers)
+    TestUtils.createTopic(zkClient, "t1", 3, 2, servers)
+    TestUtils.createTopic(zkClient, "t2", 3, 2, servers)
 
     // v0, Doesn't support a "no topics" request
     // v1, Empty list represents "no topics"
@@ -119,7 +119,7 @@ class MetadataRequestTest extends BaseRequestTest {
     def checkAutoCreatedTopic(existingTopic: String, autoCreatedTopic: String, response: MetadataResponse): Unit = {
       assertNull(response.errors.get(existingTopic))
       assertEquals(Errors.LEADER_NOT_AVAILABLE, response.errors.get(autoCreatedTopic))
-      assertEquals(Some(servers.head.config.numPartitions), zkUtils.getTopicPartitionCount(autoCreatedTopic))
+      assertEquals(Some(servers.head.config.numPartitions), zkClient.getTopicPartitionCount(autoCreatedTopic))
       for (i <- 0 until servers.head.config.numPartitions)
         TestUtils.waitUntilMetadataIsPropagated(servers, autoCreatedTopic, i)
     }
@@ -128,7 +128,7 @@ class MetadataRequestTest extends BaseRequestTest {
     val topic2 = "t2"
     val topic3 = "t3"
     val topic4 = "t4"
-    TestUtils.createTopic(zkUtils, topic1, 1, 1, servers)
+    TestUtils.createTopic(zkClient, topic1, 1, 1, servers)
 
     val response1 = sendMetadataRequest(new MetadataRequest(Seq(topic1, topic2).asJava, true, ApiKeys.METADATA.latestVersion))
     checkAutoCreatedTopic(topic1, topic2, response1)
@@ -141,14 +141,14 @@ class MetadataRequestTest extends BaseRequestTest {
     val response3 = sendMetadataRequest(new MetadataRequest(Seq(topic3, topic4).asJava, false, 4))
     assertNull(response3.errors.get(topic3))
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response3.errors.get(topic4))
-    assertEquals(None, zkUtils.getTopicPartitionCount(topic4))
+    assertEquals(None, zkClient.getTopicPartitionCount(topic4))
   }
 
   @Test
   def testAllTopicsRequest() {
     // create some topics
-    TestUtils.createTopic(zkUtils, "t1", 3, 2, servers)
-    TestUtils.createTopic(zkUtils, "t2", 3, 2, servers)
+    TestUtils.createTopic(zkClient, "t1", 3, 2, servers)
+    TestUtils.createTopic(zkClient, "t2", 3, 2, servers)
 
     // v0, Empty list represents all topics
     val metadataResponseV0 = sendMetadataRequest(new MetadataRequest(List[String]().asJava, true, 0.toShort))
@@ -167,7 +167,7 @@ class MetadataRequestTest extends BaseRequestTest {
   @Test
   def testPreferredReplica(): Unit = {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
-    TestUtils.createTopic(zkUtils, "t1", replicaAssignment, servers)
+    TestUtils.createTopic(zkClient, "t1", replicaAssignment, servers)
     // Call controller and one different broker to ensure that metadata propagation works correctly
     val responses = Seq(
       sendMetadataRequest(new MetadataRequest.Builder(Seq("t1").asJava, true).build(), Some(controllerSocketServer)),
@@ -194,7 +194,7 @@ class MetadataRequestTest extends BaseRequestTest {
     val replicaCount = 3
 
     // create a topic with 3 replicas
-    TestUtils.createTopic(zkUtils, replicaDownTopic, 1, replicaCount, servers)
+    TestUtils.createTopic(zkClient, replicaDownTopic, 1, replicaCount, servers)
 
     // Kill a replica node that is not the leader
     val metadataResponse = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava, true, 1.toShort))

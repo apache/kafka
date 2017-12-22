@@ -26,7 +26,7 @@ import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
-import kafka.zk.{AdminZkClient, KafkaZkClient, ZooKeeperTestHarness}
+import kafka.zk.{AdminZkClient, BrokerIdsZNode, KafkaZkClient, ZooKeeperTestHarness}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
@@ -49,8 +49,9 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
 
   @Test
   def testManualReplicaAssignment() {
+    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
     val brokers = List(0, 1, 2, 3, 4)
-    TestUtils.createBrokersInZk(zkUtils, brokers)
+    TestUtils.createBrokersInZk(zkClient, brokers)
 
     // duplicate brokers
     intercept[InvalidReplicaAssignmentException] {
@@ -72,6 +73,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
 
   @Test
   def testTopicCreationInZK() {
+    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
     val expectedReplicaAssignment = Map(
       0  -> List(0, 1, 2),
       1  -> List(1, 2, 3),
@@ -101,7 +103,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
       11 -> 1
     )
     val topic = "test"
-    TestUtils.createBrokersInZk(zkUtils, List(0, 1, 2, 3, 4))
+    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
     // create the topic
     adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment)
     // create leaders for all partitions
@@ -119,9 +121,10 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
 
   @Test
   def testTopicCreationWithCollision() {
+    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
     val topic = "test.topic"
     val collidingTopic = "test_topic"
-    TestUtils.createBrokersInZk(zkUtils, List(0, 1, 2, 3, 4))
+    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
     // create the topic
     adminZkClient.createTopic(topic, 3, 1)
 
@@ -292,11 +295,12 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
 
   @Test
   def testGetBrokerMetadatas() {
+    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
     // broker 4 has no rack information
     val brokerList = 0 to 5
     val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 5 -> "rack3")
     val brokerMetadatas = toBrokerMetadata(rackInfo, brokersWithoutRack = brokerList.filterNot(rackInfo.keySet))
-    TestUtils.createBrokersInZk(brokerMetadatas, zkUtils)
+    TestUtils.createBrokersInZk(brokerMetadatas, zkClient)
 
     val processedMetadatas1 = adminZkClient.getBrokerMetadatas(RackAwareMode.Disabled)
     assertEquals(brokerList, processedMetadatas1.map(_.id))

@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.BrokerEndPoint
 import kafka.server.ReplicaFetcherThread.{FetchRequest, PartitionData}
-import kafka.utils.{Exit, TestUtils, ZkUtils}
+import kafka.utils.{Exit, TestUtils}
 import kafka.utils.TestUtils.createBrokerConfigs
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
@@ -58,9 +58,9 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
 
     // Unlike `TestUtils.createTopic`, this doesn't wait for metadata propagation as the broker shuts down before
     // the metadata is propagated.
-    def createTopic(zkUtils: ZkUtils, topic: String): Unit = {
+    def createTopic(topic: String): Unit = {
       adminZkClient.createTopic(topic, partitions = 1, replicationFactor = 2)
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
+      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
     }
 
     val props = createBrokerConfigs(2, zkConnect)
@@ -72,7 +72,7 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
           super.addPartitions(partitionAndOffsets.mapValues(_ => -1))
       }
     }))
-    createTopic(zkUtils, "topic")
+    createTopic("topic")
     TestUtils.waitUntilTrue(() => shutdownCompleted, "Shutdown of follower did not complete")
   }
 
@@ -96,7 +96,7 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
         }
       }
     }))
-    TestUtils.createTopic(zkUtils, "topic", numPartitions = 1, replicationFactor = 2, servers = brokers)
+    TestUtils.createTopic(zkClient, "topic", numPartitions = 1, replicationFactor = 2, servers = brokers)
     TestUtils.waitUntilTrue(() => shutdownCompleted, "Shutdown of follower did not complete")
   }
 

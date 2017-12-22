@@ -48,7 +48,7 @@ class LogAppendTimeTest extends IntegrationTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    TestUtils.createTopic(zkUtils, topic, servers = servers)
+    TestUtils.createTopic(zkClient, topic, servers = servers)
   }
 
   @Test

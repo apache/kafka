@@ -62,7 +62,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
   def testErrorCreateTopicsRequests() {
     val timeout = 10000
     val existingTopic = "existing-topic"
-    TestUtils.createTopic(zkUtils, existingTopic, 1, 1, servers)
+    TestUtils.createTopic(zkClient, existingTopic, 1, 1, servers)
 
     // Policy violations
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(
