@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_9_0
 import kafka.cluster.{Broker, EndPoint}
-import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException}
+import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, KafkaException}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
@@ -133,11 +133,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   val kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
 
-  var kafkaHealthcheck: KafkaHealthcheck = null
   var metadataCache: MetadataCache = null
   var quotaManagers: QuotaFactory.QuotaManagers = null
 
-  var zkUtils: ZkUtils = null
   private var _zkClient: KafkaZkClient = null
   val correlationId: AtomicInteger = new AtomicInteger(0)
   val brokerMetaPropsFile = "meta.properties"
@@ -199,10 +197,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         kafkaScheduler.startup()
 
         /* setup zookeeper */
-        zkUtils = initZk()
+        initZkClient(time)
 
         /* Get or create cluster_id */
-        _clusterId = getOrGenerateClusterId(zkUtils)
+        _clusterId = getOrGenerateClusterId(zkClient)
         info(s"Cluster ID = $clusterId")
 
         /* generate brokerId */
@@ -226,10 +224,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
-        val zooKeeperClient = new ZooKeeperClient(config.zkConnect, config.zkSessionTimeoutMs,
-          config.zkConnectionTimeoutMs, config.zkMaxInFlightRequests, time)
-        _zkClient = new KafkaZkClient(zooKeeperClient, zkUtils.isSecure, time)
-
         /* start log manager */
         logManager = LogManager(config, initialOfflineDirs, zkClient, brokerState, kafkaScheduler, time, brokerTopicStats, logDirFailureChannel)
         logManager.startup()
@@ -252,12 +246,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
             endpoint
         }
 
-        // to be cleaned up in KAFKA-6320
-        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkUtils, config.rack,
-          config.interBrokerProtocolVersion)
-        kafkaHealthcheck.startup()
-        // KAFKA-6320
-
         val updatedEndpoints = listeners.map(endpoint =>
           if (endpoint.host == null || endpoint.host.trim.isEmpty)
             endpoint.copy(host = InetAddress.getLocalHost.getCanonicalHostName)
@@ -277,7 +265,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           updatedEndpoints, jmxPort, config.rack, config.interBrokerProtocolVersion)
         zkClient.registerBrokerInZk(brokerInfo)
 
-        // Now that the broker id is successfully registered via KafkaHealthcheck, checkpoint it
+        // Now that the broker id is successfully registered, checkpoint it
         checkpointBrokerId(config.brokerId)
 
         /* start kafka controller */
@@ -351,7 +339,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     new ReplicaManager(config, metrics, time, zkClient, kafkaScheduler, logManager, isShuttingDown, quotaManagers,
       brokerTopicStats, metadataCache, logDirFailureChannel)
 
-  private def initZk(): ZkUtils = {
+  private def initZkClient(time: Time): Unit = {
     info(s"Connecting to zookeeper on ${config.zkConnect}")
 
     val chrootIndex = config.zkConnect.indexOf("/")
@@ -366,29 +354,25 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     if (secureAclsEnabled && !isZkSecurityEnabled)
       throw new java.lang.SecurityException(s"${KafkaConfig.ZkEnableSecureAclsProp} is true, but the verification of the JAAS login file failed.")
 
+    // make sure chroot path exists
     chrootOption.foreach { chroot =>
       val zkConnForChrootCreation = config.zkConnect.substring(0, chrootIndex)
-      val zkClientForChrootCreation = ZkUtils.withMetrics(zkConnForChrootCreation,
-                                              sessionTimeout = config.zkSessionTimeoutMs,
-                                              connectionTimeout = config.zkConnectionTimeoutMs,
-                                              secureAclsEnabled,
-                                              time)
-      zkClientForChrootCreation.makeSurePersistentPathExists(chroot)
+      val zooKeeperClient = new ZooKeeperClient(zkConnForChrootCreation, config.zkSessionTimeoutMs,
+        config.zkConnectionTimeoutMs, config.zkMaxInFlightRequests, time)
+      val zkClient = new KafkaZkClient(zooKeeperClient, secureAclsEnabled, time)
+      zkClient.makeSurePersistentPathExists(chroot)
       info(s"Created zookeeper path $chroot")
-      zkClientForChrootCreation.close()
+      zkClient.close()
     }
 
-    val zkUtils = ZkUtils.withMetrics(config.zkConnect,
-                          sessionTimeout = config.zkSessionTimeoutMs,
-                          connectionTimeout = config.zkConnectionTimeoutMs,
-                          secureAclsEnabled,
-                          time)
-    zkUtils.setupCommonPaths()
-    zkUtils
+    val zooKeeperClient = new ZooKeeperClient(config.zkConnect, config.zkSessionTimeoutMs,
+      config.zkConnectionTimeoutMs, config.zkMaxInFlightRequests, time)
+    _zkClient = new KafkaZkClient(zooKeeperClient, secureAclsEnabled, time)
+    _zkClient.createTopLevelPaths()
   }
 
-  def getOrGenerateClusterId(zkUtils: ZkUtils): String = {
-    zkUtils.getClusterId.getOrElse(zkUtils.createOrGetClusterId(CoreUtils.generateUuidAsBase64))
+  def getOrGenerateClusterId(zkClient: KafkaZkClient): String = {
+    zkClient.getClusterId.getOrElse(zkClient.createOrGetClusterId(CoreUtils.generateUuidAsBase64))
   }
 
   /**
@@ -455,9 +439,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
           // Get the current controller info. This is to ensure we use the most recent info to issue the
           // controlled shutdown request
-          val controllerId = zkUtils.getController()
+          val controllerId = zkClient.getControllerId.getOrElse(throw new KafkaException("Controller doesn't exist"))
           //If this method returns None ignore and try again
-          zkUtils.getBrokerInfo(controllerId).foreach { broker =>
+          zkClient.getBroker(controllerId).foreach { broker =>
             // if this is the first attempt, if the controller has changed or if an exception was thrown in a previous
             // attempt, connect to the most recent controller
             if (ioException || broker != prevController) {
@@ -549,9 +533,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         CoreUtils.swallow(controlledShutdown(), this)
         brokerState.newState(BrokerShuttingDown)
 
-        if (kafkaHealthcheck != null)
-          CoreUtils.swallow(kafkaHealthcheck.shutdown(), this)
-
         if (dynamicConfigManager != null)
           CoreUtils.swallow(dynamicConfigManager.shutdown(), this)
 
@@ -582,8 +563,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         if (kafkaController != null)
           CoreUtils.swallow(kafkaController.shutdown(), this)
-        if (zkUtils != null)
-          CoreUtils.swallow(zkUtils.close(), this)
+
         if (zkClient != null)
           CoreUtils.swallow(zkClient.close(), this)
 
@@ -689,9 +669,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     }
   }
 
+  /**
+    * Return a sequence id generated by updating the broker sequence id path in ZK.
+    * Users can provide brokerId in the config. To avoid conflicts between ZK generated
+    * sequence id and configured brokerId, we increment the generated sequence id by KafkaConfig.MaxReservedBrokerId.
+    */
   private def generateBrokerId: Int = {
     try {
-      zkUtils.getBrokerSequenceId(config.maxReservedBrokerId)
+      zkClient.generateBrokerSequenceId() + config.maxReservedBrokerId
     } catch {
       case e: Exception =>
         error("Failed to generate broker.id due to ", e)

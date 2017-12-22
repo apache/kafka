@@ -23,6 +23,7 @@ import kafka.utils.TestUtils._
 import kafka.api.FetchRequestBuilder
 import kafka.message.ByteBufferMessageSet
 import java.io.File
+import java.net.UnknownHostException
 
 import kafka.log.LogManager
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -31,6 +32,7 @@ import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerialize
 import org.I0Itec.zkclient.exception.ZkException
 import org.junit.{Before, Test}
 import org.junit.Assert._
+
 import scala.reflect.ClassTag
 
 class ServerShutdownTest extends ZooKeeperTestHarness {
@@ -130,7 +132,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     val newProps = TestUtils.createBrokerConfig(0, zkConnect)
     newProps.setProperty("zookeeper.connect", "fakehostthatwontresolve:65535")
     val newConfig = KafkaConfig.fromProps(newProps)
-    verifyCleanShutdownAfterFailedStartup[ZkException](newConfig)
+    verifyCleanShutdownAfterFailedStartup[UnknownHostException](newConfig)
   }
 
   @Test

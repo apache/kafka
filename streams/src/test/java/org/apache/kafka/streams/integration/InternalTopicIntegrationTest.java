@@ -97,7 +97,8 @@ public class InternalTopicIntegrationTest {
                 CLUSTER.zKConnectString(),
                 DEFAULT_ZK_SESSION_TIMEOUT_MS,
                 DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
-                Integer.MAX_VALUE, Time.SYSTEM);
+                Integer.MAX_VALUE, Time.SYSTEM,
+                "testMetricGroup", "testMetricType");
         final KafkaZkClient kafkaZkClient = new KafkaZkClient(zkClient, false, Time.SYSTEM);
         try {
             final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
