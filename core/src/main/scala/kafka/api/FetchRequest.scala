@@ -185,10 +185,6 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
 
   def isFromFollower = Request.isValidBrokerId(replicaId)
 
-  def isFromOrdinaryConsumer = replicaId == Request.OrdinaryConsumerId
-
-  def isFromLowLevelConsumer = replicaId == Request.DebuggingConsumerId
-
   def numPartitions = requestInfo.size
 
   override def toString: String = {
@@ -201,7 +197,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
     fetchRequest.append("; Version: " + versionId)
     fetchRequest.append("; CorrelationId: " + correlationId)
     fetchRequest.append("; ClientId: " + clientId)
-    fetchRequest.append("; ReplicaId: " + replicaId)
+    fetchRequest.append("; " + Request.describe(replicaId))
     fetchRequest.append("; MaxWait: " + maxWait + " ms")
     fetchRequest.append("; MinBytes: " + minBytes + " bytes")
     fetchRequest.append("; MaxBytes:" + maxBytes + " bytes")

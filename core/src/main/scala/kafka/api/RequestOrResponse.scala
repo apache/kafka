@@ -28,6 +28,13 @@ object Request {
 
   // Broker ids are non-negative int.
   def isValidBrokerId(brokerId: Int): Boolean = brokerId >= 0
+
+  def describe(replica_id: Int): String  = replica_id match {
+    case OrdinaryConsumerId => "Follower Replica Id"
+    case DebuggingConsumerId => "Tooling Consumer"
+    case _ if isValidBrokerId(replica_id) => "Normal Consumer"
+    case _ => "Invalid"
+  }
 }
 
 

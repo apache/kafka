@@ -105,9 +105,6 @@ case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequ
       )
     })
 
-  def isFromOrdinaryClient = replicaId == Request.OrdinaryConsumerId
-  def isFromDebuggingClient = replicaId == Request.DebuggingConsumerId
-
   override def toString: String = {
     describe(true)
   }
@@ -118,7 +115,7 @@ case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequ
     offsetRequest.append("; Version: " + versionId)
     offsetRequest.append("; CorrelationId: " + correlationId)
     offsetRequest.append("; ClientId: " + clientId)
-    offsetRequest.append("; ReplicaId: " + replicaId)
+    offsetRequest.append("; " + Request.describe(replicaId))
     if(details)
       offsetRequest.append("; RequestInfo: " + requestInfo.mkString(","))
     offsetRequest.toString()
