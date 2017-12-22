@@ -53,7 +53,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     Configuration.setConfiguration(null)
   }
 
-  @Test(expected = classOf[UnknownHostException])
+  @Test(expected = classOf[IllegalArgumentException])
   def testUnresolvableConnectString(): Unit = {
     new ZooKeeperClient("some.invalid.hostname.foo.bar.local", -1, -1, Int.MaxValue, time)
   }
