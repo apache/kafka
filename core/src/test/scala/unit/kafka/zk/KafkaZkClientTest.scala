@@ -424,10 +424,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       9998, None, ApiVersion.latestVersion)
 
     zkClient.registerBrokerInZk(brokerInfo)
-    val broker = zkClient.getBroker(1).getOrElse(fail("Unregistered broker"))
-
-    assertEquals(brokerInfo.id, broker.id)
-    assertEquals(brokerInfo.endpoints(), broker.endPoints.mkString(","))
+    assertEquals(Some(brokerInfo), zkClient.getBroker(1))
   }
 
   @Test
@@ -448,9 +445,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   def testCreateTopLevelPaths() {
     zkClient.createTopLevelPaths()
 
-    ZkData.PersistentZkPaths.foreach {
-      path => assertTrue(zkClient.pathExists(path))
-    }
+    ZkData.PersistentZkPaths.foreach(path => assertTrue(zkClient.pathExists(path)))
   }
 
   @Test
