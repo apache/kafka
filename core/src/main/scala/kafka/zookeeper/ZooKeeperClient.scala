@@ -81,6 +81,7 @@ class ZooKeeperClient(connectString: String,
   }
 
   info(s"Initializing a new session to $connectString.")
+  // Fail-fast if there's an error during construction (so don't call initialize, which retries forever)
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
 
   private val sessionStateGauge =
@@ -311,22 +312,22 @@ class ZooKeeperClient(connectString: String,
   }
 
   private def initialize(): Unit = {
+    // FIXME What do we want to do if the thread is interrupted?
     if (!zooKeeper.getState.isAlive) {
+      zooKeeper.close()
       info(s"Initializing a new session to $connectString.")
       // retry forever until ZooKeeper can be instantiated
-      while (true) {
+      var connected = false
+      while (!connected) {
         try {
-          zooKeeper.close()
           zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
-          return
+          connected = true
         } catch {
           case e: Exception =>
-            info("Error when recreating ZooKeeper", e)
+            info("Error when recreating ZooKeeper, retrying after a short sleep", e)
             Thread.sleep(1000)
         }
       }
-      info(s"Timed out waiting for connection during session initialization while in state: ${zooKeeper.getState}")
-      stateChangeHandlers.values.foreach(_.onReconnectionTimeout())
     }
   }
 
@@ -341,7 +342,7 @@ class ZooKeeperClient(connectString: String,
   // package level visibility for testing only
   private[zookeeper] object ZooKeeperClientWatcher extends Watcher {
     override def process(event: WatchedEvent): Unit = {
-      debug("Received event: " + event)
+      debug(s"Received event: $event")
       Option(event.getPath) match {
         case None =>
           val state = event.getState
@@ -377,7 +378,6 @@ trait StateChangeHandler {
   def beforeInitializingSession(): Unit = {}
   def afterInitializingSession(): Unit = {}
   def onAuthFailure(): Unit = {}
-  def onReconnectionTimeout(): Unit = {}
 }
 
 trait ZNodeChangeHandler {
