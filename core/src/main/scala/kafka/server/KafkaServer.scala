@@ -438,22 +438,29 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           // 1. Find the controller and establish a connection to it.
 
           // Get the current controller info. This is to ensure we use the most recent info to issue the
-          // controlled shutdown request
-          val controllerId = zkClient.getControllerId.getOrElse(throw new KafkaException("Controller doesn't exist"))
-          //If this method returns None ignore and try again
-          zkClient.getBroker(controllerId).foreach { broker =>
-            // if this is the first attempt, if the controller has changed or if an exception was thrown in a previous
-            // attempt, connect to the most recent controller
-            if (ioException || broker != prevController) {
+          // controlled shutdown request.
+          // If the controller id or the broker registration are missing, we sleep and retry (if there are remaining retries)
+          zkClient.getControllerId match {
+            case Some(controllerId) =>
+              zkClient.getBroker(controllerId) match {
+                case Some(broker) =>
+                  // if this is the first attempt, if the controller has changed or if an exception was thrown in a previous
+                  // attempt, connect to the most recent controller
+                  if (ioException || broker != prevController) {
 
-              ioException = false
+                    ioException = false
 
-              if (prevController != null)
-                networkClient.close(node(prevController).idString)
+                    if (prevController != null)
+                      networkClient.close(node(prevController).idString)
 
-              prevController = broker
-              metadataUpdater.setNodes(Seq(node(prevController)).asJava)
-            }
+                    prevController = broker
+                    metadataUpdater.setNodes(Seq(node(prevController)).asJava)
+                  }
+                case None =>
+                  info(s"Broker registration for controller $controllerId is not available (i.e. the Controller's ZK session expired)")
+              }
+            case None =>
+              info("No controller registered in ZooKeeper")
           }
 
           // 2. issue a controlled shutdown to the controller
@@ -477,14 +484,15 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
                 info("Controlled shutdown succeeded")
               }
               else {
-                info("Remaining partitions to move: %s".format(shutdownResponse.partitionsRemaining.asScala.mkString(",")))
-                info("Error code from controller: %d".format(shutdownResponse.error.code))
+                info(s"Remaining partitions to move: ${shutdownResponse.partitionsRemaining.asScala.mkString(",")}")
+                info(s"Error from controller: ${shutdownResponse.error}")
               }
             }
             catch {
               case ioe: IOException =>
                 ioException = true
-                warn("Error during controlled shutdown, possibly because leader movement took longer than the configured controller.socket.timeout.ms and/or request.timeout.ms: %s".format(ioe.getMessage))
+                warn("Error during controlled shutdown, possibly because leader movement took longer than the " +
+                  s"configured controller.socket.timeout.ms and/or request.timeout.ms: ${ioe.getMessage}")
                 // ignore and try again
             }
           }
