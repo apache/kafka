@@ -27,8 +27,7 @@ import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndParti
 import kafka.consumer.{ConsumerThreadId, TopicCount}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.ConfigType
-import kafka.utils.ZkUtils._
+import kafka.zk.ZkData
 import com.yammer.metrics.core.MetricName
 import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
@@ -71,28 +70,10 @@ object ZkUtils {
   val ConfigChangesPath = s"$ConfigPath/changes"
   val ConfigUsersPath = s"$ConfigPath/users"
   val ProducerIdBlockPath = "/latest_producer_id_block"
-  // Important: it is necessary to add any new top level Zookeeper path to the Seq
-  val SecureZkRootPaths = Seq(AdminPath,
-                              BrokersPath,
-                              ClusterPath,
-                              ConfigPath,
-                              ControllerPath,
-                              ControllerEpochPath,
-                              IsrChangeNotificationPath,
-                              KafkaAclPath,
-                              KafkaAclChangesPath,
-                              ProducerIdBlockPath,
-                              LogDirEventNotificationPath)
 
-  // Important: it is necessary to add any new top level Zookeeper path that contains
-  //            sensitive information that should not be world readable to the Seq
-  val SensitiveZkRootPaths = Seq(ConfigUsersPath)
+  val SecureZkRootPaths = ZkData.SecureRootPaths
 
-  def withMetrics(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isZkSecurityEnabled: Boolean,
-                  time: Time): ZkUtils = {
-    val (zkClient, zkConnection) = createZkClientAndConnection(zkUrl, sessionTimeout, connectionTimeout)
-    new ZkUtils(new ZooKeeperClientMetrics(zkClient, time), zkConnection, isZkSecurityEnabled)
-  }
+  val SensitiveZkRootPaths = ZkData.SensitiveRootPaths
 
   def apply(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isZkSecurityEnabled: Boolean): ZkUtils = {
     val (zkClient, zkConnection) = createZkClientAndConnection(zkUrl, sessionTimeout, connectionTimeout)
@@ -117,24 +98,12 @@ object ZkUtils {
     (zkClient, zkConnection)
   }
 
-  def sensitivePath(path: String): Boolean = {
-    path != null && SensitiveZkRootPaths.exists(path.startsWith(_))
-  }
-
   @deprecated("This is deprecated, use defaultAcls(isSecure, path) which doesn't make sensitive data world readable", since = "0.10.2.1")
   def DefaultAcls(isSecure: Boolean): java.util.List[ACL] = defaultAcls(isSecure, "")
 
-  def defaultAcls(isSecure: Boolean, path: String): java.util.List[ACL] = {
-    if (isSecure) {
-      val list = new java.util.ArrayList[ACL]
-      list.addAll(ZooDefs.Ids.CREATOR_ALL_ACL)
-      if (!sensitivePath(path)) {
-        list.addAll(ZooDefs.Ids.READ_ACL_UNSAFE)
-      }
-      list
-    } else
-      ZooDefs.Ids.OPEN_ACL_UNSAFE
-  }
+  def sensitivePath(path: String): Boolean = ZkData.sensitivePath(path)
+
+  def defaultAcls(isSecure: Boolean, path: String): java.util.List[ACL] = ZkData.defaultAcls(isSecure, path).asJava
 
   def maybeDeletePath(zkUrl: String, dir: String) {
     try {
@@ -271,18 +240,10 @@ class ZooKeeperClientMetrics(zkClient: ZkClient, val time: Time)
 class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
               val zkConnection: ZkConnection,
               val isSecure: Boolean) extends Logging {
+  import kafka.utils.ZkUtils._
+  
   // These are persistent ZK paths that should exist on kafka broker startup.
-  val persistentZkPaths = Seq(ConsumersPath,
-                              BrokerIdsPath,
-                              BrokerTopicsPath,
-                              ConfigChangesPath,
-                              getEntityConfigRootPath(ConfigType.Topic),
-                              getEntityConfigRootPath(ConfigType.Client),
-                              DeleteTopicsPath,
-                              BrokerSequenceIdPath,
-                              IsrChangeNotificationPath,
-                              ProducerIdBlockPath,
-                              LogDirEventNotificationPath)
+  val persistentZkPaths = ZkData.PersistentZkPaths
 
   /** Present for compatibility */
   def this(zkClient: ZkClient, zkConnection: ZkConnection, isSecure: Boolean) =
@@ -1040,7 +1001,7 @@ private object ZKStringSerializer extends ZkSerializer {
 
 @deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class ZKGroupDirs(val group: String) {
-  def consumerDir = ConsumersPath
+  def consumerDir = ZkUtils.ConsumersPath
   def consumerGroupDir = consumerDir + "/" + group
   def consumerRegistryDir = consumerGroupDir + "/ids"
   def consumerGroupOffsetsDir = consumerGroupDir + "/offsets"

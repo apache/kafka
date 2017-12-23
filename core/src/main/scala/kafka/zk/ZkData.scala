@@ -28,9 +28,12 @@ import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.server.ConfigType
 import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
-import org.apache.zookeeper.data.Stat
+import org.apache.zookeeper.ZooDefs
+import org.apache.zookeeper.data.{ACL, Stat}
 
 import scala.collection.JavaConverters._
+import scala.collection.Seq
+import scala.collection.mutable.ArrayBuffer
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
 
@@ -342,8 +345,12 @@ object AclChangeNotificationSequenceZNode {
   def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
 }
 
+object ClusterZNode {
+  def path = "/cluster"
+}
+
 object ClusterIdZNode {
-  def path = "/cluster/id"
+  def path = s"${ClusterZNode.path}/id"
 
   def toJson(id: String): Array[Byte] = {
     Json.encodeAsBytes(Map("version" -> "1", "id" -> id).asJava)
@@ -365,17 +372,46 @@ object ProducerIdBlockZNode {
 }
 
 object ZkData {
+
+  // Important: it is necessary to add any new top level Zookeeper path to the Seq
+  val SecureRootPaths = Seq(AdminZNode.path,
+    BrokersZNode.path,
+    ClusterZNode.path,
+    ConfigZNode.path,
+    ControllerZNode.path,
+    ControllerEpochZNode.path,
+    IsrChangeNotificationZNode.path,
+    AclZNode.path,
+    AclChangeNotificationZNode.path,
+    ProducerIdBlockZNode.path,
+    LogDirEventNotificationZNode.path)
+
   // These are persistent ZK paths that should exist on kafka broker startup.
   val PersistentZkPaths = Seq(
     "/consumers",  // old consumer path
     BrokerIdsZNode.path,
     TopicsZNode.path,
     ConfigEntityChangeNotificationZNode.path,
-    ConfigEntityTypeZNode.path(ConfigType.Topic),
-    ConfigEntityTypeZNode.path(ConfigType.Client),
     DeleteTopicsZNode.path,
     BrokerSequenceIdZNode.path,
     IsrChangeNotificationZNode.path,
     ProducerIdBlockZNode.path,
-    LogDirEventNotificationZNode.path)
+    LogDirEventNotificationZNode.path
+  ) ++ ConfigType.all.map(ConfigEntityTypeZNode.path)
+
+  val SensitiveRootPaths = Seq(ConfigEntityTypeZNode.path(ConfigType.User))
+
+  def sensitivePath(path: String): Boolean = {
+    path != null && SensitiveRootPaths.exists(path.startsWith)
+  }
+
+  def defaultAcls(isSecure: Boolean, path: String): Seq[ACL] = {
+    if (isSecure) {
+      val acls = new ArrayBuffer[ACL]
+      acls ++= ZooDefs.Ids.CREATOR_ALL_ACL.asScala
+      if (!sensitivePath(path))
+        acls ++= ZooDefs.Ids.READ_ACL_UNSAFE.asScala
+      acls
+    } else ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala
+  }
 }

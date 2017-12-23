@@ -28,7 +28,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.ConfigType
-import kafka.utils._
+import kafka.utils.Logging
 import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
@@ -756,13 +756,8 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
    * @param partition
    * @return optional integer if the leader exists and None otherwise.
    */
-  def getLeaderForPartition(partition: TopicPartition): Option[Int] = {
-    val leaderIsrEpoch = getTopicPartitionState(partition)
-    if (leaderIsrEpoch.isDefined)
-      Option(leaderIsrEpoch.get.leaderAndIsr.leader)
-    else
-      None
-  }
+  def getLeaderForPartition(partition: TopicPartition): Option[Int] =
+    getTopicPartitionState(partition).map(_.leaderAndIsr.leader)
 
   /**
    * Gets the isr change notifications as strings. These strings are the znode names and not the absolute znode path.
@@ -1217,7 +1212,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
   }
 
   /**
-    * Generate a borker id by updating the broker sequence id path in ZK and return the version of the path.
+    * Generate a broker id by updating the broker sequence id path in ZK and return the version of the path.
     * The version is incremented by one on every update starting from 1.
     * @return sequence number as the broker id
     */
@@ -1351,10 +1346,7 @@ class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: T
     retryRequestsUntilConnected(getDataRequests)
   }
 
-  private def acls(path: String): Seq[ACL] = {
-    import scala.collection.JavaConverters._
-    ZkUtils.defaultAcls(isSecure, path).asScala
-  }
+  private def acls(path: String): Seq[ACL] = ZkData.defaultAcls(isSecure, path)
 
   private def retryRequestUntilConnected[Req <: AsyncRequest](request: Req): Req#Response = {
     retryRequestsUntilConnected(Seq(request)).head
