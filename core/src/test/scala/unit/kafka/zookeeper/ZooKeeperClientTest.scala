@@ -16,7 +16,6 @@
  */
 package kafka.zookeeper
 
-import java.net.UnknownHostException
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
