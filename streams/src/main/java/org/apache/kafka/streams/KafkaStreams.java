@@ -796,6 +796,8 @@ public class KafkaStreams {
         } else {
             stateDirCleaner.shutdownNow();
 
+            // notify all the threads to stop; avoid deadlocks by stopping any
+            // further state reports from the thread since we're shutting down
             for (final StreamThread thread : threads) {
                 thread.setStateListener(null);
                 thread.shutdown();
@@ -811,8 +813,6 @@ public class KafkaStreams {
             final Thread shutdownThread = new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    // notify all the threads to stop; avoid deadlocks by stopping any
-                    // further state reports from the thread since we're shutting down
                     for (final StreamThread thread : threads) {
                         try {
                             if (!thread.isRunning()) {
