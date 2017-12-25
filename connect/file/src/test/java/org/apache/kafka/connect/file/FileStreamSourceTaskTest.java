@@ -40,7 +40,6 @@ import static org.junit.Assert.assertEquals;
 public class FileStreamSourceTaskTest extends EasyMockSupport {
 
     private static final String TOPIC = "test";
-    private static final String BATCH_SIZE = String.valueOf(FileStreamSourceConnector.DEFAULT_TASK_BATCH_SIZE);
 
     private File tempFile;
     private Map<String, String> config;
