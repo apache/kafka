@@ -449,15 +449,8 @@ public class StreamThreadTest {
                 internalTopologyBuilder,
                 clientId,
                 new LogContext(""));
-        thread.setStateListener(
-            new StreamThread.StateListener() {
-                @Override
-                public void onChange(final Thread t, final ThreadStateTransitionValidator newState, final ThreadStateTransitionValidator oldState) {
-                    if (oldState == StreamThread.State.CREATED && newState == StreamThread.State.RUNNING) {
-                        thread.shutdown();
-                    }
-                }
-            });
+        thread.setState(StreamThread.State.RUNNING);
+        thread.shutdown();
         thread.run();
         EasyMock.verify(taskManager);
     }
@@ -482,6 +475,12 @@ public class StreamThreadTest {
                 clientId,
                 new LogContext(""));
         thread.shutdown();
+        try {
+            thread.join(1000);
+        } catch (InterruptedException e) {
+            fail("Join interrupted");
+        }
+        assertFalse(thread.isAlive());
         EasyMock.verify(taskManager);
     }
 

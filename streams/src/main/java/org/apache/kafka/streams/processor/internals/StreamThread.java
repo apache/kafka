@@ -174,7 +174,7 @@ public class StreamThread extends Thread {
      * Sets the state
      * @param newState New state
      */
-    boolean setState(final State newState) {
+    State setState(final State newState) {
         final State oldState;
 
         synchronized (stateLock) {
@@ -183,15 +183,15 @@ public class StreamThread extends Thread {
             if (state == State.PENDING_SHUTDOWN && newState != State.DEAD) {
                 // when the state is already in PENDING_SHUTDOWN, all other transitions will be
                 // refused but we do not throw exception here
-                return false;
+                return null;
             } else if (state == State.DEAD) {
                 // when the state is already in NOT_RUNNING, all its transitions
                 // will be refused but we do not throw exception here
-                return false;
+                return null;
             } else if (state == State.PARTITIONS_REVOKED && newState == State.PARTITIONS_REVOKED) {
                 // when the state is already in PARTITIONS_REVOKED, its transition to itself will be
                 // refused but we do not throw exception here
-                return false;
+                return null;
             } else if (!state.isValidTransition(newState)) {
                 log.error("Unexpected state transition from {} to {}", oldState, newState);
                 throw new StreamsException(logPrefix + "Unexpected state transition from " + oldState + " to " + newState);
@@ -211,11 +211,7 @@ public class StreamThread extends Thread {
             stateListener.onChange(this, state, oldState);
         }
 
-        if (oldState == State.CREATED && newState == State.PENDING_SHUTDOWN) {
-            completeShutdown(true);
-        }
-
-        return true;
+        return oldState;
     }
 
     public boolean isRunningAndNotRebalancing() {
@@ -257,7 +253,7 @@ public class StreamThread extends Thread {
 
             final long start = time.milliseconds();
             try {
-                if (!streamThread.setState(State.PARTITIONS_ASSIGNED)) {
+                if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
                     return;
                 }
                 taskManager.createTasks(assignment);
@@ -287,7 +283,7 @@ public class StreamThread extends Thread {
                 taskManager.activeTaskIds(),
                 taskManager.standbyTaskIds());
 
-            if (streamThread.setState(State.PARTITIONS_REVOKED)) {
+            if (streamThread.setState(State.PARTITIONS_REVOKED) != null) {
                 final long start = time.milliseconds();
                 try {
                     // suspend active tasks
@@ -720,8 +716,9 @@ public class StreamThread extends Thread {
     @Override
     public void run() {
         log.info("Starting");
-        if (!setState(State.RUNNING)) {
+        if (setState(State.RUNNING) == null) {
             log.info("StreamThread already shutdown. Not running");
+            completeShutdown(true);
             return;
         }
         boolean cleanRun = false;
@@ -1097,7 +1094,11 @@ public class StreamThread extends Thread {
      */
     public void shutdown() {
         log.info("Informed to shut down");
-        setState(State.PENDING_SHUTDOWN);
+        State oldState = setState(State.PENDING_SHUTDOWN);
+        if (oldState == State.CREATED) {
+            // Start so that we shutdown on the thread
+            this.start();
+        }
     }
 
     private void completeShutdown(final boolean cleanRun) {
