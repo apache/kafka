@@ -814,31 +814,29 @@ public class InternalTopologyBuilder {
         allSourceNodes.addAll(nodeToSourcePatterns.keySet());
 
         for (final String nodeName : Utils.sorted(allSourceNodes)) {
-            final String root = nodeGrouper.root(nodeName);
-            Set<String> nodeGroup = rootToNodeGroup.get(root);
-            if (nodeGroup == null) {
-                nodeGroup = new HashSet<>();
-                rootToNodeGroup.put(root, nodeGroup);
-                nodeGroups.put(nodeGroupId++, nodeGroup);
-            }
-            nodeGroup.add(nodeName);
+            nodeGroupId = putNodeGroupName(nodeName, nodeGroupId, nodeGroups, rootToNodeGroup);
         }
 
         // Go through non-source nodes
         for (final String nodeName : Utils.sorted(nodeFactories.keySet())) {
             if (!nodeToSourceTopics.containsKey(nodeName)) {
-                final String root = nodeGrouper.root(nodeName);
-                Set<String> nodeGroup = rootToNodeGroup.get(root);
-                if (nodeGroup == null) {
-                    nodeGroup = new HashSet<>();
-                    rootToNodeGroup.put(root, nodeGroup);
-                    nodeGroups.put(nodeGroupId++, nodeGroup);
-                }
-                nodeGroup.add(nodeName);
+                nodeGroupId = putNodeGroupName(nodeName, nodeGroupId, nodeGroups, rootToNodeGroup);
             }
         }
 
         return nodeGroups;
+    }
+
+    private int putNodeGroupName(String nodeName, int nodeGroupId, Map<Integer, Set<String>> nodeGroups, Map<String, Set<String>> rootToNodeGroup) {
+        final String root = nodeGrouper.root(nodeName);
+        Set<String> nodeGroup = rootToNodeGroup.get(root);
+        if (nodeGroup == null) {
+            nodeGroup = new HashSet<>();
+            rootToNodeGroup.put(root, nodeGroup);
+            nodeGroups.put(nodeGroupId++, nodeGroup);
+        }
+        nodeGroup.add(nodeName);
+        return nodeGroupId;
     }
 
     public synchronized ProcessorTopology build() {
@@ -1127,21 +1125,20 @@ public class InternalTopologyBuilder {
     }
 
     public synchronized Pattern earliestResetTopicsPattern() {
-        final List<String> topics = maybeDecorateInternalSourceTopics(earliestResetTopics);
-        final Pattern earliestPattern = buildPatternForOffsetResetTopics(topics, earliestResetPatterns);
-
-        ensureNoRegexOverlap(earliestPattern, latestResetPatterns, latestResetTopics);
-
-        return earliestPattern;
+        return resetTopicsPattern(earliestResetTopics, earliestResetPatterns, latestResetPatterns, latestResetTopics);
     }
 
     public synchronized Pattern latestResetTopicsPattern() {
-        final List<String> topics = maybeDecorateInternalSourceTopics(latestResetTopics);
-        final Pattern latestPattern = buildPatternForOffsetResetTopics(topics, latestResetPatterns);
+        return resetTopicsPattern(latestResetTopics, latestResetPatterns, earliestResetPatterns, earliestResetTopics);
+    }
 
-        ensureNoRegexOverlap(latestPattern, earliestResetPatterns, earliestResetTopics);
+    private Pattern resetTopicsPattern(Set<String> resetTopics, Set<Pattern> resetPatterns, Set<Pattern> latestResetPatterns, Set<String> latestResetTopics) {
+        final List<String> topics = maybeDecorateInternalSourceTopics(resetTopics);
+        final Pattern pattern = buildPatternForOffsetResetTopics(topics, resetPatterns);
 
-        return  latestPattern;
+        ensureNoRegexOverlap(pattern, latestResetPatterns, latestResetTopics);
+
+        return pattern;
     }
 
     // TODO: we should check regex overlap at topology construction time and then throw TopologyException
