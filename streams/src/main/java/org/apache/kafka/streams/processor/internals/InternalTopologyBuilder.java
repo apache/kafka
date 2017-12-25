@@ -77,17 +77,17 @@ public class InternalTopologyBuilder {
     private final List<Set<String>> copartitionSourceGroups = new ArrayList<>();
 
     // map from source processor names to subscribed topics (without application-id prefix for internal topics)
-    private final HashMap<String, List<String>> nodeToSourceTopics = new HashMap<>();
+    private final Map<String, List<String>> nodeToSourceTopics = new HashMap<>();
 
     // map from source processor names to regex subscription patterns
-    private final HashMap<String, Pattern> nodeToSourcePatterns = new LinkedHashMap<>();
+    private final Map<String, Pattern> nodeToSourcePatterns = new LinkedHashMap<>();
 
     // map from sink processor names to subscribed topic (without application-id prefix for internal topics)
-    private final HashMap<String, String> nodeToSinkTopic = new HashMap<>();
+    private final Map<String, String> nodeToSinkTopic = new HashMap<>();
 
     // map from topics to their matched regex patterns, this is to ensure one topic is passed through on source node
     // even if it can be matched by multiple regex patterns
-    private final HashMap<String, Pattern> topicToPatterns = new HashMap<>();
+    private final Map<String, Pattern> topicToPatterns = new HashMap<>();
 
     // map from state store names to all the topics subscribed from source processors that
     // are connected to these state stores
@@ -804,13 +804,13 @@ public class InternalTopologyBuilder {
     }
 
     private Map<Integer, Set<String>> makeNodeGroups() {
-        final HashMap<Integer, Set<String>> nodeGroups = new LinkedHashMap<>();
-        final HashMap<String, Set<String>> rootToNodeGroup = new HashMap<>();
+        final Map<Integer, Set<String>> nodeGroups = new LinkedHashMap<>();
+        final Map<String, Set<String>> rootToNodeGroup = new HashMap<>();
 
         int nodeGroupId = 0;
 
         // Go through source nodes first. This makes the group id assignment easy to predict in tests
-        final HashSet<String> allSourceNodes = new HashSet<>(nodeToSourceTopics.keySet());
+        final Set<String> allSourceNodes = new HashSet<>(nodeToSourceTopics.keySet());
         allSourceNodes.addAll(nodeToSourcePatterns.keySet());
 
         for (final String nodeName : Utils.sorted(allSourceNodes)) {
@@ -1338,7 +1338,7 @@ public class InternalTopologyBuilder {
                                      final Integer subtopologyId,
                                      final Set<String> nodeNames) {
 
-        final HashMap<String, AbstractNode> nodesByName = new HashMap<>();
+        final Map<String, AbstractNode> nodesByName = new HashMap<>();
 
         // add all nodes
         for (final String nodeName : nodeNames) {
