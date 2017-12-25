@@ -26,6 +26,8 @@ import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.InternalValueTransformerWithKey;
+import org.apache.kafka.streams.kstream.InternalValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.test.KStreamTestDriver;
@@ -33,8 +35,8 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Rule;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
+import static org.junit.Assert.assertArrayEquals;
 
 public class KStreamTransformValuesTest {
 
@@ -88,22 +90,82 @@ public class KStreamTransformValuesTest {
         for (int expectedKey : expectedKeys) {
             driver.process(topicName, expectedKey, expectedKey * 10);
         }
-
-        assertEquals(4, processor.processed.size());
-
         String[] expected = {"1:10", "10:110", "100:1110", "1000:11110"};
 
-        for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processor.processed.get(i));
-        }
+        assertArrayEquals(expected, processor.processed.toArray());
     }
 
     @Test
+    public void testTransformWithKey() {
+        StreamsBuilder builder = new StreamsBuilder();
+
+        ValueTransformerWithKeySupplier<Integer, Number, Integer> valueTransformerSupplier =
+                new ValueTransformerWithKeySupplier<Integer, Number, Integer>() {
+            public ValueTransformerWithKey<Integer, Number, Integer> get() {
+                return new ValueTransformerWithKey<Integer, Number, Integer>() {
+                    private int total = 0;
+                    @Override
+                    public void init(final ProcessorContext context) {
+
+                    }
+                    @Override
+                    public Integer transform(final Integer readOnlyKey, final Number value) {
+                        total += value.intValue() + readOnlyKey;
+                        return total;
+                    }
+
+                    @Override
+                    public void close() {
+
+                    }
+                };
+            }
+        };
+
+        final int[] expectedKeys = {1, 10, 100, 1000};
+
+        KStream<Integer, Integer> stream;
+        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
+        stream = builder.stream(topicName, Consumed.with(intSerde, intSerde));
+        stream.transformValues(valueTransformerSupplier).process(processor);
+
+        driver.setUp(builder);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, expectedKey * 10);
+        }
+        String[] expected = {"1:11", "10:121", "100:1221", "1000:12221"};
+
+        assertArrayEquals(expected, processor.processed.toArray());
+    }
+
+
+    @Test
     public void shouldNotAllowValueTransformerToCallInternalProcessorContextMethods() {
-        final KStreamTransformValues<Integer, Integer, Integer> transformValue = new KStreamTransformValues<>(new ValueTransformerWithKeySupplier<Integer, Integer, Integer>() {
+        final BadValueTransformer badValueTransformer = new BadValueTransformer();
+        final KStreamTransformValues<Integer, Integer, Integer> transformValue = new KStreamTransformValues<>(new InternalValueTransformerWithKeySupplier<Integer, Integer, Integer>() {
             @Override
-            public ValueTransformerWithKey<Integer, Integer, Integer> get() {
-                return new BadValueTransformer();
+            public InternalValueTransformerWithKey<Integer, Integer, Integer> get() {
+                return new InternalValueTransformerWithKey<Integer, Integer, Integer>() {
+                    @Override
+                    public Integer punctuate(long timestamp) {
+                        return null;
+                    }
+
+                    @Override
+                    public void init(ProcessorContext context) {
+                        badValueTransformer.init(context);
+                    }
+
+                    @Override
+                    public Integer transform(Integer readOnlyKey, Integer value) {
+                        return badValueTransformer.transform(readOnlyKey, value);
+                    }
+
+                    @Override
+                    public void close() {
+                        badValueTransformer.close();
+                    }
+                };
             }
         });
 

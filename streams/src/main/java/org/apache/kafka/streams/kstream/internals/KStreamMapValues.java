@@ -36,9 +36,9 @@ class KStreamMapValues<K, V, V1> implements ProcessorSupplier<K, V> {
 
     private class KStreamMapProcessor extends AbstractProcessor<K, V> {
         @Override
-        public void process(final K key, final V value) {
-            V1 newValue = mapper.apply(key, value);
-            context().forward(key, newValue);
+        public void process(final K readOnlyKey, final V value) {
+            final V1 newValue = mapper.apply(readOnlyKey, value);
+            context().forward(readOnlyKey, newValue);
         }
     }
 }

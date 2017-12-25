@@ -42,11 +42,11 @@ package org.apache.kafka.streams.kstream;
 public interface ValueMapperWithKey<K, V, VR> {
 
     /**
-     * Map the given value to a new value.
+     * Map the given [key and ]value to a new value.
      *
-     * @param key the read-only key
-     * @param value the value to be mapped
+     * @param readOnlyKey the read-only key
+     * @param value       the value to be mapped
      * @return the new value
      */
-    VR apply(final K key, final V value);
+    VR apply(final K readOnlyKey, final V value);
 }

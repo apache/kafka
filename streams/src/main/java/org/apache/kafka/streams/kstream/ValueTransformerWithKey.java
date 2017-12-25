@@ -34,14 +34,15 @@ import org.apache.kafka.streams.processor.StateStore;
  * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
  * If {@code ValueTransformerWithKey} is applied to a {@link KeyValue} pair record the record's key is preserved.
  * <p>
- * Use {@link ValueTransformerSupplier} to provide new instances of {@code ValueTransformer} to Kafka Stream's runtime.
+ * Use {@link ValueTransformerWithKeySupplier} to provide new instances of {@code {@link ValueTransformerWithKey} to
+ * Kafka Stream's runtime.
  * <p>
  * If a record's key and value should be modified {@link Transformer} can be used.
  *
  * @param <K>  key type
  * @param <V>  value type
  * @param <VR> transformed value type
- * @see ValueTransformerSupplier
+ * @see ValueTransformer
  * @see ValueTransformerWithKeySupplier
  * @see KStream#transformValues(ValueTransformerSupplier, String...)
  * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
@@ -73,7 +74,7 @@ public interface ValueTransformerWithKey<K, V, VR> {
     void init(final ProcessorContext context);
 
     /**
-     * Transform the given value to a new value.
+     * Transform the given [key and ]value to a new value.
      * Additionally, any {@link StateStore} that is {@link KStream#transformValues(ValueTransformerWithKeySupplier, String...)
      * attached} to this operator can be accessed and modified arbitrarily (cf.
      * {@link ProcessorContext#getStateStore(String)}).
@@ -83,11 +84,11 @@ public interface ValueTransformerWithKey<K, V, VR> {
      * {@link ProcessorContext#forward(Object, Object, String)} is not allowed within {@code transform} and
      * will result in an {@link StreamsException exception}.
      *
-     * @param key the read-only key
-     * @param value the value to be transformed
+     * @param readOnlyKey the read-only key
+     * @param value       the value to be transformed
      * @return the new value
      */
-    VR transform(final K key, final V value);
+    VR transform(final K readOnlyKey, final V value);
 
     /**
      * Close this processor and clean up any resources.

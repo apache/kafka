@@ -195,12 +195,12 @@ public interface KStream<K, V> {
      * This is a stateless record-by-record operation (cf.
      * {@link #transformValues(ValueTransformerSupplier, String...)} for stateful value transformation).
      * <p>
-     * The example below counts the number of token of the value string.
+     * The example below counts the number of tokens of key and value strings.
      * <pre>{@code
      * KStream<String, String> inputStream = builder.stream("topic");
-     * KStream<String, Integer> outputStream = inputStream.mapValues(new ValueMapper<String, Integer> {
-     *     Integer apply(String value) {
-     *         return value.split(" ").length;
+     * KStream<String, Integer> outputStream = inputStream.mapValues(new ValueMapperWithKey<String, String, Integer> {
+     *     Integer apply(String readOnlyKey, String value) {
+     *         return readOnlyKey.split(" ").length + value.split(" ").length;
      *     }
      * });
      * }</pre>
@@ -323,12 +323,17 @@ public interface KStream<K, V> {
      * This is a stateless record-by-record operation (cf. {@link #transformValues(ValueTransformerSupplier, String...)}
      * for stateful value transformation).
      * <p>
-     * The example below splits input records {@code <null:String>} containing sentences as values into their words.
+     * The example below splits input records {@code <Integer:String>}, with key=1, containing sentences as values
+     * into their words.
      * <pre>{@code
-     * KStream<byte[], String> inputStream = builder.stream("topic");
-     * KStream<byte[], String> outputStream = inputStream.flatMapValues(new ValueMapper<String, Iterable<String>> {
-     *     Iterable<String> apply(String value) {
-     *         return Arrays.asList(value.split(" "));
+     * KStream<Integer, String> inputStream = builder.stream("topic");
+     * KStream<Integer, String> outputStream = inputStream.flatMapValues(new ValueMapper<Integer, String, Iterable<String>> {
+     *     Iterable<Integer, String> apply(Integer readOnlyKey, String value) {
+     *         if(readOnlyKey == 1) {
+     *             return Arrays.asList(value.split(" "));
+     *         } else {
+     *             return Arrays.asList(value);
+     *         }
      *     }
      * });
      * }</pre>
@@ -1130,7 +1135,7 @@ public interface KStream<K, V> {
      * // register store
      * builder.addStore(myStore);
      *
-     * KStream outputStream = inputStream.transformValues(new ValueTransformerSupplier() { ... }, "myValueTransformState");
+     * KStream outputStream = inputStream.transformValues(new ValueTransformerWithKeySupplier() { ... }, "myValueTransformState");
      * }</pre>
      * <p>
      * Within the {@link ValueTransformerWithKey}, the state is obtained via the
@@ -1151,9 +1156,9 @@ public interface KStream<K, V> {
      *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
      *             }
      *
-     *             NewValueType transform(K key, V value) {
+     *             NewValueType transform(K readOnlyKey, V value) {
      *                 // can access this.state and use read-only key
-     *                 return new NewValueType(); // or null
+     *                 return new NewValueType(readOnlyKey); // or null
      *             }
      *
      *             void close() {

@@ -270,12 +270,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public <V1> KTable<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper) {
-        return mapValues(withKey(mapper), null, (String) null);
+        return doMapValues(withKey(mapper), null, null);
     }
 
     @Override
     public <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper) {
-        return mapValues(mapper, null, (String) null);
+        return doMapValues(mapper, null, null);
+
     }
 
     @Override
@@ -292,12 +293,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal
                 = new MaterializedInternal<>(materialized, builder, MAPVALUES_NAME);
         final String name = builder.newProcessorName(MAPVALUES_NAME);
-        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(this,
+        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(
+                this,
                 mapper,
                 materializedInternal.storeName());
         builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
-        builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materializedInternal)
-                        .materialize(),
+        builder.internalTopologyBuilder.addStateStore(
+                new KeyValueStoreMaterializer<>(materializedInternal).materialize(),
                 name);
         return new KTableImpl<>(builder, name, processorSupplier, sourceNodes, this.queryableStoreName, true);
     }
@@ -307,18 +309,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public <V1> KTable<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper,
                                         final Serde<V1> valueSerde,
                                         final String queryableStoreName) {
-        return mapValues(withKey(mapper), valueSerde, queryableStoreName);
-    }
-
-    @Override
-    public <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
-                                        final Serde<VR> valueSerde,
-                                        final String queryableStoreName) {
-        org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier = null;
-        if (queryableStoreName != null) {
-            storeSupplier = keyValueStore(this.keySerde, valueSerde, queryableStoreName);
-        }
-        return doMapValues(mapper, valueSerde, storeSupplier);
+        return mapValues(withKey(mapper), Materialized.<K, V1, KeyValueStore<Bytes, byte[]>>as(queryableStoreName).withValueSerde(valueSerde));
     }
 
     @SuppressWarnings("deprecation")

@@ -19,19 +19,20 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueTransformer;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.InternalValueTransformerWithKey;
+import org.apache.kafka.streams.kstream.InternalValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformer;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-
 
 import java.util.HashSet;
 import java.util.Objects;
@@ -123,39 +124,70 @@ public abstract class AbstractStream<K> {
         Objects.requireNonNull(valueMapper, "valueMapper can't be null");
         return new ValueMapperWithKey<K, V, VR>() {
             @Override
-            public VR apply(K key, V value) {
+            public VR apply(final K readOnlyKey, final V value) {
                 return valueMapper.apply(value);
             }
         };
     }
 
-
-    static <K, V, VR> ValueTransformerWithKey<K, V, VR> withKey(final ValueTransformer<V, VR> valueTransformer) {
-        Objects.requireNonNull(valueTransformer, "valueTransformer can't be null");
-        return new ValueTransformerWithKey<K, V, VR>() {
+    static <K, V, VR> InternalValueTransformerWithKeySupplier<K, V, VR> toInternalValueTransformerSupplier(final ValueTransformerSupplier<V, VR> valueTransformerSupplier) {
+        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
+        final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
+        return new InternalValueTransformerWithKeySupplier<K, V, VR>() {
             @Override
-            public void init(ProcessorContext context) {
-                valueTransformer.init(context);
-            }
+            public InternalValueTransformerWithKey<K, V, VR> get() {
+                return new InternalValueTransformerWithKey<K, V, VR>() {
+                    @Override
+                    public VR punctuate(final long timestamp) {
+                        return valueTransformer.punctuate(timestamp);
+                    }
 
-            @Override
-            public VR transform(K key, V value) {
-                return valueTransformer.transform(value);
-            }
+                    @Override
+                    public void init(final ProcessorContext context) {
+                        valueTransformer.init(context);
+                    }
 
-            @Override
-            public void close() {
-                valueTransformer.close();
+                    @Override
+                    public VR transform(final K readOnlyKey, final V value) {
+                        return valueTransformer.transform(value);
+                    }
+
+                    @Override
+                    public void close() {
+                        valueTransformer.close();
+                    }
+                };
             }
         };
     }
 
-    static <K, V, VR> ValueTransformerWithKeySupplier<K, V, VR> withKey(final ValueTransformerSupplier<V, VR> valueTransformerSupplier) {
-        Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
-        return new ValueTransformerWithKeySupplier<K, V, VR>() {
+    static <K, V, VR> InternalValueTransformerWithKeySupplier<K, V, VR> toInternalValueTransformerSupplier(final ValueTransformerWithKeySupplier<K, V, VR> valueTransformerWithKeySupplier) {
+        Objects.requireNonNull(valueTransformerWithKeySupplier, "valueTransformerSupplier can't be null");
+        final ValueTransformerWithKey<K, V, VR> valueTransformerWithKey = valueTransformerWithKeySupplier.get();
+        return new InternalValueTransformerWithKeySupplier<K, V, VR>() {
             @Override
-            public ValueTransformerWithKey<K, V, VR> get() {
-                return withKey(valueTransformerSupplier.get());
+            public InternalValueTransformerWithKey<K, V, VR> get() {
+                return new InternalValueTransformerWithKey<K, V, VR>() {
+                    @Override
+                    public VR punctuate(final long timestamp) {
+                        return null;
+                    }
+
+                    @Override
+                    public void init(final ProcessorContext context) {
+                        valueTransformerWithKey.init(context);
+                    }
+
+                    @Override
+                    public VR transform(final K readOnlyKey, final V value) {
+                        return valueTransformerWithKey.transform(readOnlyKey, value);
+                    }
+
+                    @Override
+                    public void close() {
+                        valueTransformerWithKey.close();
+                    }
+                };
             }
         };
     }

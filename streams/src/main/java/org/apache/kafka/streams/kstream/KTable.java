@@ -345,7 +345,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possible new type)in the new {@code KTable}.
+     * (with possible new type) in the new {@code KTable}.
      * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the update record and
      * computes a new value for it, resulting in an update record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -379,18 +379,18 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possible new type)in the new {@code KTable}.
+     * (with possible new type) in the new {@code KTable}.
      * For each {@code KTable} update the provided {@link ValueMapperWithKey} is applied to the value of the update
      * record and computes a new value for it, resulting in an update record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateless record-by-record operation.
      * <p>
-     * The example below counts the number of token of the value string.
+     * The example below counts the number of token of value and key strings.
      * <pre>{@code
      * KTable<String, String> inputTable = builder.table("topic");
      * KTable<String, Integer> outputTable = inputTable.mapValue(new ValueMapperWithKey<String, String, Integer> {
-     *     Integer apply(String key, String value) {
-     *         return value.split(" ").length;
+     *     Integer apply(String readOnlyKey, String value) {
+     *          return readOnlyKey.split(" ").length + value.split(" ").length;
      *     }
      * });
      * }</pre>
@@ -400,7 +400,7 @@ public interface KTable<K, V> {
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like a join) is applied to
      * the result {@code KTable}.
      * <p>
-     * Note that {@code mapValues} for a <i>changelog stream</i> works different to {@link KStream#mapValues(ValueMapper)
+     * Note that {@code mapValues} for a <i>changelog stream</i> works different to {@link KStream#mapValues(ValueMapperWithKey)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
      * have delete semantics.
      * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
@@ -414,7 +414,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possible new type)in the new {@code KTable}.
+     * (with possible new type) in the new {@code KTable}.
      * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the update record and
      * computes a new value for it, resulting in an update record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -458,18 +458,18 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possible new type)in the new {@code KTable}.
+     * (with possible new type) in the new {@code KTable}.
      * For each {@code KTable} update the provided {@link ValueMapperWithKey} is applied to the value of the update
      * record and computes a new value for it, resulting in an update record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateless record-by-record operation.
      * <p>
-     * The example below counts the number of token of the value string.
+     * The example below counts the number of token of value and key strings.
      * <pre>{@code
      * KTable<String, String> inputTable = builder.table("topic");
      * KTable<String, Integer> outputTable = inputTable.mapValue(new ValueMapperWithKey<String, String, Integer> {
-     *     Integer apply(String key, String value) {
-     *         return value.split(" ").length;
+     *     Integer apply(String readOnlyKey, String value) {
+     *          return readOnlyKey.split(" ").length + value.split(" ").length;
      *     }
      * });
      * }</pre>
@@ -503,7 +503,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possible new type)in the new {@code KTable}.
+     * (with possible new type) in the new {@code KTable}.
      * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the update record and
      * computes a new value for it, resulting in an update record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -551,56 +551,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possible new type)in the new {@code KTable}.
-     * For each {@code KTable} update the provided {@link ValueMapperWithKey} is applied to the value of the update
-     * record and computes a new value for it, resulting in an update record for the result {@code KTable}.
-     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * This is a stateless record-by-record operation.
-     * <p>
-     * The example below counts the number of token of the value string.
-     * <pre>{@code
-     * KTable<String, String> inputTable = builder.table("topic");
-     * KTable<String, Integer> outputTable = inputTable.mapValue(new ValueMapperWithKey<String, String, Integer> {
-     *     Integer apply(String key, String value) {
-     *         return value.split(" ").length;
-     *     }
-     * });
-     * }</pre>
-     * <p>
-     * To query the local {@link KeyValueStore} representing outputTable above it must be obtained via
-     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
-     * query the value of the key on a parallel running instance of your Kafka Streams application.
-     * <p>
-     * <p>
-     * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
-     * Thus, this operation preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like a join) is applied to
-     * the result {@code KTable}.
-     * <p>
-     * Note that {@code mapValues} for a <i>changelog stream</i> works different to {@link KStream#mapValues(ValueMapper)
-     * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
-     * have delete semantics.
-     * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
-     * delete the corresponding record in the result {@code KTable}.
-     *
-     * @param mapper a {@link ValueMapperWithKey} that computes a new output value
-     * @param queryableStoreName a user-provided name of the underlying {@link KTable} that can be
-     * used to subsequently query the operation results; valid characters are ASCII
-     * alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
-     * (i.e., that would be equivalent to calling {@link KTable#mapValues(ValueMapperWithKey)}.
-     * @param valueSerde serializer for new value type
-     * @param <VR>   the value type of the result {@code KTable}
-     *
-     * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
-     * @deprecated use {@link #mapValues(ValueMapper, Materialized) mapValues(mapper, Materialized.as(queryableStoreName).withValueSerde(valueSerde))}
-     */
-    @Deprecated
-    <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper, final Serde<VR> valueSerde, final String queryableStoreName);
-
-    /**
-     * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possible new type)in the new {@code KTable}.
+     * (with possible new type) in the new {@code KTable}.
      * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the update record and
      * computes a new value for it, resulting in an update record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.

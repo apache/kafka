@@ -19,8 +19,8 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.InternalValueTransformerWithKey;
+import org.apache.kafka.streams.kstream.InternalValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -36,9 +36,9 @@ import java.util.Map;
 
 public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> {
 
-    private final ValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier;
+    private final InternalValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier;
 
-    public KStreamTransformValues(ValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier) {
+    public KStreamTransformValues(InternalValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier) {
         this.valueTransformerSupplier = valueTransformerSupplier;
     }
 
@@ -49,10 +49,10 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
 
     public static class KStreamTransformValuesProcessor<K, V, R> implements Processor<K, V> {
 
-        private final ValueTransformerWithKey<K, V, R> valueTransformer;
+        private final InternalValueTransformerWithKey<K, V, R> valueTransformer;
         private ProcessorContext context;
 
-        public KStreamTransformValuesProcessor(ValueTransformerWithKey<K, V, R> valueTransformer) {
+        public KStreamTransformValuesProcessor(InternalValueTransformerWithKey<K, V, R> valueTransformer) {
             this.valueTransformer = valueTransformer;
         }
 
@@ -173,7 +173,11 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
 
         @SuppressWarnings("deprecation")
         @Override
-        public void punctuate(long timestamp) {}
+        public void punctuate(long timestamp) {
+            if (valueTransformer.punctuate(timestamp) != null) {
+                throw new StreamsException("ValueTransformer#punctuate must return null.");
+            }
+        }
 
         @Override
         public void close() {

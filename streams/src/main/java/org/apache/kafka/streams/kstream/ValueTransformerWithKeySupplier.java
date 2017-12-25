@@ -17,10 +17,6 @@
 package org.apache.kafka.streams.kstream;
 
 /**
- * A {@code ValueTransformerWithKeySupplier} interface which can create one or more {@link ValueTransformerWithKey}
- * instances.
- * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
- *
  * @param <K>  key type
  * @param <V>  value type
  * @param <VR> transformed value type
@@ -33,11 +29,5 @@ package org.apache.kafka.streams.kstream;
  * @see KStream#transform(TransformerSupplier, String...)
  */
 public interface ValueTransformerWithKeySupplier<K, V, VR> {
-
-    /**
-     * Return a new {@link ValueTransformerWithKey} instance.
-     *
-     * @return a new {@link ValueTransformerWithKey} instance.
-     */
     ValueTransformerWithKey<K, V, VR> get();
 }
