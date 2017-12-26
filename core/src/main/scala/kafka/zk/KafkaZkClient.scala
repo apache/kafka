@@ -49,7 +49,8 @@ import scala.collection.{Seq, mutable}
  * easier to quickly migrate away from `ZkUtils`. We should revisit this once the migration is completed and tests are
  * in place. We should also consider whether a monolithic [[kafka.zk.ZkData]] is the way to go.
  */
-class KafkaZkClient(zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time) extends Logging with KafkaMetricsGroup {
+class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time) extends AutoCloseable with
+  Logging with KafkaMetricsGroup {
 
   override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
     explicitMetricName("kafka.server", "ZooKeeperClientMetrics", name, metricTags)
@@ -1436,4 +1437,22 @@ object KafkaZkClient {
   case class UpdateLeaderAndIsrResult(successfulPartitions: Map[TopicPartition, LeaderAndIsr],
                                       partitionsToRetry: Seq[TopicPartition],
                                       failedPartitions: Map[TopicPartition, Exception])
+
+  /**
+   * Create an instance of this class with the provided parameters.
+   *
+   * The metric group and type are preserved by default for compatibility with previous versions.
+   */
+  def apply(connectString: String,
+            isSecure: Boolean,
+            sessionTimeoutMs: Int,
+            connectionTimeoutMs: Int,
+            maxInFlightRequests: Int,
+            time: Time,
+            metricGroup: String = "kafka.server",
+            metricType: String = "SessionExpireListener") = {
+    val zooKeeperClient = new ZooKeeperClient(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests,
+      time, metricGroup, metricType)
+    new KafkaZkClient(zooKeeperClient, isSecure, time)
+  }
 }

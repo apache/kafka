@@ -49,8 +49,8 @@ class ZooKeeperClient(connectString: String,
                       connectionTimeoutMs: Int,
                       maxInFlightRequests: Int,
                       time: Time,
-                      metricGroup: String = "kafka.server",
-                      metricType: String = "KafkaHealthcheck") extends Logging with KafkaMetricsGroup {
+                      metricGroup: String,
+                      metricType: String) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[ZooKeeperClient] "
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
@@ -84,20 +84,14 @@ class ZooKeeperClient(connectString: String,
   // Fail-fast if there's an error during construction (so don't call initialize, which retries forever)
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
 
-  private val sessionStateGauge =
-    newGauge("SessionState", new Gauge[String] {
-      override def value: String =
-        Option(zooKeeper.getState.toString).getOrElse("DISCONNECTED")
-    })
+  newGauge("SessionState", new Gauge[String] {
+    override def value: String = Option(zooKeeper.getState.toString).getOrElse("DISCONNECTED")
+  })
 
   metricNames += "SessionState"
 
   waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
 
-
-  /**
-    * This is added to preserve the original metric name in JMX
-    */
   override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
     explicitMetricName(metricGroup, metricType, name, metricTags)
   }
