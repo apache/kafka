@@ -624,10 +624,11 @@
   <p>
   We have seen a few issues running on Windows and Windows is not currently a well supported platform though we would be happy to change that.
   <p>
-  It is unlikely to require much OS-level tuning, but there are two potentially important OS-level configurations:
+  It is unlikely to require much OS-level tuning, but there are three potentially important OS-level configurations:
   <ul>
       <li>File descriptor limits: Kafka uses file descriptors for log segments and open connections.  If a broker hosts many partitions, consider that the broker needs at least (number_of_partitions)*(partition_size/segment_size) to track all log segments in addition to the number of connections the broker makes.  We recommend at least 100000 allowed file descriptors for the broker processes as a starting point.
       <li>Max socket buffer size: can be increased to enable high-performance data transfer between data centers as <a href="http://www.psc.edu/index.php/networking/641-tcp-tune">described here</a>.
+	  <li>Maximum number of memory map areas a process may have (aka vm.max_map_count). <a href="http://kernel.org/doc/Documentation/sysctl/vm.txt">See the Linux kernel documentation</a>. You should keep an eye at this OS-level property when considering the maximum number of partitions a broker may have. By default, on a number of Linux systems, the value of vm.max_map_count is somewhere around 65535. Each new partition, hosted on broker, consumes 2 map areas. Thus, creating 50000 partitions on a broker will result allocation of 100000 map areas and likely cause broker crash with OutOfMemoryError (Map failed) on a system with default vm.max_map_count.
   </ul>
   <p>
 
