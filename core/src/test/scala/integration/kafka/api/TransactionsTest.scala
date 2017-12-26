@@ -60,8 +60,8 @@ class TransactionsTest extends KafkaServerTestHarness {
     val numPartitions = 4
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-    TestUtils.createTopic(zkClient, topic1, numPartitions, numServers, servers, topicConfig)
-    TestUtils.createTopic(zkClient, topic2, numPartitions, numServers, servers, topicConfig)
+    createTopic(topic1, numPartitions, numServers, topicConfig)
+    createTopic(topic2, numPartitions, numServers, topicConfig)
 
     for (_ <- 0 until transactionalProducerCount)
       createTransactionalProducer("transactional-producer")
@@ -503,8 +503,8 @@ class TransactionsTest extends KafkaServerTestHarness {
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
 
-    TestUtils.createTopic(zkClient, topicWith10Partitions, 10, numServers, servers, topicConfig)
-    TestUtils.createTopic(zkClient, topicWith10PartitionsAndOneReplica, 10, 1, servers, new Properties())
+    createTopic(topicWith10Partitions, 10, numServers, topicConfig)
+    createTopic(topicWith10PartitionsAndOneReplica, 10, 1, new Properties())
 
     firstProducer.initTransactions()
 

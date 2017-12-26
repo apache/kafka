@@ -59,7 +59,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   def testErrorCreateTopicsRequests() {
     val timeout = 10000
     val existingTopic = "existing-topic"
-    TestUtils.createTopic(zkClient, existingTopic, 1, 1, servers)
+    createTopic(existingTopic, 1, 1)
 
     // Basic
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(Map(existingTopic -> new CreateTopicsRequest.TopicDetails(1, 1.toShort)).asJava, timeout).build(),

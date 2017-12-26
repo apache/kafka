@@ -54,7 +54,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   def testMetricsLeak() {
     val topic = "test-metrics-leak"
     // create topic topic1 with 1 partition on broker 0
-    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = servers)
+    createTopic(topic, numPartitions = 1, replicationFactor = 1)
     // force creation not client's specific metrics.
     createAndShutdownStep(topic, "group0", "consumer0", "producer0")
 
@@ -130,7 +130,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
 
     val topicConfig = new Properties
     topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, "2")
-    createTopic(zkClient, topic, 1, numNodes, servers, topicConfig)
+    createTopic(topic, 1, numNodes, topicConfig)
     // Produce a few messages to create the metrics
     TestUtils.produceMessages(servers, topic, nMessages)
 

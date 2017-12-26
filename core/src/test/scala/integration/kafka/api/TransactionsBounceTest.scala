@@ -169,8 +169,8 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
   private def createTopics() =  {
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-    TestUtils.createTopic(zkClient, inputTopic, numPartitions, 3, servers, topicConfig)
-    TestUtils.createTopic(zkClient, outputTopic, numPartitions, 3, servers, topicConfig)
+    createTopic(inputTopic, numPartitions, 3, topicConfig)
+    createTopic(outputTopic, numPartitions, 3, topicConfig)
   }
 
   private class BounceScheduler extends ShutdownableThread("daemon-broker-bouncer", false) {
