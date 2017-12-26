@@ -73,6 +73,7 @@ abstract class AbstractResetIntegrationTest {
     private static final String OUTPUT_TOPIC_2 = "outputTopic2";
     private static final String OUTPUT_TOPIC_2_RERUN = "outputTopic2_rerun";
     private static final String INTERMEDIATE_USER_TOPIC = "userTopic";
+    private static final String NON_EXISTING_TOPIC = "nonExistingTopic2";
 
     private static final long STREAMS_CONSUMER_TIMEOUT = 2000L;
     private static final long CLEANUP_CONSUMER_TIMEOUT = 2000L;
@@ -612,13 +613,13 @@ abstract class AbstractResetIntegrationTest {
         Assert.assertEquals(0, exitCode);
     }
 
-    void assertInputTopicDoesNotExist() throws Exception {
+    void shouldNotAllowToResetWhileStreamsIsRunning() throws Exception {
 
         final Properties streamsConfiguration = prepareTest();
         final List<String> parameterList = new ArrayList<>(
                 Arrays.asList("--application-id", APP_ID + testNo,
                         "--bootstrap-servers", bootstrapServers,
-                        "--input-topics", INPUT_TOPIC));
+                        "--input-topics", NON_EXISTING_TOPIC));
 
         final String[] parameters = parameterList.toArray(new String[parameterList.size()]);
         final Properties cleanUpConfig = new Properties();
