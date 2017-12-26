@@ -232,8 +232,32 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public DeleteTopicsResult deleteTopics(Collection<String> topics, DeleteTopicsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+    public DeleteTopicsResult deleteTopics(Collection<String> topicsToDelete, DeleteTopicsOptions options) {
+        Map<String, KafkaFuture<Void>> deleteTopicsResult = new HashMap<>();
+
+        if (timeoutNextRequests > 0) {
+            for (final String topicName : topicsToDelete) {
+                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new TimeoutException());
+                deleteTopicsResult.put(topicName, future);
+            }
+
+            --timeoutNextRequests;
+            return new DeleteTopicsResult(deleteTopicsResult);
+        }
+
+        for (final String topicName : topicsToDelete) {
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+
+            if (allTopics.remove(topicName) == null) {
+                future.completeExceptionally(new UnknownTopicOrPartitionException(String.format("Topic %s does not exist.", topicName)));
+            } else {
+                future.complete(null);
+            }
+            deleteTopicsResult.put(topicName, future);
+        }
+
+        return new DeleteTopicsResult(deleteTopicsResult);
     }
 
     @Override
@@ -243,7 +267,12 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete, DeleteRecordsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        Map<TopicPartition, KafkaFuture<DeletedRecords>> deletedRecordsResult = new HashMap<>();
+        if (recordsToDelete.isEmpty()) {
+            return new DeleteRecordsResult(deletedRecordsResult);
+        } else {
+            throw new UnsupportedOperationException("Not implemented yet");
+        }
     }
 
     @Override
