@@ -78,7 +78,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val topicPartition = new TopicPartition("test", 0)
     val topic = topicPartition.topic
     servers = createTestTopicAndCluster(topic)
-    val controllerId = zkClient.getControllerId.getOrElse(throw new KafkaException("Controller doesn't exist"))
+    val controllerId = zkClient.getControllerId.getOrElse(fail("Controller doesn't exist"))
     val controller = servers.filter(s => s.config.brokerId == controllerId).head
     val leaderIdOpt = zkClient.getLeaderForPartition(new TopicPartition(topic, 0))
     val follower = servers.filter(s => s.config.brokerId != leaderIdOpt.get && s.config.brokerId != controllerId).last
@@ -135,7 +135,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
       ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkClient, topicPartition,
         Map(topicPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentFailed
     }, "Partition reassignment shouldn't complete.")
-    val controllerId = zkClient.getControllerId.getOrElse(throw new KafkaException("Controller doesn't exist"))
+    val controllerId = zkClient.getControllerId.getOrElse(fail("Controller doesn't exist"))
     val controller = servers.filter(s => s.config.brokerId == controllerId).head
     assertFalse("Partition reassignment should fail",
       controller.kafkaController.controllerContext.partitionsBeingReassigned.contains(topicPartition))
@@ -175,7 +175,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
 
   @Test
   def testAddPartitionDuringDeleteTopic() {
-    zkClient.createTopLevelPaths
+    zkClient.createTopLevelPaths()
     val topic = "test"
     servers = createTestTopicAndCluster(topic)
     val brokers = adminZkClient.getBrokerMetadatas()
