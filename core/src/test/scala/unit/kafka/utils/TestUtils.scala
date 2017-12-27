@@ -701,6 +701,7 @@ object TestUtils extends Logging {
     createBrokersInZk(ids.map(kafka.admin.BrokerMetadata(_, None)), zkClient)
 
   def createBrokersInZk(brokerMetadatas: Seq[kafka.admin.BrokerMetadata], zkClient: KafkaZkClient): Seq[Broker] = {
+    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
     val brokers = brokerMetadatas.map { b =>
       val protocol = SecurityProtocol.PLAINTEXT
       val listenerName = ListenerName.forSecurityProtocol(protocol)

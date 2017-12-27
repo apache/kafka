@@ -27,7 +27,7 @@ import java.util.Properties
 
 import kafka.utils._
 import kafka.log._
-import kafka.zk.{BrokerIdsZNode, ZooKeeperTestHarness}
+import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
 import java.io.File
@@ -86,7 +86,6 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   @Test
   def testManualReplicaAssignment() {
-    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
     val brokers = List(0, 1, 2, 3, 4)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
@@ -110,7 +109,6 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   @Test
   def testTopicCreationInZK() {
-    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
     val expectedReplicaAssignment = Map(
       0  -> List(0, 1, 2),
       1  -> List(1, 2, 3),
@@ -158,7 +156,6 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   @Test
   def testTopicCreationWithCollision() {
-    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
     val topic = "test.topic"
     val collidingTopic = "test_topic"
     TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
@@ -549,7 +546,6 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   @Test
   def testGetBrokerMetadatas() {
-    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
     // broker 4 has no rack information
     val brokerList = 0 to 5
     val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 5 -> "rack3")

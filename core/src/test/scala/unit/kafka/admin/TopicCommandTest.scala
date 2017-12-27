@@ -20,7 +20,7 @@ import org.junit.Assert._
 import org.junit.Test
 import kafka.utils.Logging
 import kafka.utils.TestUtils
-import kafka.zk.{BrokerIdsZNode, ConfigEntityChangeNotificationZNode, ZooKeeperTestHarness}
+import kafka.zk.{ConfigEntityChangeNotificationZNode, ZooKeeperTestHarness}
 import kafka.server.ConfigType
 import kafka.admin.TopicCommand.TopicCommandOptions
 import kafka.utils.ZkUtils.getDeleteTopicPath
@@ -31,7 +31,6 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
   @Test
   def testConfigPreservationAcrossPartitionAlteration() {
-    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
     val topic = "test"
     val numPartitionsOriginal = 1
     val cleanupKey = "cleanup.policy"
@@ -63,7 +62,6 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
   @Test
   def testTopicDeletion() {
-    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
 
     val normalTopic = "test"
 
@@ -104,7 +102,6 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
   @Test
   def testDeleteIfExists() {
-    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
     // create brokers
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
@@ -122,7 +119,6 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
   @Test
   def testAlterIfExists() {
-    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
     // create brokers
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
@@ -140,7 +136,6 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
   @Test
   def testCreateIfNotExists() {
-    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
     // create brokers
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
@@ -166,7 +161,6 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
   @Test
   def testCreateAlterTopicWithRackAware() {
-    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
     val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 4 -> "rack3", 5 -> "rack3")
     TestUtils.createBrokersInZk(toBrokerMetadata(rackInfo), zkClient)
 
@@ -197,7 +191,6 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
   @Test
   def testDescribeAndListTopicsMarkedForDeletion() {
-    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
     val brokers = List(0)
     val topic = "testtopic"
     val markedForDeletionDescribe = "MarkedForDeletion"
