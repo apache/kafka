@@ -442,7 +442,6 @@ public class StoreChangelogReaderTest {
     public void shouldNotThrowTaskMigratedExceptionIfEndOffsetGetsExceededDuringRestoreForSourceTopic() {
         final int messages = 10;
         setupConsumer(messages, topicPartition);
-        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 5L));
         changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, 5, true, "storeName"));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
@@ -475,10 +474,10 @@ public class StoreChangelogReaderTest {
         //EOS enabled so commit marker at offset 5 so records start at 6
         addRecords(5, topicPartition, 6);
         consumer.assign(Collections.<TopicPartition>emptyList());
-        // commit marker is 5 so ending offset is 6
-        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 6L));
+        // commit marker is 5 so ending offset is 12
+        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 12L));
 
-        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, 11, true, "storeName"));
+        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, 6, true, "storeName"));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         replay(active);
