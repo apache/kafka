@@ -70,7 +70,7 @@ interface MetadataUpdater {
     void handleAuthenticationFailure(AuthenticationException exception);
 
     /**
-     * If `request` is a metadata request, handles it and returns `true`. Otherwise, returns `false`.
+     * Handle responses for metadata requests.
      *
      * This provides a mechanism for the `MetadataUpdater` implementation to use the NetworkClient instance for its own
      * requests with special handling for completed receives of such requests.
