@@ -77,7 +77,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   @Test
   @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
   def testDescribeNonExistingGroupWithOldConsumer() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
     createOldConsumer()
     val service = getConsumerGroupService(Array("--zookeeper", zkConnect, "--describe", "--group", "missing.group"))
     TestUtils.waitUntilTrue(() => service.collectGroupOffsets()._2.isEmpty, "Expected no rows in describe group results.")
@@ -86,7 +86,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   @Test
   @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
   def testDescribeExistingGroupWithOldConsumer() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
     createOldConsumer()
     val service = getConsumerGroupService(Array("--zookeeper", zkConnect, "--describe", "--group", group))
 
@@ -101,7 +101,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   @Test
   @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
   def testDescribeExistingGroupWithNoMembersWithOldConsumer() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
     createOldConsumer()
     val service = getConsumerGroupService(Array("--zookeeper", zkConnect, "--describe", "--group", group))
 
@@ -124,7 +124,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   @Test
   @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
   def testDescribeConsumersWithNoAssignedPartitionsWithOldConsumer() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
     createOldConsumer()
     createOldConsumer()
     val service = getConsumerGroupService(Array("--zookeeper", zkConnect, "--describe", "--group", group))
@@ -140,7 +140,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeNonExistingGroup() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
     val missingGroup = "missing.group"
 
     for (describeType <- describeTypes) {
@@ -156,7 +156,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test(expected = classOf[joptsimple.OptionException])
   def testDescribeWithMultipleSubActions() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--members", "--state")
     getConsumerGroupService(cgcArgs)
     fail("Expected an error due to presence of mutually exclusive options")
@@ -164,7 +164,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeOffsetsOfNonExistingGroup() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
@@ -179,7 +179,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeMembersOfNonExistingGroup() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
@@ -198,7 +198,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeStateOfNonExistingGroup() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
@@ -215,7 +215,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeExistingGroup() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
 
     for (describeType <- describeTypes) {
       val group = this.group + describeType.mkString("")
@@ -233,7 +233,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeOffsetsOfExistingGroup() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
@@ -253,7 +253,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeMembersOfExistingGroup() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
@@ -287,7 +287,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeStateOfExistingGroup() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
@@ -306,7 +306,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeStateOfExistingGroupWithRoundRobinAssignor() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic, "org.apache.kafka.clients.consumer.RoundRobinAssignor"))
@@ -325,7 +325,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeExistingGroupWithNoMembers() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
 
     for (describeType <- describeTypes) {
       val group = this.group + describeType.mkString("")
@@ -350,7 +350,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeOffsetsOfExistingGroupWithNoMembers() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run one consumer in the group consuming from a single-partition topic
     val executor = addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
@@ -383,7 +383,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeMembersOfExistingGroupWithNoMembers() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run one consumer in the group consuming from a single-partition topic
     val executor = addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
@@ -407,7 +407,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeStateOfExistingGroupWithNoMembers() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run one consumer in the group consuming from a single-partition topic
     val executor = addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 1, group, topic))
@@ -434,7 +434,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeWithConsumersWithoutAssignedPartitions() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
 
     for (describeType <- describeTypes) {
       val group = this.group + describeType.mkString("")
@@ -453,7 +453,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeOffsetsWithConsumersWithoutAssignedPartitions() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run two consumers in the group consuming from a single-partition topic
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 2, group, topic))
@@ -472,7 +472,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeMembersWithConsumersWithoutAssignedPartitions() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run two consumers in the group consuming from a single-partition topic
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 2, group, topic))
@@ -497,7 +497,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeStateWithConsumersWithoutAssignedPartitions() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
 
     // run two consumers in the group consuming from a single-partition topic
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 2, group, topic))
@@ -513,7 +513,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeWithMultiPartitionTopicAndMultipleConsumers() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
     val topic2 = "foo2"
     adminZkClient.createTopic(topic2, 2, 1)
 
@@ -534,9 +534,9 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeOffsetsWithMultiPartitionTopicAndMultipleConsumers() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
     val topic2 = "foo2"
-    AdminUtils.createTopic(zkUtils, topic2, 2, 1)
+    adminZkClient.createTopic(topic2, 2, 1)
 
     // run two consumers in the group consuming from a two-partition topic
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 2, group, topic2))
@@ -556,9 +556,9 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeMembersWithMultiPartitionTopicAndMultipleConsumers() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
     val topic2 = "foo2"
-    AdminUtils.createTopic(zkUtils, topic2, 2, 1)
+    adminZkClient.createTopic(topic2, 2, 1)
 
     // run two consumers in the group consuming from a two-partition topic
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 2, group, topic2))
@@ -582,9 +582,9 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
   @Test
   def testDescribeStateWithMultiPartitionTopicAndMultipleConsumers() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
     val topic2 = "foo2"
-    AdminUtils.createTopic(zkUtils, topic2, 2, 1)
+    adminZkClient.createTopic(topic2, 2, 1)
 
     // run two consumers in the group consuming from a two-partition topic
     addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 2, group, topic2))

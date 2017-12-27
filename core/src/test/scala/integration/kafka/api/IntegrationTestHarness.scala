@@ -84,7 +84,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       consumers += createNewConsumer
     }
 
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
   }
 
   def clientSecurityProps(certAlias: String): Properties = {

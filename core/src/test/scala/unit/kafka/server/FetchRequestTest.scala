@@ -342,7 +342,7 @@ class FetchRequestTest extends BaseRequestTest {
     topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, 2.toString)
     configs.foreach { case (k, v) => topicConfig.setProperty(k, v) }
     topics.flatMap { topic =>
-      val partitionToLeader = createTopic(zkUtils, topic, numPartitions = numPartitions, replicationFactor = 2,
+      val partitionToLeader = createTopic(zkClient, topic, numPartitions = numPartitions, replicationFactor = 2,
         servers = servers, topicConfig = topicConfig)
       partitionToLeader.map { case (partition, leader) => new TopicPartition(topic, partition) -> leader }
     }.toMap

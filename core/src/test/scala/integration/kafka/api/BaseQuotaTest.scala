@@ -72,7 +72,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     super.setUp()
 
     val numPartitions = 1
-    val leaders = TestUtils.createTopic(zkUtils, topic1, numPartitions, serverCount, servers)
+    val leaders = TestUtils.createTopic(zkClient, topic1, numPartitions, serverCount, servers)
     leaderNode = if (leaders(0) == servers.head.config.brokerId) servers.head else servers(1)
     followerNode = if (leaders(0) != servers.head.config.brokerId) servers.head else servers(1)
   }

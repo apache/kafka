@@ -32,11 +32,11 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
   def testValidDeleteTopicRequests() {
     val timeout = 10000
     // Single topic
-    TestUtils.createTopic(zkUtils, "topic-1", 1, 1, servers)
+    TestUtils.createTopic(zkClient, "topic-1", 1, 1, servers)
     validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("topic-1").asJava, timeout).build())
     // Multi topic
-    TestUtils.createTopic(zkUtils, "topic-3", 5, 2, servers)
-    TestUtils.createTopic(zkUtils, "topic-4", 1, 2, servers)
+    TestUtils.createTopic(zkClient, "topic-3", 5, 2, servers)
+    TestUtils.createTopic(zkClient, "topic-4", 1, 2, servers)
     validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set("topic-3", "topic-4").asJava, timeout).build())
   }
 
@@ -61,7 +61,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
       Map("invalid-topic" -> Errors.UNKNOWN_TOPIC_OR_PARTITION))
 
     // Partial
-    TestUtils.createTopic(zkUtils, "partial-topic-1", 1, 1, servers)
+    TestUtils.createTopic(zkClient, "partial-topic-1", 1, 1, servers)
     validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set(
       "partial-topic-1",
       "partial-invalid-topic").asJava, timeout).build(),
@@ -72,7 +72,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     )
 
     // Timeout
-    TestUtils.createTopic(zkUtils, timeoutTopic, 5, 2, servers)
+    TestUtils.createTopic(zkClient, timeoutTopic, 5, 2, servers)
     // Must be a 0ms timeout to avoid transient test failures. Even a timeout of 1ms has succeeded in the past.
     validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(Set(timeoutTopic).asJava, 0).build(),
       Map(timeoutTopic -> Errors.REQUEST_TIMED_OUT))

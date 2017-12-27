@@ -38,7 +38,7 @@ class AddPartitionsToTxnRequestTest extends BaseRequestTest {
   @Before
   override def setUp(): Unit = {
     super.setUp()
-    TestUtils.createTopic(zkUtils, topic1, numPartitions, servers.size, servers, new Properties())
+    TestUtils.createTopic(zkClient, topic1, numPartitions, servers.size, servers, new Properties())
   }
 
   @Test
