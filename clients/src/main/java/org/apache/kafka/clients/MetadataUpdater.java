@@ -54,7 +54,7 @@ interface MetadataUpdater {
     long maybeUpdate(long now);
 
     /**
-     * If `request` is a metadata request, handles it and return `true`. Otherwise, returns `false`.
+     * Handle disconnections for metadata requests.
      *
      * This provides a mechanism for the `MetadataUpdater` implementation to use the NetworkClient instance for its own
      * requests with special handling for disconnections of such requests.
