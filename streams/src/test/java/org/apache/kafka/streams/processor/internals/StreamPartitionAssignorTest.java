@@ -31,6 +31,7 @@ import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -633,6 +634,98 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
+    public void shouldGenerateTasksForAllCreatedPartitions() throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final InternalTopologyBuilder internalTopologyBuilder = StreamsBuilderTest.internalTopologyBuilder(builder);
+        internalTopologyBuilder.setApplicationId(applicationId);
+
+        // KStream with 3 partitions
+        KStream<Object, Object> stream1 = builder
+            .stream("topic1")
+            // force creation of internal repartition topic
+            .map(new KeyValueMapper<Object, Object, KeyValue<Object, Object>>() {
+                @Override
+                public KeyValue<Object, Object> apply(final Object key, final Object value) {
+                    return new KeyValue<>(key, value);
+                }
+            });
+
+        // KTable with 4 partitions
+        KTable<Object, Long> table1 = builder.table("topic3")
+            // force creation of internal repartition topic
+            .groupBy(new KeyValueMapper<Object, Object, KeyValue<Object, Object>>() {
+                @Override
+                public KeyValue<Object, Object> apply(final Object key, final Object value) {
+                    return new KeyValue<>(key, value);
+                }
+            })
+            .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count"));
+
+        stream1.join(table1,
+            new ValueJoiner() {
+                @Override
+                public Object apply(final Object value1, final Object value2) {
+                    return null;
+                }
+            });
+
+        final UUID uuid = UUID.randomUUID();
+        final String client = "client1";
+
+        mockTaskManager(Collections.<TaskId>emptySet(),
+            Collections.<TaskId>emptySet(),
+            UUID.randomUUID(),
+            internalTopologyBuilder);
+        configurePartitionAssignor(Collections.<String, Object>emptyMap());
+
+        final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
+            streamsConfig,
+            mockClientSupplier.restoreConsumer);
+        partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
+
+        final Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
+        final Set<TaskId> emptyTasks = Collections.emptySet();
+        subscriptions.put(
+            client,
+            new PartitionAssignor.Subscription(
+                Collections.singletonList("unknownTopic"),
+                new SubscriptionInfo(uuid, emptyTasks, emptyTasks, userEndPoint).encode()
+            )
+        );
+
+        final Map<String, PartitionAssignor.Assignment> assignment = partitionAssignor.assign(metadata, subscriptions);
+
+        final Map<String, Integer> expectedCreatedInternalTopics = new HashMap<>();
+        expectedCreatedInternalTopics.put(applicationId + "-count-repartition", 4);
+        expectedCreatedInternalTopics.put(applicationId + "-count-changelog", 4);
+        expectedCreatedInternalTopics.put(applicationId + "-KSTREAM-MAP-0000000001-repartition", 4);
+        expectedCreatedInternalTopics.put(applicationId + "-topic3-STATE-STORE-0000000002-changelog", 4);
+
+
+        assertThat(mockInternalTopicManager.readyTopics, equalTo(expectedCreatedInternalTopics));
+
+        final List<TopicPartition> expectedAssignment = Arrays.asList(
+            new TopicPartition("topic1", 0),
+            new TopicPartition("topic1", 1),
+            new TopicPartition("topic1", 2),
+            new TopicPartition("topic3", 0),
+            new TopicPartition("topic3", 1),
+            new TopicPartition("topic3", 2),
+            new TopicPartition("topic3", 3),
+            new TopicPartition(applicationId + "-count-repartition", 0),
+            new TopicPartition(applicationId + "-count-repartition", 1),
+            new TopicPartition(applicationId + "-count-repartition", 2),
+            new TopicPartition(applicationId + "-count-repartition", 3),
+            new TopicPartition(applicationId + "-KSTREAM-MAP-0000000001-repartition", 0),
+            new TopicPartition(applicationId + "-KSTREAM-MAP-0000000001-repartition", 1),
+            new TopicPartition(applicationId + "-KSTREAM-MAP-0000000001-repartition", 2),
+            new TopicPartition(applicationId + "-KSTREAM-MAP-0000000001-repartition", 3)
+        );
+        assertThat(new HashSet<>(assignment.get(client).partitions()), equalTo(new HashSet<>(expectedAssignment)));
+    }
+
+    @Test
     public void shouldAddUserDefinedEndPointToSubscription() throws Exception {
         builder.setApplicationId(applicationId);
         builder.addSource(null, "source", null, null, null, "input");
@@ -706,6 +799,7 @@ public class StreamPartitionAssignorTest {
             // pass
         }
     }
+
 
     @Test
     public void shouldNotLoopInfinitelyOnMissingMetadataAndShouldNotCreateRelatedTasks() throws Exception {
