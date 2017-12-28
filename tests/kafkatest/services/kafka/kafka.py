@@ -165,6 +165,20 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.start_minikdc(add_principals)
         Service.start(self)
 
+        self.logger.info("Waiting for brokers to register at ZK")
+        node = self.nodes[0]
+
+        cmd = self.path.script("zookeeper-shell.sh", node) + " " + self.zk_connect_setting() + " ls /brokers/ids"
+
+        broker_ids = ""
+        for node in self.nodes:
+            broker_ids += "%s, " % self.idx(node)
+        broker_ids = "[" + broker_ids[:-2] + "]"
+
+        with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
+            node.account.ssh(cmd)
+            monitor.wait_until(broker_ids, timeout_sec=30, backoff_sec=.25, err_msg="Kafka servers didn't register at ZK")
+
         # Create topics if necessary
         if self.topics is not None:
             for topic, topic_cfg in self.topics.items():
