@@ -805,7 +805,6 @@ public class StreamPartitionAssignorTest {
         }
     }
 
-
     @Test
     public void shouldNotLoopInfinitelyOnMissingMetadataAndShouldNotCreateRelatedTasks() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
