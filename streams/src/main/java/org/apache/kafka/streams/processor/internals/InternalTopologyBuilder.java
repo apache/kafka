@@ -1132,11 +1132,14 @@ public class InternalTopologyBuilder {
         return resetTopicsPattern(latestResetTopics, latestResetPatterns, earliestResetPatterns, earliestResetTopics);
     }
 
-    private Pattern resetTopicsPattern(Set<String> resetTopics, Set<Pattern> resetPatterns, Set<Pattern> latestResetPatterns, Set<String> latestResetTopics) {
+    private Pattern resetTopicsPattern(final Set<String> resetTopics,
+                                       final Set<Pattern> resetPatterns,
+                                       final Set<Pattern> otherResetPatterns,
+                                       final Set<String> otherResetTopics) {
         final List<String> topics = maybeDecorateInternalSourceTopics(resetTopics);
         final Pattern pattern = buildPatternForOffsetResetTopics(topics, resetPatterns);
 
-        ensureNoRegexOverlap(pattern, latestResetPatterns, latestResetTopics);
+        ensureNoRegexOverlap(pattern, otherResetPatterns, otherResetTopics);
 
         return pattern;
     }

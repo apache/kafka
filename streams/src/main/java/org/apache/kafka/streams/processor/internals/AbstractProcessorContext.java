@@ -169,7 +169,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     public <K, V> void forward(final K key, final V value) {
         final ProcessorNode previousNode = currentNode();
         try {
-            for (ProcessorNode child : (List<ProcessorNode>) currentNode().children()) {
+            for (final ProcessorNode child : (List<ProcessorNode>) currentNode().children()) {
                 setCurrentNode(child);
                 child.process(key, value);
             }
