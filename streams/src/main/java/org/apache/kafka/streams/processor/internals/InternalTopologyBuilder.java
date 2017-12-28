@@ -827,16 +827,20 @@ public class InternalTopologyBuilder {
         return nodeGroups;
     }
 
-    private int putNodeGroupName(String nodeName, int nodeGroupId, Map<Integer, Set<String>> nodeGroups, Map<String, Set<String>> rootToNodeGroup) {
+    private int putNodeGroupName(final String nodeName,
+                                 final int nodeGroupId,
+                                 final Map<Integer, Set<String>> nodeGroups,
+                                 final Map<String, Set<String>> rootToNodeGroup) {
+        int newNodeGroupId = nodeGroupId;
         final String root = nodeGrouper.root(nodeName);
         Set<String> nodeGroup = rootToNodeGroup.get(root);
         if (nodeGroup == null) {
             nodeGroup = new HashSet<>();
             rootToNodeGroup.put(root, nodeGroup);
-            nodeGroups.put(nodeGroupId++, nodeGroup);
+            nodeGroups.put(newNodeGroupId++, nodeGroup);
         }
         nodeGroup.add(nodeName);
-        return nodeGroupId;
+        return newNodeGroupId;
     }
 
     public synchronized ProcessorTopology build() {
@@ -1125,17 +1129,17 @@ public class InternalTopologyBuilder {
     }
 
     public synchronized Pattern earliestResetTopicsPattern() {
-        return resetTopicsPattern(earliestResetTopics, earliestResetPatterns, latestResetPatterns, latestResetTopics);
+        return resetTopicsPattern(earliestResetTopics, earliestResetPatterns, latestResetTopics, latestResetPatterns);
     }
 
     public synchronized Pattern latestResetTopicsPattern() {
-        return resetTopicsPattern(latestResetTopics, latestResetPatterns, earliestResetPatterns, earliestResetTopics);
+        return resetTopicsPattern(latestResetTopics, latestResetPatterns, earliestResetTopics, earliestResetPatterns);
     }
 
     private Pattern resetTopicsPattern(final Set<String> resetTopics,
                                        final Set<Pattern> resetPatterns,
-                                       final Set<Pattern> otherResetPatterns,
-                                       final Set<String> otherResetTopics) {
+                                       final Set<String> otherResetTopics,
+                                       final Set<Pattern> otherResetPatterns) {
         final List<String> topics = maybeDecorateInternalSourceTopics(resetTopics);
         final Pattern pattern = buildPatternForOffsetResetTopics(topics, resetPatterns);
 
