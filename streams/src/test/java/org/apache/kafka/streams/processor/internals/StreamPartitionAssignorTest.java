@@ -662,6 +662,9 @@ public class StreamPartitionAssignorTest {
             })
             .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count"));
 
+        // joining the stream and the table
+        // this triggers the enforceCopartitioning() routine in the StreamPartitionAssignor,
+        // forcing the stream.map to get repartitioned to a topic with four partitions.
         stream1.join(table1,
             new ValueJoiner() {
                 @Override
@@ -702,7 +705,7 @@ public class StreamPartitionAssignorTest {
         expectedCreatedInternalTopics.put(applicationId + "-KSTREAM-MAP-0000000001-repartition", 4);
         expectedCreatedInternalTopics.put(applicationId + "-topic3-STATE-STORE-0000000002-changelog", 4);
 
-
+        // check if all internal topics were created as expected
         assertThat(mockInternalTopicManager.readyTopics, equalTo(expectedCreatedInternalTopics));
 
         final List<TopicPartition> expectedAssignment = Arrays.asList(
@@ -722,6 +725,8 @@ public class StreamPartitionAssignorTest {
             new TopicPartition(applicationId + "-KSTREAM-MAP-0000000001-repartition", 2),
             new TopicPartition(applicationId + "-KSTREAM-MAP-0000000001-repartition", 3)
         );
+
+        // check if we created a task for all expected topicpartitions.
         assertThat(new HashSet<>(assignment.get(client).partitions()), equalTo(new HashSet<>(expectedAssignment)));
     }
 
