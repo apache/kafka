@@ -979,14 +979,12 @@ public interface KStream<K, V> {
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
      * // create store
-     * StateStoreSupplier myStore = Stores.create("myTransformState")
-     *     .withKeys(...)
-     *     .withValues(...)
-     *     .persistent() // optional
-     *     .build();
-     *
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
      * // register store
-     * builder.addStore(myStore);
+     * builder.addStateStore(keyValueStoreBuilder);
      *
      * KStream outputStream = inputStream.transform(new TransformerSupplier() { ... }, "myTransformState");
      * }</pre>
@@ -1055,14 +1053,12 @@ public interface KStream<K, V> {
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
      * // create store
-     * StateStoreSupplier myStore = Stores.create("myValueTransformState")
-     *     .withKeys(...)
-     *     .withValues(...)
-     *     .persistent() // optional
-     *     .build();
-     *
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
      * // register store
-     * builder.addStore(myStore);
+     * builder.addStateStore(keyValueStoreBuilder);
      *
      * KStream outputStream = inputStream.transformValues(new ValueTransformerSupplier() { ... }, "myValueTransformState");
      * }</pre>
@@ -1119,29 +1115,27 @@ public interface KStream<K, V> {
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applies to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper)}).
+     * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey)}).
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
      * periodic actions get be performed.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
      * // create store
-     * StateStoreSupplier myStore = Stores.create("myValueTransformState")
-     *     .withKeys(...)
-     *     .withValues(...)
-     *     .persistent() // optional
-     *     .build();
-     *
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
      * // register store
-     * builder.addStore(myStore);
+     * builder.addStateStore(keyValueStoreBuilder);
      *
      * KStream outputStream = inputStream.transformValues(new ValueTransformerWithKeySupplier() { ... }, "myValueTransformState");
      * }</pre>
      * <p>
      * Within the {@link ValueTransformerWithKey}, the state is obtained via the
      * {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}, a schedule must be
-     * registered.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
      * pairs should be emitted via {@link ProcessorContext#forward(Object, Object)
      * ProcessorContext.forward()}.
@@ -1197,14 +1191,12 @@ public interface KStream<K, V> {
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
      * // create store
-     * StateStoreSupplier myStore = Stores.create("myProcessorState")
-     *     .withKeys(...)
-     *     .withValues(...)
-     *     .persistent() // optional
-     *     .build();
-     *
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
      * // register store
-     * builder.addStore(myStore);
+     * builder.addStateStore(keyValueStoreBuilder);
      *
      * inputStream.process(new ProcessorSupplier() { ... }, "myProcessorState");
      * }</pre>
