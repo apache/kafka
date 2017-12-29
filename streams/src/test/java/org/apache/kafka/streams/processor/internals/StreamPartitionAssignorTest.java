@@ -652,7 +652,8 @@ public class StreamPartitionAssignorTest {
             });
 
         // KTable with 4 partitions
-        KTable<Object, Long> table1 = builder.table("topic3")
+        KTable<Object, Long> table1 = builder
+            .table("topic3")
             // force creation of internal repartition topic
             .groupBy(new KeyValueMapper<Object, Object, KeyValue<Object, Object>>() {
                 @Override
@@ -676,7 +677,8 @@ public class StreamPartitionAssignorTest {
         final UUID uuid = UUID.randomUUID();
         final String client = "client1";
 
-        mockTaskManager(Collections.<TaskId>emptySet(),
+        mockTaskManager(
+            Collections.<TaskId>emptySet(),
             Collections.<TaskId>emptySet(),
             UUID.randomUUID(),
             internalTopologyBuilder);
@@ -692,7 +694,7 @@ public class StreamPartitionAssignorTest {
         subscriptions.put(
             client,
             new PartitionAssignor.Subscription(
-                Collections.singletonList("unknownTopic"),
+                Utils.mkList("topic1", "topic3"),
                 new SubscriptionInfo(uuid, emptyTasks, emptyTasks, userEndPoint).encode()
             )
         );
@@ -706,7 +708,7 @@ public class StreamPartitionAssignorTest {
         expectedCreatedInternalTopics.put(applicationId + "-topic3-STATE-STORE-0000000002-changelog", 4);
 
         // check if all internal topics were created as expected
-        assertThat(mockInternalTopicManager.readyTopics, equalTo(expectedCreatedInternalTopics));
+        assertThat(expectedCreatedInternalTopics, equalTo(mockInternalTopicManager.readyTopics));
 
         final List<TopicPartition> expectedAssignment = Arrays.asList(
             new TopicPartition("topic1", 0),
@@ -727,7 +729,7 @@ public class StreamPartitionAssignorTest {
         );
 
         // check if we created a task for all expected topicpartitions.
-        assertThat(new HashSet<>(assignment.get(client).partitions()), equalTo(new HashSet<>(expectedAssignment)));
+        assertThat(new HashSet<>(expectedAssignment), equalTo(new HashSet<>(assignment.get(client).partitions())));
     }
 
     @Test
@@ -738,10 +740,11 @@ public class StreamPartitionAssignorTest {
         builder.addSink("sink", "output", null, null, null, "processor");
 
         final UUID uuid1 = UUID.randomUUID();
-        mockTaskManager(Collections.<TaskId>emptySet(),
-                               Collections.<TaskId>emptySet(),
-                               uuid1,
-                builder);
+        mockTaskManager(
+            Collections.<TaskId>emptySet(),
+            Collections.<TaskId>emptySet(),
+            uuid1,
+            builder);
         configurePartitionAssignor(Collections.singletonMap(StreamsConfig.APPLICATION_SERVER_CONFIG, (Object) userEndPoint));
         final PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("input"));
         final SubscriptionInfo subscriptionInfo = SubscriptionInfo.decode(subscription.userData());
@@ -894,7 +897,7 @@ public class StreamPartitionAssignorTest {
         final Map<String, Integer> expectedCreatedInternalTopics = new HashMap<>();
         expectedCreatedInternalTopics.put(applicationId + "-count-repartition", 3);
         expectedCreatedInternalTopics.put(applicationId + "-count-changelog", 3);
-        assertThat(mockInternalTopicManager.readyTopics, equalTo(expectedCreatedInternalTopics));
+        assertThat(expectedCreatedInternalTopics, equalTo(mockInternalTopicManager.readyTopics));
 
         final List<TopicPartition> expectedAssignment = Arrays.asList(
             new TopicPartition("topic1", 0),
@@ -904,7 +907,7 @@ public class StreamPartitionAssignorTest {
             new TopicPartition(applicationId + "-count-repartition", 1),
             new TopicPartition(applicationId + "-count-repartition", 2)
         );
-        assertThat(new HashSet<>(assignment.get(client).partitions()), equalTo(new HashSet<>(expectedAssignment)));
+        assertThat(new HashSet<>(expectedAssignment), equalTo(new HashSet<>(assignment.get(client).partitions())));
     }
 
     @Test
