@@ -75,7 +75,7 @@ public class JmxReporter implements MetricsReporter {
         }
     }
 
-    boolean containsMBean(String mbeanName) {
+    boolean containsMbean(String mbeanName) {
         return mbeans.containsKey(mbeanName);
     }
     @Override
