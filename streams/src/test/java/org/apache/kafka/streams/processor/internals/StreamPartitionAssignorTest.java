@@ -666,7 +666,8 @@ public class StreamPartitionAssignorTest {
         // joining the stream and the table
         // this triggers the enforceCopartitioning() routine in the StreamPartitionAssignor,
         // forcing the stream.map to get repartitioned to a topic with four partitions.
-        stream1.join(table1,
+        stream1.join(
+            table1,
             new ValueJoiner() {
                 @Override
                 public Object apply(final Object value1, final Object value2) {
