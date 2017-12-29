@@ -148,16 +148,16 @@ public class KStreamTransformValuesTest {
                 return new InternalValueTransformerWithKey<Integer, Integer, Integer>() {
                     @Override
                     public Integer punctuate(long timestamp) {
-                        return null;
+                        return -1;
                     }
 
                     @Override
-                    public void init(ProcessorContext context) {
+                    public void init(final ProcessorContext context) {
                         badValueTransformer.init(context);
                     }
 
                     @Override
-                    public Integer transform(Integer readOnlyKey, Integer value) {
+                    public Integer transform(final Integer readOnlyKey, final Integer value) {
                         return badValueTransformer.transform(readOnlyKey, value);
                     }
 
@@ -192,18 +192,25 @@ public class KStreamTransformValuesTest {
         } catch (final StreamsException e) {
             // expected
         }
+
+        try {
+            transformValueProcessor.punctuate(0);
+            fail("should not allow ValueTransformer#puntuate() to return not-null value");
+        } catch (final StreamsException e) {
+            // expected
+        }
     }
 
     private static final class BadValueTransformer implements ValueTransformerWithKey<Integer, Integer, Integer> {
         private ProcessorContext context;
 
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             this.context = context;
         }
 
         @Override
-        public Integer transform(Integer key, Integer value) {
+        public Integer transform(final Integer key, final Integer value) {
             if (value == 0) {
                 context.forward(null, null);
             }

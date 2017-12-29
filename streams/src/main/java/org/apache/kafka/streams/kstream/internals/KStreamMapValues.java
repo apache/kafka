@@ -25,7 +25,7 @@ class KStreamMapValues<K, V, V1> implements ProcessorSupplier<K, V> {
 
     private final ValueMapperWithKey<K, V, V1> mapper;
 
-    public KStreamMapValues(ValueMapperWithKey<K, V, V1> mapper) {
+    public KStreamMapValues(final ValueMapperWithKey<K, V, V1> mapper) {
         this.mapper = mapper;
     }
 

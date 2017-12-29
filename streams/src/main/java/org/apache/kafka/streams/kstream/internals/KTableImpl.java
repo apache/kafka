@@ -553,9 +553,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public KStream<K, V> toStream() {
         String name = builder.newProcessorName(TOSTREAM_NAME);
 
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamMapValues<K, Change<V>, V>(new ValueMapperWithKey<K, Change<V>, V>() {
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamMapValues<>(new ValueMapperWithKey<K, Change<V>, V>() {
             @Override
-            public V apply(K key, Change<V> change) {
+            public V apply(final K key, final Change<V> change) {
                 return change.newValue;
             }
         }), this.name);

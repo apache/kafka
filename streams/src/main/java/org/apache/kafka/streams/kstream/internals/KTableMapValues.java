@@ -65,7 +65,7 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         sendOldValues = true;
     }
 
-    private V1 computeValue(K key, V value) {
+    private V1 computeValue(final K key, final V value) {
         V1 newValue = null;
 
         if (value != null)
@@ -91,8 +91,8 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
 
         @Override
         public void process(K key, Change<V> change) {
-            V1 newValue = computeValue(key, change.newValue);
-            V1 oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
+            final V1 newValue = computeValue(key, change.newValue);
+            final V1 oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
 
             if (queryableName != null) {
                 store.put(key, newValue);

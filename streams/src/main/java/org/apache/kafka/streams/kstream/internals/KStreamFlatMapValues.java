@@ -25,7 +25,7 @@ class KStreamFlatMapValues<K, V, V1> implements ProcessorSupplier<K, V> {
 
     private final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends V1>> mapper;
 
-    KStreamFlatMapValues(ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends V1>> mapper) {
+    KStreamFlatMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends V1>> mapper) {
         this.mapper = mapper;
     }
 
@@ -37,7 +37,7 @@ class KStreamFlatMapValues<K, V, V1> implements ProcessorSupplier<K, V> {
     private class KStreamFlatMapValuesProcessor extends AbstractProcessor<K, V> {
         @Override
         public void process(K key, V value) {
-            Iterable<? extends V1> newValues = mapper.apply(key, value);
+            final Iterable<? extends V1> newValues = mapper.apply(key, value);
             for (V1 v : newValues) {
                 context().forward(key, v);
             }

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
@@ -170,7 +171,7 @@ public abstract class AbstractStream<K> {
                 return new InternalValueTransformerWithKey<K, V, VR>() {
                     @Override
                     public VR punctuate(final long timestamp) {
-                        return null;
+                        throw new StreamsException("ValueTransformerWithKey#punctuate should not be called.");
                     }
 
                     @Override
