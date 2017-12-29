@@ -107,4 +107,11 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
     assertEquals(None, zkUtils.getLeaderIsrAndEpochForPartition(topic, partition + 1))
   }
 
+  @Test
+  def testGetSequenceIdMethod() {
+    val path = "/test/seqid"
+    (1 to 10).foreach { seqid =>
+      assertEquals(seqid, zkUtils.getSequenceId(path))
+    }
+  }
 }

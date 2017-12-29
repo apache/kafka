@@ -21,7 +21,7 @@ import java.util.Properties
 import com.yammer.metrics.core.MetricName
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
-import kafka.common.KafkaException
+import kafka.common.{KafkaException, NoEpochForPartitionException}
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
@@ -768,6 +768,25 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     getTopicPartitionState(partition).map(_.leaderAndIsr.leader)
 
   /**
+   *  Gets the in-sync replicas (ISR) for a specific topicPartition
+   * @param partition
+   * @return  ISR for a given partition
+   */
+  def getInSyncReplicasForPartition(partition: TopicPartition): Seq[Int] =
+    getTopicPartitionState(partition).map(_.leaderAndIsr.isr).getOrElse(Seq.empty[Int])
+
+
+  /**
+   *  Gets the leader epoch for a specific topicPartition
+   * @param partition
+   * @return  leader epoch a given partition
+   */
+  def getEpochForPartition(partition: TopicPartition): Int = {
+    getTopicPartitionState(partition).map(_.leaderAndIsr.leaderEpoch).
+      getOrElse(throw new NoEpochForPartitionException("No epoch, ISR path for partition [%s] is empty".format(partition)))
+  }
+
+  /**
    * Gets the isr change notifications as strings. These strings are the znode names and not the absolute znode path.
    * @return sequence of znode names and not the absolute znode path.
    */
@@ -854,6 +873,14 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
+   * Checks the PreferredReplicaElection path existence
+   * @return true if PreferredReplicaElection patj exists else false
+   */
+  def preferredReplicaPathExists(): Boolean = {
+    pathExists(PreferredReplicaElectionZNode.path)
+  }
+
+  /**
    * Gets the controller id.
    * @return optional integer that is Some if the controller znode exists and can be parsed and None otherwise.
    */
@@ -873,6 +900,14 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   def deleteController(): Unit = {
     val deleteRequest = DeleteRequest(ControllerZNode.path, ZkVersion.NoVersion)
     retryRequestUntilConnected(deleteRequest)
+  }
+
+  /**
+   * Checks the controller path existence
+   * @return true if controller exists else false
+   */
+  def controllerPathExists(): Boolean = {
+    pathExists(ControllerZNode.path)
   }
 
   /**
@@ -1292,6 +1327,14 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
+   * Checks the clusterId path existence
+   * @return true if clusterId path exists else false
+   */
+  def clusterIdPathExists(): Boolean = {
+    pathExists(ClusterIdZNode.path)
+  }
+
+  /**
     * Generate a broker id by updating the broker sequence id path in ZK and return the version of the path.
     * The version is incremented by one on every update starting from 1.
     * @return sequence number as the broker id
@@ -1356,7 +1399,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     }
   }
 
-  private[zk] def pathExists(path: String): Boolean = {
+  def pathExists(path: String): Boolean = {
     val existsRequest = ExistsRequest(path)
     val existsResponse = retryRequestUntilConnected(existsRequest)
     existsResponse.resultCode match {
