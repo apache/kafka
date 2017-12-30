@@ -94,7 +94,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
-    public void testInputTopicAbsentWithoutIntermediateUserTopic() throws Exception {
+    public void shouldNotAllowToResetWhileStreamsRunning() throws Exception {
         super.shouldNotAllowToResetWhileStreamsIsRunning();
     }
 
