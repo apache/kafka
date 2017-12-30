@@ -17,9 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Time;
@@ -113,27 +111,6 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testLookupKafkaClusterId() {
-        final Node broker1 = new Node(0, "dummyHost-1", 1234);
-        final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        List<Node> cluster = Arrays.asList(broker1, broker2);
-        MockAdminClient adminClient = new MockAdminClient(cluster);
-
-        assertEquals(MockAdminClient.CLUSTER_ID, Worker.lookupKafkaClusterId(adminClient));
-    }
-
-    @Test(expected = ConnectException.class)
-    public void testLookupKafkaClusterIdTimeout() {
-        final Node broker1 = new Node(0, "dummyHost-1", 1234);
-        final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        List<Node> cluster = Arrays.asList(broker1, broker2);
-        MockAdminClient adminClient = new MockAdminClient(cluster);
-        adminClient.timeoutNextRequest(1);
-
-        Worker.lookupKafkaClusterId(adminClient);
-    }
-
-    @Test
     public void testStartAndStopConnector() throws Exception {
         expectConverters();
         expectStartStorage();
@@ -180,7 +157,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, MockAdminClient.CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
 
         assertEquals(Collections.emptySet(), worker.connectorNames());
@@ -233,7 +210,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, MockAdminClient.CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
 
         assertStatistics(worker, 0, 0);
@@ -297,7 +274,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, MockAdminClient.CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
 
         assertStatistics(worker, 0, 0);
@@ -365,7 +342,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, MockAdminClient.CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
 
         assertStatistics(worker, 0, 0);
@@ -391,7 +368,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, MockAdminClient.CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
 
         worker.stopConnector(CONNECTOR_ID);
@@ -452,7 +429,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, MockAdminClient.CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
 
         assertStatistics(worker, 0, 0);
@@ -561,7 +538,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, MockAdminClient.CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
         assertStatistics(worker, 0, 0);
         assertStartupStatistics(worker, 0, 0, 0, 0);
@@ -612,7 +589,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, MockAdminClient.CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
         assertStatistics(worker, 0, 0);
         assertStartupStatistics(worker, 0, 0, 0, 0);
@@ -699,7 +676,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, MockAdminClient.CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
         assertStatistics(worker, 0, 0);
         worker.startTask(TASK_ID, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
@@ -782,7 +759,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, MockAdminClient.CLUSTER_ID);
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
         worker.start();
         assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());

@@ -79,6 +79,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     private final String workerId;
     protected final Worker worker;
+    private final String kafkaClusterId;
     protected final StatusBackingStore statusBackingStore;
     protected final ConfigBackingStore configBackingStore;
 
@@ -86,17 +87,19 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     public AbstractHerder(Worker worker,
                           String workerId,
+                          String kafkaClusterId,
                           StatusBackingStore statusBackingStore,
                           ConfigBackingStore configBackingStore) {
         this.worker = worker;
         this.workerId = workerId;
+        this.kafkaClusterId = kafkaClusterId;
         this.statusBackingStore = statusBackingStore;
         this.configBackingStore = configBackingStore;
     }
 
     @Override
     public String kafkaClusterId() {
-        return worker.kafkaClusterId();
+        return kafkaClusterId;
     }
 
     protected abstract int generation();

@@ -44,14 +44,14 @@ public class RootResourceTest extends EasyMockSupport {
 
     @Test
     public void testRootGet() {
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(MockAdminClient.CLUSTER_ID);
+        EasyMock.expect(herder.kafkaClusterId()).andReturn(MockAdminClient.DEFAULT_CLUSTER_ID);
 
         replayAll();
 
         ServerInfo info = rootResource.serverInfo();
         assertEquals(AppInfoParser.getVersion(), info.version());
         assertEquals(AppInfoParser.getCommitId(), info.commit());
-        assertEquals(MockAdminClient.CLUSTER_ID, info.clusterId());
+        assertEquals(MockAdminClient.DEFAULT_CLUSTER_ID, info.clusterId());
 
         verifyAll();
     }

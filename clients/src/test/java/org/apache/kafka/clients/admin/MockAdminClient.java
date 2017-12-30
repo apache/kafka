@@ -38,24 +38,40 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 public class MockAdminClient extends AdminClient {
-    public static final String CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
+    public static final String DEFAULT_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
 
     private final List<Node> brokers;
     private final Map<String, TopicMetadata> allTopics = new HashMap<>();
+    private final String clusterId;
 
     private Node controller;
     private int timeoutNextRequests = 0;
 
     /**
-     * Creates MockAdminClient for a cluster with the given brokers. By default the first broker in the list is the controller
+     * Creates MockAdminClient for a cluster with the given brokers. The Kafka cluster ID uses the default value from
+     * DEFAULT_CLUSTER_ID.
+     *
      * @param brokers list of brokers in the cluster
+     * @param controller node that should start as the controller
      */
-    public MockAdminClient(List<Node> brokers) {
+    public MockAdminClient(List<Node> brokers, Node controller) {
+        this(brokers, controller, DEFAULT_CLUSTER_ID);
+    }
+
+    /**
+     * Creates MockAdminClient for a cluster with the given brokers.
+     * @param brokers list of brokers in the cluster
+     * @param controller node that should start as the controller
+     */
+    public MockAdminClient(List<Node> brokers, Node controller, String clusterId) {
         this.brokers = brokers;
-        this.controller = brokers.get(0);
+        controller(controller);
+        this.clusterId = clusterId;
     }
 
     public void controller(Node controller) {
+        if (!brokers.contains(controller))
+            throw new IllegalArgumentException("The controller node must be in the list of brokers");
         this.controller = controller;
     }
 
@@ -106,7 +122,7 @@ public class MockAdminClient extends AdminClient {
         } else {
             nodesFuture.complete(brokers);
             controllerFuture.complete(controller);
-            brokerIdFuture.complete(CLUSTER_ID);
+            brokerIdFuture.complete(clusterId);
         }
 
         return new DescribeClusterResult(nodesFuture, controllerFuture, brokerIdFuture);

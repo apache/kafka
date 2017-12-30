@@ -25,8 +25,8 @@ public class ServerInfo {
     private final String kafkaClusterId;
 
     public ServerInfo(String kafkaClusterId) {
-        version = AppInfoParser.getVersion();
-        commit = AppInfoParser.getCommitId();
+        this.version = AppInfoParser.getVersion();
+        this.commit = AppInfoParser.getCommitId();
         this.kafkaClusterId = kafkaClusterId;
     }
 
