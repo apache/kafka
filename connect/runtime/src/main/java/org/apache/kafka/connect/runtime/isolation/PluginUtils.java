@@ -34,6 +34,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Connect plugin utility methods.
@@ -42,7 +43,7 @@ public class PluginUtils {
     private static final Logger log = LoggerFactory.getLogger(PluginUtils.class);
 
     // Be specific about javax packages and exclude those existing in Java SE and Java EE libraries.
-    private static final String BLACKLIST = "^(?:"
+    private static final Pattern BLACKLIST = Pattern.compile("^(?:"
             + "java"
             + "|javax\\.accessibility"
             + "|javax\\.activation"
@@ -120,15 +121,15 @@ public class PluginUtils {
             + "|org\\.apache\\.kafka\\.common"
             + "|org\\.apache\\.kafka\\.connect"
             + "|org\\.slf4j"
-            + ")\\..*$";
+            + ")\\..*$");
 
-    private static final String WHITELIST = "^org\\.apache\\.kafka\\.connect\\.(?:"
+    private static final Pattern WHITELIST = Pattern.compile("^org\\.apache\\.kafka\\.connect\\.(?:"
             + "transforms\\.(?!Transformation$).*"
             + "|json\\..*"
             + "|file\\..*"
             + "|converters\\..*"
             + "|storage\\.StringConverter"
-            + ")$";
+            + ")$");
 
     private static final DirectoryStream.Filter<Path> PLUGIN_PATH_FILTER = new DirectoryStream
             .Filter<Path>() {
@@ -146,7 +147,7 @@ public class PluginUtils {
      * @return true if this class should be loaded in isolation, false otherwise.
      */
     public static boolean shouldLoadInIsolation(String name) {
-        return !(name.matches(BLACKLIST) && !name.matches(WHITELIST));
+        return !(BLACKLIST.matcher(name).matches() && !WHITELIST.matcher(name).matches());
     }
 
     /**

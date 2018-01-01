@@ -22,6 +22,8 @@ import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -94,15 +96,25 @@ public class ScramFormatter {
         return hash(clientKey);
     }
 
+    private static final Pattern EQUAL_REPLACE = Pattern.compile("=", Pattern.LITERAL);
+    private static final Pattern COMMA_REPLACE = Pattern.compile(",", Pattern.LITERAL);
+    private static final Pattern TWO_C_REPLACE = Pattern.compile("=2C", Pattern.LITERAL);
+    private static final Pattern THREE_D_REPLACE = Pattern.compile("=3D", Pattern.LITERAL);
+
     public String saslName(String username) {
-        return username.replace("=", "=3D").replace(",", "=2C");
+        return COMMA_REPLACE.matcher(
+            EQUAL_REPLACE.matcher(username).replaceAll(Matcher.quoteReplacement("=3D"))
+        ).replaceAll(Matcher.quoteReplacement("=2C"));
     }
 
     public String username(String saslName) {
-        String username = saslName.replace("=2C", ",");
-        if (username.replace("=3D", "").indexOf('=') >= 0)
+        String username = TWO_C_REPLACE.matcher(saslName).replaceAll(Matcher.quoteReplacement(","));
+
+        if (THREE_D_REPLACE.matcher(username).replaceAll(Matcher.quoteReplacement("")).indexOf('=') >= 0) {
             throw new IllegalArgumentException("Invalid username: " + saslName);
-        return username.replace("=3D", "=");
+        }
+
+        return THREE_D_REPLACE.matcher(username).replaceAll(Matcher.quoteReplacement("="));
     }
 
     public String authMessage(String clientFirstMessageBare, String serverFirstMessage, String clientFinalMessageWithoutProof) {

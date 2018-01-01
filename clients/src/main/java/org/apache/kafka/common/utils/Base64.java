@@ -20,6 +20,8 @@ package org.apache.kafka.common.utils;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Temporary class in order to support Java 7 and Java 9. `DatatypeConverter` is not in the base module of Java 9
@@ -187,6 +189,9 @@ public final class Base64 {
         private static final MethodHandle PRINT;
         private static final MethodHandle PARSE;
 
+        private static final Pattern REPLACE_PLUS_TO_DASH = Pattern.compile("+", Pattern.LITERAL);
+        private static final Pattern REPLACE_FORWARD_SLASH_TO_UNDERSCORE = Pattern.compile("/", Pattern.LITERAL);
+
         static {
             try {
                 Class<?> cls = Class.forName("javax.xml.bind.DatatypeConverter");
@@ -206,9 +211,12 @@ public final class Base64 {
             @Override
             public String encodeToString(byte[] bytes) {
                 String base64EncodedUUID = Java7Factory.encodeToString(bytes);
+
                 //Convert to URL safe variant by replacing + and / with - and _ respectively.
-                String urlSafeBase64EncodedUUID = base64EncodedUUID.replace("+", "-")
-                        .replace("/", "_");
+                String urlSafeBase64EncodedUUID = REPLACE_FORWARD_SLASH_TO_UNDERSCORE.matcher(
+                        REPLACE_PLUS_TO_DASH.matcher(base64EncodedUUID).replaceAll(Matcher.quoteReplacement("-"))
+                ).replaceAll(Matcher.quoteReplacement("_"));
+
                 // Remove the "==" padding at the end.
                 return urlSafeBase64EncodedUUID.substring(0, urlSafeBase64EncodedUUID.length() - 2);
             }

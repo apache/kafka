@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * This class is used for specifying the set of expected configurations. For each configuration, you can specify
@@ -81,6 +82,8 @@ public class ConfigDef {
     private final Map<String, ConfigKey> configKeys;
     private final List<String> groups;
     private Set<String> configsWithNoParent;
+
+    private static final Pattern SPLIT_REGEX = Pattern.compile("\\s*,\\s*");
 
     public ConfigDef() {
         configKeys = new LinkedHashMap<>();
@@ -696,7 +699,7 @@ public class ConfigDef {
                         if (trimmed.isEmpty())
                             return Collections.emptyList();
                         else
-                            return Arrays.asList(trimmed.split("\\s*,\\s*", -1));
+                            return Arrays.asList(SPLIT_REGEX.split(trimmed, -1));
                     else
                         throw new ConfigException(name, value, "Expected a comma separated list.");
                 case CLASS:
