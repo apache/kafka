@@ -26,7 +26,7 @@ import kafka.cluster._
 import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndPartition}
 import kafka.consumer.{ConsumerThreadId, TopicCount}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
-import kafka.zk.ZkData
+import kafka.zk.{BrokerIdZNode, ZkData}
 import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
@@ -389,7 +389,7 @@ class ZkUtils(val zkClient: ZkClient,
     val brokerIdPath = BrokerIdsPath + "/" + id
     // see method documentation for reason why we do this
     val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
-    val json = new String(Broker.toJsonBytes(version, id, host, port, advertisedEndpoints, jmxPort, rack),
+    val json = new String(BrokerIdZNode.encode(version, host, port, advertisedEndpoints, jmxPort, rack),
       StandardCharsets.UTF_8)
     registerBrokerInZk(brokerIdPath, json)
 
@@ -698,9 +698,13 @@ class ZkUtils(val zkClient: ZkClient,
     val nodes = getChildrenParentMayNotExist(BrokerIdsPath)
     for (node <- nodes) {
       val brokerZKString = readData(BrokerIdsPath + "/" + node)._1
-      cluster.add(Broker.createBroker(node.toInt, brokerZKString))
+      cluster.add(parseBrokerJson(node.toInt, brokerZKString))
     }
     cluster
+  }
+
+  private def parseBrokerJson(id: Int, jsonString: String): Broker = {
+    BrokerIdZNode.decode(id, jsonString.getBytes(StandardCharsets.UTF_8)).broker
   }
 
   def getPartitionLeaderAndIsrForTopics(topicAndPartitions: Set[TopicAndPartition]): mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = {
@@ -863,7 +867,7 @@ class ZkUtils(val zkClient: ZkClient,
    */
   def getBrokerInfo(brokerId: Int): Option[Broker] = {
     readDataMaybeNull(BrokerIdsPath + "/" + brokerId)._1 match {
-      case Some(brokerInfo) => Some(Broker.createBroker(brokerId, brokerInfo))
+      case Some(brokerInfo) => Some(parseBrokerJson(brokerId, brokerInfo))
       case None => None
     }
   }

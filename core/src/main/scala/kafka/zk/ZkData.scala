@@ -28,6 +28,9 @@ import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.server.ConfigType
 import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.data.{ACL, Stat}
 
@@ -66,42 +69,158 @@ object BrokerIdsZNode {
   def encode: Array[Byte] = null
 }
 
-class BrokerInfo(val id: Int,
-                 host: String,
-                 port: Int,
-                 advertisedEndpoints: Seq[EndPoint],
-                 jmxPort: Int,
-                 rack: Option[String],
-                 apiVersion: ApiVersion) {
+object BrokerInfo {
 
-  def path(): String = {
-    BrokerIdZNode.path(id)
+  /**
+   * Create a broker info with v4 json format (which includes multiple endpoints and rack) if
+   * the apiVersion is 0.10.0.X or above. Register the broker with v2 json format otherwise.
+   *
+   * Due to KAFKA-3100, 0.9.0.0 broker and old clients will break if JSON version is above 2.
+   *
+   * We include v2 to make it possible for the broker to migrate from 0.9.0.0 to 0.10.0.X or above without having to
+   * upgrade to 0.9.0.1 first (clients have to be upgraded to 0.9.0.1 in any case).
+   */
+  def apply(broker: Broker, apiVersion: ApiVersion, jmxPort: Int): BrokerInfo = {
+    // see method documentation for the reason why we do this
+    val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
+    BrokerInfo(broker, version, jmxPort)
   }
 
-  def endpoints(): String = {
-    advertisedEndpoints.mkString(",")
-  }
+}
 
-  def encode(): Array[Byte] = {
-    BrokerIdZNode.encode(id, host, port, advertisedEndpoints, jmxPort, rack, apiVersion)
-  }
+case class BrokerInfo(broker: Broker, version: Int, jmxPort: Int) {
+  val path: String = BrokerIdZNode.path(broker.id)
+  def toJsonBytes: Array[Byte] = BrokerIdZNode.encode(this)
 }
 
 object BrokerIdZNode {
+  private val HostKey = "host"
+  private val PortKey = "port"
+  private val VersionKey = "version"
+  private val EndpointsKey = "endpoints"
+  private val RackKey = "rack"
+  private val JmxPortKey = "jmx_port"
+  private val ListenerSecurityProtocolMapKey = "listener_security_protocol_map"
+  private val TimestampKey = "timestamp"
+
   def path(id: Int) = s"${BrokerIdsZNode.path}/$id"
-  def encode(id: Int,
-             host: String,
-             port: Int,
-             advertisedEndpoints: Seq[EndPoint],
-             jmxPort: Int,
-             rack: Option[String],
-             apiVersion: ApiVersion): Array[Byte] = {
-    val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
-    Broker.toJsonBytes(version, id, host, port, advertisedEndpoints, jmxPort, rack)
+
+  /**
+   * Encode to JSON bytes.
+   *
+   * The JSON format includes a top level host and port for compatibility with older clients.
+   */
+  def encode(version: Int, host: String, port: Int, advertisedEndpoints: Seq[EndPoint], jmxPort: Int,
+             rack: Option[String]): Array[Byte] = {
+    val jsonMap = collection.mutable.Map(VersionKey -> version,
+      HostKey -> host,
+      PortKey -> port,
+      EndpointsKey -> advertisedEndpoints.map(_.connectionString).toBuffer.asJava,
+      JmxPortKey -> jmxPort,
+      TimestampKey -> Time.SYSTEM.milliseconds().toString
+    )
+    rack.foreach(rack => if (version >= 3) jsonMap += (RackKey -> rack))
+
+    if (version >= 4) {
+      jsonMap += (ListenerSecurityProtocolMapKey -> advertisedEndpoints.map { endPoint =>
+        endPoint.listenerName.value -> endPoint.securityProtocol.name
+      }.toMap.asJava)
+    }
+    Json.encodeAsBytes(jsonMap.asJava)
   }
 
-  def decode(id: Int, bytes: Array[Byte]): Broker = {
-    Broker.createBroker(id, new String(bytes, UTF_8))
+  def encode(brokerInfo: BrokerInfo): Array[Byte] = {
+    val broker = brokerInfo.broker
+    // the default host and port are here for compatibility with older clients that only support PLAINTEXT
+    // we choose the first plaintext port, if there is one
+    // or we register an empty endpoint, which means that older clients will not be able to connect
+    val plaintextEndpoint = broker.endPoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).getOrElse(
+      new EndPoint(null, -1, null, null))
+    encode(brokerInfo.version, plaintextEndpoint.host, plaintextEndpoint.port, broker.endPoints, brokerInfo.jmxPort,
+      broker.rack)
+  }
+
+  /**
+    * Create a BrokerInfo object from id and JSON bytes.
+    *
+    * @param id
+    * @param jsonBytes
+    *
+    * Version 1 JSON schema for a broker is:
+    * {
+    *   "version":1,
+    *   "host":"localhost",
+    *   "port":9092
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666"
+    * }
+    *
+    * Version 2 JSON schema for a broker is:
+    * {
+    *   "version":2,
+    *   "host":"localhost",
+    *   "port":9092,
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666",
+    *   "endpoints":["PLAINTEXT://host1:9092", "SSL://host1:9093"]
+    * }
+    *
+    * Version 3 JSON schema for a broker is:
+    * {
+    *   "version":3,
+    *   "host":"localhost",
+    *   "port":9092,
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666",
+    *   "endpoints":["PLAINTEXT://host1:9092", "SSL://host1:9093"],
+    *   "rack":"dc1"
+    * }
+    *
+    * Version 4 (current) JSON schema for a broker is:
+    * {
+    *   "version":4,
+    *   "host":"localhost",
+    *   "port":9092,
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666",
+    *   "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
+    *   "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"},
+    *   "rack":"dc1"
+    * }
+    */
+  def decode(id: Int, jsonBytes: Array[Byte]): BrokerInfo = {
+    Json.tryParseBytes(jsonBytes) match {
+      case Right(js) =>
+        val brokerInfo = js.asJsonObject
+        val version = brokerInfo(VersionKey).to[Int]
+        val jmxPort = brokerInfo(JmxPortKey).to[Int]
+
+        val endpoints =
+          if (version < 1)
+            throw new KafkaException("Unsupported version of broker registration: " +
+              s"${new String(jsonBytes, UTF_8)}")
+          else if (version == 1) {
+            val host = brokerInfo(HostKey).to[String]
+            val port = brokerInfo(PortKey).to[Int]
+            val securityProtocol = SecurityProtocol.PLAINTEXT
+            val endPoint = new EndPoint(host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
+            Seq(endPoint)
+          }
+          else {
+            val securityProtocolMap = brokerInfo.get(ListenerSecurityProtocolMapKey).map(
+              _.to[Map[String, String]].map { case (listenerName, securityProtocol) =>
+                new ListenerName(listenerName) -> SecurityProtocol.forName(securityProtocol)
+              })
+            val listeners = brokerInfo(EndpointsKey).to[Seq[String]]
+            listeners.map(EndPoint.createEndPoint(_, securityProtocolMap))
+          }
+
+        val rack = brokerInfo.get(RackKey).flatMap(_.to[Option[String]])
+        BrokerInfo(Broker(id, endpoints, rack), version, jmxPort)
+      case Left(e) =>
+        throw new KafkaException(s"Failed to parse ZooKeeper registration for broker $id: " +
+          s"${new String(jsonBytes, UTF_8)}", e)
+    }
   }
 }
 

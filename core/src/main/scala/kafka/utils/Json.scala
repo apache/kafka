@@ -52,6 +52,10 @@ object Json {
     try Option(mapper.readTree(input)).map(JsonValue(_))
     catch { case _: JsonProcessingException => None }
 
+  def tryParseBytes(input: Array[Byte]): Either[JsonProcessingException, JsonValue] =
+    try Right(mapper.readTree(input)).right.map(JsonValue(_))
+    catch { case e: JsonProcessingException => Left(e) }
+
   /**
    * Encode an object into a JSON string. This method accepts any type T where
    *   T => null | Boolean | String | Number | Map[String, T] | Array[T] | Iterable[T]

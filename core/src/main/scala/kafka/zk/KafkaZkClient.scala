@@ -76,11 +76,10 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   def registerBrokerInZk(brokerInfo: BrokerInfo): Unit = {
-    val brokerIdPath = brokerInfo.path()
-    checkedEphemeralCreate(brokerIdPath, brokerInfo.encode())
-    info("Registered broker %d at path %s with addresses: %s".format(brokerInfo.id, brokerIdPath, brokerInfo.endpoints()))
+    val path = brokerInfo.path
+    checkedEphemeralCreate(path, brokerInfo.toJsonBytes)
+    info(s"Registered broker ${brokerInfo.broker.id} at path $path with addresses: ${brokerInfo.broker.endPoints}")
   }
-
 
   /**
    * Gets topic partition states for the given partitions.
@@ -293,7 +292,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
       val brokerId = getDataResponse.ctx.get.asInstanceOf[Int]
       getDataResponse.resultCode match {
         case Code.OK =>
-          Option(BrokerIdZNode.decode(brokerId, getDataResponse.data))
+          Option(BrokerIdZNode.decode(brokerId, getDataResponse.data).broker)
         case Code.NONODE => None
         case _ => throw getDataResponse.resultException.get
       }
@@ -309,7 +308,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
       case Code.OK =>
-        Option(BrokerIdZNode.decode(brokerId, getDataResponse.data))
+        Option(BrokerIdZNode.decode(brokerId, getDataResponse.data).broker)
       case Code.NONODE => None
       case _ => throw getDataResponse.resultException.get
     }
@@ -454,7 +453,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @param topics the topics whose partitions we wish to get the assignments for.
    * @return the partition assignment for each partition from the given topics.
    */
-  def getPartitionAssignmentForTopics(topics: Set[String]):  Map[String, Map[Int, Seq[Int]]] = {
+  def getPartitionAssignmentForTopics(topics: Set[String]): Map[String, Map[Int, Seq[Int]]] = {
     val getDataRequests = topics.map(topic => GetDataRequest(TopicZNode.path(topic), ctx = Some(topic)))
     val getDataResponses = retryRequestsUntilConnected(getDataRequests.toSeq)
     getDataResponses.flatMap { getDataResponse =>
@@ -658,7 +657,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     val getDataRequest = GetDataRequest(ReassignPartitionsZNode.path)
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
-      case  Code.OK => ReassignPartitionsZNode.decode(getDataResponse.data)
+      case Code.OK => ReassignPartitionsZNode.decode(getDataResponse.data)
       case Code.NONODE => Map.empty
       case _ => throw getDataResponse.resultException.get
     }
