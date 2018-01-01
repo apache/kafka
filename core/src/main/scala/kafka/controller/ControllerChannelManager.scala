@@ -109,7 +109,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
   private def addNewBroker(broker: Broker) {
     val messageQueue = new LinkedBlockingQueue[QueueItem]
     debug(s"Controller ${config.brokerId} trying to connect to broker ${broker.id}")
-    val brokerNode = broker.getNode(config.interBrokerListenerName)
+    val brokerNode = broker.node(config.interBrokerListenerName)
     val logContext = new LogContext(s"[Controller id=${config.brokerId}, targetBrokerId=${brokerNode.idString}] ")
     val networkClient = {
       val channelBuilder = ChannelBuilders.clientChannelBuilder(
@@ -408,7 +408,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
         }
         val leaderIds = leaderAndIsrPartitionStates.map(_._2.basePartitionState.leader).toSet
         val leaders = controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map {
-          _.getNode(controller.config.interBrokerListenerName)
+          _.node(controller.config.interBrokerListenerName)
         }
         val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
           controllerEpoch, leaderAndIsrPartitionStates.asJava, leaders.asJava)
@@ -436,7 +436,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
           controllerContext.liveOrShuttingDownBrokers.map { broker =>
             val securityProtocol = SecurityProtocol.PLAINTEXT
             val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
-            val node = broker.getNode(listenerName)
+            val node = broker.node(listenerName)
             val endPoints = Seq(new EndPoint(node.host, node.port, securityProtocol, listenerName))
             new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
           }

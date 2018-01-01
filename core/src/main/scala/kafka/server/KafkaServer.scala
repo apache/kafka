@@ -375,7 +375,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private def controlledShutdown() {
 
     def node(broker: Broker): Node = {
-      val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerListenerName)
+      val brokerEndPoint = broker.brokerEndPoint(config.interBrokerListenerName)
       new Node(brokerEndPoint.id, brokerEndPoint.host, brokerEndPoint.port)
     }
 
