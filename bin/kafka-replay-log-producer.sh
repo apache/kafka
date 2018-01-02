@@ -14,6 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-base_dir=$(dirname $0)
-export KAFKA_OPTS="-Xmx512M -server -Dcom.sun.management.jmxremote -Dlog4j.configuration=file:$base_dir/../config/log4j.properties"
-$base_dir/kafka-run-class.sh kafka.tools.ReplayLogProducer $@
+exec $(dirname $0)/kafka-run-class.sh kafka.tools.ReplayLogProducer "$@"

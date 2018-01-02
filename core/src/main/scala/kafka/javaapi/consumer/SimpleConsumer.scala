@@ -21,10 +21,11 @@ import kafka.utils.threadsafe
 import kafka.javaapi.FetchResponse
 import kafka.javaapi.OffsetRequest
 
-
 /**
  * A consumer of kafka messages
  */
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.consumer.KafkaConsumer instead.", "0.11.0.0")
 @threadsafe
 class SimpleConsumer(val host: String,
                      val port: Int,
@@ -47,7 +48,7 @@ class SimpleConsumer(val host: String,
     import kafka.javaapi.Implicits._
     underlying.fetch(request)
   }
-  
+
   /**
    *  Fetch a set of messages from a topic.
    *
@@ -60,7 +61,7 @@ class SimpleConsumer(val host: String,
 
   /**
    *  Fetch metadata for a sequence of topics.
-   *  
+   *
    *  @param request specifies the versionId, clientId, sequence of topics.
    *  @return metadata for each topic in the request.
    */
@@ -78,6 +79,26 @@ class SimpleConsumer(val host: String,
   def getOffsetsBefore(request: OffsetRequest): kafka.javaapi.OffsetResponse = {
     import kafka.javaapi.Implicits._
     underlying.getOffsetsBefore(request.underlying)
+  }
+
+  /**
+   * Commit offsets for a topic to Zookeeper
+   * @param request a [[kafka.javaapi.OffsetCommitRequest]] object.
+   * @return a [[kafka.javaapi.OffsetCommitResponse]] object.
+   */
+  def commitOffsets(request: kafka.javaapi.OffsetCommitRequest): kafka.javaapi.OffsetCommitResponse = {
+    import kafka.javaapi.Implicits._
+    underlying.commitOffsets(request.underlying)
+  }
+
+  /**
+   * Fetch offsets for a topic from Zookeeper
+   * @param request a [[kafka.javaapi.OffsetFetchRequest]] object.
+   * @return a [[kafka.javaapi.OffsetFetchResponse]] object.
+   */
+  def fetchOffsets(request: kafka.javaapi.OffsetFetchRequest): kafka.javaapi.OffsetFetchResponse = {
+    import kafka.javaapi.Implicits._
+    underlying.fetchOffsets(request.underlying)
   }
 
   def close() {

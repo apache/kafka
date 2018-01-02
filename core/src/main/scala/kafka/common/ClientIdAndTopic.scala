@@ -1,5 +1,3 @@
-package kafka.common
-
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -17,11 +15,21 @@ package kafka.common
  * limitations under the License.
  */
 
+package kafka.common
+
 /**
  * Convenience case class since (clientId, topic) pairs are used in the creation
  * of many Stats objects.
  */
-case class ClientIdAndTopic(clientId: String, topic: String) {
+trait ClientIdTopic {
+}
+
+case class ClientIdAndTopic(clientId: String, topic: String) extends ClientIdTopic {
   override def toString = "%s-%s".format(clientId, topic)
 }
+
+case class ClientIdAllTopics(clientId: String) extends ClientIdTopic {
+  override def toString = "%s-%s".format(clientId, "AllTopics")
+}
+
 

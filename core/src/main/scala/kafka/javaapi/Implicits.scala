@@ -34,10 +34,17 @@ private[javaapi] object Implicits extends Logging {
   implicit def toJavaOffsetResponse(response: kafka.api.OffsetResponse): kafka.javaapi.OffsetResponse =
     new kafka.javaapi.OffsetResponse(response)
 
+  implicit def toJavaOffsetFetchResponse(response: kafka.api.OffsetFetchResponse): kafka.javaapi.OffsetFetchResponse =
+    new kafka.javaapi.OffsetFetchResponse(response)
+
+  implicit def toJavaOffsetCommitResponse(response: kafka.api.OffsetCommitResponse): kafka.javaapi.OffsetCommitResponse =
+    new kafka.javaapi.OffsetCommitResponse(response)
+
   implicit def optionToJavaRef[T](opt: Option[T]): T = {
     opt match {
       case Some(obj) => obj
       case None => null.asInstanceOf[T]
     }
   }
+
 }

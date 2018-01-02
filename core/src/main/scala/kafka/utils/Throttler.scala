@@ -15,58 +15,61 @@
  * limitations under the License.
  */
 
-package kafka.utils;
+package kafka.utils
+
+import kafka.metrics.KafkaMetricsGroup
+import org.apache.kafka.common.utils.Time
+
+import java.util.concurrent.TimeUnit
+import java.util.Random
 
 import scala.math._
-
-object Throttler extends Logging {
-  val DefaultCheckIntervalMs = 100L
-}
 
 /**
  * A class to measure and throttle the rate of some process. The throttler takes a desired rate-per-second
  * (the units of the process don't matter, it could be bytes or a count of some other thing), and will sleep for 
- * an appropraite amount of time when maybeThrottle() is called to attain the desired rate.
+ * an appropriate amount of time when maybeThrottle() is called to attain the desired rate.
  * 
  * @param desiredRatePerSec: The rate we want to hit in units/sec
  * @param checkIntervalMs: The interval at which to check our rate
  * @param throttleDown: Does throttling increase or decrease our rate?
  * @param time: The time implementation to use
  */
-@nonthreadsafe
-class Throttler(val desiredRatePerSec: Double, 
-                val checkIntervalMs: Long, 
-                val throttleDown: Boolean, 
-                val time: Time) {
+@threadsafe
+class Throttler(desiredRatePerSec: Double,
+                checkIntervalMs: Long = 100L,
+                throttleDown: Boolean = true,
+                metricName: String = "throttler",
+                units: String = "entries",
+                time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup {
   
   private val lock = new Object
+  private val meter = newMeter(metricName, units, TimeUnit.SECONDS)
+  private val checkIntervalNs = TimeUnit.MILLISECONDS.toNanos(checkIntervalMs)
   private var periodStartNs: Long = time.nanoseconds
   private var observedSoFar: Double = 0.0
   
-  def this(desiredRatePerSec: Double, throttleDown: Boolean) = 
-    this(desiredRatePerSec, Throttler.DefaultCheckIntervalMs, throttleDown, SystemTime)
-
-  def this(desiredRatePerSec: Double) = 
-    this(desiredRatePerSec, Throttler.DefaultCheckIntervalMs, true, SystemTime)
-  
   def maybeThrottle(observed: Double) {
+    val msPerSec = TimeUnit.SECONDS.toMillis(1)
+    val nsPerSec = TimeUnit.SECONDS.toNanos(1)
+
+    meter.mark(observed.toLong)
     lock synchronized {
       observedSoFar += observed
       val now = time.nanoseconds
       val elapsedNs = now - periodStartNs
       // if we have completed an interval AND we have observed something, maybe
       // we should take a little nap
-      if(elapsedNs > checkIntervalMs * Time.NsPerMs && observedSoFar > 0) {
-        val rateInSecs = (observedSoFar * Time.NsPerSec) / elapsedNs
+      if (elapsedNs > checkIntervalNs && observedSoFar > 0) {
+        val rateInSecs = (observedSoFar * nsPerSec) / elapsedNs
         val needAdjustment = !(throttleDown ^ (rateInSecs > desiredRatePerSec))
-        if(needAdjustment) {
+        if (needAdjustment) {
           // solve for the amount of time to sleep to make us hit the desired rate
-          val desiredRateMs = desiredRatePerSec / Time.MsPerSec.asInstanceOf[Double]
-          val elapsedMs = elapsedNs / Time.NsPerMs
+          val desiredRateMs = desiredRatePerSec / msPerSec.toDouble
+          val elapsedMs = TimeUnit.NANOSECONDS.toMillis(elapsedNs)
           val sleepTime = round(observedSoFar / desiredRateMs - elapsedMs)
-          if(sleepTime > 0) {
-            Throttler.debug("Natural rate is " + rateInSecs + " per second but desired rate is " + desiredRatePerSec + 
-                                     ", sleeping for " + sleepTime + " ms to compensate.")
+          if (sleepTime > 0) {
+            trace("Natural rate is %f per second but desired rate is %f, sleeping for %d ms to compensate.".format(rateInSecs, desiredRatePerSec, sleepTime))
             time.sleep(sleepTime)
           }
         }
@@ -75,5 +78,28 @@ class Throttler(val desiredRatePerSec: Double,
       }
     }
   }
+
+}
+
+object Throttler {
   
+  def main(args: Array[String]) {
+    val rand = new Random()
+    val throttler = new Throttler(100000, 100, true, time = Time.SYSTEM)
+    val interval = 30000
+    var start = System.currentTimeMillis
+    var total = 0
+    while(true) {
+      val value = rand.nextInt(1000)
+      Thread.sleep(1)
+      throttler.maybeThrottle(value)
+      total += value
+      val now = System.currentTimeMillis
+      if(now - start >= interval) {
+        println(total / (interval/1000.0))
+        start = now
+        total = 0
+      }
+    }
+  }
 }

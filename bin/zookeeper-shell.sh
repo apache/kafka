@@ -14,10 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if [ $# -ne 1 ];
+if [ $# -lt 1 ];
 then
-	echo "USAGE: $0 zookeeper_host:port[/path]"
+	echo "USAGE: $0 zookeeper_host:port[/path] [args...]"
 	exit 1
 fi
 
-$(dirname $0)/kafka-run-class.sh org.apache.zookeeper.ZooKeeperMain -server $1
+exec $(dirname $0)/kafka-run-class.sh org.apache.zookeeper.ZooKeeperMain -server "$@"

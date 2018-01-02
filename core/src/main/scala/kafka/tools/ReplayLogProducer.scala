@@ -18,13 +18,13 @@
 package kafka.tools
 
 import joptsimple.OptionParser
-import java.util.concurrent.{Executors, CountDownLatch}
+import java.util.concurrent.CountDownLatch
 import java.util.Properties
-import kafka.producer.{KeyedMessage, ProducerConfig, Producer}
 import kafka.consumer._
-import kafka.utils.{Logging, ZkUtils}
+import kafka.utils.{ToolsUtils, CommandLineUtils, Logging, ZkUtils}
 import kafka.api.OffsetRequest
-import kafka.message.CompressionCodec
+import org.apache.kafka.clients.producer.{ProducerRecord, KafkaProducer, ProducerConfig}
+import scala.collection.JavaConverters._
 
 object ReplayLogProducer extends Logging {
 
@@ -32,9 +32,6 @@ object ReplayLogProducer extends Logging {
 
   def main(args: Array[String]) {
     val config = new Config(args)
-
-    val executor = Executors.newFixedThreadPool(config.numThreads)
-    val allDone = new CountDownLatch(config.numThreads)
 
     // if there is no group specified then avoid polluting zookeeper with persistent group data, this is a hack
     ZkUtils.maybeDeletePath(config.zkConnect, "/consumers/" + GroupId)
@@ -52,7 +49,7 @@ object ReplayLogProducer extends Logging {
     val consumerConnector: ConsumerConnector = Consumer.create(consumerConfig)
     val topicMessageStreams = consumerConnector.createMessageStreams(Predef.Map(config.inputTopic -> config.numThreads))
     var threadList = List[ZKConsumerThread]()
-    for ((topic, streamList) <- topicMessageStreams)
+    for (streamList <- topicMessageStreams.values)
       for (stream <- streamList)
         threadList ::= new ZKConsumerThread(config, stream)
 
@@ -64,7 +61,7 @@ object ReplayLogProducer extends Logging {
   }
 
   class Config(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
       "Multiple URLS can be given to allow fail-over.")
       .withRequiredArg
@@ -88,17 +85,6 @@ object ReplayLogProducer extends Logging {
       .describedAs("count")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(-1)
-    val asyncOpt = parser.accepts("async", "If set, messages are sent asynchronously.")
-    val delayMSBtwBatchOpt = parser.accepts("delay-btw-batch-ms", "Delay in ms between 2 batch sends.")
-      .withRequiredArg
-      .describedAs("ms")
-      .ofType(classOf[java.lang.Long])
-      .defaultsTo(0)
-    val batchSizeOpt = parser.accepts("batch-size", "Number of messages to send in a single batch.")
-      .withRequiredArg
-      .describedAs("batch size")
-      .ofType(classOf[java.lang.Integer])
-      .defaultsTo(200)
     val numThreadsOpt = parser.accepts("threads", "Number of sending threads.")
       .withRequiredArg
       .describedAs("threads")
@@ -109,48 +95,35 @@ object ReplayLogProducer extends Logging {
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(5000)
-    val compressionCodecOption = parser.accepts("compression-codec", "If set, messages are sent compressed")
+    val propertyOpt = parser.accepts("property", "A mechanism to pass properties in the form key=value to the producer. " +
+      "This allows the user to override producer properties that are not exposed by the existing command line arguments")
       .withRequiredArg
-      .describedAs("compression codec ")
-      .ofType(classOf[java.lang.Integer])
-      .defaultsTo(0)
+      .describedAs("producer properties")
+      .ofType(classOf[String])
+    val syncOpt = parser.accepts("sync", "If set message send requests to the brokers are synchronously, one at a time as they arrive.")
 
     val options = parser.parse(args : _*)
-    for(arg <- List(brokerListOpt, inputTopicOpt)) {
-      if(!options.has(arg)) {
-        System.err.println("Missing required argument \"" + arg + "\"")
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
-    }
+    
+    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, inputTopicOpt)
+
     val zkConnect = options.valueOf(zkConnectOpt)
     val brokerList = options.valueOf(brokerListOpt)
+    ToolsUtils.validatePortOrDie(parser,brokerList)
     val numMessages = options.valueOf(numMessagesOpt).intValue
-    val isAsync = options.has(asyncOpt)
-    val delayedMSBtwSend = options.valueOf(delayMSBtwBatchOpt).longValue
-    var batchSize = options.valueOf(batchSizeOpt).intValue
     val numThreads = options.valueOf(numThreadsOpt).intValue
     val inputTopic = options.valueOf(inputTopicOpt)
     val outputTopic = options.valueOf(outputTopicOpt)
     val reportingInterval = options.valueOf(reportingIntervalOpt).intValue
-    val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOption).intValue)
+    val isSync = options.has(syncOpt)
+    val producerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
   }
 
   class ZKConsumerThread(config: Config, stream: KafkaStream[Array[Byte], Array[Byte]]) extends Thread with Logging {
     val shutdownLatch = new CountDownLatch(1)
-    val props = new Properties()
-    props.put("metadata.broker.list", config.brokerList)
-    props.put("reconnect.interval", Integer.MAX_VALUE.toString)
-    props.put("send.buffer.bytes", (64*1024).toString)
-    props.put("compression.codec", config.compressionCodec.codec.toString)
-    props.put("batch.num.messages", config.batchSize.toString)
-    props.put("queue.enqueue.timeout.ms", "-1")
-    
-    if(config.isAsync)
-      props.put("producer.type", "async")
-
-    val producerConfig = new ProducerConfig(props)
-    val producer = new Producer[Array[Byte], Array[Byte]](producerConfig)
+    val producer = new KafkaProducer[Array[Byte],Array[Byte]](config.producerProps)
 
     override def run() {
       info("Starting consumer thread..")
@@ -163,9 +136,11 @@ object ReplayLogProducer extends Logging {
             stream
         for (messageAndMetadata <- iter) {
           try {
-            producer.send(new KeyedMessage[Array[Byte], Array[Byte]](config.outputTopic, messageAndMetadata.message))
-            if (config.delayedMSBtwSend > 0 && (messageCount + 1) % config.batchSize == 0)
-              Thread.sleep(config.delayedMSBtwSend)
+            val response = producer.send(new ProducerRecord[Array[Byte],Array[Byte]](config.outputTopic, null,
+                                            messageAndMetadata.timestamp, messageAndMetadata.key(), messageAndMetadata.message()))
+            if(config.isSync) {
+              response.get()
+            }
             messageCount += 1
           }catch {
             case ie: Exception => error("Skipping this message", ie)

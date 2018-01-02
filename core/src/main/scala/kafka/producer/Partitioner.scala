@@ -23,11 +23,13 @@ package kafka.producer
  * Implementations will be constructed via reflection and are required to have a constructor that takes a single 
  * VerifiableProperties instance--this allows passing configuration properties into the partitioner implementation.
  */
-trait Partitioner[T] {
+@deprecated("This trait has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.producer.Partitioner instead.", "0.10.0.0")
+trait Partitioner {
   /**
    * Uses the key to calculate a partition bucket id for routing
    * the data to the appropriate broker partition
    * @return an integer between 0 and numPartitions-1
    */
-  def partition(key: T, numPartitions: Int): Int
+  def partition(key: Any, numPartitions: Int): Int
 }

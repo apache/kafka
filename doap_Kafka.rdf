@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl"?>
+<rdf:RDF xml:lang="en"
+         xmlns="http://usefulinc.com/ns/doap#"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:asfext="http://projects.apache.org/ns/asfext#"
+         xmlns:foaf="http://xmlns.com/foaf/0.1/">
+<!--
+    Licensed to the Apache Software Foundation (ASF) under one or more
+    contributor license agreements.  See the NOTICE file distributed with
+    this work for additional information regarding copyright ownership.
+    The ASF licenses this file to You under the Apache License, Version 2.0
+    (the "License"); you may not use this file except in compliance with
+    the License.  You may obtain a copy of the License at
+
+         http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+-->
+  <Project rdf:about="http://kafka.apache.org/">
+    <created>2014-04-12</created>
+    <license rdf:resource="http://usefulinc.com/doap/licenses/asl20" />
+    <name>Apache Kafka</name>
+    <homepage rdf:resource="http://kafka.apache.org/" />
+    <asfext:pmc rdf:resource="http://kafka.apache.org" />
+    <shortdesc>Apache Kafka is a distributed, fault tolerant, publish-subscribe messaging.</shortdesc>
+    <description>A single Kafka broker can handle hundreds of megabytes of reads and writes per second from thousands of clients. Kafka is designed to allow a single cluster to serve as the central data backbone for a large organization. It can be elastically and transparently expanded without downtime. Data streams are partitioned and spread over a cluster of machines to allow data streams larger than the capability of any single machine and to allow clusters of co-ordinated consumers. Kafka has a modern cluster-centric design that offers strong durability and fault-tolerance guarantees. Messages are persisted on disk and replicated within the cluster to prevent data loss. Each broker can handle terabytes of messages without performance impact.</description>
+    <bug-database rdf:resource="https://issues.apache.org/jira/browse/KAFKA" />
+    <mailing-list rdf:resource="http://kafka.apache.org/contact.html" />
+    <download-page rdf:resource="http://kafka.apache.org/downloads.html" />
+    <programming-language>Scala</programming-language>
+    <category rdf:resource="http://projects.apache.org/category/big-data" />
+    <repository>
+      <SVNRepository>
+        <location rdf:resource="http://git-wip-us.apache.org/repos/asf/kafka.git"/>
+        <browse rdf:resource="https://github.com/apache/kafka"/>
+      </SVNRepository>
+    </repository>
+    <maintainer>
+      <foaf:Person>
+        <foaf:name>Jun Rao</foaf:name>
+          <foaf:mbox rdf:resource="mailto:junrao@apache.org"/>
+      </foaf:Person>
+    </maintainer>
+  </Project>
+</rdf:RDF>

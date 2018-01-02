@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -17,9 +17,17 @@
 
 package kafka.message
 
+import org.apache.kafka.common.errors.CorruptRecordException
+
 /**
  * Indicates that a message failed its checksum and is corrupt
+ *
+ * InvalidMessageException extends CorruptRecordException for temporary compatibility with the old Scala clients.
+ * We want to update the server side code to use and catch the new CorruptRecordException.
+ * Because ByteBufferMessageSet.scala and Message.scala are used in both server and client code having
+ * InvalidMessageException extend CorruptRecordException allows us to change server code without affecting the client.
  */
-class InvalidMessageException(message: String) extends RuntimeException(message) {
+class InvalidMessageException(message: String, throwable: Throwable) extends CorruptRecordException(message, throwable) {
+  def this(message: String) = this(null, null)
   def this() = this(null)
 }

@@ -20,6 +20,8 @@ package kafka.producer
 import java.util.Properties
 import kafka.utils.VerifiableProperties
 
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.producer.ProducerConfig instead.", "0.10.0.0")
 class SyncProducerConfig private (val props: VerifiableProperties) extends SyncProducerConfigShared {
   def this(originalProps: Properties) {
     this(new VerifiableProperties(originalProps))
@@ -33,6 +35,8 @@ class SyncProducerConfig private (val props: VerifiableProperties) extends SyncP
   val port = props.getInt("port")
 }
 
+@deprecated("This trait has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.producer.ProducerConfig instead.", "0.10.0.0")
 trait SyncProducerConfigShared {
   val props: VerifiableProperties
   
@@ -42,11 +46,15 @@ trait SyncProducerConfigShared {
   val clientId = props.getString("client.id", SyncProducerConfig.DefaultClientId)
 
   /*
-   * The required acks of the producer requests - negative value means ack
-   * after the replicas in ISR have caught up to the leader's offset
-   * corresponding to this produce request.
+   * The number of acknowledgments the producer requires the leader to have received before considering a request complete.
+   * This controls the durability of the messages sent by the producer.
+   *
+   * request.required.acks = 0 - means the producer will not wait for any acknowledgement from the leader.
+   * request.required.acks = 1 - means the leader will write the message to its local log and immediately acknowledge
+   * request.required.acks = -1 - means the leader will wait for acknowledgement from all in-sync replicas before acknowledging the write
    */
-  val requestRequiredAcks = props.getShort("request.required.acks", SyncProducerConfig.DefaultRequiredAcks)
+
+  val requestRequiredAcks = props.getShortInRange("request.required.acks", SyncProducerConfig.DefaultRequiredAcks,(-1,1))
 
   /*
    * The ack timeout of the producer requests. Value must be non-negative and non-zero
@@ -55,8 +63,10 @@ trait SyncProducerConfigShared {
                                              (1, Integer.MAX_VALUE))
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.producer.ProducerConfig instead.", "0.10.0.0")
 object SyncProducerConfig {
   val DefaultClientId = ""
   val DefaultRequiredAcks : Short = 0
-  val DefaultAckTimeoutMs = 1500
+  val DefaultAckTimeoutMs = 10000
 }

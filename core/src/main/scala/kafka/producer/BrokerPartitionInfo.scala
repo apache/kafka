@@ -16,14 +16,15 @@
 */
 package kafka.producer
 
+import org.apache.kafka.common.protocol.Errors
+
 import collection.mutable.HashMap
 import kafka.api.TopicMetadata
 import kafka.common.KafkaException
 import kafka.utils.Logging
-import kafka.common.ErrorMapping
 import kafka.client.ClientUtils
 
-
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")
 class BrokerPartitionInfo(producerConfig: ProducerConfig,
                           producerPool: ProducerPool,
                           topicPartitionInfo: HashMap[String, TopicMetadata])
@@ -54,9 +55,9 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
           }
       }
     val partitionMetadata = metadata.partitionsMetadata
-    if(partitionMetadata.size == 0) {
-      if(metadata.errorCode != ErrorMapping.NoError) {
-        throw new KafkaException(ErrorMapping.exceptionFor(metadata.errorCode))
+    if(partitionMetadata.isEmpty) {
+      if(metadata.error != Errors.NONE) {
+        throw new KafkaException(metadata.error.exception)
       } else {
         throw new KafkaException("Topic metadata %s has empty partition metadata and no error code".format(metadata))
       }
@@ -84,20 +85,21 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
     // throw partition specific exception
     topicsMetadata.foreach(tmd =>{
       trace("Metadata for topic %s is %s".format(tmd.topic, tmd))
-      if(tmd.errorCode == ErrorMapping.NoError) {
+      if(tmd.error == Errors.NONE) {
         topicPartitionInfo.put(tmd.topic, tmd)
       } else
-        warn("Error while fetching metadata [%s] for topic [%s]: %s ".format(tmd, tmd.topic, ErrorMapping.exceptionFor(tmd.errorCode).getClass))
+        warn("Error while fetching metadata [%s] for topic [%s]: %s ".format(tmd, tmd.topic, tmd.error.exception.getClass))
       tmd.partitionsMetadata.foreach(pmd =>{
-        if (pmd.errorCode != ErrorMapping.NoError && pmd.errorCode == ErrorMapping.LeaderNotAvailableCode) {
+        if (pmd.error != Errors.NONE && pmd.error == Errors.LEADER_NOT_AVAILABLE) {
           warn("Error while fetching metadata %s for topic partition [%s,%d]: [%s]".format(pmd, tmd.topic, pmd.partitionId,
-            ErrorMapping.exceptionFor(pmd.errorCode).getClass))
+            pmd.error.exception.getClass))
         } // any other error code (e.g. ReplicaNotAvailable) can be ignored since the producer does not need to access the replica and isr metadata
       })
     })
     producerPool.updateProducer(topicsMetadata)
   }
-  
+
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")
 case class PartitionAndLeader(topic: String, partitionId: Int, leaderBrokerIdOpt: Option[Int])

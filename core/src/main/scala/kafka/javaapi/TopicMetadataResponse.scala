@@ -23,4 +23,16 @@ class TopicMetadataResponse(private val underlying: kafka.api.TopicMetadataRespo
     import kafka.javaapi.MetadataListImplicits._
     underlying.topicsMetadata
   }
+
+  override def equals(obj: Any): Boolean = {
+    obj match {
+      case null => false
+      case other: TopicMetadataResponse => this.underlying.equals(other.underlying)
+      case _ => false
+    }
+  }
+
+  override def hashCode = underlying.hashCode
+
+  override def toString = underlying.toString
 }

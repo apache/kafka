@@ -19,10 +19,13 @@ package kafka.network
 
 import java.net.InetSocketAddress
 import java.nio.channels._
-import kafka.utils.{nonthreadsafe, Logging}
+
 import kafka.api.RequestOrResponse
+import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
+import org.apache.kafka.common.network.NetworkReceive
 
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
 object BlockingChannel{
   val UseDefaultBufferSize = -1
 }
@@ -32,6 +35,7 @@ object BlockingChannel{
  *
  */
 @nonthreadsafe
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class BlockingChannel( val host: String, 
                        val port: Int, 
                        val readBufferSize: Int, 
@@ -42,63 +46,89 @@ class BlockingChannel( val host: String,
   private var readChannel: ReadableByteChannel = null
   private var writeChannel: GatheringByteChannel = null
   private val lock = new Object()
-  
+  private val connectTimeoutMs = readTimeoutMs
+  private var connectionId: String = ""
+
   def connect() = lock synchronized  {
     if(!connected) {
-      channel = SocketChannel.open()
-      if(readBufferSize > 0)
-        channel.socket.setReceiveBufferSize(readBufferSize)
-      if(writeBufferSize > 0)
-        channel.socket.setSendBufferSize(writeBufferSize)
-      channel.configureBlocking(true)
-      channel.socket.setSoTimeout(readTimeoutMs)
-      channel.socket.setKeepAlive(true)
-      channel.socket.setTcpNoDelay(true)
-      channel.connect(new InetSocketAddress(host, port))
+      try {
+        channel = SocketChannel.open()
+        if(readBufferSize > 0)
+          channel.socket.setReceiveBufferSize(readBufferSize)
+        if(writeBufferSize > 0)
+          channel.socket.setSendBufferSize(writeBufferSize)
+        channel.configureBlocking(true)
+        channel.socket.setSoTimeout(readTimeoutMs)
+        channel.socket.setKeepAlive(true)
+        channel.socket.setTcpNoDelay(true)
+        channel.socket.connect(new InetSocketAddress(host, port), connectTimeoutMs)
 
-      writeChannel = channel
-      readChannel = Channels.newChannel(channel.socket().getInputStream)
-      connected = true
-      // settings may not match what we requested above
-      val msg = "Created socket with SO_TIMEOUT = %d (requested %d), SO_RCVBUF = %d (requested %d), SO_SNDBUF = %d (requested %d)."
-      debug(msg.format(channel.socket.getSoTimeout,
-                       readTimeoutMs,
-                       channel.socket.getReceiveBufferSize, 
-                       readBufferSize,
-                       channel.socket.getSendBufferSize,
-                       writeBufferSize))
+        writeChannel = channel
+        // Need to create a new ReadableByteChannel from input stream because SocketChannel doesn't implement read with timeout
+        // See: http://stackoverflow.com/questions/2866557/timeout-for-socketchannel-doesnt-work
+        readChannel = Channels.newChannel(channel.socket().getInputStream)
+        connected = true
+        val localHost = channel.socket.getLocalAddress.getHostAddress
+        val localPort = channel.socket.getLocalPort
+        val remoteHost = channel.socket.getInetAddress.getHostAddress
+        val remotePort = channel.socket.getPort
+        connectionId = localHost + ":" + localPort + "-" + remoteHost + ":" + remotePort
+        // settings may not match what we requested above
+        val msg = "Created socket with SO_TIMEOUT = %d (requested %d), SO_RCVBUF = %d (requested %d), SO_SNDBUF = %d (requested %d), connectTimeoutMs = %d."
+        debug(msg.format(channel.socket.getSoTimeout,
+                         readTimeoutMs,
+                         channel.socket.getReceiveBufferSize, 
+                         readBufferSize,
+                         channel.socket.getSendBufferSize,
+                         writeBufferSize,
+                         connectTimeoutMs))
+
+      } catch {
+        case _: Throwable => disconnect()
+      }
     }
   }
   
   def disconnect() = lock synchronized {
-    if(connected || channel != null) {
-      // closing the main socket channel *should* close the read channel
-      // but let's do it to be sure.
-      swallow(channel.close())
-      swallow(channel.socket.close())
-      swallow(readChannel.close())
-      channel = null; readChannel = null; writeChannel = null
-      connected = false
+    if(channel != null) {
+      CoreUtils.swallow(channel.close(), this)
+      CoreUtils.swallow(channel.socket.close(), this)
+      channel = null
+      writeChannel = null
     }
+    // closing the main socket channel *should* close the read channel
+    // but let's do it to be sure.
+    if(readChannel != null) {
+      CoreUtils.swallow(readChannel.close(), this)
+      readChannel = null
+    }
+    connected = false
   }
 
   def isConnected = connected
-  
-  def send(request: RequestOrResponse):Int = {
+
+  def send(request: RequestOrResponse): Long = {
     if(!connected)
       throw new ClosedChannelException()
 
-    val send = new BoundedByteBufferSend(request)
+    val send = new RequestOrResponseSend(connectionId, request)
     send.writeCompletely(writeChannel)
   }
   
-  def receive(): Receive = {
+  def receive(): NetworkReceive = {
     if(!connected)
       throw new ClosedChannelException()
 
-    val response = new BoundedByteBufferReceive()
-    response.readCompletely(readChannel)
+    val response = readCompletely(readChannel)
+    response.payload().rewind()
 
+    response
+  }
+
+  private def readCompletely(channel: ReadableByteChannel): NetworkReceive = {
+    val response = new NetworkReceive
+    while (!response.complete())
+      response.readFromReadableChannel(channel)
     response
   }
 

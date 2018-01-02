@@ -16,16 +16,18 @@
 */
 package kafka.javaapi.message
 
-import java.util.concurrent.atomic.AtomicLong
-import scala.reflect.BeanProperty
 import java.nio.ByteBuffer
+
+import kafka.common.LongRef
 import kafka.message._
 
-class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends MessageSet {
+import scala.collection.JavaConverters._
+
+class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet {
   private val underlying: kafka.message.ByteBufferMessageSet = new kafka.message.ByteBufferMessageSet(buffer)
   
   def this(compressionCodec: CompressionCodec, messages: java.util.List[Message]) {
-    this(new kafka.message.ByteBufferMessageSet(compressionCodec, new AtomicLong(0), scala.collection.JavaConversions.asBuffer(messages): _*).buffer)
+    this(new kafka.message.ByteBufferMessageSet(compressionCodec, new LongRef(0), messages.asScala: _*).buffer)
   }
 
   def this(messages: java.util.List[Message]) {
@@ -33,6 +35,8 @@ class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends Message
   }
 
   def validBytes: Int = underlying.validBytes
+
+  def getBuffer = buffer
 
   override def iterator: java.util.Iterator[MessageAndOffset] = new java.util.Iterator[MessageAndOffset] {
     val underlyingIterator = underlying.iterator

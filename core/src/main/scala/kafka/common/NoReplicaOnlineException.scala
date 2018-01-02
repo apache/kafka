@@ -20,7 +20,8 @@ package kafka.common
 
 /**
  * This exception is thrown by the leader elector in the controller when leader election fails for a partition since
- * all the replicas for a partition are offline
+ * all the leader candidate replicas for a partition are offline; the set of candidates may or may not be limited
+ * to just the in sync replicas depending upon whether unclean leader election is allowed to occur.
  */
 class NoReplicaOnlineException(message: String, cause: Throwable) extends RuntimeException(message, cause) {
   def this(message: String) = this(message, null)

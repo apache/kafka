@@ -17,65 +17,61 @@
 
 package kafka.consumer
 
-import scala.collection.JavaConversions._
-import kafka.utils.{ZkUtils, ZKStringSerializer, Logging}
-import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
+import scala.collection.JavaConverters._
+import kafka.utils.{ZkUtils, Logging}
+import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
-class ZookeeperTopicEventWatcher(val config:ConsumerConfig,
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
+class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
     val eventHandler: TopicEventHandler[String]) extends Logging {
 
   val lock = new Object()
-
-  private var zkClient: ZkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs,
-      config.zkConnectionTimeoutMs, ZKStringSerializer)
 
   startWatchingTopicEvents()
 
   private def startWatchingTopicEvents() {
     val topicEventListener = new ZkTopicEventListener()
-    ZkUtils.makeSurePersistentPathExists(zkClient, ZkUtils.BrokerTopicsPath)
+    zkUtils.makeSurePersistentPathExists(ZkUtils.BrokerTopicsPath)
 
-    zkClient.subscribeStateChanges(
-      new ZkSessionExpireListener(topicEventListener))
+    zkUtils.subscribeStateChanges(new ZkSessionExpireListener(topicEventListener))
 
-    val topics = zkClient.subscribeChildChanges(
-      ZkUtils.BrokerTopicsPath, topicEventListener).toList
+    val topics = zkUtils.subscribeChildChanges(ZkUtils.BrokerTopicsPath, topicEventListener).getOrElse {
+      throw new AssertionError(s"Expected ${ZkUtils.BrokerTopicsPath} to exist, but it does not. ")
+    }
 
     // call to bootstrap topic list
-    topicEventListener.handleChildChange(ZkUtils.BrokerTopicsPath, topics)
+    topicEventListener.handleChildChange(ZkUtils.BrokerTopicsPath, topics.asJava)
   }
 
-  private def stopWatchingTopicEvents() { zkClient.unsubscribeAll() }
+  private def stopWatchingTopicEvents() { zkUtils.unsubscribeAll() }
 
   def shutdown() {
     lock.synchronized {
       info("Shutting down topic event watcher.")
-      if (zkClient != null) {
+      if (zkUtils != null) {
         stopWatchingTopicEvents()
-        zkClient.close()
-        zkClient = null
       }
-      else
-        warn("Cannot shutdown already shutdown topic event watcher.")
+      else {
+        warn("Cannot shutdown since the embedded zookeeper client has already closed.")
+      }
     }
   }
 
   class ZkTopicEventListener extends IZkChildListener {
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleChildChange(parent: String, children: java.util.List[String]) {
       lock.synchronized {
         try {
-          if (zkClient != null) {
-            val latestTopics = zkClient.getChildren(ZkUtils.BrokerTopicsPath).toList
+          if (zkUtils != null) {
+            val latestTopics = zkUtils.getChildren(ZkUtils.BrokerTopicsPath)
             debug("all topics: %s".format(latestTopics))
-
             eventHandler.handleTopicEvent(latestTopics)
           }
         }
         catch {
-          case e =>
+          case e: Throwable =>
             error("error in handling child changes", e)
         }
       }
@@ -86,19 +82,21 @@ class ZookeeperTopicEventWatcher(val config:ConsumerConfig,
   class ZkSessionExpireListener(val topicEventListener: ZkTopicEventListener)
     extends IZkStateListener {
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleStateChanged(state: KeeperState) { }
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleNewSession() {
       lock.synchronized {
-        if (zkClient != null) {
-          info(
-            "ZK expired: resubscribing topic event listener to topic registry")
-          zkClient.subscribeChildChanges(
-            ZkUtils.BrokerTopicsPath, topicEventListener)
+        if (zkUtils != null) {
+          info("ZK expired: resubscribing topic event listener to topic registry")
+          zkUtils.subscribeChildChanges(ZkUtils.BrokerTopicsPath, topicEventListener)
         }
       }
+    }
+
+    override def handleSessionEstablishmentError(error: Throwable): Unit = {
+      //no-op ZookeeperConsumerConnector should log error.
     }
   }
 }

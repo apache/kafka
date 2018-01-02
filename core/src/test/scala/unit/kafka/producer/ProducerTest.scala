@@ -17,30 +17,30 @@
 
 package kafka.producer
 
-import org.scalatest.junit.JUnit3Suite
-import kafka.consumer.SimpleConsumer
-import kafka.message.Message
-import kafka.server.{KafkaConfig, KafkaRequestHandler, KafkaServer}
-import kafka.zk.ZooKeeperTestHarness
-import org.apache.log4j.{Level, Logger}
-import org.junit.Test
-import kafka.utils._
+import java.nio.ByteBuffer
 import java.util
-import kafka.admin.CreateTopicCommand
-import util.Properties
+import java.util.Properties
+
 import kafka.api.FetchRequestBuilder
 import kafka.common.FailedToSendMessageException
-import org.junit.Assert.assertTrue
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertEquals
+import kafka.consumer.SimpleConsumer
+import kafka.message.{Message, MessageAndOffset}
+import kafka.serializer.StringEncoder
+import kafka.server.{KafkaConfig, KafkaRequestHandler, KafkaServer}
+import kafka.utils._
+import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.utils.Time
+import org.apache.log4j.{Level, Logger}
+import org.junit.Assert._
+import org.junit.{After, Before, Test}
+import org.scalatest.exceptions.TestFailedException
 
-
-
-class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
+@deprecated("This test has been deprecated and it will be removed in a future release.", "0.10.0.0")
+class ProducerTest extends ZooKeeperTestHarness with Logging{
   private val brokerId1 = 0
   private val brokerId2 = 1
-  private val ports = TestUtils.choosePorts(2)
-  private val (port1, port2) = (ports(0), ports(1))
   private var server1: KafkaServer = null
   private var server2: KafkaServer = null
   private var consumer1: SimpleConsumer = null
@@ -48,92 +48,95 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
   private val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
   private var servers = List.empty[KafkaServer]
 
-  private val props1 = TestUtils.createBrokerConfig(brokerId1, port1)
-  private val config1 = new KafkaConfig(props1) {
-    override val hostName = "localhost"
-    override val numPartitions = 4
-  }
-  private val props2 = TestUtils.createBrokerConfig(brokerId2, port2)
-  private val config2 = new KafkaConfig(props2) {
-    override val hostName = "localhost"
-    override val numPartitions = 4
+  // Creation of consumers is deferred until they are actually needed. This allows us to kill brokers that use random
+  // ports and then get a consumer instance that will be pointed at the correct port
+  def getConsumer1() = {
+    if (consumer1 == null)
+      consumer1 = new SimpleConsumer("localhost", TestUtils.boundPort(server1), 1000000, 64*1024, "")
+    consumer1
   }
 
+  def getConsumer2() = {
+    if (consumer2 == null)
+      consumer2 = new SimpleConsumer("localhost", TestUtils.boundPort(server2), 1000000, 64*1024, "")
+    consumer2
+  }
+
+  @Before
   override def setUp() {
     super.setUp()
     // set up 2 brokers with 4 partitions each
+    val props1 = TestUtils.createBrokerConfig(brokerId1, zkConnect, false)
+    props1.put("num.partitions", "4")
+    val config1 = KafkaConfig.fromProps(props1)
+    val props2 = TestUtils.createBrokerConfig(brokerId2, zkConnect, false)
+    props2.put("num.partitions", "4")
+    val config2 = KafkaConfig.fromProps(props2)
     server1 = TestUtils.createServer(config1)
     server2 = TestUtils.createServer(config2)
     servers = List(server1,server2)
-
-    val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", port1.toString)
-
-    consumer1 = new SimpleConsumer("localhost", port1, 1000000, 64*1024, "")
-    consumer2 = new SimpleConsumer("localhost", port2, 100, 64*1024, "")
 
     // temporarily set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.FATAL)
   }
 
+  @After
   override def tearDown() {
     // restore set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.ERROR)
-    server1.shutdown
-    server1.awaitShutdown()
-    server2.shutdown
-    server2.awaitShutdown()
-    Utils.rm(server1.config.logDirs)
-    Utils.rm(server2.config.logDirs)
+
+    if (consumer1 != null)
+      consumer1.close()
+    if (consumer2 != null)
+      consumer2.close()
+
+    TestUtils.shutdownServers(Seq(server1, server2))
     super.tearDown()
   }
 
-
+  @Test
   def testUpdateBrokerPartitionInfo() {
     val topic = "new-topic"
-    CreateTopicCommand.createTopic(zkClient, "new-topic", 1, 2)
-    // wait until the update metadata request for new topic reaches all servers
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 500)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
+    TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
 
-    val props1 = new util.Properties()
-    props1.put("metadata.broker.list", "localhost:80,localhost:81")
-    props1.put("serializer.class", "kafka.serializer.StringEncoder")
-    val producerConfig1 = new ProducerConfig(props1)
-    val producer1 = new Producer[String, String](producerConfig1)
-    try{
+    val props = new Properties()
+    // no need to retry since the send will always fail
+    props.put("message.send.max.retries", "0")
+    val producer1 = TestUtils.createProducer[String, String](
+        brokerList = "localhost:80,localhost:81",
+        encoder = classOf[StringEncoder].getName,
+        keyEncoder = classOf[StringEncoder].getName,
+        producerProps = props)
+
+    try {
       producer1.send(new KeyedMessage[String, String](topic, "test", "test1"))
       fail("Test should fail because the broker list provided are not valid")
     } catch {
-      case e: FailedToSendMessageException =>
-      case oe => fail("fails with exception", oe)
-    } finally {
-      producer1.close()
-    }
+      case _: FailedToSendMessageException => // this is expected
+    } finally producer1.close()
 
-    val props2 = new util.Properties()
-    props2.put("metadata.broker.list", "localhost:80," + TestUtils.getBrokerListStrFromConfigs(Seq( config1)))
-    props2.put("serializer.class", "kafka.serializer.StringEncoder")
-    val producerConfig2= new ProducerConfig(props2)
-    val producer2 = new Producer[String, String](producerConfig2)
+    val producer2 = TestUtils.createProducer[String, String](
+      brokerList = "localhost:80," + TestUtils.getBrokerListStrFromServers(Seq(server1)),
+      encoder = classOf[StringEncoder].getName,
+      keyEncoder = classOf[StringEncoder].getName)
+
     try{
       producer2.send(new KeyedMessage[String, String](topic, "test", "test1"))
     } catch {
-      case e => fail("Should succeed sending the message", e)
+      case e: Throwable => fail("Should succeed sending the message", e)
     } finally {
       producer2.close()
     }
 
-    val props3 = new util.Properties()
-    props3.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
-    props3.put("serializer.class", "kafka.serializer.StringEncoder")
-    val producerConfig3 = new ProducerConfig(props3)
-    val producer3 = new Producer[String, String](producerConfig3)
+    val producer3 =  TestUtils.createProducer[String, String](
+      brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
+      encoder = classOf[StringEncoder].getName,
+      keyEncoder = classOf[StringEncoder].getName)
+
     try{
       producer3.send(new KeyedMessage[String, String](topic, "test", "test1"))
     } catch {
-      case e => fail("Should succeed sending the message", e)
+      case e: Throwable => fail("Should succeed sending the message", e)
     } finally {
       producer3.close()
     }
@@ -142,58 +145,68 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
   @Test
   def testSendToNewTopic() {
     val props1 = new util.Properties()
-    props1.put("serializer.class", "kafka.serializer.StringEncoder")
-    props1.put("partitioner.class", "kafka.utils.StaticPartitioner")
-    props1.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
-    props1.put("request.required.acks", "2")
-    props1.put("request.timeout.ms", "1000")
-
-    val props2 = new util.Properties()
-    props2.putAll(props1)
-    props2.put("request.required.acks", "3")
-    props2.put("request.timeout.ms", "1000")
-
-    val producerConfig1 = new ProducerConfig(props1)
-    val producerConfig2 = new ProducerConfig(props2)
+    props1.put("request.required.acks", "-1")
 
     val topic = "new-topic"
     // create topic with 1 partition and await leadership
-    CreateTopicCommand.createTopic(zkClient, topic, 1, 2)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 1000)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
+    TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
 
-    val producer1 = new Producer[String, String](producerConfig1)
-    val producer2 = new Producer[String, String](producerConfig2)
+    val producer1 = TestUtils.createProducer[String, String](
+      brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
+      encoder = classOf[StringEncoder].getName,
+      keyEncoder = classOf[StringEncoder].getName,
+      partitioner = classOf[StaticPartitioner].getName,
+      producerProps = props1)
+    val startTime = System.currentTimeMillis()
     // Available partition ids should be 0.
     producer1.send(new KeyedMessage[String, String](topic, "test", "test1"))
     producer1.send(new KeyedMessage[String, String](topic, "test", "test2"))
+    val endTime = System.currentTimeMillis()
     // get the leader
-    val leaderOpt = ZkUtils.getLeaderForPartition(zkClient, topic, 0)
+    val leaderOpt = zkClient.getLeaderForPartition(new TopicPartition(topic, 0))
     assertTrue("Leader for topic new-topic partition 0 should exist", leaderOpt.isDefined)
     val leader = leaderOpt.get
 
     val messageSet = if(leader == server1.config.brokerId) {
-      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
+      val response1 = getConsumer1().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
       response1.messageSet("new-topic", 0).iterator.toBuffer
     }else {
-      val response2 = consumer2.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
+      val response2 = getConsumer2().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
       response2.messageSet("new-topic", 0).iterator.toBuffer
     }
     assertEquals("Should have fetched 2 messages", 2, messageSet.size)
-    assertEquals(new Message(bytes = "test1".getBytes, key = "test".getBytes), messageSet(0).message)
-    assertEquals(new Message(bytes = "test2".getBytes, key = "test".getBytes), messageSet(1).message)
+    // Message 1
+    assertTrue(ByteBuffer.wrap("test1".getBytes).equals(messageSet.head.message.payload))
+    assertTrue(ByteBuffer.wrap("test".getBytes).equals(messageSet.head.message.key))
+    assertTrue(messageSet.head.message.timestamp >= startTime && messageSet.head.message.timestamp < endTime)
+    assertEquals(TimestampType.CREATE_TIME, messageSet.head.message.timestampType)
+    assertEquals(Message.MagicValue_V1, messageSet.head.message.magic)
+
+    // Message 2
+    assertTrue(ByteBuffer.wrap("test2".getBytes).equals(messageSet(1).message.payload))
+    assertTrue(ByteBuffer.wrap("test".getBytes).equals(messageSet(1).message.key))
+    assertTrue(messageSet(1).message.timestamp >= startTime && messageSet(1).message.timestamp < endTime)
+    assertEquals(TimestampType.CREATE_TIME, messageSet(1).message.timestampType)
+    assertEquals(Message.MagicValue_V1, messageSet(1).message.magic)
     producer1.close()
 
+    val props2 = new util.Properties()
+    props2.put("request.required.acks", "3")
+    // no need to retry since the send will always fail
+    props2.put("message.send.max.retries", "0")
+
     try {
-      producer2.send(new KeyedMessage[String, String](topic, "test", "test2"))
-      fail("Should have timed out for 3 acks.")
+      val producer2 = TestUtils.createProducer[String, String](
+        brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
+        encoder = classOf[StringEncoder].getName,
+        keyEncoder = classOf[StringEncoder].getName,
+        partitioner = classOf[StaticPartitioner].getName,
+        producerProps = props2)
+        producer2.close
+        fail("we don't support request.required.acks greater than 1")
     }
     catch {
-      case se: FailedToSendMessageException => true
-      case e => fail("Not expected", e)
-    }
-    finally {
-      producer2.close()
+      case _: IllegalArgumentException =>  // this is expected
     }
   }
 
@@ -201,32 +214,31 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
   @Test
   def testSendWithDeadBroker() {
     val props = new Properties()
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("partitioner.class", "kafka.utils.StaticPartitioner")
-    props.put("request.timeout.ms", "2000")
     props.put("request.required.acks", "1")
-    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    // No need to retry since the topic will be created beforehand and normal send will succeed on the first try.
+    // Reducing the retries will save the time on the subsequent failure test.
+    props.put("message.send.max.retries", "0")
 
     val topic = "new-topic"
     // create topic
-    CreateTopicCommand.createTopic(zkClient, topic, 4, 2, "0,0,0,0")
-    // waiting for 1 partition is enough
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 1000)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1, 500)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 2, 500)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 3, 500)
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(0), 1->Seq(0), 2->Seq(0), 3->Seq(0)),
+                          servers = servers)
 
-    val config = new ProducerConfig(props)
-    val producer = new Producer[String, String](config)
+    val producer = TestUtils.createProducer[String, String](
+      brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
+      encoder = classOf[StringEncoder].getName,
+      keyEncoder = classOf[StringEncoder].getName,
+      partitioner = classOf[StaticPartitioner].getName,
+      producerProps = props)
+    val startTime = System.currentTimeMillis()
     try {
       // Available partition ids should be 0, 1, 2 and 3, all lead and hosted only
       // on broker 0
       producer.send(new KeyedMessage[String, String](topic, "test", "test1"))
     } catch {
-      case e => fail("Unexpected exception: " + e)
+      case e: Throwable => fail("Unexpected exception: " + e)
     }
-
+    val endTime = System.currentTimeMillis()
     // kill the broker
     server1.shutdown
     server1.awaitShutdown()
@@ -236,19 +248,27 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
       producer.send(new KeyedMessage[String, String](topic, "test", "test1"))
       fail("Should fail since no leader exists for the partition.")
     } catch {
-      case e => // success
+      case e : TestFailedException => throw e // catch and re-throw the failure message
+      case _: Throwable => // otherwise success
     }
 
     // restart server 1
     server1.startup()
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
+    TestUtils.waitUntilLeaderIsKnown(servers, topic, 0)
 
     try {
       // cross check if broker 1 got the messages
-      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
+      val response1 = getConsumer1().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
       val messageSet1 = response1.messageSet(topic, 0).iterator
       assertTrue("Message set should have 1 message", messageSet1.hasNext)
-      assertEquals(new Message(bytes = "test1".getBytes, key = "test".getBytes), messageSet1.next.message)
+      val message = messageSet1.next.message
+      assertTrue(ByteBuffer.wrap("test1".getBytes).equals(message.payload))
+      assertTrue(ByteBuffer.wrap("test".getBytes).equals(message.key))
+      assertTrue(message.timestamp >= startTime && message.timestamp < endTime)
+      assertEquals(TimestampType.CREATE_TIME, message.timestampType)
+      assertEquals(Message.MagicValue_V1, message.magic)
       assertFalse("Message set should have another message", messageSet1.hasNext)
     } catch {
       case e: Exception => fail("Not expected", e)
@@ -258,56 +278,71 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
   @Test
   def testAsyncSendCanCorrectlyFailWithTimeout() {
-    val timeoutMs = 500
-    val props = new Properties()
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("partitioner.class", "kafka.utils.StaticPartitioner")
-    props.put("request.timeout.ms", String.valueOf(timeoutMs))
-    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
-    props.put("request.required.acks", "1")
-    props.put("client.id","ProducerTest-testAsyncSendCanCorrectlyFailWithTimeout")
-    val config = new ProducerConfig(props)
-    val producer = new Producer[String, String](config)
-
     val topic = "new-topic"
     // create topics in ZK
-    CreateTopicCommand.createTopic(zkClient, topic, 4, 2, "0:1,0:1,0:1,0:1")
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 1000)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(0, 1)), servers = servers)
+
+    val timeoutMs = 500
+    val props = new Properties()
+    props.put("request.timeout.ms", timeoutMs.toString)
+    props.put("request.required.acks", "1")
+    props.put("message.send.max.retries", "0")
+    props.put("client.id","ProducerTest-testAsyncSendCanCorrectlyFailWithTimeout")
+    val producer = TestUtils.createProducer[String, String](
+      brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
+      encoder = classOf[StringEncoder].getName,
+      keyEncoder = classOf[StringEncoder].getName,
+      partitioner = classOf[StaticPartitioner].getName,
+      producerProps = props)
 
     // do a simple test to make sure plumbing is okay
     try {
       // this message should be assigned to partition 0 whose leader is on broker 0
-      producer.send(new KeyedMessage[String, String](topic, "test", "test"))
-      // cross check if brokers got the messages
-      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
-      val messageSet1 = response1.messageSet("new-topic", 0).iterator
-      assertTrue("Message set should have 1 message", messageSet1.hasNext)
-      assertEquals(new Message("test".getBytes), messageSet1.next.message)
-    } catch {
-      case e => case e: Exception => producer.close; fail("Not expected", e)
-    }
+      producer.send(new KeyedMessage(topic, "test", "test"))
+      // cross check if the broker received the messages
+      // we need the loop because the broker won't return the message until it has been replicated and the producer is
+      // using acks=1
+      var messageSet1: Iterator[MessageAndOffset] = null
+      TestUtils.waitUntilTrue(() => {
+        val response1 = getConsumer1().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
+        messageSet1 = response1.messageSet(topic, 0).iterator
+        messageSet1.hasNext
+      }, "Message set should have 1 message")
+      assertEquals(ByteBuffer.wrap("test".getBytes), messageSet1.next.message.payload)
 
-    // stop IO threads and request handling, but leave networking operational
-    // any requests should be accepted and queue up, but not handled
-    server1.requestHandlerPool.shutdown()
+      // stop IO threads and request handling, but leave networking operational
+      // any requests should be accepted and queue up, but not handled
+      server1.requestHandlerPool.shutdown()
 
-    val t1 = SystemTime.milliseconds
+      val t1 = Time.SYSTEM.milliseconds
+      try {
+        // this message should be assigned to partition 0 whose leader is on broker 0, but
+        // broker 0 will not respond within timeoutMs millis.
+        producer.send(new KeyedMessage(topic, "test", "test"))
+        fail("Exception should have been thrown")
+      } catch {
+        case _: FailedToSendMessageException => /* success */
+      }
+      val t2 = Time.SYSTEM.milliseconds
+      // make sure we don't wait fewer than timeoutMs
+      assertTrue((t2-t1) >= timeoutMs)
+
+    } finally producer.close()
+  }
+
+  @Test
+  def testSendNullMessage() {
+    val producer = TestUtils.createProducer[String, String](
+      brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
+      encoder = classOf[StringEncoder].getName,
+      keyEncoder = classOf[StringEncoder].getName,
+      partitioner = classOf[StaticPartitioner].getName)
+
     try {
-      // this message should be assigned to partition 0 whose leader is on broker 0, but
-      // broker 0 will not response within timeoutMs millis.
-      producer.send(new KeyedMessage[String, String](topic, "test", "test"))
-    } catch {
-      case e: FailedToSendMessageException => /* success */
-      case e: Exception => fail("Not expected", e)
+      TestUtils.createTopic(zkClient, "new-topic", 2, 1, servers)
+      producer.send(new KeyedMessage("new-topic", "key", null))
     } finally {
-      producer.close
+      producer.close()
     }
-    val t2 = SystemTime.milliseconds
-
-    // make sure we don't wait fewer than numRetries*timeoutMs milliseconds
-    // we do this because the DefaultEventHandler retries a number of times
-    assertTrue((t2-t1) >= timeoutMs*config.messageSendMaxRetries)
   }
 }
-

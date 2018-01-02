@@ -1,19 +1,9 @@
 This directory contains examples of client code that uses kafka.
 
-The default target for ant is kafka.examples.KafkaConsumerProducerDemo which sends and receives 
-messages from Kafka server.
-
-In order to run demo from SBT:
-   1. Start Zookeeper and the Kafka server
-   2. ./sbt from top-level kafka directory
-   3. Switch to the kafka java examples project -> project Kafka Java Examples
-   4. execute run -> run
-   5. For unlimited producer-consumer run, select option 1
-      For simple consumer demo, select option 2
-
-To run the demo using scripts: 
+To run the demo: 
 
    1. Start Zookeeper and the Kafka server
-   2. For simple consumer demo, run bin/java-simple-consumer-demo.sh
-   3. For unlimited producer-consumer run, run bin/java-producer-consumer-demo.sh
+   2. For simple consumer demo, `run bin/java-simple-consumer-demo.sh`
+   3. For unlimited sync-producer-consumer run, `run bin/java-producer-consumer-demo.sh sync`
+   4. For unlimited async-producer-consumer run, `run bin/java-producer-consumer-demo.sh`
 

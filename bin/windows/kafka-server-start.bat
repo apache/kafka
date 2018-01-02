@@ -15,13 +15,24 @@ rem See the License for the specific language governing permissions and
 rem limitations under the License.
 
 IF [%1] EQU [] (
-	echo "USAGE: $0 server.properties [consumer.properties producer.properties]"
-	goto :eof
+	echo USAGE: %0 server.properties
+	EXIT /B 1
 )
 
-IF [%JMX_PORT%] EQU [] (
-	echo Set JMX_PORT to default value : 9999
-	set JMX_PORT=9999
+SetLocal
+IF ["%KAFKA_LOG4J_OPTS%"] EQU [""] (
+    set KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%~dp0../../config/log4j.properties
 )
-
-kafka-run-class.bat kafka.Kafka %*
+IF ["%KAFKA_HEAP_OPTS%"] EQU [""] (
+    rem detect OS architecture
+    wmic os get osarchitecture | find /i "32-bit" >nul 2>&1
+    IF NOT ERRORLEVEL 1 (
+        rem 32-bit OS
+        set KAFKA_HEAP_OPTS=-Xmx512M -Xms512M
+    ) ELSE (
+        rem 64-bit OS
+        set KAFKA_HEAP_OPTS=-Xmx1G -Xms1G
+    )
+)
+"%~dp0kafka-run-class.bat" kafka.Kafka %*
+EndLocal

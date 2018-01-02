@@ -1,0 +1,262 @@
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<script id="configuration-template" type="text/x-handlebars-template">
+  Kafka uses key-value pairs in the <a href="http://en.wikipedia.org/wiki/.properties">property file format</a> for configuration. These values can be supplied either from a file or programmatically.
+
+  <h3><a id="brokerconfigs" href="#brokerconfigs">3.1 Broker Configs</a></h3>
+
+  The essential configurations are the following:
+  <ul>
+      <li><code>broker.id</code>
+      <li><code>log.dirs</code>
+      <li><code>zookeeper.connect</code>
+  </ul>
+
+  Topic-level configurations and defaults are discussed in more detail <a href="#topicconfigs">below</a>.
+
+  <!--#include virtual="generated/kafka_config.html" -->
+
+  <p>More details about broker configuration can be found in the scala class <code>kafka.server.KafkaConfig</code>.</p>
+
+  <h3><a id="topicconfigs" href="#topicconfigs">3.2 Topic-Level Configs</a></h3>
+
+  Configurations pertinent to topics have both a server default as well an optional per-topic override. If no per-topic configuration is given the server default is used. The override can be set at topic creation time by giving one or more <code>--config</code> options. This example creates a topic named <i>my-topic</i> with a custom max message size and flush rate:
+  <pre class="brush: bash;">
+  &gt; bin/kafka-topics.sh --zookeeper localhost:2181 --create --topic my-topic --partitions 1
+      --replication-factor 1 --config max.message.bytes=64000 --config flush.messages=1
+  </pre>
+  Overrides can also be changed or set later using the alter configs command. This example updates the max message size for <i>my-topic</i>:
+  <pre class="brush: bash;">
+  &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic
+      --alter --add-config max.message.bytes=128000
+  </pre>
+
+  To check overrides set on the topic you can do
+  <pre class="brush: bash;">
+  &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic --describe
+  </pre>
+
+  To remove an override you can do
+  <pre class="brush: bash;">
+  &gt; bin/kafka-configs.sh --zookeeper localhost:2181  --entity-type topics --entity-name my-topic --alter --delete-config max.message.bytes
+  </pre>
+
+  The following are the topic-level configurations. The server's default configuration for this property is given under the Server Default Property heading. A given server default config value only applies to a topic if it does not have an explicit topic config override.
+
+  <!--#include virtual="generated/topic_config.html" -->
+
+  <h3><a id="producerconfigs" href="#producerconfigs">3.3 Producer Configs</a></h3>
+
+  Below is the configuration of the Java producer:
+  <!--#include virtual="generated/producer_config.html" -->
+
+  <p>
+      For those interested in the legacy Scala producer configs, information can be found <a href="http://kafka.apache.org/082/documentation.html#producerconfigs">
+      here</a>.
+  </p>
+
+  <h3><a id="consumerconfigs" href="#consumerconfigs">3.4 Consumer Configs</a></h3>
+
+  In 0.9.0.0 we introduced the new Java consumer as a replacement for the older Scala-based simple and high-level consumers.
+  The configs for both new and old consumers are described below.
+
+  <h4><a id="newconsumerconfigs" href="#newconsumerconfigs">3.4.1 New Consumer Configs</a></h4>
+  Below is the configuration for the new consumer:
+  <!--#include virtual="generated/consumer_config.html" -->
+
+  <h4><a id="oldconsumerconfigs" href="#oldconsumerconfigs">3.4.2 Old Consumer Configs</a></h4>
+
+  The essential old consumer configurations are the following:
+  <ul>
+          <li><code>group.id</code>
+          <li><code>zookeeper.connect</code>
+  </ul>
+
+  <table class="data-table">
+  <tbody><tr>
+          <th>Property</th>
+          <th>Default</th>
+          <th>Description</th>
+  </tr>
+      <tr>
+        <td>group.id</td>
+        <td colspan="1"></td>
+        <td>A string that uniquely identifies the group of consumer processes to which this consumer belongs. By setting the same group id multiple processes indicate that they are all part of the same consumer group.</td>
+      </tr>
+      <tr>
+        <td>zookeeper.connect</td>
+        <td colspan="1"></td>
+            <td>Specifies the ZooKeeper connection string in the form <code>hostname:port</code> where host and port are the host and port of a ZooKeeper server. To allow connecting through other ZooKeeper nodes when that ZooKeeper machine is down you can also specify multiple hosts in the form <code>hostname1:port1,hostname2:port2,hostname3:port3</code>.
+          <p>
+      The server may also have a ZooKeeper chroot path as part of its ZooKeeper connection string which puts its data under some path in the global ZooKeeper namespace. If so the consumer should use the same chroot path in its connection string. For example to give a chroot path of <code>/chroot/path</code> you would give the connection string as  <code>hostname1:port1,hostname2:port2,hostname3:port3/chroot/path</code>.</td>
+      </tr>
+      <tr>
+        <td>consumer.id</td>
+        <td colspan="1">null</td>
+        <td>
+          <p>Generated automatically if not set.</p>
+      </td>
+      </tr>
+      <tr>
+        <td>socket.timeout.ms</td>
+        <td colspan="1">30 * 1000</td>
+        <td>The socket timeout for network requests. The actual timeout set will be max.fetch.wait + socket.timeout.ms.</td>
+      </tr>
+      <tr>
+        <td>socket.receive.buffer.bytes</td>
+        <td colspan="1">64 * 1024</td>
+        <td>The socket receive buffer for network requests</td>
+      </tr>
+      <tr>
+        <td>fetch.message.max.bytes</td>
+        <td nowrap>1024 * 1024</td>
+        <td>The number of bytes of messages to attempt to fetch for each topic-partition in each fetch request. These bytes will be read into memory for each partition, so this helps control the memory used by the consumer. The fetch request size must be at least as large as the maximum message size the server allows or else it is possible for the producer to send messages larger than the consumer can fetch.</td>
+      </tr>
+      <tr>
+        <td>num.consumer.fetchers</td>
+        <td colspan="1">1</td>
+        <td>The number fetcher threads used to fetch data.</td>
+      </tr>
+      <tr>
+        <td>auto.commit.enable</td>
+        <td colspan="1">true</td>
+        <td>If true, periodically commit to ZooKeeper the offset of messages already fetched by the consumer. This committed offset will be used when the process fails as the position from which the new consumer will begin.</td>
+      </tr>
+      <tr>
+        <td>auto.commit.interval.ms</td>
+        <td colspan="1">60 * 1000</td>
+        <td>The frequency in ms that the consumer offsets are committed to zookeeper.</td>
+      </tr>
+      <tr>
+        <td>queued.max.message.chunks</td>
+        <td colspan="1">2</td>
+        <td>Max number of message chunks buffered for consumption. Each chunk can be up to fetch.message.max.bytes.</td>
+      </tr>
+      <tr>
+        <td>rebalance.max.retries</td>
+        <td colspan="1">4</td>
+        <td>When a new consumer joins a consumer group the set of consumers attempt to "rebalance" the load to assign partitions to each consumer. If the set of consumers changes while this assignment is taking place the rebalance will fail and retry. This setting controls the maximum number of attempts before giving up.</td>
+      </tr>
+      <tr>
+        <td>fetch.min.bytes</td>
+        <td colspan="1">1</td>
+        <td>The minimum amount of data the server should return for a fetch request. If insufficient data is available the request will wait for that much data to accumulate before answering the request.</td>
+      </tr>
+      <tr>
+        <td>fetch.wait.max.ms</td>
+        <td colspan="1">100</td>
+        <td>The maximum amount of time the server will block before answering the fetch request if there isn't sufficient data to immediately satisfy fetch.min.bytes</td>
+      </tr>
+      <tr>
+        <td>rebalance.backoff.ms</td>
+        <td>2000</td>
+        <td>Backoff time between retries during rebalance. If not set explicitly, the value in zookeeper.sync.time.ms is used.
+        </td>
+      </tr>
+      <tr>
+        <td>refresh.leader.backoff.ms</td>
+        <td colspan="1">200</td>
+        <td>Backoff time to wait before trying to determine the leader of a partition that has just lost its leader.</td>
+      </tr>
+      <tr>
+        <td>auto.offset.reset</td>
+        <td colspan="1">largest</td>
+        <td>
+          <p>What to do when there is no initial offset in ZooKeeper or if an offset is out of range:<br/>* smallest : automatically reset the offset to the smallest offset<br/>* largest : automatically reset the offset to the largest offset<br/>* anything else: throw exception to the consumer</p>
+      </td>
+      </tr>
+      <tr>
+        <td>consumer.timeout.ms</td>
+        <td colspan="1">-1</td>
+        <td>Throw a timeout exception to the consumer if no message is available for consumption after the specified interval</td>
+      </tr>
+      <tr>
+        <td>exclude.internal.topics</td>
+        <td colspan="1">true</td>
+        <td>Whether messages from internal topics (such as offsets) should be exposed to the consumer.</td>
+      </tr>
+      <tr>
+        <td>client.id</td>
+        <td colspan="1">group id value</td>
+        <td>The client id is a user-specified string sent in each request to help trace calls. It should logically identify the application making the request.</td>
+      </tr>
+      <tr>
+        <td>zookeeper.session.timeout.ms </td>
+        <td colspan="1">6000</td>
+        <td>ZooKeeper session timeout. If the consumer fails to heartbeat to ZooKeeper for this period of time it is considered dead and a rebalance will occur.</td>
+      </tr>
+      <tr>
+        <td>zookeeper.connection.timeout.ms</td>
+        <td colspan="1">6000</td>
+        <td>The max time that the client waits while establishing a connection to zookeeper.</td>
+      </tr>
+      <tr>
+        <td>zookeeper.sync.time.ms </td>
+        <td colspan="1">2000</td>
+        <td>How far a ZK follower can be behind a ZK leader</td>
+      </tr>
+      <tr>
+        <td>offsets.storage</td>
+        <td colspan="1">zookeeper</td>
+        <td>Select where offsets should be stored (zookeeper or kafka).</td>
+      </tr>
+      <tr>
+        <td>offsets.channel.backoff.ms</td>
+        <td colspan="1">1000</td>
+        <td>The backoff period when reconnecting the offsets channel or retrying failed offset fetch/commit requests.</td>
+      </tr>
+      <tr>
+        <td>offsets.channel.socket.timeout.ms</td>
+        <td colspan="1">10000</td>
+        <td>Socket timeout when reading responses for offset fetch/commit requests. This timeout is also used for ConsumerMetadata requests that are used to query for the offset manager.</td>
+      </tr>
+      <tr>
+        <td>offsets.commit.max.retries</td>
+        <td colspan="1">5</td>
+        <td>Retry the offset commit up to this many times on failure. This retry count only applies to offset commits during shut-down. It does not apply to commits originating from the auto-commit thread. It also does not apply to attempts to query for the offset coordinator before committing offsets. i.e., if a consumer metadata request fails for any reason, it will be retried and that retry does not count toward this limit.</td>
+      </tr>
+      <tr>
+        <td>dual.commit.enabled</td>
+        <td colspan="1">true</td>
+        <td>If you are using "kafka" as offsets.storage, you can dual commit offsets to ZooKeeper (in addition to Kafka). This is required during migration from zookeeper-based offset storage to kafka-based offset storage. With respect to any given consumer group, it is safe to turn this off after all instances within that group have been migrated to the new version that commits offsets to the broker (instead of directly to ZooKeeper).</td>
+      </tr>
+      <tr>
+        <td>partition.assignment.strategy</td>
+        <td colspan="1">range</td>
+        <td><p>Select between the "range" or "roundrobin" strategy for assigning partitions to consumer streams.<p>The round-robin partition assignor lays out all the available partitions and all the available consumer threads. It then proceeds to do a round-robin assignment from partition to consumer thread. If the subscriptions of all consumer instances are identical, then the partitions will be uniformly distributed. (i.e., the partition ownership counts will be within a delta of exactly one across all consumer threads.) Round-robin assignment is permitted only if: (a) Every topic has the same number of streams within a consumer instance (b) The set of subscribed topics is identical for every consumer instance within the group.<p> Range partitioning works on a per-topic basis. For each topic, we lay out the available partitions in numeric order and the consumer threads in lexicographic order. We then divide the number of partitions by the total number of consumer streams (threads) to determine the number of partitions to assign to each consumer. If it does not evenly divide, then the first few consumers will have one extra partition.</td>
+      </tr>
+  </tbody>
+  </table>
+
+
+  <p>More details about consumer configuration can be found in the scala class <code>kafka.consumer.ConsumerConfig</code>.</p>
+
+  <h3><a id="connectconfigs" href="#connectconfigs">3.5 Kafka Connect Configs</a></h3>
+  Below is the configuration of the Kafka Connect framework.
+  <!--#include virtual="generated/connect_config.html" -->
+
+  <h3><a id="streamsconfigs" href="#streamsconfigs">3.6 Kafka Streams Configs</a></h3>
+  Below is the configuration of the Kafka Streams client library.
+  <!--#include virtual="generated/streams_config.html" -->
+
+  <h3><a id="adminclientconfigs" href="#adminclientconfigs">3.7 AdminClient Configs</a></h3>
+  Below is the configuration of the Kafka Admin client library.
+  <!--#include virtual="generated/admin_client_config.html" -->
+</script>
+
+<div class="p-configuration"></div>

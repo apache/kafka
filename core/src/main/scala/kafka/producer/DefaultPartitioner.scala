@@ -19,11 +19,12 @@ package kafka.producer
 
 
 import kafka.utils._
+import org.apache.kafka.common.utils.Utils
 
-private class DefaultPartitioner[T](props: VerifiableProperties = null) extends Partitioner[T] {
-  private val random = new java.util.Random
-  
-  def partition(key: T, numPartitions: Int): Int = {
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "It has been replaced by org.apache.kafka.clients.producer.internals.DefaultPartitioner.", "0.10.0.0")
+class DefaultPartitioner(props: VerifiableProperties = null) extends Partitioner {
+  def partition(key: Any, numPartitions: Int): Int = {
     Utils.abs(key.hashCode) % numPartitions
   }
 }

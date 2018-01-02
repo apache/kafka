@@ -17,43 +17,52 @@
 
 package kafka.server
 
-import kafka.utils.Logging
+import java.util.Properties
 
+import kafka.metrics.KafkaMetricsReporter
+import kafka.utils.{Exit, Logging, VerifiableProperties}
 
-class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
-  private var server : KafkaServer = null
-
-  init
-
-  private def init() {
-    server = new KafkaServer(serverConfig)
+object KafkaServerStartable {
+  def fromProps(serverProps: Properties) = {
+    val reporters = KafkaMetricsReporter.startReporters(new VerifiableProperties(serverProps))
+    new KafkaServerStartable(KafkaConfig.fromProps(serverProps), reporters)
   }
+}
+
+class KafkaServerStartable(val serverConfig: KafkaConfig, reporters: Seq[KafkaMetricsReporter]) extends Logging {
+  private val server = new KafkaServer(serverConfig, kafkaMetricsReporters = reporters)
+
+  def this(serverConfig: KafkaConfig) = this(serverConfig, Seq.empty)
 
   def startup() {
-    try {
-      server.startup()
-    }
+    try server.startup()
     catch {
-      case e =>
-        fatal("Fatal error during KafkaServerStable startup. Prepare to shutdown", e)
-        shutdown()
-        System.exit(1)
+      case _: Throwable =>
+        // KafkaServer.startup() calls shutdown() in case of exceptions, so we invoke `exit` to set the status code
+        fatal("Exiting Kafka.")
+        Exit.exit(1)
     }
   }
 
   def shutdown() {
-    try {
-      server.shutdown()
-    }
+    try server.shutdown()
     catch {
-      case e =>
-        fatal("Fatal error during KafkaServerStable shutdown. Prepare to halt", e)
-        System.exit(1)
+      case _: Throwable =>
+        fatal("Halting Kafka.")
+        // Calling exit() can lead to deadlock as exit() can be called multiple times. Force exit.
+        Exit.halt(1)
     }
   }
 
-  def awaitShutdown() = 
-    server.awaitShutdown
+  /**
+   * Allow setting broker state from the startable.
+   * This is needed when a custom kafka server startable want to emit new states that it introduces.
+   */
+  def setServerState(newState: Byte) {
+    server.brokerState.newState(newState)
+  }
+
+  def awaitShutdown(): Unit = server.awaitShutdown()
 
 }
 

@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -16,6 +16,8 @@
  */
 
 package kafka.serializer
+
+import java.nio.ByteBuffer
 
 import kafka.utils.VerifiableProperties
 
@@ -36,17 +38,35 @@ class DefaultDecoder(props: VerifiableProperties = null) extends Decoder[Array[B
 }
 
 /**
- * The string encoder translates strings into bytes. It uses UTF8 by default but takes
+ * The string decoder translates bytes into strings. It uses UTF8 by default but takes
  * an optional property serializer.encoding to control this.
  */
 class StringDecoder(props: VerifiableProperties = null) extends Decoder[String] {
-  val encoding = 
+  val encoding =
     if(props == null)
-      "UTF8" 
+      "UTF8"
     else
       props.getString("serializer.encoding", "UTF8")
-      
+
   def fromBytes(bytes: Array[Byte]): String = {
     new String(bytes, encoding)
+  }
+}
+
+/**
+  * The long decoder translates bytes into longs.
+  */
+class LongDecoder(props: VerifiableProperties = null) extends Decoder[Long] {
+  def fromBytes(bytes: Array[Byte]): Long = {
+    ByteBuffer.wrap(bytes).getLong
+  }
+}
+
+/**
+  * The integer decoder translates bytes into integers.
+  */
+class IntegerDecoder(props: VerifiableProperties = null) extends Decoder[Integer] {
+  def fromBytes(bytes: Array[Byte]): Integer = {
+    ByteBuffer.wrap(bytes).getInt()
   }
 }

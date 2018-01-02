@@ -18,14 +18,15 @@
 package kafka.api
 
 import java.nio._
-import kafka.message._
+
 import kafka.api.ApiUtils._
 import kafka.common._
-import kafka.network.RequestChannel.Response
-import kafka.network.{RequestChannel, BoundedByteBufferSend}
+import kafka.message._
+import org.apache.kafka.common.protocol.ApiKeys
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object ProducerRequest {
-  val CurrentVersion = 0.shortValue
+  val CurrentVersion = 2.shortValue
 
   def readFrom(buffer: ByteBuffer): ProducerRequest = {
     val versionId: Short = buffer.getShort
@@ -52,13 +53,14 @@ object ProducerRequest {
   }
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
-                           override val correlationId: Int,
+                           correlationId: Int,
                            clientId: String,
                            requiredAcks: Short,
                            ackTimeoutMs: Int,
                            data: collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet])
-    extends RequestOrResponse(Some(RequestKeys.ProduceKey), correlationId) {
+    extends RequestOrResponse(Some(ApiKeys.PRODUCE.id)) {
 
   /**
    * Partitions the data into a map of maps (one for each topic).
@@ -91,7 +93,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
           val partitionMessageData = partitionAndData._2
           val bytes = partitionMessageData.buffer
           buffer.putInt(partition)
-          buffer.putInt(bytes.limit)
+          buffer.putInt(bytes.limit())
           buffer.put(bytes)
           bytes.rewind
         })
@@ -122,7 +124,11 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
 
   def numPartitions = data.size
 
-  override def toString(): String = {
+  override def toString: String = {
+    describe(true)
+  }
+
+  override def describe(details: Boolean): String = {
     val producerRequest = new StringBuilder
     producerRequest.append("Name: " + this.getClass.getSimpleName)
     producerRequest.append("; Version: " + versionId)
@@ -130,17 +136,9 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
     producerRequest.append("; ClientId: " + clientId)
     producerRequest.append("; RequiredAcks: " + requiredAcks)
     producerRequest.append("; AckTimeoutMs: " + ackTimeoutMs + " ms")
-    producerRequest.append("; TopicAndPartition: " + topicPartitionMessageSizeMap.mkString(","))
+    if(details)
+      producerRequest.append("; TopicAndPartition: " + topicPartitionMessageSizeMap.mkString(","))
     producerRequest.toString()
-  }
-
-  override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val producerResponseStatus = data.map {
-      case (topicAndPartition, data) =>
-        (topicAndPartition, ProducerResponseStatus(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), -1l))
-    }
-    val errorResponse = ProducerResponse(correlationId, producerResponseStatus)
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
   }
 
   def emptyData(){

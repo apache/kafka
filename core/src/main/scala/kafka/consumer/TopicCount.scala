@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -18,56 +18,67 @@
 package kafka.consumer
 
 import scala.collection._
-import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{Json, ZKGroupDirs, ZkUtils, Logging}
+import kafka.utils.{Json, ZKGroupDirs, ZkUtils, Logging, CoreUtils}
 import kafka.common.KafkaException
 
+@deprecated("This trait has been deprecated and will be removed in a future release.", "0.11.0.0")
 private[kafka] trait TopicCount {
 
-  def getConsumerThreadIdsPerTopic: Map[String, Set[String]]
-  def dbString: String
+  def getConsumerThreadIdsPerTopic: Map[String, Set[ConsumerThreadId]]
+  def getTopicCountMap: Map[String, Int]
   def pattern: String
-  
-  protected def makeConsumerThreadIdsPerTopic(consumerIdString: String,
-                                            topicCountMap: Map[String,  Int]) = {
-    val consumerThreadIdsPerTopicMap = new mutable.HashMap[String, Set[String]]()
-    for ((topic, nConsumers) <- topicCountMap) {
-      val consumerSet = new mutable.HashSet[String]
-      assert(nConsumers >= 1)
-      for (i <- 0 until nConsumers)
-        consumerSet += consumerIdString + "-" + i
-      consumerThreadIdsPerTopicMap.put(topic, consumerSet)
-    }
-    consumerThreadIdsPerTopicMap
-  }
+
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
+case class ConsumerThreadId(consumer: String, threadId: Int) extends Ordered[ConsumerThreadId] {
+  override def toString = "%s-%d".format(consumer, threadId)
+
+  def compare(that: ConsumerThreadId) = toString.compare(that.toString)
+}
+
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.11.0.0")
 private[kafka] object TopicCount extends Logging {
   val whiteListPattern = "white_list"
   val blackListPattern = "black_list"
   val staticPattern = "static"
 
-  def constructTopicCount(group: String, consumerId: String, zkClient: ZkClient) : TopicCount = {
+  def makeThreadId(consumerIdString: String, threadId: Int) = consumerIdString + "-" + threadId
+
+  def makeConsumerThreadIdsPerTopic(consumerIdString: String,
+                                    topicCountMap: Map[String,  Int]) = {
+    val consumerThreadIdsPerTopicMap = new mutable.HashMap[String, Set[ConsumerThreadId]]()
+    for ((topic, nConsumers) <- topicCountMap) {
+      val consumerSet = new mutable.HashSet[ConsumerThreadId]
+      assert(nConsumers >= 1)
+      for (i <- 0 until nConsumers)
+        consumerSet += ConsumerThreadId(consumerIdString, i)
+      consumerThreadIdsPerTopicMap.put(topic, consumerSet)
+    }
+    consumerThreadIdsPerTopicMap
+  }
+
+  def constructTopicCount(group: String, consumerId: String, zkUtils: ZkUtils, excludeInternalTopics: Boolean) : TopicCount = {
     val dirs = new ZKGroupDirs(group)
-    val topicCountString = ZkUtils.readData(zkClient, dirs.consumerRegistryDir + "/" + consumerId)._1
+    val topicCountString = zkUtils.readData(dirs.consumerRegistryDir + "/" + consumerId)._1
     var subscriptionPattern: String = null
     var topMap: Map[String, Int] = null
     try {
       Json.parseFull(topicCountString) match {
-        case Some(m) =>
-          val consumerRegistrationMap = m.asInstanceOf[Map[String, Any]]
+        case Some(js) =>
+          val consumerRegistrationMap = js.asJsonObject
           consumerRegistrationMap.get("pattern") match {
-            case Some(pattern) => subscriptionPattern = pattern.asInstanceOf[String]
+            case Some(pattern) => subscriptionPattern = pattern.to[String]
             case None => throw new KafkaException("error constructing TopicCount : " + topicCountString)
           }
           consumerRegistrationMap.get("subscription") match {
-            case Some(sub) => topMap = sub.asInstanceOf[Map[String, Int]]
+            case Some(sub) => topMap = sub.to[Map[String, Int]]
             case None => throw new KafkaException("error constructing TopicCount : " + topicCountString)
           }
         case None => throw new KafkaException("error constructing TopicCount : " + topicCountString)
       }
     } catch {
-      case e =>
+      case e: Throwable =>
         error("error parsing consumer json string " + topicCountString, e)
         throw e
     }
@@ -85,69 +96,48 @@ private[kafka] object TopicCount extends Logging {
           new Whitelist(regex)
         else
           new Blacklist(regex)
-      new WildcardTopicCount(zkClient, consumerId, filter, numStreams)
+      new WildcardTopicCount(zkUtils, consumerId, filter, numStreams, excludeInternalTopics)
     }
   }
 
   def constructTopicCount(consumerIdString: String, topicCount: Map[String, Int]) =
     new StaticTopicCount(consumerIdString, topicCount)
 
-  def constructTopicCount(consumerIdString: String, filter: TopicFilter, numStreams: Int, zkClient: ZkClient) =
-    new WildcardTopicCount(zkClient, consumerIdString, filter, numStreams)
+  def constructTopicCount(consumerIdString: String, filter: TopicFilter, numStreams: Int, zkUtils: ZkUtils, excludeInternalTopics: Boolean) =
+    new WildcardTopicCount(zkUtils, consumerIdString, filter, numStreams, excludeInternalTopics)
 
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 private[kafka] class StaticTopicCount(val consumerIdString: String,
                                 val topicCountMap: Map[String, Int])
                                 extends TopicCount {
 
-  def getConsumerThreadIdsPerTopic = makeConsumerThreadIdsPerTopic(consumerIdString, topicCountMap)
+  def getConsumerThreadIdsPerTopic = TopicCount.makeConsumerThreadIdsPerTopic(consumerIdString, topicCountMap)
 
-  override def equals(obj: Any): Boolean = {
-    obj match {
-      case null => false
-      case n: StaticTopicCount => consumerIdString == n.consumerIdString && topicCountMap == n.topicCountMap
-      case _ => false
-    }
-  }
-
-  /**
-   *  return json of
-   *  { "topic1" : 4,
-   *    "topic2" : 4 }
-   */
-  def dbString = {
-    val builder = new StringBuilder
-    builder.append("{ ")
-    var i = 0
-    for ( (topic, nConsumers) <- topicCountMap) {
-      if (i > 0)
-        builder.append(",")
-      builder.append("\"" + topic + "\": " + nConsumers)
-      i += 1
-    }
-    builder.append(" }")
-    builder.toString()
-  }
+  def getTopicCountMap = topicCountMap
 
   def pattern = TopicCount.staticPattern
 }
 
-private[kafka] class WildcardTopicCount(zkClient: ZkClient,
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
+private[kafka] class WildcardTopicCount(zkUtils: ZkUtils,
                                         consumerIdString: String,
                                         topicFilter: TopicFilter,
-                                        numStreams: Int) extends TopicCount {
+                                        numStreams: Int,
+                                        excludeInternalTopics: Boolean) extends TopicCount {
   def getConsumerThreadIdsPerTopic = {
-    val wildcardTopics = ZkUtils.getChildrenParentMayNotExist(zkClient, ZkUtils.BrokerTopicsPath).filter(topicFilter.isTopicAllowed(_))
-    makeConsumerThreadIdsPerTopic(consumerIdString, Map(wildcardTopics.map((_, numStreams)): _*))
+    val wildcardTopics = zkUtils.getChildrenParentMayNotExist(ZkUtils.BrokerTopicsPath)
+                         .filter(topic => topicFilter.isTopicAllowed(topic, excludeInternalTopics))
+    TopicCount.makeConsumerThreadIdsPerTopic(consumerIdString, Map(wildcardTopics.map((_, numStreams)): _*))
   }
 
-  def dbString = "{ \"%s\" : %d }".format(topicFilter.regex, numStreams)
+  def getTopicCountMap = Map(CoreUtils.JSONEscapeString(topicFilter.regex) -> numStreams)
 
   def pattern: String = {
     topicFilter match {
-      case wl: Whitelist => TopicCount.whiteListPattern
-      case bl: Blacklist => TopicCount.blackListPattern
+      case _: Whitelist => TopicCount.whiteListPattern
+      case _: Blacklist => TopicCount.blackListPattern
     }
   }
 

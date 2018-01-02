@@ -14,5 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-base_dir=$(dirname $0)
-$base_dir/kafka-run-class.sh kafka.admin.PreferredReplicaLeaderElectionCommand $@
+exec $(dirname $0)/kafka-run-class.sh kafka.admin.PreferredReplicaLeaderElectionCommand "$@"

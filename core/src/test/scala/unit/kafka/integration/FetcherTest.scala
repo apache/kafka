@@ -19,92 +19,75 @@ package kafka.integration
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
+import org.junit.{Test, After, Before}
+
 import scala.collection._
-import junit.framework.Assert._
+import org.junit.Assert._
 
 import kafka.cluster._
 import kafka.server._
-import org.scalatest.junit.JUnit3Suite
 import kafka.consumer._
-import kafka.serializer._
-import kafka.producer.{KeyedMessage, Producer}
-import kafka.utils.TestUtils._
 import kafka.utils.TestUtils
-import kafka.admin.CreateTopicCommand
 
-class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
-
+@deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
+class FetcherTest extends KafkaServerTestHarness {
   val numNodes = 1
-  val configs =
-    for(props <- TestUtils.createBrokerConfigs(numNodes))
-    yield new KafkaConfig(props)
+  def generateConfigs = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)
+
   val messages = new mutable.HashMap[Int, Seq[Array[Byte]]]
   val topic = "topic"
-  val cluster = new Cluster(configs.map(c => new Broker(c.brokerId, "localhost", c.port)))
-  val shutdown = ZookeeperConsumerConnector.shutdownCommand
   val queue = new LinkedBlockingQueue[FetchedDataChunk]
-  val topicInfos = configs.map(c => new PartitionTopicInfo(topic,
-                                                           0,
-                                                           queue,
-                                                           new AtomicLong(0),
-                                                           new AtomicLong(0),
-                                                           new AtomicInteger(0),
-                                                           ""))
 
   var fetcher: ConsumerFetcherManager = null
 
+  @Before
   override def setUp() {
     super.setUp
-    CreateTopicCommand.createTopic(zkClient, topic, 1, 1, configs.head.brokerId.toString)
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
-    fetcher = new ConsumerFetcherManager("consumer1", new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), zkClient)
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)), servers = servers)
+
+    val cluster = new Cluster(servers.map { s =>
+      new Broker(s.config.brokerId, "localhost", boundPort(s), listenerName, securityProtocol)
+    })
+
+    fetcher = new ConsumerFetcherManager("consumer1", new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), zkUtils)
     fetcher.stopConnections()
+    val topicInfos = configs.map(_ =>
+      new PartitionTopicInfo(topic,
+        0,
+        queue,
+        new AtomicLong(0),
+        new AtomicLong(0),
+        new AtomicInteger(0),
+        ""))
     fetcher.startConnections(topicInfos, cluster)
   }
 
+  @After
   override def tearDown() {
     fetcher.stopConnections()
     super.tearDown
   }
 
+  @Test
   def testFetcher() {
     val perNode = 2
-    var count = sendMessages(perNode)
+    var count = TestUtils.produceMessages(servers, topic, perNode).size
 
     fetch(count)
     assertQueueEmpty()
-    count = sendMessages(perNode)
+    count = TestUtils.produceMessages(servers, topic, perNode).size
     fetch(count)
     assertQueueEmpty()
   }
 
   def assertQueueEmpty(): Unit = assertEquals(0, queue.size)
 
-  def sendMessages(messagesPerNode: Int): Int = {
-    var count = 0
-    for(conf <- configs) {
-      val producer: Producer[String, Array[Byte]] = TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs),
-                                                                             new DefaultEncoder(),
-                                                                             new StringEncoder())
-      val ms = 0.until(messagesPerNode).map(x => (conf.brokerId * 5 + x).toString.getBytes).toArray
-      messages += conf.brokerId -> ms
-      producer.send(ms.map(m => KeyedMessage[String, Array[Byte]](topic, topic, m)):_*)
-      producer.close()
-      count += ms.size
-    }
-    count
-  }
-
   def fetch(expected: Int) {
     var count = 0
-    while(true) {
+    while (count < expected) {
       val chunk = queue.poll(2L, TimeUnit.SECONDS)
       assertNotNull("Timed out waiting for data chunk " + (count + 1), chunk)
-      for(message <- chunk.messages)
-        count += 1
-      if(count == expected)
-        return
+      count += chunk.messages.size
     }
   }
-
 }

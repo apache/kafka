@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -34,12 +34,12 @@ object Mx4jLoader extends Logging {
 
   def maybeLoad(): Boolean = {
     val props = new VerifiableProperties(System.getProperties())
-    if (props.getBoolean("kafka_mx4jenable", false))
-      false
+    if (!props.getBoolean("kafka_mx4jenable", false))
+      return false
     val address = props.getString("mx4jaddress", "0.0.0.0")
     val port = props.getInt("mx4jport", 8082)
     try {
-      debug("Will try to load MX4j now, if it's in the classpath");
+      debug("Will try to load MX4j now, if it's in the classpath")
 
       val mbs = ManagementFactory.getPlatformMBeanServer()
       val processorName = new ObjectName("Server:name=XSLTProcessor")
@@ -58,15 +58,13 @@ object Mx4jLoader extends Logging {
       mbs.registerMBean(xsltProcessor, processorName)
       httpAdaptorClass.getMethod("start").invoke(httpAdaptor)
       info("mx4j successfuly loaded")
-      true
+      return true
     }
     catch {
-	  case e: ClassNotFoundException => {
-        info("Will not load MX4J, mx4j-tools.jar is not in the classpath");
-      }
-      case e => {
-        warn("Could not start register mbean in JMX", e);
-      }
+	  case _: ClassNotFoundException =>
+        info("Will not load MX4J, mx4j-tools.jar is not in the classpath")
+      case e: Throwable =>
+        warn("Could not start register mbean in JMX", e)
     }
     false
   }

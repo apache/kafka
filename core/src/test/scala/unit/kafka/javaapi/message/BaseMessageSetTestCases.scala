@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -17,42 +17,37 @@
 
 package kafka.javaapi.message
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.Test
-import kafka.utils.TestUtils
-import kafka.message.{DefaultCompressionCodec, NoCompressionCodec, CompressionCodec, Message}
+import kafka.message.{CompressionCodec, DefaultCompressionCodec, Message, NoCompressionCodec}
+import org.apache.kafka.test.TestUtils
+
+import scala.collection.JavaConverters._
 
 trait BaseMessageSetTestCases extends JUnitSuite {
   
   val messages = Array(new Message("abcd".getBytes()), new Message("efgh".getBytes()))
   def createMessageSet(messages: Seq[Message], compressed: CompressionCodec = NoCompressionCodec): MessageSet
-  def toMessageIterator(messageSet: MessageSet): Iterator[Message] = {
-    import scala.collection.JavaConversions._
-    val messages = asIterable(messageSet)
-    messages.map(m => m.message).iterator
-  }
 
   @Test
-  def testWrittenEqualsRead {
+  def testWrittenEqualsRead(): Unit = {
     val messageSet = createMessageSet(messages)
-    TestUtils.checkEquals(messages.iterator, toMessageIterator(messageSet))
+    assertEquals(messages.toSeq, messageSet.asScala.map(m => m.message))
   }
 
   @Test
   def testIteratorIsConsistent() {
-    import scala.collection.JavaConversions._
     val m = createMessageSet(messages)
     // two iterators over the same set should give the same results
-    TestUtils.checkEquals(asIterator(m.iterator), asIterator(m.iterator))
+    TestUtils.checkEquals(m, m)
   }
 
   @Test
   def testIteratorIsConsistentWithCompression() {
-    import scala.collection.JavaConversions._
     val m = createMessageSet(messages, DefaultCompressionCodec)
     // two iterators over the same set should give the same results
-    TestUtils.checkEquals(asIterator(m.iterator), asIterator(m.iterator))
+    TestUtils.checkEquals(m, m)
   }
 
   @Test

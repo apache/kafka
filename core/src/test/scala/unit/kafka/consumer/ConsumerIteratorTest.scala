@@ -20,71 +20,103 @@ package kafka.consumer
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-import scala.collection._
-import junit.framework.Assert._
 
+import kafka.common.LongRef
+
+import scala.collection._
+import org.junit.Assert._
 import kafka.message._
 import kafka.server._
 import kafka.utils.TestUtils._
 import kafka.utils._
-import kafka.admin.CreateTopicCommand
-import org.junit.Test
+import org.junit.{Before, Test}
 import kafka.serializer._
-import kafka.cluster.{Broker, Cluster}
-import org.scalatest.junit.JUnit3Suite
 import kafka.integration.KafkaServerTestHarness
 
-class ConsumerIteratorTest extends JUnit3Suite with KafkaServerTestHarness {
+@deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
+class ConsumerIteratorTest extends KafkaServerTestHarness {
 
   val numNodes = 1
-  val configs =
-    for(props <- TestUtils.createBrokerConfigs(numNodes))
-    yield new KafkaConfig(props) {
-      override val zkConnect = TestZKUtils.zookeeperConnect
-    }
+
+  def generateConfigs = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)
+
   val messages = new mutable.HashMap[Int, Seq[Message]]
   val topic = "topic"
   val group = "group1"
   val consumer0 = "consumer0"
   val consumedOffset = 5
-  val cluster = new Cluster(configs.map(c => new Broker(c.brokerId, "localhost", c.port)))
   val queue = new LinkedBlockingQueue[FetchedDataChunk]
-  val topicInfos = configs.map(c => new PartitionTopicInfo(topic,
-                                                           0,
-                                                           queue,
-                                                           new AtomicLong(consumedOffset),
-                                                           new AtomicLong(0),
-                                                           new AtomicInteger(0),
-                                                           ""))
-  val consumerConfig = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer0))
+  var topicInfos: Seq[PartitionTopicInfo] = null
 
+  def consumerConfig = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer0))
+
+  @Before
   override def setUp() {
-    super.setUp
-    CreateTopicCommand.createTopic(zkClient, topic, 1, 1, configs.head.brokerId.toString)
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
+    super.setUp()
+    topicInfos = configs.map(_ => new PartitionTopicInfo(topic,
+      0,
+      queue,
+      new AtomicLong(consumedOffset),
+      new AtomicLong(0),
+      new AtomicInteger(0),
+      ""))
+    createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)), servers = servers)
   }
 
   @Test
   def testConsumerIteratorDeduplicationDeepIterator() {
     val messageStrings = (0 until 10).map(_.toString).toList
     val messages = messageStrings.map(s => new Message(s.getBytes))
-    val messageSet = new ByteBufferMessageSet(DefaultCompressionCodec, new AtomicLong(0), messages:_*)
+    val messageSet = new ByteBufferMessageSet(DefaultCompressionCodec, new LongRef(0), messages:_*)
 
-    topicInfos(0).enqueue(messageSet)
+    topicInfos.head.enqueue(messageSet)
     assertEquals(1, queue.size)
     queue.put(ZookeeperConsumerConnector.shutdownCommand)
 
-    val iter = new ConsumerIterator[String, String](queue, 
+    val iter = new ConsumerIterator[String, String](queue,
                                                     consumerConfig.consumerTimeoutMs,
-                                                    new StringDecoder(), 
+                                                    new StringDecoder(),
                                                     new StringDecoder(),
                                                     clientId = "")
-    val receivedMessages = (0 until 5).map(i => iter.next.message).toList
+    val receivedMessages = (0 until 5).map(_ => iter.next.message)
 
     assertFalse(iter.hasNext)
-    assertEquals(1, queue.size) // This is only the shutdown command.
+    assertEquals(0, queue.size) // Shutdown command has been consumed.
     assertEquals(5, receivedMessages.size)
-    val unconsumed = messageSet.filter(_.offset >= consumedOffset).map(m => Utils.readString(m.message.payload))
+    val unconsumed = messageSet.filter(_.offset >= consumedOffset).map(m => TestUtils.readString(m.message.payload))
     assertEquals(unconsumed, receivedMessages)
+  }
+
+  @Test
+  def testConsumerIteratorDecodingFailure() {
+    val messageStrings = (0 until 10).map(_.toString).toList
+    val messages = messageStrings.map(s => new Message(s.getBytes))
+    val messageSet = new ByteBufferMessageSet(NoCompressionCodec, new LongRef(0), messages:_*)
+
+    topicInfos.head.enqueue(messageSet)
+    assertEquals(1, queue.size)
+
+    val iter = new ConsumerIterator[String, String](queue,
+      ConsumerConfig.ConsumerTimeoutMs,
+      new FailDecoder(),
+      new FailDecoder(),
+      clientId = "")
+
+    (0 until 5).foreach { i =>
+      assertTrue(iter.hasNext)
+      val message = iter.next
+      assertEquals(message.offset, i + consumedOffset)
+
+      try message.message // should fail
+      catch {
+        case _: UnsupportedOperationException => // this is ok
+      }
+    }
+  }
+
+  class FailDecoder(props: VerifiableProperties = null) extends Decoder[String] {
+    def fromBytes(bytes: Array[Byte]): String = {
+      throw new UnsupportedOperationException("This decoder does not work at all..")
+    }
   }
 }

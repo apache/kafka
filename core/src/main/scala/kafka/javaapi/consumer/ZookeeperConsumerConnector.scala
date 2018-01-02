@@ -18,8 +18,9 @@ package kafka.javaapi.consumer
 
 import kafka.serializer._
 import kafka.consumer._
-import scala.collection.JavaConversions.asList
-
+import kafka.common.{OffsetAndMetadata, TopicAndPartition, MessageStreamsExistException}
+import java.util.concurrent.atomic.AtomicBoolean
+import scala.collection.JavaConverters._
 
 /**
  * This class handles the consumers interaction with zookeeper
@@ -57,11 +58,13 @@ import scala.collection.JavaConversions.asList
  *
 */
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                                 val enableFetcher: Boolean) // for testing only
     extends ConsumerConnector {
 
   private val underlying = new kafka.consumer.ZookeeperConsumerConnector(config, enableFetcher)
+  private val messageStreamCreated = new AtomicBoolean(false)
 
   def this(config: ConsumerConfig) = this(config, true)
 
@@ -71,34 +74,50 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         keyDecoder: Decoder[K],
         valueDecoder: Decoder[V])
       : java.util.Map[String,java.util.List[KafkaStream[K,V]]] = {
-    import scala.collection.JavaConversions._
 
-    val scalaTopicCountMap: Map[String, Int] = Map.empty[String, Int] ++ asMap(topicCountMap.asInstanceOf[java.util.Map[String, Int]])
+    if (messageStreamCreated.getAndSet(true))
+      throw new MessageStreamsExistException(this.getClass.getSimpleName +
+                                   " can create message streams at most once",null)
+    val scalaTopicCountMap: Map[String, Int] = {
+      Map.empty[String, Int] ++ topicCountMap.asInstanceOf[java.util.Map[String, Int]].asScala
+    }
     val scalaReturn = underlying.consume(scalaTopicCountMap, keyDecoder, valueDecoder)
     val ret = new java.util.HashMap[String,java.util.List[KafkaStream[K,V]]]
     for ((topic, streams) <- scalaReturn) {
-      var javaStreamList = new java.util.ArrayList[KafkaStream[K,V]]
+      val javaStreamList = new java.util.ArrayList[KafkaStream[K,V]]
       for (stream <- streams)
         javaStreamList.add(stream)
       ret.put(topic, javaStreamList)
     }
     ret
   }
-  
+
   def createMessageStreams(topicCountMap: java.util.Map[String,java.lang.Integer]): java.util.Map[String,java.util.List[KafkaStream[Array[Byte],Array[Byte]]]] =
     createMessageStreams(topicCountMap, new DefaultDecoder(), new DefaultDecoder())
-    
-  def createMessageStreamsByFilter[K,V](topicFilter: TopicFilter, numStreams: Int, keyDecoder: Decoder[K], valueDecoder: Decoder[V]) =
-    asList(underlying.createMessageStreamsByFilter(topicFilter, numStreams, keyDecoder, valueDecoder))
 
-  def createMessageStreamsByFilter(topicFilter: TopicFilter, numStreams: Int) = 
+  def createMessageStreamsByFilter[K,V](topicFilter: TopicFilter, numStreams: Int, keyDecoder: Decoder[K], valueDecoder: Decoder[V]) =
+    underlying.createMessageStreamsByFilter(topicFilter, numStreams, keyDecoder, valueDecoder).asJava
+
+  def createMessageStreamsByFilter(topicFilter: TopicFilter, numStreams: Int) =
     createMessageStreamsByFilter(topicFilter, numStreams, new DefaultDecoder(), new DefaultDecoder())
-    
-  def createMessageStreamsByFilter(topicFilter: TopicFilter) = 
+
+  def createMessageStreamsByFilter(topicFilter: TopicFilter) =
     createMessageStreamsByFilter(topicFilter, 1, new DefaultDecoder(), new DefaultDecoder())
-    
+
   def commitOffsets() {
-    underlying.commitOffsets
+    underlying.commitOffsets(true)
+  }
+
+  def commitOffsets(retryOnFailure: Boolean) {
+    underlying.commitOffsets(retryOnFailure)
+  }
+
+  def commitOffsets(offsetsToCommit: java.util.Map[TopicAndPartition, OffsetAndMetadata], retryOnFailure: Boolean) {
+    underlying.commitOffsets(offsetsToCommit.asScala.toMap, retryOnFailure)
+  }
+
+  def setConsumerRebalanceListener(consumerRebalanceListener: ConsumerRebalanceListener) {
+    underlying.setConsumerRebalanceListener(consumerRebalanceListener)
   }
 
   def shutdown() {

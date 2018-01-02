@@ -17,44 +17,41 @@
 
 package kafka.api
 
-import kafka.cluster.Broker
+import kafka.cluster.BrokerEndPoint
 import java.nio.ByteBuffer
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object TopicMetadataResponse {
 
   def readFrom(buffer: ByteBuffer): TopicMetadataResponse = {
     val correlationId = buffer.getInt
     val brokerCount = buffer.getInt
-    val brokers = (0 until brokerCount).map(_ => Broker.readFrom(buffer))
+    val brokers = (0 until brokerCount).map(_ => BrokerEndPoint.readFrom(buffer))
     val brokerMap = brokers.map(b => (b.id, b)).toMap
     val topicCount = buffer.getInt
     val topicsMetadata = (0 until topicCount).map(_ => TopicMetadata.readFrom(buffer, brokerMap))
-    new TopicMetadataResponse(topicsMetadata, correlationId)
+    new TopicMetadataResponse(brokers, topicsMetadata, correlationId)
   }
 }
 
-case class TopicMetadataResponse(topicsMetadata: Seq[TopicMetadata],
-                                 override val correlationId: Int)
-    extends RequestOrResponse(correlationId = correlationId) {
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
+case class TopicMetadataResponse(brokers: Seq[BrokerEndPoint],
+                                 topicsMetadata: Seq[TopicMetadata],
+                                 correlationId: Int)
+    extends RequestOrResponse() {
   val sizeInBytes: Int = {
-    val brokers = extractBrokers(topicsMetadata).values
     4 + 4 + brokers.map(_.sizeInBytes).sum + 4 + topicsMetadata.map(_.sizeInBytes).sum
   }
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(correlationId)
     /* brokers */
-    val brokers = extractBrokers(topicsMetadata).values
     buffer.putInt(brokers.size)
     brokers.foreach(_.writeTo(buffer))
     /* topic metadata */
     buffer.putInt(topicsMetadata.length)
     topicsMetadata.foreach(_.writeTo(buffer))
   }
-    
-  def extractBrokers(topicMetadatas: Seq[TopicMetadata]): Map[Int, Broker] = {
-    val parts = topicsMetadata.flatMap(_.partitionsMetadata)
-    val brokers = (parts.flatMap(_.replicas)) ++ (parts.map(_.leader).collect{case Some(l) => l})
-    brokers.map(b => (b.id, b)).toMap
-  }
+
+  override def describe(details: Boolean):String = { toString }
 }

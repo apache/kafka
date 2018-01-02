@@ -15,6 +15,6 @@ rem See the License for the specific language governing permissions and
 rem limitations under the License.
 
 SetLocal
-set KAFKA_OPTS=-Xmx512M -server -Dcom.sun.management.jmxremote -Dlog4j.configuration=file:"%CD%\kafka-console-consumer-log4j.properties"
-kafka-run-class.bat kafka.consumer.ConsoleConsumer %*
+set KAFKA_HEAP_OPTS=-Xmx512M
+"%~dp0kafka-run-class.bat" kafka.tools.ConsoleConsumer %*
 EndLocal

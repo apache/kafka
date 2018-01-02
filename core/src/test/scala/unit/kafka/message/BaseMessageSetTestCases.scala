@@ -17,23 +17,53 @@
 
 package kafka.message
 
-import java.io.RandomAccessFile
-import junit.framework.Assert._
+import java.nio.ByteBuffer
+import java.nio.channels.{FileChannel, GatheringByteChannel}
+import java.nio.file.StandardOpenOption
+
+import org.junit.Assert._
 import kafka.utils.TestUtils._
-import kafka.log.FileMessageSet
+import org.apache.kafka.common.record.FileRecords
 import org.scalatest.junit.JUnitSuite
 import org.junit.Test
 
+import scala.collection.mutable.ArrayBuffer
+import scala.collection.JavaConverters._
+
 trait BaseMessageSetTestCases extends JUnitSuite {
-  
-  val messages = Array(new Message("abcd".getBytes()), new Message("efgh".getBytes()))
+
+  private class StubByteChannel(bytesToConsumePerBuffer: Int) extends GatheringByteChannel {
+
+    val data = new ArrayBuffer[Byte]
+
+    def write(srcs: Array[ByteBuffer], offset: Int, length: Int): Long = {
+      srcs.map { src =>
+        val array = new Array[Byte](math.min(bytesToConsumePerBuffer, src.remaining))
+        src.get(array)
+        data ++= array
+        array.length
+      }.sum
+    }
+
+    def write(srcs: Array[ByteBuffer]): Long = write(srcs, 0, srcs.map(_.remaining).sum)
+
+    def write(src: ByteBuffer): Int = write(Array(src)).toInt
+
+    def isOpen: Boolean = true
+
+    def close() {}
+
+  }
+
+
+  val messages = Array(new Message("abcd".getBytes), new Message("efgh".getBytes), new Message("ijkl".getBytes))
   
   def createMessageSet(messages: Seq[Message]): MessageSet
 
   @Test
-  def testWrittenEqualsRead {
+  def testWrittenEqualsRead() {
     val messageSet = createMessageSet(messages)
-    checkEquals(messages.iterator, messageSet.map(m => m.message).iterator)
+    assertEquals(messages.toVector, messageSet.toVector.map(m => m.message))
   }
 
   @Test
@@ -56,19 +86,47 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   @Test
   def testWriteTo() {
     // test empty message set
-    testWriteToWithMessageSet(createMessageSet(Array[Message]()))
-    testWriteToWithMessageSet(createMessageSet(messages))
+    checkWriteToWithMessageSet(createMessageSet(Array[Message]()))
+    checkWriteToWithMessageSet(createMessageSet(messages))
   }
 
-  def testWriteToWithMessageSet(set: MessageSet) {
-    // do the write twice to ensure the message set is restored to its orginal state
-    for(i <- List(0,1)) {
+  /* Tests that writing to a channel that doesn't consume all the bytes in the buffer works correctly */
+  @Test
+  def testWriteToChannelThatConsumesPartially() {
+    val bytesToConsumePerBuffer = 50
+    val messages = (0 until 10).map(_ => new Message(randomString(100).getBytes))
+    val messageSet = createMessageSet(messages)
+    val messageSetSize = messageSet.sizeInBytes
+
+    val channel = new StubByteChannel(bytesToConsumePerBuffer)
+
+    var remaining = messageSetSize
+    var iterations = 0
+    while (remaining > 0) {
+      remaining -= messageSet.asRecords.writeTo(channel, messageSetSize - remaining, remaining).toInt
+      iterations += 1
+    }
+
+    assertEquals((messageSetSize / bytesToConsumePerBuffer) + 1, iterations)
+    checkEquals(new ByteBufferMessageSet(ByteBuffer.wrap(channel.data.toArray)).iterator, messageSet.iterator)
+  }
+
+  def checkWriteToWithMessageSet(messageSet: MessageSet) {
+    checkWriteWithMessageSet(messageSet, messageSet.asRecords.writeTo(_, 0, messageSet.sizeInBytes))
+  }
+
+  def checkWriteWithMessageSet(set: MessageSet, write: GatheringByteChannel => Long) {
+    // do the write twice to ensure the message set is restored to its original state
+    for (_ <- 0 to 1) {
       val file = tempFile()
-      val channel = new RandomAccessFile(file, "rw").getChannel()
-      val written = set.writeTo(channel, 0, 1024)
-      assertEquals("Expect to write the number of bytes in the set.", set.sizeInBytes, written)
-      val newSet = new FileMessageSet(file, channel)
-      checkEquals(set.iterator, newSet.iterator)
+      val channel = FileChannel.open(file.toPath, StandardOpenOption.READ, StandardOpenOption.WRITE)
+      try {
+        val written = write(channel)
+        assertEquals("Expect to write the number of bytes in the set.", set.sizeInBytes, written)
+        val fileRecords = new FileRecords(file, channel, 0, Integer.MAX_VALUE, false)
+        assertEquals(set.asRecords.records.asScala.toVector, fileRecords.records.asScala.toVector)
+        checkEquals(set.asRecords.records.iterator, fileRecords.records.iterator)
+      } finally channel.close()
     }
   }
   

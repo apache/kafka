@@ -16,17 +16,15 @@
  */
 package kafka.javaapi
 
-import kafka.cluster.Broker
-import scala.collection.JavaConversions.asList
+import kafka.cluster.BrokerEndPoint
+import scala.collection.JavaConverters._
 
 private[javaapi] object MetadataListImplicits {
   implicit def toJavaTopicMetadataList(topicMetadataSeq: Seq[kafka.api.TopicMetadata]):
-  java.util.List[kafka.javaapi.TopicMetadata] =
-    asList(topicMetadataSeq.map(new kafka.javaapi.TopicMetadata(_)))
+  java.util.List[kafka.javaapi.TopicMetadata] = topicMetadataSeq.map(new kafka.javaapi.TopicMetadata(_)).asJava
 
   implicit def toPartitionMetadataList(partitionMetadataSeq: Seq[kafka.api.PartitionMetadata]):
-  java.util.List[kafka.javaapi.PartitionMetadata] =
-    asList(partitionMetadataSeq.map(new kafka.javaapi.PartitionMetadata(_)))
+  java.util.List[kafka.javaapi.PartitionMetadata] = partitionMetadataSeq.map(new kafka.javaapi.PartitionMetadata(_)).asJava
 }
 
 class TopicMetadata(private val underlying: kafka.api.TopicMetadata) {
@@ -37,26 +35,33 @@ class TopicMetadata(private val underlying: kafka.api.TopicMetadata) {
     underlying.partitionsMetadata
   }
 
-  def errorCode: Short = underlying.errorCode
+  def error = underlying.error
+
+  def errorCode = error.code
 
   def sizeInBytes: Int = underlying.sizeInBytes
+
+  override def toString = underlying.toString
 }
 
 
 class PartitionMetadata(private val underlying: kafka.api.PartitionMetadata) {
   def partitionId: Int = underlying.partitionId
 
-  def leader: Broker = {
+  def leader: BrokerEndPoint = {
     import kafka.javaapi.Implicits._
     underlying.leader
   }
 
-  def replicas: java.util.List[Broker] = asList(underlying.replicas)
+  def replicas: java.util.List[BrokerEndPoint] = underlying.replicas.asJava
 
-  def isr: java.util.List[Broker] = asList(underlying.isr)
+  def isr: java.util.List[BrokerEndPoint] = underlying.isr.asJava
 
-  def errorCode: Short = underlying.errorCode
+  def error = underlying.error
+
+  def errorCode = error.code
 
   def sizeInBytes: Int = underlying.sizeInBytes
-}
 
+  override def toString = underlying.toString
+}

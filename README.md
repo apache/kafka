@@ -1,59 +1,214 @@
-# Kafka is a distributed publish/subscribe messaging system #
+Apache Kafka
+=================
+See our [web site](http://kafka.apache.org) for details on the project.
 
-It is designed to support the following
+You need to have [Gradle](http://www.gradle.org/installation) and [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-* Persistent messaging with O(1) disk structures that provide constant time performance even with many TB of stored messages.
-* High-throughput: even with very modest hardware Kafka can support hundreds of thousands of messages per second.
-* Explicit support for partitioning messages over Kafka servers and distributing consumption over a cluster of consumer machines while maintaining per-partition ordering semantics.
-* Support for parallel data load into Hadoop.
+Kafka requires Gradle 3.0 or higher.
 
-Kafka is aimed at providing a publish-subscribe solution that can handle all activity stream data and processing on a consumer-scale web site. This kind of activity (page views, searches, and other user actions) are a key ingredient in many of the social feature on the modern web. This data is typically handled by "logging" and ad hoc log aggregation solutions due to the throughput requirements. This kind of ad hoc solution is a viable solution to providing logging data to an offline analysis system like Hadoop, but is very limiting for building real-time processing. Kafka aims to unify offline and online processing by providing a mechanism for parallel load into Hadoop as well as the ability to partition real-time consumption over a cluster of machines.
+Java 7 should be used for building in order to support both Java 7 and Java 8 at runtime.
 
-See our [web site](http://kafka.apache.org/) for more details on the project.
+### First bootstrap and download the wrapper ###
+    cd kafka_source_dir
+    gradle
 
-## Contribution ##
+Now everything else will work.
 
-Kafka is a new project, and we are interested in building the community; we would welcome any thoughts or [patches](https://issues.apache.org/jira/browse/KAFKA). You can reach us [on the Apache mailing lists](http://kafka.apache.org/contact.html).
+### Build a jar and run it ###
+    ./gradlew jar
 
-The Kafka code is available from:
- * git clone http://git-wip-us.apache.org/repos/asf/kafka.git kafka
+Follow instructions in http://kafka.apache.org/documentation.html#quickstart
 
-To contribute you can follow:
- * https://cwiki.apache.org/confluence/display/KAFKA/Git+Workflow
+### Build source jar ###
+    ./gradlew srcJar
 
-To build for all supported versions of Scala: 
+### Build aggregated javadoc ###
+    ./gradlew aggregatedJavadoc
 
-1. ./sbt +package
+### Build javadoc and scaladoc ###
+    ./gradlew javadoc
+    ./gradlew javadocJar # builds a javadoc jar for each module
+    ./gradlew scaladoc
+    ./gradlew scaladocJar # builds a scaladoc jar for each module
+    ./gradlew docsJar # builds both (if applicable) javadoc and scaladoc jars for each module
 
-To build for a particular version of Scala (either 2.8.0, 2.8.2, 2.9.1 or 2.9.2): 
+### Run unit/integration tests ###
+    ./gradlew test # runs both unit and integration tests
+    ./gradlew unitTest
+    ./gradlew integrationTest
+    
+### Force re-running tests without code change ###
+    ./gradlew cleanTest test
+    ./gradlew cleanTest unitTest
+    ./gradlew cleanTest integrationTest
 
-1. ./sbt "++2.8.0 package" *or* ./sbt "++2.8.2 package" *or* ./sbt "++2.9.1 package" *or* ./sbt "++2.9.2 package"
+### Running a particular unit/integration test ###
+    ./gradlew -Dtest.single=RequestResponseSerializationTest core:test
 
-Here are some useful sbt commands, to be executed at the sbt command prompt (./sbt). Prefixing with "++<version> " runs the
-command for a specific Scala version, prefixing with "+" will perform the action for all versions of Scala, and no prefix
-runs the command for the default (2.8.0) version of Scala. -
+### Running a particular test method within a unit/integration test ###
+    ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
+    ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testMetadataUpdateWaitTime
 
-tasks : Lists all the sbt commands and their descriptions
+### Running a particular unit/integration test with log4j output ###
+Change the log4j setting in either `clients/src/test/resources/log4j.properties` or `core/src/test/resources/log4j.properties`
 
-clean : Deletes all generated files (the target directory).
+    ./gradlew -i -Dtest.single=RequestResponseSerializationTest core:test
 
-compile : Compile all the sub projects, but not create the jars
+### Generating test coverage reports ###
+Generate coverage reports for the whole project:
 
-test : Run all unit tests in all sub projects
+    ./gradlew reportCoverage
 
-release-zip : Create all the jars, run unit tests and create a deployable release zip
+Generate coverage for a single module, i.e.: 
 
-package: Creates jars for src, test, docs etc
+    ./gradlew clients:reportCoverage
+    
+### Building a binary release gzipped tar ball ###
+    ./gradlew clean
+    ./gradlew releaseTarGz
 
-projects : List all the sub projects 
+The above command will fail if you haven't set up the signing key. To bypass signing the artifact, you can run:
 
-project sub_project_name : Switch to a particular sub-project. For example, to switch to the core kafka code, use "project core-kafka"
+    ./gradlew releaseTarGz -x signArchives
 
-Following commands can be run only on a particular sub project -
+The release file can be found inside `./core/build/distributions/`.
 
-test-only package.test.TestName : Runs only the specified test in the current sub project
+### Cleaning the build ###
+    ./gradlew clean
 
-run : Provides options to run any of the classes that have a main method. For example, you can switch to project java-examples, and run the examples there by executing "project java-examples" followed by "run" 
+### Running a task on a particular version of Scala (either 2.11.x or 2.12.x) ###
+*Note that if building the jars with a version other than 2.11.12, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
 
-For more details please see the [SBT documentation](https://github.com/harrah/xsbt/wiki)
+You can pass either the major version (eg 2.11) or the full version (eg 2.11.12):
 
+    ./gradlew -PscalaVersion=2.11 jar
+    ./gradlew -PscalaVersion=2.11 test
+    ./gradlew -PscalaVersion=2.11 releaseTarGz
+
+Scala 2.12.x requires Java 8.
+
+### Running a task for a specific project ###
+This is for `core`, `examples` and `clients`
+
+    ./gradlew core:jar
+    ./gradlew core:test
+
+### Listing all gradle tasks ###
+    ./gradlew tasks
+
+### Building IDE project ####
+*Note that this is not strictly necessary (IntelliJ IDEA has good built-in support for Gradle projects, for example).*
+
+    ./gradlew eclipse
+    ./gradlew idea
+
+The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as Eclipse's build directory. Eclipse's default
+build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
+to avoid known issues with this configuration.
+
+### Building the jar for all scala versions and for all projects ###
+    ./gradlew jarAll
+
+### Running unit/integration tests for all scala versions and for all projects ###
+    ./gradlew testAll
+
+### Building a binary release gzipped tar ball for all scala versions ###
+    ./gradlew releaseTarGzAll
+
+### Publishing the jar for all version of Scala and for all projects to maven ###
+    ./gradlew uploadArchivesAll
+
+Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradle.properties` (typically, `~/.gradle/gradle.properties`) and assign the following variables
+
+    mavenUrl=
+    mavenUsername=
+    mavenPassword=
+    signing.keyId=
+    signing.password=
+    signing.secretKeyRingFile=
+
+### Publishing the streams quickstart archetype artifact to maven ###
+For the Streams archetype project, one cannot use gradle to upload to maven; instead the `mvn deploy` command needs to be called at the quickstart folder:
+
+    cd streams/quickstart
+    mvn deploy
+
+Please note for this to work you should create/update user maven settings (typically, `${USER_HOME}/.m2/settings.xml`) to assign the following variables
+
+    <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                           https://maven.apache.org/xsd/settings-1.0.0.xsd">
+    ...                           
+    <servers>
+       ...
+       <server>
+          <id>apache.snapshots.https</id>
+          <username>${maven_username}</username>
+          <password>${maven_password}</password>
+       </server>
+       <server>
+          <id>apache.releases.https</id>
+          <username>${maven_username}</username>
+          <password>${maven_password}</password>
+        </server>
+        ...
+     </servers>
+     ...
+
+
+### Installing the jars to the local Maven repository ###
+    ./gradlew installAll
+
+### Building the test jar ###
+    ./gradlew testJar
+
+### Determining how transitive dependencies are added ###
+    ./gradlew core:dependencies --configuration runtime
+
+### Determining if any dependencies could be updated ###
+    ./gradlew dependencyUpdates
+
+### Running code quality checks ###
+There are two code quality analysis tools that we regularly run, findbugs and checkstyle.
+
+#### Checkstyle ####
+Checkstyle enforces a consistent coding style in Kafka.
+You can run checkstyle using:
+
+    ./gradlew checkstyleMain checkstyleTest
+
+The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
+subproject build directories. They are also are printed to the console. The build will fail if Checkstyle fails.
+
+#### Findbugs ####
+Findbugs uses static analysis to look for bugs in the code.
+You can run findbugs using:
+
+    ./gradlew findbugsMain findbugsTest -x test
+
+The findbugs warnings will be found in `reports/findbugs/main.html` and `reports/findbugs/test.html` files in the subproject build
+directories.  Use -PxmlFindBugsReport=true to generate an XML report instead of an HTML one.
+
+### Common build options ###
+
+The following options should be set with a `-P` switch, for example `./gradlew -PmaxParallelForks=1 test`.
+
+* `commitId`: sets the build commit ID as .git/HEAD might not be correct if there are local commits added for build purposes.
+* `mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
+* `maxParallelForks`: limits the maximum number of processes for each task.
+* `showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
+* `skipSigning`: skips signing of artifacts.
+* `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
+* `xmlFindBugsReport`: enable XML reports for findBugs. This also disables HTML reports as only one can be enabled at a time.
+
+### Running in Vagrant ###
+
+See [vagrant/README.md](vagrant/README.md).
+
+### Contribution ###
+
+Apache Kafka is interested in building the community; we would welcome any thoughts or [patches](https://issues.apache.org/jira/browse/KAFKA). You can reach us [on the Apache mailing lists](http://kafka.apache.org/contact.html).
+
+To contribute follow the instructions here:
+ * http://kafka.apache.org/contributing.html

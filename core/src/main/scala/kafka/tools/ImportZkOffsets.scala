@@ -17,11 +17,12 @@
 
 package kafka.tools
 
-import java.io.BufferedReader
-import java.io.FileReader
+import java.io.{BufferedReader, FileInputStream, InputStreamReader}
+import java.nio.charset.StandardCharsets
+
 import joptsimple._
-import kafka.utils.{Logging, ZkUtils,ZKStringSerializer}
-import org.I0Itec.zkclient.ZkClient
+import kafka.utils.{CommandLineUtils, Exit, Logging, ZkUtils}
+import org.apache.kafka.common.security.JaasUtils
 
 
 /**
@@ -42,7 +43,7 @@ import org.I0Itec.zkclient.ZkClient
 object ImportZkOffsets extends Logging {
 
   def main(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     
     val zkConnectOpt = parser.accepts("zkconnect", "ZooKeeper connect string.")
                             .withRequiredArg()
@@ -52,60 +53,57 @@ object ImportZkOffsets extends Logging {
                             .withRequiredArg()
                             .ofType(classOf[String])
     parser.accepts("help", "Print this message.")
+    
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "Import offsets to zookeeper from files.")
             
     val options = parser.parse(args : _*)
     
     if (options.has("help")) {
        parser.printHelpOn(System.out)
-       System.exit(0)
+       Exit.exit(0)
     }
     
-    for (opt <- List(inFileOpt)) {
-      if (!options.has(opt)) {
-        System.err.println("Missing required argument: %s".format(opt))
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
-    }
+    CommandLineUtils.checkRequiredArgs(parser, options, inFileOpt)
     
     val zkConnect           = options.valueOf(zkConnectOpt)
     val partitionOffsetFile = options.valueOf(inFileOpt)
 
-    val zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
+    val zkUtils = ZkUtils(zkConnect, 30000, 30000, JaasUtils.isZkSecurityEnabled())
     val partitionOffsets: Map[String,String] = getPartitionOffsetsFromFile(partitionOffsetFile)
 
-    updateZkOffsets(zkClient, partitionOffsets)
+    updateZkOffsets(zkUtils, partitionOffsets)
   }
 
   private def getPartitionOffsetsFromFile(filename: String):Map[String,String] = {
-    val fr = new FileReader(filename)
-    val br = new BufferedReader(fr)
-    var partOffsetsMap: Map[String,String] = Map()
-    
-    var s: String = br.readLine()
-    while ( s != null && s.length() >= 1) {
-      val tokens = s.split(":")
-      
-      partOffsetsMap += tokens(0) -> tokens(1)
-      debug("adding node path [" + s + "]")
-      
-      s = br.readLine()
+    val br = new BufferedReader(new InputStreamReader(new FileInputStream(filename), StandardCharsets.UTF_8))
+    try {
+      var partOffsetsMap: Map[String,String] = Map()
+
+      var s: String = br.readLine()
+      while ( s != null && s.length() >= 1) {
+        val tokens = s.split(":")
+
+        partOffsetsMap += tokens(0) -> tokens(1)
+        debug("adding node path [" + s + "]")
+
+        s = br.readLine()
+      }
+
+      partOffsetsMap
+    } finally {
+      br.close()
     }
-    
-    return partOffsetsMap
   }
   
-  private def updateZkOffsets(zkClient: ZkClient, partitionOffsets: Map[String,String]): Unit = {
-    val cluster = ZkUtils.getCluster(zkClient)
-    var partitions: List[String] = Nil
-
+  private def updateZkOffsets(zkUtils: ZkUtils, partitionOffsets: Map[String,String]): Unit = {
     for ((partition, offset) <- partitionOffsets) {
       debug("updating [" + partition + "] with offset [" + offset + "]")
       
       try {
-        ZkUtils.updatePersistentPath(zkClient, partition, offset.toString)
+        zkUtils.updatePersistentPath(partition, offset.toString)
       } catch {
-        case e => e.printStackTrace()
+        case e: Throwable => e.printStackTrace()
       }
     }
   }

@@ -17,32 +17,33 @@
 
 package kafka.server
 
-import org.scalatest.junit.JUnit3Suite
+import org.junit.{After, Before, Test}
 import kafka.zk.ZooKeeperTestHarness
-import kafka.utils.TestUtils._
-import kafka.producer.KeyedMessage
-import kafka.serializer.StringEncoder
-import kafka.admin.CreateTopicCommand
 import kafka.utils.TestUtils
-import junit.framework.Assert._
+import TestUtils._
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.serialization.StringSerializer
 
-class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
-  val props = createBrokerConfigs(2)
-  val configs = props.map(p => new KafkaConfig(p))
+class ReplicaFetchTest extends ZooKeeperTestHarness  {
   var brokers: Seq[KafkaServer] = null
   val topic1 = "foo"
   val topic2 = "bar"
 
+  @Before
   override def setUp() {
     super.setUp()
-    brokers = configs.map(config => TestUtils.createServer(config))
+    val props = createBrokerConfigs(2, zkConnect)
+    brokers = props.map(KafkaConfig.fromProps).map(TestUtils.createServer(_))
   }
 
+  @After
   override def tearDown() {
-    brokers.foreach(_.shutdown())
+    TestUtils.shutdownServers(brokers)
     super.tearDown()
   }
 
+  @Test
   def testReplicaFetcherThread() {
     val partition = 0
     val testMessageList1 = List("test1", "test2", "test3", "test4")
@@ -50,27 +51,30 @@ class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
 
     // create a topic and partition and await leadership
     for (topic <- List(topic1,topic2)) {
-      CreateTopicCommand.createTopic(zkClient, topic, 1, 2, configs.map(c => c.brokerId).mkString(":"))
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
+      createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = brokers)
     }
 
     // send test messages to leader
-    val producer = TestUtils.createProducer[String, String](TestUtils.getBrokerListStrFromConfigs(configs), 
-                                                            new StringEncoder(), 
-                                                            new StringEncoder())
-    val messages = testMessageList1.map(m => new KeyedMessage(topic1, m, m)) ++ testMessageList2.map(m => new KeyedMessage(topic2, m, m))
-    producer.send(messages:_*)
+    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers),
+                                               retries = 5,
+                                               keySerializer = new StringSerializer,
+                                               valueSerializer = new StringSerializer)
+    val records = testMessageList1.map(m => new ProducerRecord(topic1, m, m)) ++
+      testMessageList2.map(m => new ProducerRecord(topic2, m, m))
+    records.map(producer.send).foreach(_.get)
     producer.close()
 
     def logsMatch(): Boolean = {
       var result = true
       for (topic <- List(topic1, topic2)) {
-        val expectedOffset = brokers.head.getLogManager().getLog(topic, partition).get.logEndOffset
-        result = result && expectedOffset > 0 && brokers.foldLeft(true) { (total, item) => total &&
-          (expectedOffset == item.getLogManager().getLog(topic, partition).get.logEndOffset) }
+        val tp = new TopicPartition(topic, partition)
+        val expectedOffset = brokers.head.getLogManager().getLog(tp).get.logEndOffset
+        result = result && expectedOffset > 0 && brokers.forall { item =>
+          expectedOffset == item.getLogManager().getLog(tp).get.logEndOffset
+        }
       }
       result
     }
-    assertTrue("Broker logs should be identical", waitUntilTrue(logsMatch, 6000))
+    waitUntilTrue(logsMatch _, "Broker logs should be identical")
   }
 }

@@ -16,16 +16,17 @@
  */
 package kafka.producer
 
-import async.{DefaultEventHandler, ProducerSendThread, EventHandler}
-import kafka.utils._
-import java.util.Random
-import java.util.concurrent.{TimeUnit, LinkedBlockingQueue}
-import kafka.serializer.Encoder
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.common.QueueFullException
+import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
+
+import kafka.common.{AppInfo, QueueFullException}
 import kafka.metrics._
+import kafka.producer.async.{DefaultEventHandler, EventHandler, ProducerSendThread}
+import kafka.serializer.Encoder
+import kafka.utils._
 
-
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.producer.KafkaProducer instead.", "0.10.0.0")
 class Producer[K,V](val config: ProducerConfig,
                     private val eventHandler: EventHandler[K,V])  // only for unit testing
   extends Logging {
@@ -33,16 +34,17 @@ class Producer[K,V](val config: ProducerConfig,
   private val hasShutdown = new AtomicBoolean(false)
   private val queue = new LinkedBlockingQueue[KeyedMessage[K,V]](config.queueBufferingMaxMessages)
 
-  private val random = new Random
   private var sync: Boolean = true
   private var producerSendThread: ProducerSendThread[K,V] = null
+  private val lock = new Object()
+
   config.producerType match {
     case "sync" =>
     case "async" =>
       sync = false
       producerSendThread = new ProducerSendThread[K,V]("ProducerSendThread-" + config.clientId,
                                                        queue,
-                                                       eventHandler, 
+                                                       eventHandler,
                                                        config.queueBufferingMaxMs,
                                                        config.batchNumMessages,
                                                        config.clientId)
@@ -52,13 +54,14 @@ class Producer[K,V](val config: ProducerConfig,
   private val producerTopicStats = ProducerTopicStatsRegistry.getProducerTopicStats(config.clientId)
 
   KafkaMetricsReporter.startReporters(config.props)
+  AppInfo.registerInfo()
 
   def this(config: ProducerConfig) =
     this(config,
          new DefaultEventHandler[K,V](config,
-                                      Utils.createObject[Partitioner[K]](config.partitionerClass, config.props),
-                                      Utils.createObject[Encoder[V]](config.serializerClass, config.props),
-                                      Utils.createObject[Encoder[K]](config.keySerializerClass, config.props),
+                                      CoreUtils.createObject[Partitioner](config.partitionerClass, config.props),
+                                      CoreUtils.createObject[Encoder[V]](config.serializerClass, config.props),
+                                      CoreUtils.createObject[Encoder[K]](config.keySerializerClass, config.props),
                                       new ProducerPool(config)))
 
   /**
@@ -67,14 +70,17 @@ class Producer[K,V](val config: ProducerConfig,
    * @param messages the producer data object that encapsulates the topic, key and message data
    */
   def send(messages: KeyedMessage[K,V]*) {
-    if (hasShutdown.get)
-      throw new ProducerClosedException
-    recordStats(messages)
-    sync match {
-      case true => eventHandler.handle(messages)
-      case false => asyncSend(messages)
+    lock synchronized {
+      if (hasShutdown.get)
+        throw new ProducerClosedException
+      recordStats(messages)
+      if (sync)
+        eventHandler.handle(messages)
+      else
+        asyncSend(messages)
     }
   }
+
 
   private def recordStats(messages: Seq[KeyedMessage[K,V]]) {
     for (message <- messages) {
@@ -90,16 +96,15 @@ class Producer[K,V](val config: ProducerConfig,
           queue.offer(message)
         case _  =>
           try {
-            config.queueEnqueueTimeoutMs < 0 match {
-            case true =>
+            if (config.queueEnqueueTimeoutMs < 0) {
               queue.put(message)
               true
-            case _ =>
+            } else {
               queue.offer(message, config.queueEnqueueTimeoutMs, TimeUnit.MILLISECONDS)
             }
           }
           catch {
-            case e: InterruptedException =>
+            case _: InterruptedException =>
               false
           }
       }
@@ -119,12 +124,17 @@ class Producer[K,V](val config: ProducerConfig,
    * the zookeeper client connection if one exists
    */
   def close() = {
-    val canShutdown = hasShutdown.compareAndSet(false, true)
-    if(canShutdown) {
-      info("Shutting down producer")
-      if (producerSendThread != null)
-        producerSendThread.shutdown
-      eventHandler.close
+    lock synchronized {
+      val canShutdown = hasShutdown.compareAndSet(false, true)
+      if(canShutdown) {
+        info("Shutting down producer")
+        val startTime = System.nanoTime()
+        KafkaMetricsGroup.removeAllProducerMetrics(config.clientId)
+        if (producerSendThread != null)
+          producerSendThread.shutdown
+        eventHandler.close()
+        info("Producer shutdown completed in " + (System.nanoTime() - startTime) / 1000000 + " ms")
+      }
     }
   }
 }

@@ -18,24 +18,49 @@
 package kafka.zk
 
 import org.apache.zookeeper.server.ZooKeeperServer
-import org.apache.zookeeper.server.NIOServerCnxn
-import kafka.utils.TestUtils
+import org.apache.zookeeper.server.NIOServerCnxnFactory
+import kafka.utils.{CoreUtils, Logging, TestUtils}
 import java.net.InetSocketAddress
-import kafka.utils.Utils
 
-class EmbeddedZookeeper(val connectString: String) {
+import org.apache.kafka.common.utils.Utils
+
+/**
+ * ZooKeeperServer wrapper that starts the server with temporary directories during construction and deletes
+ * the directories when `shutdown()` is called.
+ *
+ * This is an internal class and it's subject to change. We recommend that you implement your own simple wrapper
+ * if you need similar functionality.
+ */
+// This should be named EmbeddedZooKeeper for consistency with other classes, but since this is widely used by other
+// projects (even though it's internal), we keep the name as it is until we have a publicly supported test library for
+// others to use.
+class EmbeddedZookeeper() extends Logging {
+
   val snapshotDir = TestUtils.tempDir()
   val logDir = TestUtils.tempDir()
   val tickTime = 500
   val zookeeper = new ZooKeeperServer(snapshotDir, logDir, tickTime)
-  val port = connectString.split(":")(1).toInt
-  val factory = new NIOServerCnxn.Factory(new InetSocketAddress("127.0.0.1", port))
+  val factory = new NIOServerCnxnFactory()
+  private val addr = new InetSocketAddress("127.0.0.1", TestUtils.RandomPort)
+  factory.configure(addr, 0)
   factory.startup(zookeeper)
+  val port = zookeeper.getClientPort
 
   def shutdown() {
-    factory.shutdown()
-    Utils.rm(logDir)
-    Utils.rm(snapshotDir)
+    CoreUtils.swallow(zookeeper.shutdown(), this)
+    CoreUtils.swallow(factory.shutdown(), this)
+
+    def isDown(): Boolean = {
+      try {
+        ZkFourLetterWords.sendStat("127.0.0.1", port, 3000)
+        false
+      } catch { case _: Throwable => true }
+    }
+
+    Iterator.continually(isDown()).exists(identity)
+
+    Utils.delete(logDir)
+    Utils.delete(snapshotDir)
   }
   
 }

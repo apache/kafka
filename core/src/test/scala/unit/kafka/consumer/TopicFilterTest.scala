@@ -18,34 +18,68 @@
 package kafka.consumer
 
 
-import junit.framework.Assert._
+import org.apache.kafka.common.internals.Topic
+import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.Test
 
-
+@deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
 class TopicFilterTest extends JUnitSuite {
 
   @Test
   def testWhitelists() {
 
-    val topicFilter1 = new Whitelist("white1,white2")
-    assertFalse(topicFilter1.requiresTopicEventWatcher)
-    assertTrue(topicFilter1.isTopicAllowed("white2"))
-    assertFalse(topicFilter1.isTopicAllowed("black1"))
+    val topicFilter1 = Whitelist("white1,white2")
+    assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = true))
+    assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = false))
+    assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = true))
+    assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = false))
 
-    val topicFilter2 = new Whitelist(".+")
-    assertTrue(topicFilter2.requiresTopicEventWatcher)
-    assertTrue(topicFilter2.isTopicAllowed("alltopics"))
-    
-    val topicFilter3 = new Whitelist("white_listed-topic.+")
-    assertTrue(topicFilter3.requiresTopicEventWatcher)
-    assertTrue(topicFilter3.isTopicAllowed("white_listed-topic1"))
-    assertFalse(topicFilter3.isTopicAllowed("black1"))
+    val topicFilter2 = Whitelist(".+")
+    assertTrue(topicFilter2.isTopicAllowed("alltopics", excludeInternalTopics = true))
+    assertFalse(topicFilter2.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = true))
+    assertTrue(topicFilter2.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = false))
+
+    val topicFilter3 = Whitelist("white_listed-topic.+")
+    assertTrue(topicFilter3.isTopicAllowed("white_listed-topic1", excludeInternalTopics = true))
+    assertFalse(topicFilter3.isTopicAllowed("black1", excludeInternalTopics = true))
+
+    val topicFilter4 = Whitelist("test-(?!bad\\b)[\\w]+")
+    assertTrue(topicFilter4.isTopicAllowed("test-good", excludeInternalTopics = true))
+    assertFalse(topicFilter4.isTopicAllowed("test-bad", excludeInternalTopics = true))
   }
 
   @Test
   def testBlacklists() {
-    val topicFilter1 = new Blacklist("black1")
-    assertTrue(topicFilter1.requiresTopicEventWatcher)
+    val topicFilter1 = Blacklist("black1")
+    assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = true))
+    assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = false))
+    assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = true))
+    assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = false))
+
+    assertFalse(topicFilter1.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = true))
+    assertTrue(topicFilter1.isTopicAllowed(Topic.GROUP_METADATA_TOPIC_NAME, excludeInternalTopics = false))
+  }
+
+  @Test
+  def testWildcardTopicCountGetTopicCountMapEscapeJson() {
+    def getTopicCountMapKey(regex: String): String = {
+      val topicCount = new WildcardTopicCount(null, "consumerId", new Whitelist(regex), 1, true)
+      topicCount.getTopicCountMap.head._1
+    }
+    //lets make sure that the JSON strings are escaping as we expect
+    //if they are not then when they get saved to ZooKeeper and read back out they will be broken on parse
+    assertEquals("-\\\"-", getTopicCountMapKey("-\"-"))
+    assertEquals("-\\\\-", getTopicCountMapKey("-\\-"))
+    assertEquals("-\\/-", getTopicCountMapKey("-/-"))
+    assertEquals("-\\\\b-", getTopicCountMapKey("-\\b-"))
+    assertEquals("-\\\\f-", getTopicCountMapKey("-\\f-"))
+    assertEquals("-\\\\n-", getTopicCountMapKey("-\\n-"))
+    assertEquals("-\\\\r-", getTopicCountMapKey("-\\r-"))
+    assertEquals("-\\\\t-", getTopicCountMapKey("-\\t-"))
+    assertEquals("-\\\\u0000-", getTopicCountMapKey("-\\u0000-"))
+    assertEquals("-\\\\u001f-", getTopicCountMapKey("-\\u001f-"))
+    assertEquals("-\\\\u007f-", getTopicCountMapKey("-\\u007f-"))
+    assertEquals("-\\\\u009f-", getTopicCountMapKey("-\\u009f-"))
   }
 }

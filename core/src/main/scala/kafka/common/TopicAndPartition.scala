@@ -1,5 +1,7 @@
 package kafka.common
 
+import org.apache.kafka.common.TopicPartition
+
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -22,10 +24,7 @@ package kafka.common
  */
 case class TopicAndPartition(topic: String, partition: Int) {
 
-  def this(tuple: (String, Int)) = this(tuple._1, tuple._2)
+  def this(topicPartition: TopicPartition) = this(topicPartition.topic, topicPartition.partition)
 
-  def asTuple = (topic, partition)
-
-  override def toString = "[%s,%d]".format(topic, partition)
+  override def toString: String = s"$topic-$partition"
 }
-

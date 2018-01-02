@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -17,72 +17,56 @@
 
 package kafka.message
 
-import scala.reflect.BeanProperty
-import kafka.utils.Logging
 import java.nio.ByteBuffer
-import java.nio.channels._
-import java.io.{InputStream, ByteArrayOutputStream, DataOutputStream}
-import java.util.concurrent.atomic.AtomicLong
-import kafka.utils.IteratorTemplate
+
+import kafka.common.LongRef
+import kafka.utils.Logging
+import org.apache.kafka.common.record._
+
+import scala.collection.JavaConverters._
 
 object ByteBufferMessageSet {
-  
-  private def create(offsetCounter: AtomicLong, compressionCodec: CompressionCodec, messages: Message*): ByteBuffer = {
-    if(messages.size == 0) {
+
+  private def create(offsetAssigner: OffsetAssigner,
+                     compressionCodec: CompressionCodec,
+                     timestampType: TimestampType,
+                     messages: Message*): ByteBuffer = {
+    if (messages.isEmpty)
       MessageSet.Empty.buffer
-    } else if(compressionCodec == NoCompressionCodec) {
-      val buffer = ByteBuffer.allocate(MessageSet.messageSetSize(messages))
-      for(message <- messages)
-        writeMessage(buffer, message, offsetCounter.getAndIncrement)
-      buffer.rewind()
-      buffer
-    } else {
-      val byteArrayStream = new ByteArrayOutputStream(MessageSet.messageSetSize(messages))
-      val output = new DataOutputStream(CompressionFactory(compressionCodec, byteArrayStream))
-      var offset = -1L
-      try {
-        for(message <- messages) {
-          offset = offsetCounter.getAndIncrement
-          output.writeLong(offset)
-          output.writeInt(message.size)
-          output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)
-        }
-      } finally {
-        output.close()
-      }
-      val bytes = byteArrayStream.toByteArray
-      val message = new Message(bytes, compressionCodec)
-      val buffer = ByteBuffer.allocate(message.size + MessageSet.LogOverhead)
-      writeMessage(buffer, message, offset)
-      buffer.rewind()
-      buffer
+    else {
+      val buffer = ByteBuffer.allocate(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
+      val builder = MemoryRecords.builder(buffer, messages.head.magic, CompressionType.forId(compressionCodec.codec),
+        timestampType, offsetAssigner.baseOffset)
+
+      for (message <- messages)
+        builder.appendWithOffset(offsetAssigner.nextAbsoluteOffset(), message.asRecord)
+
+      builder.build().buffer
     }
   }
-  
-  def decompress(message: Message): ByteBufferMessageSet = {
-    val outputStream: ByteArrayOutputStream = new ByteArrayOutputStream
-    val inputStream: InputStream = new ByteBufferBackedInputStream(message.payload)
-    val intermediateBuffer = new Array[Byte](1024)
-    val compressed = CompressionFactory(message.compressionCodec, inputStream)
-    try {
-      Stream.continually(compressed.read(intermediateBuffer)).takeWhile(_ > 0).foreach { dataRead =>
-        outputStream.write(intermediateBuffer, 0, dataRead)
-      }
-    } finally {
-      compressed.close()
-    }
-    val outputBuffer = ByteBuffer.allocate(outputStream.size)
-    outputBuffer.put(outputStream.toByteArray)
-    outputBuffer.rewind
-    new ByteBufferMessageSet(outputBuffer)
+
+}
+
+private object OffsetAssigner {
+
+  def apply(offsetCounter: LongRef, size: Int): OffsetAssigner =
+    new OffsetAssigner(offsetCounter.value to offsetCounter.addAndGet(size))
+
+}
+
+private class OffsetAssigner(offsets: Seq[Long]) {
+  private var index = 0
+
+  def nextAbsoluteOffset(): Long = {
+    val result = offsets(index)
+    index += 1
+    result
   }
-    
-  private def writeMessage(buffer: ByteBuffer, message: Message, offset: Long) {
-    buffer.putLong(offset)
-    buffer.putInt(message.size)
-    buffer.put(message.buffer)
-    message.buffer.rewind()
-  }
+
+  def baseOffset = offsets.head
+
+  def toInnerOffset(offset: Long): Long = offset - offsets.head
+
 }
 
 /**
@@ -93,150 +77,116 @@ object ByteBufferMessageSet {
  * Option 1: From a ByteBuffer which already contains the serialized message set. Consumers will use this method.
  *
  * Option 2: Give it a list of messages along with instructions relating to serialization format. Producers will use this method.
- * 
+ *
+ *
+ * Message format v1 has the following changes:
+ * - For non-compressed messages, timestamp and timestamp type attributes have been added. The offsets of
+ *   the messages remain absolute offsets.
+ * - For compressed messages, timestamp and timestamp type attributes have been added and inner offsets (IO) are used
+ *   for inner messages of compressed messages (see offset calculation details below). The timestamp type
+ *   attribute is only set in wrapper messages. Inner messages always have CreateTime as the timestamp type in attributes.
+ *
+ * We set the timestamp in the following way:
+ * For non-compressed messages: the timestamp and timestamp type message attributes are set and used.
+ * For compressed messages:
+ * 1. Wrapper messages' timestamp type attribute is set to the proper value
+ * 2. Wrapper messages' timestamp is set to:
+ *    - the max timestamp of inner messages if CreateTime is used
+ *    - the current server time if wrapper message's timestamp = LogAppendTime.
+ *      In this case the wrapper message timestamp is used and all the timestamps of inner messages are ignored.
+ * 3. Inner messages' timestamp will be:
+ *    - used when wrapper message's timestamp type is CreateTime
+ *    - ignored when wrapper message's timestamp type is LogAppendTime
+ * 4. Inner messages' timestamp type will always be ignored with one exception: producers must set the inner message
+ *    timestamp type to CreateTime, otherwise the messages will be rejected by broker.
+ *
+ * Absolute offsets are calculated in the following way:
+ * Ideally the conversion from relative offset(RO) to absolute offset(AO) should be:
+ *
+ * AO = AO_Of_Last_Inner_Message + RO
+ *
+ * However, note that the message sets sent by producers are compressed in a streaming way.
+ * And the relative offset of an inner message compared with the last inner message is not known until
+ * the last inner message is written.
+ * Unfortunately we are not able to change the previously written messages after the last message is written to
+ * the message set when stream compression is used.
+ *
+ * To solve this issue, we use the following solution:
+ *
+ * 1. When the producer creates a message set, it simply writes all the messages into a compressed message set with
+ *    offset 0, 1, ... (inner offset).
+ * 2. The broker will set the offset of the wrapper message to the absolute offset of the last message in the
+ *    message set.
+ * 3. When a consumer sees the message set, it first decompresses the entire message set to find out the inner
+ *    offset (IO) of the last inner message. Then it computes RO and AO of previous messages:
+ *
+ *    RO = IO_of_a_message - IO_of_the_last_message
+ *    AO = AO_Of_Last_Inner_Message + RO
+ *
+ * 4. This solution works for compacted message sets as well.
+ *
  */
-class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends MessageSet with Logging {
-  private var shallowValidByteCount = -1
+class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Logging {
+
+  private[kafka] def this(compressionCodec: CompressionCodec,
+                          offsetCounter: LongRef,
+                          timestampType: TimestampType,
+                          messages: Message*) {
+    this(ByteBufferMessageSet.create(OffsetAssigner(offsetCounter, messages.size), compressionCodec,
+      timestampType, messages:_*))
+  }
+
+  def this(compressionCodec: CompressionCodec, offsetCounter: LongRef, messages: Message*) {
+    this(compressionCodec, offsetCounter, TimestampType.CREATE_TIME, messages:_*)
+  }
+
+  def this(compressionCodec: CompressionCodec, offsetSeq: Seq[Long], messages: Message*) {
+    this(ByteBufferMessageSet.create(new OffsetAssigner(offsetSeq), compressionCodec,
+      TimestampType.CREATE_TIME, messages:_*))
+  }
 
   def this(compressionCodec: CompressionCodec, messages: Message*) {
-    this(ByteBufferMessageSet.create(new AtomicLong(0), compressionCodec, messages:_*))
-  }
-  
-  def this(compressionCodec: CompressionCodec, offsetCounter: AtomicLong, messages: Message*) {
-    this(ByteBufferMessageSet.create(offsetCounter, compressionCodec, messages:_*))
+    this(compressionCodec, new LongRef(0L), messages: _*)
   }
 
   def this(messages: Message*) {
-    this(NoCompressionCodec, new AtomicLong(0), messages: _*)
+    this(NoCompressionCodec, messages: _*)
   }
 
-  private def shallowValidBytes: Int = {
-    if(shallowValidByteCount < 0) {
-      var bytes = 0
-      val iter = this.internalIterator(true)
-      while(iter.hasNext) {
-        val messageAndOffset = iter.next
-        bytes += MessageSet.entrySize(messageAndOffset.message)
-      }
-      this.shallowValidByteCount = bytes
-    }
-    shallowValidByteCount
-  }
-  
-  /** Write the messages in this set to the given channel */
-  def writeTo(channel: GatheringByteChannel, offset: Long, size: Int): Int = {
-    // Ignore offset and size from input. We just want to write the whole buffer to the channel.
-    buffer.mark()
-    var written = 0
-    while(written < sizeInBytes)
-      written += channel.write(buffer)
-    buffer.reset()
-    written
-  }
+  def getBuffer = buffer
+
+  override def asRecords: MemoryRecords = MemoryRecords.readableRecords(buffer.duplicate())
 
   /** default iterator that iterates over decompressed messages */
   override def iterator: Iterator[MessageAndOffset] = internalIterator()
 
   /** iterator over compressed messages without decompressing */
-  def shallowIterator: Iterator[MessageAndOffset] = internalIterator(true)
+  def shallowIterator: Iterator[MessageAndOffset] = internalIterator(isShallow = true)
 
   /** When flag isShallow is set to be true, we do a shallow iteration: just traverse the first level of messages. **/
   private def internalIterator(isShallow: Boolean = false): Iterator[MessageAndOffset] = {
-    new IteratorTemplate[MessageAndOffset] {
-      var topIter = buffer.slice()
-      var innerIter: Iterator[MessageAndOffset] = null
-
-      def innerDone():Boolean = (innerIter == null || !innerIter.hasNext)
-
-      def makeNextOuter: MessageAndOffset = {
-        // if there isn't at least an offset and size, we are done
-        if (topIter.remaining < 12)
-          return allDone()
-        val offset = topIter.getLong()
-        val size = topIter.getInt()
-        if(size < Message.MinHeaderSize)
-          throw new InvalidMessageException("Message found with corrupt size (" + size + ")")
-        
-        // we have an incomplete message
-        if(topIter.remaining < size)
-          return allDone()
-          
-        // read the current message and check correctness
-        val message = topIter.slice()
-        message.limit(size)
-        topIter.position(topIter.position + size)
-        val newMessage = new Message(message)
-
-        if(isShallow) {
-          new MessageAndOffset(newMessage, offset)
-        } else {
-          newMessage.compressionCodec match {
-            case NoCompressionCodec =>
-              innerIter = null
-              new MessageAndOffset(newMessage, offset)
-            case _ =>
-              innerIter = ByteBufferMessageSet.decompress(newMessage).internalIterator()
-              if(!innerIter.hasNext)
-                innerIter = null
-              makeNext()
-          }
-        }
-      }
-
-      override def makeNext(): MessageAndOffset = {
-        if(isShallow){
-          makeNextOuter
-        } else {
-          if(innerDone())
-            makeNextOuter
-          else
-            innerIter.next
-        }
-      }
-      
-    }
+    if (isShallow)
+      asRecords.batches.asScala.iterator.map(MessageAndOffset.fromRecordBatch)
+    else
+      asRecords.records.asScala.iterator.map(MessageAndOffset.fromRecord)
   }
-  
-  /**
-   * Update the offsets for this message set. This method attempts to do an in-place conversion
-   * if there is no compression, but otherwise recopies the messages
-   */
-  private[kafka] def assignOffsets(offsetCounter: AtomicLong, codec: CompressionCodec): ByteBufferMessageSet = {
-    if(codec == NoCompressionCodec) {
-      // do an in-place conversion
-      var position = 0
-      buffer.mark()
-      while(position < sizeInBytes - MessageSet.LogOverhead) {
-        buffer.position(position)
-        buffer.putLong(offsetCounter.getAndIncrement())
-        position += MessageSet.LogOverhead + buffer.getInt()
-      }
-      buffer.reset()
-      this
-    } else {
-      // messages are compressed, crack open the messageset and recompress with correct offset
-      val messages = this.internalIterator(isShallow = false).map(_.message)
-      new ByteBufferMessageSet(compressionCodec = codec, offsetCounter = offsetCounter, messages = messages.toBuffer:_*)
-    }
-  }
- 
 
   /**
    * The total number of bytes in this message set, including any partial trailing messages
    */
-  def sizeInBytes: Int = buffer.limit
-  
+  def sizeInBytes: Int = buffer.limit()
+
   /**
    * The total number of bytes in this message set not including any partial, trailing messages
    */
-  def validBytes: Int = shallowValidBytes
+  def validBytes: Int = asRecords.validBytes
 
   /**
    * Two message sets are equal if their respective byte buffers are equal
    */
   override def equals(other: Any): Boolean = {
     other match {
-      case that: ByteBufferMessageSet => 
+      case that: ByteBufferMessageSet =>
         buffer.equals(that.buffer)
       case _ => false
     }

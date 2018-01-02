@@ -18,45 +18,48 @@
 package kafka.tools
 
 import joptsimple.OptionParser
-import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{Logging, ZKGroupTopicDirs, ZkUtils, ZKStringSerializer}
+import org.apache.kafka.common.security._
+import kafka.utils.{CommandLineUtils, Exit, Logging, ZKGroupTopicDirs, ZkUtils}
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 object VerifyConsumerRebalance extends Logging {
   def main(args: Array[String]) {
-    val parser = new OptionParser()
+    val parser = new OptionParser(false)
+    warn("WARNING: VerifyConsumerRebalance is deprecated and will be dropped in a future release following 0.11.0.0.")
 
     val zkConnectOpt = parser.accepts("zookeeper.connect", "ZooKeeper connect string.").
-      withRequiredArg().defaultsTo("localhost:2181").ofType(classOf[String]);
+      withRequiredArg().defaultsTo("localhost:2181").ofType(classOf[String])
     val groupOpt = parser.accepts("group", "Consumer group.").
       withRequiredArg().ofType(classOf[String])
     parser.accepts("help", "Print this message.")
+    
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "Validate that all partitions have a consumer for a given consumer group.")
 
     val options = parser.parse(args : _*)
 
     if (options.has("help")) {
       parser.printHelpOn(System.out)
-      System.exit(0)
+      Exit.exit(0)
     }
 
-    for (opt <- List(groupOpt))
-      if (!options.has(opt)) {
-        System.err.println("Missing required argument: %s".format(opt))
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
+    CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
 
     val zkConnect = options.valueOf(zkConnectOpt)
     val group = options.valueOf(groupOpt)
 
-    var zkClient: ZkClient = null
+    var zkUtils: ZkUtils = null
     try {
-      zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
+      zkUtils = ZkUtils(zkConnect,
+                        30000,
+                        30000, 
+                        JaasUtils.isZkSecurityEnabled())
 
       debug("zkConnect = %s; group = %s".format(zkConnect, group))
 
       // check if the rebalancing operation succeeded.
       try {
-        if(validateRebalancingOperation(zkClient, group))
+        if(validateRebalancingOperation(zkUtils, group))
           println("Rebalance operation successful !")
         else
           println("Rebalance operation failed !")
@@ -65,12 +68,12 @@ object VerifyConsumerRebalance extends Logging {
       }
     }
     finally {
-      if (zkClient != null)
-        zkClient.close()
+      if (zkUtils != null)
+        zkUtils.close()
     }
   }
 
-  private def validateRebalancingOperation(zkClient: ZkClient, group: String): Boolean = {
+  private def validateRebalancingOperation(zkUtils: ZkUtils, group: String): Boolean = {
     info("Verifying rebalancing operation for consumer group " + group)
     var rebalanceSucceeded: Boolean = true
     /**
@@ -78,17 +81,15 @@ object VerifyConsumerRebalance extends Logging {
      * This means that for each partition registered under /brokers/topics/[topic]/[broker-id], an owner exists
      * under /consumers/[consumer_group]/owners/[topic]/[broker_id-partition_id]
      */
-    val consumersPerTopicMap = ZkUtils.getConsumersPerTopic(zkClient, group)
-    val partitionsPerTopicMap = ZkUtils.getPartitionsForTopics(zkClient, consumersPerTopicMap.keySet.toSeq)
+    val consumersPerTopicMap = zkUtils.getConsumersPerTopic(group, excludeInternalTopics = false)
+    val partitionsPerTopicMap = zkUtils.getPartitionsForTopics(consumersPerTopicMap.keySet.toSeq)
 
-    partitionsPerTopicMap.foreach { partitionsForTopic =>
-      val topic = partitionsForTopic._1
-      val partitions = partitionsForTopic._2
+    partitionsPerTopicMap.foreach { case (topic, partitions) =>
       val topicDirs = new ZKGroupTopicDirs(group, topic)
       info("Alive partitions for topic %s are %s ".format(topic, partitions.toString))
       info("Alive consumers for topic %s => %s ".format(topic, consumersPerTopicMap.get(topic)))
-      val partitionsWithOwners = ZkUtils.getChildrenParentMayNotExist(zkClient, topicDirs.consumerOwnerDir)
-      if(partitionsWithOwners.size == 0) {
+      val partitionsWithOwners = zkUtils.getChildrenParentMayNotExist(topicDirs.consumerOwnerDir)
+      if(partitionsWithOwners.isEmpty) {
         error("No owners for any partitions for topic " + topic)
         rebalanceSucceeded = false
       }
@@ -97,14 +98,14 @@ object VerifyConsumerRebalance extends Logging {
 
       // for each available partition for topic, check if an owner exists
       partitions.foreach { partition =>
-      // check if there is a node for [partition]
-        if(!partitionsWithOwners.exists(p => p.equals(partition))) {
+        // check if there is a node for [partition]
+        if(!partitionsWithOwners.contains(partition.toString)) {
           error("No owner for partition [%s,%d]".format(topic, partition))
           rebalanceSucceeded = false
         }
         // try reading the partition owner path for see if a valid consumer id exists there
         val partitionOwnerPath = topicDirs.consumerOwnerDir + "/" + partition
-        val partitionOwner = ZkUtils.readDataMaybeNull(zkClient, partitionOwnerPath)._1 match {
+        val partitionOwner = zkUtils.readDataMaybeNull(partitionOwnerPath)._1 match {
           case Some(m) => m
           case None => null
         }
@@ -116,7 +117,7 @@ object VerifyConsumerRebalance extends Logging {
           // check if the owner is a valid consumer id
           consumerIdsForTopic match {
             case Some(consumerIds) =>
-              if(!consumerIds.contains(partitionOwner)) {
+              if(!consumerIds.map(c => c.toString).contains(partitionOwner)) {
                 error(("Owner %s for partition [%s,%d] is not a valid member of consumer " +
                   "group %s").format(partitionOwner, topic, partition, group))
                 rebalanceSucceeded = false

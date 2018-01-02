@@ -5,8 +5,8 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,25 +18,31 @@
 package kafka.integration
 
 import kafka.consumer.SimpleConsumer
-import org.scalatest.junit.JUnit3Suite
-import kafka.producer.{ProducerConfig, Producer}
-import kafka.utils.TestUtils
-trait ProducerConsumerTestHarness extends JUnit3Suite with KafkaServerTestHarness {
-    val port: Int
-    val host = "localhost"
-    var producer: Producer[String, String] = null
-    var consumer: SimpleConsumer = null
+import org.junit.{After, Before}
+import kafka.producer.Producer
+import kafka.utils.{StaticPartitioner, TestUtils}
+import kafka.serializer.StringEncoder
 
+@deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
+trait ProducerConsumerTestHarness extends KafkaServerTestHarness {
+  val host = "localhost"
+  var producer: Producer[String, String] = null
+  var consumer: SimpleConsumer = null
+
+  @Before
   override def setUp() {
-      super.setUp
-      val props = TestUtils.getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs), "kafka.utils.StaticPartitioner")
-      producer = new Producer(new ProducerConfig(props))
-      consumer = new SimpleConsumer(host, port, 1000000, 64*1024, "")
-    }
+    super.setUp
+    producer = TestUtils.createProducer[String, String](TestUtils.getBrokerListStrFromServers(servers),
+      encoder = classOf[StringEncoder].getName,
+      keyEncoder = classOf[StringEncoder].getName,
+      partitioner = classOf[StaticPartitioner].getName)
+    consumer = new SimpleConsumer(host, TestUtils.boundPort(servers.head), 1000000, 64 * 1024, "")
+  }
 
-   override def tearDown() {
-     producer.close()
-     consumer.close()
-     super.tearDown
-   }
+  @After
+  override def tearDown() {
+    producer.close()
+    consumer.close()
+    super.tearDown
+  }
 }

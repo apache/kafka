@@ -19,10 +19,12 @@ package kafka.producer
 
 import async.AsyncProducerConfig
 import java.util.Properties
-import kafka.utils.{Utils, VerifiableProperties}
-import kafka.message.{CompressionCodec, NoCompressionCodec}
+import kafka.utils.{CoreUtils, VerifiableProperties}
+import kafka.message.NoCompressionCodec
 import kafka.common.{InvalidConfigException, Config}
 
+@deprecated("This object has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.producer.ProducerConfig instead.", "0.10.0.0")
 object ProducerConfig extends Config {
   def validate(config: ProducerConfig) {
     validateClientId(config.clientId)
@@ -48,6 +50,8 @@ object ProducerConfig extends Config {
   }
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.producer.ProducerConfig instead.", "0.10.0.0")
 class ProducerConfig private (val props: VerifiableProperties)
         extends AsyncProducerConfig with SyncProducerConfigShared {
   import ProducerConfig._
@@ -77,16 +81,7 @@ class ProducerConfig private (val props: VerifiableProperties)
    * This parameter allows you to specify the compression codec for all data generated *
    * by this producer. The default is NoCompressionCodec
    */
-  val compressionCodec = {
-    val prop = props.getString("compression.codec", NoCompressionCodec.name)
-    try {
-      CompressionCodec.getCompressionCodec(prop.toInt)
-    }
-    catch {
-      case nfe: NumberFormatException =>
-        CompressionCodec.getCompressionCodec(prop)
-    }
-  }
+  val compressionCodec = props.getCompressionCodec("compression.codec", NoCompressionCodec)
 
   /** This parameter allows you to set whether compression should be turned *
    *  on for particular topics
@@ -99,7 +94,7 @@ class ProducerConfig private (val props: VerifiableProperties)
    *
    *  If the compression codec is NoCompressionCodec, compression is disabled for all topics
    */
-  val compressedTopics = Utils.parseCsvList(props.getString("compressed.topics", null))
+  val compressedTopics = CoreUtils.parseCsvList(props.getString("compressed.topics", null))
 
   /** The leader may be unavailable transiently, which can fail the sending of a message.
     *  This property specifies the number of retries when such failures occur.

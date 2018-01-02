@@ -17,7 +17,7 @@
 
 package kafka.consumer
 
-import kafka.utils.{IteratorTemplate, Logging, Utils}
+import kafka.utils.{IteratorTemplate, Logging}
 import java.util.concurrent.{TimeUnit, BlockingQueue}
 import kafka.serializer.Decoder
 import java.util.concurrent.atomic.AtomicReference
@@ -30,6 +30,7 @@ import kafka.common.{KafkaException, MessageSizeTooLargeException}
  * The iterator takes a shutdownCommand object which can be added to the queue to trigger a shutdown
  *
  */
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk],
                              consumerTimeoutMs: Int,
                              private val keyDecoder: Decoder[K],
@@ -37,7 +38,7 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
                              val clientId: String)
   extends IteratorTemplate[MessageAndMetadata[K, V]] with Logging {
 
-  private var current: AtomicReference[Iterator[MessageAndOffset]] = new AtomicReference(null)
+  private val current: AtomicReference[Iterator[MessageAndOffset]] = new AtomicReference(null)
   private var currentTopicInfo: PartitionTopicInfo = null
   private var consumedOffset: Long = -1L
   private val consumerTopicStats = ConsumerTopicStatsRegistry.getConsumerTopicStat(clientId)
@@ -71,7 +72,6 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
       }
       if(currentDataChunk eq ZookeeperConsumerConnector.shutdownCommand) {
         debug("Received the shutdown command")
-        channel.offer(currentDataChunk)
         return allDone
       } else {
         currentTopicInfo = currentDataChunk.topicInfo
@@ -101,19 +101,23 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
 
     item.message.ensureValid() // validate checksum of message to ensure it is valid
 
-    val keyBuffer = item.message.key
-    val key = if(keyBuffer == null) null.asInstanceOf[K] else keyDecoder.fromBytes(Utils.readBytes(keyBuffer))
-    val value = valueDecoder.fromBytes(Utils.readBytes(item.message.payload))
-    new MessageAndMetadata(key, value, currentTopicInfo.topic, currentTopicInfo.partitionId, item.offset)
+    new MessageAndMetadata(currentTopicInfo.topic,
+                           currentTopicInfo.partitionId,
+                           item.message,
+                           item.offset,
+                           keyDecoder,
+                           valueDecoder,
+                           item.message.timestamp,
+                           item.message.timestampType)
   }
 
   def clearCurrentChunk() {
-    try {
-      debug("Clearing the current data chunk for this consumer iterator")
-      current.set(null)
-    }
+    debug("Clearing the current data chunk for this consumer iterator")
+    current.set(null)
   }
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.common.errors.TimeoutException instead.", "0.11.0.0")
 class ConsumerTimeoutException() extends RuntimeException()
 

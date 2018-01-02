@@ -16,249 +16,188 @@
  */
 package kafka.server
 
-import kafka.cluster.{Partition, Replica}
-import kafka.log.Log
-import kafka.message.{ByteBufferMessageSet, Message}
-import kafka.network.{BoundedByteBufferSend, RequestChannel}
-import kafka.utils.{ZkUtils, Time, TestUtils, MockTime}
-import org.easymock.EasyMock
-import org.I0Itec.zkclient.ZkClient
-import org.scalatest.junit.JUnit3Suite
+import java.io.File
+
 import kafka.api._
-import scala.Some
+import kafka.utils._
+import kafka.cluster.Replica
+import kafka.log.Log
+import kafka.server.QuotaFactory.UnboundedQuota
+import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.junit.{After, Before, Test}
+import java.util.Properties
+import java.util.concurrent.atomic.AtomicBoolean
+
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.requests.IsolationLevel
+import org.easymock.EasyMock
 import org.junit.Assert._
-import kafka.common.TopicAndPartition
 
+class SimpleFetchTest {
 
-class SimpleFetchTest extends JUnit3Suite {
+  val replicaLagTimeMaxMs = 100L
+  val replicaFetchWaitMaxMs = 100
+  val replicaLagMaxMessages = 10L
 
-  val configs = TestUtils.createBrokerConfigs(2).map(new KafkaConfig(_) {
-    override val replicaLagTimeMaxMs = 100L
-    override val replicaLagMaxMessages = 10L
-  })
-  val topic = "foo"
+  val overridingProps = new Properties()
+  overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, replicaLagTimeMaxMs.toString)
+  overridingProps.put(KafkaConfig.ReplicaFetchWaitMaxMsProp, replicaFetchWaitMaxMs.toString)
+
+  val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps(_, overridingProps))
+
+  // set the replica manager with the partition
+  val time = new MockTime
+  val metrics = new Metrics
+  val leaderLEO = 20L
+  val followerLEO = 15L
+  val partitionHW = 5
+
+  val fetchSize = 100
+  val recordToHW = new SimpleRecord("recordToHW".getBytes())
+  val recordToLEO = new SimpleRecord("recordToLEO".getBytes())
+
+  val topic = "test-topic"
   val partitionId = 0
+  val topicPartition = new TopicPartition(topic, partitionId)
 
-  /**
-   * The scenario for this test is that there is one topic, "test-topic", on broker "0" that has
-   * one  partition with one follower replica on broker "1".  The leader replica on "0"
-   * has HW of "5" and LEO of "20".  The follower on broker "1" has a local replica
-   * with a HW matching the leader's ("5") and LEO of "15", meaning it's not in-sync
-   * but is still in ISR (hasn't yet expired from ISR).
-   *
-   * When a normal consumer fetches data, it only should only see data upto the HW of the leader,
-   * in this case up an offset of "5".
-   */
-  def testNonReplicaSeesHwWhenFetching() {
-    /* setup */
-    val time = new MockTime
-    val leo = 20
-    val hw = 5
-    val fetchSize = 100
-    val messages = new Message("test-message".getBytes())
+  val fetchInfo = Seq(topicPartition -> new PartitionData(0, 0, fetchSize))
 
+  var replicaManager: ReplicaManager = _
+
+  @Before
+  def setUp() {
     // create nice mock since we don't particularly care about zkclient calls
-    val zkClient = EasyMock.createNiceMock(classOf[ZkClient])
-    EasyMock.expect(zkClient.exists(ZkUtils.ControllerEpochPath)).andReturn(false)
-    EasyMock.replay(zkClient)
+    val kafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    EasyMock.replay(kafkaZkClient)
 
-    val log = EasyMock.createMock(classOf[kafka.log.Log])
-    EasyMock.expect(log.logEndOffset).andReturn(leo).anyTimes()
-    EasyMock.expect(log.read(0, fetchSize, Some(hw))).andReturn(new ByteBufferMessageSet(messages))
+    // create nice mock since we don't particularly care about scheduler calls
+    val scheduler = EasyMock.createNiceMock(classOf[KafkaScheduler])
+    EasyMock.replay(scheduler)
+
+    // create the log which takes read with either HW max offset or none max offset
+    val log = EasyMock.createNiceMock(classOf[Log])
+    EasyMock.expect(log.logStartOffset).andReturn(0).anyTimes()
+    EasyMock.expect(log.logEndOffset).andReturn(leaderLEO).anyTimes()
+    EasyMock.expect(log.dir).andReturn(TestUtils.tempDir()).anyTimes()
+    EasyMock.expect(log.logEndOffsetMetadata).andReturn(new LogOffsetMetadata(leaderLEO)).anyTimes()
+    EasyMock.expect(log.read(
+      startOffset = 0,
+      maxLength = fetchSize,
+      maxOffset = Some(partitionHW),
+      minOneMessage = true,
+      isolationLevel = IsolationLevel.READ_UNCOMMITTED))
+      .andReturn(FetchDataInfo(
+        new LogOffsetMetadata(0L, 0L, 0),
+        MemoryRecords.withRecords(CompressionType.NONE, recordToHW)
+      )).anyTimes()
+    EasyMock.expect(log.read(
+      startOffset = 0,
+      maxLength = fetchSize,
+      maxOffset = None,
+      minOneMessage = true,
+      isolationLevel = IsolationLevel.READ_UNCOMMITTED))
+      .andReturn(FetchDataInfo(
+        new LogOffsetMetadata(0L, 0L, 0),
+        MemoryRecords.withRecords(CompressionType.NONE, recordToLEO)
+      )).anyTimes()
     EasyMock.replay(log)
 
+    // create the log manager that is aware of this mock log
     val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
-    EasyMock.expect(logManager.getLog(topic, partitionId)).andReturn(Some(log)).anyTimes()
-    EasyMock.expect(logManager.config).andReturn(configs.head).anyTimes()
+    EasyMock.expect(logManager.getLog(topicPartition, false)).andReturn(Some(log)).anyTimes()
+    EasyMock.expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
     EasyMock.replay(logManager)
 
-    val replicaManager = EasyMock.createMock(classOf[kafka.server.ReplicaManager])
-    EasyMock.expect(replicaManager.config).andReturn(configs.head)
-    EasyMock.expect(replicaManager.logManager).andReturn(logManager)
-    EasyMock.expect(replicaManager.replicaFetcherManager).andReturn(EasyMock.createMock(classOf[ReplicaFetcherManager]))
-    EasyMock.expect(replicaManager.zkClient).andReturn(zkClient)
-    EasyMock.replay(replicaManager)
+    // create the replica manager
+    replicaManager = new ReplicaManager(configs.head, metrics, time, kafkaZkClient, scheduler, logManager,
+      new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""), new BrokerTopicStats,
+      new MetadataCache(configs.head.brokerId), new LogDirFailureChannel(configs.head.logDirs.size))
 
-    val partition = getPartitionWithAllReplicasInISR(topic, partitionId, time, configs.head.brokerId, log, hw, replicaManager)
-    partition.getReplica(configs(1).brokerId).get.logEndOffset = leo - 5L
+    // add the partition with two replicas, both in ISR
+    val partition = replicaManager.getOrCreatePartition(new TopicPartition(topic, partitionId))
 
-    EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.config).andReturn(configs.head).anyTimes()
-    EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(topic, partitionId)).andReturn(partition.leaderReplicaIfLocal().get).anyTimes()
-    EasyMock.replay(replicaManager)
+    // create the leader replica with the local log
+    val leaderReplica = new Replica(configs.head.brokerId, partition.topicPartition, time, 0, Some(log))
+    leaderReplica.highWatermark = new LogOffsetMetadata(partitionHW)
+    partition.leaderReplicaIdOpt = Some(leaderReplica.brokerId)
 
-    val controller = EasyMock.createMock(classOf[kafka.controller.KafkaController])
+    // create the follower replica with defined log end offset
+    val followerReplica= new Replica(configs(1).brokerId, partition.topicPartition, time)
+    val leo = new LogOffsetMetadata(followerLEO, 0L, followerLEO.toInt)
+    followerReplica.updateLogReadResult(new LogReadResult(info = FetchDataInfo(leo, MemoryRecords.EMPTY),
+                                                          highWatermark = leo.messageOffset,
+                                                          leaderLogStartOffset = 0L,
+                                                          leaderLogEndOffset = leo.messageOffset,
+                                                          followerLogStartOffset = 0L,
+                                                          fetchTimeMs = time.milliseconds,
+                                                          readSize = -1,
+                                                          lastStableOffset = None))
 
-    // start a request channel with 2 processors and a queue size of 5 (this is more or less arbitrary)
-    // don't provide replica or leader callbacks since they will not be tested here
-    val requestChannel = new RequestChannel(2, 5)
-    val apis = new KafkaApis(requestChannel, replicaManager, zkClient, configs.head.brokerId, controller)
+    // add both of them to ISR
+    val allReplicas = List(leaderReplica, followerReplica)
+    allReplicas.foreach(partition.addReplicaIfNotExists)
+    partition.inSyncReplicas = allReplicas.toSet
+  }
 
-    // This request (from a follower) wants to read up to 2*HW but should only get back up to HW bytes into the log
-    val goodFetch = new FetchRequestBuilder()
-          .replicaId(Request.OrdinaryConsumerId)
-          .addFetch(topic, partitionId, 0, fetchSize)
-          .build()
-    val goodFetchBB = TestUtils.createRequestByteBuffer(goodFetch)
-
-    // send the request
-    apis.handleFetchRequest(new RequestChannel.Request(processor=1, requestKey=5, buffer=goodFetchBB, startTimeMs=1))
-
-    // make sure the log only reads bytes between 0->HW (5)
-    EasyMock.verify(log)
-
-    // Test offset request from non-replica
-    val topicAndPartition = TopicAndPartition(topic, partition.partitionId)
-    val offsetRequest = OffsetRequest(
-      Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
-    val offsetRequestBB = TestUtils.createRequestByteBuffer(offsetRequest)
-
-    EasyMock.reset(logManager)
-    EasyMock.reset(replicaManager)
-
-    EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(topic, partitionId)).andReturn(partition.leaderReplicaIfLocal().get)
-    EasyMock.expect(replicaManager.logManager).andReturn(logManager)
-    EasyMock.expect(logManager.getOffsets(topicAndPartition, OffsetRequest.LatestTime, 1)).andReturn(Seq(leo))
-
-    EasyMock.replay(replicaManager)
-    EasyMock.replay(logManager)
-
-    apis.handleOffsetRequest(new RequestChannel.Request(processor = 0,
-                                                        requestKey = 5,
-                                                        buffer = offsetRequestBB,
-                                                        startTimeMs = 1))
-    val offsetResponseBuffer = requestChannel.receiveResponse(0).responseSend.asInstanceOf[BoundedByteBufferSend].buffer
-    val offsetResponse = OffsetResponse.readFrom(offsetResponseBuffer)
-    EasyMock.verify(replicaManager)
-    EasyMock.verify(logManager)
-    assertEquals(1, offsetResponse.partitionErrorAndOffsets(topicAndPartition).offsets.size)
-    assertEquals(hw.toLong, offsetResponse.partitionErrorAndOffsets(topicAndPartition).offsets.head)
+  @After
+  def tearDown() {
+    replicaManager.shutdown(false)
+    metrics.close()
   }
 
   /**
-   * The scenario for this test is that there is one topic, "test-topic", on broker "0" that has
-   * one  partition with one follower replica on broker "1".  The leader replica on "0"
-   * has HW of "5" and LEO of "20".  The follower on broker "1" has a local replica
-   * with a HW matching the leader's ("5") and LEO of "15", meaning it's not in-sync
-   * but is still in ISR (hasn't yet expired from ISR).
+   * The scenario for this test is that there is one topic that has one partition
+   * with one leader replica on broker "0" and one follower replica on broker "1"
+   * inside the replica manager's metadata.
    *
-   * When the follower from broker "1" fetches data, it should see data upto the log end offset ("20")
+   * The leader replica on "0" has HW of "5" and LEO of "20".  The follower on
+   * broker "1" has a local replica with a HW matching the leader's ("5") and
+   * LEO of "15", meaning it's not in-sync but is still in ISR (hasn't yet expired from ISR).
+   *
+   * When a fetch operation with read committed data turned on is received, the replica manager
+   * should only return data up to the HW of the partition; when a fetch operation with read
+   * committed data turned off is received, the replica manager could return data up to the LEO
+   * of the local leader replica's log.
+   *
+   * This test also verifies counts of fetch requests recorded by the ReplicaManager
    */
-  def testReplicaSeesLeoWhenFetching() {
-    /* setup */
-    val time = new MockTime
-    val leo = 20
-    val hw = 5
+  @Test
+  def testReadFromLog() {
+    val brokerTopicStats = new BrokerTopicStats
+    val initialTopicCount = brokerTopicStats.topicStats(topic).totalFetchRequestRate.count()
+    val initialAllTopicsCount = brokerTopicStats.allTopicsStats.totalFetchRequestRate.count()
 
-    val messages = new Message("test-message".getBytes())
+    val readCommittedRecords = replicaManager.readFromLocalLog(
+      replicaId = Request.OrdinaryConsumerId,
+      fetchOnlyFromLeader = true,
+      readOnlyCommitted = true,
+      fetchMaxBytes = Int.MaxValue,
+      hardMaxBytesLimit = false,
+      readPartitionInfo = fetchInfo,
+      quota = UnboundedQuota,
+      isolationLevel = IsolationLevel.READ_UNCOMMITTED).find(_._1 == topicPartition)
+    val firstReadRecord = readCommittedRecords.get._2.info.records.records.iterator.next()
+    assertEquals("Reading committed data should return messages only up to high watermark", recordToHW,
+      new SimpleRecord(firstReadRecord))
 
-    val followerReplicaId = configs(1).brokerId
-    val followerLEO = 15
+    val readAllRecords = replicaManager.readFromLocalLog(
+      replicaId = Request.OrdinaryConsumerId,
+      fetchOnlyFromLeader = true,
+      readOnlyCommitted = false,
+      fetchMaxBytes = Int.MaxValue,
+      hardMaxBytesLimit = false,
+      readPartitionInfo = fetchInfo,
+      quota = UnboundedQuota,
+      isolationLevel = IsolationLevel.READ_UNCOMMITTED).find(_._1 == topicPartition)
 
-    val zkClient = EasyMock.createNiceMock(classOf[ZkClient])
-    EasyMock.expect(zkClient.exists(ZkUtils.ControllerEpochPath)).andReturn(false)
-    EasyMock.replay(zkClient)
+    val firstRecord = readAllRecords.get._2.info.records.records.iterator.next()
+    assertEquals("Reading any data can return messages up to the end of the log", recordToLEO,
+      new SimpleRecord(firstRecord))
 
-    val log = EasyMock.createMock(classOf[kafka.log.Log])
-    EasyMock.expect(log.logEndOffset).andReturn(leo).anyTimes()
-    EasyMock.expect(log.read(followerLEO, Integer.MAX_VALUE, None)).andReturn(new ByteBufferMessageSet(messages))
-    EasyMock.replay(log)
-
-    val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
-    EasyMock.expect(logManager.getLog(topic, 0)).andReturn(Some(log)).anyTimes()
-    EasyMock.expect(logManager.config).andReturn(configs.head).anyTimes()
-    EasyMock.replay(logManager)
-
-    val replicaManager = EasyMock.createMock(classOf[kafka.server.ReplicaManager])
-    EasyMock.expect(replicaManager.config).andReturn(configs.head)
-    EasyMock.expect(replicaManager.logManager).andReturn(logManager)
-    EasyMock.expect(replicaManager.replicaFetcherManager).andReturn(EasyMock.createMock(classOf[ReplicaFetcherManager]))
-    EasyMock.expect(replicaManager.zkClient).andReturn(zkClient)
-    EasyMock.replay(replicaManager)
-
-    val partition = getPartitionWithAllReplicasInISR(topic, partitionId, time, configs.head.brokerId, log, hw, replicaManager)
-    partition.getReplica(followerReplicaId).get.logEndOffset = followerLEO.asInstanceOf[Long]
-
-    EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.config).andReturn(configs.head).anyTimes()
-    EasyMock.expect(replicaManager.recordFollowerPosition(topic, partitionId, followerReplicaId, followerLEO))
-    EasyMock.expect(replicaManager.getReplica(topic, partitionId, followerReplicaId)).andReturn(partition.inSyncReplicas.find(_.brokerId == configs(1).brokerId))
-    EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(topic, partitionId)).andReturn(partition.leaderReplicaIfLocal().get).anyTimes()
-    EasyMock.replay(replicaManager)
-
-    val controller = EasyMock.createMock(classOf[kafka.controller.KafkaController])
-
-    val requestChannel = new RequestChannel(2, 5)
-    val apis = new KafkaApis(requestChannel, replicaManager, zkClient, configs.head.brokerId, controller)
-
-    /**
-     * This fetch, coming from a replica, requests all data at offset "15".  Because the request is coming
-     * from a follower, the leader should oblige and read beyond the HW.
-     */
-    val bigFetch = new FetchRequestBuilder()
-      .replicaId(followerReplicaId)
-      .addFetch(topic, partitionId, followerLEO, Integer.MAX_VALUE)
-      .build()
-
-    val fetchRequestBB = TestUtils.createRequestByteBuffer(bigFetch)
-
-    // send the request
-    apis.handleFetchRequest(new RequestChannel.Request(processor=0, requestKey=5, buffer=fetchRequestBB, startTimeMs=1))
-
-    /**
-     * Make sure the log satisfies the fetch from a follower by reading data beyond the HW, mainly all bytes after
-     * an offset of 15
-     */
-    EasyMock.verify(log)
-
-    // Test offset request from replica
-    val topicAndPartition = TopicAndPartition(topic, partition.partitionId)
-    val offsetRequest = OffsetRequest(
-      Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)),
-      replicaId = followerReplicaId)
-    val offsetRequestBB = TestUtils.createRequestByteBuffer(offsetRequest)
-
-    EasyMock.reset(logManager)
-    EasyMock.reset(replicaManager)
-
-    EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(topic, partitionId)).andReturn(partition.leaderReplicaIfLocal().get)
-    EasyMock.expect(replicaManager.logManager).andReturn(logManager)
-    EasyMock.expect(logManager.getOffsets(topicAndPartition, OffsetRequest.LatestTime, 1)).andReturn(Seq(leo))
-
-    EasyMock.replay(replicaManager)
-    EasyMock.replay(logManager)
-
-    apis.handleOffsetRequest(new RequestChannel.Request(processor = 1,
-                                                        requestKey = 5,
-                                                        buffer = offsetRequestBB,
-                                                        startTimeMs = 1))
-    val offsetResponseBuffer = requestChannel.receiveResponse(1).responseSend.asInstanceOf[BoundedByteBufferSend].buffer
-    val offsetResponse = OffsetResponse.readFrom(offsetResponseBuffer)
-    EasyMock.verify(replicaManager)
-    EasyMock.verify(logManager)
-    assertEquals(1, offsetResponse.partitionErrorAndOffsets(topicAndPartition).offsets.size)
-    assertEquals(leo.toLong, offsetResponse.partitionErrorAndOffsets(topicAndPartition).offsets.head)
+    assertEquals("Counts should increment after fetch", initialTopicCount+2, brokerTopicStats.topicStats(topic).totalFetchRequestRate.count())
+    assertEquals("Counts should increment after fetch", initialAllTopicsCount+2, brokerTopicStats.allTopicsStats.totalFetchRequestRate.count())
   }
-
-  private def getPartitionWithAllReplicasInISR(topic: String, partitionId: Int, time: Time, leaderId: Int,
-                                               localLog: Log, leaderHW: Long, replicaManager: ReplicaManager): Partition = {
-    val partition = new Partition(topic, partitionId, 2, time, replicaManager)
-    val leaderReplica = new Replica(leaderId, partition, time, 0, Some(localLog))
-
-    val allReplicas = getFollowerReplicas(partition, leaderId, time) :+ leaderReplica
-    allReplicas.foreach(partition.addReplicaIfNotExists(_))
-    // set in sync replicas for this partition to all the assigned replicas
-    partition.inSyncReplicas = allReplicas.toSet
-    // set the leader and its hw and the hw update time
-    partition.leaderReplicaIdOpt = Some(leaderId)
-    leaderReplica.highWatermark = leaderHW
-    partition
-  }
-
-  private def getFollowerReplicas(partition: Partition, leaderId: Int, time: Time): Seq[Replica] = {
-    configs.filter(_.brokerId != leaderId).map { config =>
-      new Replica(config.brokerId, partition, time)
-    }
-  }
-
 }

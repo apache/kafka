@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -18,36 +18,27 @@
 package kafka.utils
 
 import java.util.concurrent._
+
+import org.apache.kafka.common.utils.Time
+
 import scala.math._
 
-class DelayedItem[T](val item: T, delay: Long, unit: TimeUnit) extends Delayed with Logging {
+class DelayedItem(delayMs: Long) extends Delayed with Logging {
 
-  val createdMs = SystemTime.milliseconds
-  val delayMs = {
-    val given = unit.toMillis(delay)
-    if (given < 0 || (createdMs + given) < 0) (Long.MaxValue - createdMs)
-    else given
-  }
+  private val dueMs = Time.SYSTEM.milliseconds + delayMs
 
-  def this(item: T, delayMs: Long) = 
-    this(item, delayMs, TimeUnit.MILLISECONDS)
+  def this(delay: Long, unit: TimeUnit) = this(unit.toMillis(delay))
 
   /**
    * The remaining delay time
    */
   def getDelay(unit: TimeUnit): Long = {
-    val elapsedMs = (SystemTime.milliseconds - createdMs)
-    unit.convert(max(delayMs - elapsedMs, 0), TimeUnit.MILLISECONDS)
+    unit.convert(max(dueMs - Time.SYSTEM.milliseconds, 0), TimeUnit.MILLISECONDS)
   }
-    
-  def compareTo(d: Delayed): Int = {
-    val delayed = d.asInstanceOf[DelayedItem[T]]
-    val myEnd = createdMs + delayMs
-    val yourEnd = delayed.createdMs + delayed.delayMs
 
-    if(myEnd < yourEnd) -1
-    else if(myEnd > yourEnd) 1
-    else 0
+  def compareTo(d: Delayed): Int = {
+    val other = d.asInstanceOf[DelayedItem]
+    java.lang.Long.compare(dueMs, other.dueMs)
   }
-  
+
 }

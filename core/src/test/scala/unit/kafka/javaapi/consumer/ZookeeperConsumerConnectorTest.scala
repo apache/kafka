@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -17,104 +17,98 @@
 
 package kafka.javaapi.consumer
 
-import junit.framework.Assert._
-import kafka.integration.KafkaServerTestHarness
+import java.util.Properties
+
 import kafka.server._
-import org.scalatest.junit.JUnit3Suite
-import scala.collection.JavaConversions._
-import org.apache.log4j.{Level, Logger}
-import kafka.message._
 import kafka.serializer._
+import kafka.integration.KafkaServerTestHarness
 import kafka.producer.KeyedMessage
 import kafka.javaapi.producer.Producer
 import kafka.utils.IntEncoder
-import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
 import kafka.consumer.{KafkaStream, ConsumerConfig}
-import kafka.zk.ZooKeeperTestHarness
+import kafka.common.MessageStreamsExistException
+import org.junit.Test
 
-class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with ZooKeeperTestHarness with Logging {
+import scala.collection.JavaConversions
 
-  val zookeeperConnect = zkConnect
+import org.apache.log4j.{Level, Logger}
+import org.junit.Assert._
+
+@deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
+class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging {
   val numNodes = 2
   val numParts = 2
   val topic = "topic1"
-  val configs =
-    for(props <- TestUtils.createBrokerConfigs(numNodes))
-    yield new KafkaConfig(props) {
-      override val numPartitions = numParts
-      override val zkConnect = zookeeperConnect
-    }
+
+  val overridingProps = new Properties()
+  overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
+
+  def generateConfigs =
+    TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps(_, overridingProps))
+
   val group = "group1"
   val consumer1 = "consumer1"
   val nMessages = 2
 
+  @Test
   def testBasic() {
     val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
     requestHandlerLogger.setLevel(Level.FATAL)
-    var actualMessages: List[Message] = Nil
+
+    // create the topic
+    TestUtils.createTopic(zkClient, topic, numParts, 1, servers)
 
     // send some messages to each broker
-    val sentMessages1 = sendMessages(nMessages, "batch1")
-
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1, 500)
+    val sentMessages1 = sendMessages(servers, nMessages, "batch1")
 
     // create a consumer
-    val consumerConfig1 = new ConsumerConfig(TestUtils.createConsumerProperties(zookeeperConnect, group, consumer1))
+    val consumerConfig1 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer1))
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
     val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(toJavaMap(Map(topic -> numNodes*numParts/2)), new StringDecoder(), new StringDecoder())
 
     val receivedMessages1 = getMessages(nMessages*2, topicMessageStreams1)
     assertEquals(sentMessages1.sorted, receivedMessages1.sorted)
 
+    // call createMesssageStreams twice should throw MessageStreamsExistException
+    try {
+      zkConsumerConnector1.createMessageStreams(toJavaMap(Map(topic -> numNodes*numParts/2)), new StringDecoder(), new StringDecoder())
+      fail("Should fail with MessageStreamsExistException")
+    } catch {
+      case _: MessageStreamsExistException => // expected
+    }
     zkConsumerConnector1.shutdown
     info("all consumer connectors stopped")
     requestHandlerLogger.setLevel(Level.ERROR)
   }
 
-  def sendMessages(conf: KafkaConfig, 
-                   messagesPerNode: Int, 
-                   header: String, 
-                   compressed: CompressionCodec): List[String] = {
+  def sendMessages(servers: Seq[KafkaServer],
+                   messagesPerNode: Int,
+                   header: String): List[String] = {
     var messages: List[String] = Nil
-    val producer: kafka.producer.Producer[Int, String] = 
-      TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs), new StringEncoder(), new IntEncoder())
-    val javaProducer: Producer[Int, String] = new kafka.javaapi.producer.Producer(producer)
-    for (partition <- 0 until numParts) {
-      val ms = 0.until(messagesPerNode).map(x => header + conf.brokerId + "-" + partition + "-" + x)
-      messages ++= ms
-      import scala.collection.JavaConversions._
-      javaProducer.send(asList(ms.map(new KeyedMessage[Int, String](topic, partition, _))))
+    for(server <- servers) {
+      val producer: kafka.producer.Producer[Int, String] =
+        TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+          encoder = classOf[StringEncoder].getName,
+          keyEncoder = classOf[IntEncoder].getName)
+      val javaProducer: Producer[Int, String] = new kafka.javaapi.producer.Producer(producer)
+      for (partition <- 0 until numParts) {
+        val ms = 0.until(messagesPerNode).map(x => header + server.config.brokerId + "-" + partition + "-" + x)
+        messages ++= ms
+        import JavaConversions._
+        javaProducer.send(ms.map(new KeyedMessage[Int, String](topic, partition, _)): java.util.List[KeyedMessage[Int, String]])
+      }
+      javaProducer.close
     }
-    javaProducer.close
     messages
   }
 
-  def sendMessages(messagesPerNode: Int, 
-                   header: String, 
-                   compressed: CompressionCodec = NoCompressionCodec): List[String] = {
-    var messages: List[String] = Nil
-    for(conf <- configs)
-      messages ++= sendMessages(conf, messagesPerNode, header, compressed)
-    messages
-  }
-
-  def getMessages(nMessagesPerThread: Int, 
+  def getMessages(nMessagesPerThread: Int,
                   jTopicMessageStreams: java.util.Map[String, java.util.List[KafkaStream[String, String]]]): List[String] = {
     var messages: List[String] = Nil
-    val topicMessageStreams = asMap(jTopicMessageStreams)
-    for ((topic, messageStreams) <- topicMessageStreams) {
-      for (messageStream <- messageStreams) {
-        val iterator = messageStream.iterator
-        for (i <- 0 until nMessagesPerThread) {
-          assertTrue(iterator.hasNext)
-          val message = iterator.next.message
-          messages ::= message
-          debug("received message: " + message)
-        }
-      }
-    }
+    import scala.collection.JavaConversions._
+    val topicMessageStreams = jTopicMessageStreams.mapValues(_.toList)
+    messages = TestUtils.getMessages(topicMessageStreams, nMessagesPerThread)
     messages
   }
 
@@ -122,5 +116,5 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val javaMap = new java.util.HashMap[String, java.lang.Integer]()
     scalaMap.foreach(m => javaMap.put(m._1, m._2.asInstanceOf[java.lang.Integer]))
     javaMap
-  }  
+  }
 }

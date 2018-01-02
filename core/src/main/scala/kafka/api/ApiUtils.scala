@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package kafka.api
+package kafka.api
 
 import java.nio._
 import kafka.common._
@@ -92,17 +92,6 @@ object ApiUtils {
    */
   def readShortInRange(buffer: ByteBuffer, name: String, range: (Short, Short)): Short = {
     val value = buffer.getShort
-    if(value < range._1 || value > range._2)
-      throw new KafkaException(name + " has value " + value + " which is not in the range " + range + ".")
-    else value
-  }
-
-  /**
-   * Read a long out of the bytebuffer from the current position and check that it falls within the given
-   * range. If not, throw KafkaException.
-   */
-  def readLongInRange(buffer: ByteBuffer, name: String, range: (Long, Long)): Long = {
-    val value = buffer.getLong
     if(value < range._1 || value > range._2)
       throw new KafkaException(name + " has value " + value + " which is not in the range " + range + ".")
     else value

@@ -20,42 +20,63 @@ package kafka.utils
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.CountDownLatch
 
+import org.apache.kafka.common.internals.FatalExitError
+
 abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean = true)
         extends Thread(name) with Logging {
   this.setDaemon(false)
-  this.logIdent = "[" + name + "], "
+  this.logIdent = "[" + name + "]: "
   val isRunning: AtomicBoolean = new AtomicBoolean(true)
   private val shutdownLatch = new CountDownLatch(1)
 
-
   def shutdown(): Unit = {
-    info("Shutting down")
-    isRunning.set(false)
-    if (isInterruptible)
-      interrupt()
+    initiateShutdown()
+    awaitShutdown()
+  }
+
+  def isShutdownComplete: Boolean = {
+    shutdownLatch.getCount == 0
+  }
+
+  def initiateShutdown(): Boolean = {
+    if (isRunning.compareAndSet(true, false)) {
+      info("Shutting down")
+      if (isInterruptible)
+        interrupt()
+      true
+    } else
+      false
+  }
+
+    /**
+   * After calling initiateShutdown(), use this API to wait until the shutdown is complete
+   */
+  def awaitShutdown(): Unit = {
     shutdownLatch.await()
     info("Shutdown completed")
   }
 
-    /**
-   * After calling shutdown(), use this API to wait until the shutdown is complete
+  /**
+   * This method is repeatedly invoked until the thread shuts down or this method throws an exception
    */
-  def awaitShutdown(): Unit = shutdownLatch.await()
-
   def doWork(): Unit
 
   override def run(): Unit = {
-    info("Starting ")
-    try{
-      while(isRunning.get()){
+    info("Starting")
+    try {
+      while (isRunning.get)
         doWork()
-      }
-    } catch{
+    } catch {
+      case e: FatalExitError =>
+        isRunning.set(false)
+        shutdownLatch.countDown()
+        info("Stopped")
+        Exit.exit(e.statusCode())
       case e: Throwable =>
-        if(isRunning.get())
-          error("Error due to ", e)
+        if (isRunning.get())
+          error("Error due to", e)
     }
     shutdownLatch.countDown()
-    info("Stopped ")
+    info("Stopped")
   }
 }
