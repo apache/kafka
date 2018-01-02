@@ -274,11 +274,7 @@ class TaskManager {
         standby.close(clean);
 
         // remove the changelog partitions from restore consumer
-        try {
-            restoreConsumer.unsubscribe();
-        } catch (final RuntimeException fatalException) {
-            firstException.compareAndSet(null, fatalException);
-        }
+        restoreConsumer.unsubscribe();
         taskCreator.close();
         standbyTaskCreator.close();
 
