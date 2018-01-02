@@ -61,9 +61,9 @@ class KafkaApisTest {
   private val txnCoordinator = EasyMock.createNiceMock(classOf[TransactionCoordinator])
   private val controller = EasyMock.createNiceMock(classOf[KafkaController])
   private val zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
-  private val metadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
   private val metrics = new Metrics()
   private val brokerId = 1
+  private val metadataCache = new MetadataCache(brokerId)
   private val authorizer: Option[Authorizer] = None
   private val clientQuotaManager = EasyMock.createNiceMock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
@@ -363,6 +363,53 @@ class KafkaApisTest {
     testConsumerListOffsetLatest(IsolationLevel.READ_COMMITTED)
   }
 
+  /**
+   * Verifies that the metadata response is correct if the broker listeners are inconsistent (i.e. one broker has
+   * more listeners than another) and the request is sent on the listener that exists in both brokers.
+   */
+  @Test
+  def testMetadataRequestOnSharedListenerWithInconsistentListenersAcrossBrokers(): Unit = {
+    val response = sendMetadataRequestWithInconsistentListeners(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+    assertEquals(Set(0, 1), response.brokers.asScala.map(_.id).toSet)
+  }
+
+  /*
+   * Verifies that the metadata response is correct if the broker listeners are inconsistent (i.e. one broker has
+   * more listeners than another) and the request is sent on the listener that exists in one broker.
+   */
+  @Test
+  def testMetadataRequestOnDistinctListenerWithInconsistentListenersAcrossBrokers(): Unit = {
+    val response = sendMetadataRequestWithInconsistentListeners(new ListenerName("LISTENER2"))
+    assertEquals(Set(0), response.brokers.asScala.map(_.id).toSet)
+  }
+
+  private def sendMetadataRequestWithInconsistentListeners(requestListener: ListenerName): MetadataResponse = {
+    import UpdateMetadataRequest.{Broker => UBroker}
+    import UpdateMetadataRequest.{EndPoint => UEndPoint}
+    val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    val anotherListener = new ListenerName("LISTENER2")
+    val brokers = Set(
+      new UBroker(0, Seq(new UEndPoint("broker0", 9092, SecurityProtocol.PLAINTEXT, plaintextListener),
+        new UEndPoint("broker0", 9093, SecurityProtocol.PLAINTEXT, anotherListener)).asJava, "rack"),
+      new UBroker(1, Seq(new UEndPoint("broker1", 9092, SecurityProtocol.PLAINTEXT, plaintextListener)).asJava,
+        "rack")
+    )
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
+      0, Map.empty[TopicPartition, UpdateMetadataRequest.PartitionState].asJava, brokers.asJava).build()
+    metadataCache.updateCache(correlationId = 0, updateMetadataRequest)
+
+    val capturedResponse = EasyMock.newCapture[RequestChannel.Response]()
+    val capturedThrottleCallback = EasyMock.newCapture[Int => Unit]()
+    expectThrottleCallbackAndInvoke(capturedThrottleCallback)
+    EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+
+    val (metadataRequest, requestChannelRequest) = buildRequest(MetadataRequest.Builder.allTopics, requestListener)
+    createKafkaApis().handleTopicMetadataRequest(requestChannelRequest)
+
+    readResponse(ApiKeys.METADATA, metadataRequest, capturedResponse).asInstanceOf[MetadataResponse]
+  }
+
   private def testConsumerListOffsetLatest(isolationLevel: IsolationLevel): Unit = {
     val tp = new TopicPartition("foo", 0)
     val latestOffset = 15L
@@ -400,14 +447,16 @@ class KafkaApisTest {
     buildRequest(requestBuilder)
   }
 
-  private def buildRequest[T <: AbstractRequest](builder: AbstractRequest.Builder[T]): (T, RequestChannel.Request) = {
+  private def buildRequest[T <: AbstractRequest](builder: AbstractRequest.Builder[T],
+      listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, RequestChannel.Request) = {
+
     val request = builder.build()
     val buffer = request.serialize(new RequestHeader(builder.apiKey, request.version, "", 0))
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
-      new ListenerName(""), SecurityProtocol.PLAINTEXT)
+      listenerName, SecurityProtocol.PLAINTEXT)
     (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos =  0,
       MemoryPool.NONE, buffer, requestChannelMetrics))
   }
