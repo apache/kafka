@@ -438,8 +438,13 @@ public class StreamThreadTest {
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager, consumer);
 
-        StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(metrics, "", "", Collections.<String, String>emptyMap());
-        final StreamThread thread = new StreamThread(mockTime,
+        final StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(
+                metrics,
+                "",
+                "",
+                Collections.<String, String>emptyMap());
+        final StreamThread thread = new StreamThread(
+                mockTime,
                 config,
                 consumer,
                 consumer,
@@ -452,6 +457,40 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.RUNNING);
         thread.shutdown();
         thread.run();
+        EasyMock.verify(taskManager);
+    }
+
+    @Test
+    public void shouldShutdownTaskManagerOnCloseWithoutStart() {
+        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        taskManager.shutdown(true);
+        EasyMock.expectLastCall();
+        EasyMock.replay(taskManager, consumer);
+
+        final StreamThread.StreamsMetricsThreadImpl streamsMetrics = new StreamThread.StreamsMetricsThreadImpl(
+                metrics,
+                "",
+                "",
+                Collections.<String, String>emptyMap());
+        final StreamThread thread = new StreamThread(
+                mockTime,
+                config,
+                consumer,
+                consumer,
+                null,
+                taskManager,
+                streamsMetrics,
+                internalTopologyBuilder,
+                clientId,
+                new LogContext(""));
+        thread.shutdown();
+        try {
+            thread.join(1000);
+        } catch (final InterruptedException e) {
+            fail("Join interrupted");
+        }
+        assertFalse(thread.isAlive());
         EasyMock.verify(taskManager);
     }
 
