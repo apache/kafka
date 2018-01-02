@@ -312,7 +312,7 @@ public enum ApiKeys {
         for (ApiKeys key : ApiKeys.values()) {
             b.append("<tr>\n");
             b.append("<td>");
-            b.append("<a href=\"#The_Messages_" + key.name + "\">" + key.name + "</a>");
+            b.append("<a href=\"#The_Messages_").append(key.name).append("\">").append(key.name).append("</a>");
             b.append("</td>");
             b.append("<td>");
             b.append(key.id);
