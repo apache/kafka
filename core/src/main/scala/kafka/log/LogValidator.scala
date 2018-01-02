@@ -23,7 +23,7 @@ import kafka.message.{CompressionCodec, NoCompressionCodec}
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{ByteBufferOutputStream, Time}
 
 import scala.collection.mutable
 import scala.collection.JavaConverters._
@@ -126,24 +126,33 @@ private[kafka] object LogValidator extends Logging {
       (first.producerId, first.producerEpoch, first.baseSequence, first.isTransactional)
     }
 
-    val newBuffer = ByteBuffer.allocate(sizeInBytesAfterConversion)
-    val builder = MemoryRecords.builder(newBuffer, toMagicValue, CompressionType.NONE, timestampType,
-      offsetCounter.value, now, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch)
+    val batchOutput = new ByteBufferOutputStream(sizeInBytesAfterConversion)
+    val batchWriter = new RecordBatchWriter(batchOutput, toMagicValue, CompressionType.NONE, timestampType,
+      offsetCounter.value, now, false)
+
+    if (toMagicValue >= RecordBatch.MAGIC_VALUE_V2) {
+      batchWriter.setProducerIdAndEpoch(producerId, producerEpoch)
+      batchWriter.setProducerBaseSequence(sequence)
+      batchWriter.setTransactional(isTransactional)
+      batchWriter.setPartitionLeaderEpoch(partitionLeaderEpoch)
+    }
 
     for (batch <- records.batches.asScala) {
       validateBatch(batch, isFromClient, toMagicValue)
 
       for (record <- batch.asScala) {
         validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
-        builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
+        batchWriter.appendWithOffset(offsetCounter.getAndIncrement(), record)
       }
     }
 
-    val convertedRecords = builder.build()
+    batchWriter.close()
 
-    val info = builder.info
-    val recordsProcessingStats = new RecordsProcessingStats(builder.uncompressedBytesWritten,
-      builder.numRecords, time.nanoseconds - now)
+    val convertedRecords = batchWriter.toRecords
+
+    val info = batchWriter.info
+    val recordsProcessingStats = new RecordsProcessingStats(batchWriter.uncompressedBytesWritten,
+      batchWriter.numRecords, time.nanoseconds - now)
     ValidationAndOffsetAssignResult(
       validatedRecords = convertedRecords,
       maxTimestamp = info.maxTimestamp,
@@ -328,24 +337,31 @@ private[kafka] object LogValidator extends Logging {
     val startNanos = time.nanoseconds
     val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType,
       validatedRecords.asJava)
-    val buffer = ByteBuffer.allocate(estimatedSize)
-    val builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType, offsetCounter.value,
-      logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch)
+    val batchOutput = new ByteBufferOutputStream(estimatedSize)
+    val batchWriter = new RecordBatchWriter(batchOutput, magic, compressionType, timestampType, offsetCounter.value,
+      logAppendTime, false)
 
-    validatedRecords.foreach { record =>
-      builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
+    if (magic >= RecordBatch.MAGIC_VALUE_V2) {
+      batchWriter.setProducerIdAndEpoch(producerId, producerEpoch)
+      batchWriter.setProducerBaseSequence(baseSequence)
+      batchWriter.setTransactional(isTransactional)
+      batchWriter.setPartitionLeaderEpoch(partitionLeaderEpoch)
     }
 
-    val records = builder.build()
+    validatedRecords.foreach { record =>
+      batchWriter.appendWithOffset(offsetCounter.getAndIncrement(), record)
+    }
 
-    val info = builder.info
+    batchWriter.close()
+    val records = batchWriter.toRecords
+    val info = batchWriter.info
 
     // This is not strictly correct, it represents the number of records where in-place assignment is not possible
     // instead of the number of records that were converted. It will over-count cases where the source and target are
     // message format V0 or if the inner offsets are not consecutive. This is OK since the impact is the same: we have
     // to rebuild the records (including recompression if enabled).
-    val conversionCount = builder.numRecords
-    val recordsProcessingStats = new RecordsProcessingStats(uncompresssedSizeInBytes + builder.uncompressedBytesWritten,
+    val conversionCount = batchWriter.numRecords
+    val recordsProcessingStats = new RecordsProcessingStats(uncompresssedSizeInBytes + batchWriter.uncompressedBytesWritten,
       conversionCount, time.nanoseconds - startNanos)
 
     ValidationAndOffsetAssignResult(

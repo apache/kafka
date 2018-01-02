@@ -525,20 +525,20 @@ public class TransactionManager {
             if (newSequence < 0)
                 throw new IllegalStateException("Sequence number for batch with sequence " + inFlightBatch.baseSequence()
                         + " for partition " + batch.topicPartition + " is going to become negative :" + newSequence);
-
-            log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}", inFlightBatch.baseSequence(), batch.topicPartition, newSequence);
-            inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(), inFlightBatch.producerEpoch()), newSequence, inFlightBatch.isTransactional());
+            resetBaseSequence(inFlightBatch, newSequence);
         }
+    }
+
+    private void resetBaseSequence(ProducerBatch batch, int newSequence) {
+        log.info("Resetting base sequence number of batch with current sequence {} for partition {} to {}",
+                batch.baseSequence(), batch.topicPartition, newSequence);
+        batch.resetBaseSequence(newSequence);
     }
 
     private synchronized void startSequencesAtBeginning(TopicPartition topicPartition) {
         int sequence = 0;
         for (ProducerBatch inFlightBatch : inflightBatchesBySequence.get(topicPartition)) {
-            log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}",
-                    inFlightBatch.baseSequence(), inFlightBatch.topicPartition, sequence);
-            inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(),
-                    inFlightBatch.producerEpoch()), sequence, inFlightBatch.isTransactional());
-
+            resetBaseSequence(inFlightBatch, sequence);
             sequence += inFlightBatch.recordCount;
         }
         setNextSequence(topicPartition, sequence);

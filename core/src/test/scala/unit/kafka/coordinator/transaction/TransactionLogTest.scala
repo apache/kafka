@@ -18,8 +18,7 @@ package kafka.coordinator.transaction
 
 
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{CompressionType, SimpleRecord, MemoryRecords}
-
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordsBuilder, SimpleRecord}
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.scalatest.junit.JUnitSuite
@@ -80,8 +79,7 @@ class TransactionLogTest extends JUnitSuite {
       new SimpleRecord(keyBytes, valueBytes)
     }.toSeq
 
-    val records = MemoryRecords.withRecords(0, CompressionType.NONE, txnRecords: _*)
-
+    val records = new RecordsBuilder().addBatch(txnRecords: _*).build()
     var count = 0
     for (record <- records.records.asScala) {
       val txnKey = TransactionLog.readTxnRecordKey(record.key)

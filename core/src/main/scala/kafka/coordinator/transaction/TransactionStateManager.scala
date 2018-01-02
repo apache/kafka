@@ -33,7 +33,7 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{FileRecords, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{FileRecords, MemoryRecords, RecordsBuilder, SimpleRecord}
 import org.apache.kafka.common.requests.IsolationLevel
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
@@ -159,10 +159,11 @@ class TransactionStateManager(brokerId: Int,
 
         val recordsPerPartition = transactionalIdByPartition
           .map { case (partition, transactionalIdCoordinatorEpochAndMetadatas) =>
-            val deletes: Array[SimpleRecord] = transactionalIdCoordinatorEpochAndMetadatas.map { entry =>
-              new SimpleRecord(now, TransactionLog.keyToBytes(entry.transactionalId), null)
-            }.toArray
-            val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType, deletes: _*)
+            val batch = new RecordsBuilder().withCompression(TransactionLog.EnforcedCompressionType).newBatch()
+            transactionalIdCoordinatorEpochAndMetadatas.foreach { entry =>
+              batch.append(new SimpleRecord(now, TransactionLog.keyToBytes(entry.transactionalId), null))
+            }
+            val records = batch.closeBatch().build()
             val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partition)
             (topicPartition, records)
           }
@@ -314,7 +315,7 @@ class TransactionStateManager(brokerId: Int,
               case fileRecords: FileRecords =>
                 buffer.clear()
                 val bufferRead = fileRecords.readInto(buffer, 0)
-                MemoryRecords.readableRecords(bufferRead)
+                new MemoryRecords(bufferRead)
             }
 
             memRecords.batches.asScala.foreach { batch =>
@@ -471,7 +472,9 @@ class TransactionStateManager(brokerId: Int,
     val valueBytes = TransactionLog.valueToBytes(newMetadata)
     val timestamp = time.milliseconds()
 
-    val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType, new SimpleRecord(timestamp, keyBytes, valueBytes))
+    val records = new RecordsBuilder().withCompression(TransactionLog.EnforcedCompressionType)
+      .addBatch(new SimpleRecord(timestamp, keyBytes, valueBytes))
+      .build()
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionFor(transactionalId))
     val recordsPerPartition = Map(topicPartition -> records)
 

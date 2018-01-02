@@ -27,7 +27,7 @@ import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{ByteBufferOutputStream, Utils}
 import org.junit.Assert._
 import org.junit.{After, Test}
 import org.scalatest.junit.JUnitSuite
@@ -1175,7 +1175,7 @@ class LogCleanerTest extends JUnitSuite {
     val set = keys zip (offset until offset + keys.size)
 
     val corruptedMessage = invalidCleanedMessage(offset, set)
-    val records = MemoryRecords.readableRecords(corruptedMessage.buffer)
+    val records = new MemoryRecords(corruptedMessage.buffer)
 
     for (logEntry <- records.records.asScala) {
       val offset = logEntry.offset
@@ -1230,20 +1230,25 @@ class LogCleanerTest extends JUnitSuite {
         kv._1.toString.getBytes,
         kv._2.toString.getBytes))
 
-    val buffer = ByteBuffer.allocate(math.min(math.max(records.map(_.sizeInBytes()).sum / 2, 1024), 1 << 16))
-    val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, codec, TimestampType.CREATE_TIME, initialOffset)
+    val output = new ByteBufferOutputStream(math.min(math.max(records.map(_.sizeInBytes()).sum / 2, 1024), 1 << 16))
+    val writer = new RecordBatchWriter(output, RecordBatch.MAGIC_VALUE_V1, codec, TimestampType.CREATE_TIME, initialOffset,
+      RecordBatch.NO_TIMESTAMP, false)
 
     var offset = initialOffset
     records.foreach { record =>
-      builder.appendUncheckedWithOffset(offset, record)
+      writer.appendUncheckedWithOffset(offset, record)
       offset += 1
     }
 
-    builder.build()
+    writer.close()
+    writer.toRecords
   }
 
   private def messageWithOffset(key: Array[Byte], value: Array[Byte], offset: Long): MemoryRecords =
-    MemoryRecords.withRecords(offset, CompressionType.NONE, 0, new SimpleRecord(key, value))
+    new RecordsBuilder(offset)
+      .withPartitionLeaderEpoch(0)
+      .addBatch(new SimpleRecord(key, value))
+      .build()
 
   private def messageWithOffset(key: Int, value: Int, offset: Long): MemoryRecords =
     messageWithOffset(key.toString.getBytes, value.toString.getBytes, offset)
@@ -1275,8 +1280,11 @@ class LogCleanerTest extends JUnitSuite {
              producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
              sequence: Int = RecordBatch.NO_SEQUENCE,
              partitionLeaderEpoch: Int = RecordBatch.NO_PARTITION_LEADER_EPOCH): MemoryRecords = {
-    MemoryRecords.withIdempotentRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, CompressionType.NONE, producerId, producerEpoch, sequence,
-      partitionLeaderEpoch, new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
+    new RecordsBuilder()
+      .withPartitionLeaderEpoch(partitionLeaderEpoch)
+      .withProducerMetadata(producerId, producerEpoch, sequence)
+      .addBatch(new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
+      .build()
   }
 
   private def appendTransactionalAsLeader(log: Log, producerId: Long, producerEpoch: Short): Seq[Int] => LogAppendInfo = {
@@ -1292,10 +1300,11 @@ class LogCleanerTest extends JUnitSuite {
         val keyBytes = key.toString.getBytes
         new SimpleRecord(time.milliseconds(), keyBytes, keyBytes) // the value doesn't matter since we validate offsets
       }
-      val records = if (isTransactional)
-        MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
-      else
-        MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
+      val records = new RecordsBuilder()
+        .withProducerMetadata(producerId, producerEpoch, sequence)
+        .setTransactional(isTransactional)
+        .addBatch(simpleRecords: _*)
+        .build()
       sequence += simpleRecords.size
       log.appendAsLeader(records, leaderEpoch = 0)
     }
@@ -1310,8 +1319,10 @@ class LogCleanerTest extends JUnitSuite {
   private def endTxnMarker(producerId: Long, producerEpoch: Short, controlRecordType: ControlRecordType,
                    offset: Long, timestamp: Long): MemoryRecords = {
     val endTxnMarker = new EndTransactionMarker(controlRecordType, 0)
-    MemoryRecords.withEndTransactionMarker(offset, timestamp, RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      producerId, producerEpoch, endTxnMarker)
+    new RecordsBuilder(offset)
+      .withProducerMetadata(producerId, producerEpoch)
+      .addControlBatch(timestamp, endTxnMarker)
+      .build()
   }
 
   private def record(key: Int, value: Array[Byte]): MemoryRecords =

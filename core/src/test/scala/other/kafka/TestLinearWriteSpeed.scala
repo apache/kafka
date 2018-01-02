@@ -106,8 +106,9 @@ object TestLinearWriteSpeed {
     val createTime = System.currentTimeMillis
     val messageSet = {
       val compressionType = CompressionType.forId(compressionCodec.codec)
-      val records = (0 until numMessages).map(_ => new SimpleRecord(createTime, null, new Array[Byte](messageSize)))
-      MemoryRecords.withRecords(compressionType, records: _*)
+      val batch = new RecordsBuilder().withCompression(compressionType).newBatch()
+      (0 until numMessages).foreach(_ => batch.append(new SimpleRecord(createTime, null, new Array[Byte](messageSize))))
+      batch.closeBatch().build()
     }
 
     val writables = new Array[Writable](numFiles)

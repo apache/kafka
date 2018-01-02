@@ -36,8 +36,9 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.RecordBatchWriter;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -217,8 +218,8 @@ public final class RecordAccumulator {
                     return appendResult;
                 }
 
-                MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
-                ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds());
+                RecordBatchWriter batchWriter = batchWriter(buffer, maxUsableMagic);
+                ProducerBatch batch = new ProducerBatch(tp, batchWriter, time.milliseconds());
                 FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, headers, callback, time.milliseconds()));
 
                 dq.addLast(batch);
@@ -236,12 +237,18 @@ public final class RecordAccumulator {
         }
     }
 
-    private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer, byte maxUsableMagic) {
-        if (transactionManager != null && maxUsableMagic < RecordBatch.MAGIC_VALUE_V2) {
-            throw new UnsupportedVersionException("Attempting to use idempotence with a broker which does not " +
-                    "support the required message format (v2). The broker must be version 0.11 or later.");
+    private RecordBatchWriter batchWriter(ByteBuffer buffer, byte maxUsableMagic) {
+        boolean isTransactional = false;
+        if (transactionManager != null) {
+            if (maxUsableMagic < RecordBatch.MAGIC_VALUE_V2)
+                throw new UnsupportedVersionException("Attempting to use idempotence with a broker which does not " +
+                        "support the required message format (v2). The broker must be version 0.11 or later.");
+            isTransactional = transactionManager.isTransactional();
         }
-        return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L);
+        RecordBatchWriter writer = new RecordBatchWriter(new ByteBufferOutputStream(buffer), maxUsableMagic, compression,
+                TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, false);
+        writer.setTransactional(isTransactional);
+        return writer;
     }
 
     /**
@@ -520,7 +527,6 @@ public final class RecordAccumulator {
                                         break;
                                     } else {
                                         ProducerIdAndEpoch producerIdAndEpoch = null;
-                                        boolean isTransactional = false;
                                         if (transactionManager != null) {
                                             if (!transactionManager.isSendToPartitionAllowed(tp))
                                                 break;
@@ -529,8 +535,6 @@ public final class RecordAccumulator {
                                             if (!producerIdAndEpoch.isValid())
                                                 // we cannot send the batch until we have refreshed the producer id
                                                 break;
-
-                                            isTransactional = transactionManager.isTransactional();
 
                                             if (!first.hasSequence() && transactionManager.hasUnresolvedSequence(first.topicPartition))
                                                 // Don't drain any new batches while the state of previous sequence numbers
@@ -561,7 +565,7 @@ public final class RecordAccumulator {
                                             // and also have the transaction manager track the batch so as to ensure
                                             // that sequence ordering is maintained even if we receive out of order
                                             // responses.
-                                            batch.setProducerState(producerIdAndEpoch, transactionManager.sequenceNumber(batch.topicPartition), isTransactional);
+                                            batch.setProducerState(producerIdAndEpoch, transactionManager.sequenceNumber(batch.topicPartition));
                                             transactionManager.incrementSequenceNumber(batch.topicPartition, batch.recordCount);
                                             log.debug("Assigned producerId {} and producerEpoch {} to batch with base sequence " +
                                                             "{} being sent to partition {}", producerIdAndEpoch.producerId,

@@ -36,11 +36,10 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.RecordsBuilder;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
@@ -49,6 +48,7 @@ import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourceType;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
@@ -398,7 +398,7 @@ public class RequestResponseTest {
     public void fetchResponseVersionTest() {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
 
-        MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
+        MemoryRecords records = new MemoryRecords(ByteBuffer.allocate(10));
         responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE, 1000000,
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, null, records));
 
@@ -418,7 +418,7 @@ public class RequestResponseTest {
     public void testFetchResponseV4() {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
 
-        MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
+        MemoryRecords records = new MemoryRecords(ByteBuffer.allocate(10));
 
         List<FetchResponse.AbortedTransaction> abortedTransactions = asList(
                 new FetchResponse.AbortedTransaction(10, 100),
@@ -548,7 +548,7 @@ public class RequestResponseTest {
 
     private FetchResponse createFetchResponse() {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
-        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
+        MemoryRecords records = new RecordsBuilder().addBatch(new SimpleRecord("blah".getBytes())).build();
         responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE,
                 1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, null, records));
 
@@ -719,7 +719,7 @@ public class RequestResponseTest {
             throw new IllegalArgumentException("Produce request version 2 is not supported");
 
         byte magic = version == 2 ? RecordBatch.MAGIC_VALUE_V1 : RecordBatch.MAGIC_VALUE_V2;
-        MemoryRecords records = MemoryRecords.withRecords(magic, CompressionType.NONE, new SimpleRecord("woot".getBytes()));
+        MemoryRecords records = new RecordsBuilder().withMagic(magic).addBatch(new SimpleRecord("woot".getBytes())).build();
         Map<TopicPartition, MemoryRecords> produceData = Collections.singletonMap(new TopicPartition("test", 0), records);
         return ProduceRequest.Builder.forMagic(magic, (short) 1, 5000, produceData, "transactionalId")
                 .build((short) version);

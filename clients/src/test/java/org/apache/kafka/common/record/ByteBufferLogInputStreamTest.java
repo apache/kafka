@@ -32,21 +32,21 @@ public class ByteBufferLogInputStreamTest {
 
     @Test
     public void iteratorIgnoresIncompleteEntries() {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        builder.append(15L, "a".getBytes(), "1".getBytes());
-        builder.append(20L, "b".getBytes(), "2".getBytes());
-        builder.close();
+        RecordsBuilder builder = new RecordsBuilder();
+        RecordsBuilder.BatchBuilder firstBatch = builder.newBatch();
+        firstBatch.append(new SimpleRecord(15L, "a".getBytes(), "1".getBytes()));
+        firstBatch.append(new SimpleRecord(20L, "b".getBytes(), "2".getBytes()));
+        firstBatch.closeBatch();
 
-        builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 2L);
-        builder.append(30L, "c".getBytes(), "3".getBytes());
-        builder.append(40L, "d".getBytes(), "4".getBytes());
-        builder.close();
+        RecordsBuilder.BatchBuilder secondBatch = builder.newBatch();
+        secondBatch.append(new SimpleRecord(30L, "c".getBytes(), "3".getBytes()));
+        secondBatch.append(new SimpleRecord(40L, "d".getBytes(), "4".getBytes()));
+        secondBatch.closeBatch();
 
-        buffer.flip();
+        ByteBuffer buffer = builder.build().buffer().duplicate();
         buffer.limit(buffer.limit() - 5);
 
-        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        MemoryRecords records = new MemoryRecords(buffer);
         Iterator<MutableRecordBatch> iterator = records.batches().iterator();
         assertTrue(iterator.hasNext());
         MutableRecordBatch first = iterator.next();
@@ -57,20 +57,21 @@ public class ByteBufferLogInputStreamTest {
 
     @Test(expected = CorruptRecordException.class)
     public void iteratorRaisesOnTooSmallRecords() throws IOException {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        builder.append(15L, "a".getBytes(), "1".getBytes());
-        builder.append(20L, "b".getBytes(), "2".getBytes());
-        builder.close();
+        RecordsBuilder builder = new RecordsBuilder();
+        RecordsBuilder.BatchBuilder firstBatch = builder.newBatch();
+        firstBatch.append(new SimpleRecord(15L, "a".getBytes(), "1".getBytes()));
+        firstBatch.append(new SimpleRecord(20L, "b".getBytes(), "2".getBytes()));
+        firstBatch.closeBatch();
 
-        int position = buffer.position();
+        int position = builder.bufferPosition();
 
-        builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 2L);
-        builder.append(30L, "c".getBytes(), "3".getBytes());
-        builder.append(40L, "d".getBytes(), "4".getBytes());
-        builder.close();
+        RecordsBuilder.BatchBuilder secondBatch = builder.newBatch();
+        secondBatch.append(new SimpleRecord(30L, "c".getBytes(), "3".getBytes()));
+        secondBatch.append(new SimpleRecord(40L, "d".getBytes(), "4".getBytes()));
+        secondBatch.closeBatch();
 
-        buffer.flip();
+        MemoryRecords records = builder.build();
+        ByteBuffer buffer = records.buffer();
         buffer.putInt(position + DefaultRecordBatch.LENGTH_OFFSET, 9);
 
         ByteBufferLogInputStream logInputStream = new ByteBufferLogInputStream(buffer, Integer.MAX_VALUE);
@@ -80,20 +81,21 @@ public class ByteBufferLogInputStreamTest {
 
     @Test(expected = CorruptRecordException.class)
     public void iteratorRaisesOnInvalidMagic() throws IOException {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        builder.append(15L, "a".getBytes(), "1".getBytes());
-        builder.append(20L, "b".getBytes(), "2".getBytes());
-        builder.close();
+        RecordsBuilder builder = new RecordsBuilder();
+        RecordsBuilder.BatchBuilder firstBatch = builder.newBatch();
+        firstBatch.append(new SimpleRecord(15L, "a".getBytes(), "1".getBytes()));
+        firstBatch.append(new SimpleRecord(20L, "b".getBytes(), "2".getBytes()));
+        firstBatch.closeBatch();
 
-        int position = buffer.position();
+        int position = builder.bufferPosition();
 
-        builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 2L);
-        builder.append(30L, "c".getBytes(), "3".getBytes());
-        builder.append(40L, "d".getBytes(), "4".getBytes());
-        builder.close();
+        RecordsBuilder.BatchBuilder secondBatch = builder.newBatch();
+        secondBatch.append(new SimpleRecord(30L, "c".getBytes(), "3".getBytes()));
+        secondBatch.append(new SimpleRecord(40L, "d".getBytes(), "4".getBytes()));
+        secondBatch.closeBatch();
 
-        buffer.flip();
+        MemoryRecords records = builder.build();
+        ByteBuffer buffer = records.buffer();
         buffer.put(position + DefaultRecordBatch.MAGIC_OFFSET, (byte) 37);
 
         ByteBufferLogInputStream logInputStream = new ByteBufferLogInputStream(buffer, Integer.MAX_VALUE);
@@ -103,20 +105,14 @@ public class ByteBufferLogInputStreamTest {
 
     @Test(expected = CorruptRecordException.class)
     public void iteratorRaisesOnTooLargeRecords() throws IOException {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        builder.append(15L, "a".getBytes(), "1".getBytes());
-        builder.append(20L, "b".getBytes(), "2".getBytes());
-        builder.close();
+        RecordsBuilder builder = new RecordsBuilder();
+        RecordsBuilder.BatchBuilder firstBatch = builder.newBatch();
+        firstBatch.append(new SimpleRecord(15L, "a".getBytes(), "1".getBytes()));
+        firstBatch.append(new SimpleRecord(20L, "b".getBytes(), "2".getBytes()));
+        firstBatch.closeBatch();
 
-        builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 2L);
-        builder.append(30L, "c".getBytes(), "3".getBytes());
-        builder.append(40L, "d".getBytes(), "4".getBytes());
-        builder.close();
-
-        buffer.flip();
-
-        ByteBufferLogInputStream logInputStream = new ByteBufferLogInputStream(buffer, 25);
+        MemoryRecords records = builder.build();
+        ByteBufferLogInputStream logInputStream = new ByteBufferLogInputStream(records.buffer(), 25);
         assertNotNull(logInputStream.nextBatch());
         logInputStream.nextBatch();
     }

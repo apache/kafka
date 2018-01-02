@@ -157,8 +157,7 @@ class TransactionStateManagerTest {
     txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit()))
 
     val startOffset = 15L   // it should work for any start offset
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords: _*)
-
+    val records = new RecordsBuilder(startOffset).addBatch(txnRecords: _*).build()
     prepareTxnLog(topicPartition, startOffset, records)
 
     // this partition should not be part of the owned partitions
@@ -488,9 +487,12 @@ class TransactionStateManagerTest {
     val capturedArgument: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
 
     val partition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, transactionManager.partitionFor(transactionalId1))
-    val recordsByPartition = Map(partition -> MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType,
-      new SimpleRecord(time.milliseconds() + txnConfig.removeExpiredTransactionalIdsIntervalMs, TransactionLog.keyToBytes(transactionalId1), null)))
+    val expiredTimestamp = time.milliseconds() + txnConfig.removeExpiredTransactionalIdsIntervalMs
+    val records = new RecordsBuilder().withCompression(TransactionLog.EnforcedCompressionType)
+      .addBatch(new SimpleRecord(expiredTimestamp, TransactionLog.keyToBytes(transactionalId1), null))
+      .build()
 
+    val recordsByPartition = Map(partition -> records)
     txnState match {
       case Empty | CompleteCommit | CompleteAbort =>
 
@@ -538,8 +540,7 @@ class TransactionStateManagerTest {
 
     txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit()))
     val startOffset = 0L
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords: _*)
-
+    val records = new RecordsBuilder(startOffset).addBatch(txnRecords: _*).build()
     prepareTxnLog(topicPartition, 0, records)
 
     var txnId: String = null

@@ -29,9 +29,10 @@ public class SimpleMemoryRecordsTest {
     @Test
     public void testToStringIfLz4ChecksumIsCorrupted() {
         long timestamp = 1000000;
-        MemoryRecords memoryRecords = MemoryRecords.withRecords(CompressionType.LZ4,
-                new SimpleRecord(timestamp, "key1".getBytes(), "value1".getBytes()),
-                new SimpleRecord(timestamp + 1, "key2".getBytes(), "value2".getBytes()));
+        MemoryRecords memoryRecords = new RecordsBuilder().withCompression(CompressionType.LZ4).newBatch()
+                .append(new SimpleRecord(timestamp, "key1".getBytes(), "value1".getBytes()))
+                .append(new SimpleRecord(timestamp + 1, "key2".getBytes(), "value2".getBytes()))
+                .closeBatch().build();
         // Change the lz4 checksum value (not the kafka record crc) so that it doesn't match the contents
         int lz4ChecksumOffset = 6;
         memoryRecords.buffer().array()[DefaultRecordBatch.RECORD_BATCH_OVERHEAD + lz4ChecksumOffset] = 0;

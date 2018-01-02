@@ -20,7 +20,7 @@ package kafka.server
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, DefaultRecordBatch, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.junit.Assert._
 import org.junit.Test
@@ -51,12 +51,14 @@ class ProduceRequestTest extends BaseRequestTest {
       partitionResponse
     }
 
-    sendAndCheck(MemoryRecords.withRecords(CompressionType.NONE,
-      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes)), 0)
+    sendAndCheck(new RecordsBuilder().newBatch()
+      .append(new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))
+      .closeBatch().build(), 0)
 
-    sendAndCheck(MemoryRecords.withRecords(CompressionType.GZIP,
-      new SimpleRecord(System.currentTimeMillis(), "key1".getBytes, "value1".getBytes),
-      new SimpleRecord(System.currentTimeMillis(), "key2".getBytes, "value2".getBytes)), 1)
+    sendAndCheck(new RecordsBuilder().withCompression(CompressionType.GZIP).newBatch()
+      .append(new SimpleRecord(System.currentTimeMillis(), "key1".getBytes, "value1".getBytes))
+      .append(new SimpleRecord(System.currentTimeMillis(), "key2".getBytes, "value2".getBytes))
+      .closeBatch().build(), 1)
   }
 
   /* returns a pair of partition id and leader id */
@@ -71,8 +73,8 @@ class ProduceRequestTest extends BaseRequestTest {
   def testCorruptLz4ProduceRequest() {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
     val timestamp = 1000000
-    val memoryRecords = MemoryRecords.withRecords(CompressionType.LZ4,
-      new SimpleRecord(timestamp, "key".getBytes, "value".getBytes))
+    val memoryRecords = new RecordsBuilder().withCompression(CompressionType.LZ4)
+      .addBatch(new SimpleRecord(timestamp, "key".getBytes, "value".getBytes)).build()
     // Change the lz4 checksum value (not the kafka record crc) so that it doesn't match the contents
     val lz4ChecksumOffset = 6
     memoryRecords.buffer.array.update(DefaultRecordBatch.RECORD_BATCH_OVERHEAD + lz4ChecksumOffset, 0)

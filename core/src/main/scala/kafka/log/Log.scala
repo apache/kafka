@@ -931,7 +931,7 @@ class Log(@volatile var dir: File,
       // trim invalid bytes
       val validByteBuffer = records.buffer.duplicate()
       validByteBuffer.limit(validBytes)
-      MemoryRecords.readableRecords(validByteBuffer)
+      new MemoryRecords(validByteBuffer)
     }
   }
 

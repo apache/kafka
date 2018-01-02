@@ -45,7 +45,7 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANS
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, RecordsProcessingStats}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
@@ -1605,7 +1605,10 @@ class KafkaApis(val requestChannel: RequestChannel,
             case TransactionResult.ABORT => ControlRecordType.ABORT
           }
           val endTxnMarker = new EndTransactionMarker(controlRecordType, marker.coordinatorEpoch)
-          partition -> MemoryRecords.withEndTransactionMarker(producerId, marker.producerEpoch, endTxnMarker)
+          partition -> new RecordsBuilder()
+            .withProducerMetadata(producerId, marker.producerEpoch)
+            .addControlBatch(time.milliseconds(), endTxnMarker)
+            .build()
         }.toMap
 
         replicaManager.appendRecords(

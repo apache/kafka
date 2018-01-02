@@ -103,6 +103,17 @@ public final class Utils {
      * by this method.
      *
      * @param buffer The buffer to read from
+     * @return The UTF8 string
+     */
+    public static String utf8(ByteBuffer buffer) {
+        return utf8(buffer, 0, buffer.remaining());
+    }
+
+    /**
+     * Read a UTF8 string from a byte buffer. Note that the position of the byte buffer is not affected
+     * by this method.
+     *
+     * @param buffer The buffer to read from
      * @param length The length of the string in bytes
      * @return The UTF8 string
      */

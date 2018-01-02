@@ -248,7 +248,7 @@ object ReplicaAlterLogDirsThread {
       else {
         val buffer = ByteBuffer.allocate(underlying.records.sizeInBytes())
         underlying.records.asInstanceOf[FileRecords].readInto(buffer, 0)
-        MemoryRecords.readableRecords(buffer)
+        new MemoryRecords(buffer)
       }
     }
 

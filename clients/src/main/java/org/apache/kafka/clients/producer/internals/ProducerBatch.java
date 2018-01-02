@@ -26,12 +26,13 @@ import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionRatioEstimator;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.RecordBatchWriter;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ProduceResponse;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,7 +64,7 @@ public final class ProducerBatch {
     final ProduceRequestResult produceFuture;
 
     private final List<Thunk> thunks = new ArrayList<>();
-    private final MemoryRecordsBuilder recordsBuilder;
+    private final RecordBatchWriter batchWriter;
     private final AtomicInteger attempts = new AtomicInteger(0);
     private final boolean isSplitBatch;
     private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
@@ -77,22 +78,22 @@ public final class ProducerBatch {
     private boolean retry;
     private boolean reopened = false;
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
-        this(tp, recordsBuilder, now, false);
+    public ProducerBatch(TopicPartition tp, RecordBatchWriter batchWriter, long now) {
+        this(tp, batchWriter, now, false);
     }
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now, boolean isSplitBatch) {
+    ProducerBatch(TopicPartition tp, RecordBatchWriter batchWriter, long now, boolean isSplitBatch) {
         this.createdMs = now;
         this.lastAttemptMs = now;
-        this.recordsBuilder = recordsBuilder;
+        this.batchWriter = batchWriter;
         this.topicPartition = tp;
         this.lastAppendTime = createdMs;
         this.produceFuture = new ProduceRequestResult(topicPartition);
         this.retry = false;
         this.isSplitBatch = isSplitBatch;
         float compressionRatioEstimation = CompressionRatioEstimator.estimation(topicPartition.topic(),
-                                                                                recordsBuilder.compressionType());
-        recordsBuilder.setEstimatedCompressionRatio(compressionRatioEstimation);
+                                                                                batchWriter.compressionType());
+        batchWriter.setEstimatedCompressionRatio(compressionRatioEstimation);
     }
 
     /**
@@ -101,12 +102,12 @@ public final class ProducerBatch {
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
-        if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
+        if (!batchWriter.hasRoomFor(timestamp, key, value, headers)) {
             return null;
         } else {
-            Long checksum = this.recordsBuilder.append(timestamp, key, value, headers);
+            Long checksum = this.batchWriter.append(timestamp, key, value, headers);
             this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
-                    recordsBuilder.compressionType(), key, value, headers));
+                    batchWriter.compressionType(), key, value, headers));
             this.lastAppendTime = now;
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
                                                                    timestamp, checksum,
@@ -125,13 +126,13 @@ public final class ProducerBatch {
      * @return true if the record has been successfully appended, false otherwise.
      */
     private boolean tryAppendForSplit(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Thunk thunk) {
-        if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
+        if (!batchWriter.hasRoomFor(timestamp, key, value, headers)) {
             return false;
         } else {
             // No need to get the CRC.
-            this.recordsBuilder.append(timestamp, key, value, headers);
+            this.batchWriter.append(timestamp, key, value, headers);
             this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
-                    recordsBuilder.compressionType(), key, value, headers));
+                    batchWriter.compressionType(), key, value, headers));
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
                                                                    timestamp, thunk.future.checksumOrNull(),
                                                                    key == null ? -1 : key.remaining(),
@@ -213,7 +214,7 @@ public final class ProducerBatch {
 
     public Deque<ProducerBatch> split(int splitBatchSize) {
         Deque<ProducerBatch> batches = new ArrayDeque<>();
-        MemoryRecords memoryRecords = recordsBuilder.build();
+        MemoryRecords memoryRecords = batchWriter.toRecords();
 
         Iterator<MutableRecordBatch> recordBatchIter = memoryRecords.batches().iterator();
         if (!recordBatchIter.hasNext())
@@ -232,53 +233,54 @@ public final class ProducerBatch {
         // And we also Retain the create time of the original batch.
         ProducerBatch batch = null;
 
+        int sequence = 0;
         for (Record record : recordBatch) {
             assert thunkIter.hasNext();
             Thunk thunk = thunkIter.next();
             if (batch == null)
-                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
+                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize, sequence);
 
             // A newly created batch can always host the first message.
             if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
+                batch.close();
+                sequence += batch.recordCount;
                 batches.add(batch);
-                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
+
+                batch = createBatchOffAccumulatorForRecord(record, splitBatchSize, sequence);
                 batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
             }
         }
 
         // Close the last batch and add it to the batch list after split.
-        if (batch != null)
+        if (batch != null) {
+            batch.close();
             batches.add(batch);
+        }
 
         produceFuture.set(ProduceResponse.INVALID_OFFSET, NO_TIMESTAMP, new RecordBatchTooLargeException());
         produceFuture.done();
-
-        if (hasSequence()) {
-            int sequence = baseSequence();
-            ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId(), producerEpoch());
-            for (ProducerBatch newBatch : batches) {
-                newBatch.setProducerState(producerIdAndEpoch, sequence, isTransactional());
-                sequence += newBatch.recordCount;
-            }
-        }
         return batches;
     }
 
-    private ProducerBatch createBatchOffAccumulatorForRecord(Record record, int batchSize) {
+    private ProducerBatch createBatchOffAccumulatorForRecord(Record record, int batchSize, int relativeSequence) {
         int initialSize = Math.max(AbstractRecords.estimateSizeInBytesUpperBound(magic(),
-                recordsBuilder.compressionType(), record.key(), record.value(), record.headers()), batchSize);
-        ByteBuffer buffer = ByteBuffer.allocate(initialSize);
+                batchWriter.compressionType(), record.key(), record.value(), record.headers()), batchSize);
+        ByteBufferOutputStream out = new ByteBufferOutputStream(initialSize);
 
         // Note that we intentionally do not set producer state (producerId, epoch, sequence, and isTransactional)
         // for the newly created batch. This will be set when the batch is dequeued for sending (which is consistent
         // with how normal batches are handled).
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic(), recordsBuilder.compressionType(),
-                TimestampType.CREATE_TIME, 0L);
+        RecordBatchWriter builder = new RecordBatchWriter(out, magic(), batchWriter.compressionType(),
+                TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, false);
+        builder.setTransactional(isTransactional());
+        builder.setProducerIdAndEpoch(producerId(), producerEpoch());
+        if (hasSequence())
+            builder.setProducerBaseSequence(baseSequence() + relativeSequence);
         return new ProducerBatch(topicPartition, builder, this.createdMs, true);
     }
 
     public boolean isCompressed() {
-        return recordsBuilder.compressionType() != CompressionType.NONE;
+        return batchWriter.compressionType() != CompressionType.NONE;
     }
 
     /**
@@ -371,28 +373,31 @@ public final class ProducerBatch {
     }
 
     public MemoryRecords records() {
-        return recordsBuilder.build();
+        return batchWriter.toRecords();
     }
 
     public int estimatedSizeInBytes() {
-        return recordsBuilder.estimatedSizeInBytes();
+        return batchWriter.estimatedSizeInBytes();
     }
 
     public double compressionRatio() {
-        return recordsBuilder.compressionRatio();
+        return batchWriter.compressionRatio();
     }
 
     public boolean isFull() {
-        return recordsBuilder.isFull();
+        return batchWriter.isFull();
     }
 
-    public void setProducerState(ProducerIdAndEpoch producerIdAndEpoch, int baseSequence, boolean isTransactional) {
-        recordsBuilder.setProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, baseSequence, isTransactional);
+    public void setProducerState(ProducerIdAndEpoch producerIdAndEpoch, int baseSequence) {
+        batchWriter.setProducerIdAndEpoch(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
+        batchWriter.setProducerBaseSequence(baseSequence);
     }
 
-    public void resetProducerState(ProducerIdAndEpoch producerIdAndEpoch, int baseSequence, boolean isTransactional) {
+    public void resetBaseSequence(int baseSequence) {
         reopened = true;
-        recordsBuilder.reopenAndRewriteProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, baseSequence, isTransactional);
+        if (batchWriter.isClosed())
+            batchWriter.reopenHeader();
+        batchWriter.setProducerBaseSequence(baseSequence);
     }
 
     /**
@@ -400,15 +405,14 @@ public final class ProducerBatch {
      * possible to update the RecordBatch header.
      */
     public void closeForRecordAppends() {
-        recordsBuilder.closeForRecordAppends();
+        batchWriter.closeForAppends();
     }
 
     public void close() {
-        recordsBuilder.close();
-        if (!recordsBuilder.isControlBatch()) {
+        batchWriter.close();
+        if (!batchWriter.isControlBatch()) {
             CompressionRatioEstimator.updateEstimation(topicPartition.topic(),
-                                                       recordsBuilder.compressionType(),
-                                                       (float) recordsBuilder.compressionRatio());
+                    batchWriter.compressionType(), (float) batchWriter.compressionRatio());
         }
         reopened = false;
     }
@@ -421,39 +425,39 @@ public final class ProducerBatch {
      * {@link RecordAccumulator#abortBatches()}).
      */
     public void abortRecordAppends() {
-        recordsBuilder.abort();
+        batchWriter.abort();
     }
 
     public boolean isClosed() {
-        return recordsBuilder.isClosed();
+        return batchWriter.isClosed();
     }
 
     public ByteBuffer buffer() {
-        return recordsBuilder.buffer();
+        return batchWriter.outputStream().buffer();
     }
 
     public int initialCapacity() {
-        return recordsBuilder.initialCapacity();
+        return batchWriter.outputStream().initialCapacity();
     }
 
     public boolean isWritable() {
-        return !recordsBuilder.isClosed();
+        return !batchWriter.isClosed();
     }
 
     public byte magic() {
-        return recordsBuilder.magic();
+        return batchWriter.magic();
     }
 
     public long producerId() {
-        return recordsBuilder.producerId();
+        return batchWriter.producerId();
     }
 
     public short producerEpoch() {
-        return recordsBuilder.producerEpoch();
+        return batchWriter.producerEpoch();
     }
 
     public int baseSequence() {
-        return recordsBuilder.baseSequence();
+        return batchWriter.producerBaseSequence();
     }
 
     public boolean hasSequence() {
@@ -461,7 +465,7 @@ public final class ProducerBatch {
     }
 
     public boolean isTransactional() {
-        return recordsBuilder.isTransactional();
+        return batchWriter.isTransactional();
     }
 
     public boolean sequenceHasBeenReset() {

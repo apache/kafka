@@ -120,8 +120,8 @@ class ReplicaManagerTest {
         requiredAcks = 3,
         internalTopicsAllowed = false,
         isFromClient = true,
-        entriesPerPartition = Map(new TopicPartition("test1", 0) -> MemoryRecords.withRecords(CompressionType.NONE,
-          new SimpleRecord("first message".getBytes))),
+        entriesPerPartition = Map(new TopicPartition("test1", 0) ->
+          new RecordsBuilder().addBatch(new SimpleRecord("first message".getBytes)).build()),
         responseCallback = callback)
     } finally {
       rm.shutdown(checkpointHW = false)
@@ -157,7 +157,7 @@ class ReplicaManagerTest {
       rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       rm.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
 
-      val records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("first message".getBytes()))
+      val records = new RecordsBuilder().addBatch(new SimpleRecord("first message".getBytes())).build()
       val appendResult = appendRecords(rm, new TopicPartition(topic, 0), records).onFire { response =>
         assertEquals(Errors.NOT_LEADER_FOR_PARTITION, response.error)
       }
@@ -187,7 +187,6 @@ class ReplicaManagerTest {
 
     try {
       val brokerList = Seq[Integer](0, 1).asJava
-
       val partition = replicaManager.getOrCreatePartition(new TopicPartition(topic, 0))
       partition.getOrCreateReplica(0)
 
@@ -201,11 +200,13 @@ class ReplicaManagerTest {
       val producerId = 234L
       val epoch = 5.toShort
 
-      // write a few batches as part of a transaction
+      // write a few batches
       val numRecords = 3
       for (sequence <- 0 until numRecords) {
-        val records = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, epoch, sequence,
-          new SimpleRecord(s"message $sequence".getBytes))
+        val records = new RecordsBuilder()
+          .withProducerMetadata(producerId, epoch, 0)
+          .addBatch(new SimpleRecord(s"message $sequence".getBytes))
+          .build()
         appendRecords(replicaManager, new TopicPartition(topic, 0), records).onFire { response =>
           assertEquals(Errors.NONE, response.error)
         }
@@ -216,13 +217,14 @@ class ReplicaManagerTest {
       // Append a record with an out of range sequence. We should get the OutOfOrderSequence error code with the log
       // start offset set.
       val outOfRangeSequence = numRecords + 10
-      val record = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, epoch, outOfRangeSequence,
-        new SimpleRecord(s"message: $outOfRangeSequence".getBytes))
+      val record = new RecordsBuilder()
+        .withProducerMetadata(producerId, epoch, outOfRangeSequence)
+        .addBatch(new SimpleRecord(s"message: $outOfRangeSequence".getBytes))
+        .build()
       appendRecords(replicaManager, new TopicPartition(topic, 0), record).onFire { response =>
         assertEquals(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, response.error)
         assertEquals(0, response.logStartOffset)
       }
-
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -254,8 +256,11 @@ class ReplicaManagerTest {
       // write a few batches as part of a transaction
       val numRecords = 3
       for (sequence <- 0 until numRecords) {
-        val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, epoch, sequence,
-          new SimpleRecord(s"message $sequence".getBytes))
+        val records = new RecordsBuilder()
+          .setTransactional(true)
+          .withProducerMetadata(producerId, epoch, sequence)
+          .addBatch(new SimpleRecord(s"message $sequence".getBytes))
+          .build()
         appendRecords(replicaManager, new TopicPartition(topic, 0), records).onFire { response =>
           assertEquals(Errors.NONE, response.error)
         }
@@ -288,7 +293,10 @@ class ReplicaManagerTest {
 
       // now commit the transaction
       val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
-      val commitRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, endTxnMarker)
+      val commitRecordBatch = new RecordsBuilder()
+        .withProducerMetadata(producerId, epoch)
+        .addControlBatch(time.milliseconds(), endTxnMarker)
+        .build()
       appendRecords(replicaManager, new TopicPartition(topic, 0), commitRecordBatch, isFromClient = false)
         .onFire { response => assertEquals(Errors.NONE, response.error) }
 
@@ -342,8 +350,11 @@ class ReplicaManagerTest {
       // write a few batches as part of a transaction
       val numRecords = 3
       for (sequence <- 0 until numRecords) {
-        val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, epoch, sequence,
-          new SimpleRecord(s"message $sequence".getBytes))
+        val records = new RecordsBuilder()
+          .setTransactional(true)
+          .withProducerMetadata(producerId, epoch, sequence)
+          .addBatch(new SimpleRecord(s"message $sequence".getBytes))
+          .build()
         appendRecords(replicaManager, new TopicPartition(topic, 0), records).onFire { response =>
           assertEquals(Errors.NONE, response.error)
         }
@@ -351,7 +362,10 @@ class ReplicaManagerTest {
 
       // now abort the transaction
       val endTxnMarker = new EndTransactionMarker(ControlRecordType.ABORT, 0)
-      val abortRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, endTxnMarker)
+      val abortRecordBatch = new RecordsBuilder()
+        .withProducerMetadata(producerId, epoch)
+        .addControlBatch(time.milliseconds(), endTxnMarker)
+        .build()
       appendRecords(replicaManager, new TopicPartition(topic, 0), abortRecordBatch, isFromClient = false)
         .onFire { response => assertEquals(Errors.NONE, response.error) }
 

@@ -31,7 +31,7 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordsBuilder, SimpleRecord}
 import org.apache.kafka.common.requests.IsolationLevel
 import org.easymock.EasyMock
 import org.junit.Assert._
@@ -91,7 +91,7 @@ class SimpleFetchTest {
       isolationLevel = IsolationLevel.READ_UNCOMMITTED))
       .andReturn(FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
-        MemoryRecords.withRecords(CompressionType.NONE, recordToHW)
+        new RecordsBuilder().addBatch(recordToHW).build()
       )).anyTimes()
     EasyMock.expect(log.read(
       startOffset = 0,
@@ -101,13 +101,13 @@ class SimpleFetchTest {
       isolationLevel = IsolationLevel.READ_UNCOMMITTED))
       .andReturn(FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
-        MemoryRecords.withRecords(CompressionType.NONE, recordToLEO)
+        new RecordsBuilder().addBatch(recordToLEO).build()
       )).anyTimes()
     EasyMock.replay(log)
 
     // create the log manager that is aware of this mock log
     val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
-    EasyMock.expect(logManager.getLog(topicPartition, false)).andReturn(Some(log)).anyTimes()
+    EasyMock.expect(logManager.getLog(topicPartition, isFuture = false)).andReturn(Some(log)).anyTimes()
     EasyMock.expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
     EasyMock.replay(logManager)
 

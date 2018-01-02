@@ -166,7 +166,7 @@ class RequestQuotaTest extends BaseRequestTest {
     apiKey match {
         case ApiKeys.PRODUCE =>
           ProduceRequest.Builder.forCurrentMagic(1, 5000,
-            collection.mutable.Map(tp -> MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))).asJava)
+            Map(tp -> new RecordsBuilder().addBatch(new SimpleRecord("test".getBytes)).build()).asJava)
 
         case ApiKeys.FETCH =>
           val partitionMap = new LinkedHashMap[TopicPartition, FetchRequest.PartitionData]

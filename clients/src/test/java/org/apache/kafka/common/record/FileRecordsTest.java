@@ -64,7 +64,7 @@ public class FileRecordsTest {
     public void testFileSize() throws IOException {
         assertEquals(fileRecords.channel().size(), fileRecords.sizeInBytes());
         for (int i = 0; i < 20; i++) {
-            fileRecords.append(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("abcd".getBytes())));
+            fileRecords.append(new RecordsBuilder().addBatch(new SimpleRecord("abcd".getBytes())).build());
             assertEquals(fileRecords.channel().size(), fileRecords.sizeInBytes());
         }
     }
@@ -166,7 +166,7 @@ public class FileRecordsTest {
     public void testSearch() throws IOException {
         // append a new message with a high offset
         SimpleRecord lastMessage = new SimpleRecord("test".getBytes());
-        fileRecords.append(MemoryRecords.withRecords(50L, CompressionType.NONE, lastMessage));
+        fileRecords.append(new RecordsBuilder(50L).addBatch(lastMessage).build());
 
         List<RecordBatch> batches = batches(fileRecords);
         int position = 0;
@@ -370,28 +370,25 @@ public class FileRecordsTest {
                 new SimpleRecord(9L, "k9".getBytes(), "ok, almost done".getBytes()),
                 new SimpleRecord(10L, "k10".getBytes(), "finally".getBytes()));
 
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
-                TimestampType.CREATE_TIME, 0L);
+        RecordsBuilder builder = new RecordsBuilder()
+                .withCompression(compressionType);
+        RecordsBuilder.BatchBuilder firstBatch = builder.newBatch().withMagic(RecordBatch.MAGIC_VALUE_V0);
         for (int i = 0; i < 3; i++)
-            builder.appendWithOffset(offsets.get(i), records.get(i));
-        builder.close();
+            firstBatch.appendWithOffset(offsets.get(i), records.get(i));
+        firstBatch.closeBatch();
 
-        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType, TimestampType.CREATE_TIME,
-                0L);
+        RecordsBuilder.BatchBuilder secondBatch = builder.newBatch().withMagic(RecordBatch.MAGIC_VALUE_V1);
         for (int i = 3; i < 6; i++)
-            builder.appendWithOffset(offsets.get(i), records.get(i));
-        builder.close();
+            secondBatch.appendWithOffset(offsets.get(i), records.get(i));
+        secondBatch.closeBatch();
 
-        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compressionType, TimestampType.CREATE_TIME, 0L);
+        RecordsBuilder.BatchBuilder thirdBatch = builder.newBatch().withMagic(RecordBatch.MAGIC_VALUE_V2);
         for (int i = 6; i < 10; i++)
-            builder.appendWithOffset(offsets.get(i), records.get(i));
-        builder.close();
-
-        buffer.flip();
+            thirdBatch.appendWithOffset(offsets.get(i), records.get(i));
+        thirdBatch.closeBatch();
 
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
-            fileRecords.append(MemoryRecords.readableRecords(buffer));
+            fileRecords.append(builder.build());
             fileRecords.flush();
             Records convertedRecords = fileRecords.downConvert(toMagic, 0L, time).records();
             verifyConvertedRecords(records, offsets, convertedRecords, compressionType, toMagic);
@@ -470,14 +467,10 @@ public class FileRecordsTest {
     }
 
     private void append(FileRecords fileRecords, byte[][] values) throws IOException {
-        long offset = 0L;
-        for (byte[] value : values) {
-            ByteBuffer buffer = ByteBuffer.allocate(128);
-            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
-                    CompressionType.NONE, TimestampType.CREATE_TIME, offset);
-            builder.appendWithOffset(offset++, System.currentTimeMillis(), null, value);
-            fileRecords.append(builder.build());
-        }
+        RecordsBuilder builder = new RecordsBuilder();
+        for (byte[] value : values)
+            builder.addBatch(new SimpleRecord(System.currentTimeMillis(), null, value));
+        fileRecords.append(builder.build());
         fileRecords.flush();
     }
 

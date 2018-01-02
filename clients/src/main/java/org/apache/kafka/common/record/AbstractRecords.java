@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
@@ -98,43 +99,45 @@ public abstract class AbstractRecords implements Records {
             }
         }
 
-        ByteBuffer buffer = ByteBuffer.allocate(totalSizeEstimate);
+        ByteBufferOutputStream out = new ByteBufferOutputStream(totalSizeEstimate);
         long temporaryMemoryBytes = 0;
         int numRecordsConverted = 0;
         for (RecordBatchAndRecords recordBatchAndRecords : recordBatchAndRecordsList) {
             temporaryMemoryBytes += recordBatchAndRecords.batch.sizeInBytes();
             if (recordBatchAndRecords.batch.magic() <= toMagic) {
-                recordBatchAndRecords.batch.writeTo(buffer);
+                recordBatchAndRecords.batch.writeTo(out.buffer());
             } else {
-                MemoryRecordsBuilder builder = convertRecordBatch(toMagic, buffer, recordBatchAndRecords);
-                buffer = builder.buffer();
-                temporaryMemoryBytes += builder.uncompressedBytesWritten();
-                numRecordsConverted += builder.numRecords();
+                RecordBatchWriter writer = convertRecordBatch(toMagic, out, recordBatchAndRecords);
+                temporaryMemoryBytes += writer.uncompressedBytesWritten();
+                numRecordsConverted += writer.numRecords();
             }
         }
 
+        ByteBuffer buffer = out.buffer();
         buffer.flip();
         RecordsProcessingStats stats = new RecordsProcessingStats(temporaryMemoryBytes, numRecordsConverted,
                 time.nanoseconds() - startNanos);
-        return new ConvertedRecords<>(MemoryRecords.readableRecords(buffer), stats);
+        return new ConvertedRecords<>(new MemoryRecords(buffer), stats);
     }
 
     /**
      * Return a buffer containing the converted record batches. The returned buffer may not be the same as the received
      * one (e.g. it may require expansion).
      */
-    private MemoryRecordsBuilder convertRecordBatch(byte magic, ByteBuffer buffer, RecordBatchAndRecords recordBatchAndRecords) {
+    private RecordBatchWriter convertRecordBatch(byte magic, ByteBufferOutputStream buffer,
+                                                 RecordBatchAndRecords recordBatchAndRecords) {
         RecordBatch batch = recordBatchAndRecords.batch;
         final TimestampType timestampType = batch.timestampType();
         long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ? batch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, batch.compressionType(),
-                timestampType, recordBatchAndRecords.baseOffset, logAppendTime);
-        for (Record record : recordBatchAndRecords.records)
-            builder.append(record);
+        RecordBatchWriter writer = new RecordBatchWriter(buffer, magic, batch.compressionType(),
+                timestampType, recordBatchAndRecords.baseOffset, logAppendTime, false);
 
-        builder.close();
-        return builder;
+        for (Record record : recordBatchAndRecords.records)
+            writer.append(record);
+
+        writer.close();
+        return writer;
     }
 
     /**
@@ -224,7 +227,7 @@ public abstract class AbstractRecords implements Records {
      *
      * For V0 and V1 with no compression, it's unclear if Records.LOG_OVERHEAD or 0 should be chosen. There is no header
      * per batch, but a sequence of batches is preceded by the offset and size. This method returns `0` as it's what
-     * `MemoryRecordsBuilder` requires.
+     * {@link RecordBatchWriter} requires.
      */
     public static int recordBatchHeaderSizeInBytes(byte magic, CompressionType compressionType) {
         if (magic > RecordBatch.MAGIC_VALUE_V1) {

@@ -179,12 +179,20 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val producerId = 15L
     val producerEpoch = 0.toShort
-    val sequence = 0
-    log.appendAsLeader(MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
-      new SimpleRecord(time.milliseconds(), "1".getBytes, "a".getBytes),
-      new SimpleRecord(time.milliseconds(), "2".getBytes, "b".getBytes)), leaderEpoch = 0)
-    log.appendAsLeader(MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 2,
-      new SimpleRecord(time.milliseconds(), "3".getBytes, "c".getBytes)), leaderEpoch = 0)
+    log.appendAsLeader(new RecordsBuilder()
+      .withProducerMetadata(producerId, producerEpoch, 0)
+      .setTransactional(true)
+      .addBatch(
+        new SimpleRecord(time.milliseconds(), "1".getBytes, "a".getBytes),
+        new SimpleRecord(time.milliseconds(), "2".getBytes, "b".getBytes))
+      .build(),
+      leaderEpoch = 0)
+    log.appendAsLeader(new RecordsBuilder()
+      .withProducerMetadata(producerId, producerEpoch, 2)
+      .setTransactional(true)
+      .addBatch(new SimpleRecord(time.milliseconds(), "3".getBytes, "c".getBytes))
+      .build(),
+      leaderEpoch = 0)
     log.roll()
     log.onHighWatermarkIncremented(3L)
 
@@ -195,8 +203,10 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     assertEquals(0L, cleanableOffsets._1)
     assertEquals(0L, cleanableOffsets._2)
 
-    log.appendAsLeader(MemoryRecords.withEndTransactionMarker(time.milliseconds(), producerId, producerEpoch,
-      new EndTransactionMarker(ControlRecordType.ABORT, 15)), leaderEpoch = 0, isFromClient = false)
+    log.appendAsLeader(new RecordsBuilder()
+      .withProducerMetadata(producerId, producerEpoch, RecordBatch.NO_SEQUENCE)
+      .addControlBatch(time.milliseconds(), new EndTransactionMarker(ControlRecordType.ABORT, 15))
+      .build(), leaderEpoch = 0, isFromClient = false)
     log.roll()
     log.onHighWatermarkIncremented(4L)
 
@@ -218,8 +228,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
   private def createCleanerManager(log: Log): LogCleanerManager = {
     val logs = new Pool[TopicPartition, Log]()
     logs.put(new TopicPartition("log", 0), log)
-    val cleanerManager = new LogCleanerManager(Array(logDir), logs, null)
-    cleanerManager
+    new LogCleanerManager(Array(logDir), logs, null)
   }
 
   private def createLog(segmentSize: Int, cleanupPolicy: String): Log = {
@@ -230,7 +239,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val config = LogConfig(logProps)
     val partitionDir = new File(logDir, "log-0")
-    val log = Log(partitionDir,
+    Log(partitionDir,
       config,
       logStartOffset = 0L,
       recoveryPoint = 0L,
@@ -240,7 +249,6 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
       maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10))
-    log
   }
 
   private def makeLog(dir: File = logDir, config: LogConfig) =
@@ -249,7 +257,8 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10))
 
-  private def records(key: Int, value: Int, timestamp: Long) =
-    MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(timestamp, key.toString.getBytes, value.toString.getBytes))
+  private def records(key: Int, value: Int, timestamp: Long) = new RecordsBuilder()
+    .addBatch(new SimpleRecord(timestamp, key.toString.getBytes, value.toString.getBytes))
+    .build()
 
 }

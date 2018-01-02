@@ -39,10 +39,9 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.RecordsBuilder;
+import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -123,7 +122,7 @@ public class KafkaConsumerTest {
     public void testConstructorClose() throws Exception {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testConstructorClose");
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "some.invalid.hostname.foo.bar.local:9999");
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "9203@3");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
 
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
@@ -1569,11 +1568,10 @@ public class KafkaConsumerTest {
             if (fetchCount == 0) {
                 records = MemoryRecords.EMPTY;
             } else {
-                MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
-                        TimestampType.CREATE_TIME, fetchOffset);
+                RecordsBuilder.BatchBuilder batch = new RecordsBuilder(fetchOffset).newBatch();
                 for (int i = 0; i < fetchCount; i++)
-                    builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
-                records = builder.build();
+                    batch.append(new SimpleRecord(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes()));
+                records = batch.closeBatch().build();
             }
             tpResponses.put(partition, new FetchResponse.PartitionData(Errors.NONE, 0, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L,
                     null, records));

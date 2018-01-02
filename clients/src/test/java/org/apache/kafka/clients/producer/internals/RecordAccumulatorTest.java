@@ -32,12 +32,13 @@ import org.apache.kafka.common.record.CompressionRatioEstimator;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.DefaultRecordBatch;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.RecordBatchWriter;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -157,9 +158,12 @@ public class RecordAccumulatorTest {
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs);
         assertEquals("Our partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).readyNodes);
 
-        Deque<ProducerBatch> batches = accum.batches().get(tp1);
+        Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, Collections.singleton(node1),
+                Integer.MAX_VALUE, time.milliseconds());
+        assertEquals(1, drained.size());
+        List<ProducerBatch> batches = drained.get(node1.id());
         assertEquals(1, batches.size());
-        ProducerBatch producerBatch = batches.peek();
+        ProducerBatch producerBatch = batches.get(0);
         List<MutableRecordBatch> recordBatches = TestUtils.toList(producerBatch.records().batches());
         assertEquals(1, recordBatches.size());
         MutableRecordBatch recordBatch = recordBatches.get(0);
@@ -195,10 +199,12 @@ public class RecordAccumulatorTest {
                 batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024, compressionType, 0L);
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs);
         assertEquals("Our partition's leader should be ready", Collections.singleton(node1), accum.ready(cluster, time.milliseconds()).readyNodes);
-
-        Deque<ProducerBatch> batches = accum.batches().get(tp1);
+        Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, Collections.singleton(node1),
+                Integer.MAX_VALUE, time.milliseconds());
+        assertEquals(1, drained.size());
+        List<ProducerBatch> batches = drained.get(node1.id());
         assertEquals(1, batches.size());
-        ProducerBatch producerBatch = batches.peek();
+        ProducerBatch producerBatch = batches.get(0);
         List<MutableRecordBatch> recordBatches = TestUtils.toList(producerBatch.records().batches());
         assertEquals(1, recordBatches.size());
         MutableRecordBatch recordBatch = recordBatches.get(0);
@@ -636,9 +642,11 @@ public class RecordAccumulatorTest {
         RecordAccumulator accum = createTestRecordAccumulator(1024, 10 * 1024, CompressionType.GZIP, 10);
 
         // Create a big batch
-        ByteBuffer buffer = ByteBuffer.allocate(4096);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        ProducerBatch batch = new ProducerBatch(tp1, builder, now, true);
+        ByteBufferOutputStream out = new ByteBufferOutputStream(4096);
+        RecordBatchWriter writer = new RecordBatchWriter(out, RecordBatch.CURRENT_MAGIC_VALUE,
+                CompressionType.NONE, TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, false
+        );
+        ProducerBatch batch = new ProducerBatch(tp1, writer, now, true);
 
         byte[] value = new byte[1024];
         final AtomicInteger acked = new AtomicInteger(0);

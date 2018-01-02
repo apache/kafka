@@ -17,7 +17,6 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -68,11 +67,11 @@ public class MemoryRecordsTest {
 
     @Test
     public void testIterator() {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-
-        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, magic, compression,
-                TimestampType.CREATE_TIME, firstOffset, logAppendTime, pid, epoch, firstSequence, false, false,
-                partitionLeaderEpoch, buffer.limit());
+        RecordsBuilder builder = new RecordsBuilder(firstOffset)
+                .withMagic(magic)
+                .withCompression(compression)
+                .withPartitionLeaderEpoch(partitionLeaderEpoch)
+                .withProducerMetadata(pid, epoch, firstSequence);
 
         SimpleRecord[] records = new SimpleRecord[] {
             new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
@@ -83,8 +82,7 @@ public class MemoryRecordsTest {
             new SimpleRecord(6L, (byte[]) null, null)
         };
 
-        for (SimpleRecord record : records)
-            builder.append(record);
+        builder.addBatch(records);
 
         MemoryRecords memoryRecords = builder.build();
         for (int iteration = 0; iteration < 2; iteration++) {
@@ -149,35 +147,6 @@ public class MemoryRecordsTest {
         }
     }
 
-    @Test
-    public void testHasRoomForMethod() {
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magic, compression,
-                TimestampType.CREATE_TIME, 0L);
-        builder.append(0L, "a".getBytes(), "1".getBytes());
-        assertTrue(builder.hasRoomFor(1L, "b".getBytes(), "2".getBytes(), Record.EMPTY_HEADERS));
-        builder.close();
-        assertFalse(builder.hasRoomFor(1L, "b".getBytes(), "2".getBytes(), Record.EMPTY_HEADERS));
-    }
-
-    @Test
-    public void testHasRoomForMethodWithHeaders() {
-        if (magic >= RecordBatch.MAGIC_VALUE_V2) {
-            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(100), magic, compression,
-                    TimestampType.CREATE_TIME, 0L);
-            RecordHeaders headers = new RecordHeaders();
-            headers.add("hello", "world.world".getBytes());
-            headers.add("hello", "world.world".getBytes());
-            headers.add("hello", "world.world".getBytes());
-            headers.add("hello", "world.world".getBytes());
-            headers.add("hello", "world.world".getBytes());
-            builder.append(logAppendTime, "key".getBytes(), "value".getBytes());
-            // Make sure that hasRoomFor accounts for header sizes by letting a record without headers pass, but stopping
-            // a record with a large number of headers.
-            assertTrue(builder.hasRoomFor(logAppendTime, "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS));
-            assertFalse(builder.hasRoomFor(logAppendTime, "key".getBytes(), "value".getBytes(), headers.toArray()));
-        }
-    }
-
     /**
      * This test verifies that the checksum returned for various versions matches hardcoded values to catch unintentional
      * changes to how the checksum is computed.
@@ -192,7 +161,13 @@ public class MemoryRecordsTest {
             new SimpleRecord(283843L, "key1".getBytes(), "value1".getBytes()),
             new SimpleRecord(1234L, "key2".getBytes(), "value2".getBytes())
         };
-        RecordBatch batch = MemoryRecords.withRecords(magic, compression, records).batches().iterator().next();
+        MemoryRecords builtRecords = new RecordsBuilder()
+                .withMagic(magic)
+                .withCompression(compression)
+                .addBatch(records)
+                .build();
+
+        RecordBatch batch = builtRecords.batches().iterator().next();
         long expectedChecksum;
         if (magic == RecordBatch.MAGIC_VALUE_V0) {
             if (compression == CompressionType.NONE)
@@ -219,19 +194,23 @@ public class MemoryRecordsTest {
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
             int partitionLeaderEpoch = 67;
 
-            ByteBuffer buffer = ByteBuffer.allocate(2048);
-            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME,
-                    0L, RecordBatch.NO_TIMESTAMP, partitionLeaderEpoch);
-            builder.append(10L, null, "a".getBytes());
-            builder.append(11L, "1".getBytes(), "b".getBytes());
-            builder.append(12L, null, "c".getBytes());
+            RecordsBuilder builder = new RecordsBuilder()
+                    .withMagic(magic)
+                    .withCompression(compression)
+                    .withPartitionLeaderEpoch(partitionLeaderEpoch);
+
+            RecordsBuilder.BatchBuilder batchBuilder = builder.newBatch();
+            batchBuilder.append(new SimpleRecord(10L, null, "a".getBytes()));
+            batchBuilder.append(new SimpleRecord(11L, "1".getBytes(), "b".getBytes()));
+            batchBuilder.append(new SimpleRecord(12L, null, "c".getBytes()));
+            batchBuilder.closeBatch();
 
             ByteBuffer filtered = ByteBuffer.allocate(2048);
             builder.build().filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(), filtered,
                     Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
 
             filtered.flip();
-            MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+            MemoryRecords filteredRecords = new MemoryRecords(filtered);
 
             List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
             assertEquals(1, batches.size());
@@ -245,19 +224,23 @@ public class MemoryRecordsTest {
     public void testFilterToEmptyBatchRetention() {
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
             for (boolean isTransactional : Arrays.asList(true, false)) {
-                ByteBuffer buffer = ByteBuffer.allocate(2048);
                 long producerId = 23L;
                 short producerEpoch = 5;
                 long baseOffset = 3L;
                 int baseSequence = 10;
                 int partitionLeaderEpoch = 293;
 
-                MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME,
-                        baseOffset, RecordBatch.NO_TIMESTAMP, producerId, producerEpoch, baseSequence, isTransactional,
-                        partitionLeaderEpoch);
-                builder.append(11L, "2".getBytes(), "b".getBytes());
-                builder.append(12L, "3".getBytes(), "c".getBytes());
-                builder.close();
+                RecordsBuilder builder = new RecordsBuilder(baseOffset)
+                        .withMagic(magic)
+                        .withCompression(compression)
+                        .withPartitionLeaderEpoch(partitionLeaderEpoch)
+                        .setTransactional(isTransactional)
+                        .withProducerMetadata(producerId, producerEpoch, baseSequence);
+
+                RecordsBuilder.BatchBuilder batchBuilder = builder.newBatch();
+                batchBuilder.append(new SimpleRecord(11L, "2".getBytes(), "b".getBytes()));
+                batchBuilder.append(new SimpleRecord(12L, "3".getBytes(), "c".getBytes()));
+                batchBuilder.closeBatch();
 
                 ByteBuffer filtered = ByteBuffer.allocate(2048);
                 builder.build().filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
@@ -275,7 +258,7 @@ public class MemoryRecordsTest {
                 }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
 
                 filtered.flip();
-                MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+                MemoryRecords filteredRecords = new MemoryRecords(filtered);
 
                 List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
                 assertEquals(1, batches.size());
@@ -310,7 +293,7 @@ public class MemoryRecordsTest {
                 buffer.flip();
 
                 ByteBuffer filtered = ByteBuffer.allocate(2048);
-                MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
+                new MemoryRecords(buffer).filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
                     @Override
                     protected BatchRetention checkBatchRetention(RecordBatch batch) {
                         return deleteRetention;
@@ -323,7 +306,7 @@ public class MemoryRecordsTest {
                 }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
 
                 filtered.flip();
-                MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+                MemoryRecords filteredRecords = new MemoryRecords(filtered);
                 assertEquals(0, filteredRecords.sizeInBytes());
             }
         }
@@ -339,8 +322,11 @@ public class MemoryRecordsTest {
             int partitionLeaderEpoch = 29;
 
             EndTransactionMarker marker = new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch);
-            MemoryRecords records = MemoryRecords.withEndTransactionMarker(initialOffset, System.currentTimeMillis(),
-                    partitionLeaderEpoch, producerId, producerEpoch, marker);
+            MemoryRecords records = new RecordsBuilder(initialOffset)
+                    .withProducerMetadata(producerId, producerEpoch)
+                    .withPartitionLeaderEpoch(partitionLeaderEpoch)
+                    .addControlBatch(System.currentTimeMillis(), marker)
+                    .build();
             // verify that buffer allocation was precise
             assertEquals(records.buffer().remaining(), records.buffer().capacity());
 
@@ -369,30 +355,29 @@ public class MemoryRecordsTest {
     @Test
     public void testFilterToBatchDiscard() {
         if (compression != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2) {
-            ByteBuffer buffer = ByteBuffer.allocate(2048);
-            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
-            builder.append(10L, "1".getBytes(), "a".getBytes());
-            builder.close();
+            RecordsBuilder builder = new RecordsBuilder().withMagic(magic).withCompression(compression);
 
-            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 1L);
-            builder.append(11L, "2".getBytes(), "b".getBytes());
-            builder.append(12L, "3".getBytes(), "c".getBytes());
-            builder.close();
+            RecordsBuilder.BatchBuilder firstBatch = builder.newBatch();
+            firstBatch.append(new SimpleRecord(10L, "1".getBytes(), "a".getBytes()));
+            firstBatch.closeBatch();
 
-            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L);
-            builder.append(13L, "4".getBytes(), "d".getBytes());
-            builder.append(20L, "5".getBytes(), "e".getBytes());
-            builder.append(15L, "6".getBytes(), "f".getBytes());
-            builder.close();
+            RecordsBuilder.BatchBuilder secondBatch = builder.newBatch();
+            secondBatch.append(new SimpleRecord(11L, "2".getBytes(), "b".getBytes()));
+            secondBatch.append(new SimpleRecord(12L, "3".getBytes(), "c".getBytes()));
+            secondBatch.closeBatch();
 
-            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 6L);
-            builder.append(16L, "7".getBytes(), "g".getBytes());
-            builder.close();
+            RecordsBuilder.BatchBuilder thirdBatch = builder.newBatch();
+            thirdBatch.append(new SimpleRecord(13L, "4".getBytes(), "d".getBytes()));
+            thirdBatch.append(new SimpleRecord(20L, "5".getBytes(), "e".getBytes()));
+            thirdBatch.append(new SimpleRecord(15L, "6".getBytes(), "f".getBytes()));
+            thirdBatch.closeBatch();
 
-            buffer.flip();
+            RecordsBuilder.BatchBuilder fourthBatch = builder.newBatch();
+            fourthBatch.append(new SimpleRecord(16L, "7".getBytes(), "g".getBytes()));
+            fourthBatch.closeBatch();
 
             ByteBuffer filtered = ByteBuffer.allocate(2048);
-            MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
+            builder.build().filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
                 @Override
                 protected BatchRetention checkBatchRetention(RecordBatch batch) {
                     // discard the second and fourth batches
@@ -408,7 +393,7 @@ public class MemoryRecordsTest {
             }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
 
             filtered.flip();
-            MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+            MemoryRecords filteredRecords = new MemoryRecords(filtered);
 
             List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
             assertEquals(2, batches.size());
@@ -419,23 +404,20 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterToAlreadyCompactedLog() {
-        ByteBuffer buffer = ByteBuffer.allocate(2048);
-
         // create a batch with some offset gaps to simulate a compacted batch
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression,
-                TimestampType.CREATE_TIME, 0L);
-        builder.appendWithOffset(5L, 10L, null, "a".getBytes());
-        builder.appendWithOffset(8L, 11L, "1".getBytes(), "b".getBytes());
-        builder.appendWithOffset(10L, 12L, null, "c".getBytes());
+        RecordsBuilder builder = new RecordsBuilder().withMagic(magic).withCompression(compression);
 
-        builder.close();
-        buffer.flip();
+        RecordsBuilder.BatchBuilder batchBuilder = builder.newBatch();
+        batchBuilder.appendWithOffset(5L, new SimpleRecord(10L, null, "a".getBytes()));
+        batchBuilder.appendWithOffset(8L, new SimpleRecord(11L, "1".getBytes(), "b".getBytes()));
+        batchBuilder.appendWithOffset(10L, new SimpleRecord(12L, null, "c".getBytes()));
+        batchBuilder.closeBatch();
 
         ByteBuffer filtered = ByteBuffer.allocate(2048);
-        MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(),
+        builder.build().filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(),
                 filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
         filtered.flip();
-        MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+        MemoryRecords filteredRecords = new MemoryRecords(filtered);
 
         List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
         assertEquals(1, batches.size());
@@ -465,90 +447,89 @@ public class MemoryRecordsTest {
     @Test
     public void testFilterToPreservesProducerInfo() {
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
-            ByteBuffer buffer = ByteBuffer.allocate(2048);
+            RecordsBuilder builder = new RecordsBuilder().withMagic(magic).withCompression(compression);
 
             // non-idempotent, non-transactional
-            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
-            builder.append(10L, null, "a".getBytes());
-            builder.append(11L, "1".getBytes(), "b".getBytes());
-            builder.append(12L, null, "c".getBytes());
-
-            builder.close();
+            RecordsBuilder.BatchBuilder batch = builder.newBatch();
+            batch.append(new SimpleRecord(10L, null, "a".getBytes()));
+            batch.append(new SimpleRecord(11L, "1".getBytes(), "b".getBytes()));
+            batch.append(new SimpleRecord(12L, null, "c".getBytes()));
+            batch.closeBatch();
 
             // idempotent
             long pid1 = 23L;
             short epoch1 = 5;
             int baseSequence1 = 10;
-            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L,
-                    RecordBatch.NO_TIMESTAMP, pid1, epoch1, baseSequence1);
-            builder.append(13L, null, "d".getBytes());
-            builder.append(14L, "4".getBytes(), "e".getBytes());
-            builder.append(15L, "5".getBytes(), "f".getBytes());
-            builder.close();
+            RecordsBuilder.BatchBuilder idempotentBatch = builder.newBatch()
+                    .withProducerMetadata(pid1, epoch1, baseSequence1);
+            idempotentBatch.append(new SimpleRecord(13L, null, "d".getBytes()));
+            idempotentBatch.append(new SimpleRecord(14L, "4".getBytes(), "e".getBytes()));
+            idempotentBatch.append(new SimpleRecord(15L, "5".getBytes(), "f".getBytes()));
+            idempotentBatch.closeBatch();
 
             // transactional
             long pid2 = 99384L;
             short epoch2 = 234;
             int baseSequence2 = 15;
-            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L,
-                    RecordBatch.NO_TIMESTAMP, pid2, epoch2, baseSequence2, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
-            builder.append(16L, "6".getBytes(), "g".getBytes());
-            builder.append(17L, "7".getBytes(), "h".getBytes());
-            builder.append(18L, null, "i".getBytes());
-            builder.close();
+            RecordsBuilder.BatchBuilder transactionalBatch = builder.newBatch()
+                    .setTransactional(true)
+                    .withProducerMetadata(pid2, epoch2, baseSequence2);
+            transactionalBatch.append(new SimpleRecord(16L, "6".getBytes(), "g".getBytes()));
+            transactionalBatch.append(new SimpleRecord(17L, "7".getBytes(), "h".getBytes()));
+            transactionalBatch.append(new SimpleRecord(18L, null, "i".getBytes()));
+            transactionalBatch.closeBatch();
 
-            buffer.flip();
-
+            MemoryRecords unfilteredRecords = builder.build();
             ByteBuffer filtered = ByteBuffer.allocate(2048);
-            MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(),
+            unfilteredRecords.filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(),
                     filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
 
             filtered.flip();
-            MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+            MemoryRecords filteredRecords = new MemoryRecords(filtered);
 
             List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
             assertEquals(3, batches.size());
 
-            MutableRecordBatch firstBatch = batches.get(0);
-            assertEquals(1, firstBatch.countOrNull().intValue());
-            assertEquals(0L, firstBatch.baseOffset());
-            assertEquals(2L, firstBatch.lastOffset());
-            assertEquals(RecordBatch.NO_PRODUCER_ID, firstBatch.producerId());
-            assertEquals(RecordBatch.NO_PRODUCER_EPOCH, firstBatch.producerEpoch());
-            assertEquals(RecordBatch.NO_SEQUENCE, firstBatch.baseSequence());
-            assertEquals(RecordBatch.NO_SEQUENCE, firstBatch.lastSequence());
-            assertFalse(firstBatch.isTransactional());
-            List<Record> firstBatchRecords = TestUtils.toList(firstBatch);
+            MutableRecordBatch filteredBatch = batches.get(0);
+            assertEquals(1, filteredBatch.countOrNull().intValue());
+            assertEquals(0L, filteredBatch.baseOffset());
+            assertEquals(2L, filteredBatch.lastOffset());
+            assertEquals(RecordBatch.NO_PRODUCER_ID, filteredBatch.producerId());
+            assertEquals(RecordBatch.NO_PRODUCER_EPOCH, filteredBatch.producerEpoch());
+            assertEquals(RecordBatch.NO_SEQUENCE, filteredBatch.baseSequence());
+            assertEquals(RecordBatch.NO_SEQUENCE, filteredBatch.lastSequence());
+            assertFalse(filteredBatch.isTransactional());
+            List<Record> firstBatchRecords = TestUtils.toList(filteredBatch);
             assertEquals(1, firstBatchRecords.size());
             assertEquals(RecordBatch.NO_SEQUENCE, firstBatchRecords.get(0).sequence());
             assertEquals(new SimpleRecord(11L, "1".getBytes(), "b".getBytes()), new SimpleRecord(firstBatchRecords.get(0)));
 
-            MutableRecordBatch secondBatch = batches.get(1);
-            assertEquals(2, secondBatch.countOrNull().intValue());
-            assertEquals(3L, secondBatch.baseOffset());
-            assertEquals(5L, secondBatch.lastOffset());
-            assertEquals(pid1, secondBatch.producerId());
-            assertEquals(epoch1, secondBatch.producerEpoch());
-            assertEquals(baseSequence1, secondBatch.baseSequence());
-            assertEquals(baseSequence1 + 2, secondBatch.lastSequence());
-            assertFalse(secondBatch.isTransactional());
-            List<Record> secondBatchRecords = TestUtils.toList(secondBatch);
+            MutableRecordBatch filteredIdempotentBatch = batches.get(1);
+            assertEquals(2, filteredIdempotentBatch.countOrNull().intValue());
+            assertEquals(3L, filteredIdempotentBatch.baseOffset());
+            assertEquals(5L, filteredIdempotentBatch.lastOffset());
+            assertEquals(pid1, filteredIdempotentBatch.producerId());
+            assertEquals(epoch1, filteredIdempotentBatch.producerEpoch());
+            assertEquals(baseSequence1, filteredIdempotentBatch.baseSequence());
+            assertEquals(baseSequence1 + 2, filteredIdempotentBatch.lastSequence());
+            assertFalse(filteredIdempotentBatch.isTransactional());
+            List<Record> secondBatchRecords = TestUtils.toList(filteredIdempotentBatch);
             assertEquals(2, secondBatchRecords.size());
             assertEquals(baseSequence1 + 1, secondBatchRecords.get(0).sequence());
             assertEquals(new SimpleRecord(14L, "4".getBytes(), "e".getBytes()), new SimpleRecord(secondBatchRecords.get(0)));
             assertEquals(baseSequence1 + 2, secondBatchRecords.get(1).sequence());
             assertEquals(new SimpleRecord(15L, "5".getBytes(), "f".getBytes()), new SimpleRecord(secondBatchRecords.get(1)));
 
-            MutableRecordBatch thirdBatch = batches.get(2);
-            assertEquals(2, thirdBatch.countOrNull().intValue());
-            assertEquals(3L, thirdBatch.baseOffset());
-            assertEquals(5L, thirdBatch.lastOffset());
-            assertEquals(pid2, thirdBatch.producerId());
-            assertEquals(epoch2, thirdBatch.producerEpoch());
-            assertEquals(baseSequence2, thirdBatch.baseSequence());
-            assertEquals(baseSequence2 + 2, thirdBatch.lastSequence());
-            assertTrue(thirdBatch.isTransactional());
-            List<Record> thirdBatchRecords = TestUtils.toList(thirdBatch);
+            MutableRecordBatch filteredTransactionalBatch = batches.get(2);
+            assertEquals(2, filteredTransactionalBatch.countOrNull().intValue());
+            assertEquals(6L, filteredTransactionalBatch.baseOffset());
+            assertEquals(8L, filteredTransactionalBatch.lastOffset());
+            assertEquals(pid2, filteredTransactionalBatch.producerId());
+            assertEquals(epoch2, filteredTransactionalBatch.producerEpoch());
+            assertEquals(baseSequence2, filteredTransactionalBatch.baseSequence());
+            assertEquals(baseSequence2 + 2, filteredTransactionalBatch.lastSequence());
+            assertTrue(filteredTransactionalBatch.isTransactional());
+            List<Record> thirdBatchRecords = TestUtils.toList(filteredTransactionalBatch);
             assertEquals(2, thirdBatchRecords.size());
             assertEquals(baseSequence2, thirdBatchRecords.get(0).sequence());
             assertEquals(new SimpleRecord(16L, "6".getBytes(), "g".getBytes()), new SimpleRecord(thirdBatchRecords.get(0)));
@@ -559,36 +540,28 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterToWithUndersizedBuffer() {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
-        builder.append(10L, null, "a".getBytes());
-        builder.close();
+        RecordsBuilder builder = new RecordsBuilder().withMagic(magic).withCompression(compression);
+        builder.addBatch(
+                new SimpleRecord(10L, null, "a".getBytes()));
+        builder.addBatch(
+                new SimpleRecord(11L, "1".getBytes(), new byte[128]),
+                new SimpleRecord(12L, "2".getBytes(), "c".getBytes()),
+                new SimpleRecord(13L, null, "d".getBytes()));
+        builder.addBatch(
+                new SimpleRecord(14L, null, "e".getBytes()),
+                new SimpleRecord(15L, "5".getBytes(), "f".getBytes()),
+                new SimpleRecord(16L, "6".getBytes(), "g".getBytes()));
+        builder.addBatch(
+                new SimpleRecord(17L, "7".getBytes(), new byte[128]));
 
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 1L);
-        builder.append(11L, "1".getBytes(), new byte[128]);
-        builder.append(12L, "2".getBytes(), "c".getBytes());
-        builder.append(13L, null, "d".getBytes());
-        builder.close();
-
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 4L);
-        builder.append(14L, null, "e".getBytes());
-        builder.append(15L, "5".getBytes(), "f".getBytes());
-        builder.append(16L, "6".getBytes(), "g".getBytes());
-        builder.close();
-
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 7L);
-        builder.append(17L, "7".getBytes(), new byte[128]);
-        builder.close();
-
-        buffer.flip();
-
+        ByteBuffer buffer = builder.build().buffer();
         ByteBuffer output = ByteBuffer.allocate(64);
 
         List<Record> records = new ArrayList<>();
         while (buffer.hasRemaining()) {
             output.rewind();
 
-            MemoryRecords.FilterResult result = MemoryRecords.readableRecords(buffer)
+            MemoryRecords.FilterResult result = new MemoryRecords(buffer)
                     .filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(), output, Integer.MAX_VALUE,
                               BufferSupplier.NO_CACHING);
 
@@ -598,7 +571,7 @@ public class MemoryRecordsTest {
             if (output != result.output)
                 assertEquals(0, output.position());
 
-            MemoryRecords filtered = MemoryRecords.readableRecords(result.output);
+            MemoryRecords filtered = new MemoryRecords(result.output);
             records.addAll(TestUtils.toList(filtered.records()));
         }
 
@@ -610,9 +583,12 @@ public class MemoryRecordsTest {
     @Test
     public void testToString() {
         long timestamp = 1000000;
-        MemoryRecords memoryRecords = MemoryRecords.withRecords(magic, compression,
-                new SimpleRecord(timestamp, "key1".getBytes(), "value1".getBytes()),
-                new SimpleRecord(timestamp + 1, "key2".getBytes(), "value2".getBytes()));
+        MemoryRecords memoryRecords = new RecordsBuilder().withMagic(magic).withCompression(compression)
+                .newBatch()
+                .append(new SimpleRecord(timestamp, "key1".getBytes(), "value1".getBytes()))
+                .append(new SimpleRecord(timestamp + 1, "key2".getBytes(), "value2".getBytes()))
+                .closeBatch()
+                .build();
         switch (magic) {
             case RecordBatch.MAGIC_VALUE_V0:
                 assertEquals("[(record=LegacyRecordBatch(offset=0, Record(magic=0, attributes=0, compression=NONE, " +
@@ -639,30 +615,22 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterTo() {
-        ByteBuffer buffer = ByteBuffer.allocate(2048);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
-        builder.append(10L, null, "a".getBytes());
-        builder.close();
+        RecordsBuilder builder = new RecordsBuilder().withMagic(magic).withCompression(compression);
+        builder.addBatch(
+                new SimpleRecord(10L, null, "a".getBytes()));
+        builder.addBatch(
+                new SimpleRecord(11L, "1".getBytes(), "b".getBytes()),
+                new SimpleRecord(12L, null, "c".getBytes()));
+        builder.addBatch(
+                new SimpleRecord(13L, null, "d".getBytes()),
+                new SimpleRecord(20L, "4".getBytes(), "e".getBytes()),
+                new SimpleRecord(15L, "5".getBytes(), "f".getBytes()));
+        builder.addBatch(
+                new SimpleRecord(16L, "6".getBytes(), "g".getBytes()));
 
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 1L);
-        builder.append(11L, "1".getBytes(), "b".getBytes());
-        builder.append(12L, null, "c".getBytes());
-        builder.close();
-
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L);
-        builder.append(13L, null, "d".getBytes());
-        builder.append(20L, "4".getBytes(), "e".getBytes());
-        builder.append(15L, "5".getBytes(), "f".getBytes());
-        builder.close();
-
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 6L);
-        builder.append(16L, "6".getBytes(), "g".getBytes());
-        builder.close();
-
-        buffer.flip();
-
+        MemoryRecords unfiltered = builder.build();
         ByteBuffer filtered = ByteBuffer.allocate(2048);
-        MemoryRecords.FilterResult result = MemoryRecords.readableRecords(buffer).filterTo(
+        MemoryRecords.FilterResult result = unfiltered.filterTo(
                 new TopicPartition("foo", 0), new RetainNonNullKeysFilter(), filtered, Integer.MAX_VALUE,
                 BufferSupplier.NO_CACHING);
 
@@ -670,7 +638,7 @@ public class MemoryRecordsTest {
 
         assertEquals(7, result.messagesRead);
         assertEquals(4, result.messagesRetained);
-        assertEquals(buffer.limit(), result.bytesRead);
+        assertEquals(unfiltered.sizeInBytes(), result.bytesRead);
         assertEquals(filtered.limit(), result.bytesRetained);
         if (magic > RecordBatch.MAGIC_VALUE_V0) {
             assertEquals(20L, result.maxTimestamp);
@@ -680,7 +648,7 @@ public class MemoryRecordsTest {
                 assertEquals(5L, result.shallowOffsetOfMaxTimestamp);
         }
 
-        MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+        MemoryRecords filteredRecords = new MemoryRecords(filtered);
 
         List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
         final List<Long> expectedEndOffsets;
@@ -754,33 +722,39 @@ public class MemoryRecordsTest {
     public void testFilterToPreservesLogAppendTime() {
         long logAppendTime = System.currentTimeMillis();
 
-        ByteBuffer buffer = ByteBuffer.allocate(2048);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression,
-                TimestampType.LOG_APPEND_TIME, 0L, logAppendTime, pid, epoch, firstSequence);
-        builder.append(10L, null, "a".getBytes());
-        builder.close();
+        RecordsBuilder builder = new RecordsBuilder()
+                .withMagic(magic)
+                .withCompression(compression)
+                .withTimestampType(TimestampType.LOG_APPEND_TIME);
 
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.LOG_APPEND_TIME, 1L, logAppendTime,
-                pid, epoch, firstSequence);
-        builder.append(11L, "1".getBytes(), "b".getBytes());
-        builder.append(12L, null, "c".getBytes());
-        builder.close();
+        builder.newBatch()
+                .withLogAppendTime(logAppendTime)
+                .withProducerMetadata(pid, epoch, firstSequence)
+                .append(new SimpleRecord(10L, null, "a".getBytes()))
+                .closeBatch();
 
-        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.LOG_APPEND_TIME, 3L, logAppendTime,
-                pid, epoch, firstSequence);
-        builder.append(13L, null, "d".getBytes());
-        builder.append(14L, "4".getBytes(), "e".getBytes());
-        builder.append(15L, "5".getBytes(), "f".getBytes());
-        builder.close();
+        builder.newBatch()
+                .withLogAppendTime(logAppendTime)
+                .withProducerMetadata(pid, epoch, firstSequence)
+                .append(new SimpleRecord(11L, "1".getBytes(), "b".getBytes()))
+                .append(new SimpleRecord(12L, null, "c".getBytes()))
+                .closeBatch();
 
-        buffer.flip();
+        builder.newBatch()
+                .withLogAppendTime(logAppendTime)
+                .withProducerMetadata(pid, epoch, firstSequence)
+                .append(new SimpleRecord(13L, null, "d".getBytes()))
+                .append(new SimpleRecord(14L, "4".getBytes(), "e".getBytes()))
+                .append(new SimpleRecord(15L, "5".getBytes(), "f".getBytes()))
+                .closeBatch();
 
+        MemoryRecords unfilteredRecords = builder.build();
         ByteBuffer filtered = ByteBuffer.allocate(2048);
-        MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(),
+        unfilteredRecords.filterTo(new TopicPartition("foo", 0), new RetainNonNullKeysFilter(),
                 filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
 
         filtered.flip();
-        MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+        MemoryRecords filteredRecords = new MemoryRecords(filtered);
 
         List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
         assertEquals(magic < RecordBatch.MAGIC_VALUE_V2 && compression == CompressionType.NONE ? 3 : 2, batches.size());
@@ -793,6 +767,8 @@ public class MemoryRecordsTest {
             }
         }
     }
+
+
 
     @Parameterized.Parameters(name = "{index} magic={0}, firstOffset={1}, compressionType={2}")
     public static Collection<Object[]> data() {

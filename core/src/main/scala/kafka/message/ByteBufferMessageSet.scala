@@ -22,6 +22,7 @@ import java.nio.ByteBuffer
 import kafka.common.LongRef
 import kafka.utils.Logging
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.utils.ByteBufferOutputStream
 
 import scala.collection.JavaConverters._
 
@@ -34,14 +35,18 @@ object ByteBufferMessageSet {
     if (messages.isEmpty)
       MessageSet.Empty.buffer
     else {
-      val buffer = ByteBuffer.allocate(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
-      val builder = MemoryRecords.builder(buffer, messages.head.magic, CompressionType.forId(compressionCodec.codec),
-        timestampType, offsetAssigner.baseOffset)
+      val output = new ByteBufferOutputStream(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
+      val writer = new RecordBatchWriter(output, messages.head.magic, CompressionType.forId(compressionCodec.codec),
+        timestampType, offsetAssigner.baseOffset, RecordBatch.NO_TIMESTAMP, false)
 
       for (message <- messages)
-        builder.appendWithOffset(offsetAssigner.nextAbsoluteOffset(), message.asRecord)
+        writer.appendWithOffset(offsetAssigner.nextAbsoluteOffset(), message.asRecord)
 
-      builder.build().buffer
+      writer.close()
+
+      val buffer = output.buffer()
+      buffer.flip()
+      buffer
     }
   }
 
@@ -155,7 +160,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
   def getBuffer = buffer
 
-  override def asRecords: MemoryRecords = MemoryRecords.readableRecords(buffer.duplicate())
+  override def asRecords: MemoryRecords = new MemoryRecords(buffer.duplicate())
 
   /** default iterator that iterates over decompressed messages */
   override def iterator: Iterator[MessageAndOffset] = internalIterator()

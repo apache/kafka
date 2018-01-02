@@ -98,7 +98,7 @@ class GroupMetadataManagerTest {
     )
 
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, offsetCommitRecords: _*)
+    val records = new RecordsBuilder(startOffset).addBatch(offsetCommitRecords: _*).build()
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
     EasyMock.replay(replicaManager)
@@ -126,13 +126,12 @@ class GroupMetadataManagerTest {
       new TopicPartition("bar", 0) -> 8992L
     )
 
-    val buffer = ByteBuffer.allocate(1024)
+    val recordsBuilder = new RecordsBuilder()
     var nextOffset = 0
-    nextOffset += appendTransactionalOffsetCommits(buffer, producerId, producerEpoch, nextOffset, committedOffsets)
-    nextOffset += completeTransactionalOffsetCommit(buffer, producerId, producerEpoch, nextOffset, isCommit = true)
-    buffer.flip()
+    nextOffset += appendTransactionalOffsetCommits(recordsBuilder, producerId, producerEpoch, nextOffset, committedOffsets)
+    nextOffset += completeTransactionalOffsetCommit(recordsBuilder, producerId, producerEpoch, nextOffset, isCommit = true)
 
-    val records = MemoryRecords.readableRecords(buffer)
+    val records = recordsBuilder.build()
     expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
 
     EasyMock.replay(replicaManager)
@@ -160,13 +159,12 @@ class GroupMetadataManagerTest {
       new TopicPartition("bar", 0) -> 8992L
     )
 
-    val buffer = ByteBuffer.allocate(1024)
+    val builder = new RecordsBuilder()
     var nextOffset = 0
-    nextOffset += appendTransactionalOffsetCommits(buffer, producerId, producerEpoch, nextOffset, abortedOffsets)
-    nextOffset += completeTransactionalOffsetCommit(buffer, producerId, producerEpoch, nextOffset, isCommit = false)
-    buffer.flip()
+    nextOffset += appendTransactionalOffsetCommits(builder, producerId, producerEpoch, nextOffset, abortedOffsets)
+    nextOffset += completeTransactionalOffsetCommit(builder, producerId, producerEpoch, nextOffset, isCommit = false)
 
-    val records = MemoryRecords.readableRecords(buffer)
+    val records = builder.build()
     expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
 
     EasyMock.replay(replicaManager)
@@ -190,12 +188,11 @@ class GroupMetadataManagerTest {
       new TopicPartition("bar", 0) -> 8992L
     )
 
-    val buffer = ByteBuffer.allocate(1024)
+    val builder = new RecordsBuilder()
     var nextOffset = 0
-    nextOffset += appendTransactionalOffsetCommits(buffer, producerId, producerEpoch, nextOffset, pendingOffsets)
-    buffer.flip()
+    nextOffset += appendTransactionalOffsetCommits(builder, producerId, producerEpoch, nextOffset, pendingOffsets)
 
-    val records = MemoryRecords.readableRecords(buffer)
+    val records = builder.build()
     expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
 
     EasyMock.replay(replicaManager)
@@ -231,15 +228,14 @@ class GroupMetadataManagerTest {
       new TopicPartition("bar", 1) -> 89921L
     )
 
-    val buffer = ByteBuffer.allocate(1024)
+    val builder = new RecordsBuilder()
     var nextOffset = 0
-    nextOffset += appendTransactionalOffsetCommits(buffer, producerId, producerEpoch, nextOffset, abortedOffsets)
-    nextOffset += completeTransactionalOffsetCommit(buffer, producerId, producerEpoch, nextOffset, isCommit = false)
-    nextOffset += appendTransactionalOffsetCommits(buffer, producerId, producerEpoch, nextOffset, committedOffsets)
-    nextOffset += completeTransactionalOffsetCommit(buffer, producerId, producerEpoch, nextOffset, isCommit = true)
-    buffer.flip()
+    nextOffset += appendTransactionalOffsetCommits(builder, producerId, producerEpoch, nextOffset, abortedOffsets)
+    nextOffset += completeTransactionalOffsetCommit(builder, producerId, producerEpoch, nextOffset, isCommit = false)
+    nextOffset += appendTransactionalOffsetCommits(builder, producerId, producerEpoch, nextOffset, committedOffsets)
+    nextOffset += completeTransactionalOffsetCommit(builder, producerId, producerEpoch, nextOffset, isCommit = true)
 
-    val records = MemoryRecords.readableRecords(buffer)
+    val records = builder.build()
     expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
 
     EasyMock.replay(replicaManager)
@@ -282,17 +278,16 @@ class GroupMetadataManagerTest {
       new TopicPartition("bar", 2) -> 899212L
     )
 
-    val buffer = ByteBuffer.allocate(1024)
+    val builder = new RecordsBuilder()
     var nextOffset = 0
     val commitOffsetsLogPosition = nextOffset
-    nextOffset += appendTransactionalOffsetCommits(buffer, producerId, producerEpoch, nextOffset, committedOffsets)
-    nextOffset += completeTransactionalOffsetCommit(buffer, producerId, producerEpoch, nextOffset, isCommit = true)
-    nextOffset += appendTransactionalOffsetCommits(buffer, producerId, producerEpoch, nextOffset, abortedOffsets)
-    nextOffset += completeTransactionalOffsetCommit(buffer, producerId, producerEpoch, nextOffset, isCommit = false)
-    nextOffset += appendTransactionalOffsetCommits(buffer, producerId, producerEpoch, nextOffset, pendingOffsets)
-    buffer.flip()
+    nextOffset += appendTransactionalOffsetCommits(builder, producerId, producerEpoch, nextOffset, committedOffsets)
+    nextOffset += completeTransactionalOffsetCommit(builder, producerId, producerEpoch, nextOffset, isCommit = true)
+    nextOffset += appendTransactionalOffsetCommits(builder, producerId, producerEpoch, nextOffset, abortedOffsets)
+    nextOffset += completeTransactionalOffsetCommit(builder, producerId, producerEpoch, nextOffset, isCommit = false)
+    nextOffset += appendTransactionalOffsetCommits(builder, producerId, producerEpoch, nextOffset, pendingOffsets)
 
-    val records = MemoryRecords.readableRecords(buffer)
+    val records = builder.build()
     expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
 
     EasyMock.replay(replicaManager)
@@ -342,19 +337,18 @@ class GroupMetadataManagerTest {
       new TopicPartition("bar", 1) -> 89921L
     )
 
-    val buffer = ByteBuffer.allocate(1024)
+    val builder = new RecordsBuilder()
     var nextOffset = 0L
 
     val firstProduceRecordOffset = nextOffset
-    nextOffset += appendTransactionalOffsetCommits(buffer, firstProducerId, firstProducerEpoch, nextOffset, committedOffsetsFirstProducer)
-    nextOffset += completeTransactionalOffsetCommit(buffer, firstProducerId, firstProducerEpoch, nextOffset, isCommit = true)
+    nextOffset += appendTransactionalOffsetCommits(builder, firstProducerId, firstProducerEpoch, nextOffset, committedOffsetsFirstProducer)
+    nextOffset += completeTransactionalOffsetCommit(builder, firstProducerId, firstProducerEpoch, nextOffset, isCommit = true)
 
     val secondProducerRecordOffset = nextOffset
-    nextOffset += appendTransactionalOffsetCommits(buffer, secondProducerId, secondProducerEpoch, nextOffset, committedOffsetsSecondProducer)
-    nextOffset += completeTransactionalOffsetCommit(buffer, secondProducerId, secondProducerEpoch, nextOffset, isCommit = true)
-    buffer.flip()
+    nextOffset += appendTransactionalOffsetCommits(builder, secondProducerId, secondProducerEpoch, nextOffset, committedOffsetsSecondProducer)
+    nextOffset += completeTransactionalOffsetCommit(builder, secondProducerId, secondProducerEpoch, nextOffset, isCommit = true)
 
-    val records = MemoryRecords.readableRecords(buffer)
+    val records = builder.build()
     expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
 
     EasyMock.replay(replicaManager)
@@ -392,15 +386,14 @@ class GroupMetadataManagerTest {
       new TopicPartition("foo", 0) -> 24L
     )
 
-    val buffer = ByteBuffer.allocate(1024)
+    val builder = new RecordsBuilder()
     var nextOffset = 0
-    nextOffset += appendTransactionalOffsetCommits(buffer, producerId, producerEpoch, nextOffset, transactionalOffsetCommits)
+    nextOffset += appendTransactionalOffsetCommits(builder, producerId, producerEpoch, nextOffset, transactionalOffsetCommits)
     val consumerRecordOffset = nextOffset
-    nextOffset += appendConsumerOffsetCommit(buffer, nextOffset, consumerOffsetCommits)
-    nextOffset += completeTransactionalOffsetCommit(buffer, producerId, producerEpoch, nextOffset, isCommit = true)
-    buffer.flip()
+    nextOffset += appendConsumerOffsetCommit(builder, nextOffset, consumerOffsetCommits)
+    nextOffset += completeTransactionalOffsetCommit(builder, producerId, producerEpoch, nextOffset, isCommit = true)
 
-    val records = MemoryRecords.readableRecords(buffer)
+    val records = builder.build()
     expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
 
     EasyMock.replay(replicaManager)
@@ -435,14 +428,13 @@ class GroupMetadataManagerTest {
       new TopicPartition("foo", 0) -> 24L
     )
 
-    val buffer = ByteBuffer.allocate(1024)
+    val builder = new RecordsBuilder()
     var nextOffset = 0
-    nextOffset += appendConsumerOffsetCommit(buffer, nextOffset, consumerOffsetCommits)
-    nextOffset += appendTransactionalOffsetCommits(buffer, producerId, producerEpoch, nextOffset, transactionalOffsetCommits)
-    nextOffset += completeTransactionalOffsetCommit(buffer, producerId, producerEpoch, nextOffset, isCommit = true)
-    buffer.flip()
+    nextOffset += appendConsumerOffsetCommit(builder, nextOffset, consumerOffsetCommits)
+    nextOffset += appendTransactionalOffsetCommits(builder, producerId, producerEpoch, nextOffset, transactionalOffsetCommits)
+    nextOffset += completeTransactionalOffsetCommit(builder, producerId, producerEpoch, nextOffset, isCommit = true)
 
-    val records = MemoryRecords.readableRecords(buffer)
+    val records = builder.build()
     expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
 
     EasyMock.replay(replicaManager)
@@ -462,31 +454,32 @@ class GroupMetadataManagerTest {
     }
   }
 
-  private def appendConsumerOffsetCommit(buffer: ByteBuffer, baseOffset: Long, offsets: Map[TopicPartition, Long]) = {
-    val builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, baseOffset)
+  private def appendConsumerOffsetCommit(builder: RecordsBuilder, baseOffset: Long, offsets: Map[TopicPartition, Long]) = {
+    val batch = builder.newBatchFromOffset(baseOffset).withTimestampType(TimestampType.LOG_APPEND_TIME)
     val commitRecords = createCommittedOffsetRecords(offsets)
-    commitRecords.foreach(builder.append)
-    builder.build()
+    batch.append(commitRecords: _*)
+    batch.closeBatch()
     offsets.size
   }
 
-  private def appendTransactionalOffsetCommits(buffer: ByteBuffer, producerId: Long, producerEpoch: Short,
+  private def appendTransactionalOffsetCommits(builder: RecordsBuilder, producerId: Long, producerEpoch: Short,
                                                baseOffset: Long, offsets: Map[TopicPartition, Long]): Int = {
-    val builder = MemoryRecords.builder(buffer, CompressionType.NONE, baseOffset, producerId, producerEpoch, 0, true)
+    val batch = builder.newBatchFromOffset(baseOffset)
+      .withProducerMetadata(producerId, producerEpoch, 0)
+      .setTransactional(true)
     val commitRecords = createCommittedOffsetRecords(offsets)
-    commitRecords.foreach(builder.append)
-    builder.build()
+    batch.append(commitRecords: _*)
+    batch.closeBatch()
     offsets.size
   }
 
-  private def completeTransactionalOffsetCommit(buffer: ByteBuffer, producerId: Long, producerEpoch: Short, baseOffset: Long,
-                                                isCommit: Boolean): Int = {
-    val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), producerId, producerEpoch, 0, true, true,
-      RecordBatch.NO_PARTITION_LEADER_EPOCH)
+  private def completeTransactionalOffsetCommit(builder: RecordsBuilder, producerId: Long, producerEpoch: Short,
+                                                baseOffset: Long, isCommit: Boolean): Int = {
+    val batch = builder.newControlBatchFromOffset(baseOffset)
+      .withProducerMetadata(producerId, producerEpoch)
     val controlRecordType = if (isCommit) ControlRecordType.COMMIT else ControlRecordType.ABORT
-    builder.appendEndTxnMarker(time.milliseconds(), new EndTransactionMarker(controlRecordType, 0))
-    builder.build()
+    batch.setTxnMarker(time.milliseconds(), new EndTransactionMarker(controlRecordType, 0))
+    batch.closeBatch()
     1
   }
 
@@ -504,9 +497,9 @@ class GroupMetadataManagerTest {
 
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
     val tombstone = new SimpleRecord(GroupMetadataManager.offsetCommitKey(groupId, tombstonePartition), null)
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
-      offsetCommitRecords ++ Seq(tombstone): _*)
-
+    val records = new RecordsBuilder(startOffset)
+      .addBatch(offsetCommitRecords ++ Seq(tombstone): _*)
+      .build()
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
     EasyMock.replay(replicaManager)
@@ -538,8 +531,9 @@ class GroupMetadataManagerTest {
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(memberId)
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
-      offsetCommitRecords ++ Seq(groupMetadataRecord): _*)
+    val records = new RecordsBuilder(startOffset)
+      .addBatch(offsetCommitRecords ++ Seq(groupMetadataRecord): _*)
+      .build()
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
@@ -566,8 +560,9 @@ class GroupMetadataManagerTest {
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(memberId)
     val groupMetadataTombstone = new SimpleRecord(GroupMetadataManager.groupMetadataKey(groupId), null)
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
-      Seq(groupMetadataRecord, groupMetadataTombstone): _*)
+    val records = new RecordsBuilder(startOffset)
+      .addBatch(Seq(groupMetadataRecord, groupMetadataTombstone): _*)
+      .build()
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
@@ -596,8 +591,9 @@ class GroupMetadataManagerTest {
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(memberId)
     val groupMetadataTombstone = new SimpleRecord(GroupMetadataManager.groupMetadataKey(groupId), null)
-    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
-      Seq(groupMetadataRecord, groupMetadataTombstone) ++ offsetCommitRecords: _*)
+    val records = new RecordsBuilder(startOffset)
+      .addBatch(Seq(groupMetadataRecord, groupMetadataTombstone) ++ offsetCommitRecords: _*)
+      .build()
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
@@ -627,14 +623,16 @@ class GroupMetadataManagerTest {
 
     val segment1MemberId = "a"
     val segment1Offsets = Map(tp0 -> 23L, tp1 -> 455L, tp3 -> 42L)
-    val segment1Records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
-      createCommittedOffsetRecords(segment1Offsets) ++ Seq(buildStableGroupRecordWithMember(segment1MemberId)): _*)
+    val segment1Records = new RecordsBuilder(startOffset)
+      .addBatch(createCommittedOffsetRecords(segment1Offsets) ++ Seq(buildStableGroupRecordWithMember(segment1MemberId)): _*)
+      .build()
     val segment1End = expectGroupMetadataLoad(logMock, startOffset, segment1Records)
 
     val segment2MemberId = "b"
     val segment2Offsets = Map(tp0 -> 33L, tp2 -> 8992L, tp3 -> 10L)
-    val segment2Records = MemoryRecords.withRecords(segment1End, CompressionType.NONE,
-      createCommittedOffsetRecords(segment2Offsets) ++ Seq(buildStableGroupRecordWithMember(segment2MemberId)): _*)
+    val segment2Records = new RecordsBuilder(segment1End)
+      .addBatch(createCommittedOffsetRecords(segment2Offsets) ++ Seq(buildStableGroupRecordWithMember(segment2MemberId)): _*)
+      .build()
     val segment2End = expectGroupMetadataLoad(logMock, segment1End, segment2Records)
 
     EasyMock.expect(replicaManager.getLogEndOffset(groupTopicPartition)).andStubReturn(Some(segment2End))

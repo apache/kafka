@@ -28,7 +28,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.types.Type
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordsBuilder, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
@@ -119,7 +119,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     val serializedBytes = {
       val headerBytes = requestHeaderBytes(ApiKeys.PRODUCE.id, version, null,
         correlationId)
-      val records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("message".getBytes))
+      val records = new RecordsBuilder().addBatch(new SimpleRecord("message".getBytes)).build()
       val request = ProduceRequest.Builder.forCurrentMagic(1, 10000, Map(topicPartition -> records).asJava).build()
       val byteBuffer = ByteBuffer.allocate(headerBytes.length + request.toStruct.sizeOf)
       byteBuffer.put(headerBytes)

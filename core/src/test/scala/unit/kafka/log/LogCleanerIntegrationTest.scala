@@ -275,11 +275,12 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
       (key, payload)
     }
 
-    val records = kvs.map { case (key, payload) =>
-      new SimpleRecord(key.toString.getBytes, payload.toString.getBytes)
+    val batch = new RecordsBuilder().withMagic(magicValue).withCompression(codec).newBatch()
+    kvs.map { case (key, payload) =>
+      batch.append(new SimpleRecord(key.toString.getBytes, payload.toString.getBytes))
     }
-
-    val appendInfo = log.appendAsLeader(MemoryRecords.withRecords(magicValue, codec, records: _*), leaderEpoch = 0)
+    val records = batch.closeBatch().build()
+    val appendInfo = log.appendAsLeader(records, leaderEpoch = 0)
     val offsets = appendInfo.firstOffset to appendInfo.lastOffset
 
     kvs.zip(offsets).map { case (kv, offset) => (kv._1, kv._2, offset) }

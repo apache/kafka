@@ -538,7 +538,7 @@ private[log] class Cleaner(val id: Int,
       writeBuffer.clear()
 
       sourceRecords.readInto(readBuffer, position)
-      val records = MemoryRecords.readableRecords(readBuffer)
+      val records = new MemoryRecords(readBuffer)
       throttler.maybeThrottle(records.sizeInBytes)
       val result = records.filterTo(topicPartition, logCleanerFilter, writeBuffer, maxLogMessageSize, decompressionBufferSupplier)
       stats.readMessages(result.messagesRead, result.bytesRead)
@@ -550,7 +550,7 @@ private[log] class Cleaner(val id: Int,
       val outputBuffer = result.output
       if (outputBuffer.position() > 0) {
         outputBuffer.flip()
-        val retained = MemoryRecords.readableRecords(outputBuffer)
+        val retained = new MemoryRecords(outputBuffer)
         // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
         // after `Log.replaceSegments` (which acquires the lock) is called
         dest.append(firstOffset = retained.batches.iterator.next().baseOffset,
@@ -742,7 +742,7 @@ private[log] class Cleaner(val id: Int,
       checkDone(topicPartition)
       readBuffer.clear()
       segment.log.readInto(readBuffer, position)
-      val records = MemoryRecords.readableRecords(readBuffer)
+      val records = new MemoryRecords(readBuffer)
       throttler.maybeThrottle(records.sizeInBytes)
 
       val startPosition = position

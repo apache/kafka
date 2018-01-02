@@ -19,16 +19,13 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.RecordsBuilder;
 import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.record.TimestampType;
 import org.junit.Test;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -46,8 +43,12 @@ public class ProduceRequestTest {
 
     @Test
     public void shouldBeFlaggedAsTransactionalWhenTransactionalRecords() throws Exception {
-        final MemoryRecords memoryRecords = MemoryRecords.withTransactionalRecords(0, CompressionType.NONE, 1L,
-                (short) 1, 1, 1, simpleRecord);
+        final MemoryRecords memoryRecords = new RecordsBuilder(1L)
+                .setTransactional(true)
+                .withProducerMetadata(1L, (short) 1, 1)
+                .withPartitionLeaderEpoch(1)
+                .addBatch(simpleRecord)
+                .build();
         final ProduceRequest request = ProduceRequest.Builder.forCurrentMagic((short) -1,
                 10, Collections.singletonMap(new TopicPartition("topic", 1), memoryRecords)).build();
         assertTrue(request.isTransactional());
@@ -67,8 +68,11 @@ public class ProduceRequestTest {
 
     @Test
     public void shouldBeFlaggedAsIdempotentWhenIdempotentRecords() throws Exception {
-        final MemoryRecords memoryRecords = MemoryRecords.withIdempotentRecords(1, CompressionType.NONE, 1L,
-                (short) 1, 1, 1, simpleRecord);
+        final MemoryRecords memoryRecords = new RecordsBuilder(1L)
+                .withProducerMetadata(1L, (short) 1, 1)
+                .withPartitionLeaderEpoch(1)
+                .addBatch(simpleRecord)
+                .build();
         final ProduceRequest request = ProduceRequest.Builder.forCurrentMagic((short) -1, 10,
                 Collections.singletonMap(new TopicPartition("topic", 1), memoryRecords)).build();
         assertTrue(request.isIdempotent());
@@ -76,10 +80,8 @@ public class ProduceRequestTest {
 
     @Test
     public void testBuildWithOldMessageFormat() {
-        ByteBuffer buffer = ByteBuffer.allocate(256);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE,
-                TimestampType.CREATE_TIME, 0L);
-        builder.append(10L, null, "a".getBytes());
+        RecordsBuilder builder = new RecordsBuilder().withMagic(RecordBatch.MAGIC_VALUE_V1);
+        builder.addBatch(new SimpleRecord(10L, null, "a".getBytes()));
         Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
         produceData.put(new TopicPartition("test", 0), builder.build());
 
@@ -91,10 +93,8 @@ public class ProduceRequestTest {
 
     @Test
     public void testBuildWithCurrentMessageFormat() {
-        ByteBuffer buffer = ByteBuffer.allocate(256);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
-                CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        builder.append(10L, null, "a".getBytes());
+        RecordsBuilder builder = new RecordsBuilder();
+        builder.addBatch(new SimpleRecord(10L, null, "a".getBytes()));
         Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
         produceData.put(new TopicPartition("test", 0), builder.build());
 
@@ -106,20 +106,12 @@ public class ProduceRequestTest {
 
     @Test
     public void testV3AndAboveShouldContainOnlyOneRecordBatch() {
-        ByteBuffer buffer = ByteBuffer.allocate(256);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        builder.append(10L, null, "a".getBytes());
-        builder.close();
-
-        builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 1L);
-        builder.append(11L, "1".getBytes(), "b".getBytes());
-        builder.append(12L, null, "c".getBytes());
-        builder.close();
-
-        buffer.flip();
-
+        MemoryRecords records = new RecordsBuilder()
+                .addBatch(new SimpleRecord(10L, null, "a".getBytes()))
+                .addBatch(new SimpleRecord(11L, "1".getBytes(), "b".getBytes()), new SimpleRecord(12L, null, "c".getBytes()))
+                .build();
         Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
-        produceData.put(new TopicPartition("test", 0), MemoryRecords.readableRecords(buffer));
+        produceData.put(new TopicPartition("test", 0), records);
         ProduceRequest.Builder requestBuilder = ProduceRequest.Builder.forCurrentMagic((short) 1, 5000, produceData);
         assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
     }
@@ -134,10 +126,8 @@ public class ProduceRequestTest {
 
     @Test
     public void testV3AndAboveCannotUseMagicV0() {
-        ByteBuffer buffer = ByteBuffer.allocate(256);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0, CompressionType.NONE,
-                TimestampType.NO_TIMESTAMP_TYPE, 0L);
-        builder.append(10L, null, "a".getBytes());
+        RecordsBuilder builder = new RecordsBuilder().withMagic(RecordBatch.MAGIC_VALUE_V0);
+        builder.addBatch(new SimpleRecord(10L, null, "a".getBytes()));
 
         Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
         produceData.put(new TopicPartition("test", 0), builder.build());
@@ -147,10 +137,8 @@ public class ProduceRequestTest {
 
     @Test
     public void testV3AndAboveCannotUseMagicV1() {
-        ByteBuffer buffer = ByteBuffer.allocate(256);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE,
-                TimestampType.CREATE_TIME, 0L);
-        builder.append(10L, null, "a".getBytes());
+        RecordsBuilder builder = new RecordsBuilder().withMagic(RecordBatch.MAGIC_VALUE_V1);
+        builder.addBatch(new SimpleRecord(10L, null, "a".getBytes()));
 
         Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
         produceData.put(new TopicPartition("test", 0), builder.build());
@@ -175,7 +163,7 @@ public class ProduceRequestTest {
     }
 
     private ProduceRequest createNonIdempotentNonTransactionalRecords() {
-        final MemoryRecords memoryRecords = MemoryRecords.withRecords(CompressionType.NONE, simpleRecord);
+        final MemoryRecords memoryRecords = new RecordsBuilder().addBatch(simpleRecord).build();
         return ProduceRequest.Builder.forCurrentMagic((short) -1, 10,
                 Collections.singletonMap(new TopicPartition("topic", 1), memoryRecords)).build();
     }

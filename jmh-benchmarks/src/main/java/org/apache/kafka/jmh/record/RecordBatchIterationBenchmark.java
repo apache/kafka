@@ -20,10 +20,11 @@ import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.RecordBatchWriter;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
@@ -96,13 +97,11 @@ public class RecordBatchIterationBenchmark {
 
     private ByteBuffer createBatch(int batchSize) {
         byte[] value = new byte[messageSize];
-        final ByteBuffer buf = ByteBuffer.allocate(
-            AbstractRecords.estimateSizeInBytesUpperBound(messageVersion, compressionType, new byte[0], value,
-                    Record.EMPTY_HEADERS) * batchSize
-        );
-
-        final MemoryRecordsBuilder builder =
-            MemoryRecords.builder(buf, messageVersion, compressionType, TimestampType.CREATE_TIME, startingOffset);
+        int upperBoundSizeEstimate = AbstractRecords.estimateSizeInBytesUpperBound(messageVersion, compressionType,
+                new byte[0], value, Record.EMPTY_HEADERS) * batchSize;
+        final ByteBufferOutputStream buf = new ByteBufferOutputStream(upperBoundSizeEstimate);
+        final RecordBatchWriter writer = new RecordBatchWriter(buf, messageVersion, compressionType,
+                TimestampType.CREATE_TIME, startingOffset, RecordBatch.NO_TIMESTAMP, false);
 
         for (int i = 0; i < batchSize; ++i) {
             switch (bytes) {
@@ -114,14 +113,18 @@ public class RecordBatchIterationBenchmark {
                     break;
             }
 
-            builder.append(0, null, value);
+            writer.append(0, null, value);
         }
-        return builder.build().buffer();
+        writer.close();
+
+        ByteBuffer buffer = buf.buffer();
+        buffer.flip();
+        return buffer;
     }
 
     @Benchmark
     public void measureIteratorForBatchWithSingleMessage(Blackhole bh) throws IOException {
-        for (RecordBatch batch : MemoryRecords.readableRecords(singleBatchBuffer.duplicate()).batches()) {
+        for (RecordBatch batch : new MemoryRecords(singleBatchBuffer.duplicate()).batches()) {
             try (CloseableIterator<Record> iterator = batch.streamingIterator(bufferSupplier)) {
                 while (iterator.hasNext())
                     bh.consume(iterator.next());
@@ -133,7 +136,7 @@ public class RecordBatchIterationBenchmark {
     @Benchmark
     public void measureStreamingIteratorForVariableBatchSize(Blackhole bh) throws IOException {
         for (int i = 0; i < batchCount; ++i) {
-            for (RecordBatch batch : MemoryRecords.readableRecords(batchBuffers[i].duplicate()).batches()) {
+            for (RecordBatch batch : new MemoryRecords(batchBuffers[i].duplicate()).batches()) {
                 try (CloseableIterator<Record> iterator = batch.streamingIterator(bufferSupplier)) {
                     while (iterator.hasNext())
                         bh.consume(iterator.next());

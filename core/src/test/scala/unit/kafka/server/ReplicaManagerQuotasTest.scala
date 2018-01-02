@@ -26,7 +26,7 @@ import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordsBuilder, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.EasyMock
 import EasyMock._
@@ -163,7 +163,7 @@ class ReplicaManagerQuotasTest {
       EasyMock.eq(IsolationLevel.READ_UNCOMMITTED))).andReturn(
       FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
-        MemoryRecords.withRecords(CompressionType.NONE, record)
+        new RecordsBuilder().addBatch(record).build()
       )).anyTimes()
 
     //if we ask for len = 0, return 0 messages

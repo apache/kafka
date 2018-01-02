@@ -22,7 +22,7 @@ import kafka.common.LongRef
 import kafka.message.{CompressionCodec, DefaultCompressionCodec, GZIPCompressionCodec, NoCompressionCodec, SnappyCompressionCodec}
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{ByteBufferOutputStream, Time}
 import org.apache.kafka.test.TestUtils
 import org.junit.Assert._
 import org.junit.Test
@@ -168,13 +168,22 @@ class LogValidatorTest {
         (RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false,
           RecordBatch.NO_PARTITION_LEADER_EPOCH)
 
-    val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
-      producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional,
-      new SimpleRecord(timestampSeq(0), "hello".getBytes),
-      new SimpleRecord(timestampSeq(1), "there".getBytes),
-      new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
+    val batch = new RecordsBuilder()
+      .withMagic(magic)
+      .withCompression(CompressionType.GZIP)
+      .withPartitionLeaderEpoch(partitionLeaderEpoch)
+      .newBatch()
+      .setTransactional(isTransactional)
+      .withProducerMetadata(producerId, producerEpoch, baseSequence)
 
-    val validatingResults = LogValidator.validateMessagesAndAssignOffsets(records,
+    batch.append(new SimpleRecord(timestampSeq(0), "hello".getBytes))
+    batch.append(new SimpleRecord(timestampSeq(1), "there".getBytes))
+    batch.append(new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
+
+    val records = batch.closeBatch().build()
+
+    val validatingResults = LogValidator.validateMessagesAndAssignOffsets(
+      records,
       offsetCounter = new LongRef(0),
       time = time,
       now = System.currentTimeMillis(),
@@ -234,11 +243,19 @@ class LogValidatorTest {
         (RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false,
           RecordBatch.NO_PARTITION_LEADER_EPOCH)
 
-    val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
-      producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional,
-      new SimpleRecord(timestampSeq(0), "hello".getBytes),
-      new SimpleRecord(timestampSeq(1), "there".getBytes),
-      new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
+    val batch = new RecordsBuilder()
+      .withMagic(magic)
+      .withCompression(CompressionType.GZIP)
+      .withPartitionLeaderEpoch(partitionLeaderEpoch)
+      .newBatch()
+      .setTransactional(isTransactional)
+      .withProducerMetadata(producerId, producerEpoch, baseSequence)
+
+    batch.append(new SimpleRecord(timestampSeq(0), "hello".getBytes))
+    batch.append(new SimpleRecord(timestampSeq(1), "there".getBytes))
+    batch.append(new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
+
+    val records = batch.closeBatch().build()
 
     val validatingResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
@@ -379,11 +396,19 @@ class LogValidatorTest {
         (RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false,
           RecordBatch.NO_PARTITION_LEADER_EPOCH)
 
-    val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
-      producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional,
-      new SimpleRecord(timestampSeq(0), "hello".getBytes),
-      new SimpleRecord(timestampSeq(1), "there".getBytes),
-      new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
+    val batch = new RecordsBuilder()
+      .withMagic(magic)
+      .withCompression(CompressionType.GZIP)
+      .withPartitionLeaderEpoch(partitionLeaderEpoch)
+      .newBatch()
+      .setTransactional(isTransactional)
+      .withProducerMetadata(producerId, producerEpoch, baseSequence)
+
+    batch.append(new SimpleRecord(timestampSeq(0), "hello".getBytes))
+    batch.append(new SimpleRecord(timestampSeq(1), "there".getBytes))
+    batch.append(new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
+
+    val records = batch.closeBatch().build()
 
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
@@ -713,7 +738,10 @@ class LogValidatorTest {
   def testControlRecordsNotAllowedFromClients() {
     val offset = 1234567
     val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
-    val records = MemoryRecords.withEndTransactionMarker(23423L, 5, endTxnMarker)
+    val records = new RecordsBuilder()
+      .withProducerMetadata(23423L, 5)
+      .addControlBatch(time.milliseconds(), endTxnMarker)
+      .build()
     LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -732,7 +760,10 @@ class LogValidatorTest {
   def testControlRecordsNotCompressed() {
     val offset = 1234567
     val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
-    val records = MemoryRecords.withEndTransactionMarker(23423L, 5, endTxnMarker)
+    val records = new RecordsBuilder()
+      .withProducerMetadata(23423L, 5)
+      .addControlBatch(time.milliseconds(), endTxnMarker)
+      .build()
     val result = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -875,8 +906,11 @@ class LogValidatorTest {
     val producerId = 1344L
     val producerEpoch = 16.toShort
     val sequence = 0
-    val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
-      new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes), new SimpleRecord("beautiful".getBytes))
+    val records = new RecordsBuilder()
+      .withProducerMetadata(producerId, producerEpoch, sequence)
+      .setTransactional(true)
+      .addBatch(new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes), new SimpleRecord("beautiful".getBytes))
+      .build()
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -897,8 +931,10 @@ class LogValidatorTest {
     val producerId = 1344L
     val producerEpoch = 16.toShort
     val sequence = 0
-    val records = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
-      new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes), new SimpleRecord("beautiful".getBytes))
+    val records = new RecordsBuilder()
+      .withProducerMetadata(producerId, producerEpoch, sequence)
+      .addBatch(new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes), new SimpleRecord("beautiful".getBytes))
+      .build()
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -995,7 +1031,7 @@ class LogValidatorTest {
       baseSequence, 0L, 5L, partitionLeaderEpoch, TimestampType.CREATE_TIME, System.currentTimeMillis(),
       isTransactional, false)
     buffer.flip()
-    val records = MemoryRecords.readableRecords(buffer)
+    val records = new MemoryRecords(buffer)
     LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
       time = time,
@@ -1013,12 +1049,14 @@ class LogValidatorTest {
   private def createRecords(magicValue: Byte,
                             timestamp: Long = RecordBatch.NO_TIMESTAMP,
                             codec: CompressionType): MemoryRecords = {
-    val buf = ByteBuffer.allocate(512)
-    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
-    builder.appendWithOffset(0, timestamp, null, "hello".getBytes)
-    builder.appendWithOffset(1, timestamp, null, "there".getBytes)
-    builder.appendWithOffset(2, timestamp, null, "beautiful".getBytes)
-    builder.build()
+    new RecordsBuilder()
+      .withMagic(magicValue)
+      .withCompression(codec)
+      .addBatch(
+        new SimpleRecord(timestamp, null, "hello".getBytes),
+        new SimpleRecord(timestamp, null, "there".getBytes),
+        new SimpleRecord(timestamp, null, "beautiful".getBytes))
+      .build()
   }
 
   /* check that offsets are assigned consecutively from the given base offset */
@@ -1038,17 +1076,18 @@ class LogValidatorTest {
         id.toString.getBytes,
         id.toString.getBytes))
 
-    val buffer = ByteBuffer.allocate(math.min(math.max(records.map(_.sizeInBytes()).sum / 2, 1024), 1 << 16))
-    val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP,
-      TimestampType.CREATE_TIME, 0L)
+    val batchOutput = new ByteBufferOutputStream(math.min(math.max(records.map(_.sizeInBytes()).sum / 2, 1024), 1 << 16))
+    val batchWriter = new RecordBatchWriter(batchOutput, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP,
+      TimestampType.CREATE_TIME, 0L, 0L, false)
 
     var offset = initialOffset
     records.foreach { record =>
-      builder.appendUncheckedWithOffset(offset, record)
+      batchWriter.appendUncheckedWithOffset(offset, record)
       offset += 1
     }
 
-    builder.build()
+    batchWriter.close()
+    batchWriter.toRecords
   }
 
   def maybeCheckBaseTimestamp(expected: Long, batch: RecordBatch): Unit = {

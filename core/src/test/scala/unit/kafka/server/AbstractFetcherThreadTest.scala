@@ -24,7 +24,7 @@ import kafka.server.AbstractFetcherThread.{FetchRequest, PartitionData}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordsBuilder, SimpleRecord}
 import org.apache.kafka.common.requests.EpochEndOffset
 import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{Before, Test}
@@ -167,8 +167,8 @@ class AbstractFetcherThreadTest {
     @volatile var fetchCount = 0
 
     private val normalPartitionDataSet = List(
-      new TestPartitionData(MemoryRecords.withRecords(0L, CompressionType.NONE, new SimpleRecord("hello".getBytes()))),
-      new TestPartitionData(MemoryRecords.withRecords(1L, CompressionType.NONE, new SimpleRecord("hello".getBytes())))
+      new TestPartitionData(new RecordsBuilder(0L).addBatch(new SimpleRecord("hello".getBytes())).build()),
+      new TestPartitionData(new RecordsBuilder(1L).addBatch(new SimpleRecord("hello".getBytes())).build())
     )
 
     override def processPartitionData(topicPartition: TopicPartition,
@@ -193,7 +193,7 @@ class AbstractFetcherThreadTest {
       // Set the first fetch to get a corrupted message
       if (fetchCount == 1) {
         val record = new SimpleRecord("hello".getBytes())
-        val records = MemoryRecords.withRecords(CompressionType.NONE, record)
+        val records = new RecordsBuilder().addBatch(record).build()
         val buffer = records.buffer
 
         // flip some bits in the message to ensure the crc fails

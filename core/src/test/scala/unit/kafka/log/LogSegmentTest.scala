@@ -49,8 +49,11 @@ class LogSegmentTest {
 
   /* create a ByteBufferMessageSet for the given messages starting from the given offset */
   def records(offset: Long, records: String*): MemoryRecords = {
-    MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, offset, CompressionType.NONE, TimestampType.CREATE_TIME,
-      records.map { s => new SimpleRecord(offset * 10, s.getBytes) }: _*)
+    val batch = new RecordsBuilder(offset).withMagic(RecordBatch.MAGIC_VALUE_V1).newBatch()
+    records.foreach { s =>
+      batch.append(new SimpleRecord(offset * 10, s.getBytes))
+    }
+    batch.closeBatch().build()
   }
 
   @Before
@@ -269,19 +272,32 @@ class LogSegmentTest {
     val pid2 = 10L
 
     // append transactional records from pid1
+    val pid1Records = new RecordsBuilder(100L)
+      .setTransactional(true)
+      .withProducerMetadata(pid1, producerEpoch, sequence)
+      .withPartitionLeaderEpoch(partitionLeaderEpoch)
+      .addBatch(new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes))
+      .build()
     segment.append(firstOffset = 100L, largestOffset = 101L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
-      shallowOffsetOfMaxTimestamp = 100L, MemoryRecords.withTransactionalRecords(100L, CompressionType.NONE,
-        pid1, producerEpoch, sequence, partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+      shallowOffsetOfMaxTimestamp = 100L, records = pid1Records)
 
     // append transactional records from pid2
+    val pid2Records = new RecordsBuilder(102L)
+      .setTransactional(true)
+      .withProducerMetadata(pid2, producerEpoch, sequence)
+      .withPartitionLeaderEpoch(partitionLeaderEpoch)
+      .addBatch(new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes))
+      .build()
     segment.append(firstOffset = 102L, largestOffset = 103L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
-      shallowOffsetOfMaxTimestamp = 102L, MemoryRecords.withTransactionalRecords(102L, CompressionType.NONE,
-        pid2, producerEpoch, sequence, partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+      shallowOffsetOfMaxTimestamp = 102L, records = pid2Records)
 
     // append non-transactional records
+    val nonTransactionalRecords = new RecordsBuilder(104L)
+      .withPartitionLeaderEpoch(partitionLeaderEpoch)
+      .addBatch(new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes))
+      .build()
     segment.append(firstOffset = 104L, largestOffset = 105L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
-      shallowOffsetOfMaxTimestamp = 104L, MemoryRecords.withRecords(104L, CompressionType.NONE,
-        partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+      shallowOffsetOfMaxTimestamp = 104L, records = nonTransactionalRecords)
 
     // abort the transaction from pid2 (note LSO should be 100L since the txn from pid1 has not completed)
     segment.append(firstOffset = 106L, largestOffset = 106L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
@@ -328,7 +344,11 @@ class LogSegmentTest {
                             coordinatorEpoch: Int = 0,
                             timestamp: Long = RecordBatch.NO_TIMESTAMP): MemoryRecords = {
     val marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch)
-    MemoryRecords.withEndTransactionMarker(offset, timestamp, partitionLeaderEpoch, producerId, producerEpoch, marker)
+    new RecordsBuilder(offset)
+      .withPartitionLeaderEpoch(partitionLeaderEpoch)
+      .withProducerMetadata(producerId, producerEpoch)
+      .addControlBatch(timestamp, marker)
+      .build()
   }
 
   /**
@@ -445,8 +465,10 @@ class LogSegmentTest {
     val offset = 40
 
     def records(offset: Long, record: String): MemoryRecords =
-      MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, offset, CompressionType.NONE, TimestampType.CREATE_TIME,
-        new SimpleRecord(offset * 1000, record.getBytes))
+      new RecordsBuilder(offset)
+        .withMagic(RecordBatch.MAGIC_VALUE_V2)
+        .addBatch(new SimpleRecord(offset * 1000, record.getBytes))
+        .build()
 
     //Given two messages with a gap between them (e.g. mid offset compacted away)
     val ms1 = records(offset, "first message")

@@ -57,7 +57,12 @@ public class FileLogInputStreamTest {
     @Test
     public void testWriteTo() throws IOException {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
-            fileRecords.append(MemoryRecords.withRecords(magic, compression, new SimpleRecord("foo".getBytes())));
+            MemoryRecords records = new RecordsBuilder()
+                    .withMagic(magic)
+                    .withCompression(compression)
+                    .addBatch(new SimpleRecord("foo".getBytes()))
+                    .build();
+            fileRecords.append(records);
             fileRecords.flush();
 
             FileLogInputStream logInputStream = new FileLogInputStream(fileRecords.channel(), 0,
@@ -71,10 +76,10 @@ public class FileLogInputStreamTest {
             batch.writeTo(buffer);
             buffer.flip();
 
-            MemoryRecords memRecords = MemoryRecords.readableRecords(buffer);
-            List<Record> records = Utils.toList(memRecords.records().iterator());
-            assertEquals(1, records.size());
-            Record record0 = records.get(0);
+            MemoryRecords memRecords = new MemoryRecords(buffer);
+            List<Record> readRecords = Utils.toList(memRecords.records().iterator());
+            assertEquals(1, readRecords.size());
+            Record record0 = readRecords.get(0);
             assertTrue(record0.hasMagic(magic));
             assertEquals("foo", Utils.utf8(record0.value(), record0.valueSize()));
         }
@@ -86,8 +91,12 @@ public class FileLogInputStreamTest {
             SimpleRecord firstBatchRecord = new SimpleRecord(3241324L, "a".getBytes(), "foo".getBytes());
             SimpleRecord secondBatchRecord = new SimpleRecord(234280L, "b".getBytes(), "bar".getBytes());
 
-            fileRecords.append(MemoryRecords.withRecords(magic, 0L, compression, CREATE_TIME, firstBatchRecord));
-            fileRecords.append(MemoryRecords.withRecords(magic, 1L, compression, CREATE_TIME, secondBatchRecord));
+            fileRecords.append(new RecordsBuilder()
+                    .withMagic(magic)
+                    .withCompression(compression)
+                    .addBatch(firstBatchRecord)
+                    .addBatch(secondBatchRecord)
+                    .build());
             fileRecords.flush();
 
             FileLogInputStream logInputStream = new FileLogInputStream(fileRecords.channel(), 0,
@@ -122,8 +131,13 @@ public class FileLogInputStreamTest {
                 new SimpleRecord(8234020L, "e".getBytes(), null)
             };
 
-            fileRecords.append(MemoryRecords.withRecords(magic, 0L, compression, CREATE_TIME, firstBatchRecords));
-            fileRecords.append(MemoryRecords.withRecords(magic, 1L, compression, CREATE_TIME, secondBatchRecords));
+            fileRecords.append(new RecordsBuilder()
+                    .withMagic(magic)
+                    .withCompression(compression)
+                    .addBatch(firstBatchRecords)
+                    .addBatch(secondBatchRecords)
+                    .build());
+
             fileRecords.flush();
 
             FileLogInputStream logInputStream = new FileLogInputStream(fileRecords.channel(), 0,
@@ -135,7 +149,7 @@ public class FileLogInputStreamTest {
 
             FileChannelRecordBatch secondBatch = logInputStream.nextBatch();
             assertNoProducerData(secondBatch);
-            assertGenericRecordBatchData(secondBatch, 1L, 238423489L, secondBatchRecords);
+            assertGenericRecordBatchData(secondBatch, 2L, 238423489L, secondBatchRecords);
 
             assertNull(logInputStream.nextBatch());
         }
@@ -163,10 +177,20 @@ public class FileLogInputStreamTest {
                 new SimpleRecord(8234020L, "e".getBytes(), null)
             };
 
-            fileRecords.append(MemoryRecords.withIdempotentRecords(magic, 15L, compression, producerId,
-                    producerEpoch, baseSequence, partitionLeaderEpoch, firstBatchRecords));
-            fileRecords.append(MemoryRecords.withTransactionalRecords(magic, 27L, compression, producerId,
-                    producerEpoch, baseSequence + firstBatchRecords.length, partitionLeaderEpoch, secondBatchRecords));
+            RecordsBuilder records = new RecordsBuilder()
+                    .withMagic(magic)
+                    .withCompression(compression)
+                    .withPartitionLeaderEpoch(partitionLeaderEpoch);
+            records.newBatchFromOffset(15L)
+                    .withProducerMetadata(producerId, producerEpoch, baseSequence)
+                    .append(firstBatchRecords)
+                    .closeBatch();
+            records.newBatchFromOffset(27L)
+                    .setTransactional(true)
+                    .withProducerMetadata(producerId, producerEpoch, baseSequence + firstBatchRecords.length)
+                    .append(secondBatchRecords)
+                    .closeBatch();
+            fileRecords.append(records.build());
             fileRecords.flush();
 
             FileLogInputStream logInputStream = new FileLogInputStream(fileRecords.channel(), 0,
@@ -193,8 +217,13 @@ public class FileLogInputStreamTest {
             SimpleRecord firstBatchRecord = new SimpleRecord(100L, "foo".getBytes());
             SimpleRecord secondBatchRecord = new SimpleRecord(200L, "bar".getBytes());
 
-            fileRecords.append(MemoryRecords.withRecords(magic, 0L, compression, CREATE_TIME, firstBatchRecord));
-            fileRecords.append(MemoryRecords.withRecords(magic, 1L, compression, CREATE_TIME, secondBatchRecord));
+            fileRecords.append(new RecordsBuilder(0L)
+                    .withMagic(magic)
+                    .withCompression(compression)
+                    .addBatch(firstBatchRecord)
+                    .addBatch(secondBatchRecord)
+                    .build());
+
             fileRecords.flush();
             fileRecords.truncateTo(fileRecords.sizeInBytes() - 13);
 

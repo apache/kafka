@@ -29,21 +29,19 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     new ByteBufferMessageSet(NoCompressionCodec, messages: _*)
 
   @Test
-  def testValidBytes() {
-    {
-      val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message("hello".getBytes), new Message("there".getBytes))
-      val buffer = ByteBuffer.allocate(messages.sizeInBytes + 2)
-      buffer.put(messages.buffer)
-      buffer.putShort(4)
-      val messagesPlus = new ByteBufferMessageSet(buffer)
-      assertEquals("Adding invalid bytes shouldn't change byte count", messages.validBytes, messagesPlus.validBytes)
-    }
+  def testValidEmptyBytes(): Unit = {
+    assertEquals("Valid bytes on an empty ByteBufferMessageSet should return 0", 0,
+      MessageSet.Empty.asInstanceOf[ByteBufferMessageSet].validBytes)
+  }
 
-    // test valid bytes on empty ByteBufferMessageSet
-    {
-      assertEquals("Valid bytes on an empty ByteBufferMessageSet should return 0", 0,
-        MessageSet.Empty.asInstanceOf[ByteBufferMessageSet].validBytes)
-    }
+  @Test
+  def testValidBytes() {
+    val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message("hello".getBytes), new Message("there".getBytes))
+    val buffer = ByteBuffer.allocate(messages.sizeInBytes + 2)
+    buffer.put(messages.buffer)
+    buffer.putShort(4)
+    val messagesPlus = new ByteBufferMessageSet(buffer)
+    assertEquals("Adding invalid bytes shouldn't change byte count", messages.validBytes, messagesPlus.validBytes)
   }
 
   @Test

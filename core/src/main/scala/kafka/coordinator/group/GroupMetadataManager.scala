@@ -202,13 +202,12 @@ class GroupMetadataManager(brokerId: Int,
         val key = GroupMetadataManager.groupMetadataKey(group.groupId)
         val value = GroupMetadataManager.groupMetadataValue(group, groupAssignment, version = groupMetadataValueVersion)
 
-        val records = {
-          val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compressionType,
-            Seq(new SimpleRecord(timestamp, key, value)).asJava))
-          val builder = MemoryRecords.builder(buffer, magicValue, compressionType, timestampType, 0L)
-          builder.append(timestamp, key, value)
-          builder.build()
-        }
+        val records = new RecordsBuilder()
+          .withMagic(magicValue)
+          .withCompression(compressionType)
+          .withTimestampType(timestampType)
+          .addBatch(new SimpleRecord(timestamp, key, value))
+          .build()
 
         val groupMetadataPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
         val groupMetadataRecords = Map(groupMetadataPartition -> records)
@@ -321,21 +320,22 @@ class GroupMetadataManager(brokerId: Int,
           val timestampType = TimestampType.CREATE_TIME
           val timestamp = time.milliseconds()
 
-          val records = filteredOffsetMetadata.map { case (topicPartition, offsetAndMetadata) =>
-            val key = GroupMetadataManager.offsetCommitKey(group.groupId, topicPartition)
-            val value = GroupMetadataManager.offsetCommitValue(offsetAndMetadata)
-            new SimpleRecord(timestamp, key, value)
-          }
           val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
-          val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compressionType, records.asJava))
-
           if (isTxnOffsetCommit && magicValue < RecordBatch.MAGIC_VALUE_V2)
             throw Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT.exception("Attempting to make a transaction offset commit with an invalid magic: " + magicValue)
 
-          val builder = MemoryRecords.builder(buffer, magicValue, compressionType, timestampType, 0L, time.milliseconds(),
-            producerId, producerEpoch, 0, isTxnOffsetCommit, RecordBatch.NO_PARTITION_LEADER_EPOCH)
+          val builder = new RecordsBuilder().withMagic(magicValue).withCompression(compressionType)
+            .withTimestampType(timestampType)
+            .withProducerMetadata(producerId, producerEpoch, 0)
+            .setTransactional(isTxnOffsetCommit)
 
-          records.foreach(builder.append)
+          val batch = builder.newBatch()
+          filteredOffsetMetadata.foreach { case (topicPartition, offsetAndMetadata) =>
+            val key = GroupMetadataManager.offsetCommitKey(group.groupId, topicPartition)
+            val value = GroupMetadataManager.offsetCommitValue(offsetAndMetadata)
+            batch.append(new SimpleRecord(timestamp, key, value))
+          }
+          batch.closeBatch()
           val entries = Map(offsetTopicPartition -> builder.build())
 
           // set the callback function to insert offsets into cache after log append completed
@@ -531,7 +531,7 @@ class GroupMetadataManager(brokerId: Int,
             case fileRecords: FileRecords =>
               buffer.clear()
               val bufferRead = fileRecords.readInto(buffer, 0)
-              MemoryRecords.readableRecords(bufferRead)
+              new MemoryRecords(bufferRead)
           }
 
           memRecords.batches.asScala.foreach { batch =>
@@ -760,7 +760,12 @@ class GroupMetadataManager(brokerId: Int,
               try {
                 // do not need to require acks since even if the tombstone is lost,
                 // it will be appended again in the next purge cycle
-                val records = MemoryRecords.withRecords(magicValue, 0L, compressionType, timestampType, tombstones: _*)
+                val records = new RecordsBuilder()
+                  .withMagic(magicValue)
+                  .withCompression(compressionType)
+                  .withTimestampType(timestampType)
+                  .addBatch(tombstones: _*)
+                  .build()
                 partition.appendRecordsToLeader(records, isFromClient = false, requiredAcks = 0)
 
                 offsetsRemoved += removedOffsets.size

@@ -33,11 +33,14 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  * format conversion.
  *
  * In cases where keeping memory retention low is important and there's a gap between the time that record appends stop
- * and the builder is closed (e.g. the Producer), it's important to call `closeForRecordAppends` when the former happens.
+ * and the builder is closed (e.g. the Producer), it's important to call {@link #closeForAppends()} when the former happens.
  * This will release resources like compression buffers that can be relatively large (64 KB for LZ4).
  */
-public class MemoryRecordsBuilder {
+public class RecordBatchWriter {
     private static final float COMPRESSION_RATE_ESTIMATION_FACTOR = 1.05f;
+
+    private enum State { OPEN_APPEND, OPEN_HEADER, ABORTED, CLOSED }
+    private State state = State.OPEN_APPEND;
 
     private final TimestampType timestampType;
     private final CompressionType compressionType;
@@ -52,19 +55,19 @@ public class MemoryRecordsBuilder {
     private final long baseOffset;
     private final long logAppendTime;
     private final boolean isControlBatch;
-    private final int partitionLeaderEpoch;
     private final int writeLimit;
     private final int batchHeaderSizeInBytes;
+
+    // Open header fields can be written to before or after record appends
+    private int partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH;
+    private boolean isTransactional = false;
+    private long producerId = RecordBatch.NO_PRODUCER_ID;
+    private short producerEpoch = RecordBatch.NO_PRODUCER_EPOCH;
+    private int baseSequence = RecordBatch.NO_SEQUENCE;
 
     // Use a conservative estimate of the compression ratio. The producer overrides this using statistics
     // from previous batches before appending any records.
     private float estimatedCompressionRatio = 1.0F;
-
-    private boolean appendStreamIsClosed = false;
-    private boolean isTransactional;
-    private long producerId;
-    private short producerEpoch;
-    private int baseSequence;
     private int uncompressedRecordsSizeInBytes = 0; // Number of bytes (excluding the header) written before compression
     private int numRecords = 0;
     private float actualCompressionRatio = 1;
@@ -73,30 +76,29 @@ public class MemoryRecordsBuilder {
     private Long lastOffset = null;
     private Long firstTimestamp = null;
 
-    private MemoryRecords builtRecords;
-    private boolean aborted = false;
-
-    public MemoryRecordsBuilder(ByteBufferOutputStream bufferStream,
-                                byte magic,
-                                CompressionType compressionType,
-                                TimestampType timestampType,
-                                long baseOffset,
-                                long logAppendTime,
-                                long producerId,
-                                short producerEpoch,
-                                int baseSequence,
-                                boolean isTransactional,
-                                boolean isControlBatch,
-                                int partitionLeaderEpoch,
-                                int writeLimit) {
+    /**
+     * Construct a new batch writer.
+     *
+     * @param bufferStream The underlying buffer to use (note that this class will allocate a new buffer if necessary
+     *               to fit the records appended)
+     * @param magic The magic value to use
+     * @param compressionType The compression codec to use
+     * @param timestampType The desired timestamp type. For magic > 0, this cannot be {@link TimestampType#NO_TIMESTAMP_TYPE}.
+     * @param baseOffset The initial offset to use for
+     * @param logAppendTime The log append time of this record set. Can be set to NO_TIMESTAMP if CREATE_TIME is used.
+     * @param isControlBatch Whether or not this is a control batch (e.g. for transaction markers)
+     */
+    public RecordBatchWriter(ByteBufferOutputStream bufferStream,
+                             byte magic,
+                             CompressionType compressionType,
+                             TimestampType timestampType,
+                             long baseOffset,
+                             long logAppendTime,
+                             boolean isControlBatch) {
         if (magic > RecordBatch.MAGIC_VALUE_V0 && timestampType == TimestampType.NO_TIMESTAMP_TYPE)
             throw new IllegalArgumentException("TimestampType must be set for magic >= 0");
-        if (magic < RecordBatch.MAGIC_VALUE_V2) {
-            if (isTransactional)
-                throw new IllegalArgumentException("Transactional records are not supported for magic " + magic);
-            if (isControlBatch)
-                throw new IllegalArgumentException("Control records are not supported for magic " + magic);
-        }
+        else if (magic < RecordBatch.MAGIC_VALUE_V2 && isControlBatch)
+            throw new IllegalArgumentException("Control records are not supported for magic " + magic);
 
         this.magic = magic;
         this.timestampType = timestampType;
@@ -107,13 +109,8 @@ public class MemoryRecordsBuilder {
         this.uncompressedRecordsSizeInBytes = 0;
         this.actualCompressionRatio = 1;
         this.maxTimestamp = RecordBatch.NO_TIMESTAMP;
-        this.producerId = producerId;
-        this.producerEpoch = producerEpoch;
-        this.baseSequence = baseSequence;
-        this.isTransactional = isTransactional;
         this.isControlBatch = isControlBatch;
-        this.partitionLeaderEpoch = partitionLeaderEpoch;
-        this.writeLimit = writeLimit;
+        this.writeLimit = bufferStream.remaining();
         this.initialPosition = bufferStream.position();
         this.batchHeaderSizeInBytes = AbstractRecords.recordBatchHeaderSizeInBytes(magic, compressionType);
 
@@ -123,49 +120,20 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Construct a new builder.
-     *
-     * @param buffer The underlying buffer to use (note that this class will allocate a new buffer if necessary
-     *               to fit the records appended)
-     * @param magic The magic value to use
-     * @param compressionType The compression codec to use
-     * @param timestampType The desired timestamp type. For magic > 0, this cannot be {@link TimestampType#NO_TIMESTAMP_TYPE}.
-     * @param baseOffset The initial offset to use for
-     * @param logAppendTime The log append time of this record set. Can be set to NO_TIMESTAMP if CREATE_TIME is used.
-     * @param producerId The producer ID associated with the producer writing this record set
-     * @param producerEpoch The epoch of the producer
-     * @param baseSequence The sequence number of the first record in this set
-     * @param isTransactional Whether or not the records are part of a transaction
-     * @param isControlBatch Whether or not this is a control batch (e.g. for transaction markers)
-     * @param partitionLeaderEpoch The epoch of the partition leader appending the record set to the log
-     * @param writeLimit The desired limit on the total bytes for this record set (note that this can be exceeded
-     *                   when compression is used since size estimates are rough, and in the case that the first
-     *                   record added exceeds the size).
+     * Return a view of the batch built from this writer. The position of the underlying buffer
+     * is not affected by this call. Note that the writer must be closed to use this.
      */
-    public MemoryRecordsBuilder(ByteBuffer buffer,
-                                byte magic,
-                                CompressionType compressionType,
-                                TimestampType timestampType,
-                                long baseOffset,
-                                long logAppendTime,
-                                long producerId,
-                                short producerEpoch,
-                                int baseSequence,
-                                boolean isTransactional,
-                                boolean isControlBatch,
-                                int partitionLeaderEpoch,
-                                int writeLimit) {
-        this(new ByteBufferOutputStream(buffer), magic, compressionType, timestampType, baseOffset, logAppendTime,
-                producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch,
-                writeLimit);
+    public MemoryRecords toRecords() {
+        if (state != State.CLOSED)
+            throw new IllegalStateException("Writer must be closed to obtain a record slice");
+        ByteBuffer dup = bufferStream.buffer().duplicate();
+        dup.flip();
+        dup.position(initialPosition);
+        return new MemoryRecords(dup.slice());
     }
 
-    public ByteBuffer buffer() {
-        return bufferStream.buffer();
-    }
-
-    public int initialCapacity() {
-        return bufferStream.initialCapacity();
+    public ByteBufferOutputStream outputStream() {
+        return bufferStream;
     }
 
     public double compressionRatio() {
@@ -184,16 +152,16 @@ public class MemoryRecordsBuilder {
         return isTransactional;
     }
 
-    /**
-     * Close this builder and return the resulting buffer.
-     * @return The built log buffer
-     */
-    public MemoryRecords build() {
-        if (aborted) {
-            throw new IllegalStateException("Attempting to build an aborted record batch");
-        }
-        close();
-        return builtRecords;
+    public long producerId() {
+        return producerId;
+    }
+
+    public short producerEpoch() {
+        return producerEpoch;
+    }
+
+    public int producerBaseSequence() {
+        return baseSequence;
     }
 
     /**
@@ -240,86 +208,104 @@ public class MemoryRecordsBuilder {
         return uncompressedRecordsSizeInBytes + batchHeaderSizeInBytes;
     }
 
-    public void setProducerState(long producerId, short producerEpoch, int baseSequence, boolean isTransactional) {
-        if (isClosed()) {
-            // Sequence numbers are assigned when the batch is closed while the accumulator is being drained.
-            // If the resulting ProduceRequest to the partition leader failed for a retriable error, the batch will
-            // be re queued. In this case, we should not attempt to set the state again, since changing the producerId and sequence
-            // once a batch has been sent to the broker risks introducing duplicates.
-            throw new IllegalStateException("Trying to set producer state of an already closed batch. This indicates a bug on the client.");
-        }
-        this.producerId = producerId;
-        this.producerEpoch = producerEpoch;
-        this.baseSequence = baseSequence;
+    public void setBatchLastOffset(long lastOffset) {
+        if (state != State.OPEN_HEADER)
+            throw new IllegalStateException("Cannot override the last offset in state " + state);
+        this.lastOffset = lastOffset;
+    }
+
+    public void setTransactional(boolean isTransactional) {
+        ensureHeaderOpen();
+        if (isTransactional && magic < RecordBatch.MAGIC_VALUE_V2)
+            throw new IllegalArgumentException("Transactional messages are only supported by magic v2 and above");
         this.isTransactional = isTransactional;
     }
 
-    public void overrideLastOffset(long lastOffset) {
-        if (builtRecords != null)
-            throw new IllegalStateException("Cannot override the last offset after the records have been built");
-        this.lastOffset = lastOffset;
+    public void setProducerIdAndEpoch(long producerId, short epoch) {
+        ensureHeaderOpen();
+        if (producerId != RecordBatch.NO_PRODUCER_ID && magic < RecordBatch.MAGIC_VALUE_V2)
+            throw new IllegalArgumentException("ProducerId field are only supported by magic v2 and above");
+        this.producerId = producerId;
+        this.producerEpoch = epoch;
+    }
+
+    public void setPartitionLeaderEpoch(int epoch) {
+        ensureHeaderOpen();
+        if (partitionLeaderEpoch != RecordBatch.NO_PARTITION_LEADER_EPOCH && magic < RecordBatch.MAGIC_VALUE_V2)
+            throw new IllegalArgumentException("Partition leader epoch field is only supported by magic v2 and above");
+        this.partitionLeaderEpoch = epoch;
+    }
+
+    public void setProducerBaseSequence(int baseSequence) {
+        ensureHeaderOpen();
+        if (producerId != RecordBatch.NO_PRODUCER_ID && magic < RecordBatch.MAGIC_VALUE_V2)
+            throw new IllegalArgumentException("Producer sequence field is only supported by magic v2 and above");
+        this.baseSequence = baseSequence;
+    }
+
+    private void ensureHeaderOpen() {
+        if (state == State.CLOSED || state == State.ABORTED)
+            throw new IllegalStateException("Cannot modify the header in state " + state);
     }
 
     /**
      * Release resources required for record appends (e.g. compression buffers). Once this method is called, it's only
      * possible to update the RecordBatch header.
      */
-    public void closeForRecordAppends() {
-        if (!appendStreamIsClosed) {
-            try {
-                appendStream.close();
-                appendStreamIsClosed = true;
-            } catch (IOException e) {
-                throw new KafkaException(e);
-            }
+    public void closeForAppends() {
+        try {
+            if (isAborted())
+                throw new IllegalStateException("Batch has already been aborted");
+            appendStream.close();
+            state = State.OPEN_HEADER;
+        } catch (IOException e) {
+            throw new KafkaException(e);
         }
     }
 
+    public void reopenHeader() {
+        if (state != State.CLOSED)
+            throw new IllegalStateException("Cannot reopen header in state " + state);
+        this.state = State.OPEN_HEADER;
+    }
+
     public void abort() {
-        closeForRecordAppends();
-        buffer().position(initialPosition);
-        aborted = true;
-    }
-
-    public void reopenAndRewriteProducerState(long producerId, short producerEpoch, int baseSequence, boolean isTransactional) {
-        if (aborted)
-            throw new IllegalStateException("Should not reopen a batch which is already aborted.");
-        builtRecords = null;
-        this.producerId = producerId;
-        this.producerEpoch = producerEpoch;
-        this.baseSequence = baseSequence;
-        this.isTransactional = isTransactional;
-    }
-
-
-    public void close() {
-        if (aborted)
-            throw new IllegalStateException("Cannot close MemoryRecordsBuilder as it has already been aborted");
-
-        if (builtRecords != null)
+        if (isAborted())
             return;
 
-        validateProducerState();
+        closeForAppends();
+        bufferStream.position(initialPosition);
+        state = State.ABORTED;
+    }
 
-        closeForRecordAppends();
+    public void close() {
+        if (isClosed())
+            return;
+
+        if (isAborted())
+            throw new IllegalStateException("Batch has already been aborted");
+
+        if (state == State.OPEN_APPEND)
+            closeForAppends();
+
+        validateHeader();
 
         if (numRecords == 0L) {
-            buffer().position(initialPosition);
-            builtRecords = MemoryRecords.EMPTY;
+            bufferStream.position(initialPosition);
         } else {
             if (magic > RecordBatch.MAGIC_VALUE_V1)
                 this.actualCompressionRatio = (float) writeDefaultBatchHeader() / this.uncompressedRecordsSizeInBytes;
             else if (compressionType != CompressionType.NONE)
                 this.actualCompressionRatio = (float) writeLegacyCompressedWrapperHeader() / this.uncompressedRecordsSizeInBytes;
-
-            ByteBuffer buffer = buffer().duplicate();
-            buffer.flip();
-            buffer.position(initialPosition);
-            builtRecords = MemoryRecords.readableRecords(buffer.slice());
         }
+
+        state = State.CLOSED;
     }
 
-    private void validateProducerState() {
+    private void validateHeader() {
+        if (isControlBatch && !isTransactional)
+            throw new IllegalArgumentException("Control batches are only supported for transactional batches");
+
         if (isTransactional && producerId == RecordBatch.NO_PRODUCER_ID)
             throw new IllegalArgumentException("Cannot write transactional messages without a valid producer ID");
 
@@ -340,7 +326,6 @@ public class MemoryRecordsBuilder {
      * @return the written compressed bytes.
      */
     private int writeDefaultBatchHeader() {
-        ensureOpenForRecordBatchWrite();
         ByteBuffer buffer = bufferStream.buffer();
         int pos = buffer.position();
         buffer.position(initialPosition);
@@ -367,7 +352,6 @@ public class MemoryRecordsBuilder {
      * @return the written compressed bytes.
      */
     private int writeLegacyCompressedWrapperHeader() {
-        ensureOpenForRecordBatchWrite();
         ByteBuffer buffer = bufferStream.buffer();
         int pos = buffer.position();
         buffer.position(initialPosition);
@@ -389,6 +373,8 @@ public class MemoryRecordsBuilder {
     private Long appendWithOffset(long offset, boolean isControlRecord, long timestamp, ByteBuffer key,
                                   ByteBuffer value, Header[] headers) {
         try {
+            ensureOpenForRecordAppend();
+
             if (isControlRecord != isControlBatch)
                 throw new IllegalArgumentException("Control records can only be appended to control batches");
 
@@ -414,19 +400,6 @@ public class MemoryRecordsBuilder {
         } catch (IOException e) {
             throw new KafkaException("I/O exception when writing to the append stream, closing", e);
         }
-    }
-
-    /**
-     * Append a new record at the given offset.
-     * @param offset The absolute offset of the record in the log buffer
-     * @param timestamp The record timestamp
-     * @param key The record key
-     * @param value The record value
-     * @param headers The record headers if there are any
-     * @return CRC of the record or null if record-level CRC is not supported for the message format
-     */
-    public Long appendWithOffset(long offset, long timestamp, byte[] key, byte[] value, Header[] headers) {
-        return appendWithOffset(offset, false, timestamp, wrapNullable(key), wrapNullable(value), headers);
     }
 
     /**
@@ -550,10 +523,6 @@ public class MemoryRecordsBuilder {
      * Return CRC of the record or null if record-level CRC is not supported for the message format
      */
     public Long appendEndTxnMarker(long timestamp, EndTransactionMarker marker) {
-        if (producerId == RecordBatch.NO_PRODUCER_ID)
-            throw new IllegalArgumentException("End transaction marker requires a valid producerId");
-        if (!isTransactional)
-            throw new IllegalArgumentException("End transaction marker depends on batch transactional flag being enabled");
         ByteBuffer value = marker.serializeValue();
         return appendControlRecord(timestamp, marker.controlType(), value);
     }
@@ -579,7 +548,7 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Append a record at the next sequential offset.
+     * Append a record.
      * @param record the record to add
      */
     public void append(Record record) {
@@ -616,7 +585,6 @@ public class MemoryRecordsBuilder {
 
     private void appendDefaultRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value,
                                      Header[] headers) throws IOException {
-        ensureOpenForRecordAppend();
         int offsetDelta = (int) (offset - baseOffset);
         long timestampDelta = timestamp - firstTimestamp;
         int sizeInBytes = DefaultRecord.writeTo(appendStream, offsetDelta, timestampDelta, key, value, headers);
@@ -624,7 +592,6 @@ public class MemoryRecordsBuilder {
     }
 
     private long appendLegacyRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value) throws IOException {
-        ensureOpenForRecordAppend();
         if (compressionType == CompressionType.NONE && timestampType == TimestampType.LOG_APPEND_TIME)
             timestamp = logAppendTime;
 
@@ -663,15 +630,8 @@ public class MemoryRecordsBuilder {
     }
 
     private void ensureOpenForRecordAppend() {
-        if (appendStreamIsClosed)
-            throw new IllegalStateException("Tried to append a record, but MemoryRecordsBuilder is closed for record appends");
-    }
-
-    private void ensureOpenForRecordBatchWrite() {
-        if (isClosed())
-            throw new IllegalStateException("Tried to write record batch header, but MemoryRecordsBuilder is closed");
-        if (aborted)
-            throw new IllegalStateException("Tried to write record batch header, but MemoryRecordsBuilder is aborted");
+        if (state != State.OPEN_APPEND)
+            throw new IllegalStateException("Tried to append a record, but the writer is closed for record appends");
     }
 
     /**
@@ -732,13 +692,17 @@ public class MemoryRecordsBuilder {
     }
 
     public boolean isClosed() {
-        return builtRecords != null;
+        return state == State.CLOSED;
+    }
+
+    public boolean isAborted() {
+        return state == State.ABORTED;
     }
 
     public boolean isFull() {
         // note that the write limit is respected only after the first record is added which ensures we can always
         // create non-empty batches (this is used to disable batching when the producer's batch size is set to 0).
-        return appendStreamIsClosed || (this.numRecords > 0 && this.writeLimit <= estimatedBytesWritten());
+        return state != State.OPEN_APPEND || (this.numRecords > 0 && this.writeLimit <= estimatedBytesWritten());
     }
 
     /**
@@ -746,7 +710,18 @@ public class MemoryRecordsBuilder {
      * is exactly correct if the record set is not compressed or if the builder has been closed.
      */
     public int estimatedSizeInBytes() {
-        return builtRecords != null ? builtRecords.sizeInBytes() : estimatedBytesWritten();
+        switch (state) {
+            case ABORTED:
+                return 0;
+
+            case OPEN_HEADER:
+            case CLOSED:
+                return bufferStream.position() - initialPosition;
+
+            case OPEN_APPEND:
+            default:
+                return estimatedBytesWritten();
+        }
     }
 
     public byte magic() {
@@ -768,18 +743,4 @@ public class MemoryRecordsBuilder {
         }
     }
 
-    /**
-     * Return the producer id of the RecordBatches created by this builder.
-     */
-    public long producerId() {
-        return this.producerId;
-    }
-
-    public short producerEpoch() {
-        return this.producerEpoch;
-    }
-
-    public int baseSequence() {
-        return this.baseSequence;
-    }
 }
