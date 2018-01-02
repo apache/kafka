@@ -85,7 +85,7 @@ class ZooKeeperClient(connectString: String,
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
 
   newGauge("SessionState", new Gauge[String] {
-    override def value: String = Option(zooKeeper.getState.toString).getOrElse("DISCONNECTED")
+    override def value: String = Option(connectionState.toString).getOrElse("DISCONNECTED")
   })
 
   metricNames += "SessionState"
@@ -95,6 +95,11 @@ class ZooKeeperClient(connectString: String,
   override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
     explicitMetricName(metricGroup, metricType, name, metricTags)
   }
+
+  /**
+   * Return the state of the ZooKeeper connection.
+   */
+  def connectionState: States = zooKeeper.getState
 
   /**
    * Send a request and wait for its response. See handle(Seq[AsyncRequest]) for details.
@@ -209,13 +214,13 @@ class ZooKeeperClient(connectString: String,
     info("Waiting until connected.")
     var nanos = timeUnit.toNanos(timeout)
     inLock(isConnectedOrExpiredLock) {
-      var state = zooKeeper.getState
+      var state = connectionState
       while (!state.isConnected && state.isAlive) {
         if (nanos <= 0) {
           throw new ZooKeeperClientTimeoutException(s"Timed out waiting for connection while in state: $state")
         }
         nanos = isConnectedOrExpiredCondition.awaitNanos(nanos)
-        state = zooKeeper.getState
+        state = connectionState
       }
       if (state == States.AUTH_FAILED) {
         throw new ZooKeeperClientAuthFailedException("Auth failed either before or while waiting for connection")
@@ -304,10 +309,9 @@ class ZooKeeperClient(connectString: String,
   def sessionId: Long = inReadLock(initializationLock) {
     zooKeeper.getSessionId
   }
-
+  
   private def initialize(): Unit = {
-    // FIXME What do we want to do if the thread is interrupted?
-    if (!zooKeeper.getState.isAlive) {
+    if (!connectionState.isAlive) {
       zooKeeper.close()
       info(s"Initializing a new session to $connectString.")
       // retry forever until ZooKeeper can be instantiated

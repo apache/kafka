@@ -22,12 +22,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ArrayBlockingQueue, CountDownLatch, TimeUnit}
 
 import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.Meter
+import com.yammer.metrics.core.{Gauge, Meter, MetricName}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException.{Code, NoNodeException}
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
+import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.{CreateMode, WatchedEvent, ZooDefs}
 import org.junit.Assert.{assertArrayEquals, assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
@@ -384,14 +385,14 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     } finally zooKeeperClient.close()
   }
 
-  @Test
-  def testSessionExpireListenerMetrics() {
-    val metrics = Metrics.defaultRegistry
+  def isExpectedMetricName(metricName: MetricName, name: String): Boolean =
+    metricName.getName == name && metricName.getGroup == "testMetricGroup" && metricName.getType == "testMetricType"
 
+  @Test
+  def testZooKeeperStateChangeRateMetrics() {
     def checkMeterCount(name: String, expected: Long) {
-      val meter = metrics.allMetrics.asScala.collectFirst {
-        case (metricName, meter: Meter) if metricName.getName == name && metricName.getGroup == "testMetricGroup" &&
-          metricName.getType == "testMetricType" => meter
+      val meter = Metrics.defaultRegistry.allMetrics.asScala.collectFirst {
+        case (metricName, meter: Meter) if isExpectedMetricName(metricName, name) => meter
       }.getOrElse(sys.error(s"Unable to find meter with name $name"))
       assertEquals(s"Unexpected meter count for $name", expected, meter.count)
     }
@@ -408,6 +409,23 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     zooKeeperClient.ZooKeeperClientWatcher.process(new WatchedEvent(EventType.None, KeeperState.Disconnected, null))
     checkMeterCount(expiresPerSecName, 1)
     checkMeterCount(disconnectsPerSecName, 1)
+  }
+
+  @Test
+  def testZooKeeperSessionStateMetric(): Unit = {
+    def gaugeValue(name: String): Option[String] = {
+      Metrics.defaultRegistry.allMetrics.asScala.collectFirst {
+        case (metricName, gauge: Gauge[_]) if isExpectedMetricName(metricName, name) => gauge.value.asInstanceOf[String]
+      }
+    }
+
+    assertEquals(Some(States.CONNECTED.toString), gaugeValue("SessionState"))
+    assertEquals(States.CONNECTED, zooKeeperClient.connectionState)
+
+    zooKeeperClient.close()
+
+    assertEquals(None, gaugeValue("SessionState"))
+    assertEquals(States.CLOSED, zooKeeperClient.connectionState)
   }
 
   private def cleanMetricsRegistry() {

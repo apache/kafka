@@ -176,6 +176,19 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=GlobalPartitionCount"), 1)
   }
 
+  /**
+   * Test that the metrics are created with the right name, testZooKeeperStateChangeRateMetrics
+   * and testZooKeeperSessionStateMetric in ZooKeeperClientTest test the metrics behaviour.
+   */
+  @Test
+  def testSessionExpireListenerMetrics(): Unit = {
+    val metrics = Metrics.defaultRegistry.allMetrics
+
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=SessionState"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=ZooKeeperExpiresPerSec"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=ZooKeeperDisconnectsPerSec"), 1)
+  }
+
   private def meterCount(metricName: String): Long = {
     Metrics.defaultRegistry.allMetrics.asScala
       .filterKeys(_.getMBeanName.endsWith(metricName))
