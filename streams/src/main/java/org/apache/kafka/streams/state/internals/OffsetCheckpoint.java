@@ -119,8 +119,6 @@ public class OffsetCheckpoint {
      * @throws IllegalArgumentException if the offset checkpoint version is unknown
      */
     public Map<TopicPartition, Long> read() throws IOException {
-
-
         synchronized (lock) {
             try (BufferedReader reader
                      = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
