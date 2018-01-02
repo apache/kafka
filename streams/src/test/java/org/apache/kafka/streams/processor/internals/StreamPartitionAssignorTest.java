@@ -399,10 +399,11 @@ public class StreamPartitionAssignorTest {
         UUID uuid1 = UUID.randomUUID();
         UUID uuid2 = UUID.randomUUID();
 
-        mockTaskManager(Collections.<TaskId>emptySet(),
-                               Collections.<TaskId>emptySet(),
-                               uuid1,
-                builder);
+        mockTaskManager(
+            Collections.<TaskId>emptySet(),
+            Collections.<TaskId>emptySet(),
+            uuid1,
+            builder);
         configurePartitionAssignor(Collections.<String, Object>emptyMap());
 
         partitionAssignor.setInternalTopicManager(new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer));
@@ -661,7 +662,7 @@ public class StreamPartitionAssignorTest {
                     return new KeyValue<>(key, value);
                 }
             })
-            .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count"));
+            .count();
 
         // joining the stream and the table
         // this triggers the enforceCopartitioning() routine in the StreamPartitionAssignor,
@@ -703,13 +704,13 @@ public class StreamPartitionAssignorTest {
         final Map<String, PartitionAssignor.Assignment> assignment = partitionAssignor.assign(metadata, subscriptions);
 
         final Map<String, Integer> expectedCreatedInternalTopics = new HashMap<>();
-        expectedCreatedInternalTopics.put(applicationId + "-count-repartition", 4);
-        expectedCreatedInternalTopics.put(applicationId + "-count-changelog", 4);
+        expectedCreatedInternalTopics.put(applicationId + "-KTABLE-AGGREGATE-STATE-STORE-0000000006-repartition", 4);
+        expectedCreatedInternalTopics.put(applicationId + "-KTABLE-AGGREGATE-STATE-STORE-0000000006-changelog", 4);
         expectedCreatedInternalTopics.put(applicationId + "-KSTREAM-MAP-0000000001-repartition", 4);
         expectedCreatedInternalTopics.put(applicationId + "-topic3-STATE-STORE-0000000002-changelog", 4);
 
         // check if all internal topics were created as expected
-        assertThat(expectedCreatedInternalTopics, equalTo(mockInternalTopicManager.readyTopics));
+        assertThat(mockInternalTopicManager.readyTopics, equalTo(expectedCreatedInternalTopics));
 
         final List<TopicPartition> expectedAssignment = Arrays.asList(
             new TopicPartition("topic1", 0),
@@ -719,18 +720,18 @@ public class StreamPartitionAssignorTest {
             new TopicPartition("topic3", 1),
             new TopicPartition("topic3", 2),
             new TopicPartition("topic3", 3),
-            new TopicPartition(applicationId + "-count-repartition", 0),
-            new TopicPartition(applicationId + "-count-repartition", 1),
-            new TopicPartition(applicationId + "-count-repartition", 2),
-            new TopicPartition(applicationId + "-count-repartition", 3),
+            new TopicPartition(applicationId + "-KTABLE-AGGREGATE-STATE-STORE-0000000006-repartition", 0),
+            new TopicPartition(applicationId + "-KTABLE-AGGREGATE-STATE-STORE-0000000006-repartition", 1),
+            new TopicPartition(applicationId + "-KTABLE-AGGREGATE-STATE-STORE-0000000006-repartition", 2),
+            new TopicPartition(applicationId + "-KTABLE-AGGREGATE-STATE-STORE-0000000006-repartition", 3),
             new TopicPartition(applicationId + "-KSTREAM-MAP-0000000001-repartition", 0),
             new TopicPartition(applicationId + "-KSTREAM-MAP-0000000001-repartition", 1),
             new TopicPartition(applicationId + "-KSTREAM-MAP-0000000001-repartition", 2),
             new TopicPartition(applicationId + "-KSTREAM-MAP-0000000001-repartition", 3)
         );
 
-        // check if we created a task for all expected topicpartitions.
-        assertThat(new HashSet<>(expectedAssignment), equalTo(new HashSet<>(assignment.get(client).partitions())));
+        // check if we created a task for all expected topicPartitions.
+        assertThat(new HashSet<>(assignment.get(client).partitions()), equalTo(new HashSet<>(expectedAssignment)));
     }
 
     @Test
@@ -898,7 +899,7 @@ public class StreamPartitionAssignorTest {
         final Map<String, Integer> expectedCreatedInternalTopics = new HashMap<>();
         expectedCreatedInternalTopics.put(applicationId + "-count-repartition", 3);
         expectedCreatedInternalTopics.put(applicationId + "-count-changelog", 3);
-        assertThat(expectedCreatedInternalTopics, equalTo(mockInternalTopicManager.readyTopics));
+        assertThat(mockInternalTopicManager.readyTopics, equalTo(expectedCreatedInternalTopics));
 
         final List<TopicPartition> expectedAssignment = Arrays.asList(
             new TopicPartition("topic1", 0),
@@ -908,7 +909,7 @@ public class StreamPartitionAssignorTest {
             new TopicPartition(applicationId + "-count-repartition", 1),
             new TopicPartition(applicationId + "-count-repartition", 2)
         );
-        assertThat(new HashSet<>(expectedAssignment), equalTo(new HashSet<>(assignment.get(client).partitions())));
+        assertThat(new HashSet<>(assignment.get(client).partitions()), equalTo(new HashSet<>(expectedAssignment)));
     }
 
     @Test
@@ -939,10 +940,11 @@ public class StreamPartitionAssignorTest {
         builder.stream("topic1").groupByKey().count();
 
         final UUID uuid = UUID.randomUUID();
-        mockTaskManager(Collections.<TaskId>emptySet(),
-                               Collections.<TaskId>emptySet(),
-                               uuid,
-                internalTopologyBuilder);
+        mockTaskManager(
+            Collections.<TaskId>emptySet(),
+            Collections.<TaskId>emptySet(),
+            uuid,
+            internalTopologyBuilder);
 
         Map<String, Object> props = new HashMap<>();
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
