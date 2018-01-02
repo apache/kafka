@@ -606,9 +606,6 @@ object ConsumerGroupCommand extends Logging {
       }.toMap
     }
 
-    protected def getLogStartOffset(topicPartition: TopicPartition): LogOffsetResult =
-      getLogStartOffsets(Seq(topicPartition)).get(topicPartition).getOrElse(LogOffsetResult.Ignore)
-
     protected def getLogStartOffsets(topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult] = {
       val offsets = getConsumer.beginningOffsets(topicPartitions.asJava)
       topicPartitions.map { topicPartition =>
@@ -617,14 +614,18 @@ object ConsumerGroupCommand extends Logging {
       }.toMap
     }
 
-    protected def getLogTimestampOffset(topicPartition: TopicPartition, timestamp: java.lang.Long): LogOffsetResult = {
+    protected def getLogTimestampOffsets(topicPartitions: Seq[TopicPartition], timestamp: java.lang.Long): Map[TopicPartition, LogOffsetResult] = {
       val consumer = getConsumer
-      consumer.assign(List(topicPartition).asJava)
-      val offsetsForTimes = consumer.offsetsForTimes(Map(topicPartition -> timestamp).asJava)
-      if (offsetsForTimes != null && !offsetsForTimes.isEmpty && offsetsForTimes.get(topicPartition) != null)
-        LogOffsetResult.LogOffset(offsetsForTimes.get(topicPartition).offset)
+      consumer.assign(topicPartitions.asJava)
+      val offsetsForTimes = consumer.offsetsForTimes(topicPartitions.map(_ -> timestamp).toMap.asJava)
+
+      if (offsetsForTimes == null || offsetsForTimes.isEmpty)
+        topicPartitions.map(topicPartition => topicPartition -> getLogEndOffset(topicPartition)).toMap
       else {
-        getLogEndOffset(topicPartition)
+        topicPartitions.map {
+          case topicPartition if offsetsForTimes.get(topicPartition) == null => topicPartition -> getLogEndOffset(topicPartition)
+          case topicPartition => topicPartition -> LogOffsetResult.LogOffset(offsetsForTimes.get(topicPartition).offset)
+        }.toMap
       }
     }
 
@@ -715,7 +716,7 @@ object ConsumerGroupCommand extends Logging {
     private def prepareOffsetsToReset(groupId: String, partitionsToReset: Seq[TopicPartition]): Map[TopicPartition, OffsetAndMetadata] = {
       if (opts.options.has(opts.resetToOffsetOpt)) {
         val offset = opts.options.valueOf(opts.resetToOffsetOpt)
-        checkOffsetRange(partitionsToReset.map((_, offset)).toMap).map {
+        checkOffsetsRange(partitionsToReset.map((_, offset)).toMap).map {
           case (topicPartition, newOffset) => (topicPartition, new OffsetAndMetadata(newOffset))
         }
       } else if (opts.options.has(opts.resetToEarliestOpt)) {
@@ -742,28 +743,30 @@ object ConsumerGroupCommand extends Logging {
             throw new IllegalArgumentException(s"Cannot shift offset for partition $topicPartition since there is no current committed offset"))
           (topicPartition, currentOffset + shiftBy)
         }.toMap
-        checkOffsetRange(requestedOffsets).map {
+        checkOffsetsRange(requestedOffsets).map {
           case (topicPartition, newOffset) => (topicPartition, new OffsetAndMetadata(newOffset))
         }
       } else if (opts.options.has(opts.resetToDatetimeOpt)) {
         val timestamp = convertTimestamp(opts.options.valueOf(opts.resetToDatetimeOpt))
+        val logTimestampOffsets = getLogTimestampOffsets(partitionsToReset, timestamp)
         partitionsToReset.map { topicPartition =>
-          val logTimestampOffset = getLogTimestampOffset(topicPartition, timestamp)
+          val logTimestampOffset = logTimestampOffsets.get(topicPartition)
           logTimestampOffset match {
-            case LogOffsetResult.LogOffset(offset) => (topicPartition, new OffsetAndMetadata(offset))
+            case Some(LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
             case _ => CommandLineUtils.printUsageAndDie(opts.parser, s"Error getting offset by timestamp of topic partition: $topicPartition")
           }
         }.toMap
       } else if (opts.options.has(opts.resetByDurationOpt)) {
+        val duration = opts.options.valueOf(opts.resetByDurationOpt)
+        val durationParsed = DatatypeFactory.newInstance().newDuration(duration)
+        val now = new Date()
+        durationParsed.negate().addTo(now)
+        val timestamp = now.getTime
+        val logTimestampOffsets = getLogTimestampOffsets(partitionsToReset, timestamp)
         partitionsToReset.map { topicPartition =>
-          val duration = opts.options.valueOf(opts.resetByDurationOpt)
-          val now = new Date()
-          val durationParsed = DatatypeFactory.newInstance().newDuration(duration)
-          durationParsed.negate().addTo(now)
-          val timestamp = now.getTime
-          val logTimestampOffset = getLogTimestampOffset(topicPartition, timestamp)
+          val logTimestampOffset = logTimestampOffsets.get(topicPartition)
           logTimestampOffset match {
-            case LogOffsetResult.LogOffset(offset) => (topicPartition, new OffsetAndMetadata(offset))
+            case Some(LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
             case _ => CommandLineUtils.printUsageAndDie(opts.parser, s"Error getting offset by timestamp of topic partition: $topicPartition")
           }
         }.toMap
@@ -774,7 +777,7 @@ object ConsumerGroupCommand extends Logging {
         val requestedOffsets = resetPlan.keySet.map { topicPartition =>
           (topicPartition, resetPlan(topicPartition).offset())
         }.toMap
-        checkOffsetRange(requestedOffsets).map {
+        checkOffsetsRange(requestedOffsets).map {
           case (topicPartition, newOffset) => (topicPartition, new OffsetAndMetadata(newOffset))
         }
       } else if (opts.options.has(opts.resetToCurrentOpt)) {
@@ -794,7 +797,7 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    private def checkOffsetRange(requestedOffsets: Map[TopicPartition, Long]) = {
+    private def checkOffsetsRange(requestedOffsets: Map[TopicPartition, Long]) = {
       val logStartOffsets = getLogStartOffsets(requestedOffsets.keySet.toSeq)
       val logEndOffsets = getLogEndOffsets(requestedOffsets.keySet.toSeq)
       requestedOffsets.map { case (topicPartition, offset) => (topicPartition,
