@@ -73,6 +73,7 @@ abstract class AbstractResetIntegrationTest {
     private static final String OUTPUT_TOPIC_2 = "outputTopic2";
     private static final String OUTPUT_TOPIC_2_RERUN = "outputTopic2_rerun";
     private static final String INTERMEDIATE_USER_TOPIC = "userTopic";
+    private static final String NON_EXISTING_TOPIC = "nonExistingTopic2";
 
     private static final long STREAMS_CONSUMER_TIMEOUT = 2000L;
     private static final long CLEANUP_CONSUMER_TIMEOUT = 2000L;
@@ -610,6 +611,30 @@ abstract class AbstractResetIntegrationTest {
 
         final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
         Assert.assertEquals(0, exitCode);
+    }
+
+    void shouldNotAllowToResetWhileStreamsIsRunning() throws Exception {
+
+        final Properties streamsConfiguration = prepareTest();
+        final List<String> parameterList = new ArrayList<>(
+                Arrays.asList("--application-id", APP_ID + testNo,
+                        "--bootstrap-servers", bootstrapServers,
+                        "--input-topics", NON_EXISTING_TOPIC));
+
+        final String[] parameters = parameterList.toArray(new String[parameterList.size()]);
+        final Properties cleanUpConfig = new Properties();
+        cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
+
+        // RUN
+        KafkaStreams streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfiguration);
+        streams.start();
+
+        final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
+        Assert.assertEquals(1, exitCode);
+
+        streams.close();
+
     }
 
     private void assertInternalTopicsGotDeleted(final String intermediateUserTopic) throws Exception {
