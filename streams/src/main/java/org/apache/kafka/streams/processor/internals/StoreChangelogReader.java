@@ -173,8 +173,8 @@ public class StoreChangelogReader implements ChangelogReader {
         for (final StateRestorer restorer : needsPositionUpdate) {
             final long position = consumer.position(restorer.partition());
             logRestoreOffsets(restorer.partition(),
-                    position,
-                    endOffsets.get(restorer.partition()));
+                              position,
+                              endOffsets.get(restorer.partition()));
             restorer.setStartingOffset(position);
             restorer.restoreStarted();
         }
@@ -238,7 +238,7 @@ public class StoreChangelogReader implements ChangelogReader {
         final long pos = processNext(allRecords.records(topicPartition), restorer, endOffset);
         restorer.setRestoredOffset(pos);
         if (restorer.hasCompleted(pos, endOffset)) {
-            if (pos > endOffset + 1) {
+            if (pos > endOffset) {
                 throw new TaskMigratedException(task, topicPartition, endOffset, pos);
             }
 
@@ -257,29 +257,38 @@ public class StoreChangelogReader implements ChangelogReader {
                              final StateRestorer restorer,
                              final Long endOffset) {
         final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
-        long offset = -1;
-
+        long nextPosition = -1;
+        int numberRecords = records.size();
+        int numberRestored = 0;
         for (final ConsumerRecord<byte[], byte[]> record : records) {
-            offset = record.offset();
+            final long offset = record.offset();
             if (restorer.hasCompleted(offset, endOffset)) {
+                nextPosition = record.offset();
                 break;
             }
+            numberRestored++;
             if (record.key() != null) {
                 restoreRecords.add(KeyValue.pair(record.key(), record.value()));
             }
         }
 
-        if (offset == -1) {
-            offset = consumer.position(restorer.partition());
+        // if we have changelog topic then we should have restored all records in the list
+        // otherwise if we did not fully restore to that point we need to set nextPosition
+        // to the position of the restoreConsumer and we'll cause a TaskMigratedException exception
+        if (nextPosition == -1 || (restorer.offsetLimit() == Long.MAX_VALUE && numberRecords != numberRestored)) {
+            nextPosition = consumer.position(restorer.partition());
         }
 
         if (!restoreRecords.isEmpty()) {
             restorer.restore(restoreRecords);
-            restorer.restoreBatchCompleted(offset + 1, records.size());
+            restorer.restoreBatchCompleted(nextPosition, records.size());
+
         }
 
-        return consumer.position(restorer.partition());
+        return nextPosition;
     }
+
+
 
     private boolean hasPartition(final TopicPartition topicPartition) {
         final List<PartitionInfo> partitions = partitionInfo.get(topicPartition.topic());
