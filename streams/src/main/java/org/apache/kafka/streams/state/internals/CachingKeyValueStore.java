@@ -197,9 +197,9 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
 
     @Override
     public long approximateNumEntries() {
+        validateStoreOpen();
         lock.readLock().lock();
         try {
-            validateStoreOpen();
             return underlying.approximateNumEntries();
         } finally {
             lock.readLock().unlock();
@@ -209,9 +209,9 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     @Override
     public synchronized void put(final Bytes key, final byte[] value) {
         Objects.requireNonNull(key, "key cannot be null");
+        validateStoreOpen();
         lock.writeLock().lock();
         try {
-            validateStoreOpen();
             putInternal(key, value);
         } finally {
             lock.writeLock().unlock();
