@@ -173,6 +173,7 @@ public class StreamThread extends Thread {
     /**
      * Sets the state
      * @param newState New state
+     * @return The state prior to the call to setState, or null if the transition is invalid
      */
     State setState(final State newState) {
         final State oldState;

@@ -116,7 +116,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testStreamsCloseWithoutStart() throws Exception {
+    public void shouldCleanupResourcesOnCloseWithoutPreviousStart() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.globalTable("anyTopic");
         MockClientSupplier clientSupplier = new MockClientSupplier();
