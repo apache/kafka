@@ -454,8 +454,15 @@ public class StreamThreadTest {
                 internalTopologyBuilder,
                 clientId,
                 new LogContext(""));
-        thread.setState(StreamThread.State.RUNNING);
-        thread.shutdown();
+        thread.setStateListener(
+                new StreamThread.StateListener() {
+                    @Override
+                    public void onChange(final Thread t, final ThreadStateTransitionValidator newState, final ThreadStateTransitionValidator oldState) {
+                        if (oldState == StreamThread.State.CREATED && newState == StreamThread.State.RUNNING) {
+                            thread.shutdown();
+                        }
+                    }
+                });
         thread.run();
         EasyMock.verify(taskManager);
     }

@@ -719,7 +719,6 @@ public class StreamThread extends Thread {
         log.info("Starting");
         if (setState(State.RUNNING) == null) {
             log.info("StreamThread already shutdown. Not running");
-            completeShutdown(true);
             return;
         }
         boolean cleanRun = false;
@@ -1098,7 +1097,7 @@ public class StreamThread extends Thread {
         State oldState = setState(State.PENDING_SHUTDOWN);
         if (oldState == State.CREATED) {
             // Start so that we shutdown on the thread
-            this.start();
+            this.completeShutdown(true);
         }
     }
 
