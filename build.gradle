@@ -741,6 +741,8 @@ project(':core') {
   jar.manifest {
     attributes(
       'Version': "${version}"
+      'Bundle-Version': "${version}"
+      'Bundle-SymbolicName': "org.apache.kafka"
     )
   }
 
