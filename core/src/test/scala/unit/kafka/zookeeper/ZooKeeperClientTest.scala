@@ -23,17 +23,28 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ArrayBlockingQueue, CountDownLatch, TimeUnit}
 import javax.security.auth.login.Configuration
 
+import com.yammer.metrics.Metrics
+import com.yammer.metrics.core.Meter
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.JaasUtils
-import org.apache.zookeeper.KeeperException.{Code, NoNodeException}
 import org.apache.kafka.common.utils.Time
-import org.apache.zookeeper.{CreateMode, ZooDefs}
+import org.apache.zookeeper.KeeperException.{Code, NoNodeException}
+import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
+import org.apache.zookeeper.{CreateMode, WatchedEvent, ZooDefs}
 import org.junit.Assert.{assertArrayEquals, assertEquals, assertTrue}
-import org.junit.{After, Test}
+import org.junit.{After, Before, Test}
+
+import scala.collection.JavaConverters._
 
 class ZooKeeperClientTest extends ZooKeeperTestHarness {
   private val mockPath = "/foo"
   private val time = Time.SYSTEM
+
+  @Before
+  override def setUp() {
+    cleanMetricsRegistry()
+    super.setUp()
+  }
 
   @After
   override def tearDown() {
@@ -42,7 +53,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     Configuration.setConfiguration(null)
   }
 
-  @Test(expected = classOf[UnknownHostException])
+  @Test(expected = classOf[IllegalArgumentException])
   def testUnresolvableConnectString(): Unit = {
     new ZooKeeperClient("some.invalid.hostname.foo.bar.local", -1, -1, Int.MaxValue, time)
   }
@@ -358,6 +369,36 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     } else if (!unexpectedResponses.isEmpty) {
       fail(s"Received an unexpected non-CONNECTIONLOSS response code after a CONNECTIONLOSS response code from a single batch: $unexpectedResponses")
     }
+  }
+
+  @Test
+  def testSessionExpireListenerMetrics() {
+    val metrics = Metrics.defaultRegistry
+
+    def checkMeterCount(name: String, expected: Long) {
+      val meter = metrics.allMetrics.asScala.collectFirst {
+        case (metricName, meter: Meter) if metricName.getName == name => meter
+      }.getOrElse(sys.error(s"Unable to find meter with name $name"))
+      assertEquals(s"Unexpected meter count for $name", expected, meter.count)
+    }
+
+    val expiresPerSecName = "ZooKeeperExpiresPerSec"
+    val disconnectsPerSecName = "ZooKeeperDisconnectsPerSec"
+    checkMeterCount(expiresPerSecName, 0)
+    checkMeterCount(disconnectsPerSecName, 0)
+
+    zooKeeperClient.ZooKeeperClientWatcher.process(new WatchedEvent(EventType.None, KeeperState.Expired, null))
+    checkMeterCount(expiresPerSecName, 1)
+    checkMeterCount(disconnectsPerSecName, 0)
+
+    zooKeeperClient.ZooKeeperClientWatcher.process(new WatchedEvent(EventType.None, KeeperState.Disconnected, null))
+    checkMeterCount(expiresPerSecName, 1)
+    checkMeterCount(disconnectsPerSecName, 1)
+  }
+
+  private def cleanMetricsRegistry() {
+    val metrics = Metrics.defaultRegistry
+    metrics.allMetrics.keySet.asScala.foreach(metrics.removeMetric)
   }
 
   private def bytes = UUID.randomUUID().toString.getBytes(StandardCharsets.UTF_8)

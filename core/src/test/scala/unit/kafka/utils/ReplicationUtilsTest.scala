@@ -63,7 +63,7 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
     EasyMock.expect(replicaManager.zkClient).andReturn(zkClient)
     EasyMock.replay(replicaManager)
 
-    zkUtils.makeSurePersistentPathExists(ZkUtils.IsrChangeNotificationPath)
+    zkClient.makeSurePersistentPathExists(ZkUtils.IsrChangeNotificationPath)
 
     val replicas = List(0, 1)
 

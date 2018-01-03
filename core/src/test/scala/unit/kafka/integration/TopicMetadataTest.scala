@@ -59,7 +59,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
   def testBasicTopicMetadata(): Unit = {
     // create topic
     val topic = "test"
-    createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server1))
+    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server1))
 
     val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), brokerEndPoints, "TopicMetadataTest-testBasicTopicMetadata",
       2000, 0).topicsMetadata
@@ -78,8 +78,8 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
     // create topic
     val topic1 = "testGetAllTopicMetadata1"
     val topic2 = "testGetAllTopicMetadata2"
-    createTopic(zkUtils, topic1, numPartitions = 1, replicationFactor = 1, servers = Seq(server1))
-    createTopic(zkUtils, topic2, numPartitions = 1, replicationFactor = 1, servers = Seq(server1))
+    createTopic(zkClient, topic1, numPartitions = 1, replicationFactor = 1, servers = Seq(server1))
+    createTopic(zkClient, topic2, numPartitions = 1, replicationFactor = 1, servers = Seq(server1))
 
     // issue metadata request with empty list of topics
     val topicsMetadata = ClientUtils.fetchTopicMetadata(Set.empty, brokerEndPoints, "TopicMetadataTest-testGetAllTopicMetadata",
@@ -110,7 +110,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
     assertEquals(0, topicsMetadata.head.partitionsMetadata.size)
 
     // wait for leader to be elected
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
     TestUtils.waitUntilMetadataIsPropagated(Seq(server1), topic, 0)
 
     // retry the metadata for the auto created topic
@@ -162,7 +162,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
     assertEquals("Expecting InvalidTopicCode for topic2 metadata", Errors.INVALID_TOPIC_EXCEPTION, topicsMetadata(1).error)
 
     // wait for leader to be elected
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic1, 0)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 0)
     TestUtils.waitUntilMetadataIsPropagated(Seq(server1), topic1, 0)
 
     // retry the metadata for the first auto created topic

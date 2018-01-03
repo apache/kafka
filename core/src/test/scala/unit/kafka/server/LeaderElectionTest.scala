@@ -72,7 +72,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val partitionId = 0
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    val leader1 = createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(0, 1)), servers = servers)(0)
+    val leader1 = createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(0, 1)), servers = servers)(0)
 
     val leaderEpoch1 = zkUtils.getEpochForPartition(topic, partitionId)
     debug("leader Epoch: " + leaderEpoch1)
@@ -84,7 +84,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     // kill the server hosting the preferred replica
     servers.last.shutdown()
     // check if leader moves to the other server
-    val leader2 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId,
+    val leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId,
                                                     oldLeaderOpt = if (leader1 == 0) None else Some(leader1))
     val leaderEpoch2 = zkUtils.getEpochForPartition(topic, partitionId)
     debug("Leader is elected to be: %s".format(leader1))
@@ -98,7 +98,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     servers.last.startup()
     servers.head.shutdown()
     Thread.sleep(zookeeper.tickTime)
-    val leader3 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId,
+    val leader3 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId,
                                                     oldLeaderOpt = if (leader2 == 1) None else Some(leader2))
     val leaderEpoch3 = zkUtils.getEpochForPartition(topic, partitionId)
     debug("leader Epoch: " + leaderEpoch3)
@@ -117,7 +117,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val partitionId = 0
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    val leader1 = createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(0, 1)), servers = servers)(0)
+    val leader1 = createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(0, 1)), servers = servers)(0)
 
     val leaderEpoch1 = zkUtils.getEpochForPartition(topic, partitionId)
     debug("leader Epoch: " + leaderEpoch1)

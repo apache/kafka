@@ -25,6 +25,7 @@ import kafka.utils.TestUtils
 import kafka.cluster.Broker
 import kafka.client.ClientUtils
 import kafka.server.{KafkaConfig, KafkaServer}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -58,10 +59,10 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     brokers = servers.map(s => TestUtils.createBroker(s.config.brokerId, s.config.hostName, TestUtils.boundPort(s)))
 
     // create topics first
-    createTopic(zkUtils, topic1, partitionReplicaAssignment = topic1Assignment, servers = servers)
-    createTopic(zkUtils, topic2, partitionReplicaAssignment = topic2Assignment, servers = servers)
-    createTopic(zkUtils, topic3, partitionReplicaAssignment = topic3Assignment, servers = servers)
-    createTopic(zkUtils, topic4, partitionReplicaAssignment = topic4Assignment, servers = servers)
+    createTopic(zkClient, topic1, partitionReplicaAssignment = topic1Assignment, servers = servers)
+    createTopic(zkClient, topic2, partitionReplicaAssignment = topic2Assignment, servers = servers)
+    createTopic(zkClient, topic3, partitionReplicaAssignment = topic3Assignment, servers = servers)
+    createTopic(zkClient, topic4, partitionReplicaAssignment = topic4Assignment, servers = servers)
   }
 
   @After
@@ -97,10 +98,10 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
   def testIncrementPartitions(): Unit = {
     adminZkClient.addPartitions(topic1, topic1Assignment, adminZkClient.getBrokerMetadatas(), 3)
     // wait until leader is elected
-    val leader1 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic1, 1)
-    val leader2 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic1, 2)
-    val leader1FromZk = zkUtils.getLeaderForPartition(topic1, 1).get
-    val leader2FromZk = zkUtils.getLeaderForPartition(topic1, 2).get
+    val leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 1)
+    val leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 2)
+    val leader1FromZk = zkClient.getLeaderForPartition(new TopicPartition(topic1, 1)).get
+    val leader2FromZk = zkClient.getLeaderForPartition(new TopicPartition(topic1, 2)).get
     assertEquals(leader1, leader1FromZk)
     assertEquals(leader2, leader2FromZk)
 
@@ -126,10 +127,10 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
     adminZkClient.addPartitions(topic2, topic2Assignment, adminZkClient.getBrokerMetadatas(), 3,
       Some(Map(0 -> Seq(1, 2), 1 -> Seq(0, 1), 2 -> Seq(2, 3))))
     // wait until leader is elected
-    val leader1 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic2, 1)
-    val leader2 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic2, 2)
-    val leader1FromZk = zkUtils.getLeaderForPartition(topic2, 1).get
-    val leader2FromZk = zkUtils.getLeaderForPartition(topic2, 2).get
+    val leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, 1)
+    val leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, 2)
+    val leader1FromZk = zkClient.getLeaderForPartition(new TopicPartition(topic2, 1)).get
+    val leader2FromZk = zkClient.getLeaderForPartition(new TopicPartition(topic2, 2)).get
     assertEquals(leader1, leader1FromZk)
     assertEquals(leader2, leader2FromZk)
 

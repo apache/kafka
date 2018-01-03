@@ -1416,13 +1416,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
     override def process(): Unit = {
       zkClient.registerBrokerInZk(brokerInfo)
-      val wasActiveBeforeChange = isActive
-      zkClient.registerZNodeChangeHandlerAndCheckExistence(controllerChangeHandler)
-      activeControllerId = zkClient.getControllerId.getOrElse(-1)
-      if (wasActiveBeforeChange && !isActive) {
-        onControllerResignation()
-      }
-      elect()
+      Reelect.process()
     }
   }
 

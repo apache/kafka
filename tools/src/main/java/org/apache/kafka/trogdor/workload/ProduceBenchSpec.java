@@ -19,11 +19,14 @@ package org.apache.kafka.trogdor.workload;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.apache.kafka.trogdor.common.Topology;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
 
+import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The specification for a benchmark that produces messages to a set of topics.
@@ -94,7 +97,12 @@ public class ProduceBenchSpec extends TaskSpec {
 
     @Override
     public TaskController newController(String id) {
-        return new ProduceBenchController(this);
+        return new TaskController() {
+            @Override
+            public Set<String> targetNodes(Topology topology) {
+                return Collections.singleton(producerNode);
+            }
+        };
     }
 
     @Override

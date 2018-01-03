@@ -76,19 +76,19 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     val topicConfig1 = new Properties
     topicConfig1.setProperty(LogConfig.MaxMessageBytesProp, "500000")
     topicConfig1.setProperty(LogConfig.RetentionMsProp, "60000000")
-    TestUtils.createTopic(zkUtils, topic1, 1, 1, servers, topicConfig1)
+    TestUtils.createTopic(zkClient, topic1, 1, 1, servers, topicConfig1)
 
     val topic2 = "describe-alter-configs-topic-2"
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
-    TestUtils.createTopic(zkUtils, topic2, 1, 1, servers, new Properties)
+    TestUtils.createTopic(zkClient, topic2, 1, 1, servers, new Properties)
 
-    AdminClientIntegrationTest.checkValidAlterConfigs(zkUtils, servers, client, topicResource1, topicResource2)
+    AdminClientIntegrationTest.checkValidAlterConfigs(servers, client, topicResource1, topicResource2)
   }
 
   @Test
   def testInvalidAlterConfigs(): Unit = {
     client = AdminClient.create(createConfig)
-    AdminClientIntegrationTest.checkInvalidAlterConfigs(zkUtils, servers, client)
+    AdminClientIntegrationTest.checkInvalidAlterConfigs(zkClient, servers, client)
   }
 
   @Test
@@ -98,15 +98,15 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     // Create topics
     val topic1 = "invalid-alter-configs-due-to-policy-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
-    TestUtils.createTopic(zkUtils, topic1, 1, 1, servers, new Properties())
+    TestUtils.createTopic(zkClient, topic1, 1, 1, servers, new Properties())
 
     val topic2 = "invalid-alter-configs-due-to-policy-topic-2"
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
-    TestUtils.createTopic(zkUtils, topic2, 1, 1, servers, new Properties)
+    TestUtils.createTopic(zkClient, topic2, 1, 1, servers, new Properties)
 
     val topic3 = "invalid-alter-configs-due-to-policy-topic-3"
     val topicResource3 = new ConfigResource(ConfigResource.Type.TOPIC, topic3)
-    TestUtils.createTopic(zkUtils, topic3, 1, 1, servers, new Properties)
+    TestUtils.createTopic(zkClient, topic3, 1, 1, servers, new Properties)
 
     val topicConfigEntries1 = Seq(
       new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"),

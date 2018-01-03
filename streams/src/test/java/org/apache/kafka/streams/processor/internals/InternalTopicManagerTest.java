@@ -24,7 +24,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -32,17 +31,14 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class InternalTopicManagerTest {
@@ -82,7 +78,7 @@ public class InternalTopicManagerTest {
     }
 
     @After
-    public void shutdown() throws IOException {
+    public void shutdown() {
         mockAdminClient.close();
     }
 
@@ -94,40 +90,6 @@ public class InternalTopicManagerTest {
             Collections.singletonList(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList())),
             null);
         assertEquals(Collections.singletonMap(topic, 1), internalTopicManager.getNumPartitions(Collections.singleton(topic)));
-    }
-
-    @Test
-    public void shouldFailWithUnknownTopicException() {
-        mockAdminClient.addTopic(
-            false,
-            topic,
-            Collections.singletonList(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList())),
-            null);
-
-        try {
-            internalTopicManager.getNumPartitions(new HashSet<String>() {
-                {
-                    add(topic);
-                    add(topic2);
-                }
-            });
-            fail("Should have thrown UnknownTopicOrPartitionException.");
-        } catch (final StreamsException expected) {
-            assertTrue(expected.getCause() instanceof UnknownTopicOrPartitionException);
-        }
-    }
-
-    @Test
-    public void shouldExhaustRetriesOnTimeoutExceptionForGetNumPartitions() {
-        mockAdminClient.timeoutNextRequest(2);
-
-        try {
-            internalTopicManager.getNumPartitions(Collections.singleton(topic));
-            fail("Should have thrown StreamsException.");
-        } catch (final StreamsException expected) {
-            assertNull(expected.getCause());
-            assertEquals("Could not get number of partitions from brokers. This can happen if the Kafka cluster is temporary not available. You can increase admin client config `retries` to be resilient against this error.", expected.getMessage());
-        }
     }
 
     @Test
