@@ -477,7 +477,7 @@ public class ConsumerConfig extends AbstractConfig {
         return newProperties;
     }
 
-    public ConsumerConfig(Map<?, ?> props) {
+    public ConsumerConfig(Properties props) {
         super(CONFIG, props);
     }
 

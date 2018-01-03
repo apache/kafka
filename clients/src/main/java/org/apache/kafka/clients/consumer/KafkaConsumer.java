@@ -602,10 +602,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param valueDeserializer The deserializer for value that implements {@link Deserializer}. The configure() method
      *            won't be called in the consumer when the deserializer is passed in directly.
      */
-    public KafkaConsumer(Map<String, Object> configs,
+    public KafkaConsumer(final Map<String, Object> configs,
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
-        this(new ConsumerConfig(ConsumerConfig.addDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
+        this(new ConsumerConfig(
+            ConsumerConfig.addDeserializerToConfig(
+                new Properties() {
+                    {
+                        putAll(configs);
+                    }
+                },
+                keyDeserializer,
+                valueDeserializer)),
             keyDeserializer,
             valueDeserializer);
     }
