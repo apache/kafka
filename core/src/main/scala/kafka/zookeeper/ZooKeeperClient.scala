@@ -49,8 +49,8 @@ class ZooKeeperClient(connectString: String,
                       connectionTimeoutMs: Int,
                       maxInFlightRequests: Int,
                       time: Time,
-                      metricGroup: String = "kafka.server",
-                      metricType: String = "KafkaHealthcheck") extends Logging with KafkaMetricsGroup {
+                      metricGroup: String,
+                      metricType: String) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[ZooKeeperClient] "
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
@@ -81,25 +81,25 @@ class ZooKeeperClient(connectString: String,
   }
 
   info(s"Initializing a new session to $connectString.")
+  // Fail-fast if there's an error during construction (so don't call initialize, which retries forever)
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
 
-  private val sessionStateGauge =
-    newGauge("SessionState", new Gauge[String] {
-      override def value: String =
-        Option(zooKeeper.getState.toString).getOrElse("DISCONNECTED")
-    })
+  newGauge("SessionState", new Gauge[String] {
+    override def value: String = Option(connectionState.toString).getOrElse("DISCONNECTED")
+  })
 
   metricNames += "SessionState"
 
   waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
 
-
-  /**
-    * This is added to preserve the original metric name in JMX
-    */
   override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
     explicitMetricName(metricGroup, metricType, name, metricTags)
   }
+
+  /**
+   * Return the state of the ZooKeeper connection.
+   */
+  def connectionState: States = zooKeeper.getState
 
   /**
    * Send a request and wait for its response. See handle(Seq[AsyncRequest]) for details.
@@ -214,13 +214,13 @@ class ZooKeeperClient(connectString: String,
     info("Waiting until connected.")
     var nanos = timeUnit.toNanos(timeout)
     inLock(isConnectedOrExpiredLock) {
-      var state = zooKeeper.getState
+      var state = connectionState
       while (!state.isConnected && state.isAlive) {
         if (nanos <= 0) {
           throw new ZooKeeperClientTimeoutException(s"Timed out waiting for connection while in state: $state")
         }
         nanos = isConnectedOrExpiredCondition.awaitNanos(nanos)
-        state = zooKeeper.getState
+        state = connectionState
       }
       if (state == States.AUTH_FAILED) {
         throw new ZooKeeperClientAuthFailedException("Auth failed either before or while waiting for connection")
@@ -309,24 +309,23 @@ class ZooKeeperClient(connectString: String,
   def sessionId: Long = inReadLock(initializationLock) {
     zooKeeper.getSessionId
   }
-
+  
   private def initialize(): Unit = {
-    if (!zooKeeper.getState.isAlive) {
+    if (!connectionState.isAlive) {
+      zooKeeper.close()
       info(s"Initializing a new session to $connectString.")
       // retry forever until ZooKeeper can be instantiated
-      while (true) {
+      var connected = false
+      while (!connected) {
         try {
-          zooKeeper.close()
           zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
-          return
+          connected = true
         } catch {
           case e: Exception =>
-            info("Error when recreating ZooKeeper", e)
+            info("Error when recreating ZooKeeper, retrying after a short sleep", e)
             Thread.sleep(1000)
         }
       }
-      info(s"Timed out waiting for connection during session initialization while in state: ${zooKeeper.getState}")
-      stateChangeHandlers.values.foreach(_.onReconnectionTimeout())
     }
   }
 
@@ -341,7 +340,7 @@ class ZooKeeperClient(connectString: String,
   // package level visibility for testing only
   private[zookeeper] object ZooKeeperClientWatcher extends Watcher {
     override def process(event: WatchedEvent): Unit = {
-      debug("Received event: " + event)
+      debug(s"Received event: $event")
       Option(event.getPath) match {
         case None =>
           val state = event.getState
@@ -377,7 +376,6 @@ trait StateChangeHandler {
   def beforeInitializingSession(): Unit = {}
   def afterInitializingSession(): Unit = {}
   def onAuthFailure(): Unit = {}
-  def onReconnectionTimeout(): Unit = {}
 }
 
 trait ZNodeChangeHandler {

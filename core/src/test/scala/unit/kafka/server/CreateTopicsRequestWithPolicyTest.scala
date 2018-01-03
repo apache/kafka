@@ -21,7 +21,6 @@ import java.util
 import java.util.Properties
 
 import kafka.log.LogConfig
-import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest
@@ -62,7 +61,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
   def testErrorCreateTopicsRequests() {
     val timeout = 10000
     val existingTopic = "existing-topic"
-    TestUtils.createTopic(zkClient, existingTopic, 1, 1, servers)
+    createTopic(existingTopic, 1, 1)
 
     // Policy violations
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(

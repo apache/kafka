@@ -25,8 +25,8 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_9_0
-import kafka.cluster.{Broker, EndPoint}
-import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, KafkaException}
+import kafka.cluster.Broker
+import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
@@ -37,14 +37,12 @@ import kafka.security.CredentialProvider
 import kafka.security.auth.Authorizer
 import kafka.utils._
 import kafka.zk.{BrokerInfo, KafkaZkClient}
-import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics, _}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Node}
@@ -95,7 +93,8 @@ object KafkaServer {
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
  * to start up and shutdown a single Kafka node.
  */
-class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNamePrefix: Option[String] = None, kafkaMetricsReporters: Seq[KafkaMetricsReporter] = List()) extends Logging with KafkaMetricsGroup {
+class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNamePrefix: Option[String] = None,
+                  kafkaMetricsReporters: Seq[KafkaMetricsReporter] = List()) extends Logging with KafkaMetricsGroup {
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
   private val isStartingUp = new AtomicBoolean(false)
@@ -238,31 +237,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
 
-        /* tell everyone we are alive */
-        val listeners = config.advertisedListeners.map { endpoint =>
-          if (endpoint.port == 0)
-            endpoint.copy(port = socketServer.boundPort(endpoint.listenerName))
-          else
-            endpoint
-        }
-
-        val updatedEndpoints = listeners.map(endpoint =>
-          if (endpoint.host == null || endpoint.host.trim.isEmpty)
-            endpoint.copy(host = InetAddress.getLocalHost.getCanonicalHostName)
-          else
-            endpoint
-        )
-
-        // the default host and port are here for compatibility with older clients that only support PLAINTEXT
-        // we choose the first plaintext port, if there is one
-        // or we register an empty endpoint, which means that older clients will not be able to connect
-        val plaintextEndpoint = updatedEndpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).getOrElse(
-          new EndPoint(null, -1, null, null))
-
-        val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
-        val brokerInfo = new BrokerInfo(config.brokerId,
-          plaintextEndpoint.host, plaintextEndpoint.port,
-          updatedEndpoints, jmxPort, config.rack, config.interBrokerProtocolVersion)
+        val brokerInfo = createBrokerInfo
         zkClient.registerBrokerInZk(brokerInfo)
 
         // Now that the broker id is successfully registered, checkpoint it
@@ -342,6 +317,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   private def initZkClient(time: Time): Unit = {
     info(s"Connecting to zookeeper on ${config.zkConnect}")
 
+    def createZkClient(zkConnect: String, isSecure: Boolean) =
+      KafkaZkClient(zkConnect, isSecure, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
+        config.zkMaxInFlightRequests, time)
+
     val chrootIndex = config.zkConnect.indexOf("/")
     val chrootOption = {
       if (chrootIndex > 0) Some(config.zkConnect.substring(chrootIndex))
@@ -357,22 +336,37 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     // make sure chroot path exists
     chrootOption.foreach { chroot =>
       val zkConnForChrootCreation = config.zkConnect.substring(0, chrootIndex)
-      val zooKeeperClient = new ZooKeeperClient(zkConnForChrootCreation, config.zkSessionTimeoutMs,
-        config.zkConnectionTimeoutMs, config.zkMaxInFlightRequests, time)
-      val zkClient = new KafkaZkClient(zooKeeperClient, secureAclsEnabled, time)
+      val zkClient = createZkClient(zkConnForChrootCreation, secureAclsEnabled)
       zkClient.makeSurePersistentPathExists(chroot)
       info(s"Created zookeeper path $chroot")
       zkClient.close()
     }
 
-    val zooKeeperClient = new ZooKeeperClient(config.zkConnect, config.zkSessionTimeoutMs,
-      config.zkConnectionTimeoutMs, config.zkMaxInFlightRequests, time)
-    _zkClient = new KafkaZkClient(zooKeeperClient, secureAclsEnabled, time)
+    _zkClient = createZkClient(config.zkConnect, secureAclsEnabled)
     _zkClient.createTopLevelPaths()
   }
 
-  def getOrGenerateClusterId(zkClient: KafkaZkClient): String = {
+  private def getOrGenerateClusterId(zkClient: KafkaZkClient): String = {
     zkClient.getClusterId.getOrElse(zkClient.createOrGetClusterId(CoreUtils.generateUuidAsBase64))
+  }
+
+  private def createBrokerInfo: BrokerInfo = {
+    val listeners = config.advertisedListeners.map { endpoint =>
+      if (endpoint.port == 0)
+        endpoint.copy(port = socketServer.boundPort(endpoint.listenerName))
+      else
+        endpoint
+    }
+
+    val updatedEndpoints = listeners.map(endpoint =>
+      if (endpoint.host == null || endpoint.host.trim.isEmpty)
+        endpoint.copy(host = InetAddress.getLocalHost.getCanonicalHostName)
+      else
+        endpoint
+    )
+
+    val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
+    BrokerInfo(Broker(config.brokerId, updatedEndpoints, config.rack), config.interBrokerProtocolVersion, jmxPort)
   }
 
   /**
@@ -438,22 +432,29 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           // 1. Find the controller and establish a connection to it.
 
           // Get the current controller info. This is to ensure we use the most recent info to issue the
-          // controlled shutdown request
-          val controllerId = zkClient.getControllerId.getOrElse(throw new KafkaException("Controller doesn't exist"))
-          //If this method returns None ignore and try again
-          zkClient.getBroker(controllerId).foreach { broker =>
-            // if this is the first attempt, if the controller has changed or if an exception was thrown in a previous
-            // attempt, connect to the most recent controller
-            if (ioException || broker != prevController) {
+          // controlled shutdown request.
+          // If the controller id or the broker registration are missing, we sleep and retry (if there are remaining retries)
+          zkClient.getControllerId match {
+            case Some(controllerId) =>
+              zkClient.getBroker(controllerId) match {
+                case Some(broker) =>
+                  // if this is the first attempt, if the controller has changed or if an exception was thrown in a previous
+                  // attempt, connect to the most recent controller
+                  if (ioException || broker != prevController) {
 
-              ioException = false
+                    ioException = false
 
-              if (prevController != null)
-                networkClient.close(node(prevController).idString)
+                    if (prevController != null)
+                      networkClient.close(node(prevController).idString)
 
-              prevController = broker
-              metadataUpdater.setNodes(Seq(node(prevController)).asJava)
-            }
+                    prevController = broker
+                    metadataUpdater.setNodes(Seq(node(prevController)).asJava)
+                  }
+                case None =>
+                  info(s"Broker registration for controller $controllerId is not available (i.e. the Controller's ZK session expired)")
+              }
+            case None =>
+              info("No controller registered in ZooKeeper")
           }
 
           // 2. issue a controlled shutdown to the controller
@@ -477,14 +478,15 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
                 info("Controlled shutdown succeeded")
               }
               else {
-                info("Remaining partitions to move: %s".format(shutdownResponse.partitionsRemaining.asScala.mkString(",")))
-                info("Error code from controller: %d".format(shutdownResponse.error.code))
+                info(s"Remaining partitions to move: ${shutdownResponse.partitionsRemaining.asScala.mkString(",")}")
+                info(s"Error from controller: ${shutdownResponse.error}")
               }
             }
             catch {
               case ioe: IOException =>
                 ioException = true
-                warn("Error during controlled shutdown, possibly because leader movement took longer than the configured controller.socket.timeout.ms and/or request.timeout.ms: %s".format(ioe.getMessage))
+                warn("Error during controlled shutdown, possibly because leader movement took longer than the " +
+                  s"configured controller.socket.timeout.ms and/or request.timeout.ms: ${ioe.getMessage}")
                 // ignore and try again
             }
           }

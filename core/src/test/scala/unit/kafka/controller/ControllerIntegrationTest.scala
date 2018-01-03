@@ -87,7 +87,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   @Test
   def testTopicCreationWithOfflineReplica(): Unit = {
     servers = makeServers(2)
-    val controllerId = TestUtils.waitUntilControllerElected(zkUtils)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
@@ -115,7 +115,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   @Test
   def testTopicPartitionExpansionWithOfflineReplica(): Unit = {
     servers = makeServers(2)
-    val controllerId = TestUtils.waitUntilControllerElected(zkUtils)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
     val tp0 = TopicAndPartition("t", 0)
     val tp1 = TopicAndPartition("t", 1)
@@ -133,7 +133,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   @Test
   def testPartitionReassignment(): Unit = {
     servers = makeServers(2)
-    val controllerId = TestUtils.waitUntilControllerElected(zkUtils)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
 
     val metricName = s"kafka.controller:type=ControllerStats,name=${ControllerState.PartitionReassignment.rateAndTimeMetricName.get}"
     val timerCount = timer(metricName).count
@@ -158,7 +158,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   @Test
   def testPartitionReassignmentWithOfflineReplicaHaltingProgress(): Unit = {
     servers = makeServers(2)
-    val controllerId = TestUtils.waitUntilControllerElected(zkUtils)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
     val tp = TopicAndPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(controllerId))
@@ -176,7 +176,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   @Test
   def testPartitionReassignmentResumesAfterReplicaComesOnline(): Unit = {
     servers = makeServers(2)
-    val controllerId = TestUtils.waitUntilControllerElected(zkUtils)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
     val tp = TopicAndPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(controllerId))
@@ -199,7 +199,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   @Test
   def testPreferredReplicaLeaderElection(): Unit = {
     servers = makeServers(2)
-    val controllerId = TestUtils.waitUntilControllerElected(zkUtils)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val otherBroker = servers.find(_.config.brokerId != controllerId).get
     val tp = TopicAndPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(otherBroker.config.brokerId, controllerId))
@@ -210,7 +210,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   @Test
   def testBackToBackPreferredReplicaLeaderElections(): Unit = {
     servers = makeServers(2)
-    val controllerId = TestUtils.waitUntilControllerElected(zkUtils)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val otherBroker = servers.find(_.config.brokerId != controllerId).get
     val tp = TopicAndPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(otherBroker.config.brokerId, controllerId))
@@ -222,7 +222,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   @Test
   def testPreferredReplicaLeaderElectionWithOfflinePreferredReplica(): Unit = {
     servers = makeServers(2)
-    val controllerId = TestUtils.waitUntilControllerElected(zkUtils)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
     val tp = TopicAndPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(otherBrokerId, controllerId))
@@ -239,7 +239,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   @Test
   def testAutoPreferredReplicaLeaderElection(): Unit = {
     servers = makeServers(2, autoLeaderRebalanceEnable = true)
-    val controllerId = TestUtils.waitUntilControllerElected(zkUtils)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
     val tp = TopicAndPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(1, 0))
@@ -256,7 +256,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   @Test
   def testLeaderAndIsrWhenEntireIsrOfflineAndUncleanLeaderElectionDisabled(): Unit = {
     servers = makeServers(2)
-    val controllerId = TestUtils.waitUntilControllerElected(zkUtils)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
     val tp = TopicAndPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(otherBrokerId))
@@ -276,7 +276,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   @Test
   def testLeaderAndIsrWhenEntireIsrOfflineAndUncleanLeaderElectionEnabled(): Unit = {
     servers = makeServers(2, uncleanLeaderElectionEnable = true)
-    val controllerId = TestUtils.waitUntilControllerElected(zkUtils)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
     val tp = TopicAndPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(otherBrokerId))

@@ -439,7 +439,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     for (describeType <- describeTypes) {
       val group = this.group + describeType.mkString("")
       // run one consumer in the group consuming from a single-partition topic
-      val executor = addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 2, group, topic))
+      addConsumerGroupExecutor(new ConsumerGroupExecutor(brokerList, 2, group, topic))
       val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group) ++ describeType
       val service = getConsumerGroupService(cgcArgs)
 

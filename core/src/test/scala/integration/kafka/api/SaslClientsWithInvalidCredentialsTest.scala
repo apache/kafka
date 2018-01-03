@@ -62,7 +62,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both,
       JaasTestUtils.KafkaServerContextName))
     super.setUp()
-    TestUtils.createTopic(zkClient, topic, numPartitions, serverCount, this.servers)
+    createTopic(topic, numPartitions, serverCount)
   }
 
   @After
