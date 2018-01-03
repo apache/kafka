@@ -47,11 +47,11 @@ case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String]) {
     this(bep.id, bep.host, bep.port, listenerName, protocol)
   }
 
-  def node(listenerName: ListenerName): Node = {
-    val endpoint = endPointsMap.getOrElse(listenerName,
-      throw new BrokerEndPointNotAvailableException(s"End point with listener name ${listenerName.value} not found for broker $id"))
-    new Node(id, endpoint.host, endpoint.port, rack.orNull)
-  }
+  def node(listenerName: ListenerName): Node =
+    getNode(listenerName).getOrElse {
+      throw new BrokerEndPointNotAvailableException(s"End point with listener name ${listenerName.value} not found " +
+        s"for broker $id")
+    }
 
   def getNode(listenerName: ListenerName): Option[Node] =
     endPointsMap.get(listenerName).map(endpoint => new Node(id, endpoint.host, endpoint.port, rack.orNull))

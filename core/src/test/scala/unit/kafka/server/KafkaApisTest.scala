@@ -369,7 +369,8 @@ class KafkaApisTest {
    */
   @Test
   def testMetadataRequestOnSharedListenerWithInconsistentListenersAcrossBrokers(): Unit = {
-    val response = sendMetadataRequestWithInconsistentListeners(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+    val (plaintextListener, _) = updateMetadataCacheWithInconsistentListeners()
+    val response = sendMetadataRequestWithInconsistentListeners(plaintextListener)
     assertEquals(Set(0, 1), response.brokers.asScala.map(_.id).toSet)
   }
 
@@ -379,11 +380,15 @@ class KafkaApisTest {
    */
   @Test
   def testMetadataRequestOnDistinctListenerWithInconsistentListenersAcrossBrokers(): Unit = {
-    val response = sendMetadataRequestWithInconsistentListeners(new ListenerName("LISTENER2"))
+    val (_, anotherListener) = updateMetadataCacheWithInconsistentListeners()
+    val response = sendMetadataRequestWithInconsistentListeners(anotherListener)
     assertEquals(Set(0), response.brokers.asScala.map(_.id).toSet)
   }
 
-  private def sendMetadataRequestWithInconsistentListeners(requestListener: ListenerName): MetadataResponse = {
+  /**
+   * Return pair of listener names in the metadataCache: PLAINTEXT and LISTENER2 respectively.
+   */
+  private def updateMetadataCacheWithInconsistentListeners(): (ListenerName, ListenerName) = {
     import UpdateMetadataRequest.{Broker => UBroker}
     import UpdateMetadataRequest.{EndPoint => UEndPoint}
     val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
@@ -397,7 +402,10 @@ class KafkaApisTest {
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
       0, Map.empty[TopicPartition, UpdateMetadataRequest.PartitionState].asJava, brokers.asJava).build()
     metadataCache.updateCache(correlationId = 0, updateMetadataRequest)
+    (plaintextListener, anotherListener)
+  }
 
+  private def sendMetadataRequestWithInconsistentListeners(requestListener: ListenerName): MetadataResponse = {
     val capturedResponse = EasyMock.newCapture[RequestChannel.Response]()
     val capturedThrottleCallback = EasyMock.newCapture[Int => Unit]()
     expectThrottleCallbackAndInvoke(capturedThrottleCallback)
