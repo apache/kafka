@@ -125,6 +125,11 @@
 <ul>
     <li>Restored binary compatibility of AdminClient's Options classes (e.g. CreateTopicsOptions, DeleteTopicsOptions, etc.) with
         0.11.0.x. Binary (but not source) compatibility had been broken inadvertently in 1.0.0.</li>
+    <li>Kafka Streams is more robust against broker communication errors. Instead of stopping the Kafka Streams client with a fatal exception,
+	Kafka Streams tries to self-heal and reconnect to the cluster. Using the new <code>AdminClient</code> you have also more control how often
+	Kafka Streams should retry and configure timeouts fine grained (instead of hard coded retries as in older version).</li>
+    <li>Kafka Streams rebalance time was reduced further making Kafka Streams more responsive.</li>
+        
 </ul>
 
 <h5><a id="upgrade_100_notable" href="#upgrade_100_notable">Notable changes in 1.0.0</a></h5>
