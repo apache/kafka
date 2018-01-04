@@ -1663,6 +1663,8 @@ private[controller] class ControllerStats extends KafkaMetricsGroup {
 }
 
 sealed trait ControllerEvent {
+  @volatile var enqueueTimeMs: Long = -1L
+
   def state: ControllerState
   def process(): Unit
 }
