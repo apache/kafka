@@ -22,7 +22,7 @@ import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, Invali
 import org.apache.kafka.common.metrics.Quota
 import org.easymock.EasyMock
 import org.junit.Assert._
-import org.junit.{After, Test}
+import org.junit.{After, Before, Test}
 import java.util.Properties
 
 import kafka.utils._
@@ -39,6 +39,7 @@ import kafka.utils.TestUtils._
 import scala.collection.{Map, Set, immutable}
 import kafka.utils.CoreUtils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.security.JaasUtils
 
 import scala.collection.JavaConverters._
 import scala.util.Try
@@ -46,9 +47,18 @@ import scala.util.Try
 class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   var servers: Seq[KafkaServer] = Seq()
+  var zkUtils: ZkUtils = null
+
+  @Before
+  override def setUp() {
+    super.setUp()
+    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
+  }
 
   @After
   override def tearDown() {
+    if (zkUtils != null)
+     CoreUtils.swallow(zkUtils.close(), this)
     TestUtils.shutdownServers(servers)
     super.tearDown()
   }

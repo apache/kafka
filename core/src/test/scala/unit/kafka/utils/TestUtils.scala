@@ -28,7 +28,7 @@ import javax.net.ssl.X509TrustManager
 
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
-import kafka.common.{KafkaException, TopicAndPartition}
+import kafka.common.TopicAndPartition
 import kafka.consumer.{ConsumerConfig, ConsumerTimeoutException, KafkaStream}
 import kafka.log._
 import kafka.message._

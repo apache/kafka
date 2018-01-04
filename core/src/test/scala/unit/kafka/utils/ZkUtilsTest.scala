@@ -21,12 +21,27 @@ import kafka.api.LeaderAndIsr
 import kafka.common.TopicAndPartition
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.security.JaasUtils
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{After, Before, Test}
 
 class ZkUtilsTest extends ZooKeeperTestHarness {
 
   val path = "/path"
+  var zkUtils: ZkUtils = null
+
+  @Before
+  override def setUp() {
+    super.setUp
+    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
+  }
+
+  @After
+  override def tearDown() {
+    if (zkUtils != null)
+     CoreUtils.swallow(zkUtils.close(), this)
+    super.tearDown
+  }
 
   @Test
   def testSuccessfulConditionalDeletePath() {

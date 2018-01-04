@@ -21,18 +21,15 @@ import java.lang.Iterable
 import javax.security.auth.login.Configuration
 
 import scala.collection.JavaConverters._
-
 import kafka.consumer.ConsumerConfig
-import kafka.utils.ZkUtils
-import kafka.utils.ZKCheckedEphemeral
-import kafka.utils.TestUtils
+import kafka.utils.{CoreUtils, TestUtils, ZKCheckedEphemeral, ZkUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.WatchedEvent
 import org.apache.zookeeper.Watcher
 import org.apache.zookeeper.ZooDefs.Ids
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import org.junit.{After, Before, Test, Assert}
+import org.junit.{After, Assert, Before, Test}
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
 import org.junit.runner.RunWith
@@ -50,7 +47,8 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
   val jaasFile = kafka.utils.JaasTestUtils.writeJaasContextsToFile(kafka.utils.JaasTestUtils.zkSections)
   val authProvider = "zookeeper.authProvider.1"
   var zkSessionTimeoutMs = 1000
-  
+  var zkUtils: ZkUtils = null
+
   @Before
   override def setUp() {
     if (secure) {
@@ -61,10 +59,13 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
         fail("Secure access not enabled")
     }
     super.setUp
+    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
   }
   
   @After
   override def tearDown() {
+    if (zkUtils != null)
+     CoreUtils.swallow(zkUtils.close(), this)
     super.tearDown
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     System.clearProperty(authProvider)
