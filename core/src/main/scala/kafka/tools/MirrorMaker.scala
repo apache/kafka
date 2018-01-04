@@ -427,9 +427,9 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
             while (!exitingOnSendFailure && !shuttingDown && mirrorMakerConsumer.hasData) {
               val data = mirrorMakerConsumer.receive()
               if (data.value != null) {
-                trace("Sending message with value size %d and offset %d".format(data.value.length, data.offset))
+                trace("Sending message with value size %d and offset %d.".format(data.value.length, data.offset))
               } else {
-                trace("Sending message with null value and offset %d".format(data.offset))
+                trace("Sending message with null value and offset %d.".format(data.offset))
               }
               val records = messageHandler.handle(data)
               records.asScala.foreach(producer.send)
