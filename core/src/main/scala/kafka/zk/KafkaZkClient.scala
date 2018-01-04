@@ -768,7 +768,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     getTopicPartitionState(partition).map(_.leaderAndIsr.leader)
 
   /**
-   *  Gets the in-sync replicas (ISR) for a specific topicPartition
+   * Gets the in-sync replicas (ISR) for a specific topicPartition
    * @param partition
    * @return  ISR for a given partition
    */
@@ -777,7 +777,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
 
 
   /**
-   *  Gets the leader epoch for a specific topicPartition
+   * Gets the leader epoch for a specific topicPartition
    * @param partition
    * @return  leader epoch a given partition
    */

@@ -245,14 +245,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       consumers += TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT)
 
     // create the consumer offset topic
-    TestUtils.createTopic(zkClient, GROUP_METADATA_TOPIC_NAME,
-      1,
-      1,
-      servers,
-      servers.head.groupCoordinator.offsetsTopicConfigs)
+    createTopic(GROUP_METADATA_TOPIC_NAME, topicConfig = servers.head.groupCoordinator.offsetsTopicConfigs)
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(zkClient, topic, 1, 1, this.servers)
-    TestUtils.createTopic(zkClient, deleteTopic, 1, 1, this.servers)
+    createTopic(topic)
+    createTopic(deleteTopic)
   }
 
   @After
@@ -711,7 +707,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     // create an unmatched topic
     val unmatchedTopic = "unmatched"
-    TestUtils.createTopic(zkClient, unmatchedTopic, 1, 1, this.servers)
+    createTopic(unmatchedTopic)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)),  new Resource(Topic, unmatchedTopic))
     sendRecords(1, new TopicPartition(unmatchedTopic, part))
     removeAllAcls()
