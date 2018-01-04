@@ -2309,6 +2309,25 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
             System.out.println("Count of 'world' @ time " + windowTimestamp + " is " + next.value);
           }
           iterator.close();
+
+	 //Fetch values for all of the windows available within a set time range.
+	 WindowStoreIterator&lt;Long&gt; iterator = windowStore.fetchAll(timeFrom, timeTo);
+         while (iterator.hasNext()) {
+           KeyValue&lt;Long, Long&gt; next = iterator.next();
+           long windowTimestamp = next.key;
+           System.out.println("Count of 'world' @ time " + windowTimestamp + " is " + next.value);
+         }
+         iterator.close();
+
+	//Fetches all values for all windows 
+	WindowStoreIterator&lt;Long&gt; iterator = windowStore.all();
+        while (iterator.hasNext()) {
+          KeyValue&lt;Long, Long&gt; next = iterator.next();
+          long windowTimestamp = next.key;
+          System.out.println("Count of 'world' @ time " + windowTimestamp + " is " + next.value);
+        }
+        iterator.close();
+	
         </pre>
 
     <h4><a id="streams_developer-guide_interactive-queries_custom-stores" href="#streams_developer-guide_interactive-queries_custom-stores">Querying local custom state stores</a></h4>
