@@ -59,7 +59,7 @@ class BrokerEndPointTest {
     }"""
     val broker = parseBrokerJson(1, brokerInfoStr)
     assertEquals(1, broker.id)
-    val brokerEndPoint = broker.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.SSL))
+    val brokerEndPoint = broker.brokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.SSL))
     assertEquals("localhost", brokerEndPoint.host)
     assertEquals(9093, brokerEndPoint.port)
   }
@@ -76,7 +76,7 @@ class BrokerEndPointTest {
     }"""
     val broker = parseBrokerJson(1, brokerInfoStr)
     assertEquals(1, broker.id)
-    val brokerEndPoint = broker.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+    val brokerEndPoint = broker.brokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
     assertEquals("localhost", brokerEndPoint.host)
     assertEquals(9092, brokerEndPoint.port)
   }
@@ -86,7 +86,7 @@ class BrokerEndPointTest {
     val brokerInfoStr = """{"jmx_port":-1,"timestamp":"1420485325400","host":"172.16.8.243","version":1,"port":9091}"""
     val broker = parseBrokerJson(1, brokerInfoStr)
     assertEquals(1, broker.id)
-    val brokerEndPoint = broker.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+    val brokerEndPoint = broker.brokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
     assertEquals("172.16.8.243", brokerEndPoint.host)
     assertEquals(9091, brokerEndPoint.port)
   }
@@ -104,7 +104,7 @@ class BrokerEndPointTest {
     }"""
     val broker = parseBrokerJson(1, json)
     assertEquals(1, broker.id)
-    val brokerEndPoint = broker.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.SSL))
+    val brokerEndPoint = broker.brokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.SSL))
     assertEquals("host1", brokerEndPoint.host)
     assertEquals(9093, brokerEndPoint.port)
     assertEquals(Some("dc1"), broker.rack)
@@ -124,7 +124,7 @@ class BrokerEndPointTest {
     }"""
     val broker = parseBrokerJson(1, json)
     assertEquals(1, broker.id)
-    val brokerEndPoint = broker.getBrokerEndPoint(new ListenerName("CLIENT"))
+    val brokerEndPoint = broker.brokerEndPoint(new ListenerName("CLIENT"))
     assertEquals("host1", brokerEndPoint.host)
     assertEquals(9092, brokerEndPoint.port)
     assertEquals(None, broker.rack)
@@ -143,7 +143,7 @@ class BrokerEndPointTest {
     }"""
     val broker = parseBrokerJson(1, json)
     assertEquals(1, broker.id)
-    val brokerEndPoint = broker.getBrokerEndPoint(new ListenerName("CLIENT"))
+    val brokerEndPoint = broker.brokerEndPoint(new ListenerName("CLIENT"))
     assertEquals("host1", brokerEndPoint.host)
     assertEquals(9092, brokerEndPoint.port)
     assertEquals(None, broker.rack)
