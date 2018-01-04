@@ -37,7 +37,7 @@
       before the records are written to state stores or forwarded downstream to other nodes.</p>
     <p>The record caches are implemented slightly different in the DSL and Processor API.</p>
     <div class="contents local topic" id="table-of-contents">
-      <p class="topic-title first">Table of Contents</p>
+      <p class="topic-title first"><b>Table of Contents</b></p>
       <ul class="simple">
         <li><a class="reference internal" href="#record-caches-in-the-dsl" id="id1">Record caches in the DSL</a></li>
         <li><a class="reference internal" href="#record-caches-in-the-processor-api" id="id2">Record caches in the Processor API</a></li>
@@ -185,7 +185,7 @@
           <code class="docutils literal"><span class="pre">rocksdb.config.setter</span></code> configuration.</li>
       </ul>
       <div class="admonition tip">
-        <p class="first admonition-title">Tip</p>
+        <p><b>Tip</b></p>
         <p><strong>Iterators should be closed explicitly to release resources:</strong> Store iterators (e.g., <code class="docutils literal"><span class="pre">KeyValueIterator</span></code> and <code class="docutils literal"><span class="pre">WindowStoreIterator</span></code>) must be closed explicitly upon completeness to release resources such as open file handlers and in-memory read buffers, or use try-with-resources statement (available since JDK7) for this Closeable class.</p>
         <p class="last">Otherwise, stream application&#8217;s memory usage keeps increasing when running until it hits an OOM.</p>
 </div>
