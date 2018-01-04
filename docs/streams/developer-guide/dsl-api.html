@@ -700,7 +700,7 @@
                 </ul>
                 <p>The following diagram shows their relationships:</p>
                 <div class="figure align-center" id="id2">
-                    <a class="reference internal image-reference" href="../../../images/streams-stateful_operations.png"><img alt="../../../images/streams-stateful_operations.png" src="../../../images/streams-stateful_operations.png" style="width: 400pt;" /></a>
+                    <img class="centered" src="/{{version}}/images/streams-stateful_operations.png">
                     <p class="caption"><span class="caption-text">Stateful transformations in the DSL.</span></p>
                 </div>
                 <p>Here is an example of a stateful application: the WordCount algorithm.</p>
@@ -2743,7 +2743,7 @@
                             A tumbling window is a hopping window whose window size is equal to its advance interval.
                             Since tumbling windows never overlap, a data record will belong to one and only one window.</p>
                         <div class="figure align-center" id="id3">
-                            <a class="reference internal image-reference" href="../../../images/streams-time-windows-tumbling.png"><img alt="../../../images/streams-time-windows-tumbling.png" src="../../../images/streams-time-windows-tumbling.png" style="width: 400pt;" /></a>
+                            <img class="centered" src="/{{version}}/images/streams-time-windows-tumbling.png">
                             <p class="caption"><span class="caption-text">This diagram shows windowing a stream of data records with tumbling windows.  Windows do not overlap because, by
 definition, the advance interval is identical to the window size.  In this diagram the time numbers represent minutes;
 e.g. t=5 means &#8220;at the five-minute mark&#8221;.  In reality, the unit of time in Kafka Streams is milliseconds, which means
@@ -2793,7 +2793,7 @@ become t=300,000).</span></p>
 </pre></div>
                         </div>
                         <div class="figure align-center" id="id4">
-                            <a class="reference internal image-reference" href="../../../images/streams-time-windows-hopping.png"><img alt="../../../images/streams-time-windows-hopping.png" src="../../../images/streams-time-windows-hopping.png" style="width: 400pt;" /></a>
+                            <img class="centered" src="/{{version}}/images/streams-time-windows-hopping.png">
                             <p class="caption"><span class="caption-text">This diagram shows windowing a stream of data records with hopping windows.  In this diagram the time numbers
 represent minutes; e.g. t=5 means &#8220;at the five-minute mark&#8221;.  In reality, the unit of time in Kafka Streams is
 milliseconds, which means the time numbers would need to be multiplied with 60 * 1,000 to convert from minutes to
@@ -2849,7 +2849,7 @@ milliseconds (e.g. t=5 would become t=300,000).</span></p>
                             0-minute mark (only due to the illustration it looks as if the session goes from 0 to 1), and another starting and
                             ending at the 6-minute mark; and one session for the blue record key, starting and ending at the 2-minute mark.</p>
                         <div class="figure align-center" id="id5">
-                            <a class="reference internal image-reference" href="../../../images/streams-session-windows-01.png"><img alt="../../../images/streams-session-windows-01.png" src="../../../images/streams-session-windows-01.png" style="width: 400pt;" /></a>
+                            <img class="centered" src="/{{version}}/images/streams-session-windows-01.png">
                             <p class="caption"><span class="caption-text">Detected sessions after having received three input records: two records for the green record key at t=0 and t=6, and
 one record for the blue record key at t=2.
 In this diagram the time numbers represent minutes; e.g.  t=5 means &#8220;at the five-minute mark&#8221;.  In reality, the unit
@@ -2862,7 +2862,7 @@ convert from minutes to milliseconds (e.g. t=5 would become t=300,000).</span></
                             consisting of a total of two records.  And, finally, there will be a new session for the blue key starting and ending at
                             time 11.</p>
                         <div class="figure align-center" id="id6">
-                            <a class="reference internal image-reference" href="../../../images/streams-session-windows-02.png"><img alt="../../../images/streams-session-windows-02.png" src="../../../images/streams-session-windows-02.png" style="width: 400pt;" /></a>
+                            <img class="centered" src="/{{version}}/images/streams-session-windows-02.png">
                             <p class="caption"><span class="caption-text">Detected sessions after having received six input records.  Note the two late-arriving data records at t=4 (green) and
 t=5 (blue), which lead to a merge of sessions and an extension of a session, respectively.</span></p>
                         </div>
