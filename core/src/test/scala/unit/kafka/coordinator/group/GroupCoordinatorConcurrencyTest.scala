@@ -17,20 +17,17 @@
 
 package kafka.coordinator.group
 
-import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
+import java.util.concurrent.{ ConcurrentHashMap, TimeUnit }
 
 import kafka.common.OffsetAndMetadata
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest._
 import kafka.server.{ DelayedOperationPurgatory, KafkaConfig }
-
-
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.JoinGroupRequest
-
+import org.apache.kafka.common.requests.{ JoinGroupRequest, TransactionResult }
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{ After, Before, Test }
@@ -40,22 +37,6 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{ Await, Future, Promise, TimeoutException }
 
 class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest[GroupMember] {
-
-  type JoinGroupCallback = JoinGroupResult => Unit
-  type SyncGroupCallbackParams = (Array[Byte], Errors)
-  type SyncGroupCallback = (Array[Byte], Errors) => Unit
-  type HeartbeatCallbackParams = Errors
-  type HeartbeatCallback = Errors => Unit
-  type CommitOffsetCallbackParams = Map[TopicPartition, Errors]
-  type CommitOffsetCallback = Map[TopicPartition, Errors] => Unit
-  type LeaveGroupCallbackParams = Errors
-  type LeaveGroupCallback = Errors => Unit
-
-  private val ConsumerMinSessionTimeout = 10
-  private val ConsumerMaxSessionTimeout = 120 * 1000
-  private val DefaultRebalanceTimeout = 60 * 1000
-  private val DefaultSessionTimeout = 60 * 1000
-  private val GroupInitialRebalanceDelay = 50
 
   private val protocolType = "consumer"
   private val metadata = Array[Byte]()
@@ -70,9 +51,16 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       new SyncGroupOperation,
       new CommitOffsetsOperation,
       new HeartbeatOperation,
-      new CommitTxnOffsetsOperation,
       new LeaveGroupOperation
     )
+  private val allOperationsWithTxn = Seq(
+    new JoinGroupOperation,
+    new SyncGroupOperation,
+    new CommitTxnOffsetsOperation,
+    new CompleteTxnOperation,
+    new HeartbeatOperation,
+    new LeaveGroupOperation
+  )
 
   var groupCoordinator: GroupCoordinator = _
 
@@ -80,11 +68,10 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   override def setUp() {
     super.setUp()
 
-    // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
-    EasyMock.expect(zkUtils.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME))
+    EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME))
       .andReturn(Some(numPartitions))
       .anyTimes()
-    EasyMock.replay(zkUtils)
+    EasyMock.replay(zkClient)
 
     serverProps.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, ConsumerMinSessionTimeout.toString)
     serverProps.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, ConsumerMaxSessionTimeout.toString)
@@ -95,7 +82,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     val heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
     val joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
-    groupCoordinator = GroupCoordinator(config, zkUtils, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time)
+    groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time)
     groupCoordinator.startup(false)
   }
 
@@ -121,8 +108,13 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   }
 
   @Test
+  def testConcurrentTxnGoodPathSequence() {
+    verifyConcurrentOperations(createGroupMembers, allOperationsWithTxn)
+  }
+
+  @Test
   def testConcurrentRandomSequence() {
-    verifyConcurrentRandomSequences(createGroupMembers, allOperations)
+    verifyConcurrentRandomSequences(createGroupMembers, allOperationsWithTxn)
   }
 
 
@@ -226,7 +218,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
        val offsets = await(member, 500)
-       offsets.foreach { case (_, error) => assertEquals(Errors.NONE,error) }
+       offsets.foreach { case (_, error) => assertEquals(Errors.NONE, error) }
     }
   }
 
@@ -238,6 +230,29 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       val producerEpoch : Short = 2
       groupCoordinator.handleTxnCommitOffsets(member.group.groupId,
           producerId, producerEpoch, offsets, responseCallback)
+    }
+  }
+
+  class CompleteTxnOperation extends GroupOperation[CompleteTxnCallbackParams, CompleteTxnCallback] {
+    override def responseCallback(responsePromise: Promise[CompleteTxnCallbackParams]): CompleteTxnCallback = {
+      val callback: CompleteTxnCallback = error => responsePromise.success(error)
+      callback
+    }
+    override def runWithCallback(member: GroupMember, responseCallback: CompleteTxnCallback): Unit = {
+      val producerId = 1000L
+      val offsetsPartitions = (0 to numPartitions).map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, _))
+      groupCoordinator.handleTxnCompletion(producerId, offsetsPartitions, transactionResult(member.group.groupId))
+      responseCallback(Errors.NONE)
+    }
+    override def awaitAndVerify(member: GroupMember): Unit = {
+      val error = await(member, 500)
+      assertEquals(Errors.NONE, error)
+    }
+    // Test both commit and abort. Group ids used in the test have the format <prefix><index>
+    // Use the last digit of the index to decide between commit and abort.
+    private def transactionResult(groupId: String): TransactionResult = {
+      val lastDigit = groupId(groupId.length - 1).toInt
+      if (lastDigit % 2 == 0) TransactionResult.COMMIT else TransactionResult.ABORT
     }
   }
 
@@ -257,6 +272,25 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 }
 
 object GroupCoordinatorConcurrencyTest {
+
+
+  type JoinGroupCallback = JoinGroupResult => Unit
+  type SyncGroupCallbackParams = (Array[Byte], Errors)
+  type SyncGroupCallback = (Array[Byte], Errors) => Unit
+  type HeartbeatCallbackParams = Errors
+  type HeartbeatCallback = Errors => Unit
+  type CommitOffsetCallbackParams = Map[TopicPartition, Errors]
+  type CommitOffsetCallback = Map[TopicPartition, Errors] => Unit
+  type LeaveGroupCallbackParams = Errors
+  type LeaveGroupCallback = Errors => Unit
+  type CompleteTxnCallbackParams = Errors
+  type CompleteTxnCallback = Errors => Unit
+
+  private val ConsumerMinSessionTimeout = 10
+  private val ConsumerMaxSessionTimeout = 120 * 1000
+  private val DefaultRebalanceTimeout = 60 * 1000
+  private val DefaultSessionTimeout = 60 * 1000
+  private val GroupInitialRebalanceDelay = 50
 
   class Group(val groupId: String, nMembers: Int,
       groupCoordinator: GroupCoordinator, replicaManager: TestReplicaManager) {

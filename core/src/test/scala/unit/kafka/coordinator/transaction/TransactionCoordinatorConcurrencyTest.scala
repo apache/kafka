@@ -53,10 +53,9 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   private var txnMarkerChannelManager: TransactionMarkerChannelManager = _
 
   private val allOperations = Seq(
-      new InitProducerIdOperation(),
-      new AddPartitionsToTransactionOperation(Set(new TopicPartition("topic", 0))),
-      new EndTransactionOperation(TransactionResult.COMMIT),
-      new EndTransactionOperation(TransactionResult.ABORT))
+      new InitProducerIdOperation,
+      new AddPartitionsToTxnOperation(Set(new TopicPartition("topic", 0))),
+      new EndTxnOperation)
 
   private val allTransactions = mutable.Set[Transaction]()
   private val txnRecordsByPartition: Map[Int, mutable.ArrayBuffer[SimpleRecord]] =
@@ -66,12 +65,12 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   override def setUp() {
     super.setUp()
 
-    EasyMock.expect(zkUtils.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
+    EasyMock.expect(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
       .andReturn(Some(numPartitions))
       .anyTimes()
-    EasyMock.replay(zkUtils)
+    EasyMock.replay(zkClient)
 
-    txnStateManager = new TransactionStateManager(0, zkUtils, scheduler, replicaManager, txnConfig, time)
+    txnStateManager = new TransactionStateManager(0, zkClient, scheduler, replicaManager, txnConfig, time)
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
@@ -119,7 +118,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   @After
   override def tearDown() {
     try {
-      EasyMock.reset(zkUtils, replicaManager)
+      EasyMock.reset(zkClient, replicaManager)
       transactionCoordinator.shutdown()
     } finally {
       super.tearDown()
@@ -136,23 +135,36 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     verifyConcurrentRandomSequences(createTransactions, allOperations)
   }
 
+  /**
+    * Concurrently load one set of transaction state topic partitions and unload another
+    * set of partitions. This tests partition leader changes of transaction state topic
+    * that are handled by different threads concurrently. Verifies that the metadata of
+    * unloaded partitions are removed from the transaction manager and that the transactions
+    * from the newly loaded partitions are loaded correctly.
+    */
   @Test
   def testConcurrentLoadUnloadPartitions(): Unit = {
-    val firstSet = (0 until numPartitions / 2).toSet
-    val secondSet = (numPartitions / 2 until numPartitions).toSet
-    verifyConcurrentActions(loadUnloadActions(firstSet, secondSet))
+    val partitionsToLoad = (0 until numPartitions / 2).toSet
+    val partitionsToUnload = (numPartitions / 2 until numPartitions).toSet
+    verifyConcurrentActions(loadUnloadActions(partitionsToLoad, partitionsToUnload))
   }
 
+  /**
+    * Concurrently load one set of transaction state topic partitions, unload a second set
+    * of partitions and expire transactions on a third set of partitions. This tests partition
+    * leader changes of transaction state topic that are handled by different threads concurrently
+    * while expiry is performed on another thread. Verifies the state of transactions on all the partitions.
+    */
   @Test
   def testConcurrentTransactionExpiration(): Unit = {
-    val firstSet = (0 until numPartitions / 3).toSet
-    val secondSet = (numPartitions / 3 until numPartitions * 2 / 3).toSet
-    val third = (numPartitions * 2 / 3 until numPartitions).toSet
+    val partitionsToLoad = (0 until numPartitions / 3).toSet
+    val partitionsToUnload = (numPartitions / 3 until numPartitions * 2 / 3).toSet
+    val partitionsWithExpiringTxn = (numPartitions * 2 / 3 until numPartitions).toSet
     val expiringTransactions = allTransactions.filter { txn =>
-      third.contains(txnStateManager.partitionFor(txn.transactionalId))
+      partitionsWithExpiringTxn.contains(txnStateManager.partitionFor(txn.transactionalId))
     }.toSet
     val expireAction = new ExpireTransactionsAction(expiringTransactions)
-    verifyConcurrentActions(loadUnloadActions(firstSet, secondSet) + expireAction)
+    verifyConcurrentActions(loadUnloadActions(partitionsToLoad, partitionsToUnload) + expireAction)
   }
 
   override def enableCompletion(): Unit = {
@@ -160,7 +172,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
     def createResponse(request: WriteTxnMarkersRequest): WriteTxnMarkersResponse  = {
       val pidErrorMap = request.markers.asScala.map { marker =>
-        (marker.producerId().asInstanceOf[java.lang.Long], marker.partitions.asScala.map { tp => (tp, Errors.NONE) }.toMap.asJava)
+        (marker.producerId.asInstanceOf[java.lang.Long], marker.partitions.asScala.map { tp => (tp, Errors.NONE) }.toMap.asJava)
       }.toMap.asJava
       new WriteTxnMarkersResponse(pidErrorMap)
     }
@@ -174,13 +186,17 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     }
   }
 
-  private def loadUnloadActions(firstPartitionSet: Set[Int], secondPartitionSet: Set[Int]): Set[Action] = {
+  /**
+    * Concurrently load `partitionsToLoad` and unload `partitionsToUnload`. Before the concurrent operations
+    * are run `partitionsToLoad` must be unloaded first since all partitions were loaded during setUp.
+    */
+  private def loadUnloadActions(partitionsToLoad: Set[Int], partitionsToUnload: Set[Int]): Set[Action] = {
     val transactions = (1 to 10).flatMap(i => createTransactions(s"testConcurrentLoadUnloadPartitions$i-")).toSet
     transactions.foreach(txn => prepareTransaction(txn))
-    val unload = firstPartitionSet.map(new UnloadTxnPartitionAction(_))
+    val unload = partitionsToLoad.map(new UnloadTxnPartitionAction(_))
     unload.foreach(_.run())
     unload.foreach(_.await())
-    firstPartitionSet.map(new LoadTxnPartitionAction(_)) ++ secondPartitionSet.map(new UnloadTxnPartitionAction(_))
+    partitionsToLoad.map(new LoadTxnPartitionAction(_)) ++ partitionsToUnload.map(new UnloadTxnPartitionAction(_))
   }
 
   private def createTransactions(txnPrefix: String): Set[Transaction] = {
@@ -215,7 +231,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     val partitionId = txnStateManager.partitionFor(txn.transactionalId)
     val txnRecords = txnRecordsByPartition(partitionId)
     val initPidOp = new InitProducerIdOperation()
-    val addPartitionsOp = new AddPartitionsToTransactionOperation(Set(new TopicPartition("topic", 0)))
+    val addPartitionsOp = new AddPartitionsToTxnOperation(Set(new TopicPartition("topic", 0)))
       initPidOp.run(txn)
       initPidOp.awaitAndVerify(txn)
       addPartitionsOp.run(txn)
@@ -258,7 +274,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     def resultCallback(r: R): Unit = this.result = Some(r)
   }
 
-  class InitProducerIdOperation() extends TxnOperation[InitProducerIdResult] {
+  class InitProducerIdOperation extends TxnOperation[InitProducerIdResult] {
     override def run(txn: Transaction): Unit = {
       transactionCoordinator.handleInitProducerId(txn.transactionalId, 60000, resultCallback)
     }
@@ -269,7 +285,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     }
   }
 
-  class AddPartitionsToTransactionOperation(partitions: Set[TopicPartition]) extends TxnOperation[Errors] {
+  class AddPartitionsToTxnOperation(partitions: Set[TopicPartition]) extends TxnOperation[Errors] {
     override def run(txn: Transaction): Unit = {
       transactionMetadata(txn).foreach { txnMetadata =>
         transactionCoordinator.handleAddPartitionsToTransaction(txn.transactionalId,
@@ -286,14 +302,14 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     }
   }
 
-  class EndTransactionOperation(txnMarkerResult: TransactionResult) extends TxnOperation[Errors] {
+  class EndTxnOperation extends TxnOperation[Errors] {
     override def run(txn: Transaction): Unit = {
       transactionMetadata(txn).foreach { txnMetadata =>
         transactionCoordinator.handleEndTransaction(txn.transactionalId,
-            txnMetadata.producerId,
-            txnMetadata.producerEpoch,
-            txnMarkerResult,
-            resultCallback)
+          txnMetadata.producerId,
+          txnMetadata.producerEpoch,
+          transactionResult(txn),
+          resultCallback)
       }
     }
     override def awaitAndVerify(txn: Transaction): Unit = {
@@ -301,10 +317,17 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       if (!txn.ended) {
         txn.ended = true
         assertEquals(Errors.NONE, error)
-        val expectedState = if (txnMarkerResult == TransactionResult.COMMIT) CompleteCommit else CompleteAbort
+        val expectedState = if (transactionResult(txn) == TransactionResult.COMMIT) CompleteCommit else CompleteAbort
         verifyTransaction(txn, expectedState)
       } else
         assertEquals(Errors.INVALID_TXN_STATE, error)
+    }
+    // Test both commit and abort. Transactional ids used in the test have the format <prefix><index>
+    // Use the last digit of the index to decide between commit and abort.
+    private def transactionResult(txn: Transaction): TransactionResult = {
+      val txnId = txn.transactionalId
+      val lastDigit = txnId(txnId.length - 1).toInt
+      if (lastDigit % 2 == 0) TransactionResult.COMMIT else TransactionResult.ABORT
     }
   }
 

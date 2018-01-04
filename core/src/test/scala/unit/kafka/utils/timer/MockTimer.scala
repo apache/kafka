@@ -29,7 +29,7 @@ class MockTimer extends Timer {
     if (timerTask.delayMs <= 0)
       timerTask.run()
     else {
-      taskQueue.synchronized {
+      taskQueue synchronized {
         taskQueue.enqueue(new TimerTaskEntry(timerTask, timerTask.delayMs + time.milliseconds))
       }
     }
@@ -44,7 +44,7 @@ class MockTimer extends Timer {
     var hasMore = true
     while (hasMore) {
       hasMore = false
-      val head = taskQueue.synchronized {
+      val head = taskQueue synchronized {
         if (taskQueue.nonEmpty && now > taskQueue.head.expirationMs) {
           val entry = Some(taskQueue.dequeue())
           hasMore = taskQueue.nonEmpty

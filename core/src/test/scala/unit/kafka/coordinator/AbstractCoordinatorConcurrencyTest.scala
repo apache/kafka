@@ -27,7 +27,7 @@ import kafka.log.Log
 import kafka.server._
 import kafka.utils._
 import kafka.utils.timer.MockTimer
-
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{ MemoryRecords, RecordBatch, RecordsProcessingStats }
@@ -47,7 +47,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
   val executor = Executors.newFixedThreadPool(nThreads)
   val scheduler = new MockScheduler(time)
   var replicaManager: TestReplicaManager = _
-  var zkUtils: ZkUtils = _
+  var zkClient: KafkaZkClient = _
   val serverProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
   val random = new Random
 
@@ -57,7 +57,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
     replicaManager = EasyMock.partialMockBuilder(classOf[TestReplicaManager]).createMock()
     replicaManager.createDelayedProducePurgatory(timer)
 
-    zkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
+    zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   }
 
   @After
@@ -67,17 +67,24 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
       executor.shutdownNow()
   }
 
+  /**
+    * Verify that concurrent operations run in the normal sequence produce the expected results.
+    */
   def verifyConcurrentOperations(createMembers: String => Set[M], operations: Seq[Operation]) {
     OrderedOperationSequence(createMembers("verifyConcurrentOperations"), operations).run()
   }
 
+  /**
+    * Verify that arbitrary operations run in some random sequence don't leave the coordinator
+    * in a bad state. Operations in the normal sequence should continue to work as expected.
+    */
   def verifyConcurrentRandomSequences(createMembers: String => Set[M], operations: Seq[Operation]) {
     EasyMock.reset(replicaManager)
     for (i <- 0 to 10) {
       // Run some random operations
       RandomOperationSequence(createMembers(s"random$i"), operations).run()
 
-      // Check that proper sequences till work correctly
+      // Check that proper sequences still work correctly
       OrderedOperationSequence(createMembers(s"ordered$i"), operations).run()
     }
   }
@@ -97,7 +104,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
   abstract class OperationSequence(members: Set[M], operations: Seq[Operation]) {
     def actionSequence: Seq[Set[Action]]
     def run(): Unit = {
-      actionSequence.foreach { actions => verifyConcurrentActions(actions) }
+      actionSequence.foreach(verifyConcurrentActions)
     }
   }
 
@@ -164,13 +171,13 @@ object AbstractCoordinatorConcurrencyTest {
     }
 
     override def appendRecords(timeout: Long,
-      requiredAcks: Short,
-      internalTopicsAllowed: Boolean,
-      isFromClient: Boolean,
-      entriesPerPartition: Map[TopicPartition, MemoryRecords],
-      responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
-      delayedProduceLock: Option[Lock] = None,
-      processingStatsCallback: Map[TopicPartition, RecordsProcessingStats] => Unit = _ => ()) {
+                               requiredAcks: Short,
+                               internalTopicsAllowed: Boolean,
+                               isFromClient: Boolean,
+                               entriesPerPartition: Map[TopicPartition, MemoryRecords],
+                               responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+                               delayedProduceLock: Option[Lock] = None,
+                               processingStatsCallback: Map[TopicPartition, RecordsProcessingStats] => Unit = _ => ()) {
 
       if (entriesPerPartition.isEmpty)
         return
