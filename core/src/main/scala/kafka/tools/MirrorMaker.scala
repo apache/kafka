@@ -67,7 +67,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
   private[tools] var producer: MirrorMakerProducer = null
   private var mirrorMakerThreads: Seq[MirrorMakerThread] = null
-  private val isShuttingdown: AtomicBoolean = new AtomicBoolean(false)
+  private val isShuttingDown: AtomicBoolean = new AtomicBoolean(false)
   // Track the messages not successfully sent by mirror maker.
   private val numDroppedMessages: AtomicInteger = new AtomicInteger(0)
   private var messageHandler: MirrorMakerMessageHandler = null
@@ -384,7 +384,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   }
 
   def cleanShutdown() {
-    if (isShuttingdown.compareAndSet(false, true)) {
+    if (isShuttingDown.compareAndSet(false, true)) {
       info("Start clean shutdown.")
       // Shutdown consumer threads.
       info("Shutting down consumer threads.")
@@ -463,7 +463,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         shutdownLatch.countDown()
         info("Mirror maker thread stopped")
         // if it exits accidentally, stop the entire mirror maker
-        if (!isShuttingdown.get()) {
+        if (!isShuttingDown.get()) {
           fatal("Mirror maker thread exited abnormally, stopping the whole mirror maker.")
           sys.exit(-1)
         }
