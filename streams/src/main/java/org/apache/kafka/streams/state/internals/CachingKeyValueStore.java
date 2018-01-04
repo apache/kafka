@@ -207,7 +207,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     }
 
     @Override
-    public synchronized void put(final Bytes key, final byte[] value) {
+    public void put(final Bytes key, final byte[] value) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         lock.writeLock().lock();
@@ -218,7 +218,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         }
     }
 
-    private synchronized void putInternal(final Bytes rawKey, final byte[] value) {
+    private void putInternal(final Bytes rawKey, final byte[] value) {
         Objects.requireNonNull(rawKey, "key cannot be null");
         lock.writeLock().lock();
         try {
@@ -230,7 +230,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     }
 
     @Override
-    public synchronized byte[] putIfAbsent(final Bytes key, final byte[] value) {
+    public byte[] putIfAbsent(final Bytes key, final byte[] value) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         lock.writeLock().lock();
@@ -246,7 +246,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     }
 
     @Override
-    public synchronized void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+    public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         lock.writeLock().lock();
         try {
             for (KeyValue<Bytes, byte[]> entry : entries) {
@@ -258,7 +258,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     }
 
     @Override
-    public synchronized byte[] delete(final Bytes key) {
+    public byte[] delete(final Bytes key) {
         validateStoreOpen();
         lock.writeLock().lock();
         try {
