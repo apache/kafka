@@ -44,10 +44,8 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
@@ -806,7 +804,7 @@ public class InternalTopologyBuilder {
     }
 
     private Map<Integer, Set<String>> makeNodeGroups() {
-        final TreeMap<Integer, Set<String>> nodeGroups = new TreeMap<>();
+        final HashMap<Integer, Set<String>> nodeGroups = new LinkedHashMap<>();
         final HashMap<String, Set<String>> rootToNodeGroup = new HashMap<>();
 
         int nodeGroupId = 0;
@@ -839,21 +837,8 @@ public class InternalTopologyBuilder {
                 nodeGroup.add(nodeName);
             }
         }
-        final Comparator<Integer> keyPartition = new Comparator<Integer>() {
-            @Override
-            public int compare(Integer o1, Integer o2) {
-                boolean o1ContainsGlobalSource = nodeGroupContainsGlobalSourceNode(nodeGroups.get(o1));
-                boolean o2ContainsGlobalSource = nodeGroupContainsGlobalSourceNode(nodeGroups.get(o2));
-                if (o1ContainsGlobalSource == o2ContainsGlobalSource) {
-                    return Integer.compare(o1, o2);
-                }
-                if (!o1ContainsGlobalSource) return 1;
-                return -1;
-            }
-        };
-        TreeMap<Integer, Set<String>> sortedMap = new TreeMap<Integer, Set<String>>(keyPartition);
-        sortedMap.putAll(nodeGroups);
-        return sortedMap;
+
+        return nodeGroups;
     }
 
     public synchronized ProcessorTopology build() {
@@ -1301,13 +1286,6 @@ public class InternalTopologyBuilder {
     public TopologyDescription describe() {
         final TopologyDescription description = new TopologyDescription();
 
-        describeSubtopologies(description);
-        describeGlobalStores(description);
-
-        return description;
-    }
-
-    private void describeSubtopologies(final TopologyDescription description) {
         for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
 
             final Set<String> allNodesOfGroups = nodeGroup.getValue();
@@ -1315,6 +1293,31 @@ public class InternalTopologyBuilder {
 
             if (!isNodeGroupOfGlobalStores) {
                 describeSubtopology(description, nodeGroup.getKey(), allNodesOfGroups);
+            } else {
+                describeGlobalStore(description, allNodesOfGroups);
+            }
+        }
+
+        return description;
+    }
+
+    private void describeGlobalStore(final TopologyDescription description, final Set<String> nodes) {
+        final Iterator<String> it = nodes.iterator();
+        while (it.hasNext()) {
+            final String node = it.next();
+
+            if (isGlobalSource(node)) {
+                // we found a GlobalStore node group; those contain exactly two node: {sourceNode,processorNode}
+                it.remove(); // remove sourceNode from group
+                final String processorNode = nodes.iterator().next(); // get remaining processorNode
+
+                description.addGlobalStore(new GlobalStore(
+                    node,
+                    processorNode,
+                    ((ProcessorNodeFactory) nodeFactories.get(processorNode)).stateStoreNames.iterator().next(),
+                    nodeToSourceTopics.get(node).get(0)
+                ));
+                break;
             }
         }
     }
@@ -1380,31 +1383,6 @@ public class InternalTopologyBuilder {
         description.addSubtopology(new Subtopology(
                 subtopologyId,
                 new HashSet<TopologyDescription.Node>(nodesByName.values())));
-    }
-
-    private void describeGlobalStores(final TopologyDescription description) {
-        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
-            final Set<String> nodes = nodeGroup.getValue();
-
-            final Iterator<String> it = nodes.iterator();
-            while (it.hasNext()) {
-                final String node = it.next();
-
-                if (isGlobalSource(node)) {
-                    // we found a GlobalStore node group; those contain exactly two node: {sourceNode,processorNode}
-                    it.remove(); // remove sourceNode from group
-                    final String processorNode = nodes.iterator().next(); // get remaining processorNode
-
-                    description.addGlobalStore(new GlobalStore(
-                        node,
-                        processorNode,
-                        ((ProcessorNodeFactory) nodeFactories.get(processorNode)).stateStoreNames.iterator().next(),
-                        nodeToSourceTopics.get(node).get(0)
-                    ));
-                    break;
-                }
-            }
-        }
     }
 
     public final static class GlobalStore implements TopologyDescription.GlobalStore {
