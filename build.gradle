@@ -29,6 +29,7 @@ buildscript {
     classpath 'org.scoverage:gradle-scoverage:2.1.0'
     classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.2'
     classpath 'org.owasp:dependency-check-gradle:3.0.2'
+    classpath 'biz.aQute.bnd:biz.aQute.bnd.gradle:3.5.0'
   }
 }
 
@@ -792,6 +793,8 @@ project(':clients') {
     testRuntime libs.slf4jlog4j
   }
 
+  apply plugin: 'biz.aQute.bnd.builder'
+
   task determineCommitId {
     def takeFromHash = 16
     if (commitId) {
@@ -831,6 +834,47 @@ project(':clients') {
     dependsOn createVersionFile
     from("$buildDir") {
         include "kafka/$buildVersionFileName"
+    }
+    manifest {
+      attributes('Export-Package': 'kafka,' +
+              ' org.apache.kafka.clients.admin,' +
+              ' org.apache.kafka.clients.consumer.internals,' +
+              ' org.apache.kafka.clients.consumer,' +
+              ' org.apache.kafka.clients.producer.internals,' +
+              ' org.apache.kafka.clients.producer,' +
+              ' org.apache.kafka.clients,' +
+              ' org.apache.kafka.common.acl,' +
+              ' org.apache.kafka.common.annotation,' +
+              ' org.apache.kafka.common.cache,' +
+              ' org.apache.kafka.common.config.internals,' +
+              ' org.apache.kafka.common.config.types,' +
+              ' org.apache.kafka.common.config,' +
+              ' org.apache.kafka.common.errors,' +
+              ' org.apache.kafka.common.header.internals,' +
+              ' org.apache.kafka.common.header,' +
+              ' org.apache.kafka.common.internals,' +
+              ' org.apache.kafka.common.memory,' +
+              ' org.apache.kafka.common.metrics.stats,' +
+              ' org.apache.kafka.common.metrics,' +
+              ' org.apache.kafka.common.network,' +
+              ' org.apache.kafka.common.protocol.types,' +
+              ' org.apache.kafka.common.protocol,' +
+              ' org.apache.kafka.common.record,' +
+              ' org.apache.kafka.common.requests,' +
+              ' org.apache.kafka.common.resource,' +
+              ' org.apache.kafka.common.security.auth,' +
+              ' org.apache.kafka.common.security.authenticator,' +
+              ' org.apache.kafka.common.security.kerberos,' +
+              ' org.apache.kafka.common.security.plain,' +
+              ' org.apache.kafka.common.security.scram,' +
+              ' org.apache.kafka.common.security.ssl,' +
+              ' org.apache.kafka.common.security,' +
+              ' org.apache.kafka.common.serialization,' +
+              ' org.apache.kafka.common.utils,' +
+              ' org.apache.kafka.server.policy,' +
+              ' kafka.*,' +
+              ' org.apache.kafka.*',
+              'Bundle-SymbolicName': 'org.apache.kafka.kafka-clients')
     }
   }
 
