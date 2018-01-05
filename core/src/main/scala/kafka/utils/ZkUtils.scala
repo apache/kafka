@@ -26,8 +26,7 @@ import kafka.cluster._
 import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndPartition}
 import kafka.consumer.{ConsumerThreadId, TopicCount}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
-import kafka.zk.{BrokerIdZNode, ZkData}
-import kafka.zk.PartitionAssignment
+import kafka.zk.{BrokerIdZNode, ReassignPartitionsZNode, ZkData}
 import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
@@ -144,20 +143,12 @@ object ZkUtils {
     DeleteTopicsPath + "/" + topic
 
   def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Seq[Int]] = {
-    val parseResult = Json.parseStringAs[PartitionAssignment](jsonData)
-
-    val assignments = parseResult match {
-      case Left(throwable) => throw new ConfigException(s"Invalid reassignment config: $throwable")
+    val assignments = ReassignPartitionsZNode.decode(jsonData.getBytes) match {
+      case Left(e) => throw e
       case Right(result) => result
     }
 
-    val seq = for {
-      assignment <- assignments.partitions.asScala
-    } yield {
-      (TopicAndPartition(assignment.topic, assignment.partitions), assignment.replicas.asScala)
-    }
-
-    seq.toMap
+    assignments.map { case (tp, p) => (new TopicAndPartition(tp), p) }
   }
 
   def parseTopicsData(jsonData: String): Seq[String] = {

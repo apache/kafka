@@ -47,9 +47,10 @@ object Json {
     }
 
   /**
-   * Parse a JSON string into either a generic type T, or a JsonProcessingException in the case of exception.
+   * Parse a JSON string into either a generic type T, or a JsonProcessingException in the case of
+    * exception.
    */
-  def parseStringAs[T](input: String)(implicit tag: ClassTag[T]): Either[Throwable, T] = {
+  def parseStringAs[T](input: String)(implicit tag: ClassTag[T]): Either[JsonProcessingException, T] = {
     try Right(mapper.readValue(input, tag.runtimeClass).asInstanceOf[T])
     catch { case e: JsonProcessingException => Left(e) }
   }

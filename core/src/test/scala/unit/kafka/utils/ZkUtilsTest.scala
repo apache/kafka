@@ -21,7 +21,6 @@ import kafka.api.LeaderAndIsr
 import kafka.common.TopicAndPartition
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.security.JaasUtils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -43,21 +42,6 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
      CoreUtils.swallow(zkUtils.close(), this)
     super.tearDown
   }
-
-  val topic = "foo"
-  val partition1 = 0
-  val replica1 = 1
-  val replica2 = 2
-  val reassignmentJson =
-    s"""
-      |{
-      |  "version":1,
-      |  "partitions": [
-      |    { "topic": "$topic", "partition":$partition1, "replicas":[$replica1, $replica2]},
-      |    { "topic": "$topic", "partition":$partition1, "replicas":[$replica1, $replica2]}
-      |  ]
-      |}
-    """.stripMargin
 
   @Test
   def testSuccessfulConditionalDeletePath() {
@@ -146,26 +130,4 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
     }
   }
 
-  @Test
-  def testParsePartitionReassignmentDataWithoutDedup_invalidJson() = {
-    val jsonStr = "{invalid json}"
-
-    try {
-      ZkUtils.parsePartitionReassignmentData(jsonStr)
-      fail("Should have thrown ConfigException");
-    } catch {
-      case e: ConfigException =>
-        assertTrue(e.getMessage.contains("Invalid reassignment config"))
-    }
-  }
-
-  @Test
-  def testParsePartitionReassignmentData() = {
-    val result = ZkUtils.parsePartitionReassignmentData(reassignmentJson)
-
-    // Duplicates are removed
-    assertEquals(1, result.size)
-    assertTrue(result.contains(TopicAndPartition(topic, partition1)))
-    assertEquals(Seq(replica1, replica2), result(TopicAndPartition(topic, partition1)))
-  }
 }

@@ -666,11 +666,17 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * Returns all reassignments.
    * @return the reassignments for each partition.
    */
-  def getPartitionReassignment: Map[TopicPartition, Seq[Int]] = {
+  def getPartitionReassignment: collection.Map[TopicPartition, Seq[Int]] = {
     val getDataRequest = GetDataRequest(ReassignPartitionsZNode.path)
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
-      case Code.OK => ReassignPartitionsZNode.decode(getDataResponse.data)
+      case Code.OK =>
+        ReassignPartitionsZNode.decode(getDataResponse.data) match {
+          case Left(e) =>
+            logger.warn(s"Ignoring partition reassignment due to invalid json: ${e.getMessage}", e)
+            Map.empty[TopicPartition, Seq[Int]]
+          case Right(assignments) => assignments
+        }
       case Code.NONODE => Map.empty
       case _ => throw getDataResponse.resultException.get
     }

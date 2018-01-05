@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets.UTF_8
 import java.util.Properties
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.core.JsonProcessingException
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.KafkaException
@@ -36,9 +37,10 @@ import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.data.{ACL, Stat}
 
+import scala.beans.BeanProperty
 import scala.collection.JavaConverters._
-import scala.collection.Seq
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.{Seq, breakOut}
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
 
@@ -368,26 +370,41 @@ object DeleteTopicsTopicZNode {
 }
 
 object ReassignPartitionsZNode {
+
+  /**
+    * The assignment of brokers for a `TopicPartition`.
+    *
+    * A replica assignment consists of a `topic`, `partition` and a list of `replicas`, which
+    * represent the broker ids that the `TopicPartition` is assigned to.
+    */
+  case class ReplicaAssignment(@BeanProperty @JsonProperty("topic") topic: String,
+                               @BeanProperty @JsonProperty("partition") partition: Int,
+                               @BeanProperty @JsonProperty("replicas") replicas: java.util.List[Int])
+
+  /**
+    * An assignment consists of a `version` and a list of `partitions`, which represent the
+    * assignment of topic-partitions to brokers.
+    */
+  case class PartitionAssignment(@BeanProperty @JsonProperty("version") version: Int,
+                                 @BeanProperty @JsonProperty("partitions") partitions: java.util.List[ReplicaAssignment])
+
   def path = s"${AdminZNode.path}/reassign_partitions"
-  def encode(reassignment: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
-    val reassignmentJson = reassignment.map { case (tp, replicas) =>
-      Map("topic" -> tp.topic, "partition" -> tp.partition, "replicas" -> replicas.asJava).asJava
-    }.asJava
-    Json.encodeAsBytes(Map("version" -> 1, "partitions" -> reassignmentJson).asJava)
+
+  def encode(reassignmentMap: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
+    val reassignment = PartitionAssignment(1,
+      reassignmentMap.toSeq.map { case (tp, replicas) =>
+        ReplicaAssignment(tp.topic, tp.partition, replicas.asJava)
+      }.asJava
+    )
+    Json.encodeAsBytes(reassignment)
   }
-  def decode(bytes: Array[Byte]): Map[TopicPartition, Seq[Int]] = Json.parseBytes(bytes).flatMap { js =>
-    val reassignmentJson = js.asJsonObject
-    val partitionsJsonOpt = reassignmentJson.get("partitions")
-    partitionsJsonOpt.map { partitionsJson =>
-      partitionsJson.asJsonArray.iterator.map { partitionFieldsJs =>
-        val partitionFields = partitionFieldsJs.asJsonObject
-        val topic = partitionFields("topic").to[String]
-        val partition = partitionFields("partition").to[Int]
-        val replicas = partitionFields("replicas").to[Seq[Int]]
-        new TopicPartition(topic, partition) -> replicas
-      }
+
+  def decode(bytes: Array[Byte]): Either[JsonProcessingException, collection.Map[TopicPartition, Seq[Int]]] =
+    Json.parseBytesAs[PartitionAssignment](bytes).right.map { partitionAssignment =>
+      partitionAssignment.partitions.asScala.map { replicaAssignment =>
+        new TopicPartition(replicaAssignment.topic, replicaAssignment.partition) -> replicaAssignment.replicas.asScala
+      }(breakOut)
     }
-  }.map(_.toMap).getOrElse(Map.empty)
 }
 
 object PreferredReplicaElectionZNode {
@@ -567,20 +584,3 @@ object ZkData {
     } else ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala
   }
 }
-
-/**
-  * The assignment of brokers for a `TopicPartition`.
-  *
-  * A replica assignment consists of a `topic`, `partition` and a list of `replicas`, which
-  * represent the broker ids that the `TopicPartition` is assigned to.
-  */
-case class ReplicaAssignment(@JsonProperty("topic") topic: String,
-                             @JsonProperty("partition") partitions: Int,
-                             @JsonProperty("replicas") replicas: java.util.List[Int])
-
-/**
-  * An assignment consists of a `version` and a list of `partitions`, which represent the assignment
-  * of topic-partitions to brokers.
-  */
-case class PartitionAssignment(@JsonProperty("version") version: Int,
-                               @JsonProperty("partitions") partitions: java.util.List[ReplicaAssignment])
