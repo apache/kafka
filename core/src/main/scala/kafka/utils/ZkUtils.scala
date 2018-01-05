@@ -143,7 +143,8 @@ object ZkUtils {
     DeleteTopicsPath + "/" + topic
 
   def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Seq[Int]] = {
-    val assignments = ReassignPartitionsZNode.decode(jsonData.getBytes) match {
+    val utf8Bytes = jsonData.getBytes(StandardCharsets.UTF_8)
+    val assignments = ReassignPartitionsZNode.decode(utf8Bytes) match {
       case Left(e) => throw e
       case Right(result) => result
     }
