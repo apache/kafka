@@ -17,7 +17,7 @@
 package kafka.controller
 
 import java.net.SocketTimeoutException
-import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
+import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 
 import com.yammer.metrics.core.Gauge
 import kafka.api._
@@ -213,7 +213,7 @@ class RequestSendThread(val controllerId: Int,
 
   override def doWork(): Unit = {
 
-    def backoff(): Unit = CoreUtils.swallow(Thread.sleep(100), this, Level.TRACE)
+    def backoff(): Unit = pause(100, TimeUnit.MILLISECONDS)
 
     val QueueItem(apiKey, requestBuilder, callback) = queue.take()
     var clientResponse: ClientResponse = null

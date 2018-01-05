@@ -21,7 +21,7 @@ import java.io.{File, IOException}
 import java.nio._
 import java.nio.file.Files
 import java.util.Date
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.TimeUnit
 
 import com.yammer.metrics.core.Gauge
 import kafka.common._
@@ -233,7 +233,6 @@ class LogCleaner(val config: CleanerConfig,
                               checkDone = checkDone)
 
     @volatile var lastStats: CleanerStats = new CleanerStats()
-    private val backOffWaitLatch = new CountDownLatch(1)
 
     private def checkDone(topicPartition: TopicPartition) {
       if (!isRunning.get())
@@ -250,7 +249,6 @@ class LogCleaner(val config: CleanerConfig,
 
     override def shutdown() = {
     	 initiateShutdown()
-    	 backOffWaitLatch.countDown()
     	 awaitShutdown()
      }
 
@@ -289,7 +287,7 @@ class LogCleaner(val config: CleanerConfig,
           }
       }
       if (!cleaned)
-        backOffWaitLatch.await(config.backOffMs, TimeUnit.MILLISECONDS)
+        pause(config.backOffMs, TimeUnit.MILLISECONDS)
     }
 
     /**
