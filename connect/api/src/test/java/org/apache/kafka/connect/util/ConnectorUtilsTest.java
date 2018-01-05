@@ -63,6 +63,4 @@ public class ConnectorUtilsTest {
     public void testGroupPartitionsInvalidCount() {
         ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 0);
     }
-
-
 }
