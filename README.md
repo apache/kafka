@@ -182,13 +182,16 @@ The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` 
 subproject build directories. They are also are printed to the console. The build will fail if Checkstyle fails.
 
 #### Findbugs ####
-Findbugs uses static analysis to look for bugs in the code.
+Findbugs uses static analysis to look for bugs in the code. Findbugs is executed as part of the normal build process
+and will be included in CI testing. Normally xml reports are generated which are not very human readable unless processed
+by Jenkins. If you want to use check Findbugs results during development, run it so it generates HTML output:
+
 You can run findbugs using:
 
-    ./gradlew findbugsMain findbugsTest -x test
+    ./gradlew findbugsMain findbugsTest -x test -PhtmlFindBugsReport=true
 
 The findbugs warnings will be found in `reports/findbugs/main.html` and `reports/findbugs/test.html` files in the subproject build
-directories.  Use -PxmlFindBugsReport=true to generate an XML report instead of an HTML one.
+directories.
 
 ### Common build options ###
 
