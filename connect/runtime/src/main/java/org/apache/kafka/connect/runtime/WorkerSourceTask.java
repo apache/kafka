@@ -494,6 +494,8 @@ class WorkerSourceTask extends WorkerTask {
             metricGroup = connectMetrics.group(registry.sourceTaskGroupName(),
                     registry.connectorTagName(), id.connector(),
                     registry.taskTagName(), Integer.toString(id.task()));
+            // remove any previously created metrics in this group to prevent collisions.
+            metricGroup.close();
 
             sourceRecordPoll = metricGroup.sensor("source-record-poll");
             sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollRate), new Rate());
