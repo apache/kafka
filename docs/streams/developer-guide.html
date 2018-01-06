@@ -2310,23 +2310,23 @@ Note that in the <code>WordCountProcessor</code> implementation, users need to r
           }
           iterator.close();
 
-	 //Fetch values for all of the windows available within a set time range.
-	 WindowStoreIterator&lt;Long&gt; iterator = windowStore.fetchAll(timeFrom, timeTo);
-         while (iterator.hasNext()) {
-           KeyValue&lt;Long, Long&gt; next = iterator.next();
-           long windowTimestamp = next.key;
-           System.out.println("Count of 'world' @ time " + windowTimestamp + " is " + next.value);
-         }
-         iterator.close();
+	  // Fetch values for all of the windows available within a set time range.
+	  WindowStoreIterator&lt;Long&gt; iterator = windowStore.fetchAll(timeFrom, timeTo);
+          while (iterator.hasNext()) {
+            KeyValue&lt;Long, Long&gt; next = iterator.next();
+            long windowTimestamp = next.key;
+            System.out.println("Count of 'world' @ time " + windowTimestamp + " is " + next.value);
+          }
+          iterator.close();
 
-	//Fetches all values for all windows 
-	WindowStoreIterator&lt;Long&gt; iterator = windowStore.all();
-        while (iterator.hasNext()) {
-          KeyValue&lt;Long, Long&gt; next = iterator.next();
-          long windowTimestamp = next.key;
-          System.out.println("Count of 'world' @ time " + windowTimestamp + " is " + next.value);
-        }
-        iterator.close();
+	  // Fetches all values for all windows 
+	  WindowStoreIterator&lt;Long&gt; iterator = windowStore.all();
+          while (iterator.hasNext()) {
+            KeyValue&lt;Long, Long&gt; next = iterator.next();
+            long windowTimestamp = next.key;
+            System.out.println("Count of 'world' @ time " + windowTimestamp + " is " + next.value);
+          }
+          iterator.close();
 	
         </pre>
 
