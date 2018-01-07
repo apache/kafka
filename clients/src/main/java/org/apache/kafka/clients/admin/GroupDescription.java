@@ -17,30 +17,40 @@
 
 package org.apache.kafka.clients.admin;
 
-/**
- * A listing of a consumer group in the cluster.
- */
-public class ConsumerGroupListing {
-    private final String name;
+import org.apache.kafka.common.utils.Utils;
 
-    /**
-     * Create an instance with the specified parameters.
-     *
-     * @param name The topic name
-     */
-    public ConsumerGroupListing(String name) {
-        this.name = name;
+import java.util.List;
+
+/**
+ * A detailed description of a single consumer group in the cluster.
+ */
+public class GroupDescription {
+
+    private final String groupId;
+    private final String protocolType;
+    private final List<MemberDescription> consumers;
+
+    public GroupDescription(String groupId, String protocolType, List<MemberDescription> consumers) {
+        this.groupId = groupId;
+        this.protocolType = protocolType;
+        this.consumers = consumers;
     }
 
-    /**
-     * The name of the consumer group.
-     */
-    public String name() {
-        return name;
+    public String groupId() {
+        return groupId;
+    }
+
+    public String protocolType() {
+        return protocolType;
+    }
+
+    public List<MemberDescription> consumers() {
+        return consumers;
     }
 
     @Override
     public String toString() {
-        return "(name=" + name + ")";
+        return "(groupId=" + groupId + ", protocolType=" + protocolType + ", consumers=" +
+            Utils.join(consumers, ",") + ")";
     }
 }

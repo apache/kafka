@@ -462,11 +462,11 @@ public class KafkaAdminClientTest {
 
             List<String> groupIds = new ArrayList<>();
             groupIds.add("group1");
-            DescribeConsumerGroupsResult results =
+            DescribeGroupsResult results =
                 env.adminClient().describeConsumerGroups(groupIds);
-            Map<String, KafkaFuture<ConsumerGroupDescription>> values = results.values();
-            KafkaFuture<ConsumerGroupDescription> group1Result = values.get("group1");
-            ConsumerGroupDescription description = group1Result.get();
+            Map<String, KafkaFuture<GroupDescription>> values = results.values();
+            KafkaFuture<GroupDescription> group1Result = values.get("group1");
+            GroupDescription description = group1Result.get();
             assertEquals(description.name(), "group1");
             assertEquals(description.consumers().size(), 1);
         }
@@ -488,10 +488,10 @@ public class KafkaAdminClientTest {
             // Test a call where one filter has an error.
             env.kafkaClient().prepareResponse(new ListGroupsResponse(null, groups));
 
-            ListConsumerGroupsResult results =
+            ListGroupsResult results =
                 env.adminClient().listConsumerGroups();
-            KafkaFuture<Map<String, ConsumerGroupListing>> values = results.namesToListings();
-            Map<String, ConsumerGroupListing> groupsResult = values.get();
+            KafkaFuture<Map<String, GroupListing>> values = results.namesToListings();
+            Map<String, GroupListing> groupsResult = values.get();
             assertEquals(groupsResult.keySet().size(), 2);
             assertEquals(groupsResult.get("group1").name(), "group1");
             assertEquals(groupsResult.get("group2").name(), "group2");

@@ -17,34 +17,13 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.utils.Utils;
-
-import java.util.List;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * A detailed description of a single consumer group in the cluster.
+ * Options for {@link AdminClient#listConsumerGroups()}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-public class ConsumerGroupDescription {
-
-    private final String groupId;
-    private final List<ConsumerDescription> consumers;
-
-    public ConsumerGroupDescription(String groupId, List<ConsumerDescription> consumers) {
-        this.groupId = groupId;
-        this.consumers = consumers;
-    }
-
-    public String name() {
-        return groupId;
-    }
-
-    public List<ConsumerDescription> consumers() {
-        return consumers;
-    }
-
-    @Override
-    public String toString() {
-        return "(groupId=" + groupId + ", consumers=" +
-            Utils.join(consumers, ",") + ")";
-    }
+@InterfaceStability.Evolving
+public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
 }

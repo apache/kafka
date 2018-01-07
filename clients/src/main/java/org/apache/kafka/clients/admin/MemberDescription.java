@@ -25,14 +25,14 @@ import java.util.List;
 /**
  * A detailed description of a single consumer group instance in the cluster.
  */
-public class ConsumerDescription {
+public class MemberDescription {
 
     private final String consumerId;
     private final String clientId;
     private final String host;
     private final List<TopicPartition> assignment;
 
-    public ConsumerDescription(String consumerId, String clientId, String host, List<TopicPartition> assignment) {
+    public MemberDescription(String consumerId, String clientId, String host, List<TopicPartition> assignment) {
         this.consumerId = consumerId;
         this.clientId = clientId;
         this.host = host;

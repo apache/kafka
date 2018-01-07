@@ -515,21 +515,21 @@ public abstract class AdminClient implements AutoCloseable {
      * @param options  The options to use when describing the groups.
      * @return The DescribeConsumerGroupResult.
      */
-    public abstract DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds,
-                                                                        DescribeConsumerGroupsOptions options);
+    public abstract DescribeGroupsResult describeGroups(Collection<String> groupIds,
+                                                        DescribeGroupsOptions options);
 
     /**
      * Describe some group IDs in the cluster, with the default options.
      * <p>
      * This is a convenience method for
-     * #{@link AdminClient#describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)} with
+     * #{@link AdminClient#describeGroups(Collection, DescribeGroupsOptions)} with
      * default options. See the overload for more details.
      *
      * @param groupIds The IDs of the groups to describe.
      * @return The DescribeConsumerGroupResult.
      */
-    public DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds) {
-        return describeConsumerGroups(groupIds, new DescribeConsumerGroupsOptions());
+    public DescribeGroupsResult describeGroups(Collection<String> groupIds) {
+        return describeGroups(groupIds, new DescribeGroupsOptions());
     }
 
     /**
@@ -538,17 +538,17 @@ public abstract class AdminClient implements AutoCloseable {
      * @param options           The options to use when listing the consumer groups.
      * @return                  The ListConsumerGroupsResult.
      */
-    public abstract ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options);
+    public abstract ListGroupsResult listGroups(ListGroupsOptions options);
 
     /**
      * List the consumer groups available in the cluster with the default options.
      *
-     * This is a convenience method for #{@link AdminClient#listConsumerGroups(ListConsumerGroupsOptions)} with default options.
+     * This is a convenience method for #{@link AdminClient#listGroups(ListGroupsOptions)} with default options.
      * See the overload for more details.
      *
      * @return                  The ListConsumerGroupsResult.
      */
-    public ListConsumerGroupsResult listConsumerGroups() {
-        return listConsumerGroups(new ListConsumerGroupsOptions());
+    public ListGroupsResult listGroups() {
+        return listGroups(new ListGroupsOptions());
     }
 }

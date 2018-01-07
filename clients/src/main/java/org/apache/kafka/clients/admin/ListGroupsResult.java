@@ -25,33 +25,33 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * The result of the {@link AdminClient#listConsumerGroups()} call.
+ * The result of the {@link AdminClient#listGroups()} call.
  * <p>
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class ListConsumerGroupsResult {
+public class ListGroupsResult {
 
-    final KafkaFuture<Map<String, ConsumerGroupListing>> future;
+    final KafkaFuture<Map<String, GroupListing>> future;
 
-    ListConsumerGroupsResult(KafkaFuture<Map<String, ConsumerGroupListing>> future) {
+    ListGroupsResult(KafkaFuture<Map<String, GroupListing>> future) {
         this.future = future;
     }
 
     /**
      * Return a future which yields a map of topic names to TopicListing objects.
      */
-    public KafkaFuture<Map<String, ConsumerGroupListing>> namesToListings() {
+    public KafkaFuture<Map<String, GroupListing>> namesToListings() {
         return future;
     }
 
     /**
      * Return a future which yields a collection of TopicListing objects.
      */
-    public KafkaFuture<Collection<ConsumerGroupListing>> listings() {
-        return future.thenApply(new KafkaFuture.Function<Map<String, ConsumerGroupListing>, Collection<ConsumerGroupListing>>() {
+    public KafkaFuture<Collection<GroupListing>> listings() {
+        return future.thenApply(new KafkaFuture.Function<Map<String, GroupListing>, Collection<GroupListing>>() {
             @Override
-            public Collection<ConsumerGroupListing> apply(Map<String, ConsumerGroupListing> namesToDescriptions) {
+            public Collection<GroupListing> apply(Map<String, GroupListing> namesToDescriptions) {
                 return namesToDescriptions.values();
             }
         });
@@ -61,9 +61,9 @@ public class ListConsumerGroupsResult {
      * Return a future which yields a collection of topic names.
      */
     public KafkaFuture<Set<String>> names() {
-        return future.thenApply(new KafkaFuture.Function<Map<String, ConsumerGroupListing>, Set<String>>() {
+        return future.thenApply(new KafkaFuture.Function<Map<String, GroupListing>, Set<String>>() {
             @Override
-            public Set<String> apply(Map<String, ConsumerGroupListing> namesToListings) {
+            public Set<String> apply(Map<String, GroupListing> namesToListings) {
                 return namesToListings.keySet();
             }
         });
