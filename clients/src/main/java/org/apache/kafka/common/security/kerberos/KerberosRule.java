@@ -107,8 +107,8 @@ class KerberosRule {
     }
 
     /**
-     * Replace the numbered parameters of the form $n where n is from 1 to
-     * the length of params. Normal text is copied directly and $n is replaced
+     * Replace the numbered parameters of the form $n where n is from 0 to
+     * the length of params - 1. Normal text is copied directly and $n is replaced
      * by the corresponding parameter.
      * @param format the string to replace parameters again
      * @param params the list of parameters
