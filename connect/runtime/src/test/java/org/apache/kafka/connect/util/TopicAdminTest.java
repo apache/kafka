@@ -17,11 +17,13 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.admin.MockKafkaAdminClientEnv;
+import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.clients.admin.AdminClientUnitTestEnv;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
@@ -47,7 +49,7 @@ public class TopicAdminTest {
     public void returnNullWithApiVersionMismatch() {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
-        try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
             env.kafkaClient().setNode(cluster.controller());
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
@@ -62,14 +64,11 @@ public class TopicAdminTest {
     public void shouldNotCreateTopicWhenItAlreadyExists() {
         NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
-        try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
-            env.kafkaClient().setNode(cluster.controller());
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
-            env.kafkaClient().prepareResponse(createTopicResponseWithAlreadyExists(newTopic));
-            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            boolean created = admin.createTopic(newTopic);
-            assertFalse(created);
+        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            mockAdminClient.addTopic(false, "myTopic", Collections.singletonList(topicPartitionInfo), null);
+            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
+            assertFalse(admin.createTopic(newTopic));
         }
     }
 
@@ -77,14 +76,9 @@ public class TopicAdminTest {
     public void shouldCreateTopicWhenItDoesNotExist() {
         NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
-        try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
-            env.kafkaClient().setNode(cluster.controller());
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
-            env.kafkaClient().prepareResponse(createTopicResponse(newTopic));
-            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
-            boolean created = admin.createTopic(newTopic);
-            assertTrue(created);
+        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
+            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
+            assertTrue(admin.createTopic(newTopic));
         }
     }
 
@@ -93,12 +87,8 @@ public class TopicAdminTest {
         NewTopic newTopic1 = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         NewTopic newTopic2 = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
-        try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
-            env.kafkaClient().setNode(cluster.controller());
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
-            env.kafkaClient().prepareResponse(createTopicResponse(newTopic1));
-            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
+            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
             Set<String> newTopicNames = admin.createTopics(newTopic1, newTopic2);
             assertEquals(1, newTopicNames.size());
             assertEquals(newTopic2.name(), newTopicNames.iterator().next());
@@ -108,11 +98,8 @@ public class TopicAdminTest {
     @Test
     public void shouldReturnFalseWhenSuppliedNullTopicDescription() {
         Cluster cluster = createCluster(1);
-        try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
-            env.kafkaClient().setNode(cluster.controller());
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
-            TopicAdmin admin = new TopicAdmin(null, env.adminClient());
+        try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
+            TopicAdmin admin = new TopicAdmin(null, mockAdminClient);
             boolean created = admin.createTopic(null);
             assertFalse(created);
         }
@@ -120,21 +107,13 @@ public class TopicAdminTest {
 
     private Cluster createCluster(int numNodes) {
         HashMap<Integer, Node> nodes = new HashMap<>();
-        for (int i = 0; i != numNodes; ++i) {
+        for (int i = 0; i < numNodes; ++i) {
             nodes.put(i, new Node(i, "localhost", 8121 + i));
         }
         Cluster cluster = new Cluster("mockClusterId", nodes.values(),
                 Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
                 Collections.<String>emptySet(), nodes.get(0));
         return cluster;
-    }
-
-    private CreateTopicsResponse createTopicResponse(NewTopic... topics) {
-        return createTopicResponse(new ApiError(Errors.NONE, ""), topics);
-    }
-
-    private CreateTopicsResponse createTopicResponseWithAlreadyExists(NewTopic... topics) {
-        return createTopicResponse(new ApiError(Errors.TOPIC_ALREADY_EXISTS, "Topic already exists"), topics);
     }
 
     private CreateTopicsResponse createTopicResponseWithUnsupportedVersion(NewTopic... topics) {

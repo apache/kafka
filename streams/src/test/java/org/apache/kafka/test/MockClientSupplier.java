@@ -17,7 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.MockKafkaAdminClientEnv;
+import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -26,7 +26,6 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 
 import java.util.LinkedList;
@@ -59,8 +58,7 @@ public class MockClientSupplier implements KafkaClientSupplier {
 
     @Override
     public AdminClient getAdminClient(final Map<String, Object> config) {
-        MockKafkaAdminClientEnv clientEnv = new MockKafkaAdminClientEnv(Time.SYSTEM, cluster, config);
-        return clientEnv.adminClient();
+        return new MockAdminClient(cluster.nodes(), cluster.nodeById(0));
     }
 
     @Override
