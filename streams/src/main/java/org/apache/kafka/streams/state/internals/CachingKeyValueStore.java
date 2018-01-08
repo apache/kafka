@@ -220,13 +220,8 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
 
     private void putInternal(final Bytes rawKey, final byte[] value) {
         Objects.requireNonNull(rawKey, "key cannot be null");
-        lock.writeLock().lock();
-        try {
-            cache.put(cacheName, rawKey, new LRUCacheEntry(value, true, context.offset(),
-                  context.timestamp(), context.partition(), context.topic()));
-        } finally {
-            lock.writeLock().unlock();
-        }
+        cache.put(cacheName, rawKey, new LRUCacheEntry(value, true, context.offset(),
+              context.timestamp(), context.partition(), context.topic()));
     }
 
     @Override
