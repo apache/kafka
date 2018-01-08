@@ -155,7 +155,11 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
               "another instance. If you see this regularly, it could indicate that you need to either increase " +
               s"the consumer's ${ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG} or reduce the number of records " +
               s"handled on each iteration with ${ConsumerConfig.MAX_POLL_RECORDS_CONFIG}")
+          // HOTFIX LIKAFKA-12852
+          case e: KafkaException if e.getMessage != null && e.getMessage.contains("may not exist or user may not have Describe access to topic") =>
+            error("Failed to commit offsets due to an unrecoverable error such as committing to a deleted topic", e)
         }
+
       }
     } else {
       info("Exiting on send failure, skip committing offsets.")
