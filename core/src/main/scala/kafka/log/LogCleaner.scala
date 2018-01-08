@@ -144,6 +144,8 @@ class LogCleaner(initialConfig: CleanerConfig,
   newGauge("DeadThreadCount", () => deadThreadCount)
 
   private[log] def deadThreadCount: Int = cleaners.count(_.isThreadFailed)
+  /* a metric to track the number of cleaner threads alive */
+  newGauge("live-cleaner-thread-count", () => cleaners.count(_.asInstanceOf[Thread].isAlive))
 
   /**
    * Start the background cleaning
