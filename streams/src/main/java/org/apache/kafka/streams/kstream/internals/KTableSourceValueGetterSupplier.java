@@ -46,6 +46,8 @@ public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterS
         }
 
         public V get(K key) {
+            System.out.println("GET " + key + "<-" + store.get(key) + " from store " + storeName);
+
             return store.get(key);
         }
 

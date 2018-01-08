@@ -87,14 +87,15 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         try {
             context.setRecordContext(entry.recordContext());
             if (flushListener != null) {
-
                 final V oldValue = sendOldValues ? serdes.valueFrom(underlying.get(entry.key())) : null;
+
+                underlying.put(entry.key(), entry.newValue());
+
                 flushListener.apply(serdes.keyFrom(entry.key().get()),
                                     serdes.valueFrom(entry.newValue()),
                                     oldValue);
 
             }
-            underlying.put(entry.key(), entry.newValue());
         } finally {
             context.setRecordContext(current);
         }

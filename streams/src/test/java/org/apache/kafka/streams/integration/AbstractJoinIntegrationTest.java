@@ -25,28 +25,20 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.kstream.JoinWindows;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
-import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Rule;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
@@ -55,10 +47,10 @@ import org.junit.runners.Parameterized;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -85,8 +77,7 @@ public abstract class AbstractJoinIntegrationTest {
 
     static String APP_ID;
 
-    static final Time TIME = new MockTime();
-    static final Long COMMIT_INTERVAL = 100L;
+    private static final Long COMMIT_INTERVAL = 100L;
     static final Properties STREAMS_CONFIG = new Properties();
     static final String INPUT_TOPIC_RIGHT = "inputTopicRight";
     static final String INPUT_TOPIC_LEFT = "inputTopicLeft";
@@ -98,6 +89,8 @@ public abstract class AbstractJoinIntegrationTest {
     private KafkaProducer<Long, String> producer;
 
     StreamsBuilder builder;
+    int numRecordsExpected = 0;
+    AtomicBoolean finalResultReached = new AtomicBoolean(false);
 
     private final List<Input<String>> input = Arrays.asList(
             new Input<>(INPUT_TOPIC_LEFT, (String) null),
@@ -118,13 +111,6 @@ public abstract class AbstractJoinIntegrationTest {
     );
 
     final ValueJoiner<String, String, String> valueJoiner = new ValueJoiner<String, String, String>() {
-        @Override
-        public String apply(final String value1, final String value2) {
-            return value1 + "-" + value2;
-        }
-    };
-
-    final Reducer<String> reducer = new Reducer<String>() {
         @Override
         public String apply(final String value1, final String value2) {
             return value1 + "-" + value2;
@@ -182,6 +168,11 @@ public abstract class AbstractJoinIntegrationTest {
         }
     }
 
+    private void checkResult(final String outputTopic, final String expectedFinalResult, final int expectedTotalNumRecords) throws InterruptedException {
+        final List<String> result = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(RESULT_CONSUMER_CONFIG, outputTopic, expectedTotalNumRecords, 30 * 1000L);
+        assertThat(result.get(result.size() - 1), is(expectedFinalResult));
+    }
+
     /*
      * Runs the actual test. Checks the result after each input record to ensure fixed processing order.
      * If an input tuple does not trigger any result, "expectedResult" should contain a "null" entry
@@ -190,7 +181,9 @@ public abstract class AbstractJoinIntegrationTest {
         assert expectedResult.size() == input.size();
 
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
-        final KafkaStreams streams = new KafkaStreams(builder.build(), new StreamsConfig(STREAMS_CONFIG), TIME);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), new StreamsConfig(STREAMS_CONFIG));
+
+        System.out.println(builder.build().describe());
 
         try {
             streams.start();
@@ -200,13 +193,42 @@ public abstract class AbstractJoinIntegrationTest {
             final Iterator<List<String>> resultIterator = expectedResult.iterator();
             for (final Input<String> singleInput : input) {
                 producer.send(new ProducerRecord<>(singleInput.topic, null, ++ts, singleInput.record.key, singleInput.record.value)).get();
-                TIME.sleep(COMMIT_INTERVAL + 1);
 
                 List<String> expected = resultIterator.next();
-                System.out.println("checking result: " + expected);
 
                 checkResult(OUTPUT_TOPIC, expected);
             }
+        } finally {
+            streams.close();
+        }
+    }
+
+    /*
+    * Runs the actual test. Checks the final result only after expected number of records have been consumed.
+    */
+    void runTest(final String expectedFinalResult) throws Exception {
+        IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), new StreamsConfig(STREAMS_CONFIG));
+
+        try {
+            streams.start();
+
+            long ts = System.currentTimeMillis();
+
+            for (final Input<String> singleInput : input) {
+                producer.send(new ProducerRecord<>(singleInput.topic, null, ++ts, singleInput.record.key, singleInput.record.value)).get();
+            }
+
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    System.out.println("RESULT: " + finalResultReached.get());
+                    return finalResultReached.get();
+                }
+            }, "Never received expected final result.");
+
+            checkResult(OUTPUT_TOPIC, expectedFinalResult, numRecordsExpected);
+
         } finally {
             streams.close();
         }

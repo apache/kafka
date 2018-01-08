@@ -16,49 +16,20 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.LongDeserializer;
-import org.apache.kafka.common.serialization.LongSerializer;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
-import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.kstream.JoinWindows;
-import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.MockKeyValueMapper;
-import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Properties;
-
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
 
 /**
  * Tests all available joins of Kafka Streams DSL.
@@ -84,52 +55,39 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         rightTable = builder.table(INPUT_TOPIC_RIGHT);
     }
 
-    // TODO: the duplicate is due to KAFKA-4309, should be removed when it is fixed
-    private List<List<String>> dedupExpectedJoinResult = Arrays.asList(
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            Arrays.asList("D-d", "D-d")
-    );
+    final private String expectedFinalJoinResult = "D-d";
+    final private String expectedFinalMultiJoinResult = "D-d-d";
 
-    private List<List<String>> dedupExpectedMultiJoinResult = Arrays.asList(
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            Arrays.asList("D-d-d", "D-d-d")
-    );
+    final private class CountingPeek implements ForeachAction<Long, String> {
+        final private String expected;
+
+        CountingPeek(final boolean multiJoin) {
+            this.expected = multiJoin ? expectedFinalMultiJoinResult : expectedFinalJoinResult;
+        }
+
+        @Override
+        public void apply(final Long key, final String value) {
+            numRecordsExpected++;
+            if (value.equals(expected)) {
+                boolean ret = finalResultReached.compareAndSet(false, true);
+
+                if (!ret) {
+                    // do nothing; it is possible that we will see multiple duplicates of final results due to KAFKA-4309
+                    // TODO: should be removed when KAFKA-4309 is fixed
+                }
+            }
+        }
+    }
 
     @Test
     public void testInner() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
 
-        List<List<String>> expectedResult;
         if (cacheEnabled) {
-            expectedResult = dedupExpectedJoinResult;
+            leftTable.join(rightTable, valueJoiner).toStream().peek(new CountingPeek(false)).to(OUTPUT_TOPIC);
+            runTest(expectedFinalJoinResult);
         } else {
-            expectedResult = Arrays.asList(
+            List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     null,
@@ -146,22 +104,21 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     null,
                     Collections.singletonList("D-d")
             );
+
+            leftTable.join(rightTable, valueJoiner).toStream().to(OUTPUT_TOPIC);
+            runTest(expectedResult);
         }
-
-        leftTable.join(rightTable, valueJoiner).toStream().to(OUTPUT_TOPIC);
-
-        runTest(expectedResult);
     }
 
     @Test
     public void testLeft() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
 
-        List<List<String>> expectedResult;
         if (cacheEnabled) {
-            expectedResult = dedupExpectedJoinResult;
+            leftTable.leftJoin(rightTable, valueJoiner).toStream().peek(new CountingPeek(false)).to(OUTPUT_TOPIC);
+            runTest(expectedFinalJoinResult);
         } else {
-            expectedResult = Arrays.asList(
+            List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     Collections.singletonList("A-null"),
@@ -178,23 +135,21 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     null,
                     Collections.singletonList("D-d")
             );
+
+            leftTable.leftJoin(rightTable, valueJoiner).toStream().to(OUTPUT_TOPIC);
+            runTest(expectedResult);
         }
-
-        leftTable.leftJoin(rightTable, valueJoiner).toStream().to(OUTPUT_TOPIC);
-
-        runTest(expectedResult);
     }
 
     @Test
     public void testOuter() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
 
-        // TODO: the duplicate is due to KAFKA-4309, should be removed when it is fixed
-        List<List<String>> expectedResult;
         if (cacheEnabled) {
-            expectedResult = dedupExpectedJoinResult;
+            leftTable.outerJoin(rightTable, valueJoiner).toStream().peek(new CountingPeek(false)).to(OUTPUT_TOPIC);
+            runTest(expectedFinalJoinResult);
         } else {
-            expectedResult = Arrays.asList(
+            List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     Collections.singletonList("A-null"),
@@ -211,121 +166,130 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     Collections.singletonList("null-d"),
                     Collections.singletonList("D-d")
             );
+
+            leftTable.outerJoin(rightTable, valueJoiner).toStream().to(OUTPUT_TOPIC);
+            runTest(expectedResult);
         }
-
-        leftTable.outerJoin(rightTable, valueJoiner).toStream().to(OUTPUT_TOPIC);
-
-        runTest(expectedResult);
     }
 
     @Test
     public void testInnerInner() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-inner");
 
-        // TODO: the duplicate is due to KAFKA-4309, should be removed when it is fixed
-        List<List<String>> expectedResult;
         if (cacheEnabled) {
-            expectedResult = dedupExpectedMultiJoinResult;
+            leftTable.join(rightTable, valueJoiner)
+                    .join(rightTable, valueJoiner)
+                    .toStream()
+                    .peek(new CountingPeek(true))
+                    .to(OUTPUT_TOPIC);
+            runTest(expectedFinalMultiJoinResult);
         } else {
-            expectedResult = Arrays.asList(
+            List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     null,
-                    Collections.singletonList("A-a-a"),
+                    Arrays.asList("A-a-a", "A-a-a"),
                     Collections.singletonList("B-a-a"),
-                    Collections.singletonList("B-b-b"),
+                    Arrays.asList("B-b-b", "B-b-b"),
                     Collections.singletonList((String) null),
                     null,
                     null,
-                    Collections.singletonList("C-c-c"),
-                    Collections.singletonList((String) null),
+                    Arrays.asList("C-c-c", "C-c-c"),
+                    null,
                     null,
                     null,
                     null,
                     Collections.singletonList("D-d-d")
             );
+
+            leftTable.join(rightTable, valueJoiner)
+                    .join(rightTable, valueJoiner)
+                    .toStream().to(OUTPUT_TOPIC);
+
+            runTest(expectedResult);
         }
-
-        leftTable.join(rightTable, valueJoiner)
-                 .groupBy(MockKeyValueMapper.<Long, String>NoOpKeyValueMapper())
-                 .reduce(reducer, reducer)
-                 .join(rightTable, valueJoiner)
-                 .toStream().to(OUTPUT_TOPIC);
-
-        runTest(expectedResult);
     }
 
     @Test
     public void testInnerLeft() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-left");
 
-        // TODO: the duplicate is due to KAFKA-4309, should be removed when it is fixed
-        List<List<String>> expectedResult;
         if (cacheEnabled) {
-            expectedResult = dedupExpectedMultiJoinResult;
+            leftTable.join(rightTable, valueJoiner)
+                    .leftJoin(rightTable, valueJoiner)
+                    .toStream()
+                    .peek(new CountingPeek(true))
+                    .to(OUTPUT_TOPIC);
+            runTest(expectedFinalMultiJoinResult);
         } else {
-            expectedResult = Arrays.asList(
+            List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     null,
-                    Collections.singletonList("A-a"),
-                    Collections.singletonList("B-a"),
-                    Collections.singletonList("B-b"),
+                    Arrays.asList("A-a-a", "A-a-a"),
+                    Collections.singletonList("B-a-a"),
+                    Arrays.asList("B-b-b", "B-b-b"),
                     Collections.singletonList((String) null),
                     null,
                     null,
-                    Collections.singletonList("C-c"),
-                    Collections.singletonList((String) null),
+                    Arrays.asList("C-c-c", "C-c-c"),
+                    Arrays.asList((String) null, null),
                     null,
                     null,
                     null,
-                    Collections.singletonList("D-d")
+                    Collections.singletonList("D-d-d")
             );
+
+            leftTable.join(rightTable, valueJoiner)
+                    .leftJoin(rightTable, valueJoiner)
+                    .toStream()
+                    .peek(new ForeachAction<Long, String>() {
+                        @Override
+                        public void apply(Long key, String value) {
+                            System.out.println("OUTPUT: " + key + "->" + value);
+                        }
+                    })
+                    .to(OUTPUT_TOPIC);
+
+            runTest(expectedResult);
         }
-
-        leftTable.join(rightTable, valueJoiner)
-                .groupBy(MockKeyValueMapper.<Long, String>NoOpKeyValueMapper())
-                .reduce(reducer, reducer)
-                .leftJoin(rightTable, valueJoiner)
-                .toStream().to(OUTPUT_TOPIC);
-
-        runTest(expectedResult);
     }
 
     @Test
     public void testInnerOuter() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-outer");
 
-        // TODO: the duplicate is due to KAFKA-4309, should be removed when it is fixed
-        List<List<String>> expectedResult;
         if (cacheEnabled) {
-            expectedResult = dedupExpectedMultiJoinResult;
+            leftTable.join(rightTable, valueJoiner)
+                    .outerJoin(rightTable, valueJoiner)
+                    .toStream()
+                    .peek(new CountingPeek(true))
+                    .to(OUTPUT_TOPIC);
+            runTest(expectedFinalMultiJoinResult);
         } else {
-            expectedResult = Arrays.asList(
+            List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
                     null,
-                    Collections.singletonList("A-a"),
-                    Collections.singletonList("B-a"),
-                    Collections.singletonList("B-b"),
+                    Arrays.asList("A-a-a", "A-a-a"),
+                    Collections.singletonList("B-a-a"),
+                    Arrays.asList("B-b-b", "B-b-b"),
+                    Collections.singletonList("null-b"),
                     Collections.singletonList((String) null),
                     null,
-                    null,
-                    Collections.singletonList("C-c"),
-                    Collections.singletonList((String) null),
-                    null,
+                    Arrays.asList("C-c-c", "C-c-c"),
+                    Arrays.asList((String) null, null),
                     null,
                     null,
-                    Collections.singletonList("D-d")
+                    null,
+                    Arrays.asList("null-d", "D-d-d")
             );
+
+            leftTable.join(rightTable, valueJoiner)
+                    .outerJoin(rightTable, valueJoiner)
+                    .toStream().to(OUTPUT_TOPIC);
+
+            runTest(expectedResult);
         }
-
-        leftTable.join(rightTable, valueJoiner)
-                .groupBy(MockKeyValueMapper.<Long, String>NoOpKeyValueMapper())
-                .reduce(reducer, reducer)
-                .leftJoin(rightTable, valueJoiner)
-                .toStream().to(OUTPUT_TOPIC);
-
-        runTest(expectedResult);
     }
 }

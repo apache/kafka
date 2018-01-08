@@ -74,6 +74,9 @@ class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, 
             R oldValue = null;
 
             final V2 value2 = valueGetter.get(key);
+
+            System.out.println("KTABLE LEFT-JOIN: " + change + " v.s. " + value2);
+
             if (value2 == null && change.newValue == null && change.oldValue == null) {
                 return;
             }
