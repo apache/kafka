@@ -97,11 +97,11 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
                   <p>If you need more processing capacity for your stream processing application, you can simply start another instance of your stream processing application, e.g. on another machine, in order to scale out.  The instances of your application will become aware of each other and automatically begin to share the processing work.  More specifically, what will be handed over from the existing instances to the new instances is (some of) the stream tasks that have been run by the existing instances.  Moving stream tasks from one instance to another results in moving the processing work plus any internal state of these stream tasks (the state of a stream task will be re-created in the target instance by restoring the state from its corresponding changelog topic).</p>
                   <p>The various instances of your application each run in their own JVM process, which means that each instance can leverage all the processing capacity that is available to their respective JVM process (minus the capacity that any non-Kafka-Streams part of your application may be using).  This explains why running additional instances will grant your application additional processing capacity.  The exact capacity you will be adding by running a new instance depends of course on the environment in which the new instance runs: available CPU cores, available main memory and Java heap space, local storage, network bandwidth, and so on.  Similarly, if you stop any of the running instances of your application, then you are removing and freeing up the respective processing capacity.</p>
                   <div class="figure align-center" id="id1">
-                      <a class="reference internal image-reference" href="../../../images/streams-elastic-scaling-1.png"><img alt="../../../images/streams-elastic-scaling-1.png" src="../../../images/streams-elastic-scaling-1.png" style="width: 500pt; height: 400pt;" /></a>
+                      <img class="centered" src="/{{version}}/images/streams-elastic-scaling-1.png">
                       <p class="caption"><span class="caption-text">Before adding capacity: only a single instance of your Kafka Streams application is running.  At this point the corresponding Kafka consumer group of your application contains only a single member (this instance).  All data is being read and processed by this single instance.</span></p>
                   </div>
                   <div class="figure align-center" id="id2">
-                      <a class="reference internal image-reference" href="../../../images/streams-elastic-scaling-2.png"><img alt="../../../images/streams-elastic-scaling-2.png" src="../../../images/streams-elastic-scaling-2.png" style="width: 500pt; height: 400pt;" /></a>
+                      <img class="centered" src="/{{version}}/images/streams-elastic-scaling-2.png">
                       <p class="caption"><span class="caption-text">After adding capacity: now two additional instances of your Kafka Streams application are running, and they have automatically joined the application&#8217;s Kafka consumer group for a total of three current members. These three instances are automatically splitting the processing work between each other. The splitting is based on the Kafka topic partitions from which data is being read.</span></p>
                   </div>
               </div>
@@ -114,7 +114,7 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
                       work plus any internal state of these stream tasks. The state of a stream task is recreated in the target instance
                       from its changelog topic.</p>
                   <div class="figure align-center">
-                      <a class="reference internal image-reference" href="../../../images/streams-elastic-scaling-3.png"><img alt="../../../images/streams-elastic-scaling-3.png" src="../../../images/streams-elastic-scaling-3.png" style="width: 500pt; height: 400pt;" /></a>
+                      <img class="centered" src="/{{version}}/images/streams-elastic-scaling-3.png">
                   </div>
               </div>
               <div class="section" id="state-restoration-during-workload-rebalance">
