@@ -43,9 +43,12 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--list")
     val service = getConsumerGroupService(cgcArgs)
 
+    val expectedGroups = Set(group, simpleGroup)
+    var foundGroups = Set.empty[String]
     TestUtils.waitUntilTrue(() => {
-      service.listGroups().toSet == Set(group, simpleGroup)
-    }, "Expected a stable group with two members in describe group state result.")
+      foundGroups = service.listGroups().toSet
+      expectedGroups == foundGroups
+    }, s"Expected --list to show groups $expectedGroups, but found $foundGroups.")
   }
 
 }
