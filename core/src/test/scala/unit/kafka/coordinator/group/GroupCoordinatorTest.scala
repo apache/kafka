@@ -778,6 +778,36 @@ class GroupCoordinatorTest extends JUnitSuite {
   }
 
   @Test
+  def testCommitOffsetsAfterGroupIsEmpty(): Unit = {
+    // Tests the scenario where the reset offset tool modifies the offsets
+    // of a group after it becomes empty
+
+    // A group member joins
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+    val joinGroupResult = joinGroup(groupId, memberId, protocolType, protocols)
+    val assignedMemberId = joinGroupResult.memberId
+    val joinGroupError = joinGroupResult.error
+    assertEquals(Errors.NONE, joinGroupError)
+
+    // and leaves.
+    EasyMock.reset(replicaManager)
+    val leaveGroupResult = leaveGroup(groupId, assignedMemberId)
+    assertEquals(Errors.NONE, leaveGroupResult)
+
+    // The simple offset commit should now fail
+    EasyMock.reset(replicaManager)
+    val tp = new TopicPartition("topic", 0)
+    val offset = OffsetAndMetadata(0)
+    val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
+      OffsetCommitRequest.DEFAULT_GENERATION_ID, immutable.Map(tp -> offset))
+    assertEquals(Errors.NONE, commitOffsetResult(tp))
+
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
+    assertEquals(Errors.NONE, error)
+    assertEquals(Some(0), partitionData.get(tp).map(_.offset))
+  }
+
+  @Test
   def testFetchOffsets() {
     val tp = new TopicPartition("topic", 0)
     val offset = OffsetAndMetadata(0)
@@ -867,7 +897,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     groupCoordinator.handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.COMMIT)
 
     val (thirdReqError, thirdReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
-    assertEquals(Errors.NONE, secondReqError)
+    assertEquals(Errors.NONE, thirdReqError)
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), thirdReqPartitionData.get(tp).map(_.offset))
   }
 
