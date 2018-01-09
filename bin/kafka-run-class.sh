@@ -257,6 +257,8 @@ if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
 fi
 
 # Remove a possible colon prefix from the classpath (happens at lines like `CLASSPATH="$CLASSPATH:$file"` when CLASSPATH is blank)
+# Syntax used on the right side is native Bash string manipulation; for more details see
+# http://tldp.org/LDP/abs/html/string-manipulation.html, specifically the section titled "Substring Removal"
 CLASSPATH=${CLASSPATH#:}
 
 # If Cygwin is detected, classpath is converted to Windows format.
