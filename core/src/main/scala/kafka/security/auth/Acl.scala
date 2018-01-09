@@ -58,7 +58,7 @@ object Acl {
     if (bytes == null || bytes.isEmpty)
       return collection.immutable.Set.empty[Acl]
 
-    Json.parseBytes(bytes).map(_.asJsonObject).map { js =>
+    Json.parseBytesIncludingACLs(bytes).map(_.asJsonObject).map { js =>
       //the acl json version.
       require(js(VersionKey).to[Int] == CurrentVersion)
       js(AclsKey).asJsonArray.iterator.map(_.asJsonObject).map { itemJs =>

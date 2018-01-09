@@ -64,7 +64,7 @@ private[kafka] object TopicCount extends Logging {
     var subscriptionPattern: String = null
     var topMap: Map[String, Int] = null
     try {
-      Json.parseFullIncludingACLs(topicCountString) match {
+      Json.parseFull(topicCountString) match {
         case Some(js) =>
           val consumerRegistrationMap = js.asJsonObject
           consumerRegistrationMap.get("pattern") match {
