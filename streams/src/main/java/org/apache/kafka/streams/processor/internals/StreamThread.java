@@ -1097,7 +1097,7 @@ public class StreamThread extends Thread {
         State oldState = setState(State.PENDING_SHUTDOWN);
         if (oldState == State.CREATED) {
             // The thread may not have been started. Take responsibility for shutting down
-            this.completeShutdown(true);
+            completeShutdown(true);
         }
     }
 
