@@ -68,10 +68,10 @@ class ProducerBounceTest extends KafkaServerTestHarness {
     val numPartitions = 3
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-    TestUtils.createTopic(zkClient, topic1, numPartitions, numServers, servers, topicConfig)
+    createTopic(topic1, numPartitions, numServers, topicConfig)
 
     val scheduler = new ProducerScheduler()
-    scheduler.start
+    scheduler.start()
 
     // rolling bounce brokers
 
@@ -92,7 +92,7 @@ class ProducerBounceTest extends KafkaServerTestHarness {
       (0 until numPartitions).foreach(partition => TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic1, partition))
     }
 
-    scheduler.shutdown
+    scheduler.shutdown()
 
     // Make sure the producer do not see any exception
     // when draining the left messages on shutdown

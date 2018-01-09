@@ -325,17 +325,17 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(numRecords)
 
     val topic1 = "tblablac" // matches subscribed pattern
-    TestUtils.createTopic(zkClient, topic1, 2, serverCount, this.servers)
+    createTopic(topic1, 2, serverCount)
     sendRecords(1000, new TopicPartition(topic1, 0))
     sendRecords(1000, new TopicPartition(topic1, 1))
 
     val topic2 = "tblablak" // does not match subscribed pattern
-    TestUtils.createTopic(zkClient, topic2, 2, serverCount, this.servers)
+    createTopic(topic2, 2, serverCount)
     sendRecords(1000, new TopicPartition(topic2, 0))
     sendRecords(1000, new TopicPartition(topic2, 1))
 
     val topic3 = "tblab1" // does not match subscribed pattern
-    TestUtils.createTopic(zkClient, topic3, 2, serverCount, this.servers)
+    createTopic(topic3, 2, serverCount)
     sendRecords(1000, new TopicPartition(topic3, 0))
     sendRecords(1000, new TopicPartition(topic3, 1))
 
@@ -357,7 +357,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }, s"Expected partitions ${subscriptions.asJava} but actually got ${this.consumers.head.assignment()}")
 
     val topic4 = "tsomec" // matches subscribed pattern
-    TestUtils.createTopic(zkClient, topic4, 2, serverCount, this.servers)
+    createTopic(topic4, 2, serverCount)
     sendRecords(1000, new TopicPartition(topic4, 0))
     sendRecords(1000, new TopicPartition(topic4, 1))
 
@@ -396,7 +396,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // the first topic ('topic')  matches first subscription pattern only
 
     val fooTopic = "foo" // matches both subscription patterns
-    TestUtils.createTopic(zkClient, fooTopic, 1, serverCount, this.servers)
+    createTopic(fooTopic, 1, serverCount)
     sendRecords(1000, new TopicPartition(fooTopic, 0))
 
     assertEquals(0, consumer0.assignment().size)
@@ -416,7 +416,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer0.assignment()}")
 
     val barTopic = "bar" // matches the next subscription pattern
-    TestUtils.createTopic(zkClient, barTopic, 1, serverCount, this.servers)
+    createTopic(barTopic, 1, serverCount)
     sendRecords(1000, new TopicPartition(barTopic, 0))
 
     val pattern2 = Pattern.compile("...") // only 'foo' and 'bar' match this
@@ -453,7 +453,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(numRecords)
 
     val topic1 = "tblablac" // matches the subscription pattern
-    TestUtils.createTopic(zkClient, topic1, 2, serverCount, this.servers)
+    createTopic(topic1, 2, serverCount)
     sendRecords(1000, new TopicPartition(topic1, 0))
     sendRecords(1000, new TopicPartition(topic1, 1))
 
@@ -525,7 +525,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       this.consumers.head.assignment == subscriptions.asJava
     }, s"Expected partitions ${subscriptions.asJava} but actually got ${this.consumers.head.assignment}")
 
-    TestUtils.createTopic(zkClient, otherTopic, 2, serverCount, this.servers)
+    createTopic(otherTopic, 2, serverCount)
     this.consumers.head.subscribe(List(topic, otherTopic).asJava)
     TestUtils.waitUntilTrue(() => {
       this.consumers.head.poll(50)
@@ -536,7 +536,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testShrinkingTopicSubscriptions() {
     val otherTopic = "other"
-    TestUtils.createTopic(zkClient, otherTopic, 2, serverCount, this.servers)
+    createTopic(otherTopic, 2, serverCount)
     val subscriptions = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(otherTopic, 0), new TopicPartition(otherTopic, 1))
     val shrunkenSubscriptions = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
     this.consumers.head.subscribe(List(topic, otherTopic).asJava)
@@ -555,7 +555,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testPartitionsFor() {
     val numParts = 2
-    TestUtils.createTopic(zkClient, "part-test", numParts, 1, this.servers)
+    createTopic("part-test", numParts, 1)
     val parts = this.consumers.head.partitionsFor("part-test")
     assertNotNull(parts)
     assertEquals(2, parts.size)
@@ -788,7 +788,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val partitionCount = 30
     val topics = Seq(topic1, topic2, topic3)
     topics.foreach { topicName =>
-      TestUtils.createTopic(zkClient, topicName, partitionCount, serverCount, servers)
+      createTopic(topicName, partitionCount, serverCount)
     }
 
     val partitions = topics.flatMap { topic =>
@@ -1049,7 +1049,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testAutoCommitIntercept() {
     val topic2 = "topic2"
-    TestUtils.createTopic(zkClient, topic2, 2, serverCount, this.servers)
+    createTopic(topic2, 2, serverCount)
 
     // produce records
     val numRecords = 100
@@ -1145,7 +1145,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val topicName = "testConsumeMessagesWithLogAppendTime"
     val topicProps = new Properties()
     topicProps.setProperty(LogConfig.MessageTimestampTypeProp, "LogAppendTime")
-    TestUtils.createTopic(zkClient, topicName, 2, 2, servers, topicProps)
+    createTopic(topicName, 2, 2, topicProps)
 
     val startTime = System.currentTimeMillis()
     val numRecords = 50
@@ -1171,9 +1171,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val topic1 = "part-test-topic-1"
     val topic2 = "part-test-topic-2"
     val topic3 = "part-test-topic-3"
-    TestUtils.createTopic(zkClient, topic1, numParts, 1, this.servers)
-    TestUtils.createTopic(zkClient, topic2, numParts, 1, this.servers)
-    TestUtils.createTopic(zkClient, topic3, numParts, 1, this.servers)
+    createTopic(topic1, numParts, 1)
+    createTopic(topic2, numParts, 1)
+    createTopic(topic3, numParts, 1)
 
     val topics = this.consumers.head.listTopics()
     assertNotNull(topics)
@@ -1192,10 +1192,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val topic3 = "part-test-topic-3"
     val props = new Properties()
     props.setProperty(LogConfig.MessageFormatVersionProp, "0.9.0")
-    TestUtils.createTopic(zkClient, topic1, numParts, 1, this.servers)
+    createTopic(topic1, numParts, 1)
     // Topic2 is in old message format.
-    TestUtils.createTopic(zkClient, topic2, numParts, 1, this.servers, props)
-    TestUtils.createTopic(zkClient, topic3, numParts, 1, this.servers)
+    createTopic(topic2, numParts, 1, props)
+    createTopic(topic3, numParts, 1)
 
     val consumer = this.consumers.head
 
@@ -1242,7 +1242,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     createTopicAndSendRecords(topicName = topic0, numPartitions = 2, recordsPerPartition = 100)
     val props = new Properties()
     props.setProperty(LogConfig.MessageFormatVersionProp, "0.9.0")
-    TestUtils.createTopic(zkClient, topic1, numPartitions = 1, replicationFactor = 1, this.servers, props)
+    createTopic(topic1, numPartitions = 1, replicationFactor = 1, props)
     sendRecords(100, new TopicPartition(topic1, 0))
 
     val t0p0 = new TopicPartition(topic0, 0)
@@ -1332,7 +1332,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testAutoCommitOnRebalance() {
     val topic2 = "topic2"
-    TestUtils.createTopic(zkClient, topic2, 2, serverCount, this.servers)
+    createTopic(topic2, 2, serverCount)
 
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
@@ -1380,7 +1380,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testPerPartitionLagMetricsCleanUpWithSubscribe() {
     val numMessages = 1000
     val topic2 = "topic2"
-    TestUtils.createTopic(zkClient, topic2, 2, serverCount, this.servers)
+    createTopic(topic2, 2, serverCount)
     // send some messages.
     sendRecords(numMessages, tp)
     // Test subscribe
@@ -1551,7 +1551,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * records to each partition
    */
   def createTopicAndSendRecords(topicName: String, numPartitions: Int, recordsPerPartition: Int): Set[TopicPartition] = {
-    TestUtils.createTopic(zkClient, topicName, numPartitions, serverCount, this.servers)
+    createTopic(topicName, numPartitions, serverCount)
     var parts = Set[TopicPartition]()
     for (partition <- 0 until numPartitions) {
       val tp = new TopicPartition(topicName, partition)

@@ -31,6 +31,7 @@ import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneHerder;
 import org.apache.kafka.connect.storage.FileOffsetBackingStore;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,13 +77,15 @@ public class ConnectStandalone {
         plugins.compareAndSwapWithDelegatingLoader();
         StandaloneConfig config = new StandaloneConfig(workerProps);
 
+        String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
+
         RestServer rest = new RestServer(config);
         URI advertisedUrl = rest.advertisedUrl();
         String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
 
         Worker worker = new Worker(workerId, time, plugins, config, new FileOffsetBackingStore());
 
-        Herder herder = new StandaloneHerder(worker);
+        Herder herder = new StandaloneHerder(worker, kafkaClusterId);
         final Connect connect = new Connect(herder, rest);
         log.info("Kafka Connect standalone worker initialization took {}ms", time.hiResClockMs() - initStart);
 

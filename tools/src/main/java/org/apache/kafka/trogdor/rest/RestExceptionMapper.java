@@ -38,11 +38,11 @@ public class RestExceptionMapper implements ExceptionMapper<Throwable> {
         }
         if (e instanceof NotFoundException) {
             return buildResponse(Response.Status.NOT_FOUND, e);
+        } else if (e instanceof InvalidTypeIdException) {
+            return buildResponse(Response.Status.NOT_IMPLEMENTED, e);
         } else if (e instanceof JsonMappingException) {
             return buildResponse(Response.Status.BAD_REQUEST, e);
         } else if (e instanceof ClassNotFoundException) {
-            return buildResponse(Response.Status.NOT_IMPLEMENTED, e);
-        } else if (e instanceof InvalidTypeIdException) {
             return buildResponse(Response.Status.NOT_IMPLEMENTED, e);
         } else if (e instanceof SerializationException) {
             return buildResponse(Response.Status.BAD_REQUEST, e);

@@ -33,7 +33,7 @@
 
   <div class="section" id="writing-a-streams-application">
     <span id="streams-write-app"></span><h1>Writing a Streams Application<a class="headerlink" href="#writing-a-streams-application" title="Permalink to this headline"></a></h1>
-      <p class="topic-title first">Table of Contents</p>
+      <p class="topic-title first"><b>Table of Contents</b></p>
       <ul class="simple">
           <li><a class="reference internal" href="#libraries-and-maven-artifacts" id="id1">Libraries and Maven artifacts</a></li>
           <li><a class="reference internal" href="#using-kafka-streams-within-your-application-code" id="id2">Using Kafka Streams within your application code</a></li>
@@ -48,6 +48,56 @@
       <dt><a class="reference internal" href="processor-api.html#streams-developer-guide-processor-api"><span class="std std-ref">Processor API</span></a></dt>
       <dd>A low-level API that lets you add and connect processors as well as interact directly with state stores. The Processor API provides you with even more flexibility than the DSL but at the expense of requiring more manual work on the side of the application developer (e.g., more lines of code).</dd>
     </dl>
+      <div class="section" id="libraries-and-maven-artifacts">
+          <span id="streams-developer-guide-maven"></span><h2>Libraries and Maven artifacts</h2>
+          <p>This section lists the Kafka Streams related libraries that are available for writing your Kafka Streams applications.</p>
+          <p>You can define dependencies on the following libraries for your Kafka Streams applications.</p>
+          <table border="1" class="non-scrolling-table docutils">
+              <colgroup>
+                  <col width="14%" />
+                  <col width="19%" />
+                  <col width="12%" />
+                  <col width="55%" />
+              </colgroup>
+              <thead valign="bottom">
+              <tr class="row-odd"><th class="head">Group ID</th>
+                  <th class="head">Artifact ID</th>
+                  <th class="head">Version</th>
+                  <th class="head">Description</th>
+              </tr>
+              </thead>
+              <tbody valign="top">
+              <tr class="row-even"><td><code class="docutils literal"><span class="pre">org.apache.kafka</span></code></td>
+                  <td><code>kafka-streams</code></td>
+                  <td><code class="docutils literal"><span class="pre">1.0.0</span></code></td>
+                  <td>(Required) Base library for Kafka Streams.</td>
+              </tr>
+              <tr class="row-odd"><td><code class="docutils literal"><span class="pre">org.apache.kafka</span></code></td>
+                  <td><code class="docutils literal"><span class="pre">kafka-clients</span></code></td>
+                  <td><code class="docutils literal"><span class="pre">1.0.0</span></code></td>
+                  <td>(Required) Kafka client library.  Contains built-in serializers/deserializers.</td>
+              </tr>
+              </tbody>
+          </table>
+          <div class="admonition tip">
+              <p><b>Tip</b></p>
+              <p class="last">See the section <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data Types and Serialization</span></a> for more information about Serializers/Deserializers.</p>
+          </div>
+          <p>Example <code class="docutils literal"><span class="pre">pom.xml</span></code> snippet when using Maven:</p>
+          <div class="highlight-xml"><div class="highlight"><pre><span></span><span class="nt">&lt;dependency&gt;</span>
+    <span class="nt">&lt;groupId&gt;</span>org.apache.kafka<span class="nt">&lt;/groupId&gt;</span>
+    <span class="nt">&lt;artifactId&gt;</span>kafka-streams<span class="nt">&lt;/artifactId&gt;</span>
+    <span class="nt">&lt;version&gt;</span>1.0.0<span class="nt">&lt;/version&gt;</span>
+<span class="nt">&lt;/dependency&gt;</span>
+<span class="nt">&lt;dependency&gt;</span>
+    <span class="nt">&lt;groupId&gt;</span>org.apache.kafka<span class="nt">&lt;/groupId&gt;</span>
+    <span class="nt">&lt;artifactId&gt;</span>kafka-clients<span class="nt">&lt;/artifactId&gt;</span>
+    <span class="nt">&lt;version&gt;</span>1.0.0<span class="nt">&lt;/version&gt;</span>
+<span class="nt">&lt;/dependency&gt;</span>
+              
+</pre></div>
+          </div>
+      </div>
     <div class="section" id="using-kafka-streams-within-your-application-code">
       <h2>Using Kafka Streams within your application code<a class="headerlink" href="#using-kafka-streams-within-your-application-code" title="Permalink to this headline"></a></h2>
       <p>You can call Kafka Streams from anywhere in your application code, but usually these calls are made within the <code class="docutils literal"><span class="pre">main()</span></code> method of

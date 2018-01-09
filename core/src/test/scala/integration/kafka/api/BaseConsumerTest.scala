@@ -19,7 +19,7 @@ import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
-import kafka.utils.{ShutdownableThread, TestUtils}
+import kafka.utils.ShutdownableThread
 import kafka.server.KafkaConfig
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -68,7 +68,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     super.setUp()
 
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(zkClient, topic, 2, serverCount, this.servers)
+    createTopic(topic, 2, serverCount)
   }
 
   @Test

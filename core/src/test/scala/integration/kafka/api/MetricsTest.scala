@@ -71,7 +71,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     val topic = "topicWithOldMessageFormat"
     val props = new Properties
     props.setProperty(LogConfig.MessageFormatVersionProp, "0.9.0")
-    TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, this.servers, props)
+    createTopic(topic, numPartitions = 1, replicationFactor = 1, props)
     val tp = new TopicPartition(topic, 0)
 
     // Produce and consume some records
@@ -206,9 +206,9 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
   private def verifyBrokerZkMetrics(server: KafkaServer, topic: String): Unit = {
     // Latency is rounded to milliseconds, so check the count instead.
-    val initialCount = yammerHistogramCount("kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs").asInstanceOf[Long]
+    val initialCount = yammerHistogramCount("kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs")
     servers.head.zkClient.getLeaderForPartition(new TopicPartition(topic, 0))
-    val newCount = yammerHistogramCount("kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs").asInstanceOf[Long]
+    val newCount = yammerHistogramCount("kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs")
     assertTrue("ZooKeeper latency not recorded",  newCount > initialCount)
 
     assertEquals(s"Unexpected ZK state", "CONNECTED", yammerMetricValue("SessionState"))
@@ -274,7 +274,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     }
   }
 
-  private def yammerHistogramCount(name: String): Any = {
+  private def yammerHistogramCount(name: String): Long = {
     val allMetrics = Metrics.defaultRegistry.allMetrics.asScala
     val (_, metric) = allMetrics.find { case (n, _) => n.getMBeanName.endsWith(name) }
       .getOrElse(fail(s"Unable to find broker metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))

@@ -89,7 +89,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   def testSendWithInvalidCreateTime() {
     val topicProps = new Properties()
     topicProps.setProperty(LogConfig.MessageTimestampDifferenceMaxMsProp, "1000")
-    TestUtils.createTopic(zkClient, topic, 1, 2, servers, topicProps)
+    createTopic(topic, 1, 2, topicProps)
 
     val producer = createProducer(brokerList = brokerList)
     try {
