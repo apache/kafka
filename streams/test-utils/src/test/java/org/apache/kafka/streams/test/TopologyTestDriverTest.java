@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
 
@@ -48,6 +49,7 @@ public class TopologyTestDriverTest {
         {
             put(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver");
             put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+            put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         }
     };
 

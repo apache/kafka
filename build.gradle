@@ -962,13 +962,14 @@ project(':streams:test-utils') {
   dependencies {
     compile project(':streams')
 
+    testCompile project(':clients').sourceSets.test.output
     testCompile libs.junit
 
     testRuntime libs.slf4jlog4j
   }
 
   javadoc {
-    include "**/org/apache/kafka/streams/**"
+    include "**/org/apache/kafka/streams/test/**"
     exclude "**/internals/**"
   }
 

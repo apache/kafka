@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
  */
 @InterfaceStability.Unstable
 public class InternalTopologyBuilderAccessor {
-    public static InternalTopologyBuilder getInternalTopologyBuilder(Topology topology) {
+    public static InternalTopologyBuilder getInternalTopologyBuilder(final Topology topology) {
         return topology.internalTopologyBuilder;
     }
 }

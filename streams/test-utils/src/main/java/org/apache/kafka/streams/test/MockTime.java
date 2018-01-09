@@ -110,7 +110,7 @@ public class MockTime implements Time {
     }
 
     public void setCurrentTimeMs(final long newMs) {
-        long oldMs = timeMs.getAndSet(newMs);
+        final long oldMs = timeMs.getAndSet(newMs);
 
         // does not allow to set to an older timestamp
         if (oldMs > newMs) {
@@ -123,7 +123,7 @@ public class MockTime implements Time {
     }
 
     private void tick() {
-        for (MockTimeListener listener : listeners) {
+        for (final MockTimeListener listener : listeners) {
             listener.tick(timeMs.get());
         }
     }
