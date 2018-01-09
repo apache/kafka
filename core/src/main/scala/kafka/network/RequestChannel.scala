@@ -280,7 +280,9 @@ class RequestChannel(val queueSize: Int, val metricNamePrefix : String, val time
   val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)
   val responseQueueSizeMetricName = metricNamePrefix.concat(ResponseQueueSizeMetric)
 
-  @volatile var lastDequeueTimeMs = time.milliseconds
+  // Set this to Long.Maxvalue so that KafkaHealthCheck will not shutdown broker if it
+  // reads lastDequeueTimeMs before lastDequeueTimeMs is updated by any KafkaRequestHandler thread.
+  @volatile var lastDequeueTimeMs = Long.MaxValue
   // This metric can help user select a suitable threshold for requestMaxLocalTimeMs so that broker can shutdown itself only when it
   // is stuck or too slow. A suggested value of requestMaxLocalTimeMs could be twice the 999'th percentile of the RequestDequeuePollIntervalMs.
   private val requestDequeuePollIntervalMs = newHistogram("RequestDequeuePollIntervalMs")
