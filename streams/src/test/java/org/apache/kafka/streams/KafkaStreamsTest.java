@@ -17,8 +17,11 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.producer.MockProducer;
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
@@ -44,8 +47,10 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -119,7 +124,12 @@ public class KafkaStreamsTest {
     public void shouldCleanupResourcesOnCloseWithoutPreviousStart() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.globalTable("anyTopic");
+        List<Node> nodes = Arrays.asList(new Node(0, "localhost", 8121));
+        Cluster cluster = new Cluster("mockClusterId", nodes,
+            Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
+            Collections.<String>emptySet(), nodes.get(0));
         MockClientSupplier clientSupplier = new MockClientSupplier();
+        clientSupplier.setClusterForAdminClient(cluster);
         final KafkaStreams streams = new KafkaStreams(builder.build(), new StreamsConfig(props), clientSupplier);
         streams.close();
         TestUtils.waitForCondition(new TestCondition() {
