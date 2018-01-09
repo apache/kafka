@@ -38,10 +38,10 @@ import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
+import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
@@ -75,8 +75,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.requests.ResourceType.TOPIC;
 import static org.apache.kafka.common.requests.ResourceType.BROKER;
+import static org.apache.kafka.common.requests.ResourceType.TOPIC;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -155,7 +155,7 @@ public class KafkaAdminClientTest {
                 KafkaAdminClient.generateClientId(newConfMap(AdminClientConfig.CLIENT_ID_CONFIG, "myCustomId")));
     }
 
-    private static MockKafkaAdminClientEnv mockClientEnv(String... configVals) {
+    private static AdminClientUnitTestEnv mockClientEnv(String... configVals) {
         HashMap<Integer, Node> nodes = new HashMap<>();
         nodes.put(0, new Node(0, "localhost", 8121));
         nodes.put(1, new Node(1, "localhost", 8122));
@@ -163,12 +163,12 @@ public class KafkaAdminClientTest {
         Cluster cluster = new Cluster("mockClusterId", nodes.values(),
                 Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
                 Collections.<String>emptySet(), nodes.get(0));
-        return new MockKafkaAdminClientEnv(cluster, configVals);
+        return new AdminClientUnitTestEnv(cluster, configVals);
     }
 
     @Test
     public void testCloseAdminClient() throws Exception {
-        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
         }
     }
 
@@ -190,7 +190,7 @@ public class KafkaAdminClientTest {
      */
     @Test
     public void testTimeoutWithoutMetadata() throws Exception {
-        try (MockKafkaAdminClientEnv env = mockClientEnv(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10")) {
+        try (AdminClientUnitTestEnv env = mockClientEnv(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10")) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().setNode(new Node(0, "localhost", 8121));
             env.kafkaClient().prepareResponse(new CreateTopicsResponse(Collections.singletonMap("myTopic", new ApiError(Errors.NONE, ""))));
@@ -203,7 +203,7 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testCreateTopics() throws Exception {
-        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             env.kafkaClient().setNode(env.cluster().controller());
@@ -226,7 +226,7 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testDescribeAcls() throws Exception {
-        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             env.kafkaClient().setNode(env.cluster().controller());
@@ -250,7 +250,7 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testCreateAcls() throws Exception {
-        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             env.kafkaClient().setNode(env.cluster().controller());
@@ -279,7 +279,7 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testDeleteAcls() throws Exception {
-        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             env.kafkaClient().setNode(env.cluster().controller());
@@ -330,7 +330,7 @@ public class KafkaAdminClientTest {
         Cluster cluster = new Cluster("mockClusterId", nodes.values(),
             Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
             Collections.<String>emptySet(), nodes.get(0));
-        try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(time, cluster,
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
             AdminClientConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG, "1",
                 AdminClientConfig.RECONNECT_BACKOFF_MS_CONFIG, "1")) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -374,7 +374,7 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testDescribeConfigs() throws Exception {
-        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             env.kafkaClient().setNode(env.cluster().controller());
@@ -390,7 +390,7 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testCreatePartitions() throws Exception {
-        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             env.kafkaClient().setNode(env.cluster().controller());
@@ -443,7 +443,7 @@ public class KafkaAdminClientTest {
         TopicPartition myTopicPartition3 = new TopicPartition("my_topic", 3);
         TopicPartition myTopicPartition4 = new TopicPartition("my_topic", 4);
 
-        try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             env.kafkaClient().setNode(env.cluster().nodes().get(0));

@@ -100,6 +100,34 @@ public class ConfigEntry {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+
+        ConfigEntry that = (ConfigEntry) o;
+
+        return this.name.equals(that.name) &&
+                this.value != null ? this.value.equals(that.value) : that.value == null &&
+                this.isDefault == that.isDefault &&
+                this.isSensitive == that.isSensitive &&
+                this.isReadOnly == that.isReadOnly;
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + name.hashCode();
+        result = prime * result + ((value == null) ? 0 : value.hashCode());
+        result = prime * result + (isDefault ? 1 : 0);
+        result = prime * result + (isSensitive ? 1 : 0);
+        result = prime * result + (isReadOnly ? 1 : 0);
+        return result;
+    }
+
+    @Override
     public String toString() {
         return "ConfigEntry(" +
                 "name=" + name +

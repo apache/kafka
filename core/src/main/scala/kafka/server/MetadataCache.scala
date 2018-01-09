@@ -40,7 +40,7 @@ import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest
 class MetadataCache(brokerId: Int) extends Logging {
 
   private val cache = mutable.Map[String, mutable.Map[Int, UpdateMetadataRequest.PartitionState]]()
-  private var controllerId: Option[Int] = None
+  @volatile private var controllerId: Option[Int] = None
   private val aliveBrokers = mutable.Map[Int, Broker]()
   private val aliveNodes = mutable.Map[Int, collection.Map[ListenerName, Node]]()
   private val partitionMetadataLock = new ReentrantReadWriteLock()
@@ -104,9 +104,11 @@ class MetadataCache(brokerId: Int) extends Logging {
   }
 
   def getAliveEndpoint(brokerId: Int, listenerName: ListenerName): Option[Node] =
-    aliveNodes.get(brokerId).map { nodeMap =>
-      nodeMap.getOrElse(listenerName,
-        throw new BrokerEndPointNotAvailableException(s"Broker `$brokerId` does not have listener with name `$listenerName`"))
+    inReadLock(partitionMetadataLock) {
+      aliveNodes.get(brokerId).map { nodeMap =>
+        nodeMap.getOrElse(listenerName,
+          throw new BrokerEndPointNotAvailableException(s"Broker `$brokerId` does not have listener with name `$listenerName`"))
+      }
     }
 
   // errorUnavailableEndpoints exists to support v0 MetadataResponses

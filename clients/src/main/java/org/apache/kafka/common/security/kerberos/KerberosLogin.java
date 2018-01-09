@@ -218,9 +218,8 @@ public class KerberosLogin extends AbstractLogin {
                                         return;
                                     }
                                 } else {
-                                    log.warn("[Principal={}]: Could not renew TGT due to problem running shell command: '{} {}'; " +
-                                            "exception was: %s. Exiting refresh thread.", 
-                                            principal, kinitCmd, kinitArgs, e, e);
+                                    log.warn("[Principal={}]: Could not renew TGT due to problem running shell command: '{} {}'. " +
+                                            "Exiting refresh thread.", principal, kinitCmd, kinitArgs, e);
                                     return;
                                 }
                             }

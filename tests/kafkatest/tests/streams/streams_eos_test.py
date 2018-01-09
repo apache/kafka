@@ -39,6 +39,7 @@ class StreamsEosTest(KafkaTest):
         self.driver = StreamsEosTestDriverService(test_context, self.kafka)
         self.test_context = test_context
 
+    @ignore
     @cluster(num_nodes=9)
     def test_rebalance_simple(self):
         self.run_rebalance(StreamsEosTestJobRunnerService(self.test_context, self.kafka),
@@ -46,6 +47,7 @@ class StreamsEosTest(KafkaTest):
                            StreamsEosTestJobRunnerService(self.test_context, self.kafka),
                            StreamsEosTestVerifyRunnerService(self.test_context, self.kafka))
 
+    @ignore
     @cluster(num_nodes=9)
     def test_rebalance_complex(self):
         self.run_rebalance(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
@@ -77,6 +79,7 @@ class StreamsEosTest(KafkaTest):
 
         verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % verifier.STDOUT_FILE, allow_fail=False)
 
+    @ignore
     @cluster(num_nodes=9)
     def test_failure_and_recovery(self):
         self.run_failure_and_recovery(StreamsEosTestJobRunnerService(self.test_context, self.kafka),
@@ -84,6 +87,7 @@ class StreamsEosTest(KafkaTest):
                                       StreamsEosTestJobRunnerService(self.test_context, self.kafka),
                                       StreamsEosTestVerifyRunnerService(self.test_context, self.kafka))
 
+    @ignore
     @cluster(num_nodes=9)
     def test_failure_and_recovery_complex(self):
         self.run_failure_and_recovery(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka),
@@ -118,8 +122,8 @@ class StreamsEosTest(KafkaTest):
         verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % verifier.STDOUT_FILE, allow_fail=False)
 
     def add_streams(self, processor):
-        processor.start()
         with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
+            processor.start()
             self.wait_for_startup(monitor, processor)
 
     def add_streams2(self, running_processor, processor_to_be_started):

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import kafka.admin.AdminUtils;
 import kafka.admin.RackAwareMode;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
@@ -24,11 +23,10 @@ import kafka.server.KafkaServer;
 import kafka.utils.CoreUtils;
 import kafka.utils.MockTime;
 import kafka.utils.TestUtils;
-import kafka.utils.ZKStringSerializer$;
-import kafka.utils.ZkUtils;
-import org.I0Itec.zkclient.ZkClient;
-import org.I0Itec.zkclient.ZkConnection;
+import kafka.zk.AdminZkClient;
+import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.utils.Time;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -172,34 +170,25 @@ public class KafkaEmbedded {
                             final Properties topicConfig) {
         log.debug("Creating topic { name: {}, partitions: {}, replication: {}, config: {} }",
             topic, partitions, replication, topicConfig);
+        try (KafkaZkClient kafkaZkClient = createZkClient()) {
+            final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
+            adminZkClient.createTopic(topic, partitions, replication, topicConfig, RackAwareMode.Enforced$.MODULE$);
+        }
+    }
 
-        // Note: You must initialize the ZkClient with ZKStringSerializer.  If you don't, then
-        // createTopic() will only seem to work (it will return without error).  The topic will exist in
-        // only ZooKeeper and will be returned when listing topics, but Kafka itself does not create the
-        // topic.
-        final ZkClient zkClient = new ZkClient(
-            zookeeperConnect(),
-            DEFAULT_ZK_SESSION_TIMEOUT_MS,
-            DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
-            ZKStringSerializer$.MODULE$);
-        final boolean isSecure = false;
-        final ZkUtils zkUtils = new ZkUtils(zkClient, new ZkConnection(zookeeperConnect()), isSecure);
-        AdminUtils.createTopic(zkUtils, topic, partitions, replication, topicConfig, RackAwareMode.Enforced$.MODULE$);
-        zkClient.close();
+    private KafkaZkClient createZkClient() {
+        return KafkaZkClient.apply(zookeeperConnect(), false, DEFAULT_ZK_SESSION_TIMEOUT_MS,
+                DEFAULT_ZK_CONNECTION_TIMEOUT_MS, Integer.MAX_VALUE, Time.SYSTEM, "testMetricGroup", "testMetricType");
     }
 
     public void deleteTopic(final String topic) {
         log.debug("Deleting topic { name: {} }", topic);
 
-        final ZkClient zkClient = new ZkClient(
-            zookeeperConnect(),
-            DEFAULT_ZK_SESSION_TIMEOUT_MS,
-            DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
-            ZKStringSerializer$.MODULE$);
-        final boolean isSecure = false;
-        final ZkUtils zkUtils = new ZkUtils(zkClient, new ZkConnection(zookeeperConnect()), isSecure);
-        AdminUtils.deleteTopic(zkUtils, topic);
-        zkClient.close();
+        try (KafkaZkClient kafkaZkClient = createZkClient()) {
+            final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
+            adminZkClient.deleteTopic(topic);
+            kafkaZkClient.close();
+        }
     }
 
     public KafkaServer kafkaServer() {

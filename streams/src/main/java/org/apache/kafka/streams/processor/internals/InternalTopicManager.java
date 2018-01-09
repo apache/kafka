@@ -37,18 +37,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 public class InternalTopicManager {
-
-    private static final Long WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
-
-    public final static String CLEANUP_POLICY_PROP = "cleanup.policy";
-    public final static String RETENTION_MS = "retention.ms";
-
     private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA or dev-mailing list (https://kafka.apache.org/contact).";
 
@@ -62,9 +54,8 @@ public class InternalTopicManager {
     private final int retries;
 
     public InternalTopicManager(final AdminClient adminClient,
-                                final Map<String, ?> config) {
+                                final StreamsConfig streamsConfig) {
         this.adminClient = adminClient;
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
 
         LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
         log = logContext.logger(getClass());
@@ -96,17 +87,19 @@ public class InternalTopicManager {
      * If a topic exists already but has different number of partitions we fail and throw exception requesting user to reset the app before restarting again.
      */
     public void makeReady(final Map<String, InternalTopicConfig> topics) {
-        final Map<String, Integer> existingTopicPartitions = getNumPartitions(topics.keySet(), true);
+        final Map<String, Integer> existingTopicPartitions = getNumPartitions(topics.keySet());
         final Set<InternalTopicConfig> topicsToBeCreated = validateTopicPartitions(topics.values(), existingTopicPartitions);
         if (topicsToBeCreated.size() > 0) {
             final Set<NewTopic> newTopics = new HashSet<>();
 
             for (final InternalTopicConfig internalTopicConfig : topicsToBeCreated) {
-                final Properties topicProperties = internalTopicConfig.toProperties(windowChangeLogAdditionalRetention);
-                final Map<String, String> topicConfig = new HashMap<>(defaultTopicConfigs);
-                for (final String key : topicProperties.stringPropertyNames()) {
-                    topicConfig.put(key, topicProperties.getProperty(key));
-                }
+                final Map<String, String> topicConfig = internalTopicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
+
+                log.debug("Going to create topic {} with {} partitions and config {}.",
+                        internalTopicConfig.name(),
+                        internalTopicConfig.numberOfPartitions(),
+                        topicConfig);
+
                 newTopics.add(
                     new NewTopic(
                         internalTopicConfig.name(),
@@ -176,12 +169,8 @@ public class InternalTopicManager {
     /**
      * Get the number of partitions for the given topics
      */
-    public Map<String, Integer> getNumPartitions(final Set<String> topics) {
-        return getNumPartitions(topics, false);
-    }
-
-    private Map<String, Integer> getNumPartitions(final Set<String> topics,
-                                                  final boolean bestEffort) {
+    // visible for testing
+    protected Map<String, Integer> getNumPartitions(final Set<String> topics) {
         int remainingRetries = retries;
         boolean retry;
         do {
@@ -209,12 +198,7 @@ public class InternalTopicManager {
                             "Will try again (remaining retries {}).", topicFuture.getKey(), remainingRetries - 1);
                     } else {
                         final String error = "Could not get number of partitions for topic {}.";
-                        if (bestEffort) {
-                            log.debug(error, topicFuture.getKey(), cause.getMessage());
-                        } else {
-                            log.error(error, topicFuture.getKey(), cause);
-                            throw new StreamsException(cause);
-                        }
+                        log.debug(error, topicFuture.getKey(), cause.getMessage());
                     }
                 }
             }
@@ -227,15 +211,7 @@ public class InternalTopicManager {
             return existingNumberOfPartitionsPerTopic;
         } while (remainingRetries-- > 0);
 
-        if (bestEffort) {
-            return Collections.emptyMap();
-        }
-
-        final String timeoutAndRetryError = "Could not get number of partitions from brokers. " +
-            "This can happen if the Kafka cluster is temporary not available. " +
-            "You can increase admin client config `retries` to be resilient against this error.";
-        log.error(timeoutAndRetryError);
-        throw new StreamsException(timeoutAndRetryError);
+        return Collections.emptyMap();
     }
 
     /**

@@ -17,8 +17,6 @@
 
 package kafka.server
 
-import java.net.BindException
-
 import kafka.common.KafkaException
 import kafka.utils.{TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
@@ -111,7 +109,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
 
     class BrokerStateInterceptor() extends BrokerState {
       override def newState(newState: BrokerStates): Unit = {
-        val brokers = zkUtils.getAllBrokersInCluster()
+        val brokers = zkClient.getAllBrokersInCluster
         assertEquals(1, brokers.size)
         assertEquals(brokerId, brokers.head.id)
       }

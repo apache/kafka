@@ -395,15 +395,13 @@ public class KafkaStreamsTest {
 
     @Test
     public void shouldReturnThreadMetadata() {
-        props.setProperty(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.toString());
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         streams.start();
         Set<ThreadMetadata> threadMetadata = streams.localThreadsMetadata();
         assertNotNull(threadMetadata);
         assertEquals(2, threadMetadata.size());
         for (ThreadMetadata metadata : threadMetadata) {
-            assertTrue("#threadState() was: " + metadata.threadState() + "; expected either RUNNING or CREATED",
-                Utils.mkList("RUNNING", "CREATED").contains(metadata.threadState()));
+            assertTrue("#threadState() was: " + metadata.threadState() + "; expected either RUNNING, PARTITIONS_REVOKED, PARTITIONS_ASSIGNED, or CREATED",
+                Utils.mkList("RUNNING", "PARTITIONS_REVOKED", "PARTITIONS_ASSIGNED", "CREATED").contains(metadata.threadState()));
             assertEquals(0, metadata.standbyTasks().size());
             assertEquals(0, metadata.activeTasks().size());
         }

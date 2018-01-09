@@ -16,13 +16,19 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroupId;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -135,5 +141,41 @@ public class ConnectMetricsTest {
         assertEquals(id1.tags(), id2.tags());
         assertNotNull(id1.tags());
         assertNotNull(id2.tags());
+    }
+
+    @Test
+    public void testRecreateWithClose() {
+        int numMetrics = addToGroup(metrics, false);
+        int numMetricsInRecreatedGroup = addToGroup(metrics, true);
+        Assert.assertEquals(numMetrics, numMetricsInRecreatedGroup);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testRecreateWithoutClose() {
+        int numMetrics = addToGroup(metrics, false);
+        int numMetricsInRecreatedGroup = addToGroup(metrics, false);
+        // we should never get here
+        throw new RuntimeException("Created " + numMetricsInRecreatedGroup
+                + " metrics in recreated group. Original=" + numMetrics);
+    }
+
+    private int addToGroup(ConnectMetrics connectMetrics, boolean shouldClose) {
+        ConnectMetricsRegistry registry = connectMetrics.registry();
+        ConnectMetrics.MetricGroup metricGroup = connectMetrics.group(registry.taskGroupName(),
+                registry.connectorTagName(), "conn_name");
+
+        if (shouldClose) {
+            metricGroup.close();
+        }
+
+        Sensor sensor = metricGroup.sensor("my_sensor");
+        sensor.add(metricName("x1"), new Max());
+        sensor.add(metricName("y2"), new Avg());
+
+        return metricGroup.metrics().metrics().size();
+    }
+
+    static MetricName metricName(String name) {
+        return new MetricName(name, "test_group", "metrics for testing", Collections.<String, String>emptyMap());
     }
 }
