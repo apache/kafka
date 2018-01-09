@@ -59,7 +59,12 @@ public class ConfigEntry {
      * @deprecated since 1.1.0. This constructor will be removed in a future release.
      */
     public ConfigEntry(String name, String value, boolean isDefault, boolean isSensitive, boolean isReadOnly) {
-        this(name, value, ConfigSource.UNKNOWN, isSensitive, isReadOnly, Collections.<ConfigSynonym>emptyList());
+        this(name,
+             value,
+             isDefault ? ConfigSource.DEFAULT_CONFIG : ConfigSource.UNKNOWN,
+             isSensitive,
+             isReadOnly,
+             Collections.<ConfigSynonym>emptyList());
     }
 
     /**
@@ -147,7 +152,9 @@ public class ConfigEntry {
         return this.name.equals(that.name) &&
                 this.value != null ? this.value.equals(that.value) : that.value == null &&
                 this.isSensitive == that.isSensitive &&
-                this.isReadOnly == that.isReadOnly;
+                this.isReadOnly == that.isReadOnly &&
+                this.source == that.source &&
+                Objects.equals(this.synonyms, that.synonyms);
     }
 
     @Override
@@ -158,6 +165,8 @@ public class ConfigEntry {
         result = prime * result + ((value == null) ? 0 : value.hashCode());
         result = prime * result + (isSensitive ? 1 : 0);
         result = prime * result + (isReadOnly ? 1 : 0);
+        result = prime * result + source.hashCode();
+        result = prime * result + synonyms.hashCode();
         return result;
     }
 

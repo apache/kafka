@@ -106,9 +106,15 @@ public class ChannelBuilders {
             case SASL_PLAINTEXT:
                 requireNonNullMode(mode, securityProtocol);
                 JaasContext jaasContext = JaasContext.load(contextType, listenerName, configs);
-                channelBuilder = new SaslChannelBuilder(mode, jaasContext, securityProtocol, listenerName,
-                        isInterBrokerListener, clientSaslMechanism, saslHandshakeRequestEnable,
-                        credentialCache, tokenCache);
+                channelBuilder = new SaslChannelBuilder(mode,
+                        jaasContext,
+                        securityProtocol,
+                        listenerName,
+                        isInterBrokerListener,
+                        clientSaslMechanism,
+                        saslHandshakeRequestEnable,
+                        credentialCache,
+                        tokenCache);
                 break;
             case PLAINTEXT:
                 channelBuilder = new PlaintextChannelBuilder();

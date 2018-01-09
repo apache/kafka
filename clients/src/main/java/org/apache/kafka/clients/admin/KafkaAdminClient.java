@@ -1612,7 +1612,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private List<ConfigEntry.ConfigSynonym> configSynonyms(DescribeConfigsResponse.ConfigEntry configEntry) {
-        List<ConfigEntry.ConfigSynonym> synonyms = new ArrayList<>();
+        List<ConfigEntry.ConfigSynonym> synonyms = new ArrayList<>(configEntry.synonyms().size());
         for (DescribeConfigsResponse.ConfigSynonym synonym : configEntry.synonyms()) {
             synonyms.add(new ConfigEntry.ConfigSynonym(synonym.name(), synonym.value(), configSource(synonym.source())));
         }
@@ -1678,8 +1678,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         final long now = time.milliseconds();
-        runnable.call(new Call("alterConfigs", calcDeadlineMs(now, options.timeoutMs()),
-                nodeProvider) {
+        runnable.call(new Call("alterConfigs", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
 
             @Override
             public AbstractRequest.Builder createRequest(int timeoutMs) {

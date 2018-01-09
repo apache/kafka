@@ -31,7 +31,7 @@ import kafka.utils.Implicits._
 import kafka.zk.{ConfigEntityChangeNotificationZNode, ZooKeeperTestHarness}
 import org.apache.kafka.clients.admin.ConfigEntry.{ConfigSource, ConfigSynonym}
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.SslConfigs._
@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestEx
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -57,8 +58,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   private var servers = new ArrayBuffer[KafkaServer]
   private val numServers = 3
-  private val producers = new ArrayBuffer[KafkaProducer[Array[Byte], Array[Byte]]]
-  private val consumers = new ArrayBuffer[KafkaConsumer[Array[Byte], Array[Byte]]]
+  private val producers = new ArrayBuffer[KafkaProducer[String, String]]
+  private val consumers = new ArrayBuffer[KafkaConsumer[String, String]]
   private val adminClients = new ArrayBuffer[AdminClient]()
   private val clientThreads = new ArrayBuffer[ShutdownableThread]()
   private val topic = "testtopic"
@@ -242,22 +243,34 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   private def createProducer(trustStore: File, retries: Int,
-                             clientId: String = "test-producer"): KafkaProducer[Array[Byte], Array[Byte]] = {
+                             clientId: String = "test-producer"): KafkaProducer[String, String] = {
     val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName(SecureExternal))
     val propsOverride = new Properties
     propsOverride.put(ProducerConfig.CLIENT_ID_CONFIG, clientId)
-    val producer = TestUtils.createNewProducer(bootstrapServers, acks = -1, retries = retries,
-      securityProtocol = SecurityProtocol.SASL_SSL, trustStoreFile = Some(trustStore),
-      saslProperties = Some(clientSaslProps), props = Some(propsOverride))
+    val producer = TestUtils.createNewProducer(
+      bootstrapServers,
+      acks = -1,
+      retries = retries,
+      securityProtocol = SecurityProtocol.SASL_SSL,
+      trustStoreFile = Some(trustStore),
+      saslProperties = Some(clientSaslProps),
+      keySerializer = new StringSerializer,
+      valueSerializer = new StringSerializer,
+      props = Some(propsOverride))
     producers += producer
     producer
   }
 
-  private def createConsumer(groupId: String, trustStore: File, topic: String = topic):KafkaConsumer[Array[Byte], Array[Byte]] = {
+  private def createConsumer(groupId: String, trustStore: File, topic: String = topic):KafkaConsumer[String, String] = {
     val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName(SecureExternal))
-    val consumer = TestUtils.createNewConsumer(bootstrapServers, groupId,
-      securityProtocol = SecurityProtocol.SASL_SSL, trustStoreFile = Some(trustStore),
-      saslProperties = Some(clientSaslProps))
+    val consumer = TestUtils.createNewConsumer(
+      bootstrapServers,
+      groupId,
+      securityProtocol = SecurityProtocol.SASL_SSL,
+      trustStoreFile = Some(trustStore),
+      saslProperties = Some(clientSaslProps),
+      keyDeserializer = new StringDeserializer,
+      valueDeserializer = new StringDeserializer)
     consumer.subscribe(Collections.singleton(topic))
     consumers += consumer
     consumer
@@ -275,15 +288,14 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     adminClient
   }
 
-  private def verifyProduceConsume(producer: KafkaProducer[Array[Byte], Array[Byte]],
-                                   consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+  private def verifyProduceConsume(producer: KafkaProducer[String, String],
+                                   consumer: KafkaConsumer[String, String],
                                    numRecords: Int,
                                    topic: String = topic): Unit = {
-    val producerRecords = (1 to numRecords).map(i => new ProducerRecord(topic, s"key$i".getBytes,
-      s"value$i".getBytes))
+    val producerRecords = (1 to numRecords).map(i => new ProducerRecord(topic, s"key$i", s"value$i"))
     producerRecords.map(producer.send).map(_.get(10, TimeUnit.SECONDS))
 
-    val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]
+    val records = new ArrayBuffer[ConsumerRecord[String, String]]
     TestUtils.waitUntilTrue(() => {
       records ++= consumer.poll(50).asScala
       records.size == numRecords
@@ -429,7 +441,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
         try {
             while (isRunning.get) {
                 sent += 1
-                val record = new ProducerRecord(topic, s"key$sent".getBytes, s"value$sent".getBytes)
+                val record = new ProducerRecord(topic, s"key$sent", s"value$sent")
                 producer.send(record).get(10, TimeUnit.SECONDS)
               }
           } finally {

@@ -264,8 +264,8 @@ public class DescribeConfigsResponse extends AbstractResponse {
                 boolean readOnly = configEntriesStruct.getBoolean(READ_ONLY_KEY_NAME);
                 Collection<ConfigSynonym> synonyms;
                 if (configEntriesStruct.hasField(CONFIG_SYNONYMS_KEY_NAME)) {
-                    synonyms = new ArrayList<>();
                     Object[] synonymsArray = configEntriesStruct.getArray(CONFIG_SYNONYMS_KEY_NAME);
+                    synonyms = new ArrayList<>(synonymsArray.length);
                     for (Object synonymObj: synonymsArray) {
                         Struct synonymStruct = (Struct) synonymObj;
                         String synonymConfigName = synonymStruct.getString(CONFIG_NAME_KEY_NAME);

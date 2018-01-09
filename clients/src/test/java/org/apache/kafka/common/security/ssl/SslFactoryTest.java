@@ -88,7 +88,7 @@ public class SslFactoryTest {
                 Mode.SERVER, trustStoreFile, "server");
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(serverSslConfig);
-        SSLContext sslContext = sslFactory.createSSLContext(securityStore(serverSslConfig), true);
+        SSLContext sslContext = sslFactory.createSSLContext(securityStore(serverSslConfig));
         assertNotNull("SSL context not created", sslContext);
     }
 
@@ -102,7 +102,7 @@ public class SslFactoryTest {
         SslFactory sslFactory = new SslFactory(Mode.SERVER, null, true);
         sslFactory.configure(serverSslConfig);
         try {
-            sslFactory.createSSLContext(securityStore(untrustedConfig), true);
+            sslFactory.createSSLContext(securityStore(untrustedConfig));
             fail("Validation did not fail with untrusted keystore");
         } catch (SSLHandshakeException e) {
             // Expected exception

@@ -64,7 +64,7 @@ object DynamicConfig {
 
     def names = brokerConfigDef.names
 
-    def validate(props: Properties) = DynamicConfig.validate(brokerConfigDef, props, true, nonDynamicProps)
+    def validate(props: Properties) = DynamicConfig.validate(brokerConfigDef, props, customPropsAllowed = true, nonDynamicProps)
   }
 
   object Client {
@@ -91,7 +91,7 @@ object DynamicConfig {
 
     def names = clientConfigs.names
 
-    def validate(props: Properties) = DynamicConfig.validate(clientConfigs, props, false, Set.empty)
+    def validate(props: Properties) = DynamicConfig.validate(clientConfigs, props, customPropsAllowed = false, Set.empty)
   }
 
   object User {
@@ -104,7 +104,7 @@ object DynamicConfig {
 
     def names = userConfigs.names
 
-    def validate(props: Properties) = DynamicConfig.validate(userConfigs, props, false, Set.empty)
+    def validate(props: Properties) = DynamicConfig.validate(userConfigs, props, customPropsAllowed = false, Set.empty)
   }
 
   private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean, nonDynamicProps: Set[String]) = {

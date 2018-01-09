@@ -132,7 +132,7 @@ public class SslFactory implements Reconfigurable {
                          (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
                          (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
         try {
-            this.sslContext = createSSLContext(keystore, false);
+            this.sslContext = createSSLContext(keystore);
         } catch (Exception e) {
             throw new KafkaException(e);
         }
@@ -148,7 +148,7 @@ public class SslFactory implements Reconfigurable {
         try {
             SecurityStore newKeystore = maybeCreateNewKeystore(configs);
             if (newKeystore != null)
-                createSSLContext(newKeystore, true);
+                createSSLContext(newKeystore);
             return true;
         } catch (Exception e) {
             throw new KafkaException("Validation of dynamic config update failed", e);
@@ -160,7 +160,7 @@ public class SslFactory implements Reconfigurable {
         SecurityStore newKeystore = maybeCreateNewKeystore(configs);
         if (newKeystore != null) {
             try {
-                this.sslContext = createSSLContext(newKeystore, true);
+                this.sslContext = createSSLContext(newKeystore);
                 this.keystore = newKeystore;
             } catch (Exception e) {
                 throw new KafkaException("Reconfiguration of SSL keystore failed", e);
@@ -184,7 +184,7 @@ public class SslFactory implements Reconfigurable {
     }
 
     // package access for testing
-    SSLContext createSSLContext(SecurityStore keystore, boolean verifyKeystore) throws GeneralSecurityException, IOException  {
+    SSLContext createSSLContext(SecurityStore keystore) throws GeneralSecurityException, IOException  {
         SSLContext sslContext;
         if (provider != null)
             sslContext = SSLContext.getInstance(protocol, provider);
@@ -207,7 +207,9 @@ public class SslFactory implements Reconfigurable {
         tmf.init(ts);
 
         sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
-        if (verifyKeystore) {
+        if (keystore != null && keystore != this.keystore) {
+            if (this.keystore == null)
+                throw new ConfigException("Cannot add SSL keystore to an existing listener for which no keystore was configured.");
             if (keystoreVerifiableUsingTruststore)
                 SSLConfigValidatorEngine.validate(this, sslContext);
             if (!CertificateEntries.create(this.keystore.load()).equals(CertificateEntries.create(keystore.load()))) {
