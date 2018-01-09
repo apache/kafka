@@ -54,6 +54,10 @@ class JsonTest {
     Vector(1, 2, 3).map(new IntNode(_)).foreach(arrayNode.add)
     assertEquals(Json.parseFull("[1, 2, 3]"), Some(JsonValue(arrayNode)))
 
+  }
+
+  @Test
+  def testJsonParseWithBackslashEscaping() = {
     // Test with encoder that properly escapes backslash and quotes
     val map = Map("foo1" -> """bar1\,bar2""", "foo2" -> """\bar""")
     val encoded = Json.legacyEncodeAsString(map)
@@ -62,7 +66,7 @@ class JsonTest {
 
     // Test strings with non-escaped backslash and quotes. This is to verify that ACLs
     // containing non-escaped chars persisted using 1.0 can be parsed.
-    assertEquals(decoded, Json.parseFull("""{"foo1":"bar1\,bar2", "foo2":"\bar"}"""))
+    assertEquals(decoded, Json.parseBytesIncludingACLs("""{"foo1":"bar1\,bar2", "foo2":"\bar"}""".getBytes()))
   }
 
   @Test
