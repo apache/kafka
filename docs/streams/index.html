@@ -16,19 +16,21 @@
   <!--#include virtual="../js/templateData.js" -->
 </script>
 <script id="streams-template" type="text/x-handlebars-template">
-  <h1>Kafka Streams API</h1>
-       <div class="sub-nav-sticky">
-          <div class="sticky-top">
-             <div style="height:35px">
-                <a  class="active-menu-item" href="/{{version}}/documentation/streams/">Introduction</a>
-                <a href="/{{version}}/documentation/streams/developer-guide">Developer Guide</a>
+  <h1>Kafka Streams</h1>
+    <div class="sub-nav-sticky">
+        <div class="sticky-top">
+            <div style="height:35px">
+                <a class="active-menu-item" href="/{{version}}/documentation/streams/">Introduction</a>
                 <a href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
+                <a href="/{{version}}/documentation/streams/architecture">Architecture</a>
                 <a href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
                 <a href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
-             </div>
-           </div>
-       </div>
-       <h3 class="streams_intro">The easiest way to write mission-critical real-time applications and microservices</h3>
+                <a href="/{{version}}/documentation/streams/developer-guide/">Developer Guide</a>
+                <a href="/{{version}}/documentation/streams/upgrade-guide">Upgrade</a>
+            </div>
+        </div>
+    </div>
+    <h3 class="streams_intro">The easiest way to write mission-critical real-time applications and microservices</h3>
        <p class="streams__description">Kafka Streams is a client library for building applications and microservices, where the input and output data are stored in Kafka clusters. It combines the simplicity of writing and deploying standard Java and Scala applications on the client side with the benefits of Kafka's server-side cluster technology.</p>
        <div class="video__series__grid">
           <div class="yt__video__block">
@@ -287,8 +289,8 @@
        </div>
        
        <div class="pagination">
-           <a href="#" class="pagination__btn pagination__btn__prev pagination__btn--disabled">Previous</a>
-           <a href="/{{version}}/documentation/streams/quickstart" class="pagination__btn pagination__btn__next">Next</a>
+           <a href="/{{version}}/documentation" class="pagination__btn pagination__btn__prev">Previous</a>
+           <a href="/{{version}}/documentation/streams/core-concepts" class="pagination__btn pagination__btn__next">Next</a>
        </div>
      
 </script>
@@ -300,6 +302,7 @@
     <!--#include virtual="../../includes/_docs_banner.htm" -->
     <ul class="breadcrumbs">
       <li><a href="/documentation">Documentation</a>
+      <li><a href="/documentation/streams">Kafka Streams</a></li>
       </li>
     </ul>
     <div class="p-streams"></div>

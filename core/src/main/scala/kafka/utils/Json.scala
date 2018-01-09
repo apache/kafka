@@ -16,8 +16,6 @@
  */
 package kafka.utils
 
-import java.nio.charset.StandardCharsets
-
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.utils.json.JsonValue
@@ -53,6 +51,10 @@ object Json {
   def parseBytes(input: Array[Byte]): Option[JsonValue] =
     try Option(mapper.readTree(input)).map(JsonValue(_))
     catch { case _: JsonProcessingException => None }
+
+  def tryParseBytes(input: Array[Byte]): Either[JsonProcessingException, JsonValue] =
+    try Right(mapper.readTree(input)).right.map(JsonValue(_))
+    catch { case e: JsonProcessingException => Left(e) }
 
   /**
    * Encode an object into a JSON string. This method accepts any type T where

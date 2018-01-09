@@ -25,10 +25,10 @@ buildscript {
   dependencies {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar:grgit:1.9.3"
-    classpath 'com.github.ben-manes:gradle-versions-plugin:0.15.0'
+    classpath 'com.github.ben-manes:gradle-versions-plugin:0.17.0'
     classpath 'org.scoverage:gradle-scoverage:2.1.0'
-    classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.1'
-    classpath 'org.owasp:dependency-check-gradle:3.0.1'
+    classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.2'
+    classpath 'org.owasp:dependency-check-gradle:3.0.2'
   }
 }
 
@@ -79,7 +79,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "4.2.1"
+  gradleVersion = "4.4.1"
   buildVersionFileName = "kafka-version.properties"
 
   maxPermSizeArgs = []
@@ -548,7 +548,9 @@ project(':core') {
     compile libs.jacksonDatabind
     compile libs.joptSimple
     compile libs.metrics
-    compile libs.scala
+    compile libs.scalaLibrary
+    // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
+    compile libs.scalaReflect
     compile libs.scalaLogging
     compile libs.slf4jApi
     compile(libs.zkclient) {

@@ -17,8 +17,7 @@
 package org.apache.kafka.streams.tools;
 
 import kafka.tools.StreamsResetter;
-import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.admin.MockKafkaAdminClientEnv;
+import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -27,8 +26,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.DeleteTopicsResponse;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -40,6 +38,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -235,20 +234,19 @@ public class StreamsResetterTest {
     }
 
     @Test
-    public void shouldDeleteTopic() {
+    public void shouldDeleteTopic() throws InterruptedException, ExecutionException {
         Cluster cluster = createCluster(1);
-        try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
-            env.kafkaClient().setNode(cluster.controller());
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
-            env.kafkaClient().prepareResponse(new DeleteTopicsResponse(Collections.singletonMap(TOPIC, Errors.NONE)));
-            streamsResetter.doDelete(Collections.singletonList(topicPartition.topic()), env.adminClient());
+        try (MockAdminClient adminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
+            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.<Node>emptyList());
+            adminClient.addTopic(false, TOPIC, Collections.singletonList(topicPartitionInfo), null);
+            streamsResetter.doDelete(Collections.singletonList(TOPIC), adminClient);
+            assertEquals(Collections.emptySet(), adminClient.listTopics().names().get());
         }
     }
 
     private Cluster createCluster(int numNodes) {
         HashMap<Integer, Node> nodes = new HashMap<>();
-        for (int i = 0; i != numNodes; ++i) {
+        for (int i = 0; i < numNodes; ++i) {
             nodes.put(i, new Node(i, "localhost", 8121 + i));
         }
         return new Cluster("mockClusterId", nodes.values(),

@@ -100,7 +100,7 @@ public class RestServer {
         ResourceConfig resourceConfig = new ResourceConfig();
         resourceConfig.register(new JacksonJsonProvider());
 
-        resourceConfig.register(RootResource.class);
+        resourceConfig.register(new RootResource(herder));
         resourceConfig.register(new ConnectorsResource(herder));
         resourceConfig.register(new ConnectorPluginsResource(herder));
 
