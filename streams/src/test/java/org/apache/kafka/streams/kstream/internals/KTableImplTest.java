@@ -35,7 +35,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
@@ -341,11 +341,11 @@ public class KTableImplTest {
                                                                            .withValueSerde(stringSerde)
                 );
 
-        table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
+        table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper())
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, "mock-result1");
 
 
-        table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
+        table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper())
             .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result2");
 
         driver.setUp(builder, stateDir, stringSerde, stringSerde);

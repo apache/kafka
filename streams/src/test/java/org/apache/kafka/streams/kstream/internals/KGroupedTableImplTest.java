@@ -33,7 +33,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
@@ -62,7 +62,7 @@ public class KGroupedTableImplTest {
     @Before
     public void before() {
         groupedTable = builder.table("blah", Consumed.with(Serdes.String(), Serdes.String()))
-                .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper());
+                .groupBy(MockMapper.<String, String>selectValueKeyValueMapper());
     }
 
     @Test
@@ -221,7 +221,7 @@ public class KGroupedTableImplTest {
     @Test
     public void shouldCountAndMaterializeResults() {
         final KTable<String, String> table = builder.table(topic, Consumed.with(Serdes.String(), Serdes.String()));
-        table.groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(),
+        table.groupBy(MockMapper.<String, String>selectValueKeyValueMapper(),
                       Serialized.with(Serdes.String(),
                                       Serdes.String()))
                 .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count")
@@ -238,7 +238,7 @@ public class KGroupedTableImplTest {
     @Test
     public void shouldAggregateAndMaterializeResults() {
         final KTable<String, String> table = builder.table(topic, Consumed.with(Serdes.String(), Serdes.String()));
-        table.groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(),
+        table.groupBy(MockMapper.<String, String>selectValueKeyValueMapper(),
                       Serialized.with(Serdes.String(),
                                       Serdes.String()))
                 .aggregate(MockInitializer.STRING_INIT,

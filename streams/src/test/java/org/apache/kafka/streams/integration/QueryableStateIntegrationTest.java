@@ -57,7 +57,7 @@ import org.apache.kafka.streams.state.StreamsMetadata;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -218,7 +218,7 @@ public class QueryableStateIntegrationTest {
                     return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
                 }
             })
-            .groupBy(MockKeyValueMapper.<String, String>SelectValueMapper());
+            .groupBy(MockMapper.<String, String>selectValueMapper());
 
         // Create a State Store for the all time word count
         groupedByWord

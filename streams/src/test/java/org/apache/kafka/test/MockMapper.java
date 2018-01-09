@@ -18,10 +18,9 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapper;
 
-public class MockKeyValueMapper {
-
-
+public class MockMapper {
 
     private static class NoOpKeyValueMapper<K, V> implements KeyValueMapper<K, V, KeyValue<K, V>> {
         @Override
@@ -51,20 +50,31 @@ public class MockKeyValueMapper {
         }
     }
 
-    public static <K, V> KeyValueMapper<K, V, K> SelectKeyKeyValueMapper() {
+    private static class NoOpValueMapper<V> implements ValueMapper<V, V> {
+        @Override
+        public V apply(final V value) {
+            return value;
+        }
+    }
+
+    public static <K, V> KeyValueMapper<K, V, K> selectKeyKeyValueMapper() {
         return new SelectKeyMapper<>();
     }
 
 
-    public static <K, V> KeyValueMapper<K, V, KeyValue<K, V>> NoOpKeyValueMapper() {
+    public static <K, V> KeyValueMapper<K, V, KeyValue<K, V>> noOpKeyValueMapper() {
         return new NoOpKeyValueMapper<>();
     }
 
-    public static <K, V> KeyValueMapper<K, V, KeyValue<V, V>> SelectValueKeyValueMapper() {
+    public static <K, V> KeyValueMapper<K, V, KeyValue<V, V>> selectValueKeyValueMapper() {
         return new SelectValueKeyValueMapper<>();
     }
 
-    public static <K, V> KeyValueMapper<K, V, V> SelectValueMapper() {
+    public static <K, V> KeyValueMapper<K, V, V> selectValueMapper() {
         return new SelectValueMapper<>();
+    }
+
+    public static <V> ValueMapper<V, V> noOpValueMapper() {
+        return new NoOpValueMapper<>();
     }
 }
