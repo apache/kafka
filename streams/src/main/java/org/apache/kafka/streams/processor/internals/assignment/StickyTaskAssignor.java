@@ -36,6 +36,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
     private final Map<TaskId, ID> previousActiveTaskAssignment = new HashMap<>();
     private final Map<TaskId, Set<ID>> previousStandbyTaskAssignment = new HashMap<>();
     private final TaskPairs taskPairs;
+    private boolean isStandByAssignment = false;
 
     public StickyTaskAssignor(final Map<ID, ClientState> clients, final Set<TaskId> taskIds) {
         this.clients = clients;
@@ -51,6 +52,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
     }
 
     private void assignStandby(final int numStandbyReplicas) {
+        isStandByAssignment = true;
         for (final TaskId taskId : taskIds) {
             for (int i = 0; i < numStandbyReplicas; i++) {
                 final Set<ID> ids = findClientsWithoutAssignedTask(taskId);
@@ -69,6 +71,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
     }
 
     private void assignActive() {
+        isStandByAssignment = false;
         final int totalCapacity = sumCapacity(clients.values());
         final int tasksPerThread = taskIds.size() / totalCapacity;
         final Set<TaskId> assigned = new HashSet<>();
@@ -214,7 +217,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
             if (leastLoaded == null || client.hasMoreAvailableCapacityThan(leastLoaded)) {
                 if (!checkTaskPairs) {
                     leastLoaded = client;
-                } else if (taskPairs.hasNewPair(taskId, client.assignedTasks())) {
+                } else if (taskPairs.hasNewPair(taskId, client.assignedTasks(), isStandByAssignment)) {
                     leastLoaded = client;
                 }
             }
@@ -257,12 +260,17 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
             this.pairs = new HashSet<>(maxPairs);
         }
 
-        boolean hasNewPair(final TaskId task1, final Set<TaskId> taskIds) {
+        boolean hasNewPair(final TaskId task1,
+                           final Set<TaskId> taskIds,
+                           final boolean isStandbyAssignment) {
             if (pairs.size() == maxPairs) {
                 return false;
             }
             for (final TaskId taskId : taskIds) {
-                if (!pairs.contains(pair(task1, taskId))) {
+                if (isStandbyAssignment && !pairs.contains(pair(task1, taskId))) {
+                    return true;
+                }
+                if (!pairs.contains(pair(task1, taskId)) && task1.topicGroupId != taskId.topicGroupId) {
                     return true;
                 }
             }
