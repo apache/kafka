@@ -33,9 +33,9 @@
 
     <div class="section" id="interactive-queries">
         <span id="streams-developer-guide-interactive-queries"></span><h1>Interactive Queries<a class="headerlink" href="#interactive-queries" title="Permalink to this headline"></a></h1>
-        <p>Interactive queries allow you to leverage the state of your application from outside your application. The Kafka Streams API enables your applications to be queryable.</p>
+        <p>Interactive queries allow you to leverage the state of your application from outside your application. The Kafka Streams enables your applications to be queryable.</p>
         <div class="contents local topic" id="table-of-contents">
-            <p class="topic-title first">Table of Contents</p>
+            <p class="topic-title first"><b>Table of Contents</b></p>
             <ul class="simple">
                 <li><a class="reference internal" href="#querying-local-state-stores-for-an-app-instance" id="id3">Querying local state stores for an app instance</a><ul>
                     <li><a class="reference internal" href="#querying-local-key-value-stores" id="id4">Querying local key-value stores</a></li>
@@ -54,7 +54,7 @@
         </div>
         <p>The full state of your application is typically <a class="reference internal" href="../architecture.html#streams-architecture-state"><span class="std std-ref">split across many distributed instances of your application</span></a>, and across many state stores that are managed locally by these application instances.</p>
         <div class="figure align-center">
-            <a class="reference internal image-reference" href="../../../images/streams-interactive-queries-03.png"><img alt="../../../images/streams-interactive-queries-03.png" src="../../../images/streams-interactive-queries-03.png" style="width: 400pt; height: 400pt;" /></a>
+            <img class="centered" src="/{{version}}/images/streams-interactive-queries-03.png">
         </div>
         <p>There are local and remote components to interactively querying the state of your application.</p>
         <dl class="docutils">
@@ -108,7 +108,7 @@
             <p>A Kafka Streams application typically runs on multiple instances.  The state that is locally available on any given instance is only a subset of the <a class="reference internal" href="../architecture.html#streams-architecture-state"><span class="std std-ref">application&#8217;s entire state</span></a>.  Querying the local stores on an instance will only return data locally available on that particular instance.</p>
             <p>The method <code class="docutils literal"><span class="pre">KafkaStreams#store(...)</span></code> finds an application instance&#8217;s local state stores by name and type.</p>
             <div class="figure align-center" id="id1">
-                <a class="reference internal image-reference" href="../../../images/streams-interactive-queries-api-01.png"><img alt="../../../images/streams-interactive-queries-api-01.png" src="../../../images/streams-interactive-queries-api-01.png" style="width: 500pt;" /></a>
+                <img class="centered" src="/{{version}}/images/streams-interactive-queries-api-01.png">
                 <p class="caption"><span class="caption-text">Every application instance can directly query any of its local state stores.</span></p>
             </div>
             <p>The <em>name</em> of a state store is defined when you create the store. You can create the store explicitly by using the Processor API or implicitly by using stateful operations in the DSL.</p>
@@ -357,7 +357,7 @@
                 <li>In the RPC layer, <a class="reference internal" href="#streams-developer-guide-interactive-queries-discover-app-instances-and-stores"><span class="std std-ref">discover remote application instances</span></a> and their state stores and <a class="reference internal" href="#streams-developer-guide-interactive-queries-local-stores"><span class="std std-ref">query locally available state stores</span></a> to make the full state of your application queryable. The remote application instances can forward queries to other app instances if a particular instance lacks the local data to respond to a query. The locally available state stores can directly respond to queries.</li>
             </ol>
             <div class="figure align-center" id="id2">
-                <a class="reference internal image-reference" href="../../../images/streams-interactive-queries-api-02.png"><img alt="../../../images/streams-interactive-queries-api-02.png" src="../../../images/streams-interactive-queries-api-02.png" style="width: 500pt;" /></a>
+                <img class="centered" src="/{{version}}/images/streams-interactive-queries-api-02.png">
                 <p class="caption"><span class="caption-text">Discover any running instances of the same application as well as the respective RPC endpoints they expose for
 interactive queries</span></p>
             </div>
@@ -373,7 +373,7 @@ interactive queries</span></p>
                     The value of this configuration property will vary across the instances of your application.
                     When this property is set, Kafka Streams will keep track of the RPC endpoint information for every instance of an application, its state stores, and assigned stream partitions through instances of <a class="reference external" href="../javadocs/org/apache/kafka/streams/state/StreamsMetadata.html">StreamsMetadata</a>.</p>
                 <div class="admonition tip">
-                    <p class="first admonition-title">Tip</p>
+                    <p><b>Tip</b></p>
                     <p class="last">Consider leveraging the exposed RPC endpoints of your application for further functionality, such as
                         piggybacking additional inter-application communication that goes beyond interactive queries.</p>
                 </div>

@@ -324,7 +324,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     val zkUtils = ZkUtils(zkConnect, 6000, 30000, false)
 
     // create topic topic1 with 1 partition on broker 0
-    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = servers)
+    createTopic(topic, numPartitions = 1, replicationFactor = 1)
 
     // send some messages to each broker
     val sentMessages1 = sendMessages(servers, topic, nMessages)

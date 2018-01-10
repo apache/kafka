@@ -134,7 +134,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
     val brokers = servers.map(s => new Broker(s.config.brokerId, "localhost", TestUtils.boundPort(s), listenerName,
       securityProtocol))
-    val nodes = brokers.map(_.getNode(listenerName))
+    val nodes = brokers.map(_.node(listenerName))
 
     val controllerContext = new ControllerContext
     controllerContext.liveBrokers = brokers.toSet

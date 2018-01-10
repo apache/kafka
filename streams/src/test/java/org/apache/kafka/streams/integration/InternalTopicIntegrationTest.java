@@ -20,7 +20,6 @@ import kafka.log.LogConfig;
 import kafka.utils.MockTime;
 import kafka.zk.AdminZkClient;
 import kafka.zk.KafkaZkClient;
-import kafka.zookeeper.ZooKeeperClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serde;
@@ -93,13 +92,9 @@ public class InternalTopicIntegrationTest {
     }
 
     private Properties getTopicConfigProperties(final String changelog) {
-        final ZooKeeperClient zkClient = new ZooKeeperClient(
-                CLUSTER.zKConnectString(),
-                DEFAULT_ZK_SESSION_TIMEOUT_MS,
-                DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
-                Integer.MAX_VALUE, Time.SYSTEM,
+        final KafkaZkClient kafkaZkClient = KafkaZkClient.apply(CLUSTER.zKConnectString(), false,
+                DEFAULT_ZK_SESSION_TIMEOUT_MS, DEFAULT_ZK_CONNECTION_TIMEOUT_MS, Integer.MAX_VALUE, Time.SYSTEM,
                 "testMetricGroup", "testMetricType");
-        final KafkaZkClient kafkaZkClient = new KafkaZkClient(zkClient, false, Time.SYSTEM);
         try {
             final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
 

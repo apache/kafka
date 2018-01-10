@@ -54,7 +54,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
       assertTrue(servers.head.logManager.getLog(tp).isEmpty)
     }
 
-    TestUtils.createTopic(zkClient, topic, partitionNum, 1, servers)
+    createTopic(topic, partitionNum, 1)
     (0 until partitionNum).foreach { partition =>
       assertEquals(logDir1, servers.head.logManager.getLog(new TopicPartition(topic, partition)).get.dir.getParent)
     }
@@ -88,7 +88,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     assertEquals(Errors.LOG_DIR_NOT_FOUND, alterReplicaDirResponse1.responses().get(new TopicPartition(topic, 0)))
     assertEquals(Errors.REPLICA_NOT_AVAILABLE, alterReplicaDirResponse1.responses().get(new TopicPartition(topic, 1)))
 
-    TestUtils.createTopic(zkClient, topic, 3, 1, servers)
+    createTopic(topic, 3, 1)
 
     // Test AlterReplicaDirRequest after topic creation
     val partitionDirs2 = mutable.Map.empty[TopicPartition, String]

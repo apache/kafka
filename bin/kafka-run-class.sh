@@ -59,11 +59,7 @@ fi
 shopt -s nullglob
 for dir in "$base_dir"/core/build/dependant-libs-${SCALA_VERSION}*;
 do
-  if [ -z "$CLASSPATH" ] ; then
-    CLASSPATH="$dir/*"
-  else
-    CLASSPATH="$CLASSPATH:$dir/*"
-  fi
+  CLASSPATH="$CLASSPATH:$dir/*"
 done
 
 for file in "$base_dir"/examples/build/libs/kafka-examples*.jar;
@@ -259,6 +255,11 @@ if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
     KAFKA_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=100M"
   fi
 fi
+
+# Remove a possible colon prefix from the classpath (happens at lines like `CLASSPATH="$CLASSPATH:$file"` when CLASSPATH is blank)
+# Syntax used on the right side is native Bash string manipulation; for more details see
+# http://tldp.org/LDP/abs/html/string-manipulation.html, specifically the section titled "Substring Removal"
+CLASSPATH=${CLASSPATH#:}
 
 # If Cygwin is detected, classpath is converted to Windows format.
 (( CYGWIN )) && CLASSPATH=$(cygpath --path --mixed "${CLASSPATH}")

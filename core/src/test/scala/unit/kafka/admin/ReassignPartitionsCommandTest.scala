@@ -32,7 +32,7 @@ import org.junit.{Before, Test}
 import org.junit.Assert.{assertEquals, assertNull}
 
 import scala.collection.{Seq, mutable}
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import org.apache.kafka.common.TopicPartition
 
 class ReassignPartitionsCommandTest  extends ZooKeeperTestHarness  with Logging {
@@ -270,7 +270,7 @@ class ReassignPartitionsCommandTest  extends ZooKeeperTestHarness  with Logging 
     assigner.maybeLimit(Throttle(1000))
 
     //Then
-    for (actual <- propsCapture.getValues) {
+    for (actual <- propsCapture.getValues.asScala) {
       assertEquals("1000", actual.getProperty(DynamicConfig.Broker.LeaderReplicationThrottledRateProp))
       assertEquals("1000", actual.getProperty(DynamicConfig.Broker.FollowerReplicationThrottledRateProp))
     }
@@ -304,7 +304,7 @@ class ReassignPartitionsCommandTest  extends ZooKeeperTestHarness  with Logging 
     assigner.maybeLimit(Throttle(1000))
 
     //Then
-    for (actual <- propsCapture.getValues) {
+    for (actual <- propsCapture.getValues.asScala) {
       assertEquals("1000", actual.getProperty(DynamicConfig.Broker.LeaderReplicationThrottledRateProp))
       assertEquals("1000", actual.getProperty(DynamicConfig.Broker.FollowerReplicationThrottledRateProp))
     }
@@ -334,7 +334,7 @@ class ReassignPartitionsCommandTest  extends ZooKeeperTestHarness  with Logging 
     assigner.maybeLimit(Throttle(1000))
 
     //Then other property remains
-    for (actual <- propsCapture.getValues) {
+    for (actual <- propsCapture.getValues.asScala) {
       assertEquals("useful.value", actual.getProperty("useful.key"))
       assertEquals("1000", actual.getProperty(DynamicConfig.Broker.LeaderReplicationThrottledRateProp))
       assertEquals("1000", actual.getProperty(DynamicConfig.Broker.FollowerReplicationThrottledRateProp))
@@ -369,7 +369,7 @@ class ReassignPartitionsCommandTest  extends ZooKeeperTestHarness  with Logging 
     ReassignPartitionsCommand.removeThrottle(zk, status, Map.empty, admin)
 
     //Then props should have gone (dummy remains)
-    for (capture <- propsCapture.getValues) {
+    for (capture <- propsCapture.getValues.asScala) {
       assertEquals("value", capture.get("useful.key"))
       assertNull(capture.get(DynamicConfig.Broker.FollowerReplicationThrottledRateProp))
       assertNull(capture.get(DynamicConfig.Broker.LeaderReplicationThrottledRateProp))
@@ -406,7 +406,7 @@ class ReassignPartitionsCommandTest  extends ZooKeeperTestHarness  with Logging 
     ReassignPartitionsCommand.removeThrottle(zk, status, Map.empty, admin)
 
     //Then props should have gone (dummy remains)
-    for (actual <- propsCapture.getValues) {
+    for (actual <- propsCapture.getValues.asScala) {
       assertEquals("value", actual.getProperty("useful.key"))
       assertNull(actual.getProperty(LogConfig.LeaderReplicationThrottledReplicasProp))
       assertNull(actual.getProperty(LogConfig.FollowerReplicationThrottledReplicasProp))

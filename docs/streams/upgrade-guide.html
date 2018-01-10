@@ -18,7 +18,20 @@
 <script><!--#include virtual="../js/templateData.js" --></script>
 
 <script id="content-template" type="text/x-handlebars-template">
-    <h1>Upgrade Guide &amp; API Changes</h1>
+    <h1>Upgrade Guide and API Changes</h1>
+    <div class="sub-nav-sticky">
+        <div class="sticky-top">
+            <div style="height:35px">
+                <a href="/{{version}}/documentation/streams/">Introduction</a>
+                <a href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
+                <a href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
+                <a href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
+                <a href="/{{version}}/documentation/streams/architecture">Architecture</a>
+                <a href="/{{version}}/documentation/streams/developer-guide/">Developer Guide</a>
+                <a class="active-menu-item" href="/{{version}}/documentation/streams/upgrade-guide">Upgrade</a>
+            </div>
+        </div>
+    </div>
 
     <p>
         If you want to upgrade from 1.0.x to 1.1.0 you don't need to make any code changes as the public API is fully backward compatible.
@@ -68,6 +81,18 @@
     <p> New methods in <code>KafkaClientSupplier</code>: </p>
     <ul>
         <li> added <code>getAdminClient(config)</code> that allows to override an <code>AdminClient</code> used for administrative requests such as internal topic creations, etc. </li>
+    </ul>
+
+    <p>New error handling for exceptions during production:</p>
+    <ul>
+        <li>added interface <code>ProductionExceptionHandler</code> that allows implementors to decide whether or not Streams should <code>FAIL</code> or <code>CONTINUE</code> when certain exception occur while trying to produce.</li>
+        <li>provided an implementation, <code>DefaultProductionExceptionHandler</code> that always fails, preserving the existing behavior by default.</li>
+        <li>changing which implementation is used can be done by settings <code>default.production.exception.handler</code> to the fully qualified name of a class implementing this interface.</li>
+    </ul>
+
+    <p> Changes in <code>StreamsResetter</code>: </p>
+    <ul>
+        <li> added options to specify input topics offsets to reset according to <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-171+-+Extend+Consumer+Group+Reset+Offset+for+Stream+Application">KIP-171</a></li>
     </ul>
 
     <h3><a id="streams_api_changes_100" href="#streams_api_changes_100">Streams API changes in 1.0.0</a></h3>
@@ -260,7 +285,7 @@
         If exactly-once processing is enabled via the <code>processing.guarantees</code> parameter, internally Streams switches from a producer per thread to a producer per task runtime model.
         In order to distinguish the different producers, the producer's <code>client.id</code> additionally encodes the task-ID for this case.
         Because the producer's <code>client.id</code> is used to report JMX metrics, it might be required to update tools that receive those metrics.
-    
+
     </p>
 
     <p> Producer's <code>client.id</code> naming schema: </p>
@@ -386,7 +411,7 @@
     </ul>
 
     <div class="pagination">
-        <a href="/{{version}}/documentation/streams/architecture" class="pagination__btn pagination__btn__prev">Previous</a>
+        <a href="/{{version}}/documentation/streams/developer-guide/app-reset-tool" class="pagination__btn pagination__btn__prev">Previous</a>
         <a href="#" class="pagination__btn pagination__btn__next pagination__btn--disabled">Next</a>
     </div>
 </script>

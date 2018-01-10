@@ -51,6 +51,7 @@ import static org.junit.Assert.assertTrue;
 public class AbstractHerderTest extends EasyMockSupport {
     private final Worker worker = strictMock(Worker.class);
     private final String workerId = "workerId";
+    private final String kafkaClusterId = "I4ZmrWqfT2e-upky_4fdPA";
     private final int generation = 5;
     private final String connector = "connector";
     private final Plugins plugins = strictMock(Plugins.class);
@@ -64,8 +65,8 @@ public class AbstractHerderTest extends EasyMockSupport {
         StatusBackingStore statusStore = strictMock(StatusBackingStore.class);
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
-                .withArgs(worker, workerId, statusStore, configStore)
+                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore)
                 .addMockedMethod("generation")
                 .createMock();
 
@@ -107,8 +108,8 @@ public class AbstractHerderTest extends EasyMockSupport {
         StatusBackingStore statusStore = strictMock(StatusBackingStore.class);
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
-                .withArgs(worker, workerId, statusStore, configStore)
+                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore)
                 .addMockedMethod("generation")
                 .createMock();
 
@@ -228,8 +229,8 @@ public class AbstractHerderTest extends EasyMockSupport {
         StatusBackingStore statusStore = strictMock(StatusBackingStore.class);
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
-                .withArgs(worker, workerId, statusStore, configStore)
+                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore)
                 .addMockedMethod("generation")
                 .createMock();
         EasyMock.expect(herder.generation()).andStubReturn(generation);

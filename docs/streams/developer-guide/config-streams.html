@@ -69,6 +69,7 @@
           </li>
           <li><a class="reference internal" href="#optional-configuration-parameters" id="id6">Optional configuration parameters</a><ul>
             <li><a class="reference internal" href="#default-deserialization-exception-handler" id="id7">default.deserialization.exception.handler</a></li>
+            <li><a class="reference internal" href="#default-production-exception-handler" id="id24">default.production.exception.handler</a></li>
             <li><a class="reference internal" href="#default-key-serde" id="id8">default.key.serde</a></li>
             <li><a class="reference internal" href="#default-value-serde" id="id9">default.value.serde</a></li>
             <li><a class="reference internal" href="#num-standby-replicas" id="id10">num.standby.replicas</a></li>
@@ -216,77 +217,82 @@
             <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">DeserializationExceptionHandler</span></code> interface.</td>
             <td>30000 milliseconds</td>
           </tr>
-          <tr class="row-even"><td>key.serde</td>
+          <tr class="row-even"><td>default.production.exception.handler</td>
+            <td>Medium</td>
+            <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">ProductionExceptionHandler</span></code> interface.</td>
+            <td><code class="docutils literal"><span class="pre">DefaultProductionExceptionHandler</span></code></td>
+          </tr>
+          <tr class="row-odd"><td>key.serde</td>
             <td>Medium</td>
             <td colspan="2">Default serializer/deserializer class for record keys, implements the <code class="docutils literal"><span class="pre">Serde</span></code> interface (see also value.serde).</td>
             <td><code class="docutils literal"><span class="pre">Serdes.ByteArray().getClass().getName()</span></code></td>
           </tr>
-          <tr class="row-odd"><td>metric.reporters</td>
+          <tr class="row-even"><td>metric.reporters</td>
             <td>Low</td>
             <td colspan="2">A list of classes to use as metrics reporters.</td>
             <td>the empty list</td>
           </tr>
-          <tr class="row-even"><td>metrics.num.samples</td>
+          <tr class="row-odd"><td>metrics.num.samples</td>
             <td>Low</td>
             <td colspan="2">The number of samples maintained to compute metrics.</td>
             <td>2</td>
           </tr>
-          <tr class="row-odd"><td>metrics.recording.level</td>
+          <tr class="row-even"><td>metrics.recording.level</td>
             <td>Low</td>
             <td colspan="2">The highest recording level for metrics.</td>
             <td><code class="docutils literal"><span class="pre">INFO</span></code></td>
           </tr>
-          <tr class="row-even"><td>metrics.sample.window.ms</td>
+          <tr class="row-odd"><td>metrics.sample.window.ms</td>
             <td>Low</td>
             <td colspan="2">The window of time a metrics sample is computed over.</td>
             <td>30000 milliseconds</td>
           </tr>
-          <tr class="row-odd"><td>num.standby.replicas</td>
+          <tr class="row-even"><td>num.standby.replicas</td>
             <td>Medium</td>
             <td colspan="2">The number of standby replicas for each task.</td>
             <td>0</td>
           </tr>
-          <tr class="row-even"><td>num.stream.threads</td>
+          <tr class="row-odd"><td>num.stream.threads</td>
             <td>Medium</td>
             <td colspan="2">The number of threads to execute stream processing.</td>
             <td>1</td>
           </tr>
-          <tr class="row-odd"><td>partition.grouper</td>
+          <tr class="row-even"><td>partition.grouper</td>
             <td>Low</td>
             <td colspan="2">Partition grouper class that implements the <code class="docutils literal"><span class="pre">PartitionGrouper</span></code> interface.</td>
             <td>See <a class="reference internal" href="#streams-developer-guide-partition-grouper"><span class="std std-ref">Partition Grouper</span></a></td>
           </tr>
-          <tr class="row-even"><td>poll.ms</td>
+          <tr class="row-odd"><td>poll.ms</td>
             <td>Low</td>
             <td colspan="2">The amount of time in milliseconds to block waiting for input.</td>
             <td>100 milliseconds</td>
           </tr>
-          <tr class="row-odd"><td>replication.factor</td>
+          <tr class="row-even"><td>replication.factor</td>
             <td>High</td>
             <td colspan="2">The replication factor for changelog topics and repartition topics created by the application.</td>
             <td>1</td>
           </tr>
-          <tr class="row-even"><td>state.cleanup.delay.ms</td>
+          <tr class="row-odd"><td>state.cleanup.delay.ms</td>
             <td>Low</td>
             <td colspan="2">The amount of time in milliseconds to wait before deleting state when a partition has migrated.</td>
             <td>6000000 milliseconds</td>
           </tr>
-          <tr class="row-odd"><td>state.dir</td>
+          <tr class="row-even"><td>state.dir</td>
             <td>High</td>
             <td colspan="2">Directory location for state stores.</td>
             <td><code class="docutils literal"><span class="pre">/var/lib/kafka-streams</span></code></td>
           </tr>
-          <tr class="row-even"><td>timestamp.extractor</td>
+          <tr class="row-odd"><td>timestamp.extractor</td>
             <td>Medium</td>
             <td colspan="2">Timestamp extractor class that implements the <code class="docutils literal"><span class="pre">TimestampExtractor</span></code> interface.</td>
             <td>See <a class="reference internal" href="#streams-developer-guide-timestamp-extractor"><span class="std std-ref">Timestamp Extractor</span></a></td>
           </tr>
-          <tr class="row-odd"><td>value.serde</td>
+          <tr class="row-even"><td>value.serde</td>
             <td>Medium</td>
             <td colspan="2">Default serializer/deserializer class for record values, implements the <code class="docutils literal"><span class="pre">Serde</span></code> interface (see also key.serde).</td>
             <td><code class="docutils literal"><span class="pre">Serdes.ByteArray().getClass().getName()</span></code></td>
           </tr>
-          <tr class="row-even"><td>windowstore.changelog.additional.retention.ms</td>
+          <tr class="row-odd"><td>windowstore.changelog.additional.retention.ms</td>
             <td>Low</td>
             <td colspan="2">Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift.</td>
             <td>86400000 milliseconds = 1 day</td>
@@ -308,6 +314,44 @@
                   This handler logs the deserialization exception and then signals the processing pipeline to stop processing more records.</li>
               </ul>
             </div></blockquote>
+        </div>
+        <div class="section" id="default-production-exception-handler">
+          <span id="streams-developer-guide-peh"></span><h4><a class="toc-backref" href="#id24">default.production.exception.handler</a></a class="headerlink" href="#default-production-exception-handler" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div><p>The default production exception handler allows you to manage exceptions triggered when trying to interact with a broker
+              such as attempting to produce a record that is too large. By default, Kafka provides and uses the <a class="reference external" href="/4.0.0/streams/javadocs/org/apache/kafka/streams/errors/DefaultProductionExceptionHandler.html">DefaultProductionExceptionHandler</a>
+              that always fails when these exceptions occur.</p>
+
+            <p>Each exception handler can return a <code>FAIL</code> or <code>CONTINUE</code> depending on the record and the exception thrown. Returning <code>FAIL</code> will signal that Streams should shut down and <code>CONTINUE</code> will signal that Streams
+            should ignore the issue and continue processing. If you want to provide an exception handler that always ignores records that are too large, you could implement something like the following:</p>
+
+            <pre class="brush: java;">
+            import java.util.Properties;
+            import org.apache.kafka.streams.StreamsConfig;
+            import org.apache.kafka.common.errors.RecordTooLargeException;
+            import org.apache.kafka.streams.errors.ProductionExceptionHandler;
+            import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExceptionHandlerResponse;
+
+            class IgnoreRecordTooLargeHandler implements ProductionExceptionHandler {
+                public void configure(Map&lt;String, Object&gt; config) {}
+
+                public ProductionExceptionHandlerResponse handle(final ProducerRecord&lt;byte[], byte[]&gt; record,
+                                                                 final Exception exception) {
+                    if (exception instanceof RecordTooLargeException) {
+                        return ProductionExceptionHandlerResponse.CONTINUE;
+                    } else {
+                        return ProductionExceptionHandlerResponse.FAIL;
+                    }
+                }
+            }
+
+            Properties settings = new Properties();
+
+            // other various kafka streams settings, e.g. bootstrap servers, application id, etc
+
+            settings.put(StreamsConfig.DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                         IgnoreRecordTooLargeHandler.class);</pre></div>
+          </blockquote>
         </div>
         <div class="section" id="default-key-serde">
           <h4><a class="toc-backref" href="#id8">default.key.serde</a><a class="headerlink" href="#default-key-serde" title="Permalink to this headline"></a></h4>

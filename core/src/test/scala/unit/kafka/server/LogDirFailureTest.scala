@@ -23,7 +23,7 @@ import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.server.LogDirFailureTest._
 import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
-import kafka.utils.{CoreUtils, Exit, TestUtils, ZkUtils}
+import kafka.utils.{CoreUtils, Exit, TestUtils}
 import kafka.zk.LogDirEventNotificationZNode
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
@@ -55,7 +55,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    TestUtils.createTopic(zkClient, topic, partitionNum, serverCount, servers = servers)
+    createTopic(topic, partitionNum, serverCount)
   }
 
   @Test

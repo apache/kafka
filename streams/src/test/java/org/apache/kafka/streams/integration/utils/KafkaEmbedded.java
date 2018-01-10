@@ -25,7 +25,6 @@ import kafka.utils.MockTime;
 import kafka.utils.TestUtils;
 import kafka.zk.AdminZkClient;
 import kafka.zk.KafkaZkClient;
-import kafka.zookeeper.ZooKeeperClient;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Time;
 import org.junit.rules.TemporaryFolder;
@@ -171,36 +170,25 @@ public class KafkaEmbedded {
                             final Properties topicConfig) {
         log.debug("Creating topic { name: {}, partitions: {}, replication: {}, config: {} }",
             topic, partitions, replication, topicConfig);
+        try (KafkaZkClient kafkaZkClient = createZkClient()) {
+            final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
+            adminZkClient.createTopic(topic, partitions, replication, topicConfig, RackAwareMode.Enforced$.MODULE$);
+        }
+    }
 
-        final ZooKeeperClient zkClient = new ZooKeeperClient(
-                zookeeperConnect(),
-                DEFAULT_ZK_SESSION_TIMEOUT_MS,
-                DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
-                Integer.MAX_VALUE,
-                Time.SYSTEM,
-                "testMetricGroup",
-                "testMetricType");
-        final KafkaZkClient kafkaZkClient = new KafkaZkClient(zkClient, false, Time.SYSTEM);
-        final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
-        adminZkClient.createTopic(topic, partitions, replication, topicConfig, RackAwareMode.Enforced$.MODULE$);
-        kafkaZkClient.close();
+    private KafkaZkClient createZkClient() {
+        return KafkaZkClient.apply(zookeeperConnect(), false, DEFAULT_ZK_SESSION_TIMEOUT_MS,
+                DEFAULT_ZK_CONNECTION_TIMEOUT_MS, Integer.MAX_VALUE, Time.SYSTEM, "testMetricGroup", "testMetricType");
     }
 
     public void deleteTopic(final String topic) {
         log.debug("Deleting topic { name: {} }", topic);
 
-        final ZooKeeperClient zkClient = new ZooKeeperClient(
-                zookeeperConnect(),
-                DEFAULT_ZK_SESSION_TIMEOUT_MS,
-                DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
-                Integer.MAX_VALUE,
-                Time.SYSTEM,
-                "testMetricGroup",
-                "testMetricType");
-        final KafkaZkClient kafkaZkClient = new KafkaZkClient(zkClient, false, Time.SYSTEM);
-        final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
-        adminZkClient.deleteTopic(topic);
-        kafkaZkClient.close();
+        try (KafkaZkClient kafkaZkClient = createZkClient()) {
+            final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
+            adminZkClient.deleteTopic(topic);
+            kafkaZkClient.close();
+        }
     }
 
     public KafkaServer kafkaServer() {

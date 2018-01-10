@@ -161,7 +161,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(Topic, "*"))
     }
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(zkClient, topic, 1, 3, this.servers)
+    createTopic(topic, 1, 3)
   }
 
   override def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {

@@ -20,7 +20,7 @@ import java.util.{Properties, UUID}
 import java.nio.charset.StandardCharsets.UTF_8
 
 import kafka.api.ApiVersion
-import kafka.cluster.EndPoint
+import kafka.cluster.{Broker, EndPoint}
 import kafka.log.LogConfig
 import kafka.security.auth._
 import kafka.server.ConfigType
@@ -419,15 +419,12 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   def testBrokerRegistrationMethods() {
     zkClient.createTopLevelPaths()
 
-    val brokerInfo = new BrokerInfo(1, "test.host", 9999,
+    val brokerInfo = BrokerInfo(Broker(1,
       Seq(new EndPoint("test.host", 9999, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT)),
-      9998, None, ApiVersion.latestVersion)
+      rack = None), ApiVersion.latestVersion, jmxPort = 9998)
 
     zkClient.registerBrokerInZk(brokerInfo)
-    val broker = zkClient.getBroker(1).getOrElse(fail("Unregistered broker"))
-
-    assertEquals(brokerInfo.id, broker.id)
-    assertEquals(brokerInfo.endpoints(), broker.endPoints.mkString(","))
+    assertEquals(Some(brokerInfo.broker), zkClient.getBroker(1))
   }
 
   @Test
@@ -448,9 +445,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   def testCreateTopLevelPaths() {
     zkClient.createTopLevelPaths()
 
-    ZkData.PersistentZkPaths.foreach {
-      path => assertTrue(zkClient.pathExists(path))
-    }
+    ZkData.PersistentZkPaths.foreach(path => assertTrue(zkClient.pathExists(path)))
   }
 
   @Test

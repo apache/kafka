@@ -43,7 +43,7 @@ class FetcherTest extends KafkaServerTestHarness {
   @Before
   override def setUp() {
     super.setUp
-    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)), servers = servers)
+    createTopic(topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)))
 
     val cluster = new Cluster(servers.map { s =>
       new Broker(s.config.brokerId, "localhost", boundPort(s), listenerName, securityProtocol)

@@ -74,7 +74,7 @@ class RequestQuotaTest extends BaseRequestTest {
     RequestQuotaTest.principal = KafkaPrincipal.ANONYMOUS
     super.setUp()
 
-    TestUtils.createTopic(zkClient, topic, numPartitions, 1, servers)
+    createTopic(topic, numPartitions, 1)
     leaderNode = servers.head
 
     // Change default client-id request quota to a small value and a single unthrottledClient with a large quota

@@ -37,8 +37,8 @@ import kafka.security.auth.{Acl, Authorizer, Resource}
 import kafka.serializer.{DefaultEncoder, Encoder, StringEncoder}
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
-import ZkUtils._
 import Implicits._
+import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk.{AdminZkClient, BrokerIdsZNode, BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer, OffsetAndMetadata, RangeAssignor}
@@ -60,7 +60,6 @@ import org.junit.Assert._
 import scala.collection.JavaConverters._
 import scala.collection.{Map, mutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-import scala.util.Try
 
 /**
  * Utility functions to help with testing
@@ -707,8 +706,8 @@ object TestUtils extends Logging {
       val listenerName = ListenerName.forSecurityProtocol(protocol)
       Broker(b.id, Seq(EndPoint("localhost", 6667, listenerName, protocol)), b.rack)
     }
-    brokers.foreach(b => zkClient.registerBrokerInZk(new BrokerInfo(b.id, "localhost", 6667,
-      b.endPoints, jmxPort = -1, rack = b.rack, ApiVersion.latestVersion)))
+    brokers.foreach(b => zkClient.registerBrokerInZk(BrokerInfo(Broker(b.id, b.endPoints, rack = b.rack),
+      ApiVersion.latestVersion, jmxPort = -1)))
     brokers
   }
 
@@ -753,24 +752,18 @@ object TestUtils extends Logging {
     new ProducerRequest(correlationId, clientId, acks.toShort, timeout, collection.mutable.Map(data:_*))
   }
 
-  def makeLeaderForPartition(zkUtils: ZkUtils,
+  def makeLeaderForPartition(zkClient: KafkaZkClient,
                              topic: String,
                              leaderPerPartitionMap: scala.collection.immutable.Map[Int, Int],
                              controllerEpoch: Int) {
-    leaderPerPartitionMap.foreach { case (partition, leader) =>
-      try {
-        val newLeaderAndIsr = zkUtils.getLeaderAndIsrForPartition(topic, partition)
-          .map(_.newLeader(leader))
-          .getOrElse(LeaderAndIsr(leader, List(leader)))
-
-        zkUtils.updatePersistentPath(
-          getTopicPartitionLeaderAndIsrPath(topic, partition),
-          zkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch)
-        )
-      } catch {
-        case oe: Throwable => error(s"Error while electing leader for partition [$topic,$partition]", oe)
-      }
+    val newLeaderIsrAndControllerEpochs = leaderPerPartitionMap.map { case (partition, leader) =>
+      val topicPartition = new TopicPartition(topic, partition)
+      val newLeaderAndIsr = zkClient.getTopicPartitionState(topicPartition)
+        .map(_.leaderAndIsr.newLeader(leader))
+        .getOrElse(LeaderAndIsr(leader, List(leader)))
+      topicPartition -> LeaderIsrAndControllerEpoch(newLeaderAndIsr, controllerEpoch)
     }
+    zkClient.setTopicPartitionStatesRaw(newLeaderIsrAndControllerEpochs)
   }
 
   /**
@@ -795,7 +788,7 @@ object TestUtils extends Logging {
     var electedOrChangedLeader: Option[Int] = None
     while (electedOrChangedLeader.isEmpty && System.currentTimeMillis() < startTime + timeoutMs) {
       // check if leader is elected
-      leader = zkClient.getLeaderForPartition(new TopicPartition(topic, partition))
+      leader = zkClient.getLeaderForPartition(topicPartition)
       leader match {
         case Some(l) => (newLeaderOpt, oldLeaderOpt) match {
           case (Some(newLeader), _) if newLeader == l =>
@@ -949,13 +942,9 @@ object TestUtils extends Logging {
     leader
   }
 
-  def waitUntilControllerElected(zkUtils: ZkUtils, timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
-    var controllerIdTry: Try[Int] = null
-    TestUtils.waitUntilTrue(() => {
-      controllerIdTry = Try { zkUtils.getController() }
-      controllerIdTry.isSuccess
-    }, s"Controller not elected after $timeout ms", waitTime = timeout)
-    controllerIdTry.get
+  def waitUntilControllerElected(zkClient: KafkaZkClient, timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+    val (controllerId, _) = TestUtils.computeUntilTrue(zkClient.getControllerId, waitTime = timeout)(_.isDefined)
+    controllerId.getOrElse(fail(s"Controller not elected after $timeout ms"))
   }
 
   def waitUntilLeaderIsKnown(servers: Seq[KafkaServer], topic: String, partition: Int,

@@ -35,21 +35,21 @@ import java.util.Map;
  * <p>
  * When finished, be sure to {@link #close() close} the environment object.
  */
-public class MockKafkaAdminClientEnv implements AutoCloseable {
+public class AdminClientUnitTestEnv implements AutoCloseable {
     private final Time time;
     private final Cluster cluster;
     private final MockClient mockClient;
     private final KafkaAdminClient adminClient;
 
-    public MockKafkaAdminClientEnv(Cluster cluster, String...vals) {
+    public AdminClientUnitTestEnv(Cluster cluster, String...vals) {
         this(Time.SYSTEM, cluster, vals);
     }
 
-    public MockKafkaAdminClientEnv(Time time, Cluster cluster, String...vals) {
+    public AdminClientUnitTestEnv(Time time, Cluster cluster, String...vals) {
         this(time, cluster, newStrMap(vals));
     }
 
-    public MockKafkaAdminClientEnv(Time time, Cluster cluster, Map<String, Object> config) {
+    public AdminClientUnitTestEnv(Time time, Cluster cluster, Map<String, Object> config) {
         this.time = time;
         this.cluster = cluster;
         AdminClientConfig adminClientConfig = new AdminClientConfig(config);

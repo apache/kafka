@@ -38,13 +38,41 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 public class MockAdminClient extends AdminClient {
+    public static final String DEFAULT_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
+
     private final List<Node> brokers;
     private final Map<String, TopicMetadata> allTopics = new HashMap<>();
+    private final String clusterId;
 
+    private Node controller;
     private int timeoutNextRequests = 0;
 
-    public MockAdminClient(List<Node> brokers) {
+    /**
+     * Creates MockAdminClient for a cluster with the given brokers. The Kafka cluster ID uses the default value from
+     * DEFAULT_CLUSTER_ID.
+     *
+     * @param brokers list of brokers in the cluster
+     * @param controller node that should start as the controller
+     */
+    public MockAdminClient(List<Node> brokers, Node controller) {
+        this(brokers, controller, DEFAULT_CLUSTER_ID);
+    }
+
+    /**
+     * Creates MockAdminClient for a cluster with the given brokers.
+     * @param brokers list of brokers in the cluster
+     * @param controller node that should start as the controller
+     */
+    public MockAdminClient(List<Node> brokers, Node controller, String clusterId) {
         this.brokers = brokers;
+        controller(controller);
+        this.clusterId = clusterId;
+    }
+
+    public void controller(Node controller) {
+        if (!brokers.contains(controller))
+            throw new IllegalArgumentException("The controller node must be in the list of brokers");
+        this.controller = controller;
     }
 
     public void addTopic(boolean internal,
@@ -82,7 +110,22 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public DescribeClusterResult describeCluster(DescribeClusterOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        KafkaFutureImpl<Collection<Node>> nodesFuture = new KafkaFutureImpl<>();
+        KafkaFutureImpl<Node> controllerFuture = new KafkaFutureImpl<>();
+        KafkaFutureImpl<String> brokerIdFuture = new KafkaFutureImpl<>();
+
+        if (timeoutNextRequests > 0) {
+            nodesFuture.completeExceptionally(new TimeoutException());
+            controllerFuture.completeExceptionally(new TimeoutException());
+            brokerIdFuture.completeExceptionally(new TimeoutException());
+            --timeoutNextRequests;
+        } else {
+            nodesFuture.complete(brokers);
+            controllerFuture.complete(controller);
+            brokerIdFuture.complete(clusterId);
+        }
+
+        return new DescribeClusterResult(nodesFuture, controllerFuture, brokerIdFuture);
     }
 
     @Override
@@ -189,8 +232,32 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public DeleteTopicsResult deleteTopics(Collection<String> topics, DeleteTopicsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+    public DeleteTopicsResult deleteTopics(Collection<String> topicsToDelete, DeleteTopicsOptions options) {
+        Map<String, KafkaFuture<Void>> deleteTopicsResult = new HashMap<>();
+
+        if (timeoutNextRequests > 0) {
+            for (final String topicName : topicsToDelete) {
+                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new TimeoutException());
+                deleteTopicsResult.put(topicName, future);
+            }
+
+            --timeoutNextRequests;
+            return new DeleteTopicsResult(deleteTopicsResult);
+        }
+
+        for (final String topicName : topicsToDelete) {
+            KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+
+            if (allTopics.remove(topicName) == null) {
+                future.completeExceptionally(new UnknownTopicOrPartitionException(String.format("Topic %s does not exist.", topicName)));
+            } else {
+                future.complete(null);
+            }
+            deleteTopicsResult.put(topicName, future);
+        }
+
+        return new DeleteTopicsResult(deleteTopicsResult);
     }
 
     @Override
@@ -200,7 +267,12 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete, DeleteRecordsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        Map<TopicPartition, KafkaFuture<DeletedRecords>> deletedRecordsResult = new HashMap<>();
+        if (recordsToDelete.isEmpty()) {
+            return new DeleteRecordsResult(deletedRecordsResult);
+        } else {
+            throw new UnsupportedOperationException("Not implemented yet");
+        }
     }
 
     @Override

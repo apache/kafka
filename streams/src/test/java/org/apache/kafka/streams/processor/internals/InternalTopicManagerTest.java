@@ -71,7 +71,7 @@ public class InternalTopicManagerTest {
 
     @Before
     public void init() {
-        mockAdminClient = new MockAdminClient(cluster);
+        mockAdminClient = new MockAdminClient(cluster, broker1);
         internalTopicManager = new InternalTopicManager(
             mockAdminClient,
             new StreamsConfig(config));

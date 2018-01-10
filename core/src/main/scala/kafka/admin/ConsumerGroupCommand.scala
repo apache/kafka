@@ -505,7 +505,7 @@ object ConsumerGroupCommand extends Logging {
     private def getZkConsumer(brokerId: Int): Option[SimpleConsumer] = {
       try {
         zkUtils.getBrokerInfo(brokerId)
-          .map(_.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)))
+          .map(_.brokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)))
           .map(endPoint => new SimpleConsumer(endPoint.host, endPoint.port, 10000, 100000, "ConsumerGroupCommand"))
           .orElse(throw new BrokerNotAvailableException("Broker id %d does not exist".format(brokerId)))
       } catch {

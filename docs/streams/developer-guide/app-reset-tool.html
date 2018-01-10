@@ -40,7 +40,7 @@
             when resetting the application.</p>
         <p>Here&#8217;s what the application reset tool does for each topic type:</p>
         <ul class="simple">
-            <li>Input topics: Reset to the beginning of the topic. This means that it sets the application&#8217;s committed consumer offsets for all partitions to each partition&#8217;s <code class="docutils literal"><span class="pre">earliest</span></code> offset (for consumer group <code class="docutils literal"><span class="pre">application.id</span></code>).</li>
+            <li>Input topics: Reset offsets to specified position (by default to the beginning of the topic).</li>
             <li>Intermediate topics: Skip to the end of the topic, i.e., set the application&#8217;s committed consumer offsets for all partitions to each partition&#8217;s <code class="docutils literal"><span class="pre">logSize</span></code> (for consumer group <code class="docutils literal"><span class="pre">application.id</span></code>).</li>
             <li>Internal topics: Delete the internal topic (this automatically deletes any committed offsets).</li>
         </ul>
@@ -87,12 +87,16 @@
 --bootstrap-servers &lt;String: urls&gt;    Comma-separated list of broker urls with
                                         format: HOST1:PORT1,HOST2:PORT2
                                         <span class="o">(</span>default: localhost:9092<span class="o">)</span>
+--by-duration &lt;String: urls&gt;      Reset offsets to offset by duration from
+                                        current timestamp. Format: '<span>PnDTnHnMnS</span>'
 --config-file &lt;String: file name&gt;     Property file containing configs to be
                                         passed to admin clients and embedded
                                         consumer.
 --dry-run                             Display the actions that would be
                                         performed without executing the reset
                                         commands.
+--from-file &lt;String: urls&gt;        Reset offsets to values defined in CSV
+                                        file.
 --input-topics &lt;String: list&gt;         Comma-separated list of user input
                                         topics. For these topics, the tool will
                                         reset the offset to the earliest
@@ -101,13 +105,32 @@
                                         topics <span class="o">(</span>topics used in the through<span class="o">()</span>
                                         method<span class="o">)</span>. For these topics, the tool
                                         will skip to the end.
+--shift-by &lt;Long: number-of-offsets&gt; Reset offsets shifting current offset by
+                                        'n', where 'n' can be positive or
+                                        negative
+--to-datetime &lt;String&gt;                Reset offsets to offset from datetime.
+                                        Format: 'YYYY-MM-DDTHH:mm:SS.sss'
+--to-earliest                         Reset offsets to earliest offset.
+--to-latest                           Reset offsets to latest offset.
+--to-offset &lt;Long&gt;                    Reset offsets to a specific offset.
 --zookeeper                           Zookeeper option is deprecated by
                                         bootstrap.servers, as the reset tool
                                         would no longer access Zookeeper
                                         directly.
 </pre></div>
             </div>
-            <p>Parameters can be combined as needed.  For example, if you want to restart an application from an
+            <p>Consider the following as reset-offset scenarios for <code>input-topics</code>:</p>
+            <ul>
+                <li> by-duration</li>
+                <li> from-file</li>
+                <li> shift-by</li>
+                <li> to-datetime</li>
+                <li> to-earliest</li>
+                <li> to-latest</li>
+                <li> to-offset</li>
+            </ul>
+            <p>Only one of these scenarios can be defined. If not, <code>to-earliest</code> will be executed by default</p>
+            <p>All the other parameters can be combined as needed.  For example, if you want to restart an application from an
                 empty internal state, but not reprocess previous data, simply omit the parameters <code class="docutils literal"><span class="pre">--input-topics</span></code> and
                 <code class="docutils literal"><span class="pre">--intermediate-topics</span></code>.</p>
         </div>
@@ -128,7 +151,7 @@
               </div>
   <div class="pagination">
     <a href="/{{version}}/documentation/streams/developer-guide/security" class="pagination__btn pagination__btn__prev">Previous</a>
-      <a href="/{{version}}/documentation/streams/developer-guide/" class="pagination__btn pagination__btn__next">Next</a>
+      <a href="/{{version}}/documentation/streams/upgrade-guide" class="pagination__btn pagination__btn__next">Next</a>
   </div>
 </script>
 

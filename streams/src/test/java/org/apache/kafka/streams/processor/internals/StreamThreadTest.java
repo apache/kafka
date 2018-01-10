@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -186,10 +187,22 @@ public class StreamThreadTest {
         assertEquals(thread.state(), StreamThread.State.DEAD);
     }
 
+    private Cluster createCluster(int numNodes) {
+        HashMap<Integer, Node> nodes = new HashMap<>();
+        for (int i = 0; i < numNodes; ++i) {
+            nodes.put(i, new Node(i, "localhost", 8121 + i));
+        }
+        return new Cluster("mockClusterId", nodes.values(),
+            Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
+            Collections.<String>emptySet(), nodes.get(0));
+    }
+
     private StreamThread createStreamThread(final String clientId, final StreamsConfig config, final boolean eosEnabled) {
         if (eosEnabled) {
             clientSupplier.setApplicationIdForProducer(applicationId);
         }
+
+        clientSupplier.setClusterForAdminClient(createCluster(1));
 
         return StreamThread.create(internalTopologyBuilder,
                                    config,

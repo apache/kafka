@@ -54,7 +54,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   def testMetricsLeak() {
     val topic = "test-metrics-leak"
     // create topic topic1 with 1 partition on broker 0
-    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = servers)
+    createTopic(topic, numPartitions = 1, replicationFactor = 1)
     // force creation not client's specific metrics.
     createAndShutdownStep(topic, "group0", "consumer0", "producer0")
 
@@ -130,7 +130,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
 
     val topicConfig = new Properties
     topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, "2")
-    createTopic(zkClient, topic, 1, numNodes, servers, topicConfig)
+    createTopic(topic, 1, numNodes, topicConfig)
     // Produce a few messages to create the metrics
     TestUtils.produceMessages(servers, topic, nMessages)
 
@@ -174,6 +174,19 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount"), 1)
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=GlobalTopicCount"), 1)
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=GlobalPartitionCount"), 1)
+  }
+
+  /**
+   * Test that the metrics are created with the right name, testZooKeeperStateChangeRateMetrics
+   * and testZooKeeperSessionStateMetric in ZooKeeperClientTest test the metrics behaviour.
+   */
+  @Test
+  def testSessionExpireListenerMetrics(): Unit = {
+    val metrics = Metrics.defaultRegistry.allMetrics
+
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=SessionState"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=ZooKeeperExpiresPerSec"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=ZooKeeperDisconnectsPerSec"), 1)
   }
 
   private def meterCount(metricName: String): Long = {
