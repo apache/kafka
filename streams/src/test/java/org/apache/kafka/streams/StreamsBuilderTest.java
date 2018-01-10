@@ -80,7 +80,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    public void shouldAllowJoinMaterializedKTable() {
+    public void shouldAllowJoinMaterializedSourceKTable() {
         final KTable<Bytes, String> table = builder.<Bytes, String>table("table-topic");
         builder.<Bytes, String>stream("stream-topic").join(table, MockValueJoiner.TOSTRING_JOINER);
 
