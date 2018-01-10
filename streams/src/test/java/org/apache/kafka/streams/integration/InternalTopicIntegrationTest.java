@@ -39,7 +39,7 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -149,7 +149,7 @@ public class InternalTopicIntegrationTest {
                     public Iterable<String> apply(final String value) {
                         return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
                     }
-                }).groupBy(MockKeyValueMapper.<String, String>SelectValueMapper())
+                }).groupBy(MockMapper.<String, String>selectValueMapper())
                 .count("Counts").toStream();
 
         wordCounts.to(stringSerde, longSerde, DEFAULT_OUTPUT_TOPIC);
@@ -196,7 +196,7 @@ public class InternalTopicIntegrationTest {
                     public Iterable<String> apply(String value) {
                         return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
                     }
-                }).groupBy(MockKeyValueMapper.<String, String>SelectValueMapper())
+                }).groupBy(MockMapper.<String, String>selectValueMapper())
                 .count(TimeWindows.of(1000).until(durationMs), "CountWindows").toStream();
 
 

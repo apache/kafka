@@ -39,7 +39,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -104,7 +104,7 @@ public class KStreamRepartitionJoinTest {
         streamTwo = builder.stream(streamTwoInput, Consumed.with(Serdes.Integer(), Serdes.String()));
         streamFour = builder.stream(streamFourInput, Consumed.with(Serdes.Integer(), Serdes.String()));
 
-        keyMapper = MockKeyValueMapper.SelectValueKeyValueMapper();
+        keyMapper = MockMapper.selectValueKeyValueMapper();
     }
 
     @After
@@ -157,7 +157,7 @@ public class KStreamRepartitionJoinTest {
 
     private ExpectedOutputOnTopic mapBothStreamsAndJoin() throws InterruptedException {
         final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
-        final KStream<Integer, String> map2 = streamTwo.map(MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper());
+        final KStream<Integer, String> map2 = streamTwo.map(MockMapper.<Integer, String>noOpKeyValueMapper());
 
         doJoin(map1, map2, "map-both-streams-and-join-" + testNo);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, "map-both-streams-and-join-" + testNo);
@@ -183,7 +183,7 @@ public class KStreamRepartitionJoinTest {
     private ExpectedOutputOnTopic selectKeyAndJoin() throws Exception {
 
         final KStream<Integer, Integer> keySelected =
-            streamOne.selectKey(MockKeyValueMapper.<Long, Integer>SelectValueMapper());
+            streamOne.selectKey(MockMapper.<Long, Integer>selectValueMapper());
 
         final String outputTopic = "select-key-join-" + testNo;
         doJoin(keySelected, streamTwo, outputTopic);
@@ -222,7 +222,7 @@ public class KStreamRepartitionJoinTest {
     private ExpectedOutputOnTopic mapBothStreamsAndLeftJoin() throws InterruptedException {
         final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
 
-        final KStream<Integer, String> map2 = streamTwo.map(MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper());
+        final KStream<Integer, String> map2 = streamTwo.map(MockMapper.<Integer, String>noOpKeyValueMapper());
 
 
         final String outputTopic = "left-join-" + testNo;
@@ -247,7 +247,7 @@ public class KStreamRepartitionJoinTest {
         final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
 
         final KeyValueMapper<Integer, String, KeyValue<Integer, String>>
-            kvMapper = MockKeyValueMapper.NoOpKeyValueMapper();
+            kvMapper = MockMapper.noOpKeyValueMapper();
 
         final KStream<Integer, String> map2 = streamTwo.map(kvMapper);
 

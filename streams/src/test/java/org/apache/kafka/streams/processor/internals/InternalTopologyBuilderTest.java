@@ -463,6 +463,11 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullStateStoreNameWhenConnectingProcessorAndStateStores() throws Exception {
+        builder.connectProcessorAndStateStores("processor", new String[]{null});
+    }
+
+    @Test(expected = NullPointerException.class)
     public void shouldNotAddNullInternalTopic() throws Exception {
         builder.addInternalTopic(null);
     }
