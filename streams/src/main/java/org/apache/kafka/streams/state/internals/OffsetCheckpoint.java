@@ -34,6 +34,7 @@ import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * This class saves out a map of topic/partition=&gt;offsets to a file. The format of the file is UTF-8 text containing the following:
@@ -53,6 +54,8 @@ import java.util.Map;
 public class OffsetCheckpoint {
 
     private static final int VERSION = 0;
+
+    private static final Pattern SPLIT_REGEX = Pattern.compile("\\s+");
 
     private final File file;
     private final Object lock;
@@ -111,7 +114,6 @@ public class OffsetCheckpoint {
         writer.newLine();
     }
 
-
     /**
      * @throws IOException if any file operation fails with an IO exception
      * @throws IllegalArgumentException if the offset checkpoint version is unknown
@@ -128,7 +130,7 @@ public class OffsetCheckpoint {
                         final Map<TopicPartition, Long> offsets = new HashMap<>();
                         String line = reader.readLine();
                         while (line != null) {
-                            final String[] pieces = line.split("\\s+");
+                            final String[] pieces = SPLIT_REGEX.split(line);
                             if (pieces.length != 3) {
                                 throw new IOException(
                                     String.format("Malformed line in offset checkpoint file: '%s'.", line));

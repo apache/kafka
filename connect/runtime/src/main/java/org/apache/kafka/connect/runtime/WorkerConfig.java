@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -35,6 +36,8 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * Common base class providing configuration for Kafka Connect workers, whether standalone or distributed.
  */
 public class WorkerConfig extends AbstractConfig {
+
+    private static final Pattern SPLIT_REGEX = Pattern.compile("\\s*,\\s*");
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
     public static final String BOOTSTRAP_SERVERS_DOC
@@ -211,7 +214,7 @@ public class WorkerConfig extends AbstractConfig {
         String locationList = props.get(WorkerConfig.PLUGIN_PATH_CONFIG);
         return locationList == null
                          ? new ArrayList<String>()
-                         : Arrays.asList(locationList.trim().split("\\s*,\\s*", -1));
+                         : Arrays.asList(SPLIT_REGEX.split(locationList.trim(), -1));
     }
 
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
