@@ -155,8 +155,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
         if (storeSupplier != null) {
             builder.internalTopologyBuilder.addStateStore(storeSupplier, name);
+            return new KTableImpl<>(builder, name, processorSupplier, this.keySerde, this.valSerde, sourceNodes, internalStoreName, true);
+        } else {
+            return new KTableImpl<>(builder, name, processorSupplier, sourceNodes, this.queryableStoreName, false);
         }
-        return new KTableImpl<>(builder, name, processorSupplier, this.keySerde, this.valSerde, sourceNodes, internalStoreName, internalStoreName != null);
     }
 
     private KTable<K, V> doFilter(final Predicate<? super K, ? super V> predicate,
