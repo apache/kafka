@@ -590,11 +590,32 @@ public class KafkaStreams {
         this(topology.internalTopologyBuilder, config, clientSupplier);
     }
 
+    /**
+     * Create a {@code KafkaStreams} instance.
+     *
+     * @param topology       the topology specifying the computational logic
+     * @param config         the Kafka Streams configuration
+     * @param time           {@code Time} implementation; cannot be null
+     * @throws StreamsException if any fatal error occurs
+     */
+    public KafkaStreams(final Topology topology,
+                        final StreamsConfig config,
+                        final Time time) {
+        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), time);
+    }
+
     private KafkaStreams(final InternalTopologyBuilder internalTopologyBuilder,
                          final StreamsConfig config,
                          final KafkaClientSupplier clientSupplier) throws StreamsException {
+        this(internalTopologyBuilder, config, clientSupplier, Time.SYSTEM);
+    }
+
+    private KafkaStreams(final InternalTopologyBuilder internalTopologyBuilder,
+                         final StreamsConfig config,
+                         final KafkaClientSupplier clientSupplier,
+                         final Time time) throws StreamsException {
         this.config = config;
-        time = Time.SYSTEM;
+        this.time = time;
 
         // The application ID is a required config and hence should always have value
         processId = UUID.randomUUID();
@@ -796,23 +817,23 @@ public class KafkaStreams {
         } else {
             stateDirCleaner.shutdownNow();
 
-            // notify all the threads to stop; avoid deadlocks by stopping any
-            // further state reports from the thread since we're shutting down
-            for (final StreamThread thread : threads) {
-                thread.setStateListener(null);
-                thread.shutdown();
-            }
-            if (globalStreamThread != null) {
-                globalStreamThread.setStateListener(null);
-                globalStreamThread.shutdown();
-            }
-
             // wait for all threads to join in a separate thread;
             // save the current thread so that if it is a stream thread
             // we don't attempt to join it and cause a deadlock
             final Thread shutdownThread = new Thread(new Runnable() {
                 @Override
                 public void run() {
+                    // notify all the threads to stop; avoid deadlocks by stopping any
+                    // further state reports from the thread since we're shutting down
+                    for (final StreamThread thread : threads) {
+                        thread.setStateListener(null);
+                        thread.shutdown();
+                    }
+                    if (globalStreamThread != null) {
+                        globalStreamThread.setStateListener(null);
+                        globalStreamThread.shutdown();
+                    }
+
                     for (final StreamThread thread : threads) {
                         try {
                             if (!thread.isRunning()) {

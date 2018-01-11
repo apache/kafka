@@ -35,20 +35,5 @@ class NetworkPartitionFaultSpec(TaskSpec):
                                 or ClusterNode objects.
         """
         super(NetworkPartitionFaultSpec, self).__init__(start_ms, duration_ms)
-        self.partitions = []
-        for partition in partitions:
-            nodes = []
-            for obj in partition:
-                if isinstance(obj, basestring):
-                    nodes.append(obj)
-                else:
-                    nodes.append(obj.name)
-            self.partitions.append(nodes)
-
-    def message(self):
-        return {
-            "class": "org.apache.kafka.trogdor.fault.NetworkPartitionFaultSpec",
-            "startMs": self.start_ms,
-            "durationMs": self.duration_ms,
-            "partitions": self.partitions,
-        }
+        self.message["class"] = "org.apache.kafka.trogdor.fault.NetworkPartitionFaultSpec"
+        self.message["partitions"] = [TaskSpec.to_node_names(p) for p in partitions]

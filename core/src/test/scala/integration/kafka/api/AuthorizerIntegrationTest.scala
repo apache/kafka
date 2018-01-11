@@ -241,14 +241,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       consumers += TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT)
 
     // create the consumer offset topic
-    TestUtils.createTopic(zkUtils, GROUP_METADATA_TOPIC_NAME,
+    TestUtils.createTopic(zkClient, GROUP_METADATA_TOPIC_NAME,
       1,
       1,
       servers,
       servers.head.groupCoordinator.offsetsTopicConfigs)
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(zkUtils, topic, 1, 1, this.servers)
-    TestUtils.createTopic(zkUtils, deleteTopic, 1, 1, this.servers)
+    TestUtils.createTopic(zkClient, topic, 1, 1, this.servers)
+    TestUtils.createTopic(zkClient, deleteTopic, 1, 1, this.servers)
   }
 
   @After
@@ -447,9 +447,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @Test
   def testAuthorizationWithTopicNotExisting() {
     adminZkClient.deleteTopic(topic)
-    TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
+    TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     adminZkClient.deleteTopic(deleteTopic)
-    TestUtils.verifyTopicDeletion(zkUtils, deleteTopic, 1, servers)
+    TestUtils.verifyTopicDeletion(zkClient, deleteTopic, 1, servers)
 
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
       ApiKeys.METADATA -> createMetadataRequest(allowAutoTopicCreation = false),
@@ -680,7 +680,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     // create an unmatched topic
     val unmatchedTopic = "unmatched"
-    TestUtils.createTopic(zkUtils, unmatchedTopic, 1, 1, this.servers)
+    TestUtils.createTopic(zkClient, unmatchedTopic, 1, 1, this.servers)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)),  new Resource(Topic, unmatchedTopic))
     sendRecords(1, new TopicPartition(unmatchedTopic, part))
     removeAllAcls()

@@ -74,7 +74,7 @@ class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness 
 
     try {
       // create topic
-      TestUtils.createTopic(zkUtils, topic, 1, 1, List(server))
+      TestUtils.createTopic(zkClient, topic, 1, 1, List(server))
       val partition = 0
 
       // prepare the messages

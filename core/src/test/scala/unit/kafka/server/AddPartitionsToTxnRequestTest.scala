@@ -19,7 +19,6 @@ package kafka.server
 
 import java.util.Properties
 
-import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse}
@@ -38,7 +37,7 @@ class AddPartitionsToTxnRequestTest extends BaseRequestTest {
   @Before
   override def setUp(): Unit = {
     super.setUp()
-    TestUtils.createTopic(zkUtils, topic1, numPartitions, servers.size, servers, new Properties())
+    createTopic(topic1, numPartitions, servers.size, new Properties())
   }
 
   @Test

@@ -77,20 +77,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final K key, final V value) {
-        final ProcessorNode previousNode = currentNode();
-        try {
-            for (ProcessorNode child : (List<ProcessorNode>) currentNode().children()) {
-                setCurrentNode(child);
-                child.process(key, value);
-            }
-        } finally {
-            setCurrentNode(previousNode);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
     public <K, V> void forward(final K key, final V value, final int childIndex) {
         final ProcessorNode previousNode = currentNode();
         final ProcessorNode child = (ProcessorNode<K, V>) currentNode().children().get(childIndex);

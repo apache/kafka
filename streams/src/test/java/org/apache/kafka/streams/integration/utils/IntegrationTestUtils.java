@@ -173,7 +173,6 @@ public class IntegrationTestUtils {
      * @param expectedNumRecords Minimum number of expected records
      * @param waitTime           Upper bound in waiting time in milliseconds
      * @return All the records consumed, or null if no records are consumed
-     * @throws InterruptedException
      * @throws AssertionError       if the given wait time elapses
      */
     public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(final Properties consumerConfig,
@@ -212,7 +211,6 @@ public class IntegrationTestUtils {
      * @param expectedNumRecords Minimum number of expected records
      * @param waitTime           Upper bound in waiting time in milliseconds
      * @return All the records consumed, or null if no records are consumed
-     * @throws InterruptedException
      * @throws AssertionError       if the given wait time elapses
      */
     public static <V> List<V> waitUntilMinValuesRecordsReceived(final Properties consumerConfig,
@@ -320,7 +318,10 @@ public class IntegrationTestUtils {
      * @param maxMessages    Maximum number of messages to read via the consumer.
      * @return The values retrieved via the consumer.
      */
-    private static <V> List<V> readValues(final String topic, final Consumer<Object, V> consumer, final long waitTime, final int maxMessages) {
+    private static <V> List<V> readValues(final String topic,
+                                          final Consumer<Object, V> consumer,
+                                          final long waitTime,
+                                          final int maxMessages) {
         final List<V> returnList = new ArrayList<>();
         final List<KeyValue<Object, V>> kvs = readKeyValues(topic, consumer, waitTime, maxMessages);
         for (final KeyValue<?, V> kv : kvs) {
@@ -340,7 +341,9 @@ public class IntegrationTestUtils {
      * @return The KeyValue elements retrieved via the consumer
      */
     private static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic,
-        final Consumer<K, V> consumer, final long waitTime, final int maxMessages) {
+                                                             final Consumer<K, V> consumer,
+                                                             final long waitTime,
+                                                             final int maxMessages) {
         final List<KeyValue<K, V>> consumedValues;
         consumer.subscribe(Collections.singletonList(topic));
         final int pollIntervalMs = 100;
