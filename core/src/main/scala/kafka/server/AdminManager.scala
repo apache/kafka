@@ -24,7 +24,6 @@ import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import org.apache.kafka.clients.admin.ConfigEntry.ConfigSynonym
 import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.{ApiException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, PolicyViolationException, ReassignmentInProgressException, UnknownTopicOrPartitionException}
@@ -305,12 +304,12 @@ class AdminManager(val config: KafkaConfig,
             // Consider optimizing this by caching the configs or retrieving them from the `Log` when possible
             val topicProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
             val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), topicProps)
-            createResponseConfig(logConfig, createTopicConfigEntry(topicProps, includeSynonyms))
+            createResponseConfig(logConfig, createTopicConfigEntry(logConfig, topicProps, includeSynonyms))
 
           case ResourceType.BROKER =>
             val brokerId = resourceNameToBrokerId(resource.name)
             if (brokerId == config.brokerId)
-              createResponseConfig(config.currentConfig, createBrokerConfigEntry(includeSynonyms))
+              createResponseConfig(config, createBrokerConfigEntry(includeSynonyms))
             else
               throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId}, but received $brokerId")
 
@@ -434,9 +433,9 @@ class AdminManager(val config: KafkaConfig,
       }
     }
 
-    synonyms.foreach(name => maybeAddSynonym(name, dynamicConfig.dynamicBrokerConfigs,
+    synonyms.foreach(name => maybeAddSynonym(name, dynamicConfig.currentDynamicBrokerConfigs,
       isSensitive, ConfigSource.DYNAMIC_BROKER_CONFIG))
-    synonyms.foreach(name => maybeAddSynonym(name, dynamicConfig.dynamicDefaultConfigs,
+    synonyms.foreach(name => maybeAddSynonym(name, dynamicConfig.currentDynamicDefaultConfigs,
       isSensitive, ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG))
     synonyms.foreach(name => maybeAddSynonym(name, dynamicConfig.staticBrokerConfigs,
       isSensitive, ConfigSource.STATIC_BROKER_CONFIG))
@@ -445,9 +444,9 @@ class AdminManager(val config: KafkaConfig,
     allSynonyms.dropWhile(s => s.name != name).toList // e.g. drop listener overrides when describing base config
   }
 
-  private def createTopicConfigEntry(topicProps: Properties, includeSynonyms: Boolean)
+  private def createTopicConfigEntry(logConfig: LogConfig, topicProps: Properties, includeSynonyms: Boolean)
                                     (name: String, value: Any): DescribeConfigsResponse.ConfigEntry = {
-    val configEntryType = config.typeOf(name)
+    val configEntryType = logConfig.typeOf(name)
     val isSensitive = configEntryType == ConfigDef.Type.PASSWORD
     val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType)
     val allSynonyms = {

@@ -31,7 +31,7 @@ import kafka.utils.Implicits._
 import kafka.zk.{ConfigEntityChangeNotificationZNode, ZooKeeperTestHarness}
 import org.apache.kafka.clients.admin.ConfigEntry.{ConfigSource, ConfigSynonym}
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.SslConfigs._
@@ -397,7 +397,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private def waitForConfig(propName: String, propValue: String, maxWaitMs: Long = 10000): Unit = {
     servers.foreach { server =>
       TestUtils.retry(maxWaitMs) {
-        assertEquals(propValue, server.config.currentConfig.props.get(propName))
+        assertEquals(propValue, server.config.originals.get(propName))
       }
     }
   }

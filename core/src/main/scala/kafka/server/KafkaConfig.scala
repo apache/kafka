@@ -942,21 +942,28 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   def this(props: java.util.Map[_, _]) = this(props, true, None)
   def this(props: java.util.Map[_, _], doLog: Boolean) = this(props, doLog, None)
-  val dynamicConfig = dynamicConfigOverride.getOrElse(new DynamicBrokerConfig(this))
-  def currentConfig = dynamicConfig.config
+  private[server] val dynamicConfig = dynamicConfigOverride.getOrElse(new DynamicBrokerConfig(this))
+  // Cache the current config to avoid acquiring read lock to access from dynamicConfig
+  @volatile private var currentConfig = this
+
+  private[server] def updateCurrentConfig(newConfig: KafkaConfig): Unit = {
+    this.currentConfig = newConfig
+  }
 
   override def originals: util.Map[String, AnyRef] =
-    if (this == currentConfig) super.originals else currentConfig.originals
+    if (this eq currentConfig) super.originals else currentConfig.originals
   override def values: util.Map[String, _] =
-    if (this == currentConfig) super.values else currentConfig.values
+    if (this eq currentConfig) super.values else currentConfig.values
   override def originalsStrings: util.Map[String, String] =
-    if (this == currentConfig) super.originalsStrings else currentConfig.originalsStrings
+    if (this eq currentConfig) super.originalsStrings else currentConfig.originalsStrings
   override def originalsWithPrefix(prefix: String): util.Map[String, AnyRef] =
-    if (this == currentConfig) super.originalsWithPrefix(prefix) else currentConfig.originalsWithPrefix(prefix)
+    if (this eq currentConfig) super.originalsWithPrefix(prefix) else currentConfig.originalsWithPrefix(prefix)
   override def valuesWithPrefixOverride(prefix: String): util.Map[String, AnyRef] =
-    if (this == currentConfig) super.valuesWithPrefixOverride(prefix) else currentConfig.valuesWithPrefixOverride(prefix)
+    if (this eq currentConfig) super.valuesWithPrefixOverride(prefix) else currentConfig.valuesWithPrefixOverride(prefix)
+  override def get(key: String): AnyRef =
+    if (this eq currentConfig) super.get(key) else currentConfig.get(key)
 
-  //  During dynamic update, we use the values from this config, this is only used in DynamicBrokerConfig
+  //  During dynamic update, we use the values from this config, these are only used in DynamicBrokerConfig
   private[server] def originalsFromThisConfig: util.Map[String, AnyRef] = super.originals
   private[server] def valuesFromThisConfig: util.Map[String, _] = super.values
   private[server] def valuesFromThisConfigWithPrefixOverride(prefix: String): util.Map[String, AnyRef] =
@@ -1119,10 +1126,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val sslProtocol = getString(KafkaConfig.SslProtocolProp)
   val sslProvider = getString(KafkaConfig.SslProviderProp)
   val sslEnabledProtocols = getList(KafkaConfig.SslEnabledProtocolsProp)
-  def sslKeystoreType = currentConfig.getString(KafkaConfig.SslKeystoreTypeProp)
-  def sslKeystoreLocation = currentConfig.getString(KafkaConfig.SslKeystoreLocationProp)
-  def sslKeystorePassword = currentConfig.getPassword(KafkaConfig.SslKeystorePasswordProp)
-  def sslKeyPassword = currentConfig.getPassword(KafkaConfig.SslKeyPasswordProp)
+  def sslKeystoreType = getString(KafkaConfig.SslKeystoreTypeProp)
+  def sslKeystoreLocation = getString(KafkaConfig.SslKeystoreLocationProp)
+  def sslKeystorePassword = getPassword(KafkaConfig.SslKeystorePasswordProp)
+  def sslKeyPassword = getPassword(KafkaConfig.SslKeyPasswordProp)
   val sslTruststoreType = getString(KafkaConfig.SslTruststoreTypeProp)
   val sslTruststoreLocation = getString(KafkaConfig.SslTruststoreLocationProp)
   val sslTruststorePassword = getPassword(KafkaConfig.SslTruststorePasswordProp)

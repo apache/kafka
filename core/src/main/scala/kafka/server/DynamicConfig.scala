@@ -64,7 +64,7 @@ object DynamicConfig {
 
     def names = brokerConfigDef.names
 
-    def validate(props: Properties) = DynamicConfig.validate(brokerConfigDef, props, customPropsAllowed = true, nonDynamicProps)
+    def validate(props: Properties) = DynamicConfig.validate(brokerConfigDef, props, customPropsAllowed = true)
   }
 
   object Client {
@@ -91,7 +91,7 @@ object DynamicConfig {
 
     def names = clientConfigs.names
 
-    def validate(props: Properties) = DynamicConfig.validate(clientConfigs, props, customPropsAllowed = false, Set.empty)
+    def validate(props: Properties) = DynamicConfig.validate(clientConfigs, props, customPropsAllowed = false)
   }
 
   object User {
@@ -104,10 +104,10 @@ object DynamicConfig {
 
     def names = userConfigs.names
 
-    def validate(props: Properties) = DynamicConfig.validate(userConfigs, props, customPropsAllowed = false, Set.empty)
+    def validate(props: Properties) = DynamicConfig.validate(userConfigs, props, customPropsAllowed = false)
   }
 
-  private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean, nonDynamicProps: Set[String]) = {
+  private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean) = {
     //Validate Names
     val names = configDef.names()
     val propKeys = props.keySet.asScala.map(_.asInstanceOf[String])
@@ -115,8 +115,6 @@ object DynamicConfig {
       val unknownKeys = propKeys.filter(!names.contains(_))
       require(unknownKeys.isEmpty, s"Unknown Dynamic Configuration: $unknownKeys.")
     }
-    val invalidKeys = propKeys.intersect(nonDynamicProps)
-    require(invalidKeys.isEmpty, s"Config not dynamic: $invalidKeys.")
     //ValidateValues
     configDef.parse(props)
   }

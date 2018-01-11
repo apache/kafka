@@ -75,10 +75,11 @@ object DynamicBrokerConfig {
     SslConfigs.SSL_KEY_PASSWORD_CONFIG
   )
   private val DynamicSecurityConfigs = SslConfigs.RECONFIGURABLE_CONFIGS.asScala
-  private val ClusterConfigs = Set.empty[String]
 
   val AllDynamicConfigs = mutable.Set[String]()
   AllDynamicConfigs ++= DynamicSecurityConfigs
+
+  private val PerBrokerConfigs = DynamicSecurityConfigs
 
   val ListenerConfigRegex = """listener\.name\.[^.]*\.(.*)""".r
 
@@ -111,21 +112,17 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
   private[server] val staticBrokerConfigs = configToMap(kafkaConfig.originalsFromThisConfig.asScala)
   private[server] val staticDefaultConfigs = configToMap(KafkaConfig.defaultValues)
-  private[server] val dynamicBrokerConfigs = mutable.Map[String, String]()
-  private[server] val dynamicDefaultConfigs = mutable.Map[String, String]()
+  private val dynamicBrokerConfigs = mutable.Map[String, String]()
+  private val dynamicDefaultConfigs = mutable.Map[String, String]()
   private val brokerId = kafkaConfig.brokerId
   private val reconfigurables = mutable.Buffer[Reconfigurable]()
   private val lock = new ReentrantReadWriteLock
   private var currentConfig = kafkaConfig
 
-  def initialize(zkClient: KafkaZkClient): Unit = {
+  private[server] def initialize(zkClient: KafkaZkClient): Unit = {
     val adminZkClient = new AdminZkClient(zkClient)
     updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default))
     updateBrokerConfig(brokerId, adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.toString))
-  }
-
-  def config: KafkaConfig = CoreUtils.inReadLock(lock) {
-    currentConfig
   }
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
@@ -137,20 +134,39 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     reconfigurables -= reconfigurable
   }
 
+  // Visibility for testing
+  private[server] def currentKafkaConfig: KafkaConfig = CoreUtils.inReadLock(lock) {
+    currentConfig
+  }
+
+  private[server] def currentDynamicBrokerConfigs: Map[String, String] = CoreUtils.inReadLock(lock) {
+    dynamicBrokerConfigs.clone()
+  }
+
+  private[server] def currentDynamicDefaultConfigs: Map[String, String] = CoreUtils.inReadLock(lock) {
+    dynamicDefaultConfigs.clone()
+  }
+
   private[server] def updateBrokerConfig(brokerId: Int, persistentProps: Properties): Unit = CoreUtils.inWriteLock(lock) {
-    val props = fromPersistentProps(persistentProps, perBrokerConfig = true)
-    validateConfigTypes(props, logError = true)
-    dynamicBrokerConfigs.clear()
-    dynamicBrokerConfigs ++= props.asScala
-    updateCurrentConfig()
+    try {
+      val props = fromPersistentProps(persistentProps, perBrokerConfig = true)
+      dynamicBrokerConfigs.clear()
+      dynamicBrokerConfigs ++= props.asScala
+      updateCurrentConfig()
+    } catch {
+      case e: Exception => error(s"Per-broker configs of $brokerId could not be applied: $persistentProps", e)
+    }
   }
 
   private[server] def updateDefaultConfig(persistentProps: Properties): Unit = CoreUtils.inWriteLock(lock) {
-    val props = fromPersistentProps(persistentProps, perBrokerConfig = false)
-    validateConfigTypes(props, logError = true)
-    dynamicDefaultConfigs.clear()
-    dynamicDefaultConfigs ++= props.asScala
-    updateCurrentConfig()
+    try {
+      val props = fromPersistentProps(persistentProps, perBrokerConfig = false)
+      dynamicDefaultConfigs.clear()
+      dynamicDefaultConfigs ++= props.asScala
+      updateCurrentConfig()
+    } catch {
+      case e: Exception => error(s"Cluster default configs could not be applied: $persistentProps", e)
+    }
   }
 
   private[server] def toPersistentProps(configProps: Properties, perBrokerConfig: Boolean): Properties = {
@@ -170,12 +186,25 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
   private[server] def fromPersistentProps(persistentProps: Properties, perBrokerConfig: Boolean): Properties = {
     val props = persistentProps.clone().asInstanceOf[Properties]
+
+    // Remove all invalid configs from `props`
+    removeInvalidConfigs(props, perBrokerConfig)
+    def removeInvalidProps(invalidPropNames: Set[String], errorMessage: String): Unit = {
+      if (invalidPropNames.nonEmpty) {
+        invalidPropNames.foreach(props.remove)
+        error(s"$errorMessage: $invalidPropNames")
+      }
+    }
+    removeInvalidProps(nonDynamicConfigs(props), "Non-dynamic configs configured in ZooKeeper will be ignored")
+    removeInvalidProps(securityConfigsWithoutListenerPrefix(props),
+      "Security configs can be dynamically updated only using listener prefix, base configs will be ignored")
+    if (!perBrokerConfig)
+      removeInvalidProps(perBrokerConfigs(props), "Per-broker configs defined at default cluster level will be ignored")
+
     // TODO (KAFKA-6246): encrypt passwords
     def decodePassword(configName: String): Unit = {
       val value = props.getProperty(configName)
       if (value != null) {
-        if (!perBrokerConfig)
-          warn(s"Password config $configName defined at default cluster level will be ignored")
         props.setProperty(configName, new String(Base64.decoder.decode(value), StandardCharsets.UTF_8))
       }
     }
@@ -184,37 +213,71 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   private[server] def validate(props: Properties, perBrokerConfig: Boolean): Unit = CoreUtils.inReadLock(lock) {
-    validateConfigTypes(props, logError = false)
+    def checkInvalidProps(invalidPropNames: Set[String], errorMessage: String): Unit = {
+      if (invalidPropNames.nonEmpty) {
+        invalidPropNames.foreach(props.remove)
+        throw new ConfigException(s"$errorMessage: $invalidPropNames")
+      }
+    }
+    checkInvalidProps(nonDynamicConfigs(props), "Cannot update these configs dynamically")
+    checkInvalidProps(securityConfigsWithoutListenerPrefix(props),
+      "Security configs can be dynamically updated only per-listener using the listener prefix")
+    validateConfigTypes(props)
     val newProps = mutable.Map[String, String]()
     newProps ++= staticBrokerConfigs
     if (perBrokerConfig) {
       overrideProps(newProps, dynamicDefaultConfigs)
       overrideProps(newProps, props.asScala)
     } else {
-      if (!props.asScala.keySet.forall(ClusterConfigs.contains))
-        throw new ConfigException(s"Cannot configure these configs at default cluster level: ${props.asScala.keySet.diff(ClusterConfigs)}")
+      checkInvalidProps(perBrokerConfigs(props),
+        "Cannot update these configs at default cluster level, broker id must be specified")
       overrideProps(newProps, props.asScala)
       overrideProps(newProps, dynamicBrokerConfigs)
     }
     processConfig(newProps, validateOnly = true)
   }
 
-  private def validateConfigTypes(props: Properties, logError: Boolean): Unit = {
+  private def perBrokerConfigs(props: Properties): Set[String] = {
+    val configNames = props.asScala.keySet
+    configNames.intersect(PerBrokerConfigs) ++ configNames.filter(ListenerConfigRegex.findFirstIn(_).nonEmpty)
+  }
+
+  private def nonDynamicConfigs(props: Properties): Set[String] = {
+    props.asScala.keySet.intersect(DynamicConfig.Broker.nonDynamicProps)
+  }
+
+  private def securityConfigsWithoutListenerPrefix(props: Properties): Set[String] = {
+    DynamicSecurityConfigs.filter(props.containsKey)
+  }
+
+  private def validateConfigTypes(props: Properties): Unit = {
+    val baseProps = new Properties
+    props.asScala.foreach {
+      case (ListenerConfigRegex(baseName), v) => baseProps.put(baseName, v)
+      case (k, v) => baseProps.put(k, v)
+    }
+    DynamicConfig.Broker.validate(baseProps)
+  }
+
+  private def removeInvalidConfigs(props: Properties, perBrokerConfig: Boolean): Unit = {
     try {
-      val securityConfigsWithoutPrefix = DynamicSecurityConfigs.filter(props.containsKey)
-      if (securityConfigsWithoutPrefix.nonEmpty)
-          throw new ConfigException(s"Invalid configs $securityConfigsWithoutPrefix: security configs can be dynamically updated only using listener prefix")
-      val baseProps = new Properties
-      props.asScala.foreach {
-        case (ListenerConfigRegex(baseName), v) => baseProps.put(baseName, v)
-        case (k, v) => baseProps.put(k, v)
-      }
-      DynamicConfig.Broker.validate(baseProps)
+      validateConfigTypes(props)
+      props.asScala
     } catch {
       case e: Exception =>
-        if (logError)
-          error(s"Dynamic default broker config is invalid: $props, these configs will be ignored", e)
-        throw e
+        val invalidProps = props.asScala.filter { case (k, v) =>
+          val props1 = new Properties
+          props1.put(k, v)
+          try {
+            validateConfigTypes(props1)
+            false
+          } catch {
+            case _: Exception => true
+          }
+        }
+        invalidProps.foreach(props.remove)
+        val configSource = if (perBrokerConfig) "broker" else "default cluster"
+        error(s"Dynamic $configSource config contains invalid values: $invalidProps, these configs will be ignored", e)
     }
   }
 
@@ -262,7 +325,11 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     newProps ++= staticBrokerConfigs
     overrideProps(newProps, dynamicDefaultConfigs)
     overrideProps(newProps, dynamicBrokerConfigs)
-    currentConfig = processConfig(newProps, validateOnly = false)
+    val newConfig = processConfig(newProps, validateOnly = false)
+    if (newConfig ne currentConfig) {
+      currentConfig = newConfig
+      kafkaConfig.updateCurrentConfig(currentConfig)
+    }
   }
 
   private def processConfig(newProps: Map[String, String], validateOnly: Boolean): KafkaConfig = {
