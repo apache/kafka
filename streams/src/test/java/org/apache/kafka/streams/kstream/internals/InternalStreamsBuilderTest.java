@@ -156,6 +156,32 @@ public class InternalStreamsBuilderTest {
         assertEquals("topic2", topology.storeToChangelogTopic().get(storeName));
         assertNull(table1.queryableStoreName());
     }
+    
+    @Test
+    public void shouldBuildGlobalTableWithNonQueryableStoreName() throws Exception {
+        final GlobalKTable<String, String> table1 = builder.globalTable(
+            "topic2",
+            consumed,
+            new MaterializedInternal<>(
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>with(null, null),
+                builder,
+                storePrefix));
+
+        assertNull(table1.queryableStoreName());
+    }
+
+    @Test
+    public void shouldBuildGlobalTableWithQueryaIbleStoreName() throws Exception {
+        final GlobalKTable<String, String> table1 = builder.globalTable(
+            "topic2",
+            consumed,
+            new MaterializedInternal<>(
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("globalTable"),
+                builder,
+                storePrefix));
+
+        assertEquals("globalTable", table1.queryableStoreName());
+    }
 
     @Test
     public void shouldBuildSimpleGlobalTableTopology() throws Exception {
