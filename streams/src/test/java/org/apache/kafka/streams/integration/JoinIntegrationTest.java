@@ -20,7 +20,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.junit.Before;
@@ -42,8 +41,6 @@ import java.util.List;
 public class JoinIntegrationTest extends AbstractJoinIntegrationTest {
     private KStream<Long, String> leftStream;
     private KStream<Long, String> rightStream;
-    private KTable<Long, String> leftTable;
-    private KTable<Long, String> rightTable;
 
     public JoinIntegrationTest(boolean cacheEnabled) {
         super(cacheEnabled);
@@ -56,15 +53,13 @@ public class JoinIntegrationTest extends AbstractJoinIntegrationTest {
         APP_ID = "stream-stream-join-integration-test";
 
         builder = new StreamsBuilder();
-        leftTable = builder.table(INPUT_TOPIC_LEFT);
-        rightTable = builder.table(INPUT_TOPIC_RIGHT);
-        leftStream = leftTable.toStream();
-        rightStream = rightTable.toStream();
+        leftStream = builder.stream(INPUT_TOPIC_LEFT);
+        rightStream = builder.stream(INPUT_TOPIC_RIGHT);
     }
 
     @Test
-    public void testInnerKStreamKStream() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-KStream-KStream");
+    public void testInner() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
 
         final List<List<String>> expectedResult = Arrays.asList(
             null,
@@ -90,8 +85,8 @@ public class JoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @Test
-    public void testInnerRepartitionedKStreamKStream() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-repartitioned-KStream-KStream");
+    public void testInnerRepartitioned() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-repartitioned");
 
         final List<List<String>> expectedResult = Arrays.asList(
                 null,
@@ -120,8 +115,8 @@ public class JoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @Test
-    public void testLeftKStreamKStream() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left-KStream-KStream");
+    public void testLeft() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
 
         final List<List<String>> expectedResult = Arrays.asList(
             null,
@@ -147,8 +142,8 @@ public class JoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @Test
-    public void testLeftRepartitionedKStreamKStream() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left-repartitioned-KStream-KStream");
+    public void testLeftRepartitioned() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left-repartitioned");
 
         final List<List<String>> expectedResult = Arrays.asList(
                 null,
@@ -177,8 +172,8 @@ public class JoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @Test
-    public void testOuterKStreamKStream() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer-KStream-KStream");
+    public void testOuter() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
 
         final List<List<String>> expectedResult = Arrays.asList(
             null,
@@ -204,8 +199,8 @@ public class JoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @Test
-    public void testOuterRepartitionedKStreamKStream() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer-repartitioned-KStream-KStream");
+    public void testOuterRepartitioned() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer");
 
         final List<List<String>> expectedResult = Arrays.asList(
                 null,
@@ -234,8 +229,8 @@ public class JoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
 
     @Test
-    public void testMultiInnerKStreamKStream() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-multi-inner-KStream-KStream");
+    public void testMultiInner() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-multi-inner");
 
         final List<List<String>> expectedResult = Arrays.asList(
                 null,
@@ -261,207 +256,6 @@ public class JoinIntegrationTest extends AbstractJoinIntegrationTest {
 
         leftStream.join(rightStream, valueJoiner, JoinWindows.of(10000))
                 .join(rightStream, valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
-
-        runTest(expectedResult);
-    }
-
-    @Test
-    public void testInnerKStreamKTable() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-KStream-KTable");
-
-        final List<List<String>> expectedResult = Arrays.asList(
-            null,
-            null,
-            null,
-            null,
-            Collections.singletonList("B-a"),
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            Collections.singletonList("D-d")
-        );
-
-        leftStream.join(rightTable, valueJoiner).to(OUTPUT_TOPIC);
-
-        runTest(expectedResult);
-    }
-
-    @Test
-    public void testLeftKStreamKTable() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left-KStream-KTable");
-
-        final List<List<String>> expectedResult = Arrays.asList(
-            null,
-            null,
-            Collections.singletonList("A-null"),
-            null,
-            Collections.singletonList("B-a"),
-            null,
-            null,
-            null,
-            Collections.singletonList("C-null"),
-            null,
-            null,
-            null,
-            null,
-            null,
-            Collections.singletonList("D-d")
-        );
-
-        leftStream.leftJoin(rightTable, valueJoiner).to(OUTPUT_TOPIC);
-
-        runTest(expectedResult);
-    }
-
-    @Test
-    public void testInnerKTableKTable() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner-KTable-KTable");
-
-        // TODO: the duplicate is due to KAFKA-4309, should be removed when it is fixed
-        List<List<String>> expectedResult;
-        if (cacheEnabled) {
-            expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    null,
-                    Arrays.asList("A-a", "A-a"),    // dup
-                    Collections.singletonList("B-a"),
-                    Collections.singletonList("B-b"),
-                    Collections.singletonList((String) null),
-                    null,
-                    Collections.singletonList((String) null),   // dup
-                    Collections.singletonList("C-c"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    Collections.singletonList((String) null),   // dup
-                    Collections.singletonList("D-d")
-            );
-        } else {
-            expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    null,
-                    Collections.singletonList("A-a"),
-                    Collections.singletonList("B-a"),
-                    Collections.singletonList("B-b"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    Collections.singletonList("C-c"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    null,
-                    Collections.singletonList("D-d")
-            );
-        }
-
-        leftTable.join(rightTable, valueJoiner).toStream().to(OUTPUT_TOPIC);
-
-        runTest(expectedResult);
-    }
-
-    @Test
-    public void testLeftKTableKTable() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left-KTable-KTable");
-
-        // TODO: the duplicate is due to KAFKA-4309, should be removed when it is fixed
-        List<List<String>> expectedResult;
-        if (cacheEnabled) {
-            expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    Arrays.asList("A-null", "A-null"),  // dup
-                    Collections.singletonList("A-a"),
-                    Collections.singletonList("B-a"),
-                    Collections.singletonList("B-b"),
-                    Collections.singletonList((String) null),
-                    null,
-                    Arrays.asList("C-null", "C-null"),      // dup
-                    Collections.singletonList("C-c"),
-                    Collections.singletonList("C-null"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    Arrays.asList("D-d", "D-d")
-            );
-        } else {
-            expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    Collections.singletonList("A-null"),
-                    Collections.singletonList("A-a"),
-                    Collections.singletonList("B-a"),
-                    Collections.singletonList("B-b"),
-                    Collections.singletonList((String) null),
-                    null,
-                    Collections.singletonList("C-null"),
-                    Collections.singletonList("C-c"),
-                    Collections.singletonList("C-null"),
-                    Collections.singletonList((String) null),
-                    null,
-                    null,
-                    Collections.singletonList("D-d")
-            );
-        }
-
-        leftTable.leftJoin(rightTable, valueJoiner).toStream().to(OUTPUT_TOPIC);
-
-        runTest(expectedResult);
-    }
-
-    @Test
-    public void testOuterKTableKTable() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-outer-KTable-KTable");
-
-        // TODO: the duplicate is due to KAFKA-4309, should be removed when it is fixed
-        List<List<String>> expectedResult;
-        if (cacheEnabled) {
-            expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    Arrays.asList("A-null", "A-null"),
-                    Collections.singletonList("A-a"),
-                    Collections.singletonList("B-a"),
-                    Collections.singletonList("B-b"),
-                    Collections.singletonList("null-b"),
-                    Collections.singletonList((String) null),
-                    Collections.singletonList("C-null"),
-                    Collections.singletonList("C-c"),
-                    Collections.singletonList("C-null"),
-                    Collections.singletonList((String) null),
-                    null,
-                    Collections.singletonList("null-d"),
-                    Collections.singletonList("D-d")
-            );
-        } else {
-            expectedResult = Arrays.asList(
-                    null,
-                    null,
-                    Collections.singletonList("A-null"),
-                    Collections.singletonList("A-a"),
-                    Collections.singletonList("B-a"),
-                    Collections.singletonList("B-b"),
-                    Collections.singletonList("null-b"),
-                    Collections.singletonList((String) null),
-                    Collections.singletonList("C-null"),
-                    Collections.singletonList("C-c"),
-                    Collections.singletonList("C-null"),
-                    Collections.singletonList((String) null),
-                    null,
-                    Collections.singletonList("null-d"),
-                    Collections.singletonList("D-d")
-            );
-        }
-
-        leftTable.outerJoin(rightTable, valueJoiner).toStream().to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
     }
