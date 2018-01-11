@@ -50,7 +50,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
   @Test
   def testManualReplicaAssignment() {
     val brokers = List(0, 1, 2, 3, 4)
-    TestUtils.createBrokersInZk(zkUtils, brokers)
+    TestUtils.createBrokersInZk(zkClient, brokers)
 
     // duplicate brokers
     intercept[InvalidReplicaAssignmentException] {
@@ -101,11 +101,11 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
       11 -> 1
     )
     val topic = "test"
-    TestUtils.createBrokersInZk(zkUtils, List(0, 1, 2, 3, 4))
+    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
     // create the topic
     adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment)
     // create leaders for all partitions
-    TestUtils.makeLeaderForPartition(zkUtils, topic, leaderForPartitionMap, 1)
+    TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
     val actualReplicaMap = leaderForPartitionMap.keys.map(p => p -> zkClient.getReplicasForPartition(new TopicPartition(topic, p))).toMap
     assertEquals(expectedReplicaAssignment.size, actualReplicaMap.size)
     for(i <- 0 until actualReplicaMap.size)
@@ -121,7 +121,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
   def testTopicCreationWithCollision() {
     val topic = "test.topic"
     val collidingTopic = "test_topic"
-    TestUtils.createBrokersInZk(zkUtils, List(0, 1, 2, 3, 4))
+    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
     // create the topic
     adminZkClient.createTopic(topic, 3, 1)
 
@@ -296,7 +296,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     val brokerList = 0 to 5
     val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 5 -> "rack3")
     val brokerMetadatas = toBrokerMetadata(rackInfo, brokersWithoutRack = brokerList.filterNot(rackInfo.keySet))
-    TestUtils.createBrokersInZk(brokerMetadatas, zkUtils)
+    TestUtils.createBrokersInZk(brokerMetadatas, zkClient)
 
     val processedMetadatas1 = adminZkClient.getBrokerMetadatas(RackAwareMode.Disabled)
     assertEquals(brokerList, processedMetadatas1.map(_.id))

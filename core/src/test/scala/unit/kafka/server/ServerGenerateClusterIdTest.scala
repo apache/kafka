@@ -62,7 +62,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
 
     // Make sure that the cluster id is persistent.
     assertTrue(zkUtils.pathExists(ZkUtils.ClusterIdPath))
-    assertEquals(zkUtils.getClusterId, Some(clusterIdOnFirstBoot))
+    assertEquals(zkClient.getClusterId, Some(clusterIdOnFirstBoot))
 
     // Restart the server check to confirm that it uses the clusterId generated previously
     server1 = TestUtils.createServer(config1)
@@ -75,7 +75,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
 
     // Make sure that the cluster id is persistent after multiple reboots.
     assertTrue(zkUtils.pathExists(ZkUtils.ClusterIdPath))
-    assertEquals(zkUtils.getClusterId, Some(clusterIdOnFirstBoot))
+    assertEquals(zkClient.getClusterId, Some(clusterIdOnFirstBoot))
 
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }

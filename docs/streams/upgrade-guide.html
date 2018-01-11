@@ -18,24 +18,42 @@
 <script><!--#include virtual="../js/templateData.js" --></script>
 
 <script id="content-template" type="text/x-handlebars-template">
-    <h1>Upgrade Guide &amp; API Changes</h1>
+    <h1>Upgrade Guide and API Changes</h1>
+    <div class="sub-nav-sticky">
+        <div class="sticky-top">
+            <div style="height:35px">
+                <a href="/{{version}}/documentation/streams/">Introduction</a>
+                <a href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
+                <a href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
+                <a href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
+                <a href="/{{version}}/documentation/streams/architecture">Architecture</a>
+                <a href="/{{version}}/documentation/streams/developer-guide/">Developer Guide</a>
+                <a class="active-menu-item" href="/{{version}}/documentation/streams/upgrade-guide">Upgrade</a>
+            </div>
+        </div>
+    </div>
 
     <p>
-        If you want to upgrade from 0.11.0.x to 1.0.0 you don't need to do any code changes as the public API is fully backward compatible.
-        However, some public APIs were deprecated and thus it is recommended to update your code eventually to allow for future upgrades.
-        See <a href="#streams_api_changes_100">below</a> a complete list of 1.0.0 API and semantic changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
+        If you want to upgrade from 1.0.x to 1.1.0 you don't need to make any code changes as the public API is fully backward compatible.
+        See <a href="#streams_api_changes_110">below</a> for a complete list of 1.1.0 API and semantic changes that allow you to advance your application and/or simplify your code base.
     </p>
 
     <p>
-        If you want to upgrade from 0.10.2.x to 0.11.0 you don't need to do any code changes as the public API is fully backward compatible.
+        If you want to upgrade from 0.11.0.x to 1.0.0 you don't need to make any code changes as the public API is fully backward compatible.
+        However, some public APIs were deprecated and thus it is recommended to update your code eventually to allow for future upgrades.
+        See <a href="#streams_api_changes_100">below</a> for a complete list of 1.0.0 API and semantic changes that allow you to advance your application and/or simplify your code base.
+    </p>
+
+    <p>
+        If you want to upgrade from 0.10.2.x to 0.11.0 you don't need to make any code changes as the public API is fully backward compatible.
         However, some configuration parameters were deprecated and thus it is recommended to update your code eventually to allow for future upgrades.
-        See <a href="#streams_api_changes_0110">below</a> a complete list of 0.11.0 API and semantic changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
+        See <a href="#streams_api_changes_0110">below</a> for a complete list of 0.11.0 API and semantic changes that allow you to advance your application and/or simplify your code base.
     </p>
 
     <p>
         If you want to upgrade from 0.10.1.x to 0.10.2, see the <a href="/{{version}}/documentation/#upgrade_1020_streams"><b>Upgrade Section for 0.10.2</b></a>.
         It highlights incompatible changes you need to consider to upgrade your code and application.
-        See <a href="#streams_api_changes_0102">below</a> a complete list of 0.10.2 API and semantic changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
+        See <a href="#streams_api_changes_0102">below</a> for a complete list of 0.10.2 API and semantic changes that allow you to advance your application and/or simplify your code base.
     </p>
 
     <p>
@@ -44,13 +62,44 @@
         See <a href="#streams_api_changes_0101">below</a> a complete list of 0.10.1 API changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
     </p>
 
-
     <h3><a id="streams_api_changes_110" href="#streams_api_changes_110">Streams API changes in 1.1.0</a></h3>
+
+    <p>
+        The introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-220%3A+Add+AdminClient+into+Kafka+Streams%27+ClientSupplier">KIP-220</a>
+        enables you to provide configuration parameters for the embedded admin client created by Kafka Streams, similar to the embedded producer and consumer clients.
+        You can provide the configs via <code>StreamsConfig</code> by adding the configs with the prefix <code>admin.</code> as defined by <code>StreamsConfig#adminClientPrefix(String)</code>
+        to distinguish them from configurations of other clients that share the same config names.
+    </p>
+
     <p>
 	New method in <code>GlobalKTable</code>
     </p>
     <ul>
 	<li> A method has been provided such that it will return the store name associated with the <code>GlobalKTable</code> or <code>null</code> if the store name is non-queryable. </li>
+    </ul>
+    <p>
+        New methods in <code>KafkaStreams</code>:
+    </p>
+    <ul>
+        <li> added overload for the constructor that allows overriding the <code>Time</code> object used for tracking system wall-clock time; this is useful for unit testing your application code. </li>
+    </ul>
+
+    <p> New methods in <code>KafkaClientSupplier</code>: </p>
+    <ul>
+        <li> added <code>getAdminClient(config)</code> that allows to override an <code>AdminClient</code> used for administrative requests such as internal topic creations, etc. </li>
+    </ul>
+
+    <p>New error handling for exceptions during production:</p>
+    <ul>
+        <li>added interface <code>ProductionExceptionHandler</code> that allows implementors to decide whether or not Streams should <code>FAIL</code> or <code>CONTINUE</code> when certain exception occur while trying to produce.</li>
+        <li>provided an implementation, <code>DefaultProductionExceptionHandler</code> that always fails, preserving the existing behavior by default.</li>
+        <li>changing which implementation is used can be done by settings <code>default.production.exception.handler</code> to the fully qualified name of a class implementing this interface.</li>
+    </ul>
+
+    <p> Changes in <code>StreamsResetter</code>: </p>
+    <ul>
+        <li> added options to specify input topics offsets to reset according to <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-171+-+Extend+Consumer+Group+Reset+Offset+for+Stream+Application">KIP-171</a></li>
+>>>>>>> 4d544d4f08b027ce318b088b112f03dccc566098
     </ul>
 
     <h3><a id="streams_api_changes_100" href="#streams_api_changes_100">Streams API changes in 1.0.0</a></h3>
@@ -107,8 +156,8 @@
         New methods in <code>KafkaStreams</code>:
     </p>
     <ul>
-        <li>retrieve the current runtime information about the local threads via <code>#localThreadsMetadata()</code> </li>
-        <li>observe the restoration of all state stores via <code>#setGlobalStateRestoreListener()</code>, in which users can provide their customized implementation of the <code>org.apache.kafka.streams.processor.StateRestoreListener</code> interface</li>
+        <li>retrieve the current runtime information about the local threads via <code>localThreadsMetadata()</code> </li>
+        <li>observe the restoration of all state stores via <code>setGlobalStateRestoreListener()</code>, in which users can provide their customized implementation of the <code>org.apache.kafka.streams.processor.StateRestoreListener</code> interface</li>
     </ul>
 
     <p>
@@ -117,7 +166,7 @@
     <ul>
         <li>
             <code>toString()</code>, <code>toString(final String indent)</code> were previously used to return static and runtime information.
-            They have been deprecated in favor of using the new classes/methods <code>#localThreadsMetadata()</code> / <code>ThreadMetadata</code> (returning runtime information) and
+            They have been deprecated in favor of using the new classes/methods <code>localThreadsMetadata()</code> / <code>ThreadMetadata</code> (returning runtime information) and
             <code>TopologyDescription</code> / <code>Topology#describe()</code> (returning static information).
         </li>
         <li>
@@ -195,22 +244,22 @@
         <li> configuration parameter <code>key.serde</code> was deprecated and replaced by <code>default.key.serde</code> </li>
         <li> configuration parameter <code>value.serde</code> was deprecated and replaced by <code>default.value.serde</code> </li>
         <li> configuration parameter <code>timestamp.extractor</code> was deprecated and replaced by <code>default.timestamp.extractor</code> </li>
-        <li> method <code>#keySerde()</code> was deprecated and replaced by <code>#defaultKeySerde()</code> </li>
-        <li> method <code>#valueSerde()</code> was deprecated and replaced by <code>#defaultValueSerde()</code> </li>
-        <li> new method <code>#defaultTimestampExtractor()</code> was added </li>
+        <li> method <code>keySerde()</code> was deprecated and replaced by <code>defaultKeySerde()</code> </li>
+        <li> method <code>valueSerde()</code> was deprecated and replaced by <code>defaultValueSerde()</code> </li>
+        <li> new method <code>defaultTimestampExtractor()</code> was added </li>
     </ul>
 
     <p> New methods in <code>TopologyBuilder</code>: </p>
     <ul>
-        <li> added overloads for <code>#addSource()</code> that allow to define a <code>TimestampExtractor</code> per source node </li>
-        <li> added overloads for <code>#addGlobalStore()</code> that allow to define a <code>TimestampExtractor</code> per source node associated with the global store </li>
+        <li> added overloads for <code>addSource()</code> that allow to define a <code>TimestampExtractor</code> per source node </li>
+        <li> added overloads for <code>addGlobalStore()</code> that allow to define a <code>TimestampExtractor</code> per source node associated with the global store </li>
     </ul>
 
     <p> New methods in <code>KStreamBuilder</code>: </p>
     <ul>
-        <li> added overloads for <code>#stream()</code> that allow to define a <code>TimestampExtractor</code> per input stream </li>
-        <li> added overloads for <code>#table()</code> that allow to define a <code>TimestampExtractor</code> per input table </li>
-        <li> added overloads for <code>#globalKTable()</code> that allow to define a <code>TimestampExtractor</code> per global table </li>
+        <li> added overloads for <code>stream()</code> that allow to define a <code>TimestampExtractor</code> per input stream </li>
+        <li> added overloads for <code>table()</code> that allow to define a <code>TimestampExtractor</code> per input table </li>
+        <li> added overloads for <code>globalKTable()</code> that allow to define a <code>TimestampExtractor</code> per global table </li>
     </ul>
 
     <p> Deprecated methods in <code>KTable</code>: </p>
@@ -243,7 +292,7 @@
         If exactly-once processing is enabled via the <code>processing.guarantees</code> parameter, internally Streams switches from a producer per thread to a producer per task runtime model.
         In order to distinguish the different producers, the producer's <code>client.id</code> additionally encodes the task-ID for this case.
         Because the producer's <code>client.id</code> is used to report JMX metrics, it might be required to update tools that receive those metrics.
-    
+
     </p>
 
     <p> Producer's <code>client.id</code> naming schema: </p>
@@ -268,11 +317,11 @@
         New methods in <code>KafkaStreams</code>:
     </p>
     <ul>
-        <li> set a listener to react on application state change via <code>#setStateListener(StateListener listener)</code> </li>
-        <li> retrieve the current application state via <code>#state()</code> </li>
-        <li> retrieve the global metrics registry via <code>#metrics()</code> </li>
-        <li> apply a timeout when closing an application via <code>#close(long timeout, TimeUnit timeUnit)</code> </li>
-        <li> specify a custom indent when retrieving Kafka Streams information via <code>#toString(String indent)</code> </li>
+        <li> set a listener to react on application state change via <code>setStateListener(StateListener listener)</code> </li>
+        <li> retrieve the current application state via <code>state()</code> </li>
+        <li> retrieve the global metrics registry via <code>metrics()</code> </li>
+        <li> apply a timeout when closing an application via <code>close(long timeout, TimeUnit timeUnit)</code> </li>
+        <li> specify a custom indent when retrieving Kafka Streams information via <code>toString(String indent)</code> </li>
     </ul>
 
     <p>
@@ -286,27 +335,27 @@
 
     <p> Changes in <code>StreamsMetrics</code> interface: </p>
     <ul>
-        <li> removed methods: <code>#addLatencySensor()</code> </li>
-        <li> added methods: <code>#addLatencyAndThroughputSensor()</code>, <code>#addThroughputSensor()</code>, <code>#recordThroughput()</code>,
-            <code>#addSensor()</code>, <code>#removeSensor()</code> </li>
+        <li> removed methods: <code>addLatencySensor()</code> </li>
+        <li> added methods: <code>addLatencyAndThroughputSensor()</code>, <code>addThroughputSensor()</code>, <code>recordThroughput()</code>,
+            <code>addSensor()</code>, <code>removeSensor()</code> </li>
     </ul>
 
     <p> New methods in <code>TopologyBuilder</code>: </p>
     <ul>
-        <li> added overloads for <code>#addSource()</code> that allow to define a <code>auto.offset.reset</code> policy per source node </li>
-        <li> added methods <code>#addGlobalStore()</code> to add global <code>StateStore</code>s </li>
+        <li> added overloads for <code>addSource()</code> that allow to define a <code>auto.offset.reset</code> policy per source node </li>
+        <li> added methods <code>addGlobalStore()</code> to add global <code>StateStore</code>s </li>
     </ul>
 
     <p> New methods in <code>KStreamBuilder</code>: </p>
     <ul>
-        <li> added overloads for <code>#stream()</code> and <code>#table()</code> that allow to define a <code>auto.offset.reset</code> policy per input stream/table </li>
-        <li> added method <code>#globalKTable()</code> to create a <code>GlobalKTable</code> </li>
+        <li> added overloads for <code>stream()</code> and <code>table()</code> that allow to define a <code>auto.offset.reset</code> policy per input stream/table </li>
+        <li> added method <code>globalKTable()</code> to create a <code>GlobalKTable</code> </li>
     </ul>
 
     <p> New joins for <code>KStream</code>: </p>
     <ul>
-        <li> added overloads for <code>#join()</code> to join with <code>KTable</code> </li>
-        <li> added overloads for <code>#join()</code> and <code>leftJoin()</code> to join with <code>GlobalKTable</code> </li>
+        <li> added overloads for <code>join()</code> to join with <code>KTable</code> </li>
+        <li> added overloads for <code>join()</code> and <code>leftJoin()</code> to join with <code>GlobalKTable</code> </li>
         <li> note, join semantics in 0.10.2 were improved and thus you might see different result compared to 0.10.0.x and 0.10.1.x
             (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Streams+Join+Semantics">Kafka Streams Join Semantics</a> in the Apache Kafka wiki)
     </ul>
@@ -319,13 +368,13 @@
     <p> New window type <em>Session Windows</em>: </p>
     <ul>
         <li> added class <code>SessionWindows</code> to specify session windows </li>
-        <li> added overloads for <code>KGroupedStream</code> methods <code>#count()</code>, <code>#reduce()</code>, and <code>#aggregate()</code>
+        <li> added overloads for <code>KGroupedStream</code> methods <code>count()</code>, <code>reduce()</code>, and <code>aggregate()</code>
             to allow session window aggregations </li>
     </ul>
 
     <p> Changes to <code>TimestampExtractor</code>: </p>
     <ul>
-        <li> method <code>#extract()</code> has a second parameter now </li>
+        <li> method <code>extract()</code> has a second parameter now </li>
         <li> new default timestamp extractor class <code>FailOnInvalidTimestamp</code>
             (it gives the same behavior as old (and removed) default extractor <code>ConsumerRecordTimestampExtractor</code>) </li>
         <li> new alternative timestamp extractor classes <code>LogAndSkipOnInvalidTimestamp</code> and <code>UsePreviousTimeOnInvalidTimestamps</code> </li>
@@ -369,7 +418,7 @@
     </ul>
 
     <div class="pagination">
-        <a href="/{{version}}/documentation/streams/architecture" class="pagination__btn pagination__btn__prev">Previous</a>
+        <a href="/{{version}}/documentation/streams/developer-guide/app-reset-tool" class="pagination__btn pagination__btn__prev">Previous</a>
         <a href="#" class="pagination__btn pagination__btn__next pagination__btn--disabled">Next</a>
     </div>
 </script>
@@ -382,7 +431,7 @@
         <!--#include virtual="../../includes/_docs_banner.htm" -->
         <ul class="breadcrumbs">
             <li><a href="/documentation">Documentation</a></li>
-            <li><a href="/documentation/streams">Kafka Streams API</a></li>
+            <li><a href="/documentation/streams">Kafka Streams</a></li>
         </ul>
         <div class="p-content"></div>
     </div>
