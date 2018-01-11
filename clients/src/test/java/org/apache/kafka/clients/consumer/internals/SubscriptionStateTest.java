@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
@@ -51,11 +50,9 @@ public class SubscriptionStateTest {
         state.assignFromUser(singleton(tp0));
         assertEquals(singleton(tp0), state.assignedPartitions());
         assertFalse(state.hasAllFetchPositions());
-        assertTrue(state.refreshCommitsNeeded());
-        state.committed(tp0, new OffsetAndMetadata(1));
         state.seek(tp0, 1);
         assertTrue(state.isFetchable(tp0));
-        assertAllPositions(tp0, 1L);
+        assertEquals(1L, state.position(tp0).longValue());
         state.assignFromUser(Collections.<TopicPartition>emptySet());
         assertTrue(state.assignedPartitions().isEmpty());
         assertFalse(state.isAssigned(tp0));
@@ -156,7 +153,7 @@ public class SubscriptionStateTest {
         state.assignFromUser(singleton(tp0));
         state.seek(tp0, 5);
         assertEquals(5L, (long) state.position(tp0));
-        state.needOffsetReset(tp0);
+        state.requestOffsetReset(tp0);
         assertFalse(state.isFetchable(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
         assertEquals(null, state.position(tp0));
@@ -175,8 +172,7 @@ public class SubscriptionStateTest {
         assertTrue(state.partitionsAutoAssigned());
         state.assignFromSubscribed(singleton(tp0));
         state.seek(tp0, 1);
-        state.committed(tp0, new OffsetAndMetadata(1));
-        assertAllPositions(tp0, 1L);
+        assertEquals(1L, state.position(tp0).longValue());
         state.assignFromSubscribed(singleton(tp1));
         assertTrue(state.isAssigned(tp1));
         assertFalse(state.isAssigned(tp0));
@@ -193,15 +189,6 @@ public class SubscriptionStateTest {
         assertFalse(state.isFetchable(tp0));
         state.resume(tp0);
         assertTrue(state.isFetchable(tp0));
-    }
-
-    @Test
-    public void commitOffsetMetadata() {
-        state.assignFromUser(singleton(tp0));
-        state.committed(tp0, new OffsetAndMetadata(5, "hi"));
-
-        assertEquals(5, state.committed(tp0).offset());
-        assertEquals("hi", state.committed(tp0).metadata());
     }
 
     @Test(expected = IllegalStateException.class)
@@ -293,11 +280,6 @@ public class SubscriptionStateTest {
         state.unsubscribe();
         assertEquals(0, state.subscription().size());
         assertTrue(state.assignedPartitions().isEmpty());
-    }
-
-    private void assertAllPositions(TopicPartition tp, Long offset) {
-        assertEquals(offset.longValue(), state.committed(tp).offset());
-        assertEquals(offset, state.position(tp));
     }
 
     private static class MockRebalanceListener implements ConsumerRebalanceListener {

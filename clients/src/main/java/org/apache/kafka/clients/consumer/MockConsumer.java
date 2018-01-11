@@ -50,16 +50,16 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     private final Map<String, List<PartitionInfo>> partitions;
     private final SubscriptionState subscriptions;
-    private Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
-    private Set<TopicPartition> paused;
-    private boolean closed;
     private final Map<TopicPartition, Long> beginningOffsets;
     private final Map<TopicPartition, Long> endOffsets;
+    private final Map<TopicPartition, OffsetAndMetadata> committed;
+    private final Queue<Runnable> pollTasks;
+    private final Set<TopicPartition> paused;
 
-    private Queue<Runnable> pollTasks;
+    private Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
     private KafkaException exception;
-
     private AtomicBoolean wakeup;
+    private boolean closed;
 
     public MockConsumer(OffsetResetStrategy offsetResetStrategy) {
         this.subscriptions = new SubscriptionState(offsetResetStrategy);
@@ -72,6 +72,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.pollTasks = new LinkedList<>();
         this.exception = null;
         this.wakeup = new AtomicBoolean(false);
+        this.committed = new HashMap<>();
     }
 
     @Override
@@ -99,6 +100,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public synchronized void subscribe(Pattern pattern, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
+        committed.clear();
         this.subscriptions.subscribe(pattern, listener);
         Set<String> topicsToSubscribe = new HashSet<>();
         for (String topic: partitions.keySet()) {
@@ -126,18 +128,21 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public synchronized void subscribe(Collection<String> topics, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
+        committed.clear();
         this.subscriptions.subscribe(new HashSet<>(topics), listener);
     }
 
     @Override
     public synchronized void assign(Collection<TopicPartition> partitions) {
         ensureNotClosed();
+        committed.clear();
         this.subscriptions.assignFromUser(new HashSet<>(partitions));
     }
 
     @Override
     public synchronized void unsubscribe() {
         ensureNotClosed();
+        committed.clear();
         subscriptions.unsubscribe();
     }
 
@@ -211,7 +216,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public synchronized void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         ensureNotClosed();
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet())
-            subscriptions.committed(entry.getKey(), entry.getValue());
+            committed.put(entry.getKey(), entry.getValue());
         if (callback != null) {
             callback.onComplete(offsets, null);
         }
@@ -248,7 +253,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public synchronized OffsetAndMetadata committed(TopicPartition partition) {
         ensureNotClosed();
         if (subscriptions.isAssigned(partition)) {
-            return subscriptions.committed(partition);
+            return committed.get(partition);
         }
         return new OffsetAndMetadata(0);
     }
@@ -270,7 +275,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public synchronized void seekToBeginning(Collection<TopicPartition> partitions) {
         ensureNotClosed();
         for (TopicPartition tp : partitions)
-            subscriptions.needOffsetReset(tp, OffsetResetStrategy.EARLIEST);
+            subscriptions.requestOffsetReset(tp, OffsetResetStrategy.EARLIEST);
     }
 
     public synchronized void updateBeginningOffsets(Map<TopicPartition, Long> newOffsets) {
@@ -281,7 +286,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public synchronized void seekToEnd(Collection<TopicPartition> partitions) {
         ensureNotClosed();
         for (TopicPartition tp : partitions)
-            subscriptions.needOffsetReset(tp, OffsetResetStrategy.LATEST);
+            subscriptions.requestOffsetReset(tp, OffsetResetStrategy.LATEST);
     }
 
     public synchronized void updateEndOffsets(Map<TopicPartition, Long> newOffsets) {
@@ -408,11 +413,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private void updateFetchPosition(TopicPartition tp) {
         if (subscriptions.isOffsetResetNeeded(tp)) {
             resetOffsetPosition(tp);
-        } else if (subscriptions.committed(tp) == null) {
-            subscriptions.needOffsetReset(tp);
+        } else if (!committed.containsKey(tp)) {
+            subscriptions.requestOffsetReset(tp);
             resetOffsetPosition(tp);
         } else {
-            subscriptions.seek(tp, subscriptions.committed(tp).offset());
+            subscriptions.seek(tp, committed.get(tp).offset());
         }
     }
 

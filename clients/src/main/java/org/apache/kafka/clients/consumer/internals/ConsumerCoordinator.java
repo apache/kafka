@@ -217,11 +217,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
 
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
-
-        // set the flag to refresh last committed offsets
-        subscriptions.needRefreshCommits();
-
-        // update partition assignment
         subscriptions.assignFromSubscribed(assignment.partitions());
 
         // check if the assignment contains some topics that were not in the original
@@ -257,7 +252,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.nextAutoCommitDeadline = time.milliseconds() + autoCommitIntervalMs;
 
         // execute the user's callback after rebalance
-        ConsumerRebalanceListener listener = subscriptions.listener();
+        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
         log.info("Setting newly assigned partitions {}", subscriptions.assignedPartitions());
         try {
             Set<TopicPartition> assigned = new HashSet<>(subscriptions.assignedPartitions());
@@ -412,7 +407,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         maybeAutoCommitOffsetsSync(rebalanceTimeoutMs);
 
         // execute the user's callback before rebalance
-        ConsumerRebalanceListener listener = subscriptions.listener();
+        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
         log.info("Revoking previously assigned partitions {}", subscriptions.assignedPartitions());
         try {
             Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
@@ -447,15 +442,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * Refresh the committed offsets for provided partitions.
      */
     public void refreshCommittedOffsetsIfNeeded() {
-        if (subscriptions.refreshCommitsNeeded()) {
-            Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(subscriptions.assignedPartitions());
-            for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
-                TopicPartition tp = entry.getKey();
-                // verify assignment is still active
-                if (subscriptions.isAssigned(tp))
-                    this.subscriptions.committed(tp, entry.getValue());
-            }
-            this.subscriptions.commitsRefreshed();
+        Set<TopicPartition> missingFetchPositions = subscriptions.missingFetchPositions();
+        Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(missingFetchPositions);
+        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+            TopicPartition tp = entry.getKey();
+            long offset = entry.getValue().offset();
+            log.debug("Setting offset for partition {} to the committed offset {}", tp, offset);
+            this.subscriptions.seek(tp, offset);
         }
     }
 
@@ -465,6 +458,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @return A map from partition to the committed offset
      */
     public Map<TopicPartition, OffsetAndMetadata> fetchCommittedOffsets(Set<TopicPartition> partitions) {
+        if (partitions.isEmpty())
+            return Collections.emptyMap();
+
         while (true) {
             ensureCoordinatorReady();
 
@@ -547,7 +543,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private void doCommitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
-        this.subscriptions.needRefreshCommits();
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
         final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
         future.addListener(new RequestFutureListener<Void>() {
@@ -747,9 +742,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 Errors error = entry.getValue();
                 if (error == Errors.NONE) {
                     log.debug("Committed offset {} for partition {}", offset, tp);
-                    if (subscriptions.isAssigned(tp))
-                        // update the local cache only if the partition is still assigned
-                        subscriptions.committed(tp, offsetAndMetadata);
                 } else {
                     log.error("Offset commit failed on partition {} at offset {}: {}", tp, offset, error.message());
 
