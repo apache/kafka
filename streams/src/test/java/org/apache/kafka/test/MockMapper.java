@@ -70,8 +70,7 @@ public class MockMapper {
         return new SelectKeyMapper<>();
     }
 
-
-    public static <K, V> KeyValueMapper<K, V, Iterable<KeyValue<K, V>>> NoOpFlatKeyValueMapper() {
+    public static <K, V> KeyValueMapper<K, V, Iterable<KeyValue<K, V>>> noOpFlatKeyValueMapper() {
         return new NoOpFlatKeyValueMapper<>();
     }
 

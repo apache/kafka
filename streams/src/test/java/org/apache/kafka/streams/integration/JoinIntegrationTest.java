@@ -16,49 +16,23 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.LongDeserializer;
-import org.apache.kafka.common.serialization.LongSerializer;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
-import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.MockKeyValueMapper;
-import org.apache.kafka.test.TestUtils;
-import org.junit.After;
+import org.apache.kafka.test.MockMapper;
 import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Properties;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
 
 /**
  * Tests all available joins of Kafka Streams DSL.
@@ -137,9 +111,9 @@ public class JoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Arrays.asList("D-a", "D-b", "D-c", "D-d")
         );
 
-        leftStream.map(MockKeyValueMapper.<Long, String>NoOpKeyValueMapper())
-                .join(rightStream.flatMap(MockKeyValueMapper.<Long, String>NoOpFlatKeyValueMapper())
-                                 .selectKey(MockKeyValueMapper.<Long, String>SelectKeyKeyValueMapper()),
+        leftStream.map(MockMapper.<Long, String>noOpKeyValueMapper())
+                .join(rightStream.flatMap(MockMapper.<Long, String>noOpFlatKeyValueMapper())
+                                 .selectKey(MockMapper.<Long, String>selectKeyKeyValueMapper()),
                        valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
@@ -194,9 +168,9 @@ public class JoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Arrays.asList("D-a", "D-b", "D-c", "D-d")
         );
 
-        leftStream.map(MockKeyValueMapper.<Long, String>NoOpKeyValueMapper())
-                .leftJoin(rightStream.flatMap(MockKeyValueMapper.<Long, String>NoOpFlatKeyValueMapper())
-                                     .selectKey(MockKeyValueMapper.<Long, String>SelectKeyKeyValueMapper()),
+        leftStream.map(MockMapper.<Long, String>noOpKeyValueMapper())
+                .leftJoin(rightStream.flatMap(MockMapper.<Long, String>noOpFlatKeyValueMapper())
+                                     .selectKey(MockMapper.<Long, String>selectKeyKeyValueMapper()),
                         valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
@@ -251,9 +225,9 @@ public class JoinIntegrationTest extends AbstractJoinIntegrationTest {
                 Arrays.asList("D-a", "D-b", "D-c", "D-d")
         );
 
-        leftStream.map(MockKeyValueMapper.<Long, String>NoOpKeyValueMapper())
-                .outerJoin(rightStream.flatMap(MockKeyValueMapper.<Long, String>NoOpFlatKeyValueMapper())
-                                .selectKey(MockKeyValueMapper.<Long, String>SelectKeyKeyValueMapper()),
+        leftStream.map(MockMapper.<Long, String>noOpKeyValueMapper())
+                .outerJoin(rightStream.flatMap(MockMapper.<Long, String>noOpFlatKeyValueMapper())
+                                .selectKey(MockMapper.<Long, String>selectKeyKeyValueMapper()),
                         valueJoiner, JoinWindows.of(10000)).to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
