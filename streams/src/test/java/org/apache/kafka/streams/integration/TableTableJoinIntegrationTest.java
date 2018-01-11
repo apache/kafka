@@ -195,6 +195,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     .to(OUTPUT_TOPIC);
             runTest(expectedFinalMultiJoinResult, storeName);
         } else {
+            // FIXME: the duplicate below for all the multi-joins
+            //        are due to KAFKA-6443, should be updated once it is fixed.
             List<List<String>> expectedResult = Arrays.asList(
                     null,
                     null,
