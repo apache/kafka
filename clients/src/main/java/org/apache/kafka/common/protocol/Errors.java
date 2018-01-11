@@ -72,8 +72,8 @@ import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.TokenAuthorizationException;
-import org.apache.kafka.common.errors.TokenExpiredException;
+import org.apache.kafka.common.errors.DelegationTokenAuthorizationException;
+import org.apache.kafka.common.errors.DelegationTokenExpiredException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
@@ -553,40 +553,40 @@ public enum Errors {
                 return new ReassignmentInProgressException(message);
             }
         }),
-    TOKEN_AUTH_DISABLED(61, "Delegation Token feature is not enabled.", new ApiExceptionBuilder() {
+    DELEGATION_TOKEN_AUTH_DISABLED(61, "Delegation Token feature is not enabled.", new ApiExceptionBuilder() {
         @Override
         public ApiException build(String message) {
             return new DelegationTokenDisabledException(message);
         }
     }),
-    TOKEN_NOT_FOUND(62, "Delegation Token is not found on server.", new ApiExceptionBuilder() {
+    DELEGATION_TOKEN_NOT_FOUND(62, "Delegation Token is not found on server.", new ApiExceptionBuilder() {
         @Override
         public ApiException build(String message) {
             return new DelegationTokenNotFoundException(message);
         }
     }),
-    TOKEN_OWNER_MISMATCH(63, "Specified Principal is not valid Owner/Renewer.", new ApiExceptionBuilder() {
+    DELEGATION_TOKEN_OWNER_MISMATCH(63, "Specified Principal is not valid Owner/Renewer.", new ApiExceptionBuilder() {
         @Override
         public ApiException build(String message) {
             return new DelegationTokenOwnerMismatchException(message);
         }
     }),
-    TOKEN_REQUEST_NOT_ALLOWED(64, "Delegation Token requests are not allowed on PLAINTEXT/SSL channels and " + "on delegation token authenticated channels.", new ApiExceptionBuilder() {
+    DELEGATION_TOKEN_REQUEST_NOT_ALLOWED(64, "Delegation Token requests are not allowed on PLAINTEXT/SSL channels and " + "on delegation token authenticated channels.", new ApiExceptionBuilder() {
         @Override
         public ApiException build(String message) {
             return new UnsupportedByAuthenticationException(message);
         }
     }),
-    TOKEN_AUTHORIZATION_FAILED(65, "Delegation Token authorization failed.", new ApiExceptionBuilder() {
+    DELEGATION_TOKEN_AUTHORIZATION_FAILED(65, "Delegation Token authorization failed.", new ApiExceptionBuilder() {
         @Override
         public ApiException build(String message) {
-            return new TokenAuthorizationException(message);
+            return new DelegationTokenAuthorizationException(message);
         }
     }),
-    TOKEN_EXPIRED(66, "Delegation Token is expired.", new ApiExceptionBuilder() {
+    DELEGATION_TOKEN_EXPIRED(66, "Delegation Token is expired.", new ApiExceptionBuilder() {
         @Override
         public ApiException build(String message) {
-            return new TokenExpiredException(message);
+            return new DelegationTokenExpiredException(message);
         }
     }),
     INVALID_PRINCIPAL_TYPE(67, "Supplied principalType is not supported", new ApiExceptionBuilder() {

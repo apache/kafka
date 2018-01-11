@@ -62,18 +62,18 @@ class TokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest with Sasl
 
     val renewer1 = List(SecurityUtils.parseKafkaPrincipal("User:" + JaasTestUtils.KafkaPlainUser))
     val createResponse = adminClient.createToken(renewer1)
-    assertEquals(Errors.TOKEN_AUTH_DISABLED, createResponse._1)
+    assertEquals(Errors.DELEGATION_TOKEN_AUTH_DISABLED, createResponse._1)
 
     val describeResponse = adminClient.describeToken(List())
-    assertEquals(Errors.TOKEN_AUTH_DISABLED, describeResponse._1)
+    assertEquals(Errors.DELEGATION_TOKEN_AUTH_DISABLED, describeResponse._1)
 
     //test renewing tokens
     val renewResponse = adminClient.renewToken(ByteBuffer.wrap("".getBytes()))
-    assertEquals(Errors.TOKEN_AUTH_DISABLED, renewResponse._1)
+    assertEquals(Errors.DELEGATION_TOKEN_AUTH_DISABLED, renewResponse._1)
 
     //test expire tokens tokens
     val expireResponse = adminClient.expireToken(ByteBuffer.wrap("".getBytes()))
-    assertEquals(Errors.TOKEN_AUTH_DISABLED, expireResponse._1)
+    assertEquals(Errors.DELEGATION_TOKEN_AUTH_DISABLED, expireResponse._1)
 
   }
 

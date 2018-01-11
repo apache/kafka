@@ -14,19 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.errors;
 
-package org.apache.kafka.common.security.scram;
+public class DelegationTokenAuthorizationException extends AuthorizationException {
 
-import javax.security.auth.callback.Callback;
+    private static final long serialVersionUID = 1L;
 
-public class TokenAuthenticationCallback implements Callback {
-    private boolean tokenauth;
-
-    public String extension() {
-        return ScramLoginModule.TOKEN_AUTH_CONFIG + "=" +  Boolean.toString(tokenauth);
+    public DelegationTokenAuthorizationException(String message) {
+        super(message);
     }
 
-    public void tokenauth(Boolean tokenauth) {
-        this.tokenauth = tokenauth;
+    public DelegationTokenAuthorizationException(String message, Throwable cause) {
+        super(message, cause);
     }
+
 }

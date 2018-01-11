@@ -42,7 +42,7 @@ public class ResourceTypeTest {
         new AclResourceTypeTestInfo(ResourceType.GROUP, 3, "group", false),
         new AclResourceTypeTestInfo(ResourceType.CLUSTER, 4, "cluster", false),
         new AclResourceTypeTestInfo(ResourceType.TRANSACTIONAL_ID, 5, "transactional_id", false),
-        new AclResourceTypeTestInfo(ResourceType.TOKEN, 6, "token", false)
+        new AclResourceTypeTestInfo(ResourceType.DELEGATION_TOKEN, 6, "delegation_token", false)
     };
 
     @Test

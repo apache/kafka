@@ -562,4 +562,3 @@ object ZkData {
     } else ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala
   }
 }
-

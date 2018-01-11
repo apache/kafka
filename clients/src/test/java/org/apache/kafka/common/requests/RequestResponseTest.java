@@ -1099,61 +1099,57 @@ public class RequestResponseTest {
         return new CreatePartitionsResponse(42, results);
     }
 
-    private CreateTokenRequest createCreateTokenRequest() {
+    private CreateDelegationTokenRequest createCreateTokenRequest() {
         List<KafkaPrincipal> renewers = new ArrayList<>();
         renewers.add(SecurityUtils.parseKafkaPrincipal("User:user1"));
         renewers.add(SecurityUtils.parseKafkaPrincipal("User:user2"));
-        return new CreateTokenRequest.Builder(renewers, System.currentTimeMillis()).build();
+        return new CreateDelegationTokenRequest.Builder(renewers, System.currentTimeMillis()).build();
     }
 
-    private CreateTokenResponse createCreateTokenResponse() {
-        return new CreateTokenResponse(20, Errors.NONE, SecurityUtils.parseKafkaPrincipal("User:user1"), System.currentTimeMillis(),
+    private CreateDelegationTokenResponse createCreateTokenResponse() {
+        return new CreateDelegationTokenResponse(20, Errors.NONE, SecurityUtils.parseKafkaPrincipal("User:user1"), System.currentTimeMillis(),
             System.currentTimeMillis(), System.currentTimeMillis(), "token1", ByteBuffer.wrap("test".getBytes()));
     }
 
-    private RenewTokenRequest createRenewTokenRequest() {
-        return new RenewTokenRequest.Builder(ByteBuffer.wrap("test".getBytes()), System.currentTimeMillis()).build();
+    private RenewDelegationTokenRequest createRenewTokenRequest() {
+        return new RenewDelegationTokenRequest.Builder(ByteBuffer.wrap("test".getBytes()), System.currentTimeMillis()).build();
     }
 
-    private RenewTokenResponse createRenewTokenResponse() {
-        return new RenewTokenResponse(20, Errors.NONE, System.currentTimeMillis());
+    private RenewDelegationTokenResponse createRenewTokenResponse() {
+        return new RenewDelegationTokenResponse(20, Errors.NONE, System.currentTimeMillis());
     }
 
-    private ExpireTokenRequest createExpireTokenRequest() {
-        return new ExpireTokenRequest.Builder(ByteBuffer.wrap("test".getBytes()), System.currentTimeMillis()).build();
+    private ExpireDelegationTokenRequest createExpireTokenRequest() {
+        return new ExpireDelegationTokenRequest.Builder(ByteBuffer.wrap("test".getBytes()), System.currentTimeMillis()).build();
     }
 
-    private ExpireTokenResponse createExpireTokenResponse() {
-        return new ExpireTokenResponse(20, Errors.NONE, System.currentTimeMillis());
+    private ExpireDelegationTokenResponse createExpireTokenResponse() {
+        return new ExpireDelegationTokenResponse(20, Errors.NONE, System.currentTimeMillis());
     }
 
-    private DescribeTokenRequest createDescribeTokenRequest() {
+    private DescribeDelegationTokenRequest createDescribeTokenRequest() {
         List<KafkaPrincipal> owners = new ArrayList<>();
         owners.add(SecurityUtils.parseKafkaPrincipal("User:user1"));
         owners.add(SecurityUtils.parseKafkaPrincipal("User:user2"));
-        return new DescribeTokenRequest.Builder(owners).build();
+        return new DescribeDelegationTokenRequest.Builder(owners).build();
     }
 
-    private DescribeTokenResponse createDescribeTokenResponse() {
+    private DescribeDelegationTokenResponse createDescribeTokenResponse() {
         List<KafkaPrincipal> renewers = new ArrayList<>();
         renewers.add(SecurityUtils.parseKafkaPrincipal("User:user1"));
         renewers.add(SecurityUtils.parseKafkaPrincipal("User:user2"));
 
         List<DelegationToken> tokenList = new LinkedList<>();
 
-        TokenInformation tokenInfo1 = new TokenInformation("1", SecurityUtils.parseKafkaPrincipal("User:owner"), renewers);
-        tokenInfo1.setMaxTimestamp(System.currentTimeMillis());
-        tokenInfo1.setIssueTimestamp(System.currentTimeMillis());
-        tokenInfo1.setExpiryTimestamp(System.currentTimeMillis());
+        TokenInformation tokenInfo1 = new TokenInformation("1", SecurityUtils.parseKafkaPrincipal("User:owner"), renewers,
+            System.currentTimeMillis(), System.currentTimeMillis(), System.currentTimeMillis());
 
-        TokenInformation tokenInfo2 = new TokenInformation("2", SecurityUtils.parseKafkaPrincipal("User:owner1"), renewers);
-        tokenInfo1.setMaxTimestamp(System.currentTimeMillis());
-        tokenInfo1.setIssueTimestamp(System.currentTimeMillis());
-        tokenInfo1.setExpiryTimestamp(System.currentTimeMillis());
+        TokenInformation tokenInfo2 = new TokenInformation("2", SecurityUtils.parseKafkaPrincipal("User:owner1"), renewers,
+            System.currentTimeMillis(), System.currentTimeMillis(), System.currentTimeMillis());
 
         tokenList.add(new DelegationToken(tokenInfo1, "test".getBytes()));
         tokenList.add(new DelegationToken(tokenInfo2, "test".getBytes()));
 
-        return new DescribeTokenResponse(20, Errors.NONE, tokenList);
+        return new DescribeDelegationTokenResponse(20, Errors.NONE, tokenList);
     }
 }

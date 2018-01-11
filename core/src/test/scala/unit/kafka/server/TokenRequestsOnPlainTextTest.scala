@@ -52,18 +52,18 @@ class TokenRequestsOnPlainTextTest extends BaseRequestTest {
     adminClient = AdminClient.create(createAdminConfig.asScala.toMap)
 
     val createResponse = adminClient.createToken(List())
-    assertEquals(Errors.TOKEN_REQUEST_NOT_ALLOWED, createResponse._1)
+    assertEquals(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, createResponse._1)
 
     val describeResponse = adminClient.describeToken(List())
-    assertEquals(Errors.TOKEN_REQUEST_NOT_ALLOWED, describeResponse._1)
+    assertEquals(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, describeResponse._1)
 
     //test renewing tokens
     val renewResponse = adminClient.renewToken(ByteBuffer.wrap("".getBytes()))
-    assertEquals(Errors.TOKEN_REQUEST_NOT_ALLOWED, renewResponse._1)
+    assertEquals(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, renewResponse._1)
 
     //test expire tokens tokens
     val expireResponse = adminClient.expireToken(ByteBuffer.wrap("".getBytes()))
-    assertEquals(Errors.TOKEN_REQUEST_NOT_ALLOWED, expireResponse._1)
+    assertEquals(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, expireResponse._1)
   }
 
 

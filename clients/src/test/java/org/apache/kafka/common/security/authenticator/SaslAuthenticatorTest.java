@@ -401,7 +401,8 @@ public class SaslAuthenticatorTest {
         //Check valid token Info and invalid credentials
         KafkaPrincipal owner = SecurityUtils.parseKafkaPrincipal("User:Owner");
         KafkaPrincipal renewer = SecurityUtils.parseKafkaPrincipal("User:Renewer1");
-        TokenInformation tokenInfo = new TokenInformation(tokenId, owner, Collections.singleton(renewer));
+        TokenInformation tokenInfo = new TokenInformation(tokenId, owner, Collections.singleton(renewer),
+            System.currentTimeMillis(), System.currentTimeMillis(), System.currentTimeMillis());
         server.tokenCache().addToken(tokenId, tokenInfo);
         createAndCheckClientConnectionFailure(securityProtocol, "0");
 

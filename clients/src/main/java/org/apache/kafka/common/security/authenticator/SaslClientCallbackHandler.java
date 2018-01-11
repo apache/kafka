@@ -28,7 +28,7 @@ import javax.security.sasl.RealmCallback;
 
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.common.security.scram.TokenAuthenticationCallback;
+import org.apache.kafka.common.security.scram.DelegationTokenAuthenticationCallback;
 
 /**
  * Callback handler for Sasl clients. The callbacks required for the SASL mechanism
@@ -81,8 +81,8 @@ public class SaslClientCallbackHandler implements AuthCallbackHandler {
                 ac.setAuthorized(authId.equals(authzId));
                 if (ac.isAuthorized())
                     ac.setAuthorizedID(authzId);
-            } else if (callback instanceof TokenAuthenticationCallback) {
-                TokenAuthenticationCallback tc = (TokenAuthenticationCallback) callback;
+            } else if (callback instanceof DelegationTokenAuthenticationCallback) {
+                DelegationTokenAuthenticationCallback tc = (DelegationTokenAuthenticationCallback) callback;
                 if (!isKerberos && subject != null && !subject.getPublicCredentials(Boolean.class).isEmpty()) {
                     tc.tokenauth(subject.getPublicCredentials(Boolean.class).iterator().next());
                 }

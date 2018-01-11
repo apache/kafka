@@ -30,10 +30,14 @@ public class TokenInformation {
     private long expiryTimestamp;
     private String tokenId;
 
-    public TokenInformation(String tokenId, KafkaPrincipal owner, Collection<KafkaPrincipal> renewers) {
+    public TokenInformation(String tokenId, KafkaPrincipal owner, Collection<KafkaPrincipal> renewers,
+                            long issueTimestamp, long maxTimestamp, long expiryTimestamp) {
         this.tokenId = tokenId;
         this.owner = owner;
         this.renewers = renewers;
+        this.issueTimestamp =  issueTimestamp;
+        this.maxTimestamp =  maxTimestamp;
+        this.expiryTimestamp =  expiryTimestamp;
     }
 
     public KafkaPrincipal owner() {
@@ -60,10 +64,6 @@ public class TokenInformation {
         return issueTimestamp;
     }
 
-    public void setIssueTimestamp(long issueTimestamp) {
-        this.issueTimestamp = issueTimestamp;
-    }
-
     public long expiryTimestamp() {
         return expiryTimestamp;
     }
@@ -78,10 +78,6 @@ public class TokenInformation {
 
     public long maxTimestamp() {
         return maxTimestamp;
-    }
-
-    public void setMaxTimestamp(long maxTimestamp) {
-        this.maxTimestamp = maxTimestamp;
     }
 
     public boolean ownerOrRenewer(KafkaPrincipal principal) {

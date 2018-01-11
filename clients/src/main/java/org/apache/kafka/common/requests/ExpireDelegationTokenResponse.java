@@ -29,7 +29,7 @@ import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 
-public class RenewTokenResponse extends AbstractResponse {
+public class ExpireDelegationTokenResponse extends AbstractResponse {
 
     private static final String EXPIRY_TIMESTAMP_KEY_NAME = "expiry_timestamp";
 
@@ -37,33 +37,41 @@ public class RenewTokenResponse extends AbstractResponse {
     private final long expiryTimestamp;
     private final int throttleTimeMs;
 
-    private static final Schema TOKEN_RENEW_RESPONSE_V0 = new Schema(
-            ERROR_CODE,
-            new Field("expiry_timestamp", INT64, "timestamp (in msec) at which this token expires.."),
-            THROTTLE_TIME_MS);
+    private  static final Schema TOKEN_EXPIRE_RESPONSE_V0 = new Schema(
+        ERROR_CODE,
+        new Field(EXPIRY_TIMESTAMP_KEY_NAME, INT64, "timestamp (in msec) at which this token expires.."),
+        THROTTLE_TIME_MS);
 
-    public RenewTokenResponse(int throttleTimeMs, Errors error, long expiryTimestamp) {
+    public ExpireDelegationTokenResponse(int throttleTimeMs, Errors error, long expiryTimestamp) {
         this.throttleTimeMs = throttleTimeMs;
         this.error = error;
         this.expiryTimestamp = expiryTimestamp;
     }
 
-    public RenewTokenResponse(int throttleTimeMs, Errors error) {
+    public ExpireDelegationTokenResponse(int throttleTimeMs, Errors error) {
         this(throttleTimeMs, error, -1);
     }
 
-    public RenewTokenResponse(Struct struct) {
+    public ExpireDelegationTokenResponse(Struct struct) {
         error = Errors.forCode(struct.get(ERROR_CODE));
-        expiryTimestamp = struct.getLong(EXPIRY_TIMESTAMP_KEY_NAME);
+        this.expiryTimestamp = struct.getLong(EXPIRY_TIMESTAMP_KEY_NAME);
         this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
     }
 
-    public static RenewTokenResponse parse(ByteBuffer buffer, short version) {
-        return new RenewTokenResponse(ApiKeys.RENEW_TOKEN.responseSchema(version).read(buffer));
+    public static ExpireDelegationTokenResponse parse(ByteBuffer buffer, short version) {
+        return new ExpireDelegationTokenResponse(ApiKeys.EXPIRE_DELEGATION_TOKEN.responseSchema(version).read(buffer));
     }
 
     public static Schema[] schemaVersions() {
-        return new Schema[] {TOKEN_RENEW_RESPONSE_V0};
+        return new Schema[] {TOKEN_EXPIRE_RESPONSE_V0};
+    }
+
+    public Errors error() {
+        return error;
+    }
+
+    public long expiryTimestamp() {
+        return expiryTimestamp;
     }
 
     @Override
@@ -73,7 +81,7 @@ public class RenewTokenResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.RENEW_TOKEN.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.EXPIRE_DELEGATION_TOKEN.responseSchema(version));
 
         struct.set(ERROR_CODE, error.code());
         struct.set(EXPIRY_TIMESTAMP_KEY_NAME, expiryTimestamp);
@@ -84,13 +92,5 @@ public class RenewTokenResponse extends AbstractResponse {
 
     public int throttleTimeMs() {
         return throttleTimeMs;
-    }
-
-    public Errors error() {
-        return error;
-    }
-
-    public long expiryTimestamp() {
-        return expiryTimestamp;
     }
 }

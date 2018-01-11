@@ -97,7 +97,7 @@ public class ScramSaslClient implements SaslClient {
                         throw new SaslException("Expected empty challenge");
                     clientNonce = formatter.secureRandomString();
                     NameCallback nameCallback = new NameCallback("Name:");
-                    TokenAuthenticationCallback tokenAuthCallback = new TokenAuthenticationCallback();
+                    DelegationTokenAuthenticationCallback tokenAuthCallback = new DelegationTokenAuthenticationCallback();
 
                     try {
                         callbackHandler.handle(new Callback[]{nameCallback, tokenAuthCallback});

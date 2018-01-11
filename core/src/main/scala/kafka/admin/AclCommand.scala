@@ -35,7 +35,7 @@ object AclCommand extends Logging {
     Group -> Set(Read, Describe, All),
     Cluster -> Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, Alter, Describe, All),
     TransactionalId -> Set(Describe, Write, All),
-    Token -> Set(Describe, All)
+    DelegationToken -> Set(Describe, All)
   )
 
   def main(args: Array[String]) {
@@ -247,11 +247,11 @@ object AclCommand extends Logging {
       opts.options.valuesOf(opts.transactionalIdOpt).asScala.foreach(transactionalId =>
         resources += new Resource(TransactionalId, transactionalId))
 
-    if (opts.options.has(opts.tokenOpt))
-      opts.options.valuesOf(opts.tokenOpt).asScala.foreach(token => resources += new Resource(Token, token.trim))
+    if (opts.options.has(opts.delegationTokenOpt))
+      opts.options.valuesOf(opts.delegationTokenOpt).asScala.foreach(token => resources += new Resource(DelegationToken, token.trim))
 
     if (resources.isEmpty && dieIfNoResourceFound)
-      CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --token <tokenID>")
+      CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>")
 
     resources
   }
@@ -308,10 +308,10 @@ object AclCommand extends Logging {
       "used in combination with the --producer option. Note that idempotence is enabled automatically if " +
       "the producer is authorized to a particular transactional-id.")
 
-    val tokenOpt = parser.accepts("token", "token to which ACLs should be added or removed. " +
+    val delegationTokenOpt = parser.accepts("delegation-token", "Delegation token to which ACLs should be added or removed. " +
       "A value of * indicates ACL should apply to all tokens.")
       .withRequiredArg
-      .describedAs("token")
+      .describedAs("delegation-token")
       .ofType(classOf[String])
 
     val addOpt = parser.accepts("add", "Indicates you are trying to add ACLs.")

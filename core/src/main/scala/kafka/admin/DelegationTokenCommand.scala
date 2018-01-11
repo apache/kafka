@@ -89,7 +89,7 @@ object DelegationTokenCommand extends Logging {
       val tokenInfo = token.tokenInfo
       print("\n%-15s %-30s %-15s %-25s %-15s %-15s %-15s".format(
         tokenInfo.tokenId,
-        token.passwordAsBase64String,
+        token.hmacAsBase64String,
         tokenInfo.owner,
         tokenInfo.renewersAsString,
         tokenInfo.issueTimestamp,
@@ -120,7 +120,7 @@ object DelegationTokenCommand extends Logging {
   def expireToken(adminClient: AdminClient, opts: DelegationTokenCommandOptions) = {
     val hmac = opts.options.valueOf(opts.hmacOpt)
     val expiryTimePeriodMs = opts.options.valueOf(opts.expiryTimePeriodOpt).longValue()
-    println("Calling token operation with hmac :" + hmac +" , expire-time-period : "+ expiryTimePeriodMs)
+    println("Calling expire token operation with hmac :" + hmac +" , expire-time-period : "+ expiryTimePeriodMs)
     val response = adminClient.expireToken(ByteBuffer.wrap(Base64.decoder.decode(hmac)), expiryTimePeriodMs)
     response match {
       case (Errors.NONE, expiryTimeStamp) => println("Completed expire operation. New expiry timestamp : %s".format(expiryTimeStamp))

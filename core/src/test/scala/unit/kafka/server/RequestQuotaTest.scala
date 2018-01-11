@@ -306,17 +306,17 @@ class RequestQuotaTest extends BaseRequestTest {
             Collections.singletonMap("topic-2", NewPartitions.increaseTo(1)), 0, false
           )
 
-        case ApiKeys.CREATE_TOKEN =>
-          new CreateTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")), 1000)
+        case ApiKeys.CREATE_DELEGATION_TOKEN =>
+          new CreateDelegationTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")), 1000)
 
-        case ApiKeys.EXPIRE_TOKEN =>
-          new ExpireTokenRequest.Builder(ByteBuffer.allocate(10), 1000)
+        case ApiKeys.EXPIRE_DELEGATION_TOKEN =>
+          new ExpireDelegationTokenRequest.Builder(ByteBuffer.allocate(10), 1000)
 
-        case ApiKeys.DESCRIBE_TOKENS=>
-          new DescribeTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")))
+        case ApiKeys.DESCRIBE_DELEGATION_TOKEN=>
+          new DescribeDelegationTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")))
 
-        case ApiKeys.RENEW_TOKEN=>
-          new RenewTokenRequest.Builder(ByteBuffer.allocate(10), 1000)
+        case ApiKeys.RENEW_DELEGATION_TOKEN=>
+          new RenewDelegationTokenRequest.Builder(ByteBuffer.allocate(10), 1000)
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
@@ -412,10 +412,10 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.ALTER_REPLICA_LOG_DIRS => new AlterReplicaLogDirsResponse(response).throttleTimeMs
       case ApiKeys.DESCRIBE_LOG_DIRS => new DescribeLogDirsResponse(response).throttleTimeMs
       case ApiKeys.CREATE_PARTITIONS => new CreatePartitionsResponse(response).throttleTimeMs
-      case ApiKeys.CREATE_TOKEN => new CreateTokenResponse(response).throttleTimeMs
-      case ApiKeys.DESCRIBE_TOKENS=> new DescribeTokenResponse(response).throttleTimeMs
-      case ApiKeys.EXPIRE_TOKEN => new ExpireTokenResponse(response).throttleTimeMs
-      case ApiKeys.RENEW_TOKEN => new RenewTokenResponse(response).throttleTimeMs
+      case ApiKeys.CREATE_DELEGATION_TOKEN => new CreateDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.DESCRIBE_DELEGATION_TOKEN=> new DescribeDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.EXPIRE_DELEGATION_TOKEN => new ExpireDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.RENEW_DELEGATION_TOKEN => new RenewDelegationTokenResponse(response).throttleTimeMs
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
     }
   }

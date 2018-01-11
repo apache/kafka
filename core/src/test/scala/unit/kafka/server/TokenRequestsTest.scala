@@ -72,14 +72,14 @@ class TokenRequestsTest extends BaseRequestTest with SaslSetup {
     val renewer1 = List(SecurityUtils.parseKafkaPrincipal("User:" + JaasTestUtils.KafkaPlainUser))
     val tokenResult1 = adminClient.createToken(renewer1)
     assertEquals(Errors.NONE, tokenResult1._1)
-    var token1 = adminClient.describeToken(List())._2.head
+    var token1 = adminClient.describeToken(null)._2.head
     assertEquals(token1, tokenResult1._2)
 
     //test renewing tokens
-    val renewResponse = adminClient.renewToken(token1.passwordBuffer())
+    val renewResponse = adminClient.renewToken(token1.hmacBuffer())
     assertEquals(Errors.NONE, renewResponse._1)
 
-    token1 = adminClient.describeToken(List())._2.head
+    token1 = adminClient.describeToken(null)._2.head
     assertEquals(renewResponse._2, token1.tokenInfo().expiryTimestamp())
 
     //test describe tokens
@@ -88,16 +88,16 @@ class TokenRequestsTest extends BaseRequestTest with SaslSetup {
     assertEquals(Errors.NONE, tokenResult2._1)
     val token2 = tokenResult2._2
 
-    assertTrue(adminClient.describeToken(List())._2.size == 2)
+    assertTrue(adminClient.describeToken(null)._2.size == 2)
 
     //test expire tokens tokens
-    val expireResponse1 = adminClient.expireToken(token1.passwordBuffer())
+    val expireResponse1 = adminClient.expireToken(token1.hmacBuffer())
     assertEquals(Errors.NONE, expireResponse1._1)
 
-    val expireResponse2 = adminClient.expireToken(token2.passwordBuffer())
+    val expireResponse2 = adminClient.expireToken(token2.hmacBuffer())
     assertEquals(Errors.NONE, expireResponse2._1)
 
-    assertTrue(adminClient.describeToken(List())._2.size == 0)
+    assertTrue(adminClient.describeToken(null)._2.size == 0)
 
     //create token with invalid principal type
     val renewer3 = List(SecurityUtils.parseKafkaPrincipal("Group:Renewer1"))

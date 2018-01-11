@@ -34,7 +34,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.requests.DescribeGroupsResponse.GroupMetadata
 import org.apache.kafka.common.requests.OffsetFetchResponse
-import org.apache.kafka.common.utils.{LogContext, KafkaThread, Time, Utils}
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.token.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
@@ -337,30 +337,29 @@ class AdminClient(val time: Time,
   }
 
   def createToken(renewers: List[KafkaPrincipal], maxTimePeriodMs: Long = -1): (Errors, DelegationToken) = {
-    val responseBody = sendAnyNode(ApiKeys.CREATE_TOKEN, new CreateTokenRequest.Builder(renewers.asJava, maxTimePeriodMs))
-    val response = responseBody.asInstanceOf[CreateTokenResponse]
-    val tokenInfo = new TokenInformation(response.tokenId, response.owner, renewers.asJava)
-    tokenInfo.setExpiryTimestamp(response.expiryTimestamp)
-    tokenInfo.setIssueTimestamp(response.issueTimestamp)
-    tokenInfo.setMaxTimestamp(response.maxTimestamp)
-    (response.error, new DelegationToken(tokenInfo, response.passwordBytes))
+    val responseBody = sendAnyNode(ApiKeys.CREATE_DELEGATION_TOKEN, new CreateDelegationTokenRequest.Builder(renewers.asJava, maxTimePeriodMs))
+    val response = responseBody.asInstanceOf[CreateDelegationTokenResponse]
+    val tokenInfo = new TokenInformation(response.tokenId, response.owner, renewers.asJava,
+      response.issueTimestamp, response.maxTimestamp, response.expiryTimestamp)
+    (response.error, new DelegationToken(tokenInfo, response.hmacBytes))
   }
 
   def renewToken(hmac: ByteBuffer, renewTimePeriod: Long = -1): (Errors, Long) = {
-    val responseBody = sendAnyNode(ApiKeys.RENEW_TOKEN, new RenewTokenRequest.Builder(hmac, renewTimePeriod))
-    val response = responseBody.asInstanceOf[RenewTokenResponse]
+    val responseBody = sendAnyNode(ApiKeys.RENEW_DELEGATION_TOKEN, new RenewDelegationTokenRequest.Builder(hmac, renewTimePeriod))
+    val response = responseBody.asInstanceOf[RenewDelegationTokenResponse]
     (response.error, response.expiryTimestamp)
   }
 
   def expireToken(hmac: ByteBuffer, expiryTimeStamp: Long = -1): (Errors, Long) = {
-    val responseBody = sendAnyNode(ApiKeys.EXPIRE_TOKEN, new ExpireTokenRequest.Builder(hmac, expiryTimeStamp))
-    val response = responseBody.asInstanceOf[ExpireTokenResponse]
+    val responseBody = sendAnyNode(ApiKeys.EXPIRE_DELEGATION_TOKEN, new ExpireDelegationTokenRequest.Builder(hmac, expiryTimeStamp))
+    val response = responseBody.asInstanceOf[ExpireDelegationTokenResponse]
     (response.error, response.expiryTimestamp)
   }
 
   def describeToken(owners: List[KafkaPrincipal]): (Errors, List[DelegationToken]) = {
-    val responseBody = sendAnyNode(ApiKeys.RENEW_TOKEN, new DescribeTokenRequest.Builder(owners.asJava))
-    val response = responseBody.asInstanceOf[DescribeTokenResponse]
+    val ownersList = if (owners == null) null else owners.asJava
+    val responseBody = sendAnyNode(ApiKeys.RENEW_DELEGATION_TOKEN, new DescribeDelegationTokenRequest.Builder(ownersList))
+    val response = responseBody.asInstanceOf[DescribeDelegationTokenResponse]
     (response.error, response.tokens().asScala.toList)
   }
 

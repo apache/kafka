@@ -23,27 +23,27 @@ import java.util.Arrays;
 
 public class DelegationToken {
     private TokenInformation tokenInformation;
-    private byte[] password;
+    private byte[] hmac;
 
-    public DelegationToken(TokenInformation tokenInformation, byte[] password) {
+    public DelegationToken(TokenInformation tokenInformation, byte[] hmac) {
         this.tokenInformation = tokenInformation;
-        this.password = password;
+        this.hmac = hmac;
     }
 
     public TokenInformation tokenInfo() {
         return tokenInformation;
     }
 
-    public byte[] password() {
-        return password;
+    public byte[] hmac() {
+        return hmac;
     }
 
-    public String passwordAsBase64String() {
-        return Base64.encoder().encodeToString(password);
+    public String hmacAsBase64String() {
+        return Base64.encoder().encodeToString(hmac);
     }
 
-    public ByteBuffer passwordBuffer() {
-        return ByteBuffer.wrap(password);
+    public ByteBuffer hmacBuffer() {
+        return ByteBuffer.wrap(hmac);
     }
 
     @Override
@@ -60,13 +60,13 @@ public class DelegationToken {
         if (tokenInformation != null ? !tokenInformation.equals(token.tokenInformation) : token.tokenInformation != null) {
             return false;
         }
-        return Arrays.equals(password, token.password);
+        return Arrays.equals(hmac, token.hmac);
     }
 
     @Override
     public int hashCode() {
         int result = tokenInformation != null ? tokenInformation.hashCode() : 0;
-        result = 31 * result + Arrays.hashCode(password);
+        result = 31 * result + Arrays.hashCode(hmac);
         return result;
     }
 
@@ -74,7 +74,7 @@ public class DelegationToken {
     public String toString() {
         return "DelegationToken{" +
             "tokenInformation=" + tokenInformation +
-            ", password=[*******]" +
+            ", hmac=[*******]" +
             '}';
     }
 }

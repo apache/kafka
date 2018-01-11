@@ -27,18 +27,18 @@ import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndParti
 import kafka.consumer.{ConsumerThreadId, TopicCount}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
 import kafka.zk.{BrokerIdZNode, ZkData}
-import org.I0Itec.zkclient.exception._
+import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
-import org.I0Itec.zkclient._
-import org.apache.kafka.common.TopicPartition
+import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
 
-import scala.collection.JavaConverters._
 import scala.collection._
+import scala.collection.JavaConverters._
+import org.apache.kafka.common.TopicPartition
 
 object ZkUtils {
 
@@ -67,7 +67,6 @@ object ZkUtils {
   val ConfigChangesPath = s"$ConfigPath/changes"
   val ConfigUsersPath = s"$ConfigPath/users"
   val ProducerIdBlockPath = "/latest_producer_id_block"
-
 
   val SecureZkRootPaths = ZkData.SecureRootPaths
 
@@ -208,7 +207,7 @@ class ZkUtils(val zkClient: ZkClient,
               val zkConnection: ZkConnection,
               val isSecure: Boolean) extends Logging {
   import ZkUtils._
-  
+
   // These are persistent ZK paths that should exist on kafka broker startup.
   val persistentZkPaths = ZkData.PersistentZkPaths
 
@@ -724,7 +723,7 @@ class ZkUtils(val zkClient: ZkClient,
     debug(s"Read leaderISR $leaderAndIsrOpt for $topic-$partition")
     leaderAndIsrOpt.flatMap(leaderAndIsrStr => parseLeaderAndIsr(leaderAndIsrStr, leaderAndIsrPath, stat))
   }
-  
+
   def getReplicaAssignmentForTopics(topics: Seq[String]): mutable.Map[TopicAndPartition, Seq[Int]] = {
     val ret = new mutable.HashMap[TopicAndPartition, Seq[Int]]
     topics.foreach { topic =>

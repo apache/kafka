@@ -22,18 +22,19 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.utils.SecurityUtils;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL_NAME;
+import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 
-public class CreateTokenResponse extends AbstractResponse {
+public class CreateDelegationTokenResponse extends AbstractResponse {
 
     private static final String OWNER_KEY_NAME = "owner";
     private static final String ISSUE_TIMESTAMP_KEY_NAME = "issue_timestamp";
@@ -47,29 +48,28 @@ public class CreateTokenResponse extends AbstractResponse {
     private final long expiryTimestamp;
     private final long maxTimestamp;
     private final String tokenId;
-    private final ByteBuffer password;
+    private final ByteBuffer hmac;
     private final int throttleTimeMs;
     private KafkaPrincipal owner;
 
     private static final Schema TOKEN_CREATE_RESPONSE_V0 = new Schema(
         ERROR_CODE,
-        new Field("owner", STRING, "Token owner."),
-        new Field("issue_timestamp", INT64, "timestamp (in msec) when this token was generated."),
-        new Field("expiry_timestamp", INT64, "timestamp (in msec) at which this token expires."),
-        new Field("max_timestamp", INT64, "max life time of this token."),
-        new Field("token_id", STRING, "Sequence Id to ensure uniqueness."),
-        new Field("hmac", BYTES, "HMAC of the delegation token."),
+        new Field(OWNER_KEY_NAME, new Schema(PRINCIPAL_TYPE, PRINCIPAL_NAME), "token owner."),
+        new Field(ISSUE_TIMESTAMP_KEY_NAME, INT64, "timestamp (in msec) when this token was generated."),
+        new Field(EXPIRY_TIMESTAMP_NAME, INT64, "timestamp (in msec) at which this token expires."),
+        new Field(MAX_TIMESTAMP_NAME, INT64, "max life time of this token."),
+        new Field(TOKEN_ID_KEY_NAME, STRING, "UUID to ensure uniqueness."),
+        new Field(HMAC_KEY_NAME, BYTES, "HMAC of the delegation token."),
         THROTTLE_TIME_MS);
 
-
-    public CreateTokenResponse(int throttleTimeMs,
-                               Errors error,
-                               KafkaPrincipal owner,
-                               long issueTimestamp,
-                               long expiryTimestamp,
-                               long maxTimestamp,
-                               String tokenId,
-                               ByteBuffer password) {
+    public CreateDelegationTokenResponse(int throttleTimeMs,
+                                         Errors error,
+                                         KafkaPrincipal owner,
+                                         long issueTimestamp,
+                                         long expiryTimestamp,
+                                         long maxTimestamp,
+                                         String tokenId,
+                                         ByteBuffer hmac) {
         this.throttleTimeMs = throttleTimeMs;
         this.error = error;
         this.owner = owner;
@@ -77,26 +77,29 @@ public class CreateTokenResponse extends AbstractResponse {
         this.expiryTimestamp = expiryTimestamp;
         this.maxTimestamp = maxTimestamp;
         this.tokenId = tokenId;
-        this.password = password;
+        this.hmac = hmac;
     }
 
-    public CreateTokenResponse(int throttleTimeMs, Errors error, KafkaPrincipal owner) {
+    public CreateDelegationTokenResponse(int throttleTimeMs, Errors error, KafkaPrincipal owner) {
         this(throttleTimeMs, error, owner, -1, -1, -1, "", ByteBuffer.wrap(new byte[] {}));
     }
 
-    public CreateTokenResponse(Struct struct) {
+    public CreateDelegationTokenResponse(Struct struct) {
         error = Errors.forCode(struct.get(ERROR_CODE));
-        owner = SecurityUtils.parseKafkaPrincipal(struct.getString(OWNER_KEY_NAME));
+        Struct ownerStruct = (Struct) struct.get(OWNER_KEY_NAME);
+        String principalType = ownerStruct.get(PRINCIPAL_TYPE);
+        String principalName = ownerStruct.get(PRINCIPAL_NAME);
+        owner = new KafkaPrincipal(principalType, principalName);
         issueTimestamp = struct.getLong(ISSUE_TIMESTAMP_KEY_NAME);
         expiryTimestamp = struct.getLong(EXPIRY_TIMESTAMP_NAME);
         maxTimestamp = struct.getLong(MAX_TIMESTAMP_NAME);
         tokenId = struct.getString(TOKEN_ID_KEY_NAME);
-        password = struct.getBytes(HMAC_KEY_NAME);
+        hmac = struct.getBytes(HMAC_KEY_NAME);
         this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
     }
 
-    public static CreateTokenResponse parse(ByteBuffer buffer, short version) {
-        return new CreateTokenResponse(ApiKeys.CREATE_TOKEN.responseSchema(version).read(buffer));
+    public static CreateDelegationTokenResponse parse(ByteBuffer buffer, short version) {
+        return new CreateDelegationTokenResponse(ApiKeys.CREATE_DELEGATION_TOKEN.responseSchema(version).read(buffer));
     }
 
     public static Schema[] schemaVersions() {
@@ -110,15 +113,17 @@ public class CreateTokenResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.CREATE_TOKEN.responseSchema(version));
-
+        Struct struct = new Struct(ApiKeys.CREATE_DELEGATION_TOKEN.responseSchema(version));
         struct.set(ERROR_CODE, error.code());
-        struct.set(OWNER_KEY_NAME, owner.toString());
+        Struct ownerStruct = struct.instance(OWNER_KEY_NAME);
+        ownerStruct.set(PRINCIPAL_TYPE, owner.getPrincipalType());
+        ownerStruct.set(PRINCIPAL_NAME, owner.getName());
+        struct.set(OWNER_KEY_NAME, ownerStruct);
         struct.set(ISSUE_TIMESTAMP_KEY_NAME, issueTimestamp);
         struct.set(EXPIRY_TIMESTAMP_NAME, expiryTimestamp);
         struct.set(MAX_TIMESTAMP_NAME, maxTimestamp);
         struct.set(TOKEN_ID_KEY_NAME, tokenId);
-        struct.set(HMAC_KEY_NAME, password);
+        struct.set(HMAC_KEY_NAME, hmac);
         struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
         return struct;
     }
@@ -147,13 +152,9 @@ public class CreateTokenResponse extends AbstractResponse {
         return tokenId;
     }
 
-    public ByteBuffer password() {
-        return password;
-    }
-
-    public byte[] passwordBytes() {
-        byte[] byteArray = new byte[password.remaining()];
-        password.get(byteArray);
+    public byte[] hmacBytes() {
+        byte[] byteArray = new byte[hmac.remaining()];
+        hmac.get(byteArray);
         return byteArray;
     }
 

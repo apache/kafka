@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.common.errors;
 
-public class TokenExpiredException extends ApiException {
+public class DelegationTokenExpiredException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public TokenExpiredException(String message) {
+    public DelegationTokenExpiredException(String message) {
         super(message);
     }
 
-    public TokenExpiredException(String message, Throwable cause) {
+    public DelegationTokenExpiredException(String message, Throwable cause) {
         super(message, cause);
     }
 

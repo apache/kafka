@@ -25,7 +25,6 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.DelegationToken;
 import org.apache.kafka.common.security.token.TokenInformation;
-import org.apache.kafka.common.utils.SecurityUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -40,7 +39,7 @@ import static org.apache.kafka.common.protocol.types.Type.BYTES;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 
-public class DescribeTokenResponse extends AbstractResponse {
+public class DescribeDelegationTokenResponse extends AbstractResponse {
 
     private static final String TOKEN_DETAILS_KEY_NAME = "token_details";
     private static final String ISSUE_TIMESTAMP_KEY_NAME = "issue_timestamp";
@@ -55,40 +54,41 @@ public class DescribeTokenResponse extends AbstractResponse {
     private final List<DelegationToken> tokens;
     private final int throttleTimeMs;
 
-    private static final Schema TOKEN_DETAILS_V0 = new Schema(new Field("owner", STRING, "Token owner."),
-        new Field("issue_timestamp", INT64, "timestamp (in msec) when this token was generated."),
-        new Field("expiry_timestamp", INT64, "timestamp (in msec) at which this token."),
-        new Field("max_timestamp", INT64, "max life time of this token."),
-        new Field("token_id", STRING, "Sequence Id to ensure uniqueness."),
-        new Field("hmac", BYTES, "HMAC of the delegation token to be expired."),
+    private static final Schema TOKEN_DETAILS_V0 = new Schema(
+        new Field(OWNER_KEY_NAME, new Schema(PRINCIPAL_TYPE, PRINCIPAL_NAME), "token owner."),
+        new Field(ISSUE_TIMESTAMP_KEY_NAME, INT64, "timestamp (in msec) when this token was generated."),
+        new Field(EXPIRY_TIMESTAMP_NAME, INT64, "timestamp (in msec) at which this token expires."),
+        new Field(MAX_TIMESTAMP_NAME, INT64, "max life time of this token."),
+        new Field(TOKEN_ID_KEY_NAME, STRING, "UUID to ensure uniqueness."),
+        new Field(HMAC_KEY_NAME, BYTES, "HMAC of the delegation token to be expired."),
         new Field(RENEWERS_KEY_NAME, new ArrayOf(new Schema(PRINCIPAL_TYPE, PRINCIPAL_NAME)),
             "An array of token renewers. Renewer is an Kafka PrincipalType and name string," +
                 " who is allowed to renew this token before the max lifetime expires."));
 
-
     private static final Schema TOKEN_DESCRIBE_RESPONSE_V0 = new Schema(
         ERROR_CODE,
-        new Field("token_details", new ArrayOf(TOKEN_DETAILS_V0)),
+        new Field(TOKEN_DETAILS_KEY_NAME, new ArrayOf(TOKEN_DETAILS_V0)),
         THROTTLE_TIME_MS);
 
-    public DescribeTokenResponse(int throttleTimeMs, Errors error, List<DelegationToken> tokens) {
+    public DescribeDelegationTokenResponse(int throttleTimeMs, Errors error, List<DelegationToken> tokens) {
         this.throttleTimeMs = throttleTimeMs;
         this.error = error;
         this.tokens = tokens;
     }
 
-    public DescribeTokenResponse(int throttleTimeMs, Errors error) {
+    public DescribeDelegationTokenResponse(int throttleTimeMs, Errors error) {
         this(throttleTimeMs, error, new ArrayList<DelegationToken>());
     }
 
-    public DescribeTokenResponse(Struct struct) {
+    public DescribeDelegationTokenResponse(Struct struct) {
         Object[] requestStructs = struct.getArray(TOKEN_DETAILS_KEY_NAME);
         List<DelegationToken> tokens = new ArrayList<>();
 
         for (Object requestStructObj : requestStructs) {
             Struct singleRequestStruct = (Struct) requestStructObj;
 
-            String ownerStr = singleRequestStruct.getString(OWNER_KEY_NAME);
+            Struct ownerStruct = (Struct) singleRequestStruct.get(OWNER_KEY_NAME);
+            KafkaPrincipal owner = new KafkaPrincipal(ownerStruct.get(PRINCIPAL_TYPE), ownerStruct.get(PRINCIPAL_NAME));
             long issueTimestamp = singleRequestStruct.getLong(ISSUE_TIMESTAMP_KEY_NAME);
             long expiryTimestamp = singleRequestStruct.getLong(EXPIRY_TIMESTAMP_NAME);
             long maxTimestamp = singleRequestStruct.getLong(MAX_TIMESTAMP_NAME);
@@ -106,15 +106,12 @@ public class DescribeTokenResponse extends AbstractResponse {
                 }
             }
 
-            TokenInformation tokenInfo = new TokenInformation(tokenId, SecurityUtils.parseKafkaPrincipal(ownerStr), renewers);
-            tokenInfo.setExpiryTimestamp(expiryTimestamp);
-            tokenInfo.setIssueTimestamp(issueTimestamp);
-            tokenInfo.setMaxTimestamp(maxTimestamp);
+            TokenInformation tokenInfo = new TokenInformation(tokenId, owner, renewers, issueTimestamp, maxTimestamp, expiryTimestamp);
 
-            byte[] password = new byte[hmac.remaining()];
-            hmac.get(password);
+            byte[] hmacBytes = new byte[hmac.remaining()];
+            hmac.get(hmacBytes);
 
-            DelegationToken tokenDetails = new DelegationToken(tokenInfo, password);
+            DelegationToken tokenDetails = new DelegationToken(tokenInfo, hmacBytes);
             tokens.add(tokenDetails);
         }
 
@@ -123,8 +120,8 @@ public class DescribeTokenResponse extends AbstractResponse {
         this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
     }
 
-    public static DescribeTokenResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeTokenResponse(ApiKeys.DESCRIBE_TOKENS.responseSchema(version).read(buffer));
+    public static DescribeDelegationTokenResponse parse(ByteBuffer buffer, short version) {
+        return new DescribeDelegationTokenResponse(ApiKeys.DESCRIBE_DELEGATION_TOKEN.responseSchema(version).read(buffer));
     }
 
     @Override
@@ -134,7 +131,7 @@ public class DescribeTokenResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.DESCRIBE_TOKENS.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.DESCRIBE_DELEGATION_TOKEN.responseSchema(version));
         List<Struct> tokenDetailsStructs = new ArrayList<>(tokens.size());
 
         struct.set(ERROR_CODE, error.code());
@@ -142,12 +139,15 @@ public class DescribeTokenResponse extends AbstractResponse {
         for (DelegationToken token : tokens) {
             TokenInformation tokenInfo = token.tokenInfo();
             Struct singleRequestStruct = struct.instance(TOKEN_DETAILS_KEY_NAME);
-            singleRequestStruct.set(OWNER_KEY_NAME, tokenInfo.owner().toString());
+            Struct ownerStruct = singleRequestStruct.instance(OWNER_KEY_NAME);
+            ownerStruct.set(PRINCIPAL_TYPE, tokenInfo.owner().getPrincipalType());
+            ownerStruct.set(PRINCIPAL_NAME, tokenInfo.owner().getName());
+            singleRequestStruct.set(OWNER_KEY_NAME, ownerStruct);
             singleRequestStruct.set(ISSUE_TIMESTAMP_KEY_NAME, tokenInfo.issueTimestamp());
             singleRequestStruct.set(EXPIRY_TIMESTAMP_NAME, tokenInfo.expiryTimestamp());
             singleRequestStruct.set(MAX_TIMESTAMP_NAME, tokenInfo.maxTimestamp());
             singleRequestStruct.set(TOKEN_ID_KEY_NAME, tokenInfo.tokenId());
-            singleRequestStruct.set(HMAC_KEY_NAME, ByteBuffer.wrap(token.password()));
+            singleRequestStruct.set(HMAC_KEY_NAME, ByteBuffer.wrap(token.hmac()));
 
             Object[] renewersArray = new Object[tokenInfo.renewers().size()];
 

@@ -27,84 +27,84 @@ import java.nio.ByteBuffer;
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 
-public class ExpireTokenRequest extends AbstractRequest {
+public class RenewDelegationTokenRequest extends AbstractRequest {
 
     private static final String HMAC_KEY_NAME = "hmac";
-    private static final String EXPIRY_TIME_PERIOD_KEY_NAME = "expiry_time_period";
+    private static final String RENEW_TIME_PERIOD_KEY_NAME = "renew_time_period";
     private final ByteBuffer hmac;
-    private final long expiryTimePeriod;
+    private final long renewTimePeriod;
 
-    private static final Schema TOKEN_EXPIRE_REQUEST_V0 = new Schema(
-        new Field("hmac", BYTES, "HMAC of the delegation token to be expired."),
-        new Field("expiry_time_period", INT64, "time period in milli seconds."));
+    public static final Schema TOKEN_RENEW_REQUEST_V0 = new Schema(
+        new Field(HMAC_KEY_NAME, BYTES, "HMAC of the delegation token to be renewed."),
+        new Field(RENEW_TIME_PERIOD_KEY_NAME, INT64, "Renew time period in milli seconds."));
 
-    private ExpireTokenRequest(short version, ByteBuffer hmac, long renewTimePeriod) {
+    private RenewDelegationTokenRequest(short version, ByteBuffer hmac, long renewTimePeriod) {
         super(version);
 
         this.hmac = hmac;
-        this.expiryTimePeriod = renewTimePeriod;
+        this.renewTimePeriod = renewTimePeriod;
     }
 
-    public ExpireTokenRequest(Struct struct, short versionId) {
+    public RenewDelegationTokenRequest(Struct struct, short versionId) {
         super(versionId);
 
         hmac = struct.getBytes(HMAC_KEY_NAME);
-        expiryTimePeriod = struct.getLong(EXPIRY_TIME_PERIOD_KEY_NAME);
+        renewTimePeriod = struct.getLong(RENEW_TIME_PERIOD_KEY_NAME);
     }
 
-    public static ExpireTokenRequest parse(ByteBuffer buffer, short version) {
-        return new ExpireTokenRequest(ApiKeys.EXPIRE_TOKEN.parseRequest(version, buffer), version);
+    public static RenewDelegationTokenRequest parse(ByteBuffer buffer, short version) {
+        return new RenewDelegationTokenRequest(ApiKeys.RENEW_DELEGATION_TOKEN.parseRequest(version, buffer), version);
     }
 
     public static Schema[] schemaVersions() {
-        return new Schema[] {TOKEN_EXPIRE_REQUEST_V0};
+        return new Schema[] {TOKEN_RENEW_REQUEST_V0};
     }
 
     @Override
     protected Struct toStruct() {
         short version = version();
-        Struct struct = new Struct(ApiKeys.EXPIRE_TOKEN.requestSchema(version));
+        Struct struct = new Struct(ApiKeys.RENEW_DELEGATION_TOKEN.requestSchema(version));
 
         struct.set(HMAC_KEY_NAME, hmac);
-        struct.set(EXPIRY_TIME_PERIOD_KEY_NAME, expiryTimePeriod);
+        struct.set(RENEW_TIME_PERIOD_KEY_NAME, renewTimePeriod);
 
         return struct;
     }
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new ExpireTokenResponse(throttleTimeMs, Errors.forException(e));
+        return new RenewDelegationTokenResponse(throttleTimeMs, Errors.forException(e));
     }
 
     public ByteBuffer hmac() {
         return hmac;
     }
 
-    public long expiryTimePeriod() {
-        return expiryTimePeriod;
+    public long renewTimePeriod() {
+        return renewTimePeriod;
     }
 
-    public static class Builder extends AbstractRequest.Builder<ExpireTokenRequest> {
+    public static class Builder extends AbstractRequest.Builder<RenewDelegationTokenRequest> {
         private final ByteBuffer hmac;
-        private final long expiryTimePeriod;
+        private final long renewTimePeriod;
 
-        public Builder(ByteBuffer hmac, long expiryTimePeriod) {
-            super(ApiKeys.EXPIRE_TOKEN);
+        public Builder(ByteBuffer hmac, long renewTimePeriod) {
+            super(ApiKeys.RENEW_DELEGATION_TOKEN);
             this.hmac = hmac;
-            this.expiryTimePeriod = expiryTimePeriod;
+            this.renewTimePeriod = renewTimePeriod;
         }
 
         @Override
-        public ExpireTokenRequest build(short version) {
-            return new ExpireTokenRequest(version, hmac, expiryTimePeriod);
+        public RenewDelegationTokenRequest build(short version) {
+            return new RenewDelegationTokenRequest(version, hmac, renewTimePeriod);
         }
 
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("(type: ExpireTokenRequest").
+            bld.append("(type: RenewDelegationTokenRequest").
                 append(", hmac=").append(hmac).
-                append(", expiryTimePeriod=").append(expiryTimePeriod).
+                append(", renewTimePeriod=").append(renewTimePeriod).
                 append(")");
             return bld.toString();
         }

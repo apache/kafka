@@ -1080,16 +1080,15 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
-   * Creates the required zk nodes for Token storage
+   * Creates the required zk nodes for Delegation Token storage
    */
-  def createTokenPaths(): Unit = {
-    createRecursive(TokenAuthZNode.path, throwIfPathExists = false)
+  def createDelegationTokenPaths(): Unit = {
     createRecursive(TokenChangeNotificationZNode.path, throwIfPathExists = false)
     createRecursive(TokensZNode.path, throwIfPathExists = false)
   }
 
   /**
-   * Creates Token change notification message
+   * Creates Delegation Token change notification message
    * @param tokenId token name
    */
   def createTokenChangeNotification(tokenId: String): Unit = {
@@ -1106,7 +1105,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @param token the token to set on the token znode
    * @throws KeeperException if there is an error while setting or creating the znode
    */
-  def setOrCreateToken(token: DelegationToken): Unit = {
+  def setOrCreateDelegationToken(token: DelegationToken): Unit = {
 
     def set(tokenData: Array[Byte]): SetDataResponse = {
       val setDataRequest = SetDataRequest(TokenInfoZNode.path(token.tokenInfo().tokenId()), tokenData, ZkVersion.NoVersion)
@@ -1119,22 +1118,22 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
       retryRequestUntilConnected(createRequest)
     }
 
-    val reassignmentData = TokenInfoZNode.encode(token)
-    val setDataResponse = set(reassignmentData)
+    val tokenInfo = TokenInfoZNode.encode(token)
+    val setDataResponse = set(tokenInfo)
     setDataResponse.resultCode match {
       case Code.NONODE =>
-        val createDataResponse = create(reassignmentData)
-        createDataResponse.resultException.foreach(e => throw e)
-      case _ => setDataResponse.resultException.foreach(e => throw e)
+        val createDataResponse = create(tokenInfo)
+        createDataResponse.maybeThrow
+      case _ => setDataResponse.maybeThrow
     }
   }
 
   /**
-   * Gets the Token Info
+   * Gets the Delegation Token Info
    * @return optional TokenInfo that is Some if the token znode exists and can be parsed and None otherwise.
    */
-  def getTokenInfo(tokenId: String): Option[TokenInformation] = {
-    val getDataRequest = GetDataRequest(TokenInfoZNode.path(tokenId))
+  def getDelegationTokenInfo(delegationTokenId: String): Option[TokenInformation] = {
+    val getDataRequest = GetDataRequest(TokenInfoZNode.path(delegationTokenId))
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
       case Code.OK => TokenInfoZNode.decode(getDataResponse.data)
@@ -1142,13 +1141,14 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
       case _ => throw getDataResponse.resultException.get
     }
   }
+
   /**
-   * Deletes the given Token node
-   * @param tokenId
+   * Deletes the given Delegation token node
+   * @param delegationTokenId
    * @return delete status
    */
-  def deleteToken(tokenId: String): Boolean = {
-    deleteRecursive(TokenInfoZNode.path(tokenId))
+  def deleteDelegationToken(delegationTokenId: String): Boolean = {
+    deleteRecursive(TokenInfoZNode.path(delegationTokenId))
   }
 
   /**

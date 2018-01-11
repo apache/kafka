@@ -32,7 +32,7 @@ import static org.apache.kafka.common.protocol.types.Type.INT64;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL_NAME;
 
-public class CreateTokenRequest extends AbstractRequest {
+public class CreateDelegationTokenRequest extends AbstractRequest {
     private static final String RENEWERS_KEY_NAME = "renewers";
     private static final String MAX_LIFE_TIME_KEY_NAME = "max_life_time";
 
@@ -47,13 +47,13 @@ public class CreateTokenRequest extends AbstractRequest {
     private final List<KafkaPrincipal> renewers;
     private final long maxLifeTime;
 
-    private CreateTokenRequest(short version, List<KafkaPrincipal> renewers, long maxLifeTime) {
+    private CreateDelegationTokenRequest(short version, List<KafkaPrincipal> renewers, long maxLifeTime) {
         super(version);
         this.maxLifeTime = maxLifeTime;
         this.renewers = renewers;
     }
 
-    public CreateTokenRequest(Struct struct, short version) {
+    public CreateDelegationTokenRequest(Struct struct, short version) {
         super(version);
         maxLifeTime = struct.getLong(MAX_LIFE_TIME_KEY_NAME);
         Object[] renewerArray = struct.getArray(RENEWERS_KEY_NAME);
@@ -68,8 +68,8 @@ public class CreateTokenRequest extends AbstractRequest {
         }
     }
 
-    public static CreateTokenRequest parse(ByteBuffer buffer, short version) {
-        return new CreateTokenRequest(ApiKeys.CREATE_TOKEN.parseRequest(version, buffer), version);
+    public static CreateDelegationTokenRequest parse(ByteBuffer buffer, short version) {
+        return new CreateDelegationTokenRequest(ApiKeys.CREATE_DELEGATION_TOKEN.parseRequest(version, buffer), version);
     }
 
     public static Schema[] schemaVersions() {
@@ -79,7 +79,7 @@ public class CreateTokenRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         short version = version();
-        Struct struct = new Struct(ApiKeys.CREATE_TOKEN.requestSchema(version));
+        Struct struct = new Struct(ApiKeys.CREATE_DELEGATION_TOKEN.requestSchema(version));
         Object[] renewersArray = new Object[renewers.size()];
 
         int i = 0;
@@ -97,7 +97,7 @@ public class CreateTokenRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new CreateTokenResponse(throttleTimeMs, Errors.forException(e), KafkaPrincipal.ANONYMOUS);
+        return new CreateDelegationTokenResponse(throttleTimeMs, Errors.forException(e), KafkaPrincipal.ANONYMOUS);
     }
 
     public List<KafkaPrincipal> renewers() {
@@ -108,25 +108,25 @@ public class CreateTokenRequest extends AbstractRequest {
         return maxLifeTime;
     }
 
-    public static class Builder extends AbstractRequest.Builder<CreateTokenRequest> {
+    public static class Builder extends AbstractRequest.Builder<CreateDelegationTokenRequest> {
         private final List<KafkaPrincipal> renewers;
         private final long maxLifeTime;
 
         public Builder(List<KafkaPrincipal> renewers, long maxLifeTime) {
-            super(ApiKeys.CREATE_TOKEN);
+            super(ApiKeys.CREATE_DELEGATION_TOKEN);
             this.renewers = renewers;
             this.maxLifeTime = maxLifeTime;
         }
 
         @Override
-        public CreateTokenRequest build(short version) {
-            return new CreateTokenRequest(version, renewers, maxLifeTime);
+        public CreateDelegationTokenRequest build(short version) {
+            return new CreateDelegationTokenRequest(version, renewers, maxLifeTime);
         }
 
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("(type: CreateTokenRequest").
+            bld.append("(type: CreateDelegationTokenRequest").
                 append(", renewers=").append(renewers).
                 append(", maxLifeTime=").append(maxLifeTime).
                 append(")");

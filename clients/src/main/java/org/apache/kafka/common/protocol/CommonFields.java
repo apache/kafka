@@ -51,7 +51,7 @@ public class CommonFields {
     public static final Field.Int8 OPERATION = new Field.Int8("operation", "The ACL operation");
     public static final Field.Int8 PERMISSION_TYPE = new Field.Int8("permission_type", "The ACL permission type");
 
-    public static final Field.Str PRINCIPAL_TYPE = new Field.Str("principalType", "principalType of the Kafka principal");
+    public static final Field.Str PRINCIPAL_TYPE = new Field.Str("principal_type", "principalType of the Kafka principal");
     public static final Field.Str PRINCIPAL_NAME = new Field.Str("name", "name of the Kafka principal");
 
 }
