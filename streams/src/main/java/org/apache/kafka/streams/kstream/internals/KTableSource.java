@@ -60,9 +60,6 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
             if (key == null)
                 return;
             V oldValue = store.get(key);
-
-            System.out.println("PUT " + key + "<-" + value + " in store " + storeName);
-
             store.put(key, value);
             tupleForwarder.maybeForward(key, value, oldValue);
         }
