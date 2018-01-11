@@ -573,12 +573,32 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     /**
      * Schedules a punctuation for the processor
      *
+     * @param interval the interval in milliseconds
+     * @param type the punctuation type
+     * @throws IllegalStateException if the current node is not null
+     */
+    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator punctuator) {
+        switch (type) {
+            case STREAM_TIME:
+                // align punctuation to 0L, punctuate as soon as we have data
+                return schedule(0L, interval, type, punctuator);
+            case WALL_CLOCK_TIME:
+                // align punctuation to now, punctuate after interval has elapsed
+                return schedule(time.milliseconds() + interval, interval, type, punctuator);
+            default:
+                throw new IllegalArgumentException("Unrecognized PunctuationType: " + type);
+        }
+    }
+
+    /**
+     * Schedules a punctuation for the processor
+     *
      * @param startTime time of the first punctuation
      * @param interval the interval in milliseconds
      * @param type the punctuation type
      * @throws IllegalStateException if the current node is not null
      */
-    public Cancellable schedule(final long startTime, final long interval, final PunctuationType type, final Punctuator punctuator) {
+    Cancellable schedule(final long startTime, final long interval, final PunctuationType type, final Punctuator punctuator) {
         if (processorContext.currentNode() == null) {
             throw new IllegalStateException(String.format("%sCurrent node is null", logPrefix));
         }
@@ -593,26 +613,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             case WALL_CLOCK_TIME:
                 // WALL_CLOCK_TIME is driven by the wall clock time, will first punctuate when now >= time
                 return systemTimePunctuationQueue.schedule(schedule);
-            default:
-                throw new IllegalArgumentException("Unrecognized PunctuationType: " + type);
-        }
-    }
-
-    /**
-     * Schedules a punctuation for the processor
-     *
-     * @param interval the interval in milliseconds
-     * @param type the punctuation type
-     * @throws IllegalStateException if the current node is not null
-     */
-    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator punctuator) {
-        switch (type) {
-            case STREAM_TIME:
-                // align punctuation to 0L, punctuate as soon as we have data
-                return schedule(0L, interval, type, punctuator);
-            case WALL_CLOCK_TIME:
-                // align punctuation to now, punctuate after interval has elapsed
-                return schedule(time.milliseconds() + interval, interval, type, punctuator);
             default:
                 throw new IllegalArgumentException("Unrecognized PunctuationType: " + type);
         }
