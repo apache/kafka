@@ -103,6 +103,7 @@ abstract class AssignedTasks<T extends Task> {
                     log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
                     addToRestoring(entry.getValue());
                 } else {
+                    entry.getValue().initializeTopology();
                     transitionToRunning(entry.getValue(), readyPartitions);
                 }
                 it.remove();
@@ -112,6 +113,12 @@ abstract class AssignedTasks<T extends Task> {
             }
         }
         return readyPartitions;
+    }
+
+    void initializeTopologyForRestored() {
+        for (final Map.Entry<TaskId, T> taskIdTEntry : restoring.entrySet()) {
+            taskIdTEntry.getValue().initializeTopology();
+        }
     }
 
     Set<TopicPartition> updateRestored(final Collection<TopicPartition> restored) {

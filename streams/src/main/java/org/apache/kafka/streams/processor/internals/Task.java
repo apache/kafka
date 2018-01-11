@@ -34,6 +34,8 @@ public interface Task {
      */
     boolean initialize();
 
+    void initializeTopology();
+
     void commit();
 
     void suspend();

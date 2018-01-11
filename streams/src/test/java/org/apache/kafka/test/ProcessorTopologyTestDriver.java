@@ -249,6 +249,7 @@ public class ProcessorTopologyTestDriver {
                                   new MockTime(),
                                   producer);
             task.initialize();
+            task.initializeTopology();
         }
     }
 

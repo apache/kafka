@@ -225,6 +225,11 @@ public abstract class AbstractTask implements Task {
         }
     }
 
+    @Override
+    public void initializeTopology() {
+        // default no-op
+    }
+
     void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions) {
         stateMgr.reinitializeStateStoresForPartitions(partitions, processorContext);
     }
