@@ -33,7 +33,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -163,7 +163,7 @@ public class PurgeRepartitionTopicIntegrationTest {
         StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(INPUT_TOPIC)
-               .groupBy(MockKeyValueMapper.SelectKeyKeyValueMapper())
+               .groupBy(MockMapper.selectKeyKeyValueMapper())
                .count();
 
         kafkaStreams = new KafkaStreams(builder.build(), new StreamsConfig(streamsConfiguration), time);
