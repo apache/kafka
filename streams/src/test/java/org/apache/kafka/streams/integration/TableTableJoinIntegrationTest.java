@@ -395,7 +395,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     Arrays.asList("A-null-null", "A-a-a", "A-a-a"),
                     Collections.singletonList("B-a-a"),
                     Arrays.asList("B-b-b", "B-b-b"),
-                    Collections.singletonList("null-b-b"),
+                    Collections.singletonList("null-b"),
                     Collections.singletonList((String) null),
                     null,
                     Arrays.asList("C-null-null", "C-c-c", "C-c-c"),
@@ -486,12 +486,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             leftTable.outerJoin(rightTable, valueJoiner)
                     .leftJoin(rightTable, valueJoiner, materialized)
                     .toStream()
-                    .peek(new ForeachAction<Long, String>() {
-                        @Override
-                        public void apply(Long key, String value) {
-                            System.out.println("OUTPUT: " + key + "->" + value);
-                        }
-                    })
                     .to(OUTPUT_TOPIC);
 
             runTest(expectedResult, storeName);
@@ -517,26 +511,20 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                     Arrays.asList("A-null-null", "A-a-a", "A-a-a"),
                     Collections.singletonList("B-a-a"),
                     Arrays.asList("B-b-b", "B-b-b"),
-                    Collections.singletonList("null-b"),
-                    Collections.singletonList((String) null),
+                    Collections.singletonList("null-b-b"),
+                    Arrays.asList((String) null, null),
                     null,
                     Arrays.asList("C-null-null", "C-c-c", "C-c-c"),
                     Arrays.asList("C-null-null", "C-null-null"),
                     Collections.singletonList((String) null),
                     null,
                     null,
-                    Arrays.asList("null-d", "D-d-d")
+                    Arrays.asList("null-d-d", "null-d-d", "D-d-d")
             );
 
             leftTable.outerJoin(rightTable, valueJoiner)
                     .outerJoin(rightTable, valueJoiner, materialized)
                     .toStream()
-                    .peek(new ForeachAction<Long, String>() {
-                        @Override
-                        public void apply(Long key, String value) {
-                            System.out.println("OUTPUT: " + key + "->" + value);
-                        }
-                    })
                     .to(OUTPUT_TOPIC);
 
             runTest(expectedResult, storeName);
