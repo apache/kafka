@@ -52,7 +52,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     public void prepareTopology() throws InterruptedException {
         super.prepareEnvironment();
 
-        APPID = "table-table-join-integration-test";
+        appID = "table-table-join-integration-test";
 
         builder = new StreamsBuilder();
         leftTable = builder.table(INPUT_TOPIC_LEFT);
@@ -61,7 +61,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
 
     final private String expectedFinalJoinResult = "D-d";
     final private String expectedFinalMultiJoinResult = "D-d-d";
-    final private String storeName = APPID + "-store";
+    final private String storeName = appID + "-store";
 
     private Materialized<Long, String, KeyValueStore<Bytes, byte[]>> materialized = Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(storeName)
             .withKeySerde(Serdes.Long())
@@ -92,7 +92,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
 
     @Test
     public void testInner() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-inner");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
 
         if (cacheEnabled) {
             leftTable.join(rightTable, valueJoiner, materialized).toStream().peek(new CountingPeek(false)).to(OUTPUT_TOPIC);
@@ -123,7 +123,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
 
     @Test
     public void testLeft() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-left");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
 
         if (cacheEnabled) {
             leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().peek(new CountingPeek(false)).to(OUTPUT_TOPIC);
@@ -154,7 +154,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
 
     @Test
     public void testOuter() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-outer");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
 
         if (cacheEnabled) {
             leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().peek(new CountingPeek(false)).to(OUTPUT_TOPIC);
@@ -185,7 +185,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
 
     @Test
     public void testInnerInner() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-inner-inner");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
 
         if (cacheEnabled) {
             leftTable.join(rightTable, valueJoiner)
@@ -223,7 +223,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
 
     @Test
     public void testInnerLeft() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-inner-left");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
 
         if (cacheEnabled) {
             leftTable.join(rightTable, valueJoiner)
@@ -262,7 +262,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
 
     @Test
     public void testInnerOuter() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-inner-outer");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
 
         if (cacheEnabled) {
             leftTable.join(rightTable, valueJoiner)
@@ -300,7 +300,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
 
     @Test
     public void testLeftInner() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-inner-inner");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
 
         if (cacheEnabled) {
             leftTable.leftJoin(rightTable, valueJoiner)
@@ -339,7 +339,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
 
     @Test
     public void testLeftLeft() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-inner-left");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
 
         if (cacheEnabled) {
             leftTable.leftJoin(rightTable, valueJoiner)
@@ -378,7 +378,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
 
     @Test
     public void testLeftOuter() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-inner-outer");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
 
         if (cacheEnabled) {
             leftTable.leftJoin(rightTable, valueJoiner)
@@ -416,7 +416,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
 
     @Test
     public void testOuterInner() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-inner-inner");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-inner");
 
         if (cacheEnabled) {
             leftTable.outerJoin(rightTable, valueJoiner)
@@ -455,7 +455,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
 
     @Test
     public void testOuterLeft() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-inner-left");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-left");
 
         if (cacheEnabled) {
             leftTable.outerJoin(rightTable, valueJoiner)
@@ -494,7 +494,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
 
     @Test
     public void testOuterOuter() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-inner-outer");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-outer");
 
         if (cacheEnabled) {
             leftTable.outerJoin(rightTable, valueJoiner)

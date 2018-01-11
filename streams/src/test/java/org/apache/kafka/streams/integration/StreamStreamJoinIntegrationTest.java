@@ -50,7 +50,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     public void prepareTopology() throws InterruptedException {
         super.prepareEnvironment();
 
-        APPID = "stream-stream-join-integration-test";
+        appID = "stream-stream-join-integration-test";
 
         builder = new StreamsBuilder();
         leftStream = builder.stream(INPUT_TOPIC_LEFT);
@@ -59,7 +59,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
 
     @Test
     public void testInner() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-inner");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
 
         final List<List<String>> expectedResult = Arrays.asList(
             null,
@@ -86,7 +86,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
 
     @Test
     public void testInnerRepartitioned() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-inner-repartitioned");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-repartitioned");
 
         final List<List<String>> expectedResult = Arrays.asList(
                 null,
@@ -116,7 +116,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
 
     @Test
     public void testLeft() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-left");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
 
         final List<List<String>> expectedResult = Arrays.asList(
             null,
@@ -143,7 +143,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
 
     @Test
     public void testLeftRepartitioned() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-left-repartitioned");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left-repartitioned");
 
         final List<List<String>> expectedResult = Arrays.asList(
                 null,
@@ -173,7 +173,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
 
     @Test
     public void testOuter() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-outer");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
 
         final List<List<String>> expectedResult = Arrays.asList(
             null,
@@ -200,7 +200,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
 
     @Test
     public void testOuterRepartitioned() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-outer");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
 
         final List<List<String>> expectedResult = Arrays.asList(
                 null,
@@ -230,7 +230,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
 
     @Test
     public void testMultiInner() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, APPID + "-multi-inner");
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-multi-inner");
 
         final List<List<String>> expectedResult = Arrays.asList(
                 null,
