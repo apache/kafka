@@ -38,11 +38,11 @@ import java.util.List;
  */
 @Category({IntegrationTest.class})
 @RunWith(value = Parameterized.class)
-public class JoinIntegrationTest extends AbstractJoinIntegrationTest {
+public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest {
     private KStream<Long, String> leftStream;
     private KStream<Long, String> rightStream;
 
-    public JoinIntegrationTest(boolean cacheEnabled) {
+    public StreamStreamJoinIntegrationTest(boolean cacheEnabled) {
         super(cacheEnabled);
     }
 

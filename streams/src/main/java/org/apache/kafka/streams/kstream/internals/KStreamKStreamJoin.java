@@ -80,8 +80,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             try (WindowStoreIterator<V2> iter = otherWindow.fetch(key, timeFrom, timeTo)) {
                 while (iter.hasNext()) {
                     needOuterJoin = false;
-                    V2 value2 = iter.next().value;
-                    context().forward(key, joiner.apply(value, value2));
+                    context().forward(key, joiner.apply(value, iter.next().value));
                 }
 
                 if (needOuterJoin) {
