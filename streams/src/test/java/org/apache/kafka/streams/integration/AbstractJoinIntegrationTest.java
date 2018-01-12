@@ -70,7 +70,7 @@ public abstract class AbstractJoinIntegrationTest {
     @Rule
     public final TemporaryFolder testFolder = new TemporaryFolder(TestUtils.tempDirectory());
 
-    @Parameterized.Parameters
+    @Parameterized.Parameters(name = "caching enabled = {0}")
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<>();
         for (boolean cacheEnabled : Arrays.asList(true, false))
@@ -192,8 +192,6 @@ public abstract class AbstractJoinIntegrationTest {
     void runTest(final List<List<String>> expectedResult, final String storeName) throws Exception {
         assert expectedResult.size() == input.size();
 
-        System.out.println(builder.build().describe());
-
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
         streams = new KafkaStreams(builder.build(), new StreamsConfig(STREAMS_CONFIG));
 
@@ -250,7 +248,6 @@ public abstract class AbstractJoinIntegrationTest {
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
                 public boolean conditionMet() {
-                    System.out.println("RESULT: " + finalResultReached.get());
                     return finalResultReached.get();
                 }
             }, "Never received expected final result.");
