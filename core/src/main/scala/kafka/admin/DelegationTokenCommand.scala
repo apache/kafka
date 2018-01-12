@@ -24,8 +24,8 @@ import kafka.utils.{CommandLineUtils, Exit, Logging}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.apache.kafka.common.utils.{Base64, SecurityUtils, Utils}
-import org.apache.kafka.common.security.token.DelegationToken
 
 import scala.collection.JavaConverters._
 import scala.collection.Set

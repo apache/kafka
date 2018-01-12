@@ -26,7 +26,7 @@ import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuild
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
-import org.apache.kafka.common.security.token.TokenCache;
+import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Map;
@@ -74,7 +74,7 @@ public class ChannelBuilders {
                                                       SecurityProtocol securityProtocol,
                                                       AbstractConfig config,
                                                       CredentialCache credentialCache,
-                                                      TokenCache tokenCache) {
+                                                      DelegationTokenCache tokenCache) {
         return create(securityProtocol, Mode.SERVER, JaasContext.Type.SERVER, config, listenerName, null,
                 true, credentialCache, tokenCache);
     }
@@ -87,7 +87,7 @@ public class ChannelBuilders {
                                          String clientSaslMechanism,
                                          boolean saslHandshakeRequestEnable,
                                          CredentialCache credentialCache,
-                                         TokenCache tokenCache) {
+                                         DelegationTokenCache tokenCache) {
         Map<String, ?> configs;
         if (listenerName == null)
             configs = config.values();

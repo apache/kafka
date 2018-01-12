@@ -22,7 +22,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.token.TokenCache;
+import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.authenticator.LoginManager;
@@ -54,7 +54,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
     private final JaasContext jaasContext;
     private final boolean handshakeRequestEnable;
     private final CredentialCache credentialCache;
-    private final TokenCache tokenCache;
+    private final DelegationTokenCache tokenCache;
 
     private LoginManager loginManager;
     private SslFactory sslFactory;
@@ -68,7 +68,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
                               String clientSaslMechanism,
                               boolean handshakeRequestEnable,
                               CredentialCache credentialCache,
-                              TokenCache tokenCache) {
+                              DelegationTokenCache tokenCache) {
         this.mode = mode;
         this.jaasContext = jaasContext;
         this.securityProtocol = securityProtocol;

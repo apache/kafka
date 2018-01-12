@@ -44,7 +44,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.kafka.common.security.token.TokenCache;
+import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
 
 /**
  * Non-blocking EchoServer implementation that uses ChannelBuilder to create channels
@@ -65,7 +65,7 @@ public class NioEchoServer extends Thread {
     private final CredentialCache credentialCache;
     private final Metrics metrics;
     private int numSent = 0;
-    private final TokenCache tokenCache;
+    private final DelegationTokenCache tokenCache;
 
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
             String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache) throws Exception {
@@ -78,7 +78,7 @@ public class NioEchoServer extends Thread {
         this.socketChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
         this.newChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
         this.credentialCache = credentialCache;
-        this.tokenCache = new TokenCache(ScramMechanism.mechanismNames());
+        this.tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames());
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL)
             ScramCredentialUtils.createCache(credentialCache, ScramMechanism.mechanismNames());
         if (channelBuilder == null)
@@ -96,7 +96,7 @@ public class NioEchoServer extends Thread {
         return credentialCache;
     }
 
-    public TokenCache tokenCache() {
+    public DelegationTokenCache tokenCache() {
         return tokenCache;
     }
 

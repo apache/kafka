@@ -56,7 +56,7 @@ import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.ScramMechanism;
 import org.apache.kafka.common.security.scram.ScramServerCallbackHandler;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.security.token.TokenCache;
+import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
 import org.ietf.jgss.GSSContext;
 import org.ietf.jgss.GSSCredential;
 import org.ietf.jgss.GSSException;
@@ -108,7 +108,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private final Set<String> enabledMechanisms;
     private final Map<String, ?> configs;
     private final KafkaPrincipalBuilder principalBuilder;
-    private final TokenCache tokenCache;
+    private final DelegationTokenCache tokenCache;
 
     // Current SASL state
     private SaslState saslState = SaslState.INITIAL_REQUEST;
@@ -135,7 +135,7 @@ public class SaslServerAuthenticator implements Authenticator {
                                    ListenerName listenerName,
                                    SecurityProtocol securityProtocol,
                                    TransportLayer transportLayer,
-                                   TokenCache tokenCache) throws IOException {
+                                   DelegationTokenCache tokenCache) throws IOException {
         if (subject == null)
             throw new IllegalArgumentException("subject cannot be null");
         this.connectionId = connectionId;

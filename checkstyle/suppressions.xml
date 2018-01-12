@@ -54,7 +54,7 @@
               files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler).java"/>
 
     <suppress checks="JavaNCSS"
-              files="Protocol.java|AbstractRequest.java|KerberosLogin.java|WorkerSinkTaskTest.java"/>
+              files="AbstractRequest.java|KerberosLogin.java|WorkerSinkTaskTest.java"/>
 
     <suppress checks="NPathComplexity"
               files="(BufferPool|MetricName|Node|ConfigDef|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|Agent).java"/>

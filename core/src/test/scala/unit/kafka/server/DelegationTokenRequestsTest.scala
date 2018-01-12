@@ -30,7 +30,7 @@ import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
 
-class TokenRequestsTest extends BaseRequestTest with SaslSetup {
+class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
   private val kafkaClientSaslMechanism = "PLAIN"
   private val kafkaServerSaslMechanisms = List("PLAIN")

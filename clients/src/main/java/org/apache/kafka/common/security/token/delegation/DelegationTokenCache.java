@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.token;
+package org.apache.kafka.common.security.token.delegation;
 
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
@@ -27,7 +27,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class TokenCache {
+public class DelegationTokenCache {
 
     private CredentialCache credentialCache = new CredentialCache();
     //Cache to hold all the tokens
@@ -35,7 +35,7 @@ public class TokenCache {
     //Cache to hold hmac->tokenId mapping. This is required for renew, expire requests
     private Map<String, String> hmacIDCache = new ConcurrentHashMap<>();
 
-    public TokenCache(Collection<String> scramMechanisms) {
+    public DelegationTokenCache(Collection<String> scramMechanisms) {
         //Create caches for scramMechanisms
         ScramCredentialUtils.createCache(credentialCache, scramMechanisms);
     }

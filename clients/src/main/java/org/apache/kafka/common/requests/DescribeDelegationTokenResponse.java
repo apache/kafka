@@ -23,8 +23,8 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.security.token.DelegationToken;
-import org.apache.kafka.common.security.token.TokenInformation;
+import org.apache.kafka.common.security.token.delegation.DelegationToken;
+import org.apache.kafka.common.security.token.delegation.TokenInformation;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;

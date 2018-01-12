@@ -158,7 +158,8 @@ object TestUtils extends Logging {
     enableSaslPlaintext: Boolean = false,
     enableSaslSsl: Boolean = false,
     rackInfo: Map[Int, String] = Map(),
-    logDirCount: Int = 1, enableToken: Boolean = false): Seq[Properties] = {
+    logDirCount: Int = 1,
+    enableToken: Boolean = false): Seq[Properties] = {
     (0 until numConfigs).map { node =>
       createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, RandomPort,
         interBrokerSecurityProtocol, trustStoreFile, saslProperties, enablePlaintext = enablePlaintext, enableSsl = enableSsl,

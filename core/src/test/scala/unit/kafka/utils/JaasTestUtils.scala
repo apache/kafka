@@ -72,14 +72,15 @@ object JaasTestUtils {
 
   case class ScramLoginModule(username: String,
                               password: String,
-                              debug: Boolean = false, tokenProps: Map[String, String] = Map.empty) extends JaasModule {
+                              debug: Boolean = false,
+                              tokenProps: Map[String, String] = Map.empty) extends JaasModule {
 
     def name = "org.apache.kafka.common.security.scram.ScramLoginModule"
 
     def entries: Map[String, String] = Map(
       "username" -> username,
       "password" -> password
-    ) ++ tokenProps.map { case (user, pass) => user -> pass }
+    ) ++ tokenProps.map { case (name, value) => name -> value }
   }
 
   sealed trait JaasModule {

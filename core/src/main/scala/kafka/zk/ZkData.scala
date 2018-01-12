@@ -25,12 +25,12 @@ import kafka.common.KafkaException
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
 import kafka.security.auth.{Acl, Resource}
-import kafka.server.{ConfigType, TokenManager}
+import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.security.token.{DelegationToken, TokenInformation}
+import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.data.{ACL, Stat}
@@ -491,30 +491,30 @@ object ProducerIdBlockZNode {
   def path = "/latest_producer_id_block"
 }
 
-object TokenAuthZNode {
-  def path = "/tokenauth"
+object DelegationTokenAuthZNode {
+  def path = "/delegation_token"
 }
 
-object TokenChangeNotificationZNode {
-  def path =  s"${TokenAuthZNode.path}/token_changes"
+object DelegationTokenChangeNotificationZNode {
+  def path =  s"${DelegationTokenAuthZNode.path}/token_changes"
 }
 
-object TokenChangeNotificationSequenceZNode {
-  val SequenceNumberPrefix = "token_changes_"
-  def createPath = s"${TokenChangeNotificationZNode.path}/$SequenceNumberPrefix"
-  def deletePath(sequenceNode: String) = s"${TokenChangeNotificationZNode.path}/${sequenceNode}"
+object DelegationTokenChangeNotificationSequenceZNode {
+  val SequenceNumberPrefix = "token_change_"
+  def createPath = s"${DelegationTokenChangeNotificationZNode.path}/$SequenceNumberPrefix"
+  def deletePath(sequenceNode: String) = s"${DelegationTokenChangeNotificationZNode.path}/${sequenceNode}"
   def encode(tokenId : String): Array[Byte] = tokenId.getBytes(UTF_8)
   def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
 }
 
-object TokensZNode {
-  def path = s"${TokenAuthZNode.path}/tokens"
+object DelegationTokensZNode {
+  def path = s"${DelegationTokenAuthZNode.path}/tokens"
 }
 
-object TokenInfoZNode {
-  def path(tokenId: String) =  s"${TokensZNode.path}/$tokenId"
-  def encode(token: DelegationToken): Array[Byte] =  Json.encodeAsBytes(TokenManager.toJsonCompatibleMap(token).asJava)
-  def decode(bytes: Array[Byte]): Option[TokenInformation] = TokenManager.fromBytes(bytes)
+object DelegationTokenInfoZNode {
+  def path(tokenId: String) =  s"${DelegationTokensZNode.path}/$tokenId"
+  def encode(token: DelegationToken): Array[Byte] =  Json.encodeAsBytes(DelegationTokenManager.toJsonCompatibleMap(token).asJava)
+  def decode(bytes: Array[Byte]): Option[TokenInformation] = DelegationTokenManager.fromBytes(bytes)
 }
 
 object ZkData {
@@ -531,7 +531,7 @@ object ZkData {
     AclChangeNotificationZNode.path,
     ProducerIdBlockZNode.path,
     LogDirEventNotificationZNode.path,
-    TokenAuthZNode.path)
+    DelegationTokenAuthZNode.path)
 
   // These are persistent ZK paths that should exist on kafka broker startup.
   val PersistentZkPaths = Seq(
@@ -546,7 +546,7 @@ object ZkData {
     LogDirEventNotificationZNode.path
   ) ++ ConfigType.all.map(ConfigEntityTypeZNode.path)
 
-  val SensitiveRootPaths = Seq(ConfigEntityTypeZNode.path(ConfigType.User), TokensZNode.path)
+  val SensitiveRootPaths = Seq(ConfigEntityTypeZNode.path(ConfigType.User), DelegationTokensZNode.path)
 
   def sensitivePath(path: String): Boolean = {
     path != null && SensitiveRootPaths.exists(path.startsWith)

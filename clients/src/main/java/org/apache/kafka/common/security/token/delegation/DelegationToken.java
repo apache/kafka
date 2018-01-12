@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.token;
+package org.apache.kafka.common.security.token.delegation;
 
 import org.apache.kafka.common.utils.Base64;
 

@@ -28,7 +28,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.security.scram.ScramMechanism;
-import org.apache.kafka.common.security.token.TokenCache;
+import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
@@ -112,7 +112,7 @@ public class SaslServerAuthenticatorTest {
         JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig);
         Subject subject = new Subject();
         return new SaslServerAuthenticator(configs, "node", jaasContext, subject, null, new CredentialCache(),
-                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer, new TokenCache(ScramMechanism.mechanismNames()));
+                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer, new DelegationTokenCache(ScramMechanism.mechanismNames()));
     }
 
 }

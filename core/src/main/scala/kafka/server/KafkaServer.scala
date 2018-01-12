@@ -44,7 +44,7 @@ import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.security.token.TokenCache
+import org.apache.kafka.common.security.token.delegation.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Node}
@@ -121,12 +121,12 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   var replicaManager: ReplicaManager = null
   var adminManager: AdminManager = null
-  var tokenManager: TokenManager = null
+  var tokenManager: DelegationTokenManager = null
 
   var dynamicConfigHandlers: Map[String, ConfigHandler] = null
   var dynamicConfigManager: DynamicConfigManager = null
   var credentialProvider: CredentialProvider = null
-  var tokenCache: TokenCache = null
+  var tokenCache: DelegationTokenCache = null
 
   var groupCoordinator: GroupCoordinator = null
 
@@ -232,7 +232,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         logManager.startup()
 
         metadataCache = new MetadataCache(config.brokerId)
-        tokenCache = new TokenCache(config.saslEnabledMechanisms)
+        tokenCache = new DelegationTokenCache(config.saslEnabledMechanisms)
         credentialProvider = new CredentialProvider(config.saslEnabledMechanisms, tokenCache)
 
         socketServer = new SocketServer(config, metrics, time, credentialProvider)
@@ -249,7 +249,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         checkpointBrokerId(config.brokerId)
 
         /* start token manager */
-        tokenManager = new TokenManager(config, tokenCache, time , zkClient)
+        tokenManager = new DelegationTokenManager(config, tokenCache, time , zkClient)
         tokenManager.startup()
 
         /* start kafka controller */

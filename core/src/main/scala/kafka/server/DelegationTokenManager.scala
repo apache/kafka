@@ -26,19 +26,18 @@ import javax.crypto.{Mac, SecretKey}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{CoreUtils, Json, Logging}
-import kafka.zk.{KafkaZkClient, TokenChangeNotificationSequenceZNode, TokenChangeNotificationZNode, TokensZNode}
+import kafka.zk.{DelegationTokenChangeNotificationSequenceZNode, DelegationTokenChangeNotificationZNode, DelegationTokensZNode, KafkaZkClient}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.{ScramCredential, ScramFormatter, ScramMechanism}
-import org.apache.kafka.common.security.token.{DelegationToken, TokenCache, TokenInformation}
+import org.apache.kafka.common.security.token.delegation.{DelegationToken, DelegationTokenCache, TokenInformation}
 import org.apache.kafka.common.utils.{Base64, Sanitizer, SecurityUtils, Time}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-object TokenManager {
+object DelegationTokenManager {
   val DefaultHmacAlgorithm = "HmacSHA512"
-  val TokenSequenceIdPrefix = "token"
   val OwnerKey ="owner"
   val RenewersKey = "renewers"
   val IssueTimestampKey = "issueTimestamp"
@@ -132,19 +131,22 @@ object TokenManager {
       case None =>
         None
     }
+
+
   }
 }
 
-class TokenManager(val config: KafkaConfig,
-                   val tokenCache: TokenCache,
-                   val time: Time,
-                   val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
+class DelegationTokenManager(val config: KafkaConfig,
+                             val tokenCache: DelegationTokenCache,
+                             val time: Time,
+                             val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[Token Manager on Broker " + config.brokerId + "]: "
 
-  import TokenManager._
+  import DelegationTokenManager._
 
   type CreateResponseCallback = CreateTokenResult => Unit
   type RenewResponseCallback = (Errors, Long) => Unit
+  type ExpireResponseCallback = (Errors, Long) => Unit
   type DescribeResponseCallback = (Errors, List[DelegationToken]) => Unit
 
   val secretKey = {
@@ -164,7 +166,7 @@ class TokenManager(val config: KafkaConfig,
     if (config.tokenAuthEnabled) {
       zkClient.createDelegationTokenPaths
       loadCache
-      tokenChangeListener = new ZkNodeChangeNotificationListener(zkClient, TokenChangeNotificationZNode.path, TokenChangeNotificationSequenceZNode.SequenceNumberPrefix, TokenChangedNotificationHandler)
+      tokenChangeListener = new ZkNodeChangeNotificationListener(zkClient, DelegationTokenChangeNotificationZNode.path, DelegationTokenChangeNotificationSequenceZNode.SequenceNumberPrefix, TokenChangedNotificationHandler)
       tokenChangeListener.init
     }
   }
@@ -177,7 +179,7 @@ class TokenManager(val config: KafkaConfig,
 
   private def loadCache() {
     lock.synchronized {
-      val tokens = zkClient.getChildren(TokensZNode.path)
+      val tokens = zkClient.getChildren(DelegationTokensZNode.path)
       info(s"Loading the token cache. Total token count : " + tokens.size)
       for (tokenId <- tokens) {
         try {
@@ -373,7 +375,7 @@ class TokenManager(val config: KafkaConfig,
   def expireToken(principal: KafkaPrincipal,
                   hmac: ByteBuffer,
                   expireLifeTimeMs: Long,
-                  expireResponseCallback: RenewResponseCallback) {
+                  expireResponseCallback: ExpireResponseCallback) {
 
     if (!config.tokenAuthEnabled) {
       expireResponseCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, -1)
@@ -473,5 +475,18 @@ case class CreateTokenResult(issueTimestamp: Long,
                              expiryTimestamp: Long,
                              maxTimestamp: Long,
                              tokenId: String,
-                             hmac:  Array[Byte],
-                             error: Errors)
+                             hmac: Array[Byte],
+                             error: Errors) {
+  override def equals(other: Any): Boolean = {
+    other match {
+      case that: CreateTokenResult =>
+        error.equals(that.error) &&
+          tokenId.equals(that.tokenId) &&
+          issueTimestamp.equals(that.issueTimestamp) &&
+          expiryTimestamp.equals(that.expiryTimestamp) &&
+          maxTimestamp.equals(that.maxTimestamp) &&
+          (hmac sameElements that.hmac)
+      case _ => false
+    }
+  }
+}

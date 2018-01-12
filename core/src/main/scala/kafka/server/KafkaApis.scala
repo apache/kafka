@@ -57,8 +57,7 @@ import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
 import DescribeLogDirsResponse.LogDirInfo
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.security.token.TokenInformation
-import org.apache.kafka.common.security.token.DelegationToken
+import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 
 import scala.collection.{mutable, _}
 import scala.collection.JavaConverters._
@@ -84,7 +83,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 brokerTopicStats: BrokerTopicStats,
                 val clusterId: String,
                 time: Time,
-                val tokenManager: TokenManager) extends Logging {
+                val tokenManager: DelegationTokenManager) extends Logging {
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val adminZkClient = new AdminZkClient(zkClient)
@@ -2038,7 +2037,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (!allowTokenRequests(request))
-      sendResponseCallback(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, TokenManager.ErrorTimestamp)
+      sendResponseCallback(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, DelegationTokenManager.ErrorTimestamp)
     else {
       tokenManager.renewToken(
         request.session.principal,
@@ -2061,7 +2060,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (!allowTokenRequests(request))
-      sendResponseCallback(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, TokenManager.ErrorTimestamp)
+      sendResponseCallback(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, DelegationTokenManager.ErrorTimestamp)
     else {
       tokenManager.expireToken(
         request.session.principal,

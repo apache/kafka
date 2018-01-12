@@ -55,7 +55,7 @@ object KafkaController extends Logging {
 }
 
 class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Time, metrics: Metrics, brokerInfo: BrokerInfo,
-                      tokenManager: TokenManager, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
+                      tokenManager: DelegationTokenManager, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
 
   this.logIdent = s"[Controller id=${config.brokerId}] "
 

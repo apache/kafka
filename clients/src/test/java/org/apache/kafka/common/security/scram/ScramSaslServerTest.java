@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.security.scram;
 
-import org.apache.kafka.common.security.token.TokenCache;
+import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -44,7 +44,7 @@ public class ScramSaslServerTest {
         CredentialCache.Cache<ScramCredential> credentialCache = new CredentialCache().createCache(mechanism.mechanismName(), ScramCredential.class);
         credentialCache.put(USER_A, formatter.generateCredential("passwordA", 4096));
         credentialCache.put(USER_B, formatter.generateCredential("passwordB", 4096));
-        ScramServerCallbackHandler callbackHandler = new ScramServerCallbackHandler(credentialCache, new TokenCache(ScramMechanism.mechanismNames()));
+        ScramServerCallbackHandler callbackHandler = new ScramServerCallbackHandler(credentialCache, new DelegationTokenCache(ScramMechanism.mechanismNames()));
         saslServer = new ScramSaslServer(mechanism, new HashMap<String, Object>(), callbackHandler);
     }
 

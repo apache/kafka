@@ -31,7 +31,7 @@ import kafka.server.ConfigType
 import kafka.utils.Logging
 import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.security.token.{DelegationToken, TokenInformation}
+import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.data.{ACL, Stat}
@@ -1083,17 +1083,17 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * Creates the required zk nodes for Delegation Token storage
    */
   def createDelegationTokenPaths(): Unit = {
-    createRecursive(TokenChangeNotificationZNode.path, throwIfPathExists = false)
-    createRecursive(TokensZNode.path, throwIfPathExists = false)
+    createRecursive(DelegationTokenChangeNotificationZNode.path, throwIfPathExists = false)
+    createRecursive(DelegationTokensZNode.path, throwIfPathExists = false)
   }
 
   /**
    * Creates Delegation Token change notification message
-   * @param tokenId token name
+   * @param tokenId token Id
    */
   def createTokenChangeNotification(tokenId: String): Unit = {
-    val path = TokenChangeNotificationSequenceZNode.createPath
-    val createRequest = CreateRequest(path, TokenChangeNotificationSequenceZNode.encode(tokenId), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
+    val path = DelegationTokenChangeNotificationSequenceZNode.createPath
+    val createRequest = CreateRequest(path, DelegationTokenChangeNotificationSequenceZNode.encode(tokenId), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
     createResponse.resultException.foreach(e => throw e)
   }
@@ -1108,17 +1108,17 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   def setOrCreateDelegationToken(token: DelegationToken): Unit = {
 
     def set(tokenData: Array[Byte]): SetDataResponse = {
-      val setDataRequest = SetDataRequest(TokenInfoZNode.path(token.tokenInfo().tokenId()), tokenData, ZkVersion.NoVersion)
+      val setDataRequest = SetDataRequest(DelegationTokenInfoZNode.path(token.tokenInfo().tokenId()), tokenData, ZkVersion.NoVersion)
       retryRequestUntilConnected(setDataRequest)
     }
 
     def create(tokenData: Array[Byte]): CreateResponse = {
-      val path = TokenInfoZNode.path(token.tokenInfo().tokenId())
+      val path = DelegationTokenInfoZNode.path(token.tokenInfo().tokenId())
       val createRequest = CreateRequest(path, tokenData, acls(path), CreateMode.PERSISTENT)
       retryRequestUntilConnected(createRequest)
     }
 
-    val tokenInfo = TokenInfoZNode.encode(token)
+    val tokenInfo = DelegationTokenInfoZNode.encode(token)
     val setDataResponse = set(tokenInfo)
     setDataResponse.resultCode match {
       case Code.NONODE =>
@@ -1133,10 +1133,10 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @return optional TokenInfo that is Some if the token znode exists and can be parsed and None otherwise.
    */
   def getDelegationTokenInfo(delegationTokenId: String): Option[TokenInformation] = {
-    val getDataRequest = GetDataRequest(TokenInfoZNode.path(delegationTokenId))
+    val getDataRequest = GetDataRequest(DelegationTokenInfoZNode.path(delegationTokenId))
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
-      case Code.OK => TokenInfoZNode.decode(getDataResponse.data)
+      case Code.OK => DelegationTokenInfoZNode.decode(getDataResponse.data)
       case Code.NONODE => None
       case _ => throw getDataResponse.resultException.get
     }
@@ -1148,7 +1148,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @return delete status
    */
   def deleteDelegationToken(delegationTokenId: String): Boolean = {
-    deleteRecursive(TokenInfoZNode.path(delegationTokenId))
+    deleteRecursive(DelegationTokenInfoZNode.path(delegationTokenId))
   }
 
   /**

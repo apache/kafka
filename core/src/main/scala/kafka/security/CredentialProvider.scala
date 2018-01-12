@@ -23,9 +23,9 @@ import org.apache.kafka.common.security.authenticator.CredentialCache
 import org.apache.kafka.common.security.scram.{ScramCredential, ScramCredentialUtils, ScramMechanism}
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef._
-import org.apache.kafka.common.security.token.TokenCache
+import org.apache.kafka.common.security.token.delegation.DelegationTokenCache
 
-class CredentialProvider(saslEnabledMechanisms: List[String], val tokenCache: TokenCache) {
+class CredentialProvider(saslEnabledMechanisms: List[String], val tokenCache: DelegationTokenCache) {
 
   val credentialCache = new CredentialCache
   ScramCredentialUtils.createCache(credentialCache, saslEnabledMechanisms)
