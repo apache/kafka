@@ -961,6 +961,7 @@ project(':streams:test-utils') {
 
   dependencies {
     compile project(':streams')
+    compile project(':clients')
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.junit

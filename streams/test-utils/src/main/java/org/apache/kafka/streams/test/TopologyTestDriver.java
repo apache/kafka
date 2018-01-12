@@ -25,6 +25,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -33,11 +34,15 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.InternalTopologyBuilderAccessor;
+import org.apache.kafka.streams.MockTime;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -77,12 +82,13 @@ import java.util.concurrent.atomic.AtomicLong;
  * processors, and sinks.
  * Best of all, the class works without a real Kafka broker, so the tests execute very quickly with very little overhead.
  * <p>
- * Using the {@code TopologyTestDriver} in tests is easy: simply instantiate the driver with a {@link StreamsConfig} and
- * a {@link Topology}, use the driver to supply an input message to the topology, and then use the driver to read and
- * verify any messages output by the topology.
+ * Using the {@code TopologyTestDriver} in tests is easy: simply instantiate the driver and provide
+ * {@link Properties configs} and a {@link Topology} (cf. {@link StreamsBuilder#build()}), use the driver to supply an
+ * input message to the topology, and then use the driver to read and verify any messages output by the topology.
  * <p>
  * Although the driver doesn't use a real Kafka broker, it does simulate Kafka {@link Consumer consumers} and
  * {@link Producer producers} that read and write raw {@code byte[]} messages.
+ * TODO update next paragraph
  * You can either deal with messages that have {@code byte[]} keys and values, or you can supply the
  * {@link Serializer serializers} and {@link Deserializer deserializer} that the driver can use to convert the keys and
  * values into objects.
@@ -114,11 +120,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * driver.process("input-topic", "key1", "value1", strSerializer, strSerializer);
  * </pre>
  *
- * {@link #process(String, Object, Object, Serializer, Serializer, long) process(...)} has many different overloads
- * with the goal to reduce boiler plate code.
+ * {@link #process(ConsumerRecord) process(...)}
  * It's recommended to check them out.
- * In addition, you can use {@link TestRecordFactory} to generate {@link TestRecord TestRecords} that can be
- * ingested into the driver via {@link #process(TestRecord)}.
+ * In addition, you can use {@link ConsumerRecordFactory} to generate {@link ConsumerRecord ConsumerRecords} that can be
+ * ingested into the driver via {@link #process(ConsumerRecord)}.
  * <p>
  * When {@code #process()} is called, the driver passes the input message through to the appropriate source that
  * consumes the named topic, and will invoke the processor(s) downstream of the source.
@@ -138,8 +143,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * instance for use on both the keys and values. Your test logic can then verify whether these output records are
  * correct.
  * <p>
- * Note, that calling {@code process()} will never trigger any punctuation call back.
- * However, you can test punctuations manually via {@link #punctuateStreamTime()} and {@link #punctuateWallClockTime()}.
+ * Note, that calling {@code process()} will only trigger {@link PunctuationType#STREAM_TIME event-time} base
+ * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) punctuation} call backs.
+ * However, you can test {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type punctuations manually via
+ * {@link #advanceWallClockTime(long)}.
  * <p>
  * Finally, when completed, make sure your tests {@link #close()} the driver to release all resources and
  * {@link org.apache.kafka.streams.processor.Processor processors}.
@@ -154,22 +161,20 @@ import java.util.concurrent.atomic.AtomicLong;
  * Or, our test might have pre-populated some state <em>before</em> submitting the input message, and verified afterward
  * that the processor(s) correctly updated the state.
  */
-// TODO add annotation -- need to decide which
+@InterfaceStability.Evolving
 public class TopologyTestDriver {
+
+    private final Time mockTime;
 
     private final static int PARTITION_ID = 0;
     private final static TaskId TASK_ID = new TaskId(0, PARTITION_ID);
-
-    private final Time time;
-    private final ProcessorTopology processorTopology;
     private StreamTask task;
     private GlobalStateUpdateTask globalStateTask;
 
-    private final String singleTopicName;
-    private final Set<String> internalTopics = new HashSet<>();
-
+    private final ProcessorTopology processorTopology;
     private final MockProducer<byte[], byte[]> producer;
 
+    private final Set<String> internalTopics = new HashSet<>();
     private final Map<String, TopicPartition> partitionsByTopic = new HashMap<>();
     private final Map<String, TopicPartition> globalPartitionsByTopic = new HashMap<>();
     private final Map<TopicPartition, AtomicLong> offsetsByTopicPartition = new HashMap<>();
@@ -178,27 +183,27 @@ public class TopologyTestDriver {
 
     /**
      * Create a new test diver instance.
+     * Initialized the internally mocked wall-clock time with {@link System#currentTimeMillis() current system time}.
      *
      * @param topology the topology to be tested
      * @param config the configuration for the topology
      */
     public TopologyTestDriver(final Topology topology,
                               final Properties config) {
-        this(topology, config, Time.SYSTEM);
+        this(topology, config, System.currentTimeMillis());
     }
-
     /**
-     * Create a new test driver instance.
+     * Create a new test diver instance.
      *
      * @param topology the topology to be tested
      * @param config the configuration for the topology
-     * @param time the time for this test
+     * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
      */
     public TopologyTestDriver(final Topology topology,
                               final Properties config,
-                              final Time time) {
+                              final long initialWallClockTimeMs) {
         final StreamsConfig streamsConfig = new StreamsConfig(config);
-        this.time = time;
+        mockTime = new MockTime(initialWallClockTimeMs);
 
         InternalTopologyBuilder builder = InternalTopologyBuilderAccessor.getInternalTopologyBuilder(topology);
         builder.setApplicationId(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG));
@@ -215,7 +220,7 @@ public class TopologyTestDriver {
         };
 
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-        final StateDirectory stateDirectory = new StateDirectory(streamsConfig, time);
+        final StateDirectory stateDirectory = new StateDirectory(streamsConfig, mockTime);
         final StreamsMetrics streamsMetrics = new StreamsMetricsImpl(
             new Metrics(),
             "topology-test-driver-stream-metrics",
@@ -292,51 +297,41 @@ public class TopologyTestDriver {
                 streamsMetrics,
                 stateDirectory,
                 cache,
-                time,
+                mockTime,
                 producer);
             task.initialize();
         }
-
-        if (offsetsByTopicPartition.size() == 1) {
-            if (partitionsByTopic.size() > 0) {
-                singleTopicName = partitionsByTopic.keySet().iterator().next();
-            } else {
-                singleTopicName = globalPartitionsByTopic.keySet().iterator().next();
-            }
-        } else {
-            singleTopicName = null;
-        }
-
     }
 
     /**
-     * Send an input message with the given key, value, and timestamp on the specified topic to the topology and then commit the messages.
+     * Send an input message with the given key, value, and timestamp on the specified topic to the topology and then
+     * commit the messages.
      *
-     * @param topicName the name of the topic on which the message is to be sent
-     * @param key the raw message key
-     * @param value the raw message value
-     * @param timestamp the message timestamp
+     * @param consumerRecord the record to be processed
      */
-    public void process(String topicName,
-                        final byte[] key,
-                        final byte[] value,
-                        final long timestamp) {
-        if (topicName == null) {
-            if (singleTopicName == null) {
-                throw new IllegalArgumentException("Topology under test has more than one source; thus, topicName cannot be null");
-            }
-            topicName = singleTopicName;
-        }
+    public void process(final ConsumerRecord<byte[], byte[]> consumerRecord) {
+        final String topicName = consumerRecord.topic();
 
-        final TopicPartition tp = partitionsByTopic.get(topicName);
-        if (tp != null) {
-            final long offset = offsetsByTopicPartition.get(tp).incrementAndGet() - 1;
-            task.addRecords(tp, Collections.singleton(new ConsumerRecord<>(tp.topic(), tp.partition(), offset, timestamp, TimestampType.CREATE_TIME, 0L, 0, 0, key, value)));
+        final TopicPartition topicPartition = partitionsByTopic.get(topicName);
+        if (topicPartition != null) {
+            final long offset = offsetsByTopicPartition.get(topicPartition).incrementAndGet() - 1;
+            task.addRecords(topicPartition, Collections.singleton(new ConsumerRecord<>(
+                topicName,
+                topicPartition.partition(),
+                offset,
+                consumerRecord.timestamp(),
+                consumerRecord.timestampType(),
+                consumerRecord.checksum(),
+                consumerRecord.serializedKeySize(),
+                consumerRecord.serializedValueSize(),
+                consumerRecord.key(),
+                consumerRecord.value())));
             producer.clear();
 
             // Process the record ...
+            ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(consumerRecord.timestamp(), offset, topicPartition.partition(), topicName));
             task.process();
-            ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(timestamp, offset, tp.partition(), topicName));
+            task.maybePunctuateStreamTime();
             task.commit();
 
             // Capture all the records sent to the producer ...
@@ -349,248 +344,43 @@ public class TopologyTestDriver {
                 outputRecords.add(record);
 
                 // Forward back into the topology if the produced record is to an internal or a source topic ...
-                if (internalTopics.contains(record.topic()) || processorTopology.sourceTopics().contains(record.topic())) {
-                    process(record.topic(), record.key(), record.value(), record.timestamp());
+                final String outputTopicName = record.topic();
+                if (internalTopics.contains(outputTopicName) || processorTopology.sourceTopics().contains(outputTopicName)) {
+                    final byte[] serializedKey = record.key();
+                    final byte[] serializedValue = record.value();
+
+                    process(new ConsumerRecord<>(
+                        outputTopicName,
+                        -1,
+                        -1L,
+                        record.timestamp(),
+                        TimestampType.CREATE_TIME,
+                        0L,
+                        serializedKey == null ? 0 : serializedKey.length,
+                        serializedValue == null ? 0 : serializedValue.length,
+                        serializedKey,
+                        serializedValue));
                 }
             }
         } else {
-            final TopicPartition global = globalPartitionsByTopic.get(topicName);
-            if (global == null) {
+            final TopicPartition globalTopicPartition = globalPartitionsByTopic.get(topicName);
+            if (globalTopicPartition == null) {
                 throw new IllegalArgumentException("Unknown topic: " + topicName);
             }
-            final long offset = offsetsByTopicPartition.get(global).incrementAndGet() - 1;
-            globalStateTask.update(new ConsumerRecord<>(global.topic(), global.partition(), offset, timestamp, TimestampType.CREATE_TIME, 0L, 0, 0, key, value));
+            final long offset = offsetsByTopicPartition.get(globalTopicPartition).incrementAndGet() - 1;
+            globalStateTask.update(new ConsumerRecord<>(
+                globalTopicPartition.topic(),
+                globalTopicPartition.partition(),
+                offset,
+                consumerRecord.timestamp(),
+                consumerRecord.timestampType(),
+                consumerRecord.checksum(),
+                consumerRecord.serializedKeySize(),
+                consumerRecord.serializedValueSize(),
+                consumerRecord.key(),
+                consumerRecord.value()));
             globalStateTask.flushState();
         }
-    }
-
-    /**
-     * Send an input message with the given key and value on the specified topic to the topology and then commit the messages.
-     * The record timestamp will be inferred from the time object provided in the constructor.
-     *
-     * @param topicName the name of the topic on which the message is to be sent
-     * @param key the raw message key
-     * @param value the raw message value
-     */
-    public void process(final String topicName,
-                        final byte[] key,
-                        final byte[] value) {
-        process(topicName, key, value, time.milliseconds());
-    }
-
-    /**
-     * Send an input message with the given key, value, and timestamp to the topology and then commit the messages.
-     * The topology must have a single source topic only to be able to use this method.
-     *
-     * @param key the raw message key
-     * @param value the raw message value
-     * @param timestamp the message timestamp
-     */
-    public void process(final byte[] key,
-                        final byte[] value,
-                        final long timestamp) {
-        process(singleTopicName, key, value, timestamp);
-    }
-
-    /**
-     * Send an input message with the given key and value to the topology and then commit the messages.
-     * The topology must have a single source topic only to be able to use this method.
-     * The record timestamp will be inferred from the time object provided in the constructor.
-     *
-     * @param key the raw message key
-     * @param value the raw message value
-     */
-    public void process(final byte[] key,
-                        final byte[] value) {
-        process(singleTopicName, key, value, time.milliseconds());
-    }
-
-    /**
-     * Send an input message with the given key, value, and timestamp on the specified topic to the topology and then commit the messages.
-     *
-     * @param topicName the name of the topic on which the message is to be sent
-     * @param key the message key
-     * @param value the message value
-     * @param keySerializer the serializer for the key
-     * @param valueSerializer the serializer for the value
-     * @param timestamp the message timestamp
-     */
-    public <K, V> void process(final String topicName,
-                               final K key,
-                               final V value,
-                               final Serializer<K> keySerializer,
-                               final Serializer<V> valueSerializer,
-                               final long timestamp) {
-        process(topicName,
-                TestRecord.serialize("key", topicName, key, keySerializer),
-                TestRecord.serialize("value", topicName, value, valueSerializer),
-                timestamp);
-    }
-
-    /**
-     * Send an input message with the given key and value on the specified topic to the topology and then commit the messages.
-     * The record timestamp will be inferred from the time object provided in the constructor.
-     *
-     * @param topicName the name of the topic on which the message is to be sent
-     * @param key the message key
-     * @param value the message value
-     * @param keySerializer the serializer for the key
-     * @param valueSerializer the serializer for the value
-     */
-    public <K, V> void process(final String topicName,
-                               final K key,
-                               final V value,
-                               final Serializer<K> keySerializer,
-                               final Serializer<V> valueSerializer) {
-        process(topicName, key, value, keySerializer, valueSerializer, time.milliseconds());
-    }
-
-    /**
-     * Send an input message with the given key, value, and timestamp on the specified topic to the topology and then commit the messages.
-     * The topology must have a single source topic only to be able to use this method.
-     *
-     * @param key the message key
-     * @param value the message value
-     * @param keySerializer the serializer for the key
-     * @param valueSerializer the serializer for the value
-     * @param timestamp the message timestamp
-     */
-    public <K, V> void process(final K key,
-                               final V value,
-                               final Serializer<K> keySerializer,
-                               final Serializer<V> valueSerializer,
-                               final long timestamp) {
-        process(singleTopicName, key, value, keySerializer, valueSerializer, timestamp);
-    }
-
-    /**
-     * Send an input message with the given key and value to the topology and then commit the messages.
-     * The topology must have a single source topic only to be able to use this method.
-     * The record timestamp will be inferred from the time object provided in the constructor.
-     *
-     * @param key the message key
-     * @param value the message value
-     * @param keySerializer the serializer for the key
-     * @param valueSerializer the serializer for the value
-     */
-    public <K, V> void process(final K key,
-                               final V value,
-                               final Serializer<K> keySerializer,
-                               final Serializer<V> valueSerializer) {
-        process(singleTopicName, key, value, keySerializer, valueSerializer, time.milliseconds());
-    }
-
-    /**
-     * Send an input message with {@code null}-key and the given value and timestamp on the specified topic to the topology and then commit the messages.
-     *
-     * @param topicName the name of the topic on which the message is to be sent
-     * @param value the raw message value
-     * @param timestamp the message timestamp
-     */
-    public void process(String topicName,
-                        final byte[] value,
-                        final long timestamp) {
-        process(topicName, null, value, timestamp);
-    }
-
-    /**
-     * Send an input message with {@code null}-key and the given value on the specified topic to the topology and then commit the messages.
-     * The record timestamp will be inferred from the time object provided in the constructor.
-     *
-     * @param topicName the name of the topic on which the message is to be sent
-     * @param value the raw message value
-     */
-    public void process(final String topicName,
-                        final byte[] value) {
-        process(topicName, null, value, time.milliseconds());
-    }
-
-    /**
-     * Send an input message with {@code null}-key and the given value and timestamp to the topology and then commit the messages.
-     * The topology must have a single source topic only to be able to use this method.
-     *
-     * @param value the raw message value
-     * @param timestamp the message timestamp
-     */
-    public void process(final byte[] value,
-                        final long timestamp) {
-        process(singleTopicName, null, value, timestamp);
-    }
-
-    /**
-     * Send an input message with {@code null}-key and the given value to the topology and then commit the messages.
-     * The topology must have a single source topic only to be able to use this method.
-     * The record timestamp will be inferred from the time object provided in the constructor.
-     *
-     * @param value the raw message value
-     */
-    public void process(final byte[] value) {
-        process(singleTopicName, null, value, time.milliseconds());
-    }
-
-    /**
-     * Send an input message with {@code null}-key and the given value and timestamp on the specified topic to the topology and then commit the messages.
-     *
-     * @param topicName the name of the topic on which the message is to be sent
-     * @param value the message value
-     * @param valueSerializer the serializer for the value
-     * @param timestamp the message timestamp
-     */
-    public <V> void process(final String topicName,
-                            final V value,
-                            final Serializer<V> valueSerializer,
-                            final long timestamp) {
-        process(topicName, null, valueSerializer.serialize(topicName, value), timestamp);
-    }
-
-    /**
-     * Send an input message with {@code null}-key and the given value on the specified topic to the topology and then commit the messages.
-     * The record timestamp will be inferred from the time object provided in the constructor.
-     *
-     * @param topicName the name of the topic on which the message is to be sent
-     * @param value the message value
-     * @param valueSerializer the serializer for the value
-     */
-    public <V> void process(final String topicName,
-                            final V value,
-                            final Serializer<V> valueSerializer) {
-        process(topicName, null, value, null, valueSerializer, time.milliseconds());
-    }
-
-    /**
-     * Send an input message with {@code null}-key and the given value and timestamp on the specified topic to the topology and then commit the messages.
-     * The topology must have a single source topic only to be able to use this method.
-     *
-     * @param value the message value
-     * @param valueSerializer the serializer for the value
-     * @param timestamp the message timestamp
-     */
-    public <V> void process(final V value,
-                            final Serializer<V> valueSerializer,
-                            final long timestamp) {
-        process(singleTopicName, null, value, null, valueSerializer, timestamp);
-    }
-
-    /**
-     * Send an input message with {@code null}-key and the given value to the topology and then commit the messages.
-     * The topology must have a single source topic only to be able to use this method.
-     * The record timestamp will be inferred from the time object provided in the constructor.
-     *
-     * @param value the message value
-     * @param valueSerializer the serializer for the value
-     */
-    public <V> void process(final V value,
-                            final Serializer<V> valueSerializer) {
-        process(singleTopicName, null, value, null, valueSerializer, time.milliseconds());
-    }
-
-    /**
-     * Send an input message to the topology and then commit the messages.
-     *
-     * @param record the record to be processed
-     */
-    public void process(final TestRecord record) {
-        process(record.topicName(), record.key(), record.value(), record.timestamp());
     }
 
     /**
@@ -598,23 +388,28 @@ public class TopologyTestDriver {
      *
      * @param records a lit of record to be processed
      */
-    public void process(final List<TestRecord> records) {
-        for (final TestRecord record : records) {
-            process(record.topicName(), record.key(), record.value(), record.timestamp());
+    public void process(final List<ConsumerRecord<byte[], byte[]>> records) {
+        for (final ConsumerRecord<byte[], byte[]> record : records) {
+            process(record);
         }
     }
 
-    public void punctuateWallClockTime() {
-
-    }
-
-    public void punctuateStreamTime() {
-
+    /**
+     * Advances the internally mocked wall-clock time.
+     * This might trigger a {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type
+     * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) punctuation}.
+     *
+     * @param advanceMs the amount of time to advance wall-clock time in milliseconds
+     */
+    public void advanceWallClockTime(final long advanceMs) {
+        mockTime.sleep(advanceMs);
+        task.maybePunctuateSystemTime();
+        task.commit();
     }
 
     /**
      * Read the next record from the given topic. These records were output by the topology during the previous calls to
-     * {@link #process(String, byte[], byte[], long)}.
+     * {@link #process(ConsumerRecord)}.
      *
      * @param topic the name of the topic
      * @return the next record on that topic, or null if there is no record available
@@ -629,7 +424,7 @@ public class TopologyTestDriver {
 
     /**
      * Read the next record from the given topic. These records were output by the topology during the previous calls to
-     * {@link #process(String, byte[], byte[], long)}.
+     * {@link #process(ConsumerRecord)}.
      *
      * @param topic the name of the topic
      * @param keyDeserializer the deserializer for the key type
@@ -654,7 +449,7 @@ public class TopologyTestDriver {
      * presumed to be used by a Processor within the topology.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
-     * {@link #process(String, byte[], byte[], long) process an input message}, and/or to check the store afterward.
+     * {@link #process(ConsumerRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
      * @return the state store, or null if no store has been registered with the given name
@@ -670,7 +465,7 @@ public class TopologyTestDriver {
      * presumed to be used by a Processor within the topology.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
-     * {@link #process(String, byte[], byte[], long) process an input message}, and/or to check the store afterward.
+     * {@link #process(ConsumerRecord) process an input message}, and/or to check the store afterward.
      * <p>
      *
      * @param name the name of the store
