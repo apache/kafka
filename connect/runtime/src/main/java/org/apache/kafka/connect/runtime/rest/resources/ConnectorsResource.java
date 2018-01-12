@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
@@ -324,7 +325,7 @@ public class ConnectorsResource {
         for (Map.Entry<String, String> entry : config.entrySet()) {
             final String key = entry.getKey();
             if (definedConfigKeys.containsKey(key) && definedConfigKeys.get(key).type.equals(ConfigDef.Type.PASSWORD)) {
-                newConfig.put(key, "*********");
+                newConfig.put(key, Password.HIDDEN);
             } else {
                 newConfig.put(key, entry.getValue());
             }
