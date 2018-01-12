@@ -214,9 +214,9 @@ public abstract class AbstractJoinIntegrationTest {
                 }
             }
 
-            if (storeName != null)
+            if (storeName != null) {
                 checkQueryableStore(storeName, expectedFinalResult);
-
+            }
         } finally {
             streams.close();
         }
@@ -254,9 +254,9 @@ public abstract class AbstractJoinIntegrationTest {
 
             checkResult(OUTPUT_TOPIC, expectedFinalResult, numRecordsExpected);
 
-            if (storeName != null)
+            if (storeName != null) {
                 checkQueryableStore(storeName, expectedFinalResult);
-
+            }
         } finally {
             streams.close();
         }
@@ -271,11 +271,13 @@ public abstract class AbstractJoinIntegrationTest {
         final KeyValueIterator<Long, String> all = store.all();
         final KeyValue<Long, String> onlyEntry = all.next();
 
-        assertThat(onlyEntry.key, is(anyUniqueKey));
-        assertThat(onlyEntry.value, is(expectedFinalResult));
-        assertThat(all.hasNext(), is(false));
-
-        all.close();
+        try {
+            assertThat(onlyEntry.key, is(anyUniqueKey));
+            assertThat(onlyEntry.value, is(expectedFinalResult));
+            assertThat(all.hasNext(), is(false));
+        } finally {
+            all.close();
+        }
     }
 
     private final class Input<V> {
