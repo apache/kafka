@@ -31,7 +31,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private boolean sendOldValues = false;
 
-    public KTableReduce(String storeName, Reducer<V> addReducer, Reducer<V> removeReducer) {
+    KTableReduce(String storeName, Reducer<V> addReducer, Reducer<V> removeReducer) {
         this.storeName = storeName;
         this.addReducer = addReducer;
         this.removeReducer = removeReducer;
@@ -98,7 +98,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
         return new KTableValueGetterSupplier<K, V>() {
 
             public KTableValueGetter<K, V> get() {
-                return new KTableAggregateValueGetter();
+                return new KTableMaterializedValueGetter<>(storeName);
             }
 
             @Override
@@ -106,22 +106,5 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
                 return new String[]{storeName};
             }
         };
-    }
-
-    private class KTableAggregateValueGetter implements KTableValueGetter<K, V> {
-
-        private KeyValueStore<K, V> store;
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public void init(ProcessorContext context) {
-            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-        }
-
-        @Override
-        public V get(K key) {
-            return store.get(key);
-        }
-
     }
 }

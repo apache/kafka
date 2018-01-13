@@ -33,7 +33,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
 
     private boolean sendOldValues = false;
 
-    public KTableAggregate(String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> add, Aggregator<? super K, ? super V, T> remove) {
+    KTableAggregate(String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> add, Aggregator<? super K, ? super V, T> remove) {
         this.storeName = storeName;
         this.initializer = initializer;
         this.add = add;
@@ -51,7 +51,6 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
     }
 
     private class KTableAggregateProcessor extends AbstractProcessor<K, Change<V>> {
-
         private KeyValueStore<K, T> store;
         private TupleForwarder<K, T> tupleForwarder;
 
@@ -102,7 +101,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
         return new KTableValueGetterSupplier<K, T>() {
 
             public KTableValueGetter<K, T> get() {
-                return new KTableAggregateValueGetter();
+                return new KTableMaterializedValueGetter<>(storeName);
             }
 
             @Override
@@ -111,22 +110,4 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
             }
         };
     }
-
-    private class KTableAggregateValueGetter implements KTableValueGetter<K, T> {
-
-        private KeyValueStore<K, T> store;
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public void init(ProcessorContext context) {
-            store = (KeyValueStore<K, T>) context.getStateStore(storeName);
-        }
-
-        @Override
-        public T get(K key) {
-            return store.get(key);
-        }
-
-    }
-
 }

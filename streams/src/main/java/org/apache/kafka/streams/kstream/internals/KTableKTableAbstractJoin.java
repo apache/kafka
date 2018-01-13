@@ -18,15 +18,17 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueJoiner;
 
+import java.util.ArrayList;
+
 abstract class KTableKTableAbstractJoin<K, R, V1, V2> implements KTableProcessorSupplier<K, V1, R> {
 
-    protected final KTableImpl<K, ?, V1> table1;
-    protected final KTableImpl<K, ?, V2> table2;
-    protected final KTableValueGetterSupplier<K, V1> valueGetterSupplier1;
-    protected final KTableValueGetterSupplier<K, V2> valueGetterSupplier2;
-    protected final ValueJoiner<? super V1, ? super V2, ? extends R> joiner;
+    private final KTableImpl<K, ?, V1> table1;
+    private final KTableImpl<K, ?, V2> table2;
+    final KTableValueGetterSupplier<K, V1> valueGetterSupplier1;
+    final KTableValueGetterSupplier<K, V2> valueGetterSupplier2;
+    final ValueJoiner<? super V1, ? super V2, ? extends R> joiner;
 
-    protected boolean sendOldValues = false;
+    boolean sendOldValues = false;
 
     KTableKTableAbstractJoin(KTableImpl<K, ?, V1> table1,
                              KTableImpl<K, ?, V2> table2,
@@ -44,5 +46,4 @@ abstract class KTableKTableAbstractJoin<K, R, V1, V2> implements KTableProcessor
         table2.enableSendingOldValues();
         sendOldValues = true;
     }
-
 }
