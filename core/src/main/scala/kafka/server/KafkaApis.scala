@@ -2093,34 +2093,21 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendResponseCallback(Errors.NONE, List())
       }
       else {
-        val owners = if (describeTokenRequest.owners == null) null else describeTokenRequest.owners.asScala
-        def eligible(token: TokenInformation) : Boolean = {
-          val include =
-          //exclude tokens which are not requested
-            if (owners != null && !owners.exists(owner => token.ownerOrRenewer(owner))) {
-              false
-              //Owners and the renewers can describe their own tokens
-            } else if (token.ownerOrRenewer(requestPrincipal)) {
-              true
-              // Check permission for non-owned tokens
-            } else if (authorize(request.session, Describe, new Resource(kafka.security.auth.DelegationToken, token.tokenId))) {
-              true
-            }
-            else {
-              false
-            }
-
-          include
-        }
-
+        val owners = if (describeTokenRequest.owners == null) None else Some(describeTokenRequest.owners.asScala.toList)
+        def authorizeToken(tokenId: String) = authorize(request.session, Describe, new Resource(kafka.security.auth.DelegationToken, tokenId))
+        def eligible(token: TokenInformation) = DelegationTokenManager.filterToken(requestPrincipal, owners, token, authorizeToken)
         val tokens =  tokenManager.getTokens(eligible)
         sendResponseCallback(Errors.NONE, tokens)
       }
     }
   }
 
-  def allowTokenRequests(request: RequestChannel.Request) : Boolean = {
-    if (request.session.principal.tokenAuthenticated || request.context.securityProtocol == SecurityProtocol.PLAINTEXT)
+  def allowTokenRequests(request: RequestChannel.Request): Boolean = {
+    val protocol = request.context.securityProtocol
+    if (request.session.principal.tokenAuthenticated ||
+      protocol == SecurityProtocol.PLAINTEXT ||
+      // disallow requests from 1-way SSL
+      (protocol == SecurityProtocol.SSL && request.session.principal == KafkaPrincipal.ANONYMOUS))
       false
     else
       true

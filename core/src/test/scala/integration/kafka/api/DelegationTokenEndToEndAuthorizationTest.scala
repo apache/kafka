@@ -60,9 +60,9 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     createScramCredentials(zkConnect, clientPrincipal, clientPassword)
 
     //create a token with "scram-user" credentials
-    val token = getDelegationToken()
+    val token = createDelegationToken()
 
-    // pass token info to client jaas config
+    // pass token to client jaas config
     val clientLoginContext = JaasTestUtils.tokenClientLoginModule(token.tokenInfo().tokenId(), token.hmacAsBase64String())
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
@@ -74,7 +74,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     super.setUp()
   }
 
-  def getDelegationToken(): DelegationToken = {
+  private def createDelegationToken(): DelegationToken = {
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     val securityProps: util.Map[Object, Object] =
@@ -85,10 +85,12 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
 
     val adminClient = AdminClient.create(config.asScala.toMap)
     var (error, token)  = adminClient.createToken(List())
-    adminClient.close()
 
     //wait for token to reach all the brokers
-    Thread.sleep(100)
+    TestUtils.waitUntilTrue(() => servers.forall(server => !server.tokenCache.tokens().isEmpty),
+      "Timed out waiting for token to propagate to all servers")
+    adminClient.close()
+
     token
   }
 }

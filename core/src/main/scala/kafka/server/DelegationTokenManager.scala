@@ -131,8 +131,26 @@ object DelegationTokenManager {
       case None =>
         None
     }
+  }
 
+  def filterToken(requestedPrincipal: KafkaPrincipal, owners : Option[List[KafkaPrincipal]], token: TokenInformation, authorizeToken: String => Boolean) : Boolean = {
 
+    val allow =
+    //exclude tokens which are not requested
+      if (!owners.isEmpty && !owners.get.exists(owner => token.ownerOrRenewer(owner))) {
+        false
+        //Owners and the renewers can describe their own tokens
+      } else if (token.ownerOrRenewer(requestedPrincipal)) {
+        true
+        // Check permission for non-owned tokens
+      } else if ((authorizeToken(token.tokenId))) {
+        true
+      }
+      else {
+        false
+      }
+
+    allow
   }
 }
 
@@ -214,7 +232,6 @@ class DelegationTokenManager(val config: KafkaConfig,
     val scramCredentialMap =  prepareScramCredentials(hmacString)
     tokenCache.updateCache(token, scramCredentialMap.asJava)
   }
-
   /**
    * @param hmacString
    */
@@ -477,6 +494,7 @@ case class CreateTokenResult(issueTimestamp: Long,
                              tokenId: String,
                              hmac: Array[Byte],
                              error: Errors) {
+
   override def equals(other: Any): Boolean = {
     other match {
       case that: CreateTokenResult =>
@@ -488,5 +506,10 @@ case class CreateTokenResult(issueTimestamp: Long,
           (hmac sameElements that.hmac)
       case _ => false
     }
+  }
+
+  override def hashCode(): Int = {
+    val fields = Seq(issueTimestamp, expiryTimestamp, maxTimestamp, tokenId, hmac, error)
+    fields.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
   }
 }

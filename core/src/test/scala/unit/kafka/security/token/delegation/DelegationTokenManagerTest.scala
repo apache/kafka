@@ -15,7 +15,7 @@
   * limitations under the License.
   */
 
-package unit.kafka.security.token.delegation
+package kafka.security.token.delegation
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
@@ -270,25 +270,8 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
       List()
     }
     else {
-      def eligible(token: TokenInformation): Boolean = {
-        val include =
-        //exclude tokens which are not requested
-          if (requestedOwners != null && !requestedOwners.exists(owner => token.ownerOrRenewer(owner))) {
-            false
-            //Owners and the renewers can describe their own tokens
-          } else if (token.ownerOrRenewer(requestPrincipal)) {
-            true
-            // Check permission for non-owned tokens
-          } else if (simpleAclAuthorizer.authorize(hostSession, Describe, new Resource(kafka.security.auth.DelegationToken, token.tokenId))) {
-            true
-          }
-          else {
-            false
-          }
-
-        include
-      }
-
+      def authorizeToken(tokenId: String) = simpleAclAuthorizer.authorize(hostSession, Describe, new Resource(kafka.security.auth.DelegationToken, tokenId))
+      def eligible(token: TokenInformation) = DelegationTokenManager.filterToken(requestPrincipal, Option(requestedOwners), token, authorizeToken)
       tokenManager.getTokens(eligible)
     }
   }

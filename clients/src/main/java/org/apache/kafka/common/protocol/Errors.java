@@ -571,7 +571,7 @@ public enum Errors {
             return new DelegationTokenOwnerMismatchException(message);
         }
     }),
-    DELEGATION_TOKEN_REQUEST_NOT_ALLOWED(64, "Delegation Token requests are not allowed on PLAINTEXT channels and " + "on delegation token authenticated channels.", new ApiExceptionBuilder() {
+    DELEGATION_TOKEN_REQUEST_NOT_ALLOWED(64, "Delegation Token requests are not allowed on PLAINTEXT/1-way SSL channels and " + "on delegation token authenticated channels.", new ApiExceptionBuilder() {
         @Override
         public ApiException build(String message) {
             return new UnsupportedByAuthenticationException(message);
