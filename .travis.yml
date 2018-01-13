@@ -34,12 +34,17 @@ env:
 jdk:
   - oraclejdk8
 
+addons:
+  apt:
+    packages: [shellcheck]
+
 before_install:
   - gradle wrapper
 
 script:
   - ./gradlew rat
   - ./gradlew systemTestLibs && /bin/bash ./tests/docker/run_tests.sh
+  - find . -name '*.sh' | xargs shellcheck ./tests/docker/ducker-ak
 
 services:
   - docker

@@ -14,11 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 SIGNAL=${SIGNAL:-TERM}
+# shellcheck disable=SC2009
 PIDS=$(ps ax | grep java | grep -i QuorumPeerMain | grep -v grep | awk '{print $1}')
 
 if [ -z "$PIDS" ]; then
   echo "No zookeeper server to stop"
   exit 1
 else
-  kill -s $SIGNAL $PIDS
+  # shellcheck disable=SC2086
+  kill -s "$SIGNAL" $PIDS
 fi

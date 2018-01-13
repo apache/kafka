@@ -20,11 +20,12 @@ KAFKA_NUM_CONTAINERS=${KAFKA_NUM_CONTAINERS:-14}
 TC_PATHS=${TC_PATHS:-./kafkatest/}
 
 die() {
-    echo $@
+    echo "$@"
     exit 1
 }
 
-if ${SCRIPT_DIR}/ducker-ak ssh | grep -q '(none)'; then
-    ${SCRIPT_DIR}/ducker-ak up -n "${KAFKA_NUM_CONTAINERS}" || die "ducker-ak up failed"
+if "$SCRIPT_DIR/ducker-ak" ssh | grep -q '(none)'; then
+    "$SCRIPT_DIR/ducker-ak" up -n "${KAFKA_NUM_CONTAINERS}" || die "ducker-ak up failed"
 fi
-${SCRIPT_DIR}/ducker-ak test ${TC_PATHS} ${_DUCKTAPE_OPTIONS} || die "ducker-ak test failed"
+# shellcheck disable=SC2086
+"$SCRIPT_DIR/ducker-ak" test "$TC_PATHS" ${_DUCKTAPE_OPTIONS} || die "ducker-ak test failed"

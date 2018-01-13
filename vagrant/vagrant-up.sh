@@ -17,10 +17,9 @@
 set -o nounset
 set -o errexit  # exit script if any command exits with nonzero value
 
-readonly PROG_NAME=$(basename $0)
-readonly PROG_DIR=$(dirname $(realpath $0))
+readonly PROG_NAME=$(basename "$0")
+readonly PROG_DIR=$(dirname "$(realpath "$0")")
 readonly INVOKE_DIR=$(pwd)
-readonly ARGS="$@"
 
 # overrideable defaults
 AWS=false
@@ -56,7 +55,7 @@ function help {
     exit 0
 }
 
-while [[ $# > 0 ]]; do
+while [ $# -gt 0 ]; do
     key="$1"
     case $key in
         -h | --help)
@@ -88,7 +87,6 @@ done
 function read_vagrant_machines {
     local ignore_state="ignore"
     local reading_state="reading"
-    local tmp_file="tmp-$RANDOM"
 
     local state="$ignore_state"
     local machines=""
@@ -128,7 +126,7 @@ function filter {
 
     local result=""
     for item in $list; do
-        if [[ ! -z "$(echo $item | grep "$pattern")"  ]]; then
+        if echo "$item" | grep -q "$pattern"; then
             result="$result $item"
         fi
     done
@@ -138,7 +136,8 @@ function filter {
 # Given a list of machine names, return only test worker machines
 function worker {
     local machines="$1"
-    local workers=$(filter "$machines" "worker")
+    local workers
+    workers=$(filter "$machines" "worker")
     workers=$(echo "$workers" | xargs)  # trim leading/trailing whitespace
     echo "$workers"
 }
@@ -146,7 +145,8 @@ function worker {
 # Given a list of machine names, return only zookeeper and broker machines
 function zk_broker {
     local machines="$1"
-    local zk_broker_list=$(filter "$machines" "zk")
+    local zk_broker_list
+    zk_broker_list=$(filter "$machines" "zk")
     zk_broker_list="$zk_broker_list $(filter "$machines" "broker")"
     zk_broker_list=$(echo "$zk_broker_list" | xargs)  # trim leading/trailing whitespace
     echo "$zk_broker_list"
@@ -176,9 +176,10 @@ function vagrant_batch_command {
     for machine in $machines; do
         m_group="$m_group $machine"
 
-        if [[ $(expr $count % $group_size) == 0 ]]; then
+        if [ $((count % group_size)) -eq 0 ]; then
             # We've reached a full group
             # Bring up this part of the cluster
+            # shellcheck disable=SC2086
             $vagrant_cmd $m_group
             m_group=""
         fi
@@ -187,6 +188,7 @@ function vagrant_batch_command {
 
     # Take care of any leftover partially complete group
     if [[ ! -z "$m_group" ]]; then
+        # shellcheck disable=SC2086
         $vagrant_cmd $m_group
     fi
 }
@@ -203,7 +205,8 @@ function bring_up_local {
 function bring_up_aws {
     local parallel="$1"
     local max_parallel="$2"
-    local machines="$(read_vagrant_machines)"
+    local machines
+    machines="$(read_vagrant_machines)"
     case "$3" in
           true)
             local debug="--debug"
@@ -219,6 +222,7 @@ function bring_up_aws {
         if [[ ! -z "$zk_broker_machines" ]]; then
             # We still have to bring up zookeeper/broker nodes serially
             echo "Bringing up zookeeper/broker machines serially"
+            # shellcheck disable=SC2086
             vagrant up --provider=aws --no-parallel --no-provision $zk_broker_machines $debug
             vagrant hostmanager
             vagrant provision
@@ -228,9 +232,10 @@ function bring_up_aws {
             echo "Bringing up test worker machines in parallel"
 	    # Try to isolate this job in its own /tmp space. See note
 	    # below about vagrant issue
-            local vagrant_rsync_temp_dir=$(mktemp -d);
+            local vagrant_rsync_temp_dir
+            vagrant_rsync_temp_dir=$(mktemp -d)
             TMPDIR=$vagrant_rsync_temp_dir vagrant_batch_command "vagrant up $debug --provider=aws" "$worker_machines" "$max_parallel"
-            rm -rf $vagrant_rsync_temp_dir
+            rm -rf "$vagrant_rsync_temp_dir"
             vagrant hostmanager
         fi
     else
@@ -249,9 +254,10 @@ function bring_up_aws {
     # script that are running/ran recently and may cause different
     # instances to sync to the wrong nodes
     for worker in $worker_machines; do
-        local vagrant_rsync_temp_dir=$(mktemp -d);
-        TMPDIR=$vagrant_rsync_temp_dir vagrant rsync $worker;
-        rm -rf $vagrant_rsync_temp_dir
+        local vagrant_rsync_temp_dir
+        vagrant_rsync_temp_dir=$(mktemp -d)
+        TMPDIR=$vagrant_rsync_temp_dir vagrant rsync "$worker"
+        rm -rf "$vagrant_rsync_temp_dir"
     done
 }
 

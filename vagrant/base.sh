@@ -20,7 +20,7 @@ set -ex
 # If you update this, also update tests/docker/Dockerfile
 export KIBOSH_VERSION=d85ac3ec44be0700efe605c16289fd901cfdaa13
 
-if [ -z `which javac` ]; then
+if ! which javac >/dev/null; then
     apt-get -y update
     apt-get install -y software-properties-common python-software-properties
     add-apt-repository -y ppa:webupd8team/java
@@ -70,18 +70,18 @@ get_kafka() {
     url=https://s3-us-west-2.amazonaws.com/kafka-packages/kafka_$scala_version-$version.tgz
     # the .tgz above does not include the streams test jar hence we need to get it separately
     url_streams_test=https://s3-us-west-2.amazonaws.com/kafka-packages/kafka-streams-$version-test.jar
-    if [ ! -d /opt/kafka-$version ]; then
+    if [ ! -d "/opt/kafka-$version" ]; then
         pushd /tmp
-        curl -O $url
-        curl -O $url_streams_test || true
-        file_tgz=`basename $url`
-        file_streams_jar=`basename $url_streams_test` || true
-        tar -xzf $file_tgz
-        rm -rf $file_tgz
+        curl -O "$url"
+        curl -O "$url_streams_test" || true
+        file_tgz=$(basename "$url")
+        file_streams_jar=$(basename "$url_streams_test") || true
+        tar -xzf "$file_tgz"
+        rm -rf "$file_tgz"
 
-        file=`basename $file_tgz .tgz`
-        mv $file $kafka_dir
-        mv $file_streams_jar $kafka_dir/libs || true
+        file=$(basename "$file_tgz" .tgz)
+        mv "$file" "$kafka_dir"
+        mv "$file_streams_jar" "$kafka_dir/libs" || true
         popd
     fi
 }

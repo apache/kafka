@@ -25,13 +25,15 @@ JMX_PORT=$3
 kafka_dir=/opt/kafka-dev
 cd $kafka_dir
 
-cp $kafka_dir/config/zookeeper.properties $kafka_dir/config/zookeeper-$ZKID.properties
-echo "initLimit=5" >> $kafka_dir/config/zookeeper-$ZKID.properties
-echo "syncLimit=2" >> $kafka_dir/config/zookeeper-$ZKID.properties
-echo "quorumListenOnAllIPs=true" >> $kafka_dir/config/zookeeper-$ZKID.properties
-for i in `seq 1 $NUM_ZK`; do
-    echo "server.${i}=zk${i}:2888:3888" >> $kafka_dir/config/zookeeper-$ZKID.properties
-done
+cp $kafka_dir/config/zookeeper.properties "$kafka_dir/config/zookeeper-$ZKID.properties"
+{
+    echo initLimit=5
+    echo syncLimit=2
+    echo quorumListenOnAllIPs=true
+    for i in $(seq 1 "$NUM_ZK"); do
+        echo "server.${i}=zk${i}:2888:3888"
+    done
+} >> "$kafka_dir/config/zookeeper-$ZKID.properties"
 
 mkdir -p /tmp/zookeeper
 echo "$ZKID" > /tmp/zookeeper/myid
@@ -44,4 +46,4 @@ if [[  -n $JMX_PORT ]]; then
   export JMX_PORT=$JMX_PORT
   export KAFKA_JMX_OPTS="-Djava.rmi.server.hostname=zk$ZKID -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false "
 fi
-bin/zookeeper-server-start.sh config/zookeeper-$ZKID.properties 1>> /tmp/zk.log 2>> /tmp/zk.log &
+bin/zookeeper-server-start.sh "config/zookeeper-$ZKID.properties" 1>> /tmp/zk.log 2>> /tmp/zk.log &

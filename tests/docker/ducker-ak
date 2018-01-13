@@ -93,7 +93,7 @@ EOF
 
 # Exit with an error message.
 die() {
-    echo $@
+    echo "$@"
     exit 1
 }
 
@@ -102,8 +102,8 @@ die() {
 # $@: The commands to check for.  This function will die if any of these commands are not found by
 #       the 'which' command.
 require_commands() {
-    local cmds="${@}"
-    for cmd in ${cmds}; do
+    local cmds=("$@")
+    for cmd in "${cmds[@]}"; do
         which -- "${cmd}" &> /dev/null || die "You must install ${cmd} to run this script."
     done
 }
@@ -122,7 +122,7 @@ set_once() {
     [[ -n "${!key}" ]] && die "Error: more than one value specified for ${what}."
     verify_command_line_argument "${value}" "${what}"
     # It would be better to use declare -g, but older bash versions don't support it.
-    export ${key}="${value}"
+    export "${key}"="${value}"
 }
 
 # Verify that a command-line argument is present and does not start with a slash.
@@ -180,9 +180,9 @@ must_do() {
             *) break;;
         esac
     done
-    local cmd="${@}"
+    local cmd="${1}"
     [[ "${verbose}" -eq 1 ]] && echo "${cmd}"
-    ${cmd} >${output} || die "${1} failed"
+    ${cmd} >${output} || die "${cmd} failed"
 }
 
 # Ask the user a yes/no question.
@@ -216,16 +216,16 @@ ducker_build() {
     must_pushd "${ducker_dir}"
     must_do -v -o docker build --memory="${docker_build_memory_limit}" \
         --build-arg "ducker_creator=${user_name}" -t "${image_name}" \
-        -f "${ducker_dir}/Dockerfile" ${docker_args} -- .
+        -f "${ducker_dir}/Dockerfile" -- .
     docker_status=$?
     must_popd
     duration="${SECONDS}"
     if [[ ${docker_status} -ne 0 ]]; then
-        die "** ERROR: Failed to build ${what} image after $((${duration} / 60))m \
-$((${duration} % 60))s.  See ${build_log} for details."
+        die "** ERROR: Failed to build ${what} image after $((duration / 60))m \
+$((duration % 60))s.  See build log for details."
     fi
-    echo "** Successfully built ${what} image in $((${duration} / 60))m \
-$((${duration} % 60))s.  See ${build_log} for details."
+    echo "** Successfully built ${what} image in $((duration / 60))m \
+$((duration % 60))s.  See build log for details."
 }
 
 docker_run() {
@@ -248,10 +248,12 @@ setup_custom_ducktape() {
     [[ -f "${custom_ducktape}/ducktape/__init__.py" ]] || \
         die "You must supply a valid ducktape directory to --custom-ducktape"
     docker_run ducker01 "${image_name}"
-    local running_container="$(docker ps -f=network=ducknet -q)"
+    local running_container
+    running_container="$(docker ps -f=network=ducknet -q)"
     must_do -v -o docker cp "${custom_ducktape}" "${running_container}:/opt/ducktape"
-    docker exec --user=root ducker01 bash -c 'set -x && cd /opt/kafka-dev/tests && sudo python ./setup.py develop install && cd /opt/ducktape && sudo python ./setup.py develop install'
-    [[ $? -ne 0 ]] && die "failed to install the new ducktape."
+    if ! docker exec --user=root ducker01 bash -c 'set -x && cd /opt/kafka-dev/tests && sudo python ./setup.py develop install && cd /opt/ducktape && sudo python ./setup.py develop install'; then
+        die 'failed to install the new ducktape.'
+    fi
     must_do -v -o docker commit ducker01 "${image_name}"
     must_do -v docker kill "${running_container}"
     must_do -v docker rm ducker01
@@ -298,8 +300,10 @@ it up anyway."
             exit 1
         fi
     fi
-    local running_containers="$(docker ps -f=network=ducknet -q)"
-    local num_running_containers=$(count ${running_containers})
+    local running_containers
+    running_containers=($(docker ps -f=network=ducknet -q))
+    local num_running_containers
+    num_running_containers=${#running_containers[@]}
     if [[ ${num_running_containers} -gt 0 ]]; then
         die "ducker_up: there are ${num_running_containers} ducker containers \
 running already.  Use ducker down to bring down these containers before \
@@ -322,15 +326,17 @@ attempting to start new ones."
     exec 3<> "${ducker_dir}/build/node_hosts"
     for n in $(seq -f %02g 1 ${num_nodes}); do
         local node="ducker${n}"
-        docker exec --user=root "${node}" grep "${node}" /etc/hosts >&3
-        [[ $? -ne 0 ]] && die "failed to find the /etc/hosts entry for ${node}"
+        if ! docker exec --user=root "${node}" grep "${node}" /etc/hosts >&3; then
+            die "failed to find the /etc/hosts entry for ${node}"
+        fi
     done
     exec 3>&-
     for n in $(seq -f %02g 1 ${num_nodes}); do
         local node="ducker${n}"
-        docker exec --user=root "${node}" \
-            bash -c "grep -v ${node} /opt/kafka-dev/tests/docker/build/node_hosts >> /etc/hosts"
-        [[ $? -ne 0 ]] && die "failed to append to the /etc/hosts file on ${node}"
+        if ! docker exec --user=root "${node}" \
+            bash -c "grep -v ${node} /opt/kafka-dev/tests/docker/build/node_hosts >> /etc/hosts"; then
+            die "failed to append to the /etc/hosts file on ${node}"
+        fi
     done
 
     echo "ducker_up: added the latest entries to /etc/hosts on each node."
@@ -367,13 +373,14 @@ cat<<EOF >&3
   ],
   "nodes": [
 EOF
-    for n in $(seq 2 ${num_nodes}); do
+    for n in $(seq 2 "$num_nodes"); do
       if [[ ${n} -eq ${num_nodes} ]]; then
         suffix=""
       else
         suffix=","
       fi
-      local node=$(printf ducker%02d ${n})
+      local node
+      node=$(printf ducker%02d "$n")
 cat<<EOF >&3
     {
       "externally_routable_ip": "${node}",
@@ -402,7 +409,6 @@ ducker_test() {
     [[ $# -lt 1 ]] && \
         die "ducker_test: you must supply at least one system test to run. Type --help for help."
     local args=""
-    local kafka_test=0
     for arg in "${@}"; do
         local regex=".*\/kafkatest\/(.*)"
         if [[ $arg =~ $regex ]]; then
@@ -443,17 +449,20 @@ Currently active containers: $(echo_running_container_names)"
         local guest_command_prefix="bash -c"
     fi
     if [[ "${node_name}" == "all" ]]; then
-        local nodes=$(echo_running_container_names)
+        local nodes
+        nodes=$(echo_running_container_names)
         [[ "${nodes}" == "(none)" ]] && die "ducker_ssh: can't locate any running ducker nodes."
         for node in ${nodes}; do
-            docker exec --user=${user_name} -i ${docker_flags} "${node}" \
+            # shellcheck disable=SC2086
+            docker exec --user="${user_name}" -i ${docker_flags} "${node}" \
                 ${guest_command_prefix} "${guest_command}" || die "docker exec ${node} failed"
         done
     else
         docker inspect --type=container -- "${node_name}" &>/dev/null || \
             die "ducker_ssh: can't locate node ${node_name}. Currently running nodes: \
 $(echo_running_container_names)"
-        exec docker exec --user=${user_name} -i ${docker_flags} "${node_name}" \
+        # shellcheck disable=SC2086
+        exec docker exec --user="${user_name}" -i ${docker_flags} "${node_name}" \
             ${guest_command_prefix} "${guest_command}"
     fi
 }
@@ -464,7 +473,7 @@ echo_running_container_names() {
     if [[ -z "${node_names}" ]]; then
         echo "(none)"
     else
-        echo ${node_names//$'\n'/ }
+        echo "${node_names//$'\n'/ }"
     fi
 }
 
@@ -478,10 +487,10 @@ ducker_down() {
         esac
     done
     local running_containers
-    running_containers="$(docker ps -f=network=ducknet -q)"
-    [[ $? -eq 0 ]]  || die "ducker_down: docker command failed.  Is the docker daemon running?"
+    running_containers="$(docker ps -f=network=ducknet -q)" || die "ducker_down: docker command failed.  Is the docker daemon running?"
     running_containers=${running_containers//$'\n'/ }
-    local all_containers="$(docker ps -a -f=network=ducknet -q)"
+    local all_containers
+    all_containers="$(docker ps -a -f=network=ducknet -q)"
     all_containers=${all_containers//$'\n'/ }
     if [[ -z "${all_containers}" ]]; then
         maybe_echo "${verbose}" "No ducker containers found."
@@ -499,6 +508,7 @@ ducker_down() {
     if docker network inspect ducknet &>/dev/null; then
         must_do -v docker network rm ducknet
     fi
+    # shellcheck disable=SC2086
     maybe_echo "${verbose}" "ducker_down: removed $(count ${all_containers}) containers."
 }
 
@@ -513,10 +523,8 @@ ducker_purge() {
     done
     echo "** ducker_purge: attempting to locate ducker images to purge"
     local images
-    images=$(docker images -q -a -f label=ducker.creator)
-    [[ $? -ne 0 ]] && die "docker images command failed"
+    images=$(docker images -q -a -f label=ducker.creator) || die 'docker images command failed'
     images=${images//$'\n'/ }
-    declare -a purge_images=()
     if [[ -z "${images}" ]]; then
         echo "** ducker_purge: no images found to purge."
         exit 0
@@ -524,18 +532,20 @@ ducker_purge() {
     echo "** ducker_purge: images to delete:"
     for image in ${images}; do
         echo -n "${image} "
-        docker inspect --format='{{.Config.Labels}} {{.Created}}' --type=image "${image}"
-        [[ $? -ne 0 ]] && die "docker inspect ${image} failed"
+        if ! docker inspect --format='{{.Config.Labels}} {{.Created}}' --type=image "${image}"; then
+            die "docker inspect ${image} failed"
+        fi
     done
     ask_yes_no "Delete these docker images? [y/n]"
     [[ "${_return}" -eq 0 ]] && exit 0
-    must_do -v -o docker rmi ${force_str} ${images}
+    # shellcheck disable=SC2086
+    must_do -v -o docker rmi "${force_str}" ${images}
 }
 
 # Parse command-line arguments
 [[ $# -lt 1 ]] && usage 0
 # Display the help text if -h or --help appears in the command line
-for arg in ${@}; do
+for arg in "$@"; do
     case "${arg}" in
         -h|--help) usage 0;;
         --) break;;
@@ -548,7 +558,7 @@ case "${action}" in
     help) usage 0;;
 
     up|test|ssh|down|purge)
-        ducker_${action} "${@}"; exit 0;;
+        "ducker_${action}" "${@}"; exit 0;;
 
     *)  echo "Unknown command '${action}'.  Type '${script_path} --help' for usage information."
         exit 1;;

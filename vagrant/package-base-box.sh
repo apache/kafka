@@ -17,8 +17,8 @@
 # This script automates the process of creating and packaging 
 # a new vagrant base_box. For use locally (not aws).
 
-base_dir=`dirname $0`/..
-cd $base_dir
+base_dir=$(dirname "$0")/..
+cd "$base_dir" || exit 1
 
 backup_vagrantfile=backup_Vagrantfile.local
 local_vagrantfile=Vagrantfile.local

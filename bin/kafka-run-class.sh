@@ -38,14 +38,14 @@ should_include_file() {
     return 0
   fi
   file=$1
-  if [ -z "$(echo "$file" | egrep "$regex")" ] ; then
+  if ! echo "$file" | grep -E -q "$regex"; then
     return 0
   else
     return 1
   fi
 }
 
-base_dir=$(dirname $0)/..
+base_dir=$(dirname "$0")/..
 
 if [ -z "$SCALA_VERSION" ]; then
   SCALA_VERSION=2.11.12
@@ -147,7 +147,7 @@ if [ -z "$KAFKA_JMX_OPTS" ]; then
 fi
 
 # JMX port to use
-if [  $JMX_PORT ]; then
+if [ "$JMX_PORT" ]; then
   KAFKA_JMX_OPTS="$KAFKA_JMX_OPTS -Dcom.sun.management.jmxremote.port=$JMX_PORT "
 fi
 
@@ -266,7 +266,9 @@ CLASSPATH=${CLASSPATH#:}
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
+  # shellcheck disable=SC2086
   nohup $JAVA $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp $CLASSPATH $KAFKA_OPTS "$@" > "$CONSOLE_OUTPUT_FILE" 2>&1 < /dev/null &
 else
+  # shellcheck disable=SC2086
   exec $JAVA $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp $CLASSPATH $KAFKA_OPTS "$@"
 fi

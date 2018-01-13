@@ -19,7 +19,7 @@ then
 	echo "USAGE: $0 [-daemon] server.properties [--override property=value]*"
 	exit 1
 fi
-base_dir=$(dirname $0)
+base_dir=$(dirname "$0")
 
 if [ "x$KAFKA_LOG4J_OPTS" = "x" ]; then
     export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/log4j.properties"
@@ -41,4 +41,5 @@ case $COMMAND in
     ;;
 esac
 
-exec $base_dir/kafka-run-class.sh $EXTRA_ARGS kafka.Kafka "$@"
+# shellcheck disable=SC2086
+exec "$(dirname "$0")/kafka-run-class.sh" $EXTRA_ARGS kafka.Kafka "$@"

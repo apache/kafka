@@ -27,9 +27,9 @@ sudo apt-get install -y \
   realpath \
   python-setuptools
 
-base_dir=`dirname $0`/../..
+base_dir=$(dirname "$0")/../..
 
-if [ -z `which vagrant` ]; then
+if ! which vagrant >/dev/null; then
     echo "Installing vagrant..."
     wget https://releases.hashicorp.com/vagrant/1.9.3/vagrant_1.9.3_x86_64.deb
     sudo dpkg -i vagrant_1.9.3_x86_64.deb
@@ -40,37 +40,38 @@ fi
 # Note: Do NOT install vagrant-cachier since it doesn't work on AWS and only
 # adds log noise
 vagrant_plugins="vagrant-aws vagrant-hostmanager"
-existing=`vagrant plugin list`
+existing=$(vagrant plugin list)
 for plugin in $vagrant_plugins; do
-    echo $existing | grep $plugin > /dev/null
-    if [ $? != 0 ]; then
-        vagrant plugin install $plugin
+    if ! echo "$existing" | grep -q "$plugin"; then
+        vagrant plugin install "$plugin"
     fi
 done
 
 # Create Vagrantfile.local as a convenience
 if [ ! -e "$base_dir/Vagrantfile.local" ]; then
-    cp $base_dir/vagrant/aws/aws-example-Vagrantfile.local $base_dir/Vagrantfile.local
+    cp "$base_dir/vagrant/aws/aws-example-Vagrantfile.local" "$base_dir/Vagrantfile.local"
 fi
 
 gradle="gradle-2.2.1"
-if [ -z `which gradle` ] && [ ! -d $base_dir/$gradle ]; then
+if ! which gradle >/dev/null && [ ! -d "$base_dir/$gradle" ]; then
     if [ ! -e $gradle-bin.zip ]; then
         wget https://services.gradle.org/distributions/$gradle-bin.zip
     fi
     unzip $gradle-bin.zip
     rm -rf $gradle-bin.zip
-    mv $gradle $base_dir/$gradle
+    mv $gradle "$base_dir/$gradle"
 fi
 
 # Ensure aws access keys are in the environment when we use a EC2 driver machine
 LOCAL_HOSTNAME=$(hostname -d)
 if [[ ${LOCAL_HOSTNAME} =~ .*\.compute\.internal ]]; then
-  grep "AWS ACCESS KEYS" ~/.bashrc > /dev/null
-  if [ $? != 0 ]; then
-    echo "# --- AWS ACCESS KEYS ---" >> ~/.bashrc
-    echo ". `realpath $base_dir/aws/aws-access-keys-commands`" >> ~/.bashrc
-    echo "# -----------------------" >> ~/.bashrc
-    source ~/.bashrc
-  fi
+    if ! grep -q "AWS ACCESS KEYS" ~/.bashrc; then
+        {
+            echo '# --- AWS ACCESS KEYS ---'
+            echo ". $(realpath "$base_dir/aws/aws-access-keys-commands")"
+            echo '# -----------------------'
+        } >> ~/.bashrc
+        # shellcheck source=/dev/null
+        source ~/.bashrc
+    fi
 fi
