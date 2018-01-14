@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream;
+package org.apache.kafka.streams.kstream.internals;
 
 public interface InternalValueTransformerWithKeySupplier<K, V, VR> {
     InternalValueTransformerWithKey<K, V, VR> get();

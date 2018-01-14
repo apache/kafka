@@ -309,7 +309,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public <V1> KTable<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper,
                                         final Serde<V1> valueSerde,
                                         final String queryableStoreName) {
-        return mapValues(withKey(mapper), Materialized.<K, V1, KeyValueStore<Bytes, byte[]>>as(queryableStoreName).withValueSerde(valueSerde));
+        return mapValues(withKey(mapper), Materialized.<K, V1, KeyValueStore<Bytes, byte[]>>as(queryableStoreName).
+                withValueSerde(valueSerde).withKeySerde(this.keySerde));
     }
 
     @SuppressWarnings("deprecation")

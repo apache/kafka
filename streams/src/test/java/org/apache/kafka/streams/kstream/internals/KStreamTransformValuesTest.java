@@ -26,8 +26,6 @@ import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.kstream.InternalValueTransformerWithKey;
-import org.apache.kafka.streams.kstream.InternalValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.test.KStreamTestDriver;
@@ -148,7 +146,7 @@ public class KStreamTransformValuesTest {
                 return new InternalValueTransformerWithKey<Integer, Integer, Integer>() {
                     @Override
                     public Integer punctuate(long timestamp) {
-                        return -1;
+                        throw new StreamsException("ValueTransformerWithKey#punctuate should not be called.");
                     }
 
                     @Override
