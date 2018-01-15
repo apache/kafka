@@ -163,12 +163,12 @@ class ConnectDistributedTest(Test):
         self.sink = MockSink(self.cc, self.topics.keys(), mode='connector-failure', delay_sec=5)
         self.sink.start()
 
-        wait_until(lambda: self.connector_is_failed(self.sink), timeout_sec=15,
+        wait_until(lambda: self.connector_is_failed(self.sink), timeout_sec=60,
                    err_msg="Failed to see connector transition to the FAILED state")
 
         self.cc.restart_connector(self.sink.name)
         
-        wait_until(lambda: self.connector_is_running(self.sink), timeout_sec=10,
+        wait_until(lambda: self.connector_is_running(self.sink), timeout_sec=60,
                    err_msg="Failed to see connector transition to the RUNNING state")
 
     @cluster(num_nodes=5)
@@ -187,12 +187,12 @@ class ConnectDistributedTest(Test):
         connector.start()
 
         task_id = 0
-        wait_until(lambda: self.task_is_failed(connector, task_id), timeout_sec=20,
+        wait_until(lambda: self.task_is_failed(connector, task_id), timeout_sec=60,
                    err_msg="Failed to see task transition to the FAILED state")
 
         self.cc.restart_task(connector.name, task_id)
         
-        wait_until(lambda: self.task_is_running(connector, task_id), timeout_sec=10,
+        wait_until(lambda: self.task_is_running(connector, task_id), timeout_sec=60,
                    err_msg="Failed to see task transition to the RUNNING state")
 
     @cluster(num_nodes=5)
@@ -209,14 +209,14 @@ class ConnectDistributedTest(Test):
         self.source = VerifiableSource(self.cc, topic=self.TOPIC)
         self.source.start()
 
-        wait_until(lambda: self.is_running(self.source), timeout_sec=30,
+        wait_until(lambda: self.is_running(self.source), timeout_sec=60,
                    err_msg="Failed to see connector transition to the RUNNING state")
         
         self.cc.pause_connector(self.source.name)
 
         # wait until all nodes report the paused transition
         for node in self.cc.nodes:
-            wait_until(lambda: self.is_paused(self.source, node), timeout_sec=30,
+            wait_until(lambda: self.is_paused(self.source, node), timeout_sec=60,
                        err_msg="Failed to see connector transition to the PAUSED state")
 
         # verify that we do not produce new messages while paused
@@ -227,11 +227,11 @@ class ConnectDistributedTest(Test):
         self.cc.resume_connector(self.source.name)
 
         for node in self.cc.nodes:
-            wait_until(lambda: self.is_running(self.source, node), timeout_sec=30,
+            wait_until(lambda: self.is_running(self.source, node), timeout_sec=60,
                        err_msg="Failed to see connector transition to the RUNNING state")
 
         # after resuming, we should see records produced again
-        wait_until(lambda: len(self.source.sent_messages()) > num_messages, timeout_sec=30,
+        wait_until(lambda: len(self.source.sent_messages()) > num_messages, timeout_sec=60,
                    err_msg="Failed to produce messages after resuming source connector")
 
     @cluster(num_nodes=5)
@@ -249,20 +249,20 @@ class ConnectDistributedTest(Test):
         self.source = VerifiableSource(self.cc, topic=self.TOPIC)
         self.source.start()
 
-        wait_until(lambda: len(self.source.committed_messages()) > 0, timeout_sec=30,
+        wait_until(lambda: len(self.source.committed_messages()) > 0, timeout_sec=60,
                    err_msg="Timeout expired waiting for source task to produce a message")
 
         self.sink = VerifiableSink(self.cc, topics=[self.TOPIC])
         self.sink.start()
 
-        wait_until(lambda: self.is_running(self.sink), timeout_sec=30,
+        wait_until(lambda: self.is_running(self.sink), timeout_sec=60,
                    err_msg="Failed to see connector transition to the RUNNING state")
         
         self.cc.pause_connector(self.sink.name)
 
         # wait until all nodes report the paused transition
         for node in self.cc.nodes:
-            wait_until(lambda: self.is_paused(self.sink, node), timeout_sec=30,
+            wait_until(lambda: self.is_paused(self.sink, node), timeout_sec=60,
                        err_msg="Failed to see connector transition to the PAUSED state")
 
         # verify that we do not consume new messages while paused
@@ -273,11 +273,11 @@ class ConnectDistributedTest(Test):
         self.cc.resume_connector(self.sink.name)
 
         for node in self.cc.nodes:
-            wait_until(lambda: self.is_running(self.sink, node), timeout_sec=30,
+            wait_until(lambda: self.is_running(self.sink, node), timeout_sec=60,
                        err_msg="Failed to see connector transition to the RUNNING state")
 
         # after resuming, we should see records consumed again
-        wait_until(lambda: len(self.sink.received_messages()) > num_messages, timeout_sec=30,
+        wait_until(lambda: len(self.sink.received_messages()) > num_messages, timeout_sec=60,
                    err_msg="Failed to consume messages after resuming sink connector")
 
     @cluster(num_nodes=5)
@@ -293,7 +293,7 @@ class ConnectDistributedTest(Test):
         self.source = VerifiableSource(self.cc, topic=self.TOPIC)
         self.source.start()
 
-        wait_until(lambda: self.is_running(self.source), timeout_sec=30,
+        wait_until(lambda: self.is_running(self.source), timeout_sec=60,
                    err_msg="Failed to see connector transition to the RUNNING state")
         
         self.cc.pause_connector(self.source.name)
@@ -302,7 +302,7 @@ class ConnectDistributedTest(Test):
 
         # we should still be paused after restarting
         for node in self.cc.nodes:
-            wait_until(lambda: self.is_paused(self.source, node), timeout_sec=30,
+            wait_until(lambda: self.is_paused(self.source, node), timeout_sec=60,
                        err_msg="Failed to see connector startup in PAUSED state")
 
     @cluster(num_nodes=5)
@@ -329,7 +329,7 @@ class ConnectDistributedTest(Test):
         # do rebalancing of the group, etc, and b) without explicit leave group support, rebalancing takes awhile
         for node in self.cc.nodes:
             node.account.ssh("echo -e -n " + repr(self.FIRST_INPUTS) + " >> " + self.INPUT_FILE)
-        wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST), timeout_sec=70, err_msg="Data added to input file was not seen in the output file in a reasonable amount of time.")
+        wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST), timeout_sec=120, err_msg="Data added to input file was not seen in the output file in a reasonable amount of time.")
 
         # Restarting both should result in them picking up where they left off,
         # only processing new data.
@@ -337,7 +337,7 @@ class ConnectDistributedTest(Test):
 
         for node in self.cc.nodes:
             node.account.ssh("echo -e -n " + repr(self.SECOND_INPUTS) + " >> " + self.INPUT_FILE)
-        wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST), timeout_sec=70, err_msg="Sink output file never converged to the same state as the input file")
+        wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST), timeout_sec=120, err_msg="Sink output file never converged to the same state as the input file")
 
     @cluster(num_nodes=5)
     @matrix(clean=[True, False])
@@ -364,7 +364,7 @@ class ConnectDistributedTest(Test):
                 self.cc.stop_node(node, clean_shutdown=clean)
                 with node.account.monitor_log(self.cc.LOG_FILE) as monitor:
                     self.cc.start_node(node)
-                    monitor.wait_until("Starting connectors and tasks using config offset", timeout_sec=90,
+                    monitor.wait_until("Starting connectors and tasks using config offset", timeout_sec=150,
                                        err_msg="Kafka Connect worker didn't successfully join group and start work")
                 self.logger.info("Bounced Kafka Connect on %s and rejoined in %f seconds", node.account, time.time() - started)
 
@@ -442,7 +442,7 @@ class ConnectDistributedTest(Test):
         if not success:
             self.mark_for_collect(self.cc)
             # Also collect the data in the topic to aid in debugging
-            consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, consumer_timeout_ms=1000, print_key=True)
+            consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.source.topic, consumer_timeout_ms=2000, print_key=True)
             consumer_validator.run()
             self.mark_for_collect(consumer_validator, "consumer_stdout")
 
@@ -473,12 +473,12 @@ class ConnectDistributedTest(Test):
             'transforms.insertTimestampField.timestamp.field': ts_fieldname,
         })
 
-        wait_until(lambda: self.connector_is_running(source_connector), timeout_sec=30, err_msg='Failed to see connector transition to the RUNNING state')
+        wait_until(lambda: self.connector_is_running(source_connector), timeout_sec=60, err_msg='Failed to see connector transition to the RUNNING state')
 
         for node in self.cc.nodes:
             node.account.ssh("echo -e -n " + repr(self.FIRST_INPUTS) + " >> " + self.INPUT_FILE)
 
-        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC, consumer_timeout_ms=15000, print_timestamp=True)
+        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC, consumer_timeout_ms=30000, print_timestamp=True)
         consumer.run()
 
         assert len(consumer.messages_consumed[1]) == len(self.FIRST_INPUT_LIST)
