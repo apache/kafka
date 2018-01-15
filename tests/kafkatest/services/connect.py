@@ -103,7 +103,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     def start_and_wait_to_load_plugins(self, node, worker_type, remote_connector_configs):
         with node.account.monitor_log(self.LOG_FILE) as monitor:
             self.start_and_return_immediately(node, worker_type, remote_connector_configs)
-            monitor.wait_until('Kafka Connect started', timeout_sec=60,
+            monitor.wait_until('Kafka version', timeout_sec=60,
                                err_msg="Never saw message indicating Kafka Connect finished startup on node: " +
                                        "%s in condition mode: %s" % (str(node.account), self.startup_mode))
 
