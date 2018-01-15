@@ -49,6 +49,10 @@ public class FetcherMetricsRegistry {
     public MetricNameTemplate partitionRecordsLag;
     public MetricNameTemplate partitionRecordsLagMax;
     public MetricNameTemplate partitionRecordsLagAvg;
+    // To remove in 2.0
+    public MetricNameTemplate partitionRecordsLagDeprecated;
+    public MetricNameTemplate partitionRecordsLagMaxDeprecated;
+    public MetricNameTemplate partitionRecordsLagAvgDeprecated;
 
     public FetcherMetricsRegistry() {
         this(new HashSet<String>(), "");
@@ -117,13 +121,22 @@ public class FetcherMetricsRegistry {
         this.topicRecordsConsumedTotal = new MetricNameTemplate("records-consumed-total", groupName,
                 "The total number of records consumed for a topic", topicTags);
         
+        this.partitionRecordsLagDeprecated = new MetricNameTemplate("{topic}-{partition}.records-lag", groupName,
+                "The latest lag of the partition (DEPRECATED use the tag based version instead)", tags);
+        this.partitionRecordsLagMaxDeprecated = new MetricNameTemplate("{topic}-{partition}.records-lag-max", groupName,
+                "The max lag of the partition (DEPRECATED use the tag based version instead)", tags);
+        this.partitionRecordsLagAvgDeprecated = new MetricNameTemplate("{topic}-{partition}.records-lag-avg", groupName,
+                "The average lag of the partition (DEPRECATED use the tag based version instead)", tags);
+
         /***** Partition level *****/
-        this.partitionRecordsLag = new MetricNameTemplate("{topic}-{partition}.records-lag", groupName, 
-                "The latest lag of the partition", tags);
-        this.partitionRecordsLagMax = new MetricNameTemplate("{topic}-{partition}.records-lag-max", groupName, 
-                "The max lag of the partition", tags);
-        this.partitionRecordsLagAvg = new MetricNameTemplate("{topic}-{partition}.records-lag-avg", groupName, 
-                "The average lag of the partition", tags);
+        Set<String> partitionTags = new HashSet<>(topicTags);
+        partitionTags.add("partition");
+        this.partitionRecordsLag = new MetricNameTemplate("records-lag", groupName,
+                "The latest lag of the partition", partitionTags);
+        this.partitionRecordsLagMax = new MetricNameTemplate("records-lag-max", groupName,
+                "The max lag of the partition", partitionTags);
+        this.partitionRecordsLagAvg = new MetricNameTemplate("records-lag-avg", groupName,
+                "The average lag of the partition", partitionTags);
         
     
     }
@@ -151,6 +164,9 @@ public class FetcherMetricsRegistry {
             topicRecordsPerRequestAvg,
             topicRecordsConsumedRate,
             topicRecordsConsumedTotal,
+            partitionRecordsLagDeprecated,
+            partitionRecordsLagAvgDeprecated,
+            partitionRecordsLagMaxDeprecated,
             partitionRecordsLag,
             partitionRecordsLagAvg,
             partitionRecordsLagMax
