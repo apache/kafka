@@ -137,6 +137,8 @@ public class ValueConversion {
                 } else {
                     sb.append(',');
                 }
+                append(sb, field.name(), true);
+                sb.append(':');
                 append(sb, struct.get(field), true);
             }
             sb.append('}');
