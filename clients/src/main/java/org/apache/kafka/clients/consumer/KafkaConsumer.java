@@ -191,7 +191,7 @@ import java.util.regex.Pattern;
  * demonstrate how to use them.
  *
  * <h4>Automatic Offset Committing</h4>
- * This example demonstrates a simple usage of Kafka's consumer api that relying on automatic offset committing.
+ * This example demonstrates a simple usage of Kafka's consumer api that relies on automatic offset committing.
  * <p>
  * <pre>
  *     Properties props = new Properties();
