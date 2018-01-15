@@ -17,9 +17,15 @@
 
 package kafka.security.auth
 
+import java.nio.charset.StandardCharsets
+
+import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.utils.Json
+import kafka.utils.json.JsonValue
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.SecurityUtils
+
 import scala.collection.JavaConverters._
 
 object Acl {
@@ -33,6 +39,7 @@ object Acl {
   val VersionKey = "version"
   val CurrentVersion = 1
   val AclsKey = "acls"
+  private val mapper = new ObjectMapper()
 
   /**
    *
@@ -58,7 +65,7 @@ object Acl {
     if (bytes == null || bytes.isEmpty)
       return collection.immutable.Set.empty[Acl]
 
-    Json.parseBytesIncludingACLs(bytes).map(_.asJsonObject).map { js =>
+    tryParseBytesIncludingACLs(bytes).right.map(_.asJsonObject).right.map { js =>
       //the acl json version.
       require(js(VersionKey).to[Int] == CurrentVersion)
       js(AclsKey).asJsonArray.iterator.map(_.asJsonObject).map { itemJs =>
@@ -68,12 +75,28 @@ object Acl {
         val operation = Operation.fromString(itemJs(OperationKey).to[String])
         new Acl(principal, permissionType, host, operation)
       }.toSet
-    }.getOrElse(Set.empty)
+    }.right.getOrElse(Set.empty)
   }
 
   def toJsonCompatibleMap(acls: Set[Acl]): Map[String, Any] = {
     Map(Acl.VersionKey -> Acl.CurrentVersion, Acl.AclsKey -> acls.map(acl => acl.toMap.asJava).toList.asJava)
   }
+
+  /**
+    * Parse a JSON string into a JsonValue if possible. `None` is returned if `input` is not valid JSON. This method is currently used
+    * to read the already stored invalid ACLs JSON which was persisted using older versions of Kafka (prior to Kafka 1.1.0). KAFKA-6319
+    */
+  private def tryParseBytesIncludingACLs(input: Array[Byte]): Either[JsonProcessingException, JsonValue] =
+    try Right(mapper.readTree(input)).right.map(JsonValue(_))
+    catch {
+      case _: JsonProcessingException =>
+        // Before 1.0.1, Json#encode did not escape backslash or any other special characters. SSL principals
+        // stored in ACLs may contain backslash as an escape char, making the JSON generated in earlier versions invalid.
+        // Escape backslash and retry to handle these strings which may have been persisted in ZK.
+        // Note that this does not handle all special characters (e.g. non-escaped double quotes are not supported)
+        val escapedInput = new String(input, StandardCharsets.UTF_8).replaceAll("\\\\", "\\\\\\\\")
+        Json.tryParseBytes(escapedInput.getBytes(StandardCharsets.UTF_8))
+    }
 }
 
 /**

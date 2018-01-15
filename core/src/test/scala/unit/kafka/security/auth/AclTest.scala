@@ -18,11 +18,15 @@ package kafka.security.auth
 
 import java.nio.charset.StandardCharsets.UTF_8
 
+import com.fasterxml.jackson.core.JsonProcessingException
 import kafka.utils.Json
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.junit.Assert.assertEquals
 import org.junit.{Assert, Test}
 import org.scalatest.junit.JUnitSuite
+
 import scala.collection.JavaConverters._
+import scala.collection.Map
 
 class AclTest extends JUnitSuite {
 
@@ -41,6 +45,15 @@ class AclTest extends JUnitSuite {
 
     Assert.assertEquals(acls, Acl.fromBytes(jsonAcls))
     Assert.assertEquals(acls, Acl.fromBytes(AclJson.getBytes(UTF_8)))
+  }
+
+  @Test
+  def testJsonParseWithBackslashEscaping() = {
+    // Test with encoder that properly escapes backslash and quotes
+    val map = Map("foo1" -> """bar1\,bar2""", "foo2" -> """\bar""")
+    val encoded = Json.legacyEncodeAsString(map)
+    val decoded = Json.parseFull(encoded)
+    assertEquals(Json.parseFull("""{"foo1":"bar1\\,bar2", "foo2":"\\bar"}"""), decoded)
   }
 
 }
