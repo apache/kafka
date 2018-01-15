@@ -20,7 +20,6 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.Header;
-import org.apache.kafka.connect.header.Headers;
 
 /**
  * SinkRecord is a {@link ConnectRecord} that has been read from Kafka and includes the kafkaOffset of

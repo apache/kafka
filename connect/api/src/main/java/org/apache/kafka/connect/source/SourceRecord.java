@@ -19,7 +19,6 @@ package org.apache.kafka.connect.source;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.Header;
-import org.apache.kafka.connect.header.Headers;
 
 import java.util.Map;
 

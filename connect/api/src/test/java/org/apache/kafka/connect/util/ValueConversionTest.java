@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.storage;
+package org.apache.kafka.connect.util;
 
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -27,12 +27,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
-public class SimpleHeaderConverterTest {
+public class ValueConversionTest {
 
     private static final String TOPIC = "topic";
     private static final String HEADER = "header";
@@ -67,11 +66,18 @@ public class SimpleHeaderConverterTest {
         INT_LIST.add(-987654321);
     }
 
-    private SimpleHeaderConverter converter;
+    private ValueConversion converter;
 
     @Before
     public void beforeEach() {
-        converter = new SimpleHeaderConverter();
+        converter = new ValueConversion();
+    }
+
+    @Test
+    public void shouldEscapeStringsWithEmbeddedQuotesAndBackslashes() {
+        String original = "three\"blind\\\"mice";
+        String expected = "three\\\"blind\\\\\\\"mice";
+        assertEquals(expected, converter.escape(original));
     }
 
     @Test
@@ -190,13 +196,13 @@ public class SimpleHeaderConverterTest {
     }
 
     protected SchemaAndValue roundTrip(Schema schema, Object input) {
-        byte[] serialized = converter.fromConnectHeader(TOPIC, HEADER, schema, input);
-        return converter.toConnectHeader(TOPIC, HEADER, serialized);
+        String serialized = converter.asString(input);
+        return converter.fromString(serialized);
     }
 
     protected void assertRoundTrip(Schema schema, Object value) {
-        byte[] serialized = converter.fromConnectHeader(TOPIC, HEADER, schema, value);
-        SchemaAndValue result = converter.toConnectHeader(TOPIC, HEADER, serialized);
+        String serialized = converter.asString(value);
+        SchemaAndValue result = converter.fromString(serialized);
 
         if (value == null) {
             assertNull(serialized);
@@ -207,13 +213,13 @@ public class SimpleHeaderConverterTest {
             assertEquals(value, result.value());
             assertEquals(schema, result.schema());
 
-            byte[] serialized2 = converter.fromConnectHeader(TOPIC, HEADER, result.schema(), result.value());
-            SchemaAndValue result2 = converter.toConnectHeader(TOPIC, HEADER, serialized2);
+            String serialized2 = converter.asString(result.value());
+            SchemaAndValue result2 = converter.fromString(serialized2);
             assertNotNull(serialized2);
             assertEquals(schema, result2.schema());
             assertEquals(value, result2.value());
             assertEquals(result, result2);
-            assertArrayEquals(serialized, serialized);
+            assertEquals(serialized, serialized2);
         }
     }
 

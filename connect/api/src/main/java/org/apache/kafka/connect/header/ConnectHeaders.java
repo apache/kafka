@@ -56,7 +56,7 @@ public class ConnectHeaders implements Headers {
     public ConnectHeaders(Iterable<Header> original) {
         if (original != null) {
             if (original instanceof ConnectHeaders) {
-                ConnectHeaders headers = (ConnectHeaders)original;
+                ConnectHeaders headers = (ConnectHeaders) original;
                 if (!headers.isEmpty()) {
                     this.headers = new LinkedList<>(((ConnectHeaders) original).headers);
                 }

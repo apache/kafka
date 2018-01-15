@@ -62,7 +62,7 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
         if (headers == null) {
             this.headers = new ConnectHeaders();
         } else if (headers instanceof ConnectHeaders) {
-            this.headers = (ConnectHeaders)headers;
+            this.headers = (ConnectHeaders) headers;
         } else {
             this.headers = new ConnectHeaders(headers);
         }
