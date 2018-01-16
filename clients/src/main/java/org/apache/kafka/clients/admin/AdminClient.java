@@ -24,6 +24,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.requests.QuotaConfigResourceTuple;
+import org.apache.kafka.common.requests.Resource;
 
 import java.util.Collection;
 import java.util.Map;
@@ -561,4 +562,35 @@ public abstract class AdminClient implements AutoCloseable {
      * @since 1.1.0
      */
     public abstract DescribeQuotasResult describeQuotas(Map<QuotaConfigResourceTuple, Collection<String>> configs, DescribeQuotasOptions options);
+
+    /**
+     * Returns the list of quota config entities specified by the parameter.
+     *
+     * @param quotaConfigResource The quota entity that we want to list. If only {@link Resource#type} is given, then
+     *                            the list command will return all entities with the given type. Valid types are
+     *                            {@link org.apache.kafka.common.requests.ResourceType#CLIENT} and
+     *                            {@link org.apache.kafka.common.requests.ResourceType#USER}. If also {@link Resource#name}
+     *                            is specified and not empty, then all children of that entity will be returned.
+     *                            In this case the `type` must be {@link org.apache.kafka.common.requests.ResourceType#USER}.
+     * @return                    A list of quota config resources' names.
+     * @since 1.1.0
+     */
+    public ListQuotasResult listQuotas(Resource quotaConfigResource) {
+        return listQuotas(quotaConfigResource, new ListQuotasOptions());
+    }
+
+    /**
+     * Returns the list of quota config entities specified by the parameter.
+     *
+     * @param quotaConfigResource The quota entity that we want to list. If only {@link Resource#type} is given, then
+     *                            the list command will return all entities with the given type. Valid types are
+     *                            {@link org.apache.kafka.common.requests.ResourceType#CLIENT} and
+     *                            {@link org.apache.kafka.common.requests.ResourceType#USER}. If also {@link Resource#name}
+     *                            is specified and not empty, then all children of that entity will be returned.
+     *                            In this case the `type` must be {@link org.apache.kafka.common.requests.ResourceType#USER}.
+     * @param options             Additional options to list the quota configs.
+     * @return                    A list of quota config resources' names.
+     * @since 1.1.0
+     */
+    public abstract ListQuotasResult listQuotas(Resource quotaConfigResource, ListQuotasOptions options);
 }

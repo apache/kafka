@@ -458,6 +458,19 @@ class AdminManager(val config: KafkaConfig,
     }
   }
 
+  def listQuotas(resource: Resource): Seq[String] = {
+    resource.`type` match {
+      case ResourceType.USER =>
+        Option(resource.name) match {
+          case Some(userName) if userName.length > 0 => adminZkClient.listChildrenConfigs(ConfigType.User, userName)
+          case _ => adminZkClient.listChildrenConfigs(ConfigType.User)
+        }
+      case ResourceType.CLIENT =>
+        adminZkClient.listChildrenConfigs(ConfigType.Client)
+      case _ => throw new InvalidRequestException("Invalid resource type provided")
+    }
+  }
+
   def shutdown() {
     topicPurgatory.shutdown()
     CoreUtils.swallow(createTopicPolicy.foreach(_.close()), this)

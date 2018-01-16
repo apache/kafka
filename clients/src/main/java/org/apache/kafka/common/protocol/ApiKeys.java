@@ -75,6 +75,8 @@ import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetRequest;
 import org.apache.kafka.common.requests.ListOffsetResponse;
+import org.apache.kafka.common.requests.ListQuotasRequest;
+import org.apache.kafka.common.requests.ListQuotasResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
@@ -175,7 +177,9 @@ public enum ApiKeys {
     CREATE_PARTITIONS(37, "CreatePartitions", CreatePartitionsRequest.schemaVersions(),
             CreatePartitionsResponse.schemaVersions()),
     DESCRIBE_QUOTAS(38, "DescribeQuotas", DescribeQuotasRequest.schemaVersions(),
-            DescribeQuotasResponse.schemaVersions());
+            DescribeQuotasResponse.schemaVersions()),
+    LIST_QUOTAS(39, "ListQuotas", ListQuotasRequest.schemaVersions(),
+            ListQuotasResponse.schemaVersions());
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

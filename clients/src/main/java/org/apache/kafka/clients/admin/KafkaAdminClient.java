@@ -89,6 +89,8 @@ import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.requests.DescribeQuotasRequest;
 import org.apache.kafka.common.requests.DescribeQuotasResponse;
+import org.apache.kafka.common.requests.ListQuotasRequest;
+import org.apache.kafka.common.requests.ListQuotasResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.QuotaConfigResourceTuple;
@@ -2031,5 +2033,31 @@ public class KafkaAdminClient extends AdminClient {
             }, now);
         }
         return new DescribeQuotasResult(resultMap);
+    }
+
+    @Override
+    public ListQuotasResult listQuotas(final Resource quotaConfigResource, ListQuotasOptions options) {
+        final KafkaFutureImpl<List<String>> quotaEntityNamesFuture = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        runnable.call(new Call("listQuotas", calcDeadlineMs(now, options.timeoutMs()),
+                new LeastLoadedNodeProvider()) {
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new ListQuotasRequest.Builder(quotaConfigResource);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                ListQuotasResponse response = (ListQuotasResponse) abstractResponse;
+                List<String> quotaEntityNames = response.quotaEntityNames();
+                quotaEntityNamesFuture.complete(quotaEntityNames);
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                quotaEntityNamesFuture.completeExceptionally(throwable);
+            }
+        }, now);
+        return new ListQuotasResult(quotaEntityNamesFuture);
     }
 }

@@ -111,14 +111,14 @@ public class DescribeQuotasRequest extends AbstractRequest {
         return Collections.unmodifiableMap(quotaConfigSettings);
     }
 
-    private Struct wrapQuotaConfigResource(Resource quota, Struct parent, String field) {
+    static Struct wrapQuotaConfigResource(Resource quota, Struct parent, String field) {
         Struct struct = parent.instance(field);
         struct.set(QUOTA_TYPE_KEY_NAME, quota.type().id());
         struct.set(QUOTA_NAME_KEY_NAME, quota.name());
         return struct;
     }
 
-    private Resource unwrapQuotaConfigResource(Struct quotaStruct) {
+    static Resource unwrapQuotaConfigResource(Struct quotaStruct) {
         ResourceType type = ResourceType.forId(quotaStruct.getByte(QUOTA_TYPE_KEY_NAME));
         return new Resource(type, quotaStruct.getString(QUOTA_NAME_KEY_NAME));
     }
@@ -144,21 +144,20 @@ public class DescribeQuotasRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-//        short version = version();
-//        switch (version) {
-//            case 0:
-//                ApiError error = ApiError.fromThrowable(e);
-//                Map<Resource, DescribeConfigsResponse.Config> errors = new HashMap<>(resources().size());
-//                DescribeConfigsResponse.Config config = new DescribeConfigsResponse.Config(error,
-//                        Collections.<DescribeConfigsResponse.ConfigEntry>emptyList());
-//                for (Resource resource : resources())
-//                    errors.put(resource, config);
-//                return new DescribeConfigsResponse(throttleTimeMs, errors);
-//            default:
-//                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-//                        version, this.getClass().getSimpleName(), ApiKeys.DESCRIBE_CONFIGS.latestVersion()));
-//        }
-        return null;
+        short version = version();
+        switch (version) {
+            case 0:
+                ApiError error = ApiError.fromThrowable(e);
+                Map<QuotaConfigResourceTuple, DescribeConfigsResponse.Config> errors = new HashMap<>(quotaConfigSettings.size());
+                DescribeConfigsResponse.Config config = new DescribeConfigsResponse.Config(error,
+                        Collections.<DescribeConfigsResponse.ConfigEntry>emptyList());
+                for (QuotaConfigResourceTuple resource : quotaConfigSettings.keySet())
+                    errors.put(resource, config);
+                return new DescribeQuotasResponse(throttleTimeMs, errors);
+            default:
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        version, this.getClass().getSimpleName(), ApiKeys.DESCRIBE_QUOTAS.latestVersion()));
+        }
     }
 
     public static DescribeQuotasRequest parse(ByteBuffer buffer, short version) {

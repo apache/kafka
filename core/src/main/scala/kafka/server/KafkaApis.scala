@@ -136,6 +136,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
         case ApiKeys.CREATE_PARTITIONS => handleCreatePartitionsRequest(request)
         case ApiKeys.DESCRIBE_QUOTAS => handleDescribeQuotasRequest(request)
+        case ApiKeys.LIST_QUOTAS => handleListQuotasRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -1968,6 +1969,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       resource._1 -> new DescribeConfigsResponse.Config(error, Collections.emptyList[DescribeConfigsResponse.ConfigEntry])
     }
     sendResponseMaybeThrottle(request, requestThrottleMs => new DescribeQuotasResponse(requestThrottleMs, (authorizedConfigs ++ unauthorizedConfigs).asJava))
+  }
+
+  def handleListQuotasRequest(request: RequestChannel.Request): Unit = {
+    val listQuotasRequest = request.body[ListQuotasRequest]
+    if (authorize(request.session, Describe, Resource.ClusterResource)) {
+      val quotaEntityNames = adminManager.listQuotas(listQuotasRequest.quotaConfigResource());
+      sendResponseMaybeThrottle(request, requestThrottleMs => new ListQuotasResponse(requestThrottleMs, quotaEntityNames.asJava))
+    } else {
+      val error = configsAuthorizationApiError(request.session, listQuotasRequest.quotaConfigResource)
+      sendResponseMaybeThrottle(request, requestThrottleMs => new ListQuotasResponse(requestThrottleMs, error))
+    }
   }
 
   def handleAlterReplicaLogDirsRequest(request: RequestChannel.Request): Unit = {

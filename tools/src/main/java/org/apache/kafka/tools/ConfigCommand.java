@@ -73,7 +73,7 @@ public class ConfigCommand {
         new ConfigCommand().run(args);
     }
 
-    void run(String[] args) {
+    private void run(String[] args) {
         try {
             doRun(args);
         } catch (IOException | ConfigCommandException | ArgumentParserException e) {
@@ -127,10 +127,10 @@ public class ConfigCommand {
             ConfigResource.Type childResourceType = getChildConfigResourceType(opts);
             ConfigResource resource = new ConfigResource(resourceType, opts.getEntityDefault() ? "<default>" : opts.getEntityName());
             if (ConfigResource.Type.UNKNOWN == childResourceType) {
-                return describeSingleQuotaConfig(resource);
+                return describeQuotaConfig(resource);
             } else {
                 ConfigResource childResource = new ConfigResource(childResourceType, opts.getChildEntityDefault() ? "<default>" : opts.getChildEntityName());
-                return describeSingleQuotaConfig(resource, childResource);
+                return describeQuotaConfig(resource, childResource);
             }
         } else {
             throw new IllegalArgumentException("Illegal type specified for the resource");
@@ -143,17 +143,45 @@ public class ConfigCommand {
         return result.values();
     }
 
-    private Map<?, KafkaFuture<Config>> describeSingleQuotaConfig(ConfigResource resource) {
-        DescribeQuotasResult result = client.describeQuotas(Collections.singletonMap(
-                new QuotaConfigResourceTuple(configResourceToResource(resource)), (Collection<String>) Collections.<String>emptyList()));
-        return result.values();
+    private Map<?, KafkaFuture<Config>> describeQuotaConfig(ConfigResource configResource) throws ConfigCommandException {
+        Resource resource = configResourceToResource(configResource);
+        if (resource.name() == null || "".equals(resource.name())) {
+            try {
+                List<String> quotaConfigEntityNames = client.listQuotas(resource).quotaNamesFuture().get();
+                Map<QuotaConfigResourceTuple, Collection<String>> configs = new HashMap<>();
+                for (String quotaConfigEntityName : quotaConfigEntityNames) {
+                    configs.put(new QuotaConfigResourceTuple(new Resource(resource.type(), quotaConfigEntityName)), Collections.<String>emptyList());
+                }
+                return client.describeQuotas(configs).values();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new ConfigCommandException(e);
+            }
+        } else {
+            DescribeQuotasResult result = client.describeQuotas(Collections.singletonMap(
+                    new QuotaConfigResourceTuple(resource), (Collection<String>) Collections.<String>emptyList()));
+            return result.values();
+        }
     }
 
-    private Map<?, KafkaFuture<Config>> describeSingleQuotaConfig(ConfigResource resource, ConfigResource childResource) {
-        DescribeQuotasResult result = client.describeQuotas(Collections.singletonMap(
-                new QuotaConfigResourceTuple(configResourceToResource(resource),
-                        configResourceToResource(childResource)), (Collection<String>) Collections.<String>emptyList()));
-        return result.values();
+    private Map<?, KafkaFuture<Config>> describeQuotaConfig(ConfigResource configResource, ConfigResource childConfigResource) throws ConfigCommandException {
+        Resource resource = configResourceToResource(configResource);
+        Resource childResource = configResourceToResource(childConfigResource);
+        if (childResource.name() == null || "".equals(childResource.name())) {
+            try {
+                List<String> quotaConfigEntityNames = client.listQuotas(resource).quotaNamesFuture().get();
+                Map<QuotaConfigResourceTuple, Collection<String>> configs = new HashMap<>();
+                for (String quotaConfigEntityName : quotaConfigEntityNames) {
+                    configs.put(new QuotaConfigResourceTuple(resource, new Resource(childResource.type(), quotaConfigEntityName)), Collections.<String>emptyList());
+                }
+                return client.describeQuotas(configs).values();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new ConfigCommandException(e);
+            }
+        } else {
+            DescribeQuotasResult result = client.describeQuotas(Collections.singletonMap(
+                    new QuotaConfigResourceTuple(resource, childResource), (Collection<String>) Collections.<String>emptyList()));
+            return result.values();
+        }
     }
 
     private Resource configResourceToResource(ConfigResource configResource) {
@@ -244,15 +272,15 @@ public class ConfigCommand {
             System.out.println();
             if (config.getKey() instanceof ConfigResource) {
                 ConfigResource key = (ConfigResource) config.getKey();
-                System.out.format("%115s", "CONFIGS FOR " + key.type() + " " + key.name() + "%n");
+                System.out.format("%115s %s %s%n", "CONFIGS FOR", key.type(), key.name());
             } else if (config.getKey() instanceof QuotaConfigResourceTuple) {
                 QuotaConfigResourceTuple key = (QuotaConfigResourceTuple) config.getKey();
                 Resource parent = key.quotaConfigResource();
                 Resource child = key.childQuotaConfigResource();
                 if (child != null && child.type() != ResourceType.UNKNOWN) {
-                    System.out.format("%115s", "CONFIGS FOR (USER, CLIENT) (" + parent.name() + ", " + child.name() + ")%n");
+                    System.out.format("%115s (%s, %s)%n", "CONFIGS FOR (USER, CLIENT)", parent.name(), child.name());
                 } else {
-                    System.out.format("%115s", "CONFIGS FOR " + parent.type() + " " + parent.name() + "%n");
+                    System.out.format("%115s %s %s%n", "CONFIGS FOR", parent.type(), parent.name());
                 }
             }
             System.out.println();
@@ -367,12 +395,12 @@ public class ConfigCommand {
 
             MutuallyExclusiveGroup nameOptions = parser
                     .addMutuallyExclusiveGroup()
-                    .required(true)
                     .description("You can specify only one in --entity-name and --entity-default");
 
             nameOptions.addArgument("--entity-name")
                     .action(entityStoreAction)
                     .type(String.class)
+                    .setDefault("")
                     .dest(ENTITY_NAME)
                     .help("Name of entity (client id/user principal name)");
             nameOptions.addArgument("--entity-default")
@@ -577,7 +605,6 @@ public class ConfigCommand {
 
             @Override
             public void onAttach(Argument arg) {
-
             }
 
             @Override

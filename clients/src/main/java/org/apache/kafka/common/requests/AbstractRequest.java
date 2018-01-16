@@ -216,6 +216,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return new CreatePartitionsRequest(struct, apiVersion);
             case DESCRIBE_QUOTAS:
                 return new DescribeQuotasRequest(struct, apiVersion);
+            case LIST_QUOTAS:
+                return new ListQuotasRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

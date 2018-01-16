@@ -431,5 +431,12 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       .map(entityPath => (entityPath, fetchEntityConfig(rootEntityType, entityPath))).toMap
   }
 
+  def listChildrenConfigs(rootEntityName: String): Seq[String] = {
+    zkClient.getChildren(ConfigEntityTypeZNode.path(rootEntityName))
+  }
+
+  def listChildrenConfigs(rootEntityName: String, childEntityName: String): Seq[String] = {
+    zkClient.getChildren(ConfigEntityZNode.path(rootEntityName, childEntityName))
+  }
 }
 

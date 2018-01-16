@@ -148,6 +148,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new CreatePartitionsResponse(struct);
             case DESCRIBE_QUOTAS:
                 return new DescribeQuotasResponse(struct);
+            case LIST_QUOTAS:
+                return new ListQuotasResponse(struct);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

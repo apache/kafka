@@ -38,6 +38,8 @@ import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
 import static org.apache.kafka.common.protocol.types.Type.INT8;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
+import static org.apache.kafka.common.requests.DescribeQuotasRequest.unwrapQuotaConfigResource;
+import static org.apache.kafka.common.requests.DescribeQuotasRequest.wrapQuotaConfigResource;
 
 public class DescribeQuotasResponse extends AbstractResponse {
 
@@ -113,18 +115,6 @@ public class DescribeQuotasResponse extends AbstractResponse {
 
     public Map<QuotaConfigResourceTuple, DescribeConfigsResponse.Config> quotaConfigSettings() {
         return Collections.unmodifiableMap(configs);
-    }
-
-    private Struct wrapQuotaConfigResource(Resource quota, Struct parent, String typeName) {
-        Struct struct = parent.instance(typeName);
-        struct.set(QUOTA_TYPE_KEY_NAME, quota.type().id());
-        struct.set(QUOTA_NAME_KEY_NAME, quota.name());
-        return struct;
-    }
-
-    private Resource unwrapQuotaConfigResource(Struct quotaStruct) {
-        ResourceType type = ResourceType.forId(quotaStruct.getByte(QUOTA_TYPE_KEY_NAME));
-        return new Resource(type, quotaStruct.getString(QUOTA_NAME_KEY_NAME));
     }
 
     private DescribeConfigsResponse.Config unwrapConfig(Struct struct) {
