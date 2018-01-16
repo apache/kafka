@@ -30,6 +30,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
+import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
@@ -115,7 +116,7 @@ public class ConnectorsResource {
         FutureCallback<ConnectorInfo> cb = new FutureCallback<>();
         herder.connectorInfo(connector, cb);
         ConnectorInfo connectorInfo = completeOrForwardRequest(cb, "/connectors/" + connector, "GET", null, forward);
-        return new ConnectorInfo(connectorInfo.name(), maskCredentials(connectorInfo.config()), connectorInfo.tasks(), connectorInfo.type());
+        return new ConnectorInfo(connectorInfo.name(), AbstractHerder.maskCredentials(connectorInfo.config()), connectorInfo.tasks(), connectorInfo.type());
     }
 
     @GET
