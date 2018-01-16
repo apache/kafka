@@ -20,22 +20,37 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-public class KTableMaterializedValueGetter<K, V> implements KTableValueGetter<K, V> {
-    private final String storeName;
-    private KeyValueStore<K, V> store;
+public class KTableMaterializedValueGetterSupplier<K, V> implements KTableValueGetterSupplier<K, V> {
 
-    KTableMaterializedValueGetter(final String storeName) {
+    private final String storeName;
+
+    KTableMaterializedValueGetterSupplier(final String storeName) {
         this.storeName = storeName;
     }
 
-    @SuppressWarnings("unchecked")
-    @Override
-    public void init(ProcessorContext context) {
-        store = (KeyValueStore<K, V>) context.getStateStore(storeName);
+    public KTableValueGetter<K, V> get() {
+        return new KTableMaterializedValueGetter();
     }
 
     @Override
-    public V get(K key) {
-        return store.get(key);
+    public String[] storeNames() {
+        return new String[]{storeName};
     }
+
+    private class KTableMaterializedValueGetter implements KTableValueGetter<K, V> {
+        private KeyValueStore<K, V> store;
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void init(final ProcessorContext context) {
+            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
+        }
+
+        @Override
+        public V get(final K key) {
+            return store.get(key);
+        }
+    }
+
+
 }

@@ -48,17 +48,7 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         // if the KTable is materialized, use the materialized store to return getter value;
         // otherwise rely on the parent getter and apply map-values on-the-fly
         if (queryableName != null) {
-            return new KTableValueGetterSupplier<K, V1>() {
-
-                public KTableValueGetter<K, V1> get() {
-                    return new KTableMaterializedValueGetter<>(queryableName);
-                }
-
-                @Override
-                public String[] storeNames() {
-                    return new String[]{queryableName};
-                }
-            };
+            return new KTableMaterializedValueGetterSupplier<>(queryableName);
         } else {
             return new KTableValueGetterSupplier<K, V1>() {
                 final KTableValueGetterSupplier<K, V> parentValueGetterSupplier = parent.valueGetterSupplier();
@@ -96,7 +86,7 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
             if (queryableName != null) {
                 store = (KeyValueStore<K, V1>) context.getStateStore(queryableName);
@@ -127,12 +117,12 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         }
 
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             parentGetter.init(context);
         }
 
         @Override
-        public V1 get(K key) {
+        public V1 get(final K key) {
             return computeValue(key, parentGetter.get(key));
         }
     }

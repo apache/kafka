@@ -33,7 +33,10 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
 
     private boolean sendOldValues = false;
 
-    KTableAggregate(String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> add, Aggregator<? super K, ? super V, T> remove) {
+    KTableAggregate(final String storeName,
+                    final Initializer<T> initializer,
+                    final Aggregator<? super K, ? super V, T> add,
+                    final Aggregator<? super K, ? super V, T> remove) {
         this.storeName = storeName;
         this.initializer = initializer;
         this.add = add;
@@ -97,17 +100,6 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
 
     @Override
     public KTableValueGetterSupplier<K, T> view() {
-
-        return new KTableValueGetterSupplier<K, T>() {
-
-            public KTableValueGetter<K, T> get() {
-                return new KTableMaterializedValueGetter<>(storeName);
-            }
-
-            @Override
-            public String[] storeNames() {
-                return new String[]{storeName};
-            }
-        };
+        return new KTableMaterializedValueGetterSupplier<>(storeName);
     }
 }

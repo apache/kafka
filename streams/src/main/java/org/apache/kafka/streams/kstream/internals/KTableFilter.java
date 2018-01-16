@@ -97,17 +97,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         // if the KTable is materialized, use the materialized store to return getter value;
         // otherwise rely on the parent getter and apply filter on-the-fly
         if (queryableName != null) {
-            return new KTableValueGetterSupplier<K, V>() {
-
-                public KTableValueGetter<K, V> get() {
-                    return new KTableMaterializedValueGetter<>(queryableName);
-                }
-
-                @Override
-                public String[] storeNames() {
-                    return new String[]{queryableName};
-                }
-            };
+            return new KTableMaterializedValueGetterSupplier<>(queryableName);
         } else {
             return new KTableValueGetterSupplier<K, V>() {
                 final KTableValueGetterSupplier<K, V> parentValueGetterSupplier = parent.valueGetterSupplier();
@@ -126,28 +116,20 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private class KTableFilterValueGetter implements KTableValueGetter<K, V> {
         private final KTableValueGetter<K, V> parentGetter;
-        private KeyValueStore<K, V> store = null;
 
-        KTableFilterValueGetter(KTableValueGetter<K, V> parentGetter) {
+        KTableFilterValueGetter(final KTableValueGetter<K, V> parentGetter) {
             this.parentGetter = parentGetter;
         }
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
-            if (queryableName != null) {
-                store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
-            } else {
-                parentGetter.init(context);
-            }
+        public void init(final ProcessorContext context) {
+            parentGetter.init(context);
         }
 
         @Override
-        public V get(K key) {
-            if (queryableName != null)
-                return store.get(key);
-            else
-                return computeValue(key, parentGetter.get(key));
+        public V get(final K key) {
+            return computeValue(key, parentGetter.get(key));
         }
     }
 

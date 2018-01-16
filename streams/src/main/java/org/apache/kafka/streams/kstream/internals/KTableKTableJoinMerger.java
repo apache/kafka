@@ -48,16 +48,7 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
         // if the result KTable is materialized, use the materialized store to return getter value;
         // otherwise rely on the parent getter and apply join on-the-fly
         if (queryableName != null) {
-            return new KTableValueGetterSupplier<K, V>() {
-                public KTableValueGetter<K, V> get() {
-                    return new KTableMaterializedValueGetter<>(queryableName);
-                }
-
-                @Override
-                public String[] storeNames() {
-                    return new String[]{queryableName};
-                }
-            };
+            return new KTableMaterializedValueGetterSupplier<K, V>(queryableName);
         } else {
             return new KTableValueGetterSupplier<K, V>() {
 
@@ -96,7 +87,7 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
             if (queryableName != null) {
                 store = (KeyValueStore<K, V>) context.getStateStore(queryableName);

@@ -199,7 +199,7 @@ public class ProcessorTopology {
 
     // for testing only
     public Set<String> processorConnectedStateStores(final String processorName) {
-        for (ProcessorNode<?, ?> node : processorNodes) {
+        for (final ProcessorNode<?, ?> node : processorNodes) {
             if (node.name().equals(processorName)) {
                 return node.stateStores;
             }

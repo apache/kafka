@@ -45,7 +45,6 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
-import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
@@ -77,9 +76,8 @@ public class StreamsBuilderTest {
         ProcessorTopology topology = builder.internalTopologyBuilder.build();
 
         assertThat(topology.stateStores().size(), equalTo(1));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005").size(), is(1));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"), hasItem(topology.stateStores().get(0).name()));
-        assertThat(topology.processorConnectedStateStores("KTABLE-FILTER-0000000003").size(), is(0));
+        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"), equalTo(Collections.singleton(topology.stateStores().get(0).name())));
+        assertThat(topology.processorConnectedStateStores("KTABLE-FILTER-0000000003").isEmpty(), is(true));
     }
 
     @Test
@@ -93,10 +91,8 @@ public class StreamsBuilderTest {
         ProcessorTopology topology = builder.internalTopologyBuilder.build();
 
         assertThat(topology.stateStores().size(), equalTo(2));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005").size(), is(1));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"), hasItem("store"));
-        assertThat(topology.processorConnectedStateStores("KTABLE-FILTER-0000000003").size(), is(1));
-        assertThat(topology.processorConnectedStateStores("KTABLE-FILTER-0000000003"), hasItem("store"));
+        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"), equalTo(Collections.singleton("store")));
+        assertThat(topology.processorConnectedStateStores("KTABLE-FILTER-0000000003"), equalTo(Collections.singleton("store")));
     }
 
     @Test
@@ -109,9 +105,8 @@ public class StreamsBuilderTest {
         ProcessorTopology topology = builder.internalTopologyBuilder.build();
 
         assertThat(topology.stateStores().size(), equalTo(1));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005").size(), is(1));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"), hasItem(topology.stateStores().get(0).name()));
-        assertThat(topology.processorConnectedStateStores("KTABLE-MAPVALUES-0000000003").size(), is(0));
+        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"), equalTo(Collections.singleton(topology.stateStores().get(0).name())));
+        assertThat(topology.processorConnectedStateStores("KTABLE-MAPVALUES-0000000003").isEmpty(), is(true));
     }
 
     @Test
@@ -125,10 +120,8 @@ public class StreamsBuilderTest {
         ProcessorTopology topology = builder.internalTopologyBuilder.build();
 
         assertThat(topology.stateStores().size(), equalTo(2));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005").size(), is(1));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"), hasItem("store"));
-        assertThat(topology.processorConnectedStateStores("KTABLE-MAPVALUES-0000000003").size(), is(1));
-        assertThat(topology.processorConnectedStateStores("KTABLE-MAPVALUES-0000000003"), hasItem("store"));
+        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"), equalTo(Collections.singleton("store")));
+        assertThat(topology.processorConnectedStateStores("KTABLE-MAPVALUES-0000000003"), equalTo(Collections.singleton("store")));
     }
 
     @Test
@@ -142,10 +135,9 @@ public class StreamsBuilderTest {
         ProcessorTopology topology = builder.internalTopologyBuilder.build();
 
         assertThat(topology.stateStores().size(), equalTo(2));
-        assertThat(topology.processorConnectedStateStores("KTABLE-MERGE-0000000007").size(), is(0));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010").size(), is(2));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010"), hasItem(topology.stateStores().get(0).name()));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010"), hasItem(topology.stateStores().get(1).name()));
+        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010"), equalTo(Utils.mkSet(topology.stateStores().get(0).name(), topology.stateStores().get(1).name())));
+        assertThat(topology.processorConnectedStateStores("KTABLE-MERGE-0000000007").isEmpty(), is(true));
+
     }
 
     @Test
@@ -159,10 +151,8 @@ public class StreamsBuilderTest {
         ProcessorTopology topology = builder.internalTopologyBuilder.build();
 
         assertThat(topology.stateStores().size(), equalTo(3));
-        assertThat(topology.processorConnectedStateStores("KTABLE-MERGE-0000000007").size(), is(1));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010").size(), is(1));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010"), hasItem("store"));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010"), hasItem("store"));
+        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010"), equalTo(Collections.singleton("store")));
+        assertThat(topology.processorConnectedStateStores("KTABLE-MERGE-0000000007"), equalTo(Collections.singleton("store")));
     }
 
     @Test
@@ -172,15 +162,11 @@ public class StreamsBuilderTest {
 
         driver.setUp(builder, TestUtils.tempDirectory());
 
-        System.out.println(builder.build().describe());
-
         ProcessorTopology topology = builder.internalTopologyBuilder.build();
 
         assertThat(topology.stateStores().size(), equalTo(1));
-        assertThat(topology.processorConnectedStateStores("KTABLE-SOURCE-0000000002").size(), is(1));
-        assertThat(topology.processorConnectedStateStores("KTABLE-SOURCE-0000000002"), hasItem(topology.stateStores().get(0).name()));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000004").size(), is(1));
-        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000004"), hasItem(topology.stateStores().get(0).name()));
+        assertThat(topology.processorConnectedStateStores("KTABLE-SOURCE-0000000002"), equalTo(Collections.singleton(topology.stateStores().get(0).name())));
+        assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000004"), equalTo(Collections.singleton(topology.stateStores().get(0).name())));
     }
 
     @Test

@@ -31,7 +31,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private boolean sendOldValues = false;
 
-    KTableReduce(String storeName, Reducer<V> addReducer, Reducer<V> removeReducer) {
+    KTableReduce(final String storeName, final Reducer<V> addReducer, final Reducer<V> removeReducer) {
         this.storeName = storeName;
         this.addReducer = addReducer;
         this.removeReducer = removeReducer;
@@ -54,7 +54,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<K, V>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
@@ -94,17 +94,6 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     @Override
     public KTableValueGetterSupplier<K, V> view() {
-
-        return new KTableValueGetterSupplier<K, V>() {
-
-            public KTableValueGetter<K, V> get() {
-                return new KTableMaterializedValueGetter<>(storeName);
-            }
-
-            @Override
-            public String[] storeNames() {
-                return new String[]{storeName};
-            }
-        };
+        return new KTableMaterializedValueGetterSupplier<K, V>(storeName);
     }
 }
