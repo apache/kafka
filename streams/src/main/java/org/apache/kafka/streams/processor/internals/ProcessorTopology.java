@@ -197,4 +197,14 @@ public class ProcessorTopology {
         return sb.toString();
     }
 
+    // for testing only
+    public Set<String> processorConnectedStateStores(final String processorName) {
+        for (ProcessorNode<?, ?> node : processorNodes) {
+            if (node.name().equals(processorName)) {
+                return node.stateStores;
+            }
+        }
+
+        return Collections.emptySet();
+    }
 }
