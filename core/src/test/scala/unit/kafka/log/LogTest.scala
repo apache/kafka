@@ -544,8 +544,7 @@ class LogTest {
     assertTrue(activeProducers.contains(pid))
 
     val lastSeq = activeProducers(pid)
-    assertEquals(0, entry.firstSeq)
-    assertEquals(3, entry.lastSeq)
+    assertEquals(3, lastSeq)
     log.close()
   }
 
@@ -587,8 +586,7 @@ class LogTest {
     assertTrue(activeProducers.contains(pid))
 
     val lastSeq = activeProducers(pid)
-    assertEquals(0, entry.firstSeq)
-    assertEquals(1, entry.lastSeq)
+    assertEquals(1, lastSeq)
     log.close()
   }
 
@@ -622,8 +620,7 @@ class LogTest {
     assertTrue(activeProducers.contains(pid))
 
     val lastSeq = activeProducers(pid)
-    assertEquals(0, entry.firstSeq)
-    assertEquals(3, entry.lastSeq)
+    assertEquals(3, lastSeq)
     log.close()
   }
 
@@ -732,7 +729,7 @@ class LogTest {
     assertTrue(retainedLastSeqOpt.isDefined)
     assertEquals(0, retainedLastSeqOpt.get)
 
-    time.sleep(log.config.fileDeleteDelayMs + 1)
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
 
     val reloadedLog = createLog(logDir, logConfig, logStartOffset = 1L)
@@ -763,7 +760,7 @@ class LogTest {
     assertEquals(None, log.latestProducerSnapshotOffset)
     assertEquals(29, log.latestProducerStateEndOffset)
 
-    time.sleep(log.config.fileDeleteDelayMs + 1)
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 
@@ -791,6 +788,8 @@ class LogTest {
 
     assertEquals(2, log.logSegments.size)
     assertEquals(Set(pid2), log.activeProducersWithLastSequence.keySet)
+
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 
@@ -1081,7 +1080,6 @@ class LogTest {
 
     val records = MemoryRecords.readableRecords(buffer)
     records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
-    try {
     // Ensure that batches with duplicates are accepted on the follower.
     assertEquals(0L, log.logEndOffset)
     log.appendAsFollower(records)
@@ -1186,8 +1184,7 @@ class LogTest {
       assertNull("Key should be null", actual.key)
       assertEquals("Values not equal", ByteBuffer.wrap(values(i)), actual.value)
     }
-    assertEquals("Reading beyond the last message returns nothing.", 0,
-      log.readUncommitted(values.length, 100, None).records.batches.asScala.size)
+    assertEquals("Reading beyond the last message returns nothing.", 0, log.readUncommitted(values.length, 100, None).records.batches.asScala.size)
     log.close()
   }
 
@@ -1425,7 +1422,7 @@ class LogTest {
       // time goes by; the log file is deleted
       log.onHighWatermarkIncremented(currOffset)
       log.deleteOldSegments()
-      time.sleep(log.config.fileDeleteDelayMs + 1)
+      mockTime.sleep(log.config.fileDeleteDelayMs + 1)
 
       assertEquals("Deleting segments shouldn't have changed the logEndOffset", currOffset, log.logEndOffset)
       assertEquals("We should still have one segment left", 1, log.numberOfSegments)
@@ -1436,6 +1433,7 @@ class LogTest {
                    log.appendAsLeader(TestUtils.singletonRecords(value = "hello".getBytes, timestamp = mockTime.milliseconds), leaderEpoch = 0).firstOffset)
 
       // cleanup the log
+      mockTime.sleep(log.config.fileDeleteDelayMs + 1)
       log.delete()
     }
   }
@@ -1760,7 +1758,7 @@ class LogTest {
     assertEquals("Should change offset", 0, log.logEndOffset)
     assertEquals("Should change log size", log.size, 0)
 
-    time.sleep(log.config.fileDeleteDelayMs + 1)
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 
@@ -1799,7 +1797,7 @@ class LogTest {
       log.appendAsLeader(TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds + i), leaderEpoch = 0)
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
 
-    time.sleep(log.config.fileDeleteDelayMs + 1)
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 
@@ -1848,7 +1846,7 @@ class LogTest {
     assertEquals("All but one segment should be deleted.", 1, log.numberOfSegments)
     assertEquals("Log end offset should be 3.", 3, log.logEndOffset)
 
-    time.sleep(log.config.fileDeleteDelayMs + 1)
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 
@@ -1886,6 +1884,7 @@ class LogTest {
     mockTime.sleep(asyncDeleteMs + 1)
     assertTrue("Files should all be gone.", deletedFiles.forall(!_.exists))
 
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 
@@ -1905,6 +1904,7 @@ class LogTest {
     // expire all segments
     log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
     log = createLog(logDir, logConfig)
     assertEquals("The deleted segments should be gone.", 1, log.numberOfSegments)
@@ -2232,7 +2232,7 @@ class LogTest {
     assertEquals("Epoch entries should have gone.", 1, epochCache(log).epochEntries().size)
     assertEquals("Epoch entry should be the latest epoch and the leo.", EpochEntry(1, 100), epochCache(log).epochEntries().head)
 
-    time.sleep(log.config.fileDeleteDelayMs + 1)
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
 
     // append some messages to create some segments
     for (_ <- 0 until 100)
@@ -2290,7 +2290,7 @@ class LogTest {
     assertEquals("should have 1 segments", 1, log.numberOfSegments)
     assertEquals(log.logStartOffset, 15)
 
-    time.sleep(log.config.fileDeleteDelayMs + 1)
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 
@@ -2312,7 +2312,7 @@ class LogTest {
     log.deleteOldSegments()
     assertEquals("should have 2 segments", 2,log.numberOfSegments)
 
-    time.sleep(log.config.fileDeleteDelayMs + 1)
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 
@@ -2330,6 +2330,7 @@ class LogTest {
     log.deleteOldSegments()
     assertEquals("should have 3 segments", 3,log.numberOfSegments)
 
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 
@@ -2347,7 +2348,7 @@ class LogTest {
     log.deleteOldSegments()
     assertEquals("There should be 1 segment remaining", 1, log.numberOfSegments)
 
-    time.sleep(log.config.fileDeleteDelayMs + 1)
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 
@@ -2365,6 +2366,7 @@ class LogTest {
     log.deleteOldSegments()
     assertEquals("There should be 3 segments remaining", 3, log.numberOfSegments)
 
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 
@@ -2386,6 +2388,7 @@ class LogTest {
     log.deleteOldSegments()
     assertEquals("There should be 3 segments remaining", segments, log.numberOfSegments)
 
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 
@@ -2403,7 +2406,7 @@ class LogTest {
     log.deleteOldSegments()
     assertEquals("There should be 1 segment remaining", 1, log.numberOfSegments)
 
-    time.sleep(log.config.fileDeleteDelayMs + 1)
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 
@@ -2482,7 +2485,7 @@ class LogTest {
     //The oldest epoch entry should have been removed
     assertEquals(ListBuffer(EpochEntry(1, 5), EpochEntry(2, 10)), cache.epochEntries)
 
-    time.sleep(log.config.fileDeleteDelayMs + 1)
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 
@@ -2510,7 +2513,7 @@ class LogTest {
     //The the first entry should have gone from (0,0) => (0,5)
     assertEquals(ListBuffer(EpochEntry(0, 5), EpochEntry(1, 7), EpochEntry(2, 10)), cache.epochEntries)
 
-    time.sleep(log.config.fileDeleteDelayMs + 1)
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 
@@ -2557,7 +2560,7 @@ class LogTest {
     //Then
     assertEquals(0, cache.epochEntries.size)
 
-    time.sleep(log.config.fileDeleteDelayMs + 1)
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 
@@ -2626,6 +2629,7 @@ class LogTest {
 
     log.appendAsLeader(records, leaderEpoch = 0)
     assertEquals(None, log.firstUnstableOffset)
+    log.close()
   }
 
   @Test
@@ -2807,8 +2811,6 @@ class LogTest {
     lastSegment.txnIndex.deleteIfExists()
 
     log.close()
-    Files.deleteIfExists(indexFilePair._1.toPath)
-    Files.deleteIfExists(indexFilePair._2.toPath)
 
     val reloadedLogConfig = createLogConfig(segmentBytes = 1024 * 5)
     val reloadedLog = createLog(logDir, reloadedLogConfig, recoveryPoint = recoveryPoint)
@@ -2993,7 +2995,7 @@ class LogTest {
     // the first unstable offset should be lower bounded by the log start offset
     assertEquals(Some(8L), log.firstUnstableOffset.map(_.messageOffset))
 
-    time.sleep(log.config.fileDeleteDelayMs + 1)
+    mockTime.sleep(log.config.fileDeleteDelayMs + 1)
     log.close()
   }
 

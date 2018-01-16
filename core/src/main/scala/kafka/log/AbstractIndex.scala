@@ -28,6 +28,7 @@ import kafka.log.IndexSearchType.IndexSearchEntity
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.utils.{MappedByteBuffers, OperatingSystem, Utils}
+import sun.nio.ch.DirectBuffer
 
 import scala.math.ceil
 
@@ -141,7 +142,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   /**
    * Rename the file that backs this offset index
    *
-   * @throws IOException if rename fails
+   * @throws java.io.IOException if rename fails
    */
   def renameTo(f: File) {
     inLock(lock) {
@@ -157,7 +158,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
             this.mmap = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
             this.mmap.position(position)
           } finally {
-            CoreUtils.swallow(raf.close())
+            CoreUtils.swallow(raf.close(), this)
           }
         }
       } finally {
@@ -178,7 +179,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   /**
    * Delete this index file.
    *
-   * @throws IOException if deletion fails due to an I/O error
+   * @throws java.io.IOException if deletion fails due to an I/O error
    * @return `true` if the file was deleted by this method; `false` if the file could not be deleted because it did
    *         not exist
    */
@@ -188,7 +189,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
       // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
       // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
-      CoreUtils.swallow(safeForceUnmap())
+      CoreUtils.swallow(forceUnmap(), this)
       // Accessing unmapped mmap crashes JVM by SEGV.
       // Accessing it after this method called sounds like a bug but for safety, assign null and do not allow later access.
       mmap = null
@@ -202,7 +203,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
     */
   def resetToSane(): Unit = {
     inLock(lock) {
-      CoreUtils.swallow(forceUnmap())
+      CoreUtils.swallow(forceUnmap(), this)
 
       val deleted = file.delete()
       if(!deleted && file.exists)
@@ -214,7 +215,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
         val len = raf.length()
         mmap = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
       } finally {
-        CoreUtils.swallow(raf.close())
+        CoreUtils.swallow(raf.close(), this)
       }
     }
   }
@@ -286,21 +287,6 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * Forcefully free the buffer's mmap.
    */
   protected[log] def forceUnmap() {
-    //1 - FROM NX Windows fixes branch, requeres tests
-    // try {
-    //   mmap match {
-    //     case buffer: DirectBuffer =>
-    //       val bufferCleaner = buffer.cleaner()
-    //       /* cleaner can be null if the mapped region has size 0 */
-    //       if (bufferCleaner != null)
-    //         bufferCleaner.clean()
-    //       mmap = null
-    //     case _ =>
-    //   }
-    // } catch {
-    //   case t: Throwable => error("Error when freeing index buffer", t)
-    // }
-
     try MappedByteBuffers.unmap(file.getAbsolutePath, mmap)
     finally mmap = null // Accessing unmapped mmap crashes JVM by SEGV so we null it out to be safe
   }

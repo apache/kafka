@@ -29,7 +29,7 @@ import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{OperatingSystem, Time}
 import org.apache.kafka.common.errors.{KafkaStorageException, LogDirNotFoundException}
 
 import scala.collection.JavaConverters._
@@ -227,7 +227,6 @@ class LogManager(logDirs: Seq[File],
         locks.append(lock)
       } catch {
         case e: IOException =>
-          lock.destroy()
           locks.foreach(_.destroy())
           logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while locking directory $dir", e)
       }
@@ -785,9 +784,11 @@ class LogManager(logDirs: Seq[File],
         cleaner.abortCleaning(topicPartition)
         cleaner.updateCheckpoints(removedLog.dir.getParentFile)
       }
-      removedLog.renameDir(Log.logDeleteDirName(topicPartition))
       checkpointLogRecoveryOffsetsInDir(removedLog.dir.getParentFile)
       checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)
+      removedLog.close()
+
+      removedLog.renameDir(Log.logDeleteDirName(topicPartition))
       logsToBeDeleted.add(removedLog)
       info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
     } else if (offlineLogDirs.nonEmpty) {

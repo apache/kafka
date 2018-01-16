@@ -48,8 +48,11 @@ class HighwatermarkPersistenceTest {
 
   @After
   def teardown() {
-    for (manager <- logManagers; dir <- manager.liveLogDirs)
-      Utils.delete(dir)
+     logManagers.foreach( logManager => {
+       logManager.shutdown()
+       logManager.allLogs.foreach(_.close())
+       logManager.liveLogDirs.foreach(Utils.delete)
+     })
   }
 
   @Test
