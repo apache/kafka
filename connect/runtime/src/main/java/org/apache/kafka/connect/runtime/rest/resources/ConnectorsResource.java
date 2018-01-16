@@ -17,9 +17,6 @@
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
@@ -53,7 +50,6 @@ import java.net.URI;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
