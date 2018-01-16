@@ -24,7 +24,7 @@ public class StreamsEosTest {
      *  args ::= command kafka zookeeper stateDir
      *  command := "run" | "process" | "verify"
      */
-    public static void main(final String[] args) throws Exception {
+    public static void main(final String[] args) {
         final String kafka = args[0];
         final String stateDir = args.length > 1 ? args[1] : null;
         final String command = args.length > 2 ? args[2] : null;
@@ -33,6 +33,7 @@ public class StreamsEosTest {
         System.out.println("kafka=" + kafka);
         System.out.println("stateDir=" + stateDir);
         System.out.println("command=" + command);
+        System.out.flush();
 
         if (command == null || stateDir == null) {
             System.exit(-1);
@@ -56,6 +57,8 @@ public class StreamsEosTest {
                 break;
             default:
                 System.out.println("unknown command: " + command);
+                System.out.flush();
+                System.exit(-1);
         }
     }
 

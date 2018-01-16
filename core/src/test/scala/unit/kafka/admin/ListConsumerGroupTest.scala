@@ -30,7 +30,6 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 
-
 class ListConsumerGroupTest extends KafkaServerTestHarness {
 
   val overridingProps = new Properties()
@@ -40,13 +39,14 @@ class ListConsumerGroupTest extends KafkaServerTestHarness {
   val props = new Properties
 
   // configure the servers and clients
-  override def generateConfigs() = TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
+  override def generateConfigs =
+    TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
 
   @Before
   override def setUp() {
     super.setUp()
 
-    AdminUtils.createTopic(zkUtils, topic, 1, 1)
+    adminZkClient.createTopic(topic, 1, 1)
     props.setProperty("group.id", group)
     props.setProperty("zookeeper.connect", zkConnect)
   }

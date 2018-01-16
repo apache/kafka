@@ -17,11 +17,9 @@ package kafka.api
 import java.io.File
 import java.util.Properties
 
-import kafka.admin.AdminUtils
-
 import kafka.server._
-
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.utils.Sanitizer
 import org.junit.Before
 
 class UserClientIdQuotaTest extends BaseQuotaTest {
@@ -30,8 +28,10 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
 
   override val userPrincipal = "O=A client,CN=localhost"
-  override def producerQuotaId = QuotaId(Some(QuotaId.sanitize(userPrincipal)), Some(producerClientId))
-  override def consumerQuotaId = QuotaId(Some(QuotaId.sanitize(userPrincipal)), Some(consumerClientId))
+  override def producerClientId = "QuotasTestProducer-!@#$%^&*()"
+  override def consumerClientId = "QuotasTestConsumer-!@#$%^&*()"
+  override def producerQuotaId = QuotaId(Some(Sanitizer.sanitize(userPrincipal)), Some(producerClientId), Some(Sanitizer.sanitize(producerClientId)))
+  override def consumerQuotaId = QuotaId(Some(Sanitizer.sanitize(userPrincipal)), Some(consumerClientId), Some(Sanitizer.sanitize(consumerClientId)))
 
   @Before
   override def setUp() {
@@ -40,7 +40,7 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
     this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
     super.setUp()
     val defaultProps = quotaProperties(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, ConfigEntityName.Default + "/clients/" + ConfigEntityName.Default, defaultProps)
+    adminZkClient.changeUserOrUserClientIdConfig(ConfigEntityName.Default + "/clients/" + ConfigEntityName.Default, defaultProps)
     waitForQuotaUpdate(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
   }
 
@@ -58,11 +58,11 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
 
   override def removeQuotaOverrides() {
     val emptyProps = new Properties
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, QuotaId.sanitize(userPrincipal) + "/clients/" + producerClientId, emptyProps)
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, QuotaId.sanitize(userPrincipal) + "/clients/" + consumerClientId, emptyProps)
+    adminZkClient.changeUserOrUserClientIdConfig(Sanitizer.sanitize(userPrincipal) + "/clients/" + Sanitizer.sanitize(producerClientId), emptyProps)
+    adminZkClient.changeUserOrUserClientIdConfig(Sanitizer.sanitize(userPrincipal) + "/clients/" + Sanitizer.sanitize(consumerClientId), emptyProps)
   }
 
   private def updateQuotaOverride(userPrincipal: String, clientId: String, properties: Properties) {
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, QuotaId.sanitize(userPrincipal) + "/clients/" + clientId, properties)
+    adminZkClient.changeUserOrUserClientIdConfig(Sanitizer.sanitize(userPrincipal) + "/clients/" + Sanitizer.sanitize(clientId), properties)
   }
 }

@@ -4,7 +4,7 @@ See our [web site](http://kafka.apache.org) for details on the project.
 
 You need to have [Gradle](http://www.gradle.org/installation) and [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-Kafka requires Gradle 2.0 or higher.
+Kafka requires Gradle 3.0 or higher.
 
 Java 7 should be used for building in order to support both Java 7 and Java 8 at runtime.
 
@@ -77,9 +77,9 @@ The release file can be found inside `./core/build/distributions/`.
     ./gradlew clean
 
 ### Running a task on a particular version of Scala (either 2.11.x or 2.12.x) ###
-*Note that if building the jars with a version other than 2.11.11, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
+*Note that if building the jars with a version other than 2.11.12, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
 
-You can pass either the major version (eg 2.11) or the full version (eg 2.11.11):
+You can pass either the major version (eg 2.11) or the full version (eg 2.11.12):
 
     ./gradlew -PscalaVersion=2.11 jar
     ./gradlew -PscalaVersion=2.11 test
@@ -127,6 +127,36 @@ Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradl
     signing.password=
     signing.secretKeyRingFile=
 
+### Publishing the streams quickstart archetype artifact to maven ###
+For the Streams archetype project, one cannot use gradle to upload to maven; instead the `mvn deploy` command needs to be called at the quickstart folder:
+
+    cd streams/quickstart
+    mvn deploy
+
+Please note for this to work you should create/update user maven settings (typically, `${USER_HOME}/.m2/settings.xml`) to assign the following variables
+
+    <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                           https://maven.apache.org/xsd/settings-1.0.0.xsd">
+    ...                           
+    <servers>
+       ...
+       <server>
+          <id>apache.snapshots.https</id>
+          <username>${maven_username}</username>
+          <password>${maven_password}</password>
+       </server>
+       <server>
+          <id>apache.releases.https</id>
+          <username>${maven_username}</username>
+          <password>${maven_password}</password>
+        </server>
+        ...
+     </servers>
+     ...
+
+
 ### Installing the jars to the local Maven repository ###
     ./gradlew installAll
 
@@ -164,6 +194,7 @@ directories.  Use -PxmlFindBugsReport=true to generate an XML report instead of 
 
 The following options should be set with a `-P` switch, for example `./gradlew -PmaxParallelForks=1 test`.
 
+* `commitId`: sets the build commit ID as .git/HEAD might not be correct if there are local commits added for build purposes.
 * `mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
 * `maxParallelForks`: limits the maximum number of processes for each task.
 * `showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.

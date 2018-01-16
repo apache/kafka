@@ -19,6 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 
@@ -26,12 +29,29 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
+import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+
 public class TxnOffsetCommitResponse extends AbstractResponse {
-    private static final String TOPIC_PARTITIONS_KEY_NAME = "topics";
+    private static final String TOPICS_KEY_NAME = "topics";
     private static final String PARTITIONS_KEY_NAME = "partitions";
-    private static final String TOPIC_KEY_NAME = "topic";
-    private static final String PARTITION_KEY_NAME = "partition";
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
+
+    private static final Schema TXN_OFFSET_COMMIT_PARTITION_ERROR_RESPONSE_V0 = new Schema(
+            PARTITION_ID,
+            ERROR_CODE);
+
+    private static final Schema TXN_OFFSET_COMMIT_RESPONSE_V0 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(TOPICS_KEY_NAME, new ArrayOf(new Schema(
+                    TOPIC_NAME,
+                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_ERROR_RESPONSE_V0)))),
+                    "Errors per partition from writing markers."));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{TXN_OFFSET_COMMIT_RESPONSE_V0};
+    }
 
     // Possible error codes:
     //   InvalidProducerEpoch
@@ -53,16 +73,16 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
     }
 
     public TxnOffsetCommitResponse(Struct struct) {
-        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
+        this.throttleTimeMs = struct.get(THROTTLE_TIME_MS);
         Map<TopicPartition, Errors> errors = new HashMap<>();
-        Object[] topicPartitionsArray = struct.getArray(TOPIC_PARTITIONS_KEY_NAME);
+        Object[] topicPartitionsArray = struct.getArray(TOPICS_KEY_NAME);
         for (Object topicPartitionObj : topicPartitionsArray) {
             Struct topicPartitionStruct = (Struct) topicPartitionObj;
-            String topic = topicPartitionStruct.getString(TOPIC_KEY_NAME);
+            String topic = topicPartitionStruct.get(TOPIC_NAME);
             for (Object partitionObj : topicPartitionStruct.getArray(PARTITIONS_KEY_NAME)) {
                 Struct partitionStruct = (Struct) partitionObj;
-                Integer partition = partitionStruct.getInt(PARTITION_KEY_NAME);
-                Errors error = Errors.forCode(partitionStruct.getShort(ERROR_CODE_KEY_NAME));
+                Integer partition = partitionStruct.get(PARTITION_ID);
+                Errors error = Errors.forCode(partitionStruct.get(ERROR_CODE));
                 errors.put(new TopicPartition(topic, partition), error);
             }
         }
@@ -72,28 +92,28 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.TXN_OFFSET_COMMIT.responseSchema(version));
-        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
+        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
         Map<String, Map<Integer, Errors>> mappedPartitions = CollectionUtils.groupDataByTopic(errors);
         Object[] partitionsArray = new Object[mappedPartitions.size()];
         int i = 0;
         for (Map.Entry<String, Map<Integer, Errors>> topicAndPartitions : mappedPartitions.entrySet()) {
-            Struct topicPartitionsStruct = struct.instance(TOPIC_PARTITIONS_KEY_NAME);
-            topicPartitionsStruct.set(TOPIC_KEY_NAME, topicAndPartitions.getKey());
+            Struct topicPartitionsStruct = struct.instance(TOPICS_KEY_NAME);
+            topicPartitionsStruct.set(TOPIC_NAME, topicAndPartitions.getKey());
             Map<Integer, Errors> partitionAndErrors = topicAndPartitions.getValue();
 
             Object[] partitionAndErrorsArray = new Object[partitionAndErrors.size()];
             int j = 0;
             for (Map.Entry<Integer, Errors> partitionAndError : partitionAndErrors.entrySet()) {
                 Struct partitionAndErrorStruct = topicPartitionsStruct.instance(PARTITIONS_KEY_NAME);
-                partitionAndErrorStruct.set(PARTITION_KEY_NAME, partitionAndError.getKey());
-                partitionAndErrorStruct.set(ERROR_CODE_KEY_NAME, partitionAndError.getValue().code());
+                partitionAndErrorStruct.set(PARTITION_ID, partitionAndError.getKey());
+                partitionAndErrorStruct.set(ERROR_CODE, partitionAndError.getValue().code());
                 partitionAndErrorsArray[j++] = partitionAndErrorStruct;
             }
             topicPartitionsStruct.set(PARTITIONS_KEY_NAME, partitionAndErrorsArray);
             partitionsArray[i++] = topicPartitionsStruct;
         }
 
-        struct.set(TOPIC_PARTITIONS_KEY_NAME, partitionsArray);
+        struct.set(TOPICS_KEY_NAME, partitionsArray);
         return struct;
     }
 
@@ -103,6 +123,11 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
 
     public Map<TopicPartition, Errors> errors() {
         return errors;
+    }
+
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(errors);
     }
 
     public static TxnOffsetCommitResponse parse(ByteBuffer buffer, short version) {

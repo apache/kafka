@@ -30,6 +30,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
@@ -78,6 +79,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     private final String workerId;
     protected final Worker worker;
+    private final String kafkaClusterId;
     protected final StatusBackingStore statusBackingStore;
     protected final ConfigBackingStore configBackingStore;
 
@@ -85,12 +87,19 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     public AbstractHerder(Worker worker,
                           String workerId,
+                          String kafkaClusterId,
                           StatusBackingStore statusBackingStore,
                           ConfigBackingStore configBackingStore) {
         this.worker = worker;
         this.workerId = workerId;
+        this.kafkaClusterId = kafkaClusterId;
         this.statusBackingStore = statusBackingStore;
         this.configBackingStore = configBackingStore;
+    }
+
+    @Override
+    public String kafkaClusterId() {
+        return kafkaClusterId;
     }
 
     protected abstract int generation();
@@ -188,12 +197,17 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return worker.getPlugins();
     }
 
+    /*
+     * Retrieves config map by connector name
+     */
+    protected abstract Map<String, String> config(String connName);
+
     @Override
     public ConnectorStateInfo connectorStatus(String connName) {
         ConnectorStatus connector = statusBackingStore.get(connName);
         if (connector == null)
             throw new NotFoundException("No status found for connector " + connName);
-
+        
         Collection<TaskStatus> tasks = statusBackingStore.getAll(connName);
 
         ConnectorStateInfo.ConnectorState connectorState = new ConnectorStateInfo.ConnectorState(
@@ -207,7 +221,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         Collections.sort(taskStates);
 
-        return new ConnectorStateInfo(connName, connectorState, taskStates);
+        Map<String, String> conf = config(connName);
+        return new ConnectorStateInfo(connName, connectorState, taskStates,
+            conf == null ? ConnectorType.UNKNOWN : connectorTypeForClass(conf.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
     }
 
     @Override
@@ -342,6 +358,14 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             tempConnectors.put(connType, connector);
             return connector;
         }
+    }
+
+    /*
+     * Retrieves ConnectorType for the corresponding connector class
+     * @param connClass class of the connector
+     */
+    public ConnectorType connectorTypeForClass(String connClass) {
+        return ConnectorType.from(getConnector(connClass).getClass());
     }
 
     /**

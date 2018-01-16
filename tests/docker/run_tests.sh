@@ -27,4 +27,4 @@ die() {
 if ${SCRIPT_DIR}/ducker-ak ssh | grep -q '(none)'; then
     ${SCRIPT_DIR}/ducker-ak up -n "${KAFKA_NUM_CONTAINERS}" || die "ducker-ak up failed"
 fi
-${SCRIPT_DIR}/ducker-ak test ${TC_PATHS} || die "ducker-ak test failed"
+${SCRIPT_DIR}/ducker-ak test ${TC_PATHS} ${_DUCKTAPE_OPTIONS} || die "ducker-ak test failed"

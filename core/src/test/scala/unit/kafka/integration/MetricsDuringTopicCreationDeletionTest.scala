@@ -26,7 +26,6 @@ import org.junit.{Before, Test}
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
 
-
 class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with Logging {
 
   private val nodesNum = 3
@@ -48,7 +47,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
 
   @volatile private var running = true
   
-  override def generateConfigs() = TestUtils.createBrokerConfigs(nodesNum, zkConnect)
+  override def generateConfigs = TestUtils.createBrokerConfigs(nodesNum, zkConnect)
     .map(KafkaConfig.fromProps(_, overridingProps))
 
   @Before
@@ -136,7 +135,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
       // Create topics
       for (t <- topics if running) {
         try {
-          kafka.admin.AdminUtils.createTopic(zkUtils, t, partitionNum, replicationFactor)
+          adminZkClient.createTopic(t, partitionNum, replicationFactor)
         } catch {
           case e: Exception => e.printStackTrace
         }
@@ -146,7 +145,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
       // Delete topics
       for (t <- topics if running) {
           try {
-              kafka.admin.AdminUtils.deleteTopic(zkUtils, t)
+              adminZkClient.deleteTopic(t)
           } catch {
           case e: Exception => e.printStackTrace
           }

@@ -69,7 +69,7 @@ class ConsumerEventHandler(object):
                 assert tp in self.position, "No previous position for %s: %s" % (str(tp), event)
                 assert self.position[tp] >= offset, \
                     "The committed offset %d was greater than the current position %d for partition %s" % \
-                    (offset, self.position[t], str(tp))
+                    (offset, self.position[tp], str(tp))
                 self.committed[tp] = offset
 
     def handle_records_consumed(self, event):

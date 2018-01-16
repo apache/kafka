@@ -16,9 +16,8 @@
  */
 package org.apache.kafka.common.security.scram;
 
+import org.apache.kafka.common.utils.Base64;
 import org.junit.Test;
-
-import javax.xml.bind.DatatypeConverter;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -55,13 +54,13 @@ public class ScramFormatterTest {
         String serverNonce = serverFirst.nonce().substring(clientNonce.length());
         assertEquals("%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0", serverNonce);
         byte[] salt = serverFirst.salt();
-        assertArrayEquals(DatatypeConverter.parseBase64Binary("W22ZaJ0SNY7soEsUEjb6gQ=="), salt);
+        assertArrayEquals(Base64.decoder().decode("W22ZaJ0SNY7soEsUEjb6gQ=="), salt);
         int iterations = serverFirst.iterations();
         assertEquals(4096, iterations);
         byte[] channelBinding = clientFinal.channelBinding();
-        assertArrayEquals(DatatypeConverter.parseBase64Binary("biws"), channelBinding);
+        assertArrayEquals(Base64.decoder().decode("biws"), channelBinding);
         byte[] serverSignature = serverFinal.serverSignature();
-        assertArrayEquals(DatatypeConverter.parseBase64Binary("6rriTRBi23WpRR/wtup+mMhUZUn/dB5nLTJRsjl95G4="), serverSignature);
+        assertArrayEquals(Base64.decoder().decode("6rriTRBi23WpRR/wtup+mMhUZUn/dB5nLTJRsjl95G4="), serverSignature);
 
         byte[] saltedPassword = formatter.saltedPassword(password, salt, iterations);
         byte[] serverKey = formatter.serverKey(saltedPassword);

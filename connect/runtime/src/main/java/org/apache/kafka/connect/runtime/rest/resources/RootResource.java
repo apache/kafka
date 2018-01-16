@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
+import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 
 import javax.ws.rs.GET;
@@ -27,9 +28,15 @@ import javax.ws.rs.core.MediaType;
 @Produces(MediaType.APPLICATION_JSON)
 public class RootResource {
 
+    private final Herder herder;
+
+    public RootResource(Herder herder) {
+        this.herder = herder;
+    }
+
     @GET
     @Path("/")
     public ServerInfo serverInfo() {
-        return new ServerInfo();
+        return new ServerInfo(herder.kafkaClusterId());
     }
 }

@@ -18,10 +18,17 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
+
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_EPOCH;
+import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_ID;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 
 public class InitProducerIdResponse extends AbstractResponse {
     // Possible error codes:
@@ -31,9 +38,16 @@ public class InitProducerIdResponse extends AbstractResponse {
     //   TransactionalIdAuthorizationFailed
     //   ClusterAuthorizationFailed
 
-    private static final String PRODUCER_ID_KEY_NAME = "producer_id";
-    private static final String EPOCH_KEY_NAME = "producer_epoch";
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
+    private static final Schema INIT_PRODUCER_ID_RESPONSE_V0 = new Schema(
+            THROTTLE_TIME_MS,
+            ERROR_CODE,
+            PRODUCER_ID,
+            PRODUCER_EPOCH);
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{INIT_PRODUCER_ID_RESPONSE_V0};
+    }
+
     private final int throttleTimeMs;
     private final Errors error;
     private final long producerId;
@@ -47,10 +61,10 @@ public class InitProducerIdResponse extends AbstractResponse {
     }
 
     public InitProducerIdResponse(Struct struct) {
-        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
-        this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
-        this.producerId = struct.getLong(PRODUCER_ID_KEY_NAME);
-        this.epoch = struct.getShort(EPOCH_KEY_NAME);
+        this.throttleTimeMs = struct.get(THROTTLE_TIME_MS);
+        this.error = Errors.forCode(struct.get(ERROR_CODE));
+        this.producerId = struct.get(PRODUCER_ID);
+        this.epoch = struct.get(PRODUCER_EPOCH);
     }
 
     public InitProducerIdResponse(int throttleTimeMs, Errors errors) {
@@ -69,6 +83,11 @@ public class InitProducerIdResponse extends AbstractResponse {
         return error;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(error);
+    }
+
     public short epoch() {
         return epoch;
     }
@@ -76,10 +95,10 @@ public class InitProducerIdResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.INIT_PRODUCER_ID.responseSchema(version));
-        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
-        struct.set(PRODUCER_ID_KEY_NAME, producerId);
-        struct.set(EPOCH_KEY_NAME, epoch);
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
+        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
+        struct.set(PRODUCER_ID, producerId);
+        struct.set(PRODUCER_EPOCH, epoch);
+        struct.set(ERROR_CODE, error.code());
         return struct;
     }
 

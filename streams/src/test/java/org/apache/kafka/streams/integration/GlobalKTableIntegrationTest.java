@@ -18,21 +18,27 @@ package org.apache.kafka.streams.integration;
 
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
@@ -47,16 +53,23 @@ import org.junit.experimental.categories.Category;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 
 @Category({IntegrationTest.class})
 public class GlobalKTableIntegrationTest {
     private static final int NUM_BROKERS = 1;
+    private static final Properties BROKER_CONFIG;
+    static {
+        BROKER_CONFIG = new Properties();
+        BROKER_CONFIG.put("transaction.state.log.replication.factor", (short) 1);
+        BROKER_CONFIG.put("transaction.state.log.min.isr", 1);
+    }
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER =
-            new EmbeddedKafkaCluster(NUM_BROKERS);
+            new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
 
     private static volatile int testNo = 0;
     private final MockTime mockTime = CLUSTER.time;
@@ -72,7 +85,7 @@ public class GlobalKTableIntegrationTest {
             return value1 + "+" + value2;
         }
     };
-    private KStreamBuilder builder;
+    private StreamsBuilder builder;
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
     private String globalOne;
@@ -88,7 +101,7 @@ public class GlobalKTableIntegrationTest {
     @Before
     public void before() throws InterruptedException {
         testNo++;
-        builder = new KStreamBuilder();
+        builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
         final String applicationId = "globalOne-table-test-" + testNo;
@@ -100,9 +113,13 @@ public class GlobalKTableIntegrationTest {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
-        globalTable = builder.globalTable(Serdes.Long(), Serdes.String(), null, globalOne, globalStore);
-        stream = builder.stream(Serdes.String(), Serdes.Long(), inputStream);
-        table = builder.table(Serdes.String(), Serdes.Long(), inputTable, "table");
+        globalTable = builder.globalTable(globalOne, Consumed.with(Serdes.Long(), Serdes.String()),
+                                          Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(globalStore)
+                                                  .withKeySerde(Serdes.Long())
+                                                  .withValueSerde(Serdes.String()));
+        final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
+        stream = builder.stream(inputStream, stringLongConsumed);
+        table = builder.table(inputTable, stringLongConsumed);
         foreachAction = new ForeachAction<String, String>() {
             @Override
             public void apply(final String key, final String value) {
@@ -217,6 +234,37 @@ public class GlobalKTableIntegrationTest {
         }, 30000L, "waiting for final values");
     }
 
+    @Test
+    public void shouldRestoreTransactionalMessages() throws Exception {
+        produceInitialGlobalTableValues(true);
+        startStreams();
+
+        final Map<Long, String> expected = new HashMap<>();
+        expected.put(1L, "A");
+        expected.put(2L, "B");
+        expected.put(3L, "C");
+        expected.put(4L, "D");
+
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                ReadOnlyKeyValueStore<Long, String> store = null;
+                try {
+                    store = kafkaStreams.store(globalStore, QueryableStoreTypes.<Long, String>keyValueStore());
+                } catch (InvalidStateStoreException ex) {
+                    return false;
+                }
+                Map<Long, String> result = new HashMap<>();
+                Iterator<KeyValue<Long, String>> it = store.all();
+                while (it.hasNext()) {
+                    KeyValue<Long, String> kv = it.next();
+                    result.put(kv.key, kv.value);
+                }
+                return result.equals(expected);
+            }
+        }, 30000L, "waiting for initial values");
+        System.out.println("no failed test");
+    }
 
     private void createTopics() throws InterruptedException {
         inputStream = "input-stream-" + testNo;
@@ -227,11 +275,11 @@ public class GlobalKTableIntegrationTest {
     }
 
     private void startStreams() {
-        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
     }
 
-    private void produceTopicValues(final String topic) throws java.util.concurrent.ExecutionException, InterruptedException {
+    private void produceTopicValues(final String topic) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
                 topic,
                 Arrays.asList(
@@ -248,7 +296,16 @@ public class GlobalKTableIntegrationTest {
                 mockTime);
     }
 
-    private void produceInitialGlobalTableValues() throws java.util.concurrent.ExecutionException, InterruptedException {
+    private void produceInitialGlobalTableValues() throws Exception {
+        produceInitialGlobalTableValues(false);
+    }
+
+    private void produceInitialGlobalTableValues(final boolean enableTransactions) throws Exception {
+        Properties properties = new Properties();
+        if (enableTransactions) {
+            properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "someid");
+            properties.put(ProducerConfig.RETRIES_CONFIG, 1);
+        }
         IntegrationTestUtils.produceKeyValuesSynchronously(
                 globalOne,
                 Arrays.asList(
@@ -260,11 +317,12 @@ public class GlobalKTableIntegrationTest {
                         CLUSTER.bootstrapServers(),
                         LongSerializer.class,
                         StringSerializer.class,
-                        new Properties()),
-                mockTime);
+                        properties),
+                mockTime,
+                enableTransactions);
     }
 
-    private void produceGlobalTableValues() throws java.util.concurrent.ExecutionException, InterruptedException {
+    private void produceGlobalTableValues() throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
                 globalOne,
                 Arrays.asList(

@@ -27,8 +27,9 @@ import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.types.Struct
-import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractRequestResponse, RequestHeader, ResponseHeader}
+import org.apache.kafka.common.security.auth.SecurityProtocol
 
 abstract class BaseRequestTest extends KafkaServerTestHarness {
   private var correlationId = 0
@@ -36,14 +37,16 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
   // If required, set number of brokers
   protected def numBrokers: Int = 3
 
+  protected def logDirCount: Int = 1
+
   // If required, override properties by mutating the passed Properties object
   protected def propertyOverrides(properties: Properties) {}
 
-  def generateConfigs() = {
+  def generateConfigs = {
     val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
       enableControlledShutdown = false, enableDeleteTopic = true,
       interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
+      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     props.foreach(propertyOverrides)
     props.map(KafkaConfig.fromProps)
   }
@@ -107,7 +110,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
                      apiVersion: Option[Short] = None,
                      protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): ByteBuffer = {
     val socket = connect(destination, protocol)
-    try send(request, apiKey, socket, apiVersion)
+    try sendAndReceive(request, apiKey, socket, apiVersion)
     finally socket.close()
   }
 
@@ -120,18 +123,34 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
                            destination: SocketServer = anySocketServer,
                            protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): ByteBuffer = {
     val socket = connect(destination, protocol)
-    try sendStruct(requestStruct, apiKey, socket, apiVersion)
+    try sendStructAndReceive(requestStruct, apiKey, socket, apiVersion)
     finally socket.close()
+  }
+
+  /**
+    * Serializes and sends the request to the given api.
+    */
+  def send(request: AbstractRequest, apiKey: ApiKeys, socket: Socket, apiVersion: Option[Short] = None): Unit = {
+    val header = nextRequestHeader(apiKey, apiVersion.getOrElse(request.version))
+    val serializedBytes = request.serialize(header).array
+    sendRequest(socket, serializedBytes)
+  }
+
+  /**
+   * Receive response and return a ByteBuffer containing response without the header
+   */
+  def receive(socket: Socket): ByteBuffer = {
+    val response = receiveResponse(socket)
+    skipResponseHeader(response)
   }
 
   /**
     * Serializes and sends the request to the given api.
     * A ByteBuffer containing the response is returned.
     */
-  def send(request: AbstractRequest, apiKey: ApiKeys, socket: Socket, apiVersion: Option[Short] = None): ByteBuffer = {
-    val header = nextRequestHeader(apiKey, apiVersion.getOrElse(request.version))
-    val serializedBytes = request.serialize(header).array
-    val response = requestAndReceive(socket, serializedBytes)
+  def sendAndReceive(request: AbstractRequest, apiKey: ApiKeys, socket: Socket, apiVersion: Option[Short] = None): ByteBuffer = {
+    send(request, apiKey, socket, apiVersion)
+    val response = receiveResponse(socket)
     skipResponseHeader(response)
   }
 
@@ -139,7 +158,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     * Serializes and sends the requestStruct to the given api.
     * A ByteBuffer containing the response (without the response header) is returned.
     */
-  def sendStruct(requestStruct: Struct, apiKey: ApiKeys, socket: Socket, apiVersion: Short): ByteBuffer = {
+  def sendStructAndReceive(requestStruct: Struct, apiKey: ApiKeys, socket: Socket, apiVersion: Short): ByteBuffer = {
     val header = nextRequestHeader(apiKey, apiVersion)
     val serializedBytes = AbstractRequestResponse.serialize(header.toStruct, requestStruct).array
     val response = requestAndReceive(socket, serializedBytes)
@@ -155,7 +174,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
 
   def nextRequestHeader(apiKey: ApiKeys, apiVersion: Short): RequestHeader = {
     correlationId += 1
-    new RequestHeader(apiKey.id, apiVersion, "client-id", correlationId)
+    new RequestHeader(apiKey, apiVersion, "client-id", correlationId)
   }
 
 }

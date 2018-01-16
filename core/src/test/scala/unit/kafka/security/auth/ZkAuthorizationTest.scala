@@ -79,12 +79,16 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     assertTrue(zkUtils.isSecure)
     for (path <- zkUtils.persistentZkPaths) {
       zkUtils.makeSurePersistentPathExists(path)
-      if(!path.equals(ZkUtils.ConsumersPath)) {
+      if (ZkUtils.sensitivePath(path)) {
         val aclList = zkUtils.zkConnection.getAcl(path).getKey
-        assertTrue(aclList.size == 2)
-        for (acl: ACL <- aclList.asScala) {
-          assertTrue(TestUtils.isAclSecure(acl, false))
-        }
+        assertEquals(s"Unexpected acl list size for $path", 1, aclList.size)
+        for (acl <- aclList.asScala)
+          assertTrue(TestUtils.isAclSecure(acl, sensitive = true))
+      } else if (!path.equals(ZkUtils.ConsumersPath)) {
+        val aclList = zkUtils.zkConnection.getAcl(path).getKey
+        assertEquals(s"Unexpected acl list size for $path", 2, aclList.size)
+        for (acl <- aclList.asScala)
+          assertTrue(TestUtils.isAclSecure(acl, sensitive = false))
       }
     }
     // Test that can create: createEphemeralPathExpectConflict
@@ -166,7 +170,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    * Tests the migration tool when chroot is being used.
    */
   @Test
-  def testChroot {
+  def testChroot(): Unit = {
     val zkUrl = zkConnect + "/kafka"
     zkUtils.createPersistentPath("/kafka")
     val unsecureZkUtils = ZkUtils(zkUrl, 6000, 6000, false)

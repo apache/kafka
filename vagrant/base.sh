@@ -16,6 +16,10 @@
 
 set -ex
 
+# The version of Kibosh to use for testing.
+# If you update this, also update tests/docker/Dockerfile
+export KIBOSH_VERSION=d85ac3ec44be0700efe605c16289fd901cfdaa13
+
 if [ -z `which javac` ]; then
     apt-get -y update
     apt-get install -y software-properties-common python-software-properties
@@ -63,9 +67,9 @@ get_kafka() {
     scala_version=$2
 
     kafka_dir=/opt/kafka-$version
-    url=https://s3-us-west-2.amazonaws.com/kafka-packages-$version/kafka_$scala_version-$version.tgz
+    url=https://s3-us-west-2.amazonaws.com/kafka-packages/kafka_$scala_version-$version.tgz
     # the .tgz above does not include the streams test jar hence we need to get it separately
-    url_streams_test=https://s3-us-west-2.amazonaws.com/kafka-packages-$version/kafka-streams-$version-test.jar
+    url_streams_test=https://s3-us-west-2.amazonaws.com/kafka-packages/kafka-streams-$version-test.jar
     if [ ! -d /opt/kafka-$version ]; then
         pushd /tmp
         curl -O $url
@@ -82,6 +86,19 @@ get_kafka() {
     fi
 }
 
+# Install Kibosh
+apt-get update -y && apt-get install -y git cmake pkg-config libfuse-dev
+pushd /opt
+git clone -q  https://github.com/confluentinc/kibosh.git
+pushd "/opt/kibosh"
+git reset --hard $KIBOSH_VERSION
+mkdir "/opt/kibosh/build"
+pushd "/opt/kibosh/build"
+../configure && make -j 2
+popd
+popd
+popd
+
 # Test multiple Scala versions
 get_kafka 0.8.2.2 2.10
 chmod a+rw /opt/kafka-0.8.2.2
@@ -93,6 +110,8 @@ get_kafka 0.10.1.1 2.11
 chmod a+rw /opt/kafka-0.10.1.1
 get_kafka 0.10.2.1 2.11
 chmod a+rw /opt/kafka-0.10.2.1
+get_kafka 0.11.0.0 2.11
+chmod a+rw /opt/kafka-0.11.0.0
 
 
 # For EC2 nodes, we want to use /mnt, which should have the local disk. On local

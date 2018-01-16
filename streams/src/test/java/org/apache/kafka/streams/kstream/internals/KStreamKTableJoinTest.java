@@ -18,15 +18,17 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
@@ -45,17 +47,9 @@ public class KStreamKTableJoinTest {
 
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
-
-    private KStreamTestDriver driver = null;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
     private File stateDir = null;
-
-    @After
-    public void tearDown() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
 
     @Before
     public void setUp() throws IOException {
@@ -63,8 +57,8 @@ public class KStreamKTableJoinTest {
     }
 
     @Test
-    public void testJoin() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+    public void testJoin() {
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
@@ -73,16 +67,17 @@ public class KStreamKTableJoinTest {
         final MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.stream(intSerde, stringSerde, topic1);
-        table = builder.table(intSerde, stringSerde, topic2, "anyStoreName");
+        final Consumed<Integer, String> consumed = Consumed.with(intSerde, stringSerde);
+        stream = builder.stream(topic1, consumed);
+        table = builder.table(topic2, consumed);
         stream.join(table, MockValueJoiner.TOSTRING_JOINER).process(processor);
 
-        final Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
+        final Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir, Serdes.Integer(), Serdes.String());
         driver.setTime(0L);
 
         // push two items to the primary stream. the other table is empty
@@ -140,6 +135,4 @@ public class KStreamKTableJoinTest {
 
         processor.checkAndClearProcessResult("2:XX2+YY2", "3:XX3+YY3");
     }
-
-
 }

@@ -319,4 +319,12 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
         <Method name="main"/>
         <Bug pattern="IL_INFINITE_LOOP"/>
     </Match>
+
+    <Match>
+        <!-- Suppress a spurious warning about calling notify without modifying
+             other state under the monitor. -->
+        <Package name="org.apache.kafka.trogdor.workload"/>
+        <Source name="RoundTripWorker.java"/>
+        <Bug pattern="NN_NAKED_NOTIFY"/>
+    </Match>
 </FindBugsFilter>

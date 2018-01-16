@@ -867,6 +867,7 @@ public class ConfigDef {
 
         @Override
         public void ensureValid(final String name, final Object value) {
+            @SuppressWarnings("unchecked")
             List<String> values = (List<String>) value;
             for (String string : values) {
                 validString.ensureValid(name, string);

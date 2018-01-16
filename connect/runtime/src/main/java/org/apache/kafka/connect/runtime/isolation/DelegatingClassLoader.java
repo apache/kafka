@@ -35,12 +35,15 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.sql.Driver;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
@@ -209,6 +212,40 @@ public class DelegatingClassLoader extends URLClassLoader {
             addPlugins(plugins.transformations(), loader);
             transformations.addAll(plugins.transformations());
         }
+
+        loadJdbcDrivers(loader);
+    }
+
+    private void loadJdbcDrivers(final ClassLoader loader) {
+        // Apply here what java.sql.DriverManager does to discover and register classes
+        // implementing the java.sql.Driver interface.
+        AccessController.doPrivileged(
+                new PrivilegedAction<Void>() {
+                    public Void run() {
+                        ServiceLoader<Driver> loadedDrivers = ServiceLoader.load(
+                                Driver.class,
+                                loader
+                        );
+                        Iterator<Driver> driversIterator = loadedDrivers.iterator();
+                        try {
+                            while (driversIterator.hasNext()) {
+                                Driver driver = driversIterator.next();
+                                log.debug(
+                                        "Registered java.sql.Driver: {} to java.sql.DriverManager",
+                                        driver
+                                );
+                            }
+                        } catch (Throwable t) {
+                            log.debug(
+                                    "Ignoring java.sql.Driver classes listed in resources but not"
+                                            + " present in class loader's classpath: ",
+                                    t
+                            );
+                        }
+                        return null;
+                    }
+                }
+        );
     }
 
     private PluginScanResult scanPluginPath(

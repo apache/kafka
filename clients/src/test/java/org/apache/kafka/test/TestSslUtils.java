@@ -179,9 +179,9 @@ public class TestSslUtils {
     }
 
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore,
-            Mode mode, File trustStoreFile, String certAlias, String hostName)
+            Mode mode, File trustStoreFile, String certAlias, String cn)
         throws IOException, GeneralSecurityException {
-        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, hostName, new CertificateBuilder());
+        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, cn, new CertificateBuilder());
     }
 
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore,

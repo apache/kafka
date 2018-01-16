@@ -26,6 +26,7 @@ import javax.security.sasl.SaslException;
 import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslServerFactory;
 
+import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.authenticator.SaslServerCallbackHandler;
 
@@ -50,14 +51,24 @@ public class PlainSaslServer implements SaslServer {
     private final JaasContext jaasContext;
 
     private boolean complete;
-    private String authorizationID;
+    private String authorizationId;
 
     public PlainSaslServer(JaasContext jaasContext) {
         this.jaasContext = jaasContext;
     }
 
+    /**
+     * @throws SaslAuthenticationException if username/password combination is invalid or if the requested
+     *         authorization id is not the same as username.
+     * <p>
+     * <b>Note:</b> This method may throw {@link SaslAuthenticationException} to provide custom error messages
+     * to clients. But care should be taken to avoid including any information in the exception message that
+     * should not be leaked to unauthenticated clients. It may be safer to throw {@link SaslException} in
+     * some cases so that a standard error message is returned to clients.
+     * </p>
+     */
     @Override
-    public byte[] evaluateResponse(byte[] response) throws SaslException {
+    public byte[] evaluateResponse(byte[] response) throws SaslException, SaslAuthenticationException {
         /*
          * Message format (from https://tools.ietf.org/html/rfc4616):
          *
@@ -79,7 +90,7 @@ public class PlainSaslServer implements SaslServer {
         }
         if (tokens.length != 3)
             throw new SaslException("Invalid SASL/PLAIN response: expected 3 tokens, got " + tokens.length);
-        authorizationID = tokens[0];
+        String authorizationIdFromClient = tokens[0];
         String username = tokens[1];
         String password = tokens[2];
 
@@ -89,14 +100,18 @@ public class PlainSaslServer implements SaslServer {
         if (password.isEmpty()) {
             throw new SaslException("Authentication failed: password not specified");
         }
-        if (authorizationID.isEmpty())
-            authorizationID = username;
 
         String expectedPassword = jaasContext.configEntryOption(JAAS_USER_PREFIX + username,
                 PlainLoginModule.class.getName());
         if (!password.equals(expectedPassword)) {
-            throw new SaslException("Authentication failed: Invalid username or password");
+            throw new SaslAuthenticationException("Authentication failed: Invalid username or password");
         }
+
+        if (!authorizationIdFromClient.isEmpty() && !authorizationIdFromClient.equals(username))
+            throw new SaslAuthenticationException("Authentication failed: Client requested an authorization id that is different from username");
+
+        this.authorizationId = username;
+
         complete = true;
         return new byte[0];
     }
@@ -105,7 +120,7 @@ public class PlainSaslServer implements SaslServer {
     public String getAuthorizationID() {
         if (!complete)
             throw new IllegalStateException("Authentication exchange has not completed");
-        return authorizationID;
+        return authorizationId;
     }
 
     @Override

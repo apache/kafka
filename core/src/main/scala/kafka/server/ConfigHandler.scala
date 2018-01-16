@@ -25,14 +25,15 @@ import kafka.log.{LogConfig, LogManager}
 import kafka.security.CredentialProvider
 import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
+import org.apache.kafka.common.utils.Sanitizer
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 
 /**
   * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
@@ -51,19 +52,19 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     // Validate the configurations.
     val configNamesToExclude = excludedConfigs(topic, topicConfig)
 
-    val logs = logManager.logsByTopicPartition.filterKeys(_.topic == topic).values.toBuffer
+    val logs = logManager.logsByTopic(topic).toBuffer
     if (logs.nonEmpty) {
       /* combine the default properties with the overrides in zk to create the new LogConfig */
       val props = new Properties()
-      props.putAll(logManager.defaultConfig.originals)
+      props ++= logManager.defaultConfig.originals.asScala
       topicConfig.asScala.foreach { case (key, value) =>
         if (!configNamesToExclude.contains(key)) props.put(key, value)
       }
       val logConfig = LogConfig(props)
-      if ((topicConfig.containsKey(LogConfig.RetentionMsProp) 
+      if ((topicConfig.containsKey(LogConfig.RetentionMsProp)
         || topicConfig.containsKey(LogConfig.MessageTimestampDifferenceMaxMsProp))
         && logConfig.retentionMs < logConfig.messageTimestampDifferenceMaxMs)
-        warn(s"${LogConfig.RetentionMsProp} for topic $topic is set to ${logConfig.retentionMs}. It is smaller than " + 
+        warn(s"${LogConfig.RetentionMsProp} for topic $topic is set to ${logConfig.retentionMs}. It is smaller than " +
           s"${LogConfig.MessageTimestampDifferenceMaxMsProp}'s value ${logConfig.messageTimestampDifferenceMaxMs}. " +
           s"This may result in frequent log rolling.")
       logs.foreach(_.config = logConfig)
@@ -73,10 +74,10 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
       if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).length > 0) {
         val partitions = parseThrottledPartitions(topicConfig, kafkaConfig.brokerId, prop)
         quotaManager.markThrottled(topic, partitions)
-        logger.debug(s"Setting $prop on broker ${kafkaConfig.brokerId} for topic: $topic and partitions $partitions")
+        debug(s"Setting $prop on broker ${kafkaConfig.brokerId} for topic: $topic and partitions $partitions")
       } else {
         quotaManager.removeThrottle(topic)
-        logger.debug(s"Removing $prop from broker ${kafkaConfig.brokerId} for topic $topic")
+        debug(s"Removing $prop from broker ${kafkaConfig.brokerId} for topic $topic")
       }
     }
     updateThrottledList(LogConfig.LeaderReplicationThrottledReplicasProp, quotas.leader)
@@ -96,7 +97,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
         .map(_ (0).toInt).toSeq //convert to list of partition ids
     }
   }
-  
+
   def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
     // Verify message format version
     Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).flatMap { versionString =>
@@ -117,25 +118,26 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
  */
 class QuotaConfigHandler(private val quotaManagers: QuotaManagers) {
 
-  def updateQuotaConfig(sanitizedUser: Option[String], clientId: Option[String], config: Properties) {
+  def updateQuotaConfig(sanitizedUser: Option[String], sanitizedClientId: Option[String], config: Properties) {
+    val clientId = sanitizedClientId.map(Sanitizer.desanitize)
     val producerQuota =
       if (config.containsKey(DynamicConfig.Client.ProducerByteRateOverrideProp))
         Some(new Quota(config.getProperty(DynamicConfig.Client.ProducerByteRateOverrideProp).toLong, true))
       else
         None
-    quotaManagers.produce.updateQuota(sanitizedUser, clientId, producerQuota)
+    quotaManagers.produce.updateQuota(sanitizedUser, clientId, sanitizedClientId, producerQuota)
     val consumerQuota =
       if (config.containsKey(DynamicConfig.Client.ConsumerByteRateOverrideProp))
         Some(new Quota(config.getProperty(DynamicConfig.Client.ConsumerByteRateOverrideProp).toLong, true))
       else
         None
-    quotaManagers.fetch.updateQuota(sanitizedUser, clientId, consumerQuota)
+    quotaManagers.fetch.updateQuota(sanitizedUser, clientId, sanitizedClientId, consumerQuota)
     val requestQuota =
       if (config.containsKey(DynamicConfig.Client.RequestPercentageOverrideProp))
         Some(new Quota(config.getProperty(DynamicConfig.Client.RequestPercentageOverrideProp).toDouble, true))
       else
         None
-    quotaManagers.request.updateQuota(sanitizedUser, clientId, requestQuota)
+    quotaManagers.request.updateQuota(sanitizedUser, clientId, sanitizedClientId, requestQuota)
   }
 }
 
@@ -145,14 +147,14 @@ class QuotaConfigHandler(private val quotaManagers: QuotaManagers) {
  */
 class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
 
-  def processConfigChanges(clientId: String, clientConfig: Properties) {
-    updateQuotaConfig(None, Some(clientId), clientConfig)
+  def processConfigChanges(sanitizedClientId: String, clientConfig: Properties) {
+    updateQuotaConfig(None, Some(sanitizedClientId), clientConfig)
   }
 }
 
 /**
  * The UserConfigHandler will process <user> and <user, client-id> quota changes in ZK.
- * The callback provides the node name containing sanitized user principal, client-id if this is
+ * The callback provides the node name containing sanitized user principal, sanitized client-id if this is
  * a <user, client-id> update and the full properties set read from ZK.
  */
 class UserConfigHandler(private val quotaManagers: QuotaManagers, val credentialProvider: CredentialProvider) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
@@ -163,10 +165,10 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers, val credential
     if (entities.length != 1 && entities.length != 3)
       throw new IllegalArgumentException("Invalid quota entity path: " + quotaEntityPath)
     val sanitizedUser = entities(0)
-    val clientId = if (entities.length == 3) Some(entities(2)) else None
-    updateQuotaConfig(Some(sanitizedUser), clientId, config)
-    if (!clientId.isDefined && sanitizedUser != ConfigEntityName.Default)
-      credentialProvider.updateCredentials(QuotaId.desanitize(sanitizedUser), config)
+    val sanitizedClientId = if (entities.length == 3) Some(entities(2)) else None
+    updateQuotaConfig(Some(sanitizedUser), sanitizedClientId, config)
+    if (!sanitizedClientId.isDefined && sanitizedUser != ConfigEntityName.Default)
+      credentialProvider.updateCredentials(Sanitizer.desanitize(sanitizedUser), config)
   }
 }
 
@@ -187,6 +189,7 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quo
     if (brokerConfig.brokerId == brokerId.trim.toInt) {
       quotaManagers.leader.updateQuota(upperBound(getOrDefault(LeaderReplicationThrottledRateProp)))
       quotaManagers.follower.updateQuota(upperBound(getOrDefault(FollowerReplicationThrottledRateProp)))
+      quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(ReplicaAlterLogDirsIoMaxBytesPerSecondProp)))
     }
   }
 }

@@ -59,15 +59,16 @@ abstract class InterBrokerSendThread(name: String,
         if (networkClient.ready(request.destination, now)) {
           networkClient.send(clientRequest, now)
         } else {
-          val disConnectedResponse: ClientResponse = new ClientResponse(clientRequest.makeHeader(request.request.desiredOrLatestVersion()),
-            completionHandler, destination,
-            now /* createdTimeMs */ , now /* receivedTimeMs */ , true /* disconnected */ , null /* versionMismatch */ , null /* responseBody */)
+          val header = clientRequest.makeHeader(request.request.latestAllowedVersion)
+          val disconnectResponse: ClientResponse = new ClientResponse(header, completionHandler, destination,
+            now /* createdTimeMs */ , now /* receivedTimeMs */ , true /* disconnected */ , null /* versionMismatch */ ,
+            null /* responseBody */)
 
           // poll timeout would be the minimum of connection delay if there are any dest yet to be reached;
           // otherwise it is infinity
           pollTimeout = Math.min(pollTimeout, networkClient.connectionDelay(request.destination, now))
 
-          completionHandler.onComplete(disConnectedResponse)
+          completionHandler.onComplete(disconnectResponse)
         }
       }
       networkClient.poll(pollTimeout, now)

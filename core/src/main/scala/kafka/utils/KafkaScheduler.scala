@@ -127,8 +127,8 @@ class KafkaScheduler(val threads: Int,
     }
   }
   
-  private def ensureRunning = {
-    if(!isStarted)
+  private def ensureRunning(): Unit = {
+    if (!isStarted)
       throw new IllegalStateException("Kafka scheduler is not running.")
   }
 }

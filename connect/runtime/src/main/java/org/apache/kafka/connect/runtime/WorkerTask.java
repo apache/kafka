@@ -16,11 +16,24 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Frequencies;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.connect.runtime.AbstractStatus.State;
+import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
+import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -42,6 +55,7 @@ abstract class WorkerTask implements Runnable {
     private final TaskStatus.Listener statusListener;
     protected final ClassLoader loader;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
+    private final TaskMetricsGroup taskMetricsGroup;
     private volatile TargetState targetState;
     private volatile boolean stopping;   // indicates whether the Worker has asked the task to stop
     private volatile boolean cancelled;  // indicates whether the Worker has cancelled the task (e.g. because of slow shutdown)
@@ -49,13 +63,16 @@ abstract class WorkerTask implements Runnable {
     public WorkerTask(ConnectorTaskId id,
                       TaskStatus.Listener statusListener,
                       TargetState initialState,
-                      ClassLoader loader) {
+                      ClassLoader loader,
+                      ConnectMetrics connectMetrics) {
         this.id = id;
-        this.statusListener = statusListener;
+        this.taskMetricsGroup = new TaskMetricsGroup(this.id, connectMetrics, statusListener);
+        this.statusListener = taskMetricsGroup;
         this.loader = loader;
         this.targetState = initialState;
         this.stopping = false;
         this.cancelled = false;
+        this.taskMetricsGroup.recordState(this.targetState);
     }
 
     public ConnectorTaskId id() {
@@ -68,6 +85,7 @@ abstract class WorkerTask implements Runnable {
 
     /**
      * Initialize the task for execution.
+     *
      * @param taskConfig initial configuration
      */
     public abstract void initialize(TaskConfig taskConfig);
@@ -116,6 +134,12 @@ abstract class WorkerTask implements Runnable {
 
     protected abstract void close();
 
+    /**
+     * Method called when this worker task has been completely closed, and when the subclass should clean up
+     * all resources.
+     */
+    protected abstract void releaseResources();
+
     protected boolean isStopping() {
         return stopping;
     }
@@ -124,7 +148,7 @@ abstract class WorkerTask implements Runnable {
         try {
             close();
         } catch (Throwable t) {
-            log.error("Task {} threw an uncaught and unrecoverable exception during shutdown", id, t);
+            log.error("{} Task threw an uncaught and unrecoverable exception during shutdown", this, t);
             throw t;
         }
     }
@@ -145,8 +169,8 @@ abstract class WorkerTask implements Runnable {
 
             execute();
         } catch (Throwable t) {
-            log.error("Task {} threw an uncaught and unrecoverable exception", id, t);
-            log.error("Task is being killed and will not recover until manually restarted");
+            log.error("{} Task threw an uncaught and unrecoverable exception", this, t);
+            log.error("{} Task is being killed and will not recover until manually restarted", this);
             throw t;
         } finally {
             doClose();
@@ -195,8 +219,16 @@ abstract class WorkerTask implements Runnable {
             if (t instanceof Error)
                 throw (Error) t;
         } finally {
-            Plugins.compareAndSwapLoaders(savedLoader);
-            shutdownLatch.countDown();
+            try {
+                Plugins.compareAndSwapLoaders(savedLoader);
+                shutdownLatch.countDown();
+            } finally {
+                try {
+                    releaseResources();
+                } finally {
+                    taskMetricsGroup.close();
+                }
+            }
         }
     }
 
@@ -206,6 +238,7 @@ abstract class WorkerTask implements Runnable {
 
     /**
      * Await task resumption.
+     *
      * @return true if the task's target state is not paused, false if the task is shutdown before resumption
      * @throws InterruptedException
      */
@@ -231,4 +264,161 @@ abstract class WorkerTask implements Runnable {
         }
     }
 
+    /**
+     * Record that offsets have been committed.
+     *
+     * @param duration the length of time in milliseconds for the commit attempt to complete
+     */
+    protected void recordCommitSuccess(long duration) {
+        taskMetricsGroup.recordCommit(duration, true, null);
+    }
+
+    /**
+     * Record that offsets have been committed.
+     *
+     * @param duration the length of time in milliseconds for the commit attempt to complete
+     * @param error the unexpected error that occurred; may be null in the case of timeouts or interruptions
+     */
+    protected void recordCommitFailure(long duration, Throwable error) {
+        taskMetricsGroup.recordCommit(duration, false, error);
+    }
+
+    /**
+     * Record that a batch of records has been processed.
+     *
+     * @param size the number of records in the batch
+     */
+    protected void recordBatch(int size) {
+        taskMetricsGroup.recordBatch(size);
+    }
+
+    TaskMetricsGroup taskMetricsGroup() {
+        return taskMetricsGroup;
+    }
+
+    static class TaskMetricsGroup implements TaskStatus.Listener {
+        private final TaskStatus.Listener delegateListener;
+        private final MetricGroup metricGroup;
+        private final Time time;
+        private final StateTracker taskStateTimer;
+        private final Sensor commitTime;
+        private final Sensor batchSize;
+        private final Sensor commitAttempts;
+
+        public TaskMetricsGroup(ConnectorTaskId id, ConnectMetrics connectMetrics, TaskStatus.Listener statusListener) {
+            delegateListener = statusListener;
+            time = connectMetrics.time();
+            taskStateTimer = new StateTracker();
+            ConnectMetricsRegistry registry = connectMetrics.registry();
+            metricGroup = connectMetrics.group(registry.taskGroupName(),
+                    registry.connectorTagName(), id.connector(),
+                    registry.taskTagName(), Integer.toString(id.task()));
+            // prevent collisions by removing any previously created metrics in this group.
+            metricGroup.close();
+
+            metricGroup.addValueMetric(registry.taskStatus, new LiteralSupplier<String>() {
+                @Override
+                public String metricValue(long now) {
+                    return taskStateTimer.currentState().toString().toLowerCase(Locale.getDefault());
+                }
+            });
+
+            addRatioMetric(State.RUNNING, registry.taskRunningRatio);
+            addRatioMetric(State.PAUSED, registry.taskPauseRatio);
+
+            commitTime = metricGroup.sensor("commit-time");
+            commitTime.add(metricGroup.metricName(registry.taskCommitTimeMax), new Max());
+            commitTime.add(metricGroup.metricName(registry.taskCommitTimeAvg), new Avg());
+
+            batchSize = metricGroup.sensor("batch-size");
+            batchSize.add(metricGroup.metricName(registry.taskBatchSizeMax), new Max());
+            batchSize.add(metricGroup.metricName(registry.taskBatchSizeAvg), new Avg());
+
+            MetricName offsetCommitFailures = metricGroup.metricName(registry.taskCommitFailurePercentage);
+            MetricName offsetCommitSucceeds = metricGroup.metricName(registry.taskCommitSuccessPercentage);
+            Frequencies commitFrequencies = Frequencies.forBooleanValues(offsetCommitFailures, offsetCommitSucceeds);
+            commitAttempts = metricGroup.sensor("offset-commit-completion");
+            commitAttempts.add(commitFrequencies);
+        }
+
+        private void addRatioMetric(final State matchingState, MetricNameTemplate template) {
+            MetricName metricName = metricGroup.metricName(template);
+            if (metricGroup.metrics().metric(metricName) == null) {
+                metricGroup.metrics().addMetric(metricName, new Measurable() {
+                    @Override
+                    public double measure(MetricConfig config, long now) {
+                        return taskStateTimer.durationRatio(matchingState, now);
+                    }
+                });
+            }
+        }
+
+        void close() {
+            metricGroup.close();
+        }
+
+        void recordCommit(long duration, boolean success, Throwable error) {
+            if (success) {
+                commitTime.record(duration);
+                commitAttempts.record(1.0d);
+            } else {
+                commitAttempts.record(0.0d);
+            }
+        }
+
+        void recordBatch(int size) {
+            batchSize.record(size);
+        }
+
+        @Override
+        public void onStartup(ConnectorTaskId id) {
+            taskStateTimer.changeState(State.RUNNING, time.milliseconds());
+            delegateListener.onStartup(id);
+        }
+
+        @Override
+        public void onFailure(ConnectorTaskId id, Throwable cause) {
+            taskStateTimer.changeState(State.FAILED, time.milliseconds());
+            delegateListener.onFailure(id, cause);
+        }
+
+        @Override
+        public void onPause(ConnectorTaskId id) {
+            taskStateTimer.changeState(State.PAUSED, time.milliseconds());
+            delegateListener.onPause(id);
+        }
+
+        @Override
+        public void onResume(ConnectorTaskId id) {
+            taskStateTimer.changeState(State.RUNNING, time.milliseconds());
+            delegateListener.onResume(id);
+        }
+
+        @Override
+        public void onShutdown(ConnectorTaskId id) {
+            taskStateTimer.changeState(State.UNASSIGNED, time.milliseconds());
+            delegateListener.onShutdown(id);
+        }
+
+        public void recordState(TargetState state) {
+            switch (state) {
+                case STARTED:
+                    taskStateTimer.changeState(State.RUNNING, time.milliseconds());
+                    break;
+                case PAUSED:
+                    taskStateTimer.changeState(State.PAUSED, time.milliseconds());
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        public State state() {
+            return taskStateTimer.currentState();
+        }
+
+        protected MetricGroup metricGroup() {
+            return metricGroup;
+        }
+    }
 }

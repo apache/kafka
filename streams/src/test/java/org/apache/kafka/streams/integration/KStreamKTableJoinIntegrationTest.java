@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -26,18 +25,23 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -47,8 +51,11 @@ import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
@@ -60,7 +67,7 @@ import static org.junit.Assert.assertThat;
 @Category({IntegrationTest.class})
 public class KStreamKTableJoinIntegrationTest {
     private static final int NUM_BROKERS = 1;
-    private static final long COMMIT_INTERVAL_MS = 300L;
+    private static final long COMMIT_INTERVAL_MS = 1000L;
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -88,11 +95,8 @@ public class KStreamKTableJoinIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
-            TestUtils.tempDirectory().getPath());
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
-
-
     }
 
     @After
@@ -142,7 +146,7 @@ public class KStreamKTableJoinIntegrationTest {
         countClicksPerRegion(10 * 1024 * 1024);
     }
 
-    private void countClicksPerRegion(final int cacheSizeBytes) throws java.util.concurrent.ExecutionException, InterruptedException {
+    private void countClicksPerRegion(final int cacheSizeBytes) throws Exception {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         // Input 1: Clicks per user (multiple records allowed per user).
         final List<KeyValue<String, Long>> userClicks = Arrays.asList(
@@ -183,6 +187,11 @@ public class KStreamKTableJoinIntegrationTest {
                 new KeyValue<>("europe", 109L),
                 new KeyValue<>("asia", 124L)
             );
+        final Map<String, Long> remainingExpectedResult = new HashMap<>();
+        for (final KeyValue<String, Long> record : expectedClicksPerRegion) {
+            remainingExpectedResult.put(record.key, record.value);
+        }
+        final AtomicInteger outputCounter = new AtomicInteger();
 
         //
         // Step 1: Configure and start the processor topology.
@@ -190,13 +199,13 @@ public class KStreamKTableJoinIntegrationTest {
         final Serde<String> stringSerde = Serdes.String();
         final Serde<Long> longSerde = Serdes.Long();
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         // This KStream contains information such as "alice" -> 13L.
         //
         // Because this is a KStream ("record stream"), multiple records for the same user will be
         // considered as separate click-count events, each of which will be added to the total count.
-        final KStream<String, Long> userClicksStream = builder.stream(stringSerde, longSerde, userClicksTopic);
+        final KStream<String, Long> userClicksStream = builder.stream(userClicksTopic, Consumed.with(Serdes.String(), Serdes.Long()));
         // This KTable contains information such as "alice" -> "europe".
         //
         // Because this is a KTable ("changelog stream"), only the latest value (here: region) for a
@@ -209,7 +218,8 @@ public class KStreamKTableJoinIntegrationTest {
         // subsequently processed in the `leftJoin`, the latest region update for "alice" is "europe"
         // (which overrides her previous region value of "asia").
         final KTable<String, String> userRegionsTable =
-            builder.table(stringSerde, stringSerde, userRegionsTopic, userRegionsStoreName);
+            builder.table(userRegionsTopic,
+                          Consumed.with(Serdes.String(), Serdes.String()));
 
 
         // Compute the number of clicks per region, e.g. "europe" -> 13L.
@@ -242,18 +252,31 @@ public class KStreamKTableJoinIntegrationTest {
                 }
             })
             // Compute the total per region by summing the individual click counts per region.
-            .groupByKey(stringSerde, longSerde)
+            .groupByKey(Serialized.with(stringSerde, longSerde))
             .reduce(new Reducer<Long>() {
                 @Override
                 public Long apply(final Long value1, final Long value2) {
                     return value1 + value2;
                 }
-            }, "ClicksPerRegionUnwindowed");
+            });
 
         // Write the (continuously updating) results to the output topic.
-        clicksPerRegion.to(stringSerde, longSerde, outputTopic);
+        clicksPerRegion
+            .toStream()
+            .peek(new ForeachAction<String, Long>() {
+                @Override
+                public void apply(final String key, final Long value) {
+                    outputCounter.incrementAndGet();
 
-        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+                    final long finalValue = remainingExpectedResult.get(key);
+                    if (value == finalValue) {
+                        remainingExpectedResult.remove(key);
+                    }
+                }
+            })
+            .to(outputTopic, Produced.with(stringSerde, longSerde));
+
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
 
         //
@@ -269,7 +292,6 @@ public class KStreamKTableJoinIntegrationTest {
         userRegionsProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         userRegionsProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         IntegrationTestUtils.produceKeyValuesSynchronously(userRegionsTopic, userRegions, userRegionsProducerConfig, mockTime);
-
 
         //
         // Step 3: Publish some user click events.
@@ -292,10 +314,26 @@ public class KStreamKTableJoinIntegrationTest {
         consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
 
-        final List<KeyValue<String, Long>> actualClicksPerRegion = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig,
-            outputTopic, expectedClicksPerRegion.size());
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return remainingExpectedResult.isEmpty();
+            }
+        }, "Never received expected result.");
 
-        assertThat(actualClicksPerRegion, equalTo(expectedClicksPerRegion));
+        final int expectedResultSize = expectedClicksPerRegion.size();
+        final int expectedNumberOfOutputs = (cacheSizeBytes == 0)
+            ? expectedResultSize
+            : Math.max(expectedResultSize, outputCounter.get());
+        final List<KeyValue<String, Long>> actualClicksPerRegion =
+            IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                consumerConfig,
+                outputTopic,
+                expectedNumberOfOutputs);
+
+        assertThat(
+            actualClicksPerRegion.subList(expectedNumberOfOutputs - expectedResultSize, expectedNumberOfOutputs),
+            equalTo(expectedClicksPerRegion));
     }
 
 }

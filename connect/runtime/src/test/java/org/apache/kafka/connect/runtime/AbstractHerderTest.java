@@ -23,6 +23,7 @@ import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
@@ -50,6 +51,7 @@ import static org.junit.Assert.assertTrue;
 public class AbstractHerderTest extends EasyMockSupport {
     private final Worker worker = strictMock(Worker.class);
     private final String workerId = "workerId";
+    private final String kafkaClusterId = "I4ZmrWqfT2e-upky_4fdPA";
     private final int generation = 5;
     private final String connector = "connector";
     private final Plugins plugins = strictMock(Plugins.class);
@@ -63,12 +65,13 @@ public class AbstractHerderTest extends EasyMockSupport {
         StatusBackingStore statusStore = strictMock(StatusBackingStore.class);
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
-                .withArgs(worker, workerId, statusStore, configStore)
+                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore)
                 .addMockedMethod("generation")
                 .createMock();
 
         EasyMock.expect(herder.generation()).andStubReturn(generation);
+        EasyMock.expect(herder.config(connector)).andReturn(null);
 
         EasyMock.expect(statusStore.get(connector))
                 .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
@@ -76,6 +79,7 @@ public class AbstractHerderTest extends EasyMockSupport {
         EasyMock.expect(statusStore.getAll(connector))
                 .andReturn(Collections.singletonList(
                         new TaskStatus(taskId, AbstractStatus.State.UNASSIGNED, workerId, generation)));
+        EasyMock.expect(worker.getPlugins()).andStubReturn(plugins);
 
         replayAll();
 
@@ -104,8 +108,8 @@ public class AbstractHerderTest extends EasyMockSupport {
         StatusBackingStore statusStore = strictMock(StatusBackingStore.class);
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
-                .withArgs(worker, workerId, statusStore, configStore)
+                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore)
                 .addMockedMethod("generation")
                 .createMock();
 
@@ -191,6 +195,7 @@ public class AbstractHerderTest extends EasyMockSupport {
         config.put(ConnectorConfig.TRANSFORMS_CONFIG + ".xformA.type", SampleTransformation.class.getName());
         config.put("required", "value"); // connector required config
         ConfigInfos result = herder.validateConnectorConfig(config);
+        assertEquals(herder.connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)), ConnectorType.SOURCE);
 
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
@@ -224,8 +229,8 @@ public class AbstractHerderTest extends EasyMockSupport {
         StatusBackingStore statusStore = strictMock(StatusBackingStore.class);
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
-                .withArgs(worker, workerId, statusStore, configStore)
+                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore)
                 .addMockedMethod("generation")
                 .createMock();
         EasyMock.expect(herder.generation()).andStubReturn(generation);

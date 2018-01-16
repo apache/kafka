@@ -16,27 +16,29 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.network.ChannelBuilder;
+import org.apache.kafka.common.network.ChannelBuilders;
+import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.network.ChannelBuilders;
-import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.network.ChannelBuilder;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.SaslConfigs;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 
-public class ClientUtils {
+public final class ClientUtils {
     private static final Logger log = LoggerFactory.getLogger(ClientUtils.class);
+
+    private ClientUtils() {}
 
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls) {
         List<InetSocketAddress> addresses = new ArrayList<>();
@@ -82,8 +84,6 @@ public class ClientUtils {
      */
     public static ChannelBuilder createChannelBuilder(AbstractConfig config) {
         SecurityProtocol securityProtocol = SecurityProtocol.forName(config.getString(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
-        if (!SecurityProtocol.nonTestingValues().contains(securityProtocol))
-            throw new ConfigException("Invalid SecurityProtocol " + securityProtocol);
         String clientSaslMechanism = config.getString(SaslConfigs.SASL_MECHANISM);
         return ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT, config, null,
                 clientSaslMechanism, true);

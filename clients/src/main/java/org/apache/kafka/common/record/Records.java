@@ -19,6 +19,8 @@ package org.apache.kafka.common.record;
 import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
 
+import org.apache.kafka.common.utils.Time;
+
 /**
  * Interface for accessing the records contained in a log. The log itself is represented as a sequence of record
  * batches (see {@link RecordBatch}).
@@ -97,10 +99,11 @@ public interface Records {
      * deep iteration since all of the deep records must also be converted to the desired format.
      * @param toMagic The magic value to convert to
      * @param firstOffset The starting offset for returned records. This only impacts some cases. See
-     *                    {@link AbstractRecords#downConvert(Iterable, byte, long)} for an explanation.
-     * @return A Records instance (which may or may not be the same instance)
+     *                    {@link AbstractRecords#downConvert(Iterable, byte, long, Time) for an explanation.
+     * @param time instance used for reporting stats
+     * @return A ConvertedRecords instance which may or may not contain the same instance in its records field.
      */
-    Records downConvert(byte toMagic, long firstOffset);
+    ConvertedRecords<? extends Records> downConvert(byte toMagic, long firstOffset, Time time);
 
     /**
      * Get an iterator over the records in this log. Note that this generally requires decompression,

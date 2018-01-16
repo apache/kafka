@@ -263,8 +263,7 @@ object TestOffsetManager {
       }
 
       fetchThread = new FetchThread(threadCount, fetchIntervalMs, zkUtils)
-
-      val statsThread = new StatsThread(reportingIntervalMs, commitThreads, fetchThread)
+      statsThread = new StatsThread(reportingIntervalMs, commitThreads, fetchThread)
 
       Runtime.getRuntime.addShutdownHook(new Thread() {
         override def run() {

@@ -10,9 +10,8 @@ Running tests using docker
 --------------------------
 Docker containers can be used for running kafka system tests locally.
 * Requirements
-  - Docker 1.12.3 is installed and running on the machine.
-  - Test require a single kafka_*SNAPSHOT.tgz to be present in core/build/distributions.
-   This can be done by running ./gradlew clean releaseTarGz  
+  - Docker 1.12.3 (or higher) is installed and running on the machine.
+  - Test require that Kafka, including system test libs, is built. This can be done by running ./gradlew clean systemTestLibs
 * Run all tests
 ```
 bash tests/docker/run_tests.sh
@@ -25,6 +24,19 @@ _DUCKTAPE_OPTIONS="--debug" bash tests/docker/run_tests.sh | tee debug_logs.txt
 ```
 TC_PATHS="tests/kafkatest/tests/streams tests/kafkatest/tests/tools" bash tests/docker/run_tests.sh
 ```
+* Run a specific tests file
+```
+TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py" bash tests/docker/run_tests.sh
+```
+* Run a specific test class
+```
+TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py::PluggableConsumerTest" bash tests/docker/run_tests.sh
+```
+* Run a specific test method
+```
+TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py::PluggableConsumerTest.test_start_stop" bash tests/docker/run_tests.sh
+```
+
 * Notes
   - The scripts to run tests creates and destroys docker network named *knw*.
    This network can't be used for any other purpose.
@@ -80,7 +92,7 @@ This produces a json about the build which looks like:
     ],
     "before_install": null,
     "script": [
-      "./gradlew releaseTarGz && /bin/bash ./tests/travis/run_tests.sh"
+      "./gradlew systemTestLibs && /bin/bash ./tests/travis/run_tests.sh"
     ],
     "services": [
       "docker"
@@ -128,7 +140,7 @@ This produces a json about the build which looks like:
         "jdk": "oraclejdk8",
         "before_install": null,
         "script": [
-          "./gradlew releaseTarGz && /bin/bash ./tests/travis/run_tests.sh"
+          "./gradlew systemTestLibs && /bin/bash ./tests/travis/run_tests.sh"
         ],
         "services": [
           "docker"
@@ -165,7 +177,7 @@ This produces a json about the build which looks like:
         "jdk": "oraclejdk8",
         "before_install": null,
         "script": [
-          "./gradlew releaseTarGz && /bin/bash ./tests/travis/run_tests.sh"
+          "./gradlew systemTestLibs && /bin/bash ./tests/travis/run_tests.sh"
         ],
         "services": [
           "docker"
@@ -215,7 +227,7 @@ The resulting json looks like:
       "jdk": "oraclejdk8",
       "before_install": null,
       "script": [
-        "./gradlew releaseTarGz && /bin/bash ./tests/travis/run_tests.sh"
+        "./gradlew systemTestLibs && /bin/bash ./tests/travis/run_tests.sh"
       ],
       "services": [
         "docker"
@@ -252,7 +264,7 @@ The resulting json looks like:
       "jdk": "oraclejdk8",
       "before_install": null,
       "script": [
-        "./gradlew releaseTarGz && /bin/bash ./tests/travis/run_tests.sh"
+        "./gradlew systemTestLibs && /bin/bash ./tests/travis/run_tests.sh"
       ],
       "services": [
         "docker"

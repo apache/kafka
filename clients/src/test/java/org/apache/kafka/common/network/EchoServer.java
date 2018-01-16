@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.SslFactory;
 
 import javax.net.ssl.SSLContext;
@@ -41,6 +41,7 @@ class EchoServer extends Thread {
     private final ServerSocket serverSocket;
     private final List<Thread> threads;
     private final List<Socket> sockets;
+    private volatile boolean closing = false;
     private final SslFactory sslFactory;
     private final AtomicBoolean renegotiate = new AtomicBoolean();
 
@@ -71,40 +72,45 @@ class EchoServer extends Thread {
     @Override
     public void run() {
         try {
-            while (true) {
+            while (!closing) {
                 final Socket socket = serverSocket.accept();
-                sockets.add(socket);
-                Thread thread = new Thread() {
-                    @Override
-                    public void run() {
-                        try {
-                            DataInputStream input = new DataInputStream(socket.getInputStream());
-                            DataOutputStream output = new DataOutputStream(socket.getOutputStream());
-                            while (socket.isConnected() && !socket.isClosed()) {
-                                int size = input.readInt();
-                                if (renegotiate.get()) {
-                                    renegotiate.set(false);
-                                    ((SSLSocket) socket).startHandshake();
-                                }
-                                byte[] bytes = new byte[size];
-                                input.readFully(bytes);
-                                output.writeInt(size);
-                                output.write(bytes);
-                                output.flush();
-                            }
-                        } catch (IOException e) {
-                            // ignore
-                        } finally {
+                synchronized (sockets) {
+                    if (closing) {
+                        break;
+                    }
+                    sockets.add(socket);
+                    Thread thread = new Thread() {
+                        @Override
+                        public void run() {
                             try {
-                                socket.close();
+                                DataInputStream input = new DataInputStream(socket.getInputStream());
+                                DataOutputStream output = new DataOutputStream(socket.getOutputStream());
+                                while (socket.isConnected() && !socket.isClosed()) {
+                                    int size = input.readInt();
+                                    if (renegotiate.get()) {
+                                        renegotiate.set(false);
+                                        ((SSLSocket) socket).startHandshake();
+                                    }
+                                    byte[] bytes = new byte[size];
+                                    input.readFully(bytes);
+                                    output.writeInt(size);
+                                    output.write(bytes);
+                                    output.flush();
+                                }
                             } catch (IOException e) {
                                 // ignore
+                            } finally {
+                                try {
+                                    socket.close();
+                                } catch (IOException e) {
+                                    // ignore
+                                }
                             }
                         }
-                    }
-                };
-                thread.start();
-                threads.add(thread);
+                    };
+                    thread.start();
+                    threads.add(thread);
+                }
             }
         } catch (IOException e) {
             // ignore
@@ -112,11 +118,14 @@ class EchoServer extends Thread {
     }
 
     public void closeConnections() throws IOException {
-        for (Socket socket : sockets)
-            socket.close();
+        synchronized (sockets) {
+            for (Socket socket : sockets)
+                socket.close();
+        }
     }
 
     public void close() throws IOException, InterruptedException {
+        closing = true;
         this.serverSocket.close();
         closeConnections();
         for (Thread t : threads)

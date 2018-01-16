@@ -27,6 +27,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Exit;
@@ -75,9 +76,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     // This main() is not used by the system test. It is intended to be used for local debugging.
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) throws InterruptedException {
         final String kafka = "localhost:9092";
-        final String zookeeper = "localhost:2181";
         final File stateDir = TestUtils.tempDirectory();
 
         final int numKeys = 20;
@@ -130,7 +130,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         System.out.println("shutdown");
     }
 
-    public static Map<String, Set<Integer>> generate(String kafka, final int numKeys, final int maxRecordsPerKey) throws Exception {
+    public static Map<String, Set<Integer>> generate(String kafka, final int numKeys, final int maxRecordsPerKey) {
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "SmokeTest");
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
@@ -140,6 +140,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         // no duplicates
         producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
         producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
+        producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 80000);
 
         KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
@@ -155,6 +156,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
         int remaining = data.length;
 
+        List<ProducerRecord<byte[], byte[]>> needRetry = new ArrayList<>();
+
         while (remaining > 0) {
             int index = rand.nextInt(remaining);
             String key = data[index].key;
@@ -168,27 +171,57 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 ProducerRecord<byte[], byte[]> record =
                         new ProducerRecord<>("data", stringSerde.serializer().serialize("", key), intSerde.serializer().serialize("", value));
 
-                producer.send(record, new Callback() {
-                    @Override
-                    public void onCompletion(final RecordMetadata metadata, final Exception exception) {
-                        if (exception != null) {
-                            exception.printStackTrace();
-                            Exit.exit(1);
-                        }
-                    }
-                });
-
+                producer.send(record, new TestCallback(record, needRetry));
 
                 numRecordsProduced++;
                 allData.get(key).add(value);
                 if (numRecordsProduced % 100 == 0)
                     System.out.println(numRecordsProduced + " records produced");
                 Utils.sleep(2);
-
             }
         }
+        producer.flush();
+
+        int remainingRetries = 5;
+        while (!needRetry.isEmpty()) {
+            final List<ProducerRecord<byte[], byte[]>> needRetry2 = new ArrayList<>();
+            for (final ProducerRecord<byte[], byte[]> record : needRetry) {
+                producer.send(record, new TestCallback(record, needRetry2));
+            }
+            producer.flush();
+            needRetry = needRetry2;
+
+            if (--remainingRetries == 0 && !needRetry.isEmpty()) {
+                System.err.println("Failed to produce all records after multiple retries");
+                Exit.exit(1);
+            }
+        }
+
         producer.close();
         return Collections.unmodifiableMap(allData);
+    }
+
+    private static class TestCallback implements Callback {
+        private final ProducerRecord<byte[], byte[]> originalRecord;
+        private final List<ProducerRecord<byte[], byte[]>> needRetry;
+
+        TestCallback(final ProducerRecord<byte[], byte[]> originalRecord,
+                     final List<ProducerRecord<byte[], byte[]>> needRetry) {
+            this.originalRecord = originalRecord;
+            this.needRetry = needRetry;
+        }
+
+        @Override
+        public void onCompletion(final RecordMetadata metadata, final Exception exception) {
+            if (exception != null) {
+                if (exception instanceof TimeoutException) {
+                    needRetry.add(originalRecord);
+                } else {
+                    exception.printStackTrace();
+                    Exit.exit(1);
+                }
+            }
+        }
     }
 
     private static void shuffle(int[] data, int windowSize) {

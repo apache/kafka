@@ -23,7 +23,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class CollectionUtils {
+public final class CollectionUtils {
+
+    private CollectionUtils() {}
+
     /**
      * group data by topic
      * @param data Data to be partitioned

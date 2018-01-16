@@ -25,25 +25,19 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class ListTopicsOptions {
-    private Integer timeoutMs = null;
+public class ListTopicsOptions extends AbstractOptions<ListTopicsOptions> {
+
     private boolean listInternal = false;
 
     /**
      * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
      * AdminClient should be used.
+     *
      */
+    // This method is retained to keep binary compatibility with 0.11
     public ListTopicsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;
-    }
-
-    /**
-     * The request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
-     * AdminClient should be used.
-     */
-    public Integer timeoutMs() {
-        return timeoutMs;
     }
 
     /**

@@ -13,15 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark import ignore
 from ducktape.mark import parametrize
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
-
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsBrokerCompatibilityService
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.version import DEV_BRANCH, LATEST_0_10_2, LATEST_0_10_1, LATEST_0_10_0, LATEST_0_9, LATEST_0_8_2, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_0_11_0, LATEST_0_10_2, LATEST_0_10_1, LATEST_0_10_0, LATEST_0_9, LATEST_0_8_2, KafkaVersion
 
 
 class StreamsBrokerCompatibility(Test):
@@ -55,6 +55,7 @@ class StreamsBrokerCompatibility(Test):
     def setUp(self):
         self.zk.start()
 
+   
     @parametrize(broker_version=str(LATEST_0_10_2))
     @parametrize(broker_version=str(LATEST_0_10_1))
     def test_fail_fast_on_incompatible_brokers_if_eos_enabled(self, broker_version):
@@ -66,12 +67,13 @@ class StreamsBrokerCompatibility(Test):
 
         processor.node.account.ssh(processor.start_cmd(processor.node))
         with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
-            monitor.wait_until('Exception in thread "main" org.apache.kafka.streams.errors.StreamsException: Setting processing.guarantee=exactly_once requires broker version 0.11.0.x or higher.',
+            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS ',
                                timeout_sec=60,
-                               err_msg="Never saw 'EOS requires broker version 0.11+' error message " + str(processor.node.account))
+                               err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS ' error message " + str(processor.node.account))
 
         self.kafka.stop()
 
+    @parametrize(broker_version=str(LATEST_0_11_0))
     @parametrize(broker_version=str(LATEST_0_10_2))
     @parametrize(broker_version=str(LATEST_0_10_1))
     def test_compatible_brokers_eos_disabled(self, broker_version):
@@ -100,12 +102,13 @@ class StreamsBrokerCompatibility(Test):
 
         processor.node.account.ssh(processor.start_cmd(processor.node))
         with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
-            monitor.wait_until('Exception in thread "main" org.apache.kafka.streams.errors.StreamsException: Kafka Streams requires broker version 0.10.1.x or higher.',
+            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.streams.errors.StreamsException: Could not create topic kafka-streams-system-test-broker-compatibility-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog.',
                         timeout_sec=60,
-                        err_msg="Never saw 'Streams requires broker verion 0.10.1+' error message " + str(processor.node.account))
+                        err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.streams.errors.StreamsException: Could not create topic kafka-streams-system-test-broker-compatibility-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog.' error message " + str(processor.node.account))
 
         self.kafka.stop()
 
+    @ignore
     @parametrize(broker_version=str(LATEST_0_9))
     @parametrize(broker_version=str(LATEST_0_8_2))
     def test_timeout_on_pre_010_brokers(self, broker_version):

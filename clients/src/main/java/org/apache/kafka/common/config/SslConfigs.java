@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
 
@@ -24,10 +26,24 @@ public class SslConfigs {
      * NOTE: DO NOT CHANGE EITHER CONFIG NAMES AS THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
      */
 
-    public static final String PRINCIPAL_BUILDER_CLASS_CONFIG = "principal.builder.class";
-    public static final String PRINCIPAL_BUILDER_CLASS_DOC = "The fully qualified name of a class that implements the PrincipalBuilder interface, " +
-            "which is currently used to build the Principal for connections with the SSL SecurityProtocol.";
-    public static final String DEFAULT_PRINCIPAL_BUILDER_CLASS = "org.apache.kafka.common.security.auth.DefaultPrincipalBuilder";
+    /**
+     * @deprecated As of 1.0.0. This field will be removed in a future major release.
+     */
+    @Deprecated
+    public static final String PRINCIPAL_BUILDER_CLASS_CONFIG = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG;
+    /**
+     * @deprecated As of 1.0.0. This field will be removed in a future major release.
+     */
+    @Deprecated
+    public static final String PRINCIPAL_BUILDER_CLASS_DOC = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC;
+    /**
+     * @deprecated As of 1.0.0. This field will be removed in a future major release. In recent versions,
+     *   the config is optional and there is no default.
+     */
+    // use FQN to avoid import deprecation warning
+    @Deprecated
+    public static final String DEFAULT_PRINCIPAL_BUILDER_CLASS =
+            org.apache.kafka.common.security.auth.DefaultPrincipalBuilder.class.getName();
 
     public static final String SSL_PROTOCOL_CONFIG = "ssl.protocol";
     public static final String SSL_PROTOCOL_DOC = "The SSL protocol used to generate the SSLContext. "
@@ -91,15 +107,16 @@ public class SslConfigs {
     public static final String SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG = "ssl.secure.random.implementation";
     public static final String SSL_SECURE_RANDOM_IMPLEMENTATION_DOC = "The SecureRandom PRNG implementation to use for SSL cryptography operations. ";
 
-    public static final String SSL_CLIENT_AUTH_CONFIG = "ssl.client.auth";
-    public static final String SSL_CLIENT_AUTH_DOC = "Configures kafka broker to request client authentication."
-                                           + " The following settings are common: "
-                                           + " <ul>"
-                                           + " <li><code>ssl.client.auth=required</code> If set to required"
-                                           + " client authentication is required."
-                                           + " <li><code>ssl.client.auth=requested</code> This means client authentication is optional."
-                                           + " unlike requested , if this option is set client can choose not to provide authentication information about itself"
-                                           + " <li><code>ssl.client.auth=none</code> This means client authentication is not needed.";
+    /**
+     * @deprecated As of 1.0.0. This field will be removed in a future major release.
+     */
+    @Deprecated
+    public static final String SSL_CLIENT_AUTH_CONFIG = BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG;
+    /**
+     * @deprecated As of 1.0.0. This field will be removed in a future major release.
+     */
+    @Deprecated
+    public static final String SSL_CLIENT_AUTH_DOC = BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC;
 
     public static void addClientSslSupport(ConfigDef config) {
         config.define(SslConfigs.SSL_PROTOCOL_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_PROTOCOL, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_PROTOCOL_DOC)

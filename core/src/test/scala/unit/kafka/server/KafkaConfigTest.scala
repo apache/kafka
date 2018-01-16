@@ -26,7 +26,7 @@ import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.Assertions.intercept
@@ -121,7 +121,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testLogRetentionValid {
+  def testLogRetentionValid(): Unit = {
     val props1 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     val props2 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     val props3 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
@@ -539,12 +539,15 @@ class KafkaConfigTest {
         case KafkaConfig.ZkConnectionTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.ZkSyncTimeMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.ZkEnableSecureAclsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean")
+        case KafkaConfig.ZkMaxInFlightRequestsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
 
         case KafkaConfig.BrokerIdProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.NumNetworkThreadsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.NumIoThreadsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.BackgroundThreadsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.QueuedMaxRequestsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.NumReplicaAlterLogDirsThreadsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.QueuedMaxBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.RequestTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
 
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
@@ -715,6 +718,14 @@ class KafkaConfigTest {
     assertEquals(123L, config.logFlushIntervalMs)
     assertEquals(SnappyCompressionCodec, config.offsetsTopicCompressionCodec)
     assertEquals(Sensor.RecordingLevel.DEBUG.toString, config.metricRecordingLevel)
+  }
+
+  @Test
+  def testNonroutableAdvertisedListeners() {
+    val props = new Properties()
+    props.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://0.0.0.0:9092")
+    assertFalse(isValidKafkaConfig(props))
   }
 
   private def assertPropertyInvalid(validRequiredProps: => Properties, name: String, values: Any*) {

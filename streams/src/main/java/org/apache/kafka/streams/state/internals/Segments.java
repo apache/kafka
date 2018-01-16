@@ -24,10 +24,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.SimpleTimeZone;
@@ -61,12 +62,16 @@ class Segments {
         this.formatter.setTimeZone(new SimpleTimeZone(0, "UTC"));
     }
 
-    long segmentId(long timestamp) {
+    long segmentId(final long timestamp) {
         return timestamp / segmentInterval;
     }
 
-    String segmentName(long segmentId) {
-        return name + "-" + formatter.format(new Date(segmentId * segmentInterval));
+    String segmentName(final long segmentId) {
+        // (1) previous format used - as a separator so if this changes in the future
+        // then we should use something different.
+        // (2) previous format used : as a separator (which did break KafkaStreams on Windows OS)
+        // so if this changes in the future then we should use something different.
+        return name + "." + segmentId * segmentInterval;
     }
 
     Segment getSegmentForTimestamp(final long timestamp) {
@@ -85,9 +90,7 @@ class Segments {
             if (previousSegment == null) {
                 newSegment.openDB(context);
                 maxSegmentId = segmentId > maxSegmentId ? segmentId : maxSegmentId;
-                if (minSegmentId == Long.MAX_VALUE) {
-                    minSegmentId = maxSegmentId;
-                }
+                minSegmentId = segmentId < minSegmentId ? segmentId : minSegmentId;
             }
             return previousSegment == null ? newSegment : previousSegment;
         } else {
@@ -103,7 +106,7 @@ class Segments {
                 if (list != null) {
                     long[] segmentIds = new long[list.length];
                     for (int i = 0; i < list.length; i++)
-                        segmentIds[i] = segmentIdFromSegmentName(list[i]);
+                        segmentIds[i] = segmentIdFromSegmentName(list[i], dir);
 
                     // open segments in the id order
                     Arrays.sort(segmentIds);
@@ -141,6 +144,21 @@ class Segments {
         return segments;
     }
 
+    List<Segment> allSegments() {
+        final List<Segment> segments = new ArrayList<>();
+        for (Segment segment : this.segments.values()) {
+            if (segment.isOpen()) {
+                try {
+                    segments.add(segment);
+                } catch (InvalidStateStoreException ise) {
+                    // segment may have been closed by streams thread;
+                }
+            }
+        }
+        Collections.sort(segments);
+        return segments;
+    }
+    
     void flush() {
         for (Segment segment : segments.values()) {
             segment.flush();
@@ -151,6 +169,7 @@ class Segments {
         for (Segment segment : segments.values()) {
             segment.close();
         }
+        segments.clear();
     }
 
     private Segment getSegment(long segmentId) {
@@ -187,12 +206,51 @@ class Segments {
         }
     }
 
-    private long segmentIdFromSegmentName(String segmentName) {
-        try {
-            Date date = formatter.parse(segmentName.substring(name.length() + 1));
-            return date.getTime() / segmentInterval;
-        } catch (Exception ex) {
-            return -1L;
+    private long segmentIdFromSegmentName(final String segmentName,
+                                          final File parent) {
+        final int segmentSeparatorIndex = name.length();
+        final char segmentSeparator = segmentName.charAt(segmentSeparatorIndex);
+        final String segmentIdString = segmentName.substring(segmentSeparatorIndex + 1);
+        final long segmentId;
+
+        // old style segment name with date
+        if (segmentSeparator == '-') {
+            try {
+                segmentId = formatter.parse(segmentIdString).getTime() / segmentInterval;
+            } catch (ParseException e) {
+                log.warn("Unable to parse segmentName {} to a date. This segment will be skipped", segmentName);
+                return -1L;
+            }
+            renameSegmentFile(parent, segmentName, segmentId);
+        } else {
+            // for both new formats (with : or .) parse segment ID identically
+            try {
+                segmentId = Long.parseLong(segmentIdString) / segmentInterval;
+            } catch (NumberFormatException e) {
+                throw new ProcessorStateException("Unable to parse segment id as long from segmentName: " + segmentName);
+            }
+
+            // intermediate segment name with : breaks KafkaStreams on Windows OS -> rename segment file to new name with .
+            if (segmentSeparator == ':') {
+                renameSegmentFile(parent, segmentName, segmentId);
+            }
+        }
+
+        return segmentId;
+
+    }
+
+    private void renameSegmentFile(final File parent,
+                                   final String segmentName,
+                                   final long segmentId) {
+        final File newName = new File(parent, segmentName(segmentId));
+        final File oldName = new File(parent, segmentName);
+        if (!oldName.renameTo(newName)) {
+            throw new ProcessorStateException("Unable to rename old style segment from: "
+                + oldName
+                + " to new name: "
+                + newName);
         }
     }
+
 }

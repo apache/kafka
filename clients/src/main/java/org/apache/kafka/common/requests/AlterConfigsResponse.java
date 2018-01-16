@@ -18,6 +18,10 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -26,11 +30,31 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
+import static org.apache.kafka.common.protocol.types.Type.INT8;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
+
 public class AlterConfigsResponse extends AbstractResponse {
 
     private static final String RESOURCES_KEY_NAME = "resources";
     private static final String RESOURCE_TYPE_KEY_NAME = "resource_type";
     private static final String RESOURCE_NAME_KEY_NAME = "resource_name";
+
+    private static final Schema ALTER_CONFIGS_RESPONSE_ENTITY_V0 = new Schema(
+            ERROR_CODE,
+            ERROR_MESSAGE,
+            new Field(RESOURCE_TYPE_KEY_NAME, INT8),
+            new Field(RESOURCE_NAME_KEY_NAME, STRING));
+
+    private static final Schema ALTER_CONFIGS_RESPONSE_V0 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(RESOURCES_KEY_NAME, new ArrayOf(ALTER_CONFIGS_RESPONSE_ENTITY_V0)));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{ALTER_CONFIGS_RESPONSE_V0};
+    }
 
     private final int throttleTimeMs;
     private final Map<Resource, ApiError> errors;
@@ -42,7 +66,7 @@ public class AlterConfigsResponse extends AbstractResponse {
     }
 
     public AlterConfigsResponse(Struct struct) {
-        throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
+        throttleTimeMs = struct.get(THROTTLE_TIME_MS);
         Object[] resourcesArray = struct.getArray(RESOURCES_KEY_NAME);
         errors = new HashMap<>(resourcesArray.length);
         for (Object resourceObj : resourcesArray) {
@@ -58,6 +82,11 @@ public class AlterConfigsResponse extends AbstractResponse {
         return errors;
     }
 
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return apiErrorCounts(errors);
+    }
+
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -65,7 +94,7 @@ public class AlterConfigsResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.ALTER_CONFIGS.responseSchema(version));
-        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
+        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
         List<Struct> resourceStructs = new ArrayList<>(errors.size());
         for (Map.Entry<Resource, ApiError> entry : errors.entrySet()) {
             Struct resourceStruct = struct.instance(RESOURCES_KEY_NAME);

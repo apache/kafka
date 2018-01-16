@@ -10,7 +10,9 @@
 
     <!-- Clients -->
     <suppress checks="ClassFanOutComplexity"
-              files="(Fetcher|Sender|SenderTest|ConsumerCoordinator|KafkaConsumer|KafkaProducer|SaslServerAuthenticator|Utils|TransactionManagerTest|KafkaAdminClient|NetworkClient).java"/>
+              files="(Fetcher|Sender|SenderTest|ConsumerCoordinator|KafkaConsumer|KafkaProducer|Utils|TransactionManagerTest|KafkaAdminClient|NetworkClient).java"/>
+    <suppress checks="ClassFanOutComplexity"
+              files="(SaslServerAuthenticator|SaslAuthenticatorTest).java"/>
     <suppress checks="ClassFanOutComplexity"
               files="Errors.java"/>
     <suppress checks="ClassFanOutComplexity"
@@ -21,7 +23,7 @@
               files="AbstractResponse.java"/>
 
     <suppress checks="MethodLength"
-              files="KerberosLogin.java|RequestResponseTest.java"/>
+              files="KerberosLogin.java|RequestResponseTest.java|ConnectMetricsRegistry.java"/>
 
     <suppress checks="ParameterNumber"
               files="NetworkClient.java"/>
@@ -32,36 +34,43 @@
     <suppress checks="ParameterNumber"
               files="Fetcher.java"/>
     <suppress checks="ParameterNumber"
+              files="Sender.java"/>
+    <suppress checks="ParameterNumber"
               files="ConfigDef.java"/>
     <suppress checks="ParameterNumber"
               files="DefaultRecordBatch.java"/>
+    <suppress checks="ParameterNumber"
+              files="Sender.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files="(KafkaConsumer|ConsumerCoordinator|Fetcher|KafkaProducer|AbstractRequest|AbstractResponse|TransactionManager|KafkaAdminClient).java"/>
     <suppress checks="ClassDataAbstractionCoupling"
-              files="Errors.java"/>
+              files="(Errors|SaslAuthenticatorTest|AgentTest).java"/>
 
     <suppress checks="BooleanExpressionComplexity"
               files="(Utils|Topic|KafkaLZ4BlockOutputStream|AclData).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslTransportLayer).java"/>
+              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslTransportLayer|SaslClientAuthenticator).java"/>
 
     <suppress checks="JavaNCSS"
-              files="AbstractRequest.java|KerberosLogin.java"/>
+              files="AbstractRequest.java|KerberosLogin.java|WorkerSinkTaskTest.java"/>
 
     <suppress checks="JavaNCSS"
               files="AbstractRequest.java"/>
 
     <suppress checks="NPathComplexity"
-              files="(BufferPool|MetricName|Node|ConfigDef|SslTransportLayer|MetadataResponse|KerberosLogin|SslTransportLayer|Sender|Serdes).java"/>
+              files="(BufferPool|MetricName|Node|ConfigDef|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|Agent).java"/>
 
     <!-- clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
               files="(Sender|Fetcher|KafkaConsumer|Metrics|ConsumerCoordinator|RequestResponse|TransactionManager|KafkaAdminClient)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
-              files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher)Test.java"/>
+              files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher|KafkaAdminClient)Test.java"/>
+
+    <suppress checks="ClassFanOutComplexity"
+              files="MockAdminClient.java"/>
 
     <suppress checks="JavaNCSS"
               files="RequestResponseTest.java"/>
@@ -71,7 +80,7 @@
               files="DistributedHerder(|Test).java"/>
 
     <suppress checks="MethodLength"
-              files="(KafkaConfigBackingStore|RequestResponseTest).java"/>
+              files="(KafkaConfigBackingStore|RequestResponseTest|WorkerSinkTaskTest).java"/>
 
     <suppress checks="ParameterNumber"
               files="WorkerSourceTask.java"/>
@@ -117,7 +126,7 @@
 
     <!-- Streams -->
     <suppress checks="ClassFanOutComplexity"
-              files="(KafkaStreams|KStreamImpl|KTableImpl|StreamThread|StreamTask).java"/>
+              files="(TopologyBuilder|KafkaStreams|KStreamImpl|KTableImpl|StreamThread|StreamTask).java"/>
 
     <suppress checks="MethodLength"
               files="StreamPartitionAssignor.java"/>
@@ -128,7 +137,7 @@
               files="RocksDBWindowStoreSupplier.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(KStreamImpl|StreamPartitionAssignor|KafkaStreams|KTableImpl).java"/>
+              files="(TopologyBuilder|KStreamImpl|StreamPartitionAssignor|KafkaStreams|KTableImpl).java"/>
 
     <suppress checks="CyclomaticComplexity"
               files="TopologyBuilder.java"/>
@@ -184,14 +193,14 @@
               files="VerifiableConsumer.java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="StreamsResetter.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="ProducerPerformance.java"/>
+              files="(StreamsResetter|ProducerPerformance|Agent).java"/>
 
     <suppress checks="NPathComplexity"
-              files="StreamsResetter.java"/>
-    <suppress checks="NPathComplexity"
-              files="ProducerPerformance.java"/>
+              files="(ProducerPerformance|StreamsResetter|Agent).java"/>
+    <suppress checks="ImportControl"
+              files="SignalLogger.java"/>
+    <suppress checks="IllegalImport"
+              files="SignalLogger.java"/>
 
     <!-- Log4J-Appender -->
     <suppress checks="CyclomaticComplexity"

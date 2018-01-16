@@ -18,9 +18,8 @@ package kafka.server.epoch
 
 import java.util.{Map => JMap}
 
-import kafka.admin.AdminUtils
 import kafka.server.KafkaConfig._
-import kafka.server.{BlockingSend, KafkaConfig, KafkaServer, ReplicaFetcherBlockingSend}
+import kafka.server.{BlockingSend, KafkaServer, ReplicaFetcherBlockingSend}
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
@@ -29,7 +28,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.serialization.StringSerializer
-import org.apache.kafka.common.utils.SystemTime
+import org.apache.kafka.common.utils.{LogContext, SystemTime}
 import org.apache.kafka.common.TopicPartition
 
 import org.junit.Assert._
@@ -65,7 +64,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     // Given two topics with replication of a single partition
     for (topic <- List(topic1, topic2)) {
-      createTopic(zkUtils, topic, Map(0 -> Seq(0, 1)), servers = brokers)
+      createTopic(zkClient, topic, Map(0 -> Seq(0, 1)), servers = brokers)
     }
 
     // When we send four messages
@@ -96,11 +95,11 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     //3 brokers, put partition on 100/101 and then pretend to be 102
     brokers = (100 to 102).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic1, Map(
+    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic1, Map(
       0 -> Seq(100),
       1 -> Seq(101)
     ))
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic2, Map(
+    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic2, Map(
       0 -> Seq(100)
     ))
 
@@ -144,7 +143,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     //Setup: we are only interested in the single partition on broker 101
     brokers = Seq(100, 101).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
     def leo() = brokers(1).replicaManager.getReplica(tp).get.logEndOffset.messageOffset
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, tp.topic, Map(tp.partition -> Seq(101)))
+    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(tp.topic, Map(tp.partition -> Seq(101)))
     producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 10, acks = -1)
 
     //1. Given a single message
@@ -215,14 +214,14 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   }
 
   private def sender(from: KafkaServer, to: KafkaServer): BlockingSend = {
-    val endPoint = from.metadataCache.getAliveBrokers.find(_.id == to.config.brokerId).get.getBrokerEndPoint(from.config.interBrokerListenerName)
-    new ReplicaFetcherBlockingSend(endPoint, from.config, new Metrics(), new SystemTime(), 42, "TestFetcher")
+    val endPoint = from.metadataCache.getAliveBrokers.find(_.id == to.config.brokerId).get.brokerEndPoint(from.config.interBrokerListenerName)
+    new ReplicaFetcherBlockingSend(endPoint, from.config, new Metrics(), new SystemTime(), 42, "TestFetcher", new LogContext())
   }
 
   private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {
     TestUtils.waitUntilTrue(() => {
       brokers(0).metadataCache.getPartitionInfo(topic, partition) match {
-        case Some(m) => m.leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch == epoch
+        case Some(m) => m.basePartitionState.leaderEpoch == epoch
         case None => false
       }
     }, "Epoch didn't change")
@@ -263,7 +262,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   /**
     * Simulates how the Replica Fetcher Thread requests leader offsets for epochs
     */
-  private class TestFetcherThread(sender: BlockingSend) extends Logging {
+  private[epoch] class TestFetcherThread(sender: BlockingSend) extends Logging {
 
     def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
       val request = new OffsetsForLeaderEpochRequest.Builder(toJavaFormat(partitions))

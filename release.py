@@ -121,6 +121,8 @@ def user_ok(msg):
 
 def sftp_mkdir(dir):
     basedir, dirname = os.path.split(dir)
+    if not basedir:
+       basedir = "."
     try:
        cmd_str  = """
 cd %s
@@ -160,6 +162,32 @@ if not user_ok("""Requirements:
       signing.keyId=your-gpgkeyId
       signing.password=your-gpg-passphrase
       signing.secretKeyRingFile=/Users/your-id/.gnupg/secring.gpg (if you are using GPG 2.1 and beyond, then this file will no longer exist anymore, and you have to manually create it from the new private key directory with "gpg --export-secret-keys -o ~/.gnupg/secring.gpg")
+8. ~/.m2/settings.xml configured for pgp signing and uploading to apache release maven, i.e., 
+       <server>
+          <id>apache.releases.https</id>
+          <username>your-apache-id</username>
+          <password>your-apache-passwd</password>
+        </server>
+	<server>
+            <id>your-gpgkeyId</id>
+            <passphrase>your-gpg-passphase</passphrase>
+        </server>
+        <profile>
+            <id>gpg-signing</id>
+            <properties>
+                <gpg.keyname>your-gpgkeyId</gpg.keyname>
+        	<gpg.passphraseServerId>your-gpgkeyId</gpg.passphraseServerId>
+            </properties>
+        </profile>
+9. You may also need to update some gnupgp configs:
+	~/.gnupg/gpg-agent.conf
+	allow-loopback-pinentry
+
+	~/.gnupg/gpg.conf
+	use-agent
+	pinentry-mode loopback
+
+	echo RELOADAGENT | gpg-connect-agent
 
 If any of these are missing, see https://cwiki.apache.org/confluence/display/KAFKA/Release+Process for instructions on setting them up.
 
@@ -176,11 +204,11 @@ starting_branch = cmd_output('git rev-parse --abbrev-ref HEAD')
 cmd("Verifying that you have no unstaged git changes", 'git diff --exit-code --quiet')
 cmd("Verifying that you have no staged git changes", 'git diff --cached --exit-code --quiet')
 
-release_version = raw_input("Release version (without any RC info, e.g. 0.10.2.0): ")
+release_version = raw_input("Release version (without any RC info, e.g. 1.0.0): ")
 try:
     release_version_parts = release_version.split('.')
-    if len(release_version_parts) != 4:
-        fail("Invalid release version, should have 4 version number components")
+    if len(release_version_parts) != 3:
+        fail("Invalid release version, should have 3 version number components")
     # Validate each part is a number
     [int(x) for x in release_version_parts]
 except ValueError:
@@ -188,8 +216,8 @@ except ValueError:
 
 rc = raw_input("Release candidate number: ")
 
-dev_branch = '.'.join(release_version_parts[:3])
-docs_version = ''.join(release_version_parts[:3])
+dev_branch = '.'.join(release_version_parts[:2])
+docs_version = ''.join(release_version_parts[:2])
 
 # Validate that the release doesn't already exist and that the
 cmd("Fetching tags from upstream", 'git fetch --tags %s' % PUSH_REMOTE_NAME)
@@ -260,6 +288,12 @@ cmd("Checking out current development branch", "git checkout -b %s %s" % (releas
 print("Updating version numbers")
 replace("gradle.properties", "version", "version=%s" % release_version)
 replace("tests/kafkatest/__init__.py", "__version__", "__version__ = '%s'" % release_version)
+cmd("update streams quickstart pom", ["sed", "-i", ".orig"," s/-SNAPSHOT//", "streams/quickstart/pom.xml"])
+cmd("update streams quickstart java pom", ["sed", "-i", ".orig", "s/-SNAPSHOT//", "streams/quickstart/java/pom.xml"])
+cmd("update streams quickstart java pom", ["sed", "-i", ".orig", "s/-SNAPSHOT//", "streams/quickstart/java/src/main/resources/archetype-resources/pom.xml"])
+cmd("remove backup pom.xml", "rm streams/quickstart/pom.xml.orig")
+cmd("remove backup java pom.xml", "rm streams/quickstart/java/pom.xml.orig")
+cmd("remove backup java pom.xml", "rm streams/quickstart/java/src/main/resources/archetype-resources/pom.xml.orig")
 # Command in explicit list due to messages with spaces
 cmd("Commiting version number updates", ["git", "commit", "-a", "-m", "Bump version to %s" % release_version])
 # Command in explicit list due to messages with spaces
@@ -275,6 +309,8 @@ if os.path.exists(work_dir):
 os.makedirs(work_dir)
 print("Temporary build working director:", work_dir)
 kafka_dir = os.path.join(work_dir, 'kafka')
+streams_quickstart_dir = os.path.join(kafka_dir, 'streams/quickstart')
+print("Streams quickstart dir", streams_quickstart_dir)
 cmd("Creating staging area for release artifacts", "mkdir kafka-" + rc_tag, cwd=work_dir)
 artifacts_dir = os.path.join(work_dir, "kafka-" + rc_tag)
 cmd("Cloning clean copy of repo", "git clone %s kafka" % REPO_HOME, cwd=work_dir)
@@ -304,7 +340,7 @@ cmd("Creating source archive", "git archive --format tar.gz --prefix kafka-%(rel
 
 cmd("Building artifacts", "gradle", cwd=kafka_dir, env=jdk7_env)
 cmd("Building artifacts", "./gradlew clean releaseTarGzAll aggregatedJavadoc", cwd=kafka_dir, env=jdk7_env)
-# This should be removed with KAFKA-4421
+# we need extra cmd to build 2.12 with jdk8 specifically
 cmd("Building artifacts for Scala 2.12", "./gradlew releaseTarGz -PscalaVersion=2.12", cwd=kafka_dir, env=jdk8_env)
 cmd("Copying artifacts", "cp %s/core/build/distributions/* %s" % (kafka_dir, artifacts_dir), shell=True)
 cmd("Copying artifacts", "cp -R %s/build/docs/javadoc %s" % (kafka_dir, artifacts_dir))
@@ -322,7 +358,7 @@ for filename in os.listdir(artifacts_dir):
     dir, fname = os.path.split(full_path)
     cmd("Generating MD5 for " + full_path, "gpg --print-md md5 %s > %s.md5" % (fname, fname), shell=True, cwd=dir)
     cmd("Generating SHA1 for " + full_path, "gpg --print-md sha1 %s > %s.sha1" % (fname, fname), shell=True, cwd=dir)
-    cmd("Generating SHA2 for " + full_path, "gpg --print-md sha512 %s > %s.sha2" % (fname, fname), shell=True, cwd=dir)
+    cmd("Generating SHA512 for " + full_path, "gpg --print-md sha512 %s > %s.sha512" % (fname, fname), shell=True, cwd=dir)
 
 cmd("Listing artifacts to be uploaded:", "ls -R %s" % artifacts_dir)
 if not user_ok("Going to upload the artifacts in %s, listed above, to your Apache home directory. Ok (y/n)?): " % artifacts_dir):
@@ -353,6 +389,7 @@ if not user_ok("Going to build and upload mvn artifacts based on these settings:
     fail("Retry again later")
 cmd("Building and uploading archives", "./gradlew uploadArchivesAll", cwd=kafka_dir, env=jdk7_env)
 cmd("Building and uploading archives", "./gradlew uploadCoreArchives_2_12 -PscalaVersion=2.12", cwd=kafka_dir, env=jdk8_env)
+cmd("Building and uploading archives", "mvn deploy", cwd=streams_quickstart_dir, env=jdk7_env)
 
 release_notification_props = { 'release_version': release_version,
                                'rc': rc,
@@ -381,11 +418,11 @@ Some suggested steps:
       wget http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.asc &&
       wget http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.md5 &&
       wget http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.sha1 &&
-      wget http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.sha2 &&
+      wget http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.sha512 &&
       gpg --verify kafka-%(release_version)s-src.tgz.asc kafka-%(release_version)s-src.tgz &&
       gpg --print-md md5 kafka-%(release_version)s-src.tgz | diff - kafka-%(release_version)s-src.tgz.md5 &&
       gpg --print-md sha1 kafka-%(release_version)s-src.tgz | diff - kafka-%(release_version)s-src.tgz.sha1 &&
-      gpg --print-md sha512 kafka-%(release_version)s-src.tgz | diff - kafka-%(release_version)s-src.tgz.sha2 &&
+      gpg --print-md sha512 kafka-%(release_version)s-src.tgz | diff - kafka-%(release_version)s-src.tgz.sha512 &&
       rm kafka-%(release_version)s-src.tgz* &&
       echo "OK" || echo "Failed"
  * Validate the javadocs look ok. They are at http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/javadoc/
@@ -404,7 +441,7 @@ if not user_ok("Ok to push RC tag %s (y/n)?: " % rc_tag):
     fail("Ok, giving up")
 cmd("Pushing RC tag", "git push %s %s" % (PUSH_REMOTE_NAME, rc_tag))
 
-# Move back to starting branch and clean out the temporary release branch (e.g. 0.10.2.0) we used to generate everything
+# Move back to starting branch and clean out the temporary release branch (e.g. 1.0.0) we used to generate everything
 cmd("Resetting repository working state", "git reset --hard HEAD && git checkout %s" % starting_branch, shell=True)
 cmd("Deleting git branches %s" % release_version, "git branch -D %s" % release_version, shell=True)
 

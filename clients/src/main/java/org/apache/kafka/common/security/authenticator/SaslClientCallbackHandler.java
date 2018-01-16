@@ -28,7 +28,6 @@ import javax.security.sasl.RealmCallback;
 
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.common.security.auth.AuthCallbackHandler;
 
 /**
  * Callback handler for Sasl clients. The callbacks required for the SASL mechanism

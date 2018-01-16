@@ -16,30 +16,27 @@
  */
 package org.apache.kafka.streams.integration;
 
-
-import kafka.admin.AdminUtils;
 import kafka.log.LogConfig;
 import kafka.utils.MockTime;
-import kafka.utils.ZKStringSerializer$;
-import kafka.utils.ZkUtils;
-import org.I0Itec.zkclient.ZkClient;
-import org.I0Itec.zkclient.ZkConnection;
+import kafka.zk.AdminZkClient;
+import kafka.zk.KafkaZkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -50,10 +47,10 @@ import scala.Tuple2;
 import scala.collection.Iterator;
 import scala.collection.Map;
 
-import java.util.Properties;
 import java.util.Arrays;
-import java.util.Locale;
 import java.util.List;
+import java.util.Locale;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
@@ -76,7 +73,7 @@ public class InternalTopicIntegrationTest {
     private String applicationId = "compact-topics-integration-test";
 
     @BeforeClass
-    public static void startKafkaCluster() throws Exception {
+    public static void startKafkaCluster() throws InterruptedException {
         CLUSTER.createTopics(DEFAULT_INPUT_TOPIC, DEFAULT_OUTPUT_TOPIC);
     }
 
@@ -95,20 +92,13 @@ public class InternalTopicIntegrationTest {
     }
 
     private Properties getTopicConfigProperties(final String changelog) {
-        // Note: You must initialize the ZkClient with ZKStringSerializer.  If you don't, then
-        // createTopics() will only seem to work (it will return without error).  The topic will exist in
-        // only ZooKeeper and will be returned when listing topics, but Kafka itself does not create the
-        // topic.
-        final ZkClient zkClient = new ZkClient(
-                CLUSTER.zKConnectString(),
-                DEFAULT_ZK_SESSION_TIMEOUT_MS,
-                DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
-                ZKStringSerializer$.MODULE$);
+        final KafkaZkClient kafkaZkClient = KafkaZkClient.apply(CLUSTER.zKConnectString(), false,
+                DEFAULT_ZK_SESSION_TIMEOUT_MS, DEFAULT_ZK_CONNECTION_TIMEOUT_MS, Integer.MAX_VALUE, Time.SYSTEM,
+                "testMetricGroup", "testMetricType");
         try {
-            final boolean isSecure = false;
-            final ZkUtils zkUtils = new ZkUtils(zkClient, new ZkConnection(CLUSTER.zKConnectString()), isSecure);
+            final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
 
-            final Map<String, Properties> topicConfigs = AdminUtils.fetchAllTopicConfigs(zkUtils);
+            final Map<String, Properties> topicConfigs = adminZkClient.getAllTopicConfigs();
             final Iterator it = topicConfigs.iterator();
             while (it.hasNext()) {
                 final Tuple2<String, Properties> topicConfig = (Tuple2<String, Properties>) it.next();
@@ -120,7 +110,7 @@ public class InternalTopicIntegrationTest {
             }
             return new Properties();
         } finally {
-            zkClient.close();
+            kafkaZkClient.close();
         }
     }
 
@@ -139,7 +129,7 @@ public class InternalTopicIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> textLines = builder.stream(DEFAULT_INPUT_TOPIC);
 
@@ -149,7 +139,7 @@ public class InternalTopicIntegrationTest {
                     public Iterable<String> apply(final String value) {
                         return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
                     }
-                }).groupBy(MockKeyValueMapper.<String, String>SelectValueMapper())
+                }).groupBy(MockMapper.<String, String>selectValueMapper())
                 .count("Counts").toStream();
 
         wordCounts.to(stringSerde, longSerde, DEFAULT_OUTPUT_TOPIC);
@@ -157,7 +147,7 @@ public class InternalTopicIntegrationTest {
         // Remove any state from previous test runs
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
 
-        final KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
         streams.start();
 
         //
@@ -173,7 +163,7 @@ public class InternalTopicIntegrationTest {
         assertEquals(LogConfig.Compact(), properties.getProperty(LogConfig.CleanupPolicyProp()));
     }
 
-    private void produceData(final List<String> inputValues) throws java.util.concurrent.ExecutionException, InterruptedException {
+    private void produceData(final List<String> inputValues) throws Exception {
         final Properties producerConfig = new Properties();
         producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
@@ -185,7 +175,7 @@ public class InternalTopicIntegrationTest {
 
     @Test
     public void shouldUseCompactAndDeleteForWindowStoreChangelogs() throws Exception {
-        KStreamBuilder builder = new KStreamBuilder();
+        StreamsBuilder builder = new StreamsBuilder();
 
         KStream<String, String> textLines = builder.stream(DEFAULT_INPUT_TOPIC);
 
@@ -196,14 +186,14 @@ public class InternalTopicIntegrationTest {
                     public Iterable<String> apply(String value) {
                         return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
                     }
-                }).groupBy(MockKeyValueMapper.<String, String>SelectValueMapper())
+                }).groupBy(MockMapper.<String, String>selectValueMapper())
                 .count(TimeWindows.of(1000).until(durationMs), "CountWindows").toStream();
 
 
         // Remove any state from previous test runs
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
 
-        KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+        KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfiguration);
         streams.start();
 
         //

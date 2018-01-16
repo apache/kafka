@@ -20,6 +20,8 @@ import java.util.Map;
 import java.nio.channels.SelectionKey;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.memory.MemoryPool;
+
 
 /**
  * A ChannelBuilder interface to build Channel based on configs
@@ -31,20 +33,20 @@ public interface ChannelBuilder extends AutoCloseable {
      */
     void configure(Map<String, ?> configs) throws KafkaException;
 
-
     /**
      * returns a Channel with TransportLayer and Authenticator configured.
      * @param  id  channel id
      * @param  key SelectionKey
-     * @param  maxReceiveSize
+     * @param  maxReceiveSize max size of a single receive buffer to allocate
+     * @param  memoryPool memory pool from which to allocate buffers, or null for none
      * @return KafkaChannel
      */
-    KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize) throws KafkaException;
-
+    KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException;
 
     /**
      * Closes ChannelBuilder
      */
+    @Override
     void close();
 
 }

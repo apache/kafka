@@ -18,6 +18,7 @@ package org.apache.kafka.tools;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonSerializer;
@@ -218,7 +219,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             printJson(new StartupComplete());
             consumer.subscribe(Collections.singletonList(topic), this);
 
-            while (true) {
+            while (!isFinished()) {
                 ConsumerRecords<String, String> records = consumer.poll(Long.MAX_VALUE);
                 Map<TopicPartition, OffsetAndMetadata> offsets = onRecordsReceived(records);
 
@@ -256,6 +257,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         }
     }
 
+    @JsonPropertyOrder({ "timestamp", "name" })
     private static abstract class ConsumerEvent {
         private final long timestamp = System.currentTimeMillis();
 
@@ -345,6 +347,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         }
     }
 
+    @JsonPropertyOrder({ "timestamp", "name", "key", "value", "topic", "partition", "offset" })
     public static class RecordData extends ConsumerEvent {
 
         private final ConsumerRecord<String, String> record;

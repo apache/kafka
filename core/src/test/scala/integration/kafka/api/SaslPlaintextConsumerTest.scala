@@ -13,7 +13,7 @@
 package kafka.api
 
 import kafka.utils.JaasTestUtils
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Before}
 
 class SaslPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {

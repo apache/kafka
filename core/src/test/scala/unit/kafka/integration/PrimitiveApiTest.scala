@@ -24,12 +24,11 @@ import kafka.api.{FetchRequest, FetchRequestBuilder, PartitionFetchInfo}
 import kafka.server.{KafkaConfig, KafkaRequestHandler}
 import kafka.producer.{KeyedMessage, Producer}
 import org.apache.log4j.{Level, Logger}
-import kafka.zk.ZooKeeperTestHarness
 import org.junit.Test
 
 import scala.collection._
 import kafka.common.{ErrorMapping, OffsetOutOfRangeException, TopicAndPartition, UnknownTopicOrPartitionException}
-import kafka.utils.{CoreUtils, StaticPartitioner, TestUtils}
+import kafka.utils.{StaticPartitioner, TestUtils}
 import kafka.serializer.StringEncoder
 import java.util.Properties
 
@@ -42,7 +41,7 @@ import org.apache.kafka.common.TopicPartition
 class PrimitiveApiTest extends ProducerConsumerTestHarness {
   val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
 
-  def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
+  def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
   @Test
   def testFetchRequestCanProperlySerialize() {
@@ -118,7 +117,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
 
   private def produceAndMultiFetch(producer: Producer[String, String]) {
     for(topic <- List("test1", "test2", "test3", "test4"))
-      TestUtils.createTopic(zkUtils, topic, servers = servers)
+      createTopic(topic)
 
     // send some messages
     val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
@@ -187,7 +186,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
 
   private def multiProduce(producer: Producer[String, String]) {
     val topics = Map("test4" -> 0, "test1" -> 0, "test2" -> 0, "test3" -> 0)
-    topics.keys.map(topic => TestUtils.createTopic(zkUtils, topic, servers = servers))
+    topics.keys.map(topic => createTopic(topic))
 
     val messages = new mutable.HashMap[String, Seq[String]]
     val builder = new FetchRequestBuilder()
@@ -215,7 +214,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
   @Test
   def testConsumerEmptyTopic() {
     val newTopic = "new-topic"
-    TestUtils.createTopic(zkUtils, newTopic, numPartitions = 1, replicationFactor = 1, servers = servers)
+    createTopic(newTopic, numPartitions = 1, replicationFactor = 1)
 
     val fetchResponse = consumer.fetch(new FetchRequestBuilder().addFetch(newTopic, 0, 0, 10000).build())
     assertFalse(fetchResponse.messageSet(newTopic, 0).iterator.hasNext)
@@ -224,7 +223,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
   @Test
   def testPipelinedProduceRequests() {
     val topics = Map("test4" -> 0, "test1" -> 0, "test2" -> 0, "test3" -> 0)
-    topics.keys.map(topic => TestUtils.createTopic(zkUtils, topic, servers = servers))
+    topics.keys.map(topic => createTopic(topic))
     val props = new Properties()
     props.put("request.required.acks", "0")
     val pipelinedProducer: Producer[String, String] =
