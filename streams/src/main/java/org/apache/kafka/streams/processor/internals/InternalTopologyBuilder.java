@@ -1289,13 +1289,6 @@ public class InternalTopologyBuilder {
     public TopologyDescription describe() {
         final TopologyDescription description = new TopologyDescription();
 
-        describeSubtopologies(description);
-        describeGlobalStores(description);
-
-        return description;
-    }
-
-    private void describeSubtopologies(final TopologyDescription description) {
         for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
 
             final Set<String> allNodesOfGroups = nodeGroup.getValue();
@@ -1303,6 +1296,32 @@ public class InternalTopologyBuilder {
 
             if (!isNodeGroupOfGlobalStores) {
                 describeSubtopology(description, nodeGroup.getKey(), allNodesOfGroups);
+            } else {
+                describeGlobalStore(description, allNodesOfGroups, nodeGroup.getKey());
+            }
+        }
+
+        return description;
+    }
+
+    private void describeGlobalStore(final TopologyDescription description, final Set<String> nodes, int id) {
+        final Iterator<String> it = nodes.iterator();
+        while (it.hasNext()) {
+            final String node = it.next();
+
+            if (isGlobalSource(node)) {
+                // we found a GlobalStore node group; those contain exactly two node: {sourceNode,processorNode}
+                it.remove(); // remove sourceNode from group
+                final String processorNode = nodes.iterator().next(); // get remaining processorNode
+
+                description.addGlobalStore(new GlobalStore(
+                    node,
+                    processorNode,
+                    ((ProcessorNodeFactory) nodeFactories.get(processorNode)).stateStoreNames.iterator().next(),
+                    nodeToSourceTopics.get(node).get(0),
+                    id
+                ));
+                break;
             }
         }
     }
@@ -1370,43 +1389,26 @@ public class InternalTopologyBuilder {
                 new HashSet<TopologyDescription.Node>(nodesByName.values())));
     }
 
-    private void describeGlobalStores(final TopologyDescription description) {
-        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
-            final Set<String> nodes = nodeGroup.getValue();
-
-            final Iterator<String> it = nodes.iterator();
-            while (it.hasNext()) {
-                final String node = it.next();
-
-                if (isGlobalSource(node)) {
-                    // we found a GlobalStore node group; those contain exactly two node: {sourceNode,processorNode}
-                    it.remove(); // remove sourceNode from group
-                    final String processorNode = nodes.iterator().next(); // get remaining processorNode
-
-                    description.addGlobalStore(new GlobalStore(
-                        node,
-                        processorNode,
-                        ((ProcessorNodeFactory) nodeFactories.get(processorNode)).stateStoreNames.iterator().next(),
-                        nodeToSourceTopics.get(node).get(0)
-                    ));
-                    break;
-                }
-            }
-        }
-    }
-
     public final static class GlobalStore implements TopologyDescription.GlobalStore {
         private final Source source;
         private final Processor processor;
+        private final int id;
 
         public GlobalStore(final String sourceName,
                            final String processorName,
                            final String storeName,
-                           final String topicName) {
+                           final String topicName,
+                           final int id) {
             source = new Source(sourceName, topicName);
             processor = new Processor(processorName, Collections.singleton(storeName));
             source.successors.add(processor);
             processor.predecessors.add(source);
+            this.id = id;
+        }
+
+        @Override
+        public int id() {
+            return id;
         }
 
         @Override
@@ -1421,7 +1423,7 @@ public class InternalTopologyBuilder {
 
         @Override
         public String toString() {
-            return "GlobalStore: " + source.name + " (topic: " + source.topics + ")\n      --> "
+            return "GlobalStore: " + source.name + " Id: " + id + " (topic: " + source.topics + ")\n      --> "
                 + processor.name + " (store: " + processor.stores.iterator().next() + ")\n";
         }
 
@@ -1723,7 +1725,7 @@ public class InternalTopologyBuilder {
         @Override
         public int compare(final TopologyDescription.GlobalStore globalStore1,
                            final TopologyDescription.GlobalStore globalStore2) {
-            return globalStore1.source().name().compareTo(globalStore2.source().name());
+            return globalStore1.id() - globalStore2.id();
         }
     }
 
@@ -1740,8 +1742,8 @@ public class InternalTopologyBuilder {
     private final static SubtopologyComparator SUBTOPOLOGY_COMPARATOR = new SubtopologyComparator();
 
     public final static class TopologyDescription implements org.apache.kafka.streams.TopologyDescription {
-        private final Set<TopologyDescription.Subtopology> subtopologies = new TreeSet<>(SUBTOPOLOGY_COMPARATOR);
-        private final Set<TopologyDescription.GlobalStore> globalStores = new TreeSet<>(GLOBALSTORE_COMPARATOR);
+        private final TreeSet<TopologyDescription.Subtopology> subtopologies = new TreeSet<>(SUBTOPOLOGY_COMPARATOR);
+        private final TreeSet<TopologyDescription.GlobalStore> globalStores = new TreeSet<>(GLOBALSTORE_COMPARATOR);
 
         public void addSubtopology(final TopologyDescription.Subtopology subtopology) {
             subtopologies.add(subtopology);
@@ -1763,33 +1765,43 @@ public class InternalTopologyBuilder {
 
         @Override
         public String toString() {
-            return subtopologiesAsString() + "\n" + globalStoresAsString();
-        }
-
-        private String subtopologiesAsString() {
             final StringBuilder sb = new StringBuilder();
-            sb.append("Sub-topologies:\n");
-            if (subtopologies.isEmpty()) {
-                sb.append("  none\n");
-            } else {
-                for (final TopologyDescription.Subtopology st : subtopologies) {
-                    sb.append("  ");
-                    sb.append(st);
+            sb.append("Topologies:\n ");
+            final TopologyDescription.Subtopology[] sortedSubtopologies = 
+                subtopologies.descendingSet().toArray(new TopologyDescription.Subtopology[subtopologies.size()]);
+            final TopologyDescription.GlobalStore[] sortedGlobalStores = 
+                globalStores.descendingSet().toArray(new TopologyDescription.GlobalStore[globalStores.size()]);
+            int expectedId = 0;
+            int subtopologiesIndex = sortedSubtopologies.length - 1;
+            int globalStoresIndex = sortedGlobalStores.length - 1;
+            while (subtopologiesIndex != -1 && globalStoresIndex != -1) {
+                sb.append("  ");
+                final TopologyDescription.Subtopology subtopology = 
+                    sortedSubtopologies[subtopologiesIndex];
+                final TopologyDescription.GlobalStore globalStore = 
+                    sortedGlobalStores[globalStoresIndex];
+                if (subtopology.id() == expectedId) {
+                    sb.append(subtopology);
+                    subtopologiesIndex--;
+                } else {
+                    sb.append(globalStore);
+                    globalStoresIndex--;
                 }
+                expectedId++;
             }
-            return sb.toString();
-        }
-
-        private String globalStoresAsString() {
-            final StringBuilder sb = new StringBuilder();
-            sb.append("Global Stores:\n");
-            if (globalStores.isEmpty()) {
-                sb.append("  none\n");
-            } else {
-                for (final TopologyDescription.GlobalStore gs : globalStores) {
-                    sb.append("  ");
-                    sb.append(gs);
-                }
+            while (subtopologiesIndex != -1) {
+                final TopologyDescription.Subtopology subtopology = 
+                    sortedSubtopologies[subtopologiesIndex];
+                sb.append("  ");
+                sb.append(subtopology);
+                subtopologiesIndex--;
+            }
+            while (globalStoresIndex != -1) {
+                final TopologyDescription.GlobalStore globalStore = 
+                    sortedGlobalStores[globalStoresIndex];
+                sb.append("  ");
+                sb.append(globalStore);
+                globalStoresIndex--;
             }
             return sb.toString();
         }
