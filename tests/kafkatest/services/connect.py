@@ -40,6 +40,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     STDERR_FILE = os.path.join(PERSISTENT_ROOT, "connect.stderr")
     LOG4J_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "connect-log4j.properties")
     PID_FILE = os.path.join(PERSISTENT_ROOT, "connect.pid")
+    CONNECT_REST_PORT = 8083
 
     logs = {
         "connect_log": {
@@ -78,11 +79,12 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         self.config_template_func = config_template_func
         self.connector_config_templates = connector_config_templates
 
-    def listening(self, node, port=8083):
+    def listening(self, node):
         try:
-            cmd = "nc -z %s %s" % (node.account.hostname, port)
+            cmd = "nc -z %s %s" % (node.account.hostname, self.CONNECT_REST_PORT)
             node.account.ssh_output(cmd, allow_fail=False)
-            self.logger.debug("Connect worker started accepting connections at: '%s:%s')", node.account.hostname, port)
+            self.logger.debug("Connect worker started accepting connections at: '%s:%s')", node.account.hostname,
+                              self.CONNECT_REST_PORT)
             return True
         except (RemoteCommandError, ValueError) as e:
             return False
@@ -229,7 +231,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         raise exception_to_throw
 
     def _base_url(self, node):
-        return 'http://' + node.account.externally_routable_ip + ':' + '8083'
+        return 'http://' + node.account.externally_routable_ip + ':' + str(self.CONNECT_REST_PORT)
 
 
 class ConnectStandaloneService(ConnectServiceBase):
