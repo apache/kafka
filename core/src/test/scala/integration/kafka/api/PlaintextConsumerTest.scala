@@ -1398,8 +1398,16 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       }, "Consumer did not consume any message before timeout.")
       assertEquals("should be assigned once", 1, listener0.callsToAssigned)
       // Verify the metric exist.
-      val tags = Collections.singletonMap("client-id", "testPerPartitionLagMetricsCleanUpWithSubscribe")
-      val fetchLag0 = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
+      val tags1 = new util.HashMap[String, String]()
+      tags1.put("client-id", "testPerPartitionLagMetricsCleanUpWithSubscribe")
+      tags1.put("topic", tp.topic())
+      tags1.put("partition", String.valueOf(tp.partition()))
+
+      val tags2 = new util.HashMap[String, String]()
+      tags2.put("client-id", "testPerPartitionLagMetricsCleanUpWithSubscribe")
+      tags2.put("topic", tp2.topic())
+      tags2.put("partition", String.valueOf(tp2.partition()))
+      val fetchLag0 = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags1))
       assertNotNull(fetchLag0)
       val expectedLag = numMessages - records.count
       assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag0.value, epsilon)
@@ -1411,8 +1419,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
         listener0.callsToAssigned >= 2
       }, "Expected rebalance did not occur.")
       // Verify the metric has gone
-      assertNull(consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
-      assertNull(consumer.metrics.get(new MetricName(tp2 + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
+      assertNull(consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags1)))
+      assertNull(consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags2)))
     } finally {
       consumer.close()
     }
@@ -1436,15 +1444,24 @@ class PlaintextConsumerTest extends BaseConsumerTest {
         !records.records(tp).isEmpty
       }, "Consumer did not consume any message before timeout.")
       // Verify the metric exist.
-      val tags = Collections.singletonMap("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
-      val fetchLag = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
+      val tags = new util.HashMap[String, String]()
+      tags.put("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
+      tags.put("topic", tp.topic())
+      tags.put("partition", String.valueOf(tp.partition()))
+      val fetchLag = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags))
       assertNotNull(fetchLag)
+
+      val oldTags = Collections.singletonMap("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
+      val oldFetchLag = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", oldTags))
+      assertEquals(fetchLag.metricValue(), oldFetchLag.metricValue())
+
       val expectedLag = numMessages - records.count
       assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag.value, epsilon)
 
       consumer.assign(List(tp2).asJava)
       TestUtils.waitUntilTrue(() => !consumer.poll(100).isEmpty, "Consumer did not consume any message before timeout.")
       assertNull(consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
+      assertNull(consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags)))
     } finally {
       consumer.close()
     }
@@ -1466,8 +1483,16 @@ class PlaintextConsumerTest extends BaseConsumerTest {
         records = consumer.poll(100)
         !records.isEmpty
       }, "Consumer did not consume any message before timeout.")
-      val tags = Collections.singletonMap("client-id", "testPerPartitionLagWithMaxPollRecords")
-      val lag = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
+      val oldTags = Collections.singletonMap("client-id", "testPerPartitionLagWithMaxPollRecords")
+      val oldLag = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", oldTags))
+
+      val tags = new util.HashMap[String, String]()
+      tags.put("client-id", "testPerPartitionLagWithMaxPollRecords")
+      tags.put("topic", tp.topic())
+      tags.put("partition", String.valueOf(tp.partition()))
+      val lag = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags))
+      assertEquals(oldLag.metricValue(), lag.metricValue())
+
       assertEquals(s"The lag should be ${numMessages - records.count}", numMessages - records.count, lag.value, epsilon)
     } finally {
       consumer.close()

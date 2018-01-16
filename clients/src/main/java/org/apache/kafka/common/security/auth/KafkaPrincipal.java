@@ -47,10 +47,16 @@ public class KafkaPrincipal implements Principal {
 
     private final String principalType;
     private final String name;
+    private boolean tokenAuthenticated;
 
     public KafkaPrincipal(String principalType, String name) {
+       this(principalType, name, false);
+    }
+
+    public KafkaPrincipal(String principalType, String name, boolean tokenauth) {
         this.principalType = requireNonNull(principalType, "Principal type cannot be null");
         this.name = requireNonNull(name, "Principal name cannot be null");
+        this.tokenAuthenticated =  tokenauth;
     }
 
     /**
@@ -83,8 +89,9 @@ public class KafkaPrincipal implements Principal {
 
     @Override
     public int hashCode() {
-        int result = principalType.hashCode();
-        result = 31 * result + name.hashCode();
+        int result = principalType != null ? principalType.hashCode() : 0;
+        result = 31 * result + (name != null ? name.hashCode() : 0);
+        result = 31 * result + (tokenAuthenticated ? 1 : 0);
         return result;
     }
 
@@ -97,4 +104,8 @@ public class KafkaPrincipal implements Principal {
         return principalType;
     }
 
+    public boolean tokenAuthenticated() {
+        return tokenAuthenticated;
+    }
 }
+

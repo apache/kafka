@@ -28,9 +28,14 @@ import kafka.utils.CoreUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.security.token.delegation.TokenInformation
+import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.zookeeper.KeeperException.NodeExistsException
 import org.junit.Assert._
 import org.junit.Test
+
+import scala.collection.JavaConverters._
+import scala.util.Random
 
 class KafkaZkClientTest extends ZooKeeperTestHarness {
 
@@ -472,4 +477,39 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     data.map(new String(_, UTF_8))
   }
 
+  @Test
+  def testDelegationTokenMethods() {
+    assertFalse(zkClient.pathExists(DelegationTokensZNode.path))
+    assertFalse(zkClient.pathExists(DelegationTokenChangeNotificationZNode.path))
+
+    zkClient.createDelegationTokenPaths
+    assertTrue(zkClient.pathExists(DelegationTokensZNode.path))
+    assertTrue(zkClient.pathExists(DelegationTokenChangeNotificationZNode.path))
+
+    val tokenId = "token1"
+    val owner = SecurityUtils.parseKafkaPrincipal("User:owner1")
+    val renewers = List(SecurityUtils.parseKafkaPrincipal("User:renewer1"), SecurityUtils.parseKafkaPrincipal("User:renewer1"))
+
+    val tokenInfo = new TokenInformation(tokenId, owner, renewers.asJava,
+      System.currentTimeMillis(), System.currentTimeMillis(), System.currentTimeMillis())
+    val bytes = new Array[Byte](20)
+    Random.nextBytes(bytes)
+    val token = new org.apache.kafka.common.security.token.delegation.DelegationToken(tokenInfo, bytes)
+
+    // test non-existent token
+    assertTrue(zkClient.getDelegationTokenInfo(tokenId).isEmpty)
+
+    // create a token
+    zkClient.setOrCreateDelegationToken(token)
+
+    //get created token
+    assertEquals(tokenInfo, zkClient.getDelegationTokenInfo(tokenId).get)
+
+    //update expiryTime
+    tokenInfo.setExpiryTimestamp(System.currentTimeMillis())
+    zkClient.setOrCreateDelegationToken(token)
+
+    //test updated token
+    assertEquals(tokenInfo, zkClient.getDelegationTokenInfo(tokenId).get)
+  }
 }

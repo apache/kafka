@@ -66,6 +66,8 @@ public class ScramSaslServer implements SaslServer {
     private ClientFirstMessage clientFirstMessage;
     private ServerFirstMessage serverFirstMessage;
     private ScramCredential scramCredential;
+    private boolean tokenAuthentication;
+    private String tokenOwner;
 
     public ScramSaslServer(ScramMechanism mechanism, Map<String, ?> props, CallbackHandler callbackHandler) throws NoSuchAlgorithmException {
         this.mechanism = mechanism;
@@ -93,9 +95,14 @@ public class ScramSaslServer implements SaslServer {
                     try {
                         String saslName = clientFirstMessage.saslName();
                         this.username = formatter.username(saslName);
+                        Map<String, String> extensions = clientFirstMessage.extensionsAsMap();
+                        this.tokenAuthentication = "true".equalsIgnoreCase(extensions.get(ScramLoginModule.TOKEN_AUTH_CONFIG));
                         NameCallback nameCallback = new NameCallback("username", username);
-                        ScramCredentialCallback credentialCallback = new ScramCredentialCallback();
+                        ScramCredentialCallback credentialCallback = new ScramCredentialCallback(tokenAuthentication, getMechanismName());
                         callbackHandler.handle(new Callback[]{nameCallback, credentialCallback});
+                        this.tokenOwner = credentialCallback.tokenOwner();
+                        if (tokenAuthentication && tokenOwner == null)
+                            throw new SaslException("Token Authentication failed: Invalid tokenId : " + username);
                         this.scramCredential = credentialCallback.scramCredential();
                         if (scramCredential == null)
                             throw new SaslException("Authentication failed: Invalid user credentials");
@@ -143,6 +150,10 @@ public class ScramSaslServer implements SaslServer {
     public String getAuthorizationID() {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
+
+        if (tokenAuthentication)
+            return tokenOwner; // return token owner as principal for this session
+
         return username;
     }
 
@@ -155,7 +166,11 @@ public class ScramSaslServer implements SaslServer {
     public Object getNegotiatedProperty(String propName) {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
-        return null;
+
+        if (ScramLoginModule.TOKEN_AUTH_CONFIG.equals(propName))
+            return tokenAuthentication;
+        else
+            return null;
     }
 
     @Override

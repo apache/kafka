@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -26,11 +26,12 @@ import org.apache.kafka.streams.state.KeyValueStore;
 class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
 
     private final KTableImpl<K, ?, V> parent;
-    private final ValueMapper<? super V, ? extends V1> mapper;
+    private final ValueMapperWithKey<? super K, ? super V, ? extends V1> mapper;
     private final String queryableName;
     private boolean sendOldValues = false;
 
-    KTableMapValues(final KTableImpl<K, ?, V> parent, final ValueMapper<? super V, ? extends V1> mapper,
+    KTableMapValues(final KTableImpl<K, ?, V> parent,
+                    final ValueMapperWithKey<? super K, ? super V, ? extends V1> mapper,
                     final String queryableName) {
         this.parent = parent;
         this.mapper = mapper;
@@ -80,11 +81,11 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         sendOldValues = true;
     }
 
-    private V1 computeValue(V value) {
+    private V1 computeValue(final K key, final V value) {
         V1 newValue = null;
 
         if (value != null)
-            newValue = mapper.apply(value);
+            newValue = mapper.apply(key, value);
 
         return newValue;
     }
@@ -105,8 +106,8 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
 
         @Override
         public void process(K key, Change<V> change) {
-            V1 newValue = computeValue(change.newValue);
-            V1 oldValue = sendOldValues ? computeValue(change.oldValue) : null;
+            final V1 newValue = computeValue(key, change.newValue);
+            final V1 oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
 
             if (queryableName != null) {
                 store.put(key, newValue);
@@ -132,7 +133,7 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
 
         @Override
         public V1 get(K key) {
-            return computeValue(parentGetter.get(key));
+            return computeValue(key, parentGetter.get(key));
         }
     }
 
