@@ -16,27 +16,18 @@
  */
 package org.apache.kafka.streams.kstream;
 
-
 /**
- * A {@code ValueTransformerSupplier} interface which can create one or more {@link ValueTransformer} instances.
- *
+ * @param <K>  key type
  * @param <V>  value type
  * @param <VR> transformed value type
  * @see ValueTransformer
  * @see ValueTransformerWithKey
- * @see ValueTransformerWithKeySupplier
  * @see KStream#transformValues(ValueTransformerSupplier, String...)
  * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
  * @see Transformer
  * @see TransformerSupplier
  * @see KStream#transform(TransformerSupplier, String...)
  */
-public interface ValueTransformerSupplier<V, VR> {
-
-    /**
-     * Return a new {@link ValueTransformer} instance.
-     *
-     * @return a new {@link ValueTransformer} instance.
-     */
-    ValueTransformer<V, VR> get();
+public interface ValueTransformerWithKeySupplier<K, V, VR> {
+    ValueTransformerWithKey<K, V, VR> get();
 }

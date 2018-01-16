@@ -22,30 +22,34 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.TimestampExtractor;
 
 /**
- * The {@code ValueTransformer} interface for stateful mapping of a value to a new value (with possible new type).
- * This is a stateful record-by-record operation, i.e, {@link #transform(Object)} is invoked individually for each
+ * The {@code ValueTransformerWithKey} interface for stateful mapping of a value to a new value (with possible new type).
+ * This is a stateful record-by-record operation, i.e, {@link #transform(Object, Object)} is invoked individually for each
  * record of a stream and can access and modify a state that is available beyond a single call of
- * {@link #transform(Object)} (cf. {@link ValueMapper} for stateless value transformation).
- * Additionally, this {@code ValueTransformer} can {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule}
- * a method to be {@link Punctuator#punctuate(long) called periodically} with the provided context.
- * If {@code ValueTransformer} is applied to a {@link KeyValue} pair record the record's key is preserved.
+ * {@link #transform(Object, Object)} (cf. {@link ValueMapper} for stateless value transformation).
+ * Additionally, this {@code ValueTransformerWithKey} can
+ * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule} a method to be
+ * {@link Punctuator#punctuate(long) called periodically} with the provided context.
+ * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
+ * If {@code ValueTransformerWithKey} is applied to a {@link KeyValue} pair record the record's key is preserved.
  * <p>
- * Use {@link ValueTransformerSupplier} to provide new instances of {@code ValueTransformer} to Kafka Stream's runtime.
+ * Use {@link ValueTransformerWithKeySupplier} to provide new instances of {@code {@link ValueTransformerWithKey} to
+ * Kafka Stream's runtime.
  * <p>
  * If a record's key and value should be modified {@link Transformer} can be used.
  *
+ * @param <K>  key type
  * @param <V>  value type
  * @param <VR> transformed value type
- * @see ValueTransformerSupplier
+ * @see ValueTransformer
  * @see ValueTransformerWithKeySupplier
  * @see KStream#transformValues(ValueTransformerSupplier, String...)
  * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
  * @see Transformer
  */
-public interface ValueTransformer<V, VR> {
+
+public interface ValueTransformerWithKey<K, V, VR> {
 
     /**
      * Initialize this transformer.
@@ -56,12 +60,12 @@ public interface ValueTransformer<V, VR> {
      * {@link Punctuator#punctuate(long) called periodically} and to access attached {@link StateStore}s.
      * <p>
      * Note that {@link ProcessorContext} is updated in the background with the current record's meta data.
-     * Thus, it only contains valid record meta data when accessed within {@link #transform(Object)}.
+     * Thus, it only contains valid record meta data when accessed within {@link #transform(Object, Object)}.
      * <p>
      * Note that using {@link ProcessorContext#forward(Object, Object)},
      * {@link ProcessorContext#forward(Object, Object, int)}, or
      * {@link ProcessorContext#forward(Object, Object, String)} is not allowed within any method of
-     * {@code ValueTransformer} and will result in an {@link StreamsException exception}.
+     * {@code ValueTransformerWithKey} and will result in an {@link StreamsException exception}.
      *
      * @param context the context
      * @throws IllegalStateException If store gets registered after initialization is already finished
@@ -70,8 +74,8 @@ public interface ValueTransformer<V, VR> {
     void init(final ProcessorContext context);
 
     /**
-     * Transform the given value to a new value.
-     * Additionally, any {@link StateStore} that is {@link KStream#transformValues(ValueTransformerSupplier, String...)
+     * Transform the given [key and ]value to a new value.
+     * Additionally, any {@link StateStore} that is {@link KStream#transformValues(ValueTransformerWithKeySupplier, String...)
      * attached} to this operator can be accessed and modified arbitrarily (cf.
      * {@link ProcessorContext#getStateStore(String)}).
      * <p>
@@ -80,32 +84,11 @@ public interface ValueTransformer<V, VR> {
      * {@link ProcessorContext#forward(Object, Object, String)} is not allowed within {@code transform} and
      * will result in an {@link StreamsException exception}.
      *
-     * @param value the value to be transformed
+     * @param readOnlyKey the read-only key
+     * @param value       the value to be transformed
      * @return the new value
      */
-    VR transform(final V value);
-
-    /**
-     * Perform any periodic operations if this processor {@link ProcessorContext#schedule(long) schedule itself} with
-     * the context during {@link #init(ProcessorContext) initialization}.
-     * <p>
-     * It is not possible to return any new output records within {@code punctuate}.
-     * Using {@link ProcessorContext#forward(Object, Object)}, {@link ProcessorContext#forward(Object, Object, int)},
-     * or {@link ProcessorContext#forward(Object, Object, String)} will result in an
-     * {@link StreamsException exception}.
-     * Furthermore, {@code punctuate} must return {@code null}.
-     * <p>
-     * Note, that {@code punctuate} is called base on <it>stream time</it> (i.e., time progress with regard to
-     * timestamps return by the used {@link TimestampExtractor})
-     * and not based on wall-clock time.
-     *
-     * @deprecated Please use {@link Punctuator} functional interface instead.
-     *
-     * @param timestamp the stream time when {@code punctuate} is being called
-     * @return must return {@code null}&mdash;otherwise, an {@link StreamsException exception} will be thrown
-     */
-    @Deprecated
-    VR punctuate(final long timestamp);
+    VR transform(final K readOnlyKey, final V value);
 
     /**
      * Close this processor and clean up any resources.
@@ -115,5 +98,4 @@ public interface ValueTransformer<V, VR> {
      * or {@link ProcessorContext#forward(Object, Object, String)} will result in an {@link StreamsException exception}.
      */
     void close();
-
 }

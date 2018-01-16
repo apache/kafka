@@ -14,29 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream;
+package org.apache.kafka.streams.kstream.internals;
 
 
-/**
- * A {@code ValueTransformerSupplier} interface which can create one or more {@link ValueTransformer} instances.
- *
- * @param <V>  value type
- * @param <VR> transformed value type
- * @see ValueTransformer
- * @see ValueTransformerWithKey
- * @see ValueTransformerWithKeySupplier
- * @see KStream#transformValues(ValueTransformerSupplier, String...)
- * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
- * @see Transformer
- * @see TransformerSupplier
- * @see KStream#transform(TransformerSupplier, String...)
- */
-public interface ValueTransformerSupplier<V, VR> {
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 
-    /**
-     * Return a new {@link ValueTransformer} instance.
-     *
-     * @return a new {@link ValueTransformer} instance.
-     */
-    ValueTransformer<V, VR> get();
+public interface InternalValueTransformerWithKey<K, V, VR> extends ValueTransformerWithKey<K, V, VR> {
+    VR punctuate(final long timestamp);
 }

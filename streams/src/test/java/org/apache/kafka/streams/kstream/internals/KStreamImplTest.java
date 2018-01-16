@@ -36,6 +36,9 @@ import org.apache.kafka.streams.kstream.Printed;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
@@ -283,7 +286,12 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullMapperOnMapValues() {
-        testStream.mapValues(null);
+        testStream.mapValues((ValueMapper) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullMapperOnMapValuesWithKey() {
+        testStream.mapValues((ValueMapperWithKey) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -303,7 +311,12 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullMapperOnFlatMapValues() {
-        testStream.flatMapValues(null);
+        testStream.flatMapValues((ValueMapper) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullMapperOnFlatMapValuesWithKey() {
+        testStream.flatMapValues((ValueMapperWithKey) null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -333,7 +346,12 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTransformSupplierOnTransformValues() {
-        testStream.transformValues(null);
+        testStream.transformValues((ValueTransformerSupplier) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullTransformSupplierOnTransformValuesWithKey() {
+        testStream.transformValues((ValueTransformerWithKeySupplier) null);
     }
 
     @Test(expected = NullPointerException.class)
