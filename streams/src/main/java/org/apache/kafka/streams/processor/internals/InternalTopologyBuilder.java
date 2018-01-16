@@ -1420,7 +1420,7 @@ public class InternalTopologyBuilder {
 
         @Override
         public String toString() {
-            return "GlobalStore: " + source.name + " (topic: " + source.topics + ")\n      --> "
+            return "GlobalStore: " + source.name + " Id: " + id + " (topic: " + source.topics + ")\n      --> "
                 + processor.name + " (store: " + processor.stores.iterator().next() + ")\n";
         }
 
