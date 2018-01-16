@@ -42,6 +42,7 @@ import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -146,6 +147,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private boolean needsReconfigRebalance;
     private volatile int generation;
 
+    private final DistributedConfig config;
+
     public DistributedHerder(DistributedConfig config,
                              Time time,
                              Worker worker,
@@ -186,6 +189,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 });
         this.forwardRequestExecutor = Executors.newSingleThreadExecutor();
         this.startAndStopExecutor = Executors.newFixedThreadPool(START_STOP_THREAD_POOL_SIZE);
+        this.config = config;
 
         stopping = new AtomicBoolean(false);
         configState = ClusterConfigState.EMPTY;
@@ -710,7 +714,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         return generation;
     }
 
-
     // Should only be called from work thread, so synchronization should not be needed
     private boolean isLeader() {
         return assignment != null && member.memberId().equals(assignment.leader());
@@ -1011,7 +1014,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         public void run() {
                             try {
                                 String reconfigUrl = RestServer.urlJoin(leaderUrl(), "/connectors/" + connName + "/tasks");
-                                RestServer.httpRequest(reconfigUrl, "POST", taskProps, null);
+                                RestClient.httpRequest(reconfigUrl, "POST", taskProps, null, config);
                                 cb.onCompletion(null, null);
                             } catch (ConnectException e) {
                                 log.error("Request to leader to reconfigure connector tasks failed", e);

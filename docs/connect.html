@@ -187,7 +187,43 @@
 
     <h4><a id="connect_rest" href="#connect_rest">REST API</a></h4>
 
-    <p>Since Kafka Connect is intended to be run as a service, it also provides a REST API for managing connectors. By default, this service runs on port 8083. The following are the currently supported endpoints:</p>
+    <p>Since Kafka Connect is intended to be run as a service, it also provides a REST API for managing connectors. The REST API server can be configured using the <code>listeners</code> configuration option.
+        This field should contain a list of listeners in the following format: <code>protocol://host:port,protocol2://host2:port2</code>. Currently supported protocols are <code>http</code> and <code>https</code>.
+        For example:</p>
+
+    <pre class="brush: text;">
+        listeners=http://localhost:8080,https://localhost:8443
+    </pre>
+
+    <p>By default, if no <code>listeners</code> are specified, the REST server runs on port 8083 using the HTTP protocol. When using HTTPS, the configuration has to include the SSL configuration.
+    By default, it will use the <code>ssl.*</code>. In case it is needed to use different configuration for the REST API than for connecting to Kafka brokers, the fields can be prefixed with <code>listeners.https</code>.
+        When using the prefix, only the prefixed options will be used and the <code>ssl.*</code> options without the prefix will be ignored. Following fields can be used to configure HTTPS for the REST API:</p>
+
+    <ul>
+        <li><code>ssl.keystore.location</code></li>
+        <li><code>ssl.keystore.password</code></li>
+        <li><code>ssl.keystore.type</code></li>
+        <li><code>ssl.key.password</code></li>
+        <li><code>ssl.truststore.location</code></li>
+        <li><code>ssl.truststore.password</code></li>
+        <li><code>ssl.truststore.type</code></li>
+        <li><code>ssl.enabled.protocols</code></li>
+        <li><code>ssl.provider</code></li>
+        <li><code>ssl.protocol</code></li>
+        <li><code>ssl.cipher.suites</code></li>
+        <li><code>ssl.keymanager.algorithm</code></li>
+        <li><code>ssl.secure.random.implementation</code></li>
+        <li><code>ssl.trustmanager.algorithm</code></li>
+        <li><code>ssl.endpoint.identification.algorithm</code></li>
+        <li><code>ssl.client.auth</code></li>
+    </ul>
+
+    <p>The REST API is used not only by users to monitor / manage Kafka Connect. It is also used for the Kafka Connect cross-cluster communication. Requests received on the follower nodes REST API will be forwarded to the leader node REST API.
+    In case the URI under which is given host reachable is different from the URI which it listens on, the configuration options <code>rest.advertised.host.name</code>, <code>rest.advertised.port</code> and <code>rest.advertised.security.protocol</code>
+    can be used to change the URI which will be used by the follower nodes to connect with the leader. When using both HTTP and HTTPS listeners, the <code>rest.advertised.security.protocol</code> option can be also used to define which listener
+        will be used for the cross-cluster communication. When using HTTPS for communication between nodes, the same <code>ssl.*</code> or <code>listeners.https</code> options will be used to configure the HTTPS client.</p>
+
+    <p>The following are the currently supported REST API endpoints:</p>
 
     <ul>
         <li><code>GET /connectors</code> - return a list of active connectors</li>

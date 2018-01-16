@@ -1167,6 +1167,7 @@ project(':connect:runtime') {
     compile libs.jettyServer
     compile libs.jettyServlet
     compile libs.jettyServlets
+    compile libs.jettyClient
     compile(libs.reflections)
     compile(libs.mavenArtifact)
 

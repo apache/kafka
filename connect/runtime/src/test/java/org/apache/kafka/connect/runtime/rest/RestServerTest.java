@@ -16,32 +16,33 @@
  */
 package org.apache.kafka.connect.runtime.rest;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
-import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.MockStrict;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+import javax.ws.rs.client.Client;
+import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.client.Invocation;
+import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.core.Response;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.Invocation;
-import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.core.Response;
 
 import static org.junit.Assert.assertEquals;
 
@@ -59,13 +60,16 @@ public class RestServerTest {
 
     private Map<String, String> baseWorkerProps() {
         Map<String, String> workerProps = new HashMap<>();
-        workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter.schemas.enable", "false");
-        workerProps.put("internal.value.converter.schemas.enable", "false");
-        workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
+        workerProps.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "status-topic");
+        workerProps.put(DistributedConfig.CONFIG_TOPIC_CONFIG, "config-topic");
+        workerProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        workerProps.put(DistributedConfig.GROUP_ID_CONFIG, "connect-test-group");
+        workerProps.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        workerProps.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        workerProps.put(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        workerProps.put(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "connect-offsets");
+
         return workerProps;
     }
 
@@ -77,6 +81,72 @@ public class RestServerTest {
     @Test
     public void testCORSDisabled() {
         checkCORSRequest("", "http://bar.com", null, null);
+    }
+
+    @Test
+    public void testParseListeners() {
+        // Use listeners field
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        configMap.put("listeners", "http://localhost:8080,https://localhost:8443");
+        DistributedConfig config = new DistributedConfig(configMap);
+
+        server = new RestServer(config);
+        Assert.assertArrayEquals(new String[] {"http://localhost:8080", "https://localhost:8443"}, server.parseListeners().toArray());
+
+        // Build listener from hostname and port
+        configMap = new HashMap<>(baseWorkerProps());
+        configMap.put("rest.host.name", "my-hostname");
+        configMap.put("rest.port", "8080");
+        config = new DistributedConfig(configMap);
+        server = new RestServer(config);
+        Assert.assertArrayEquals(new String[] {"HTTP://my-hostname:8080"}, server.parseListeners().toArray());
+    }
+
+    @Test
+    public void testAdvertisedUri() {
+        // Advertised URI from listeenrs without protocol
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        configMap.put("listeners", "http://localhost:8080,https://localhost:8443");
+        DistributedConfig config = new DistributedConfig(configMap);
+
+        server = new RestServer(config);
+        Assert.assertEquals("http://localhost:8080/", server.advertisedUrl().toString());
+
+        // Advertised URI from listeners with protocol
+        configMap = new HashMap<>(baseWorkerProps());
+        configMap.put("listeners", "http://localhost:8080,https://localhost:8443");
+        configMap.put("rest.advertised.security.protocol", "https");
+        config = new DistributedConfig(configMap);
+
+        server = new RestServer(config);
+        Assert.assertEquals("https://localhost:8443/", server.advertisedUrl().toString());
+
+        // Advertised URI from listeners with only SSL available
+        configMap = new HashMap<>(baseWorkerProps());
+        configMap.put("listeners", "https://localhost:8443");
+        config = new DistributedConfig(configMap);
+
+        server = new RestServer(config);
+        Assert.assertEquals("https://localhost:8443/", server.advertisedUrl().toString());
+
+        // Listener is overriden by advertised values
+        configMap = new HashMap<>(baseWorkerProps());
+        configMap.put("listeners", "https://localhost:8443");
+        configMap.put("rest.advertised.security.protocol", "http");
+        configMap.put("rest.advertised.host.name", "somehost");
+        configMap.put("rest.advertised.port", "10000");
+        config = new DistributedConfig(configMap);
+
+        server = new RestServer(config);
+        Assert.assertEquals("http://somehost:10000/", server.advertisedUrl().toString());
+
+        // listener from hostname and port
+        configMap = new HashMap<>(baseWorkerProps());
+        configMap.put("rest.host.name", "my-hostname");
+        configMap.put("rest.port", "8080");
+        config = new DistributedConfig(configMap);
+        server = new RestServer(config);
+        Assert.assertEquals("http://my-hostname:8080/", server.advertisedUrl().toString());
     }
 
     public void checkCORSRequest(String corsDomain, String origin, String expectedHeader, String method) {
@@ -98,7 +168,7 @@ public class RestServerTest {
         Map<String, String> workerProps = baseWorkerProps();
         workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, corsDomain);
         workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG, method);
-        WorkerConfig workerConfig = new StandaloneConfig(workerProps);
+        WorkerConfig workerConfig = new DistributedConfig(workerProps);
         server = new RestServer(workerConfig);
         server.start(herder);
 
