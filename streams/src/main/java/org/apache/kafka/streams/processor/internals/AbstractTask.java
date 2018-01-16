@@ -199,7 +199,7 @@ public abstract class AbstractTask implements Task {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    void initializeStateStores() {
+    void initStateStores() {
         if (topology.stateStores().isEmpty()) {
             return;
         }
