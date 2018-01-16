@@ -207,7 +207,7 @@ class ZkUtils(val zkClient: ZkClient,
               val zkConnection: ZkConnection,
               val isSecure: Boolean) extends Logging {
   import ZkUtils._
-  
+
   // These are persistent ZK paths that should exist on kafka broker startup.
   val persistentZkPaths = ZkData.PersistentZkPaths
 
@@ -723,7 +723,7 @@ class ZkUtils(val zkClient: ZkClient,
     debug(s"Read leaderISR $leaderAndIsrOpt for $topic-$partition")
     leaderAndIsrOpt.flatMap(leaderAndIsrStr => parseLeaderAndIsr(leaderAndIsrStr, leaderAndIsrPath, stat))
   }
-  
+
   def getReplicaAssignmentForTopics(topics: Seq[String]): mutable.Map[TopicAndPartition, Seq[Int]] = {
     val ret = new mutable.HashMap[TopicAndPartition, Seq[Int]]
     topics.foreach { topic =>

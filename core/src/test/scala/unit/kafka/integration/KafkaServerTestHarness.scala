@@ -61,6 +61,12 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
    */
   def configureSecurityBeforeServersStart() {}
 
+  /**
+   * Override this in case Tokens or security credentials needs to be created after `servers` are started.
+   * The default implementation of this method is a no-op.
+   */
+  def configureSecurityAfterServersStart() {}
+
   def configs: Seq[KafkaConfig] = {
     if (instanceConfigs == null)
       instanceConfigs = generateConfigs
@@ -94,6 +100,9 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
     brokerList = TestUtils.bootstrapServers(servers, listenerName)
     alive = new Array[Boolean](servers.length)
     Arrays.fill(alive, true)
+
+    // default implementation is a no-op, it is overridden by subclasses if required
+    configureSecurityAfterServersStart()
   }
 
   @After
