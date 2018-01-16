@@ -30,7 +30,6 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
-import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
@@ -116,7 +115,7 @@ public class ConnectorsResource {
         FutureCallback<ConnectorInfo> cb = new FutureCallback<>();
         herder.connectorInfo(connector, cb);
         ConnectorInfo connectorInfo = completeOrForwardRequest(cb, "/connectors/" + connector, "GET", null, forward);
-        return new ConnectorInfo(connectorInfo.name(), maskCredentials(connectorInfo.config()), connectorInfo.tasks(), connectorInfo.type());
+        return new ConnectorInfo(connectorInfo.name(), herder.maskCredentials(connector, connectorInfo.config()), connectorInfo.tasks(), connectorInfo.type());
     }
 
     @GET
@@ -126,7 +125,7 @@ public class ConnectorsResource {
         FutureCallback<Map<String, String>> cb = new FutureCallback<>();
         herder.connectorConfig(connector, cb);
         Map<String, String> config = completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", null, forward);
-        return maskCredentials(config);
+        return herder.maskCredentials(connector, config);
     }
 
     @GET
@@ -190,7 +189,7 @@ public class ConnectorsResource {
                 }, forward);
         List<TaskInfo> maskedTaskInfoList = new ArrayList<>();
         for (TaskInfo taskInfo : taskInfoList) {
-            maskedTaskInfoList.add(new TaskInfo(taskInfo.id(), maskCredentials(taskInfo.config())));
+            maskedTaskInfoList.add(new TaskInfo(taskInfo.id(), herder.maskCredentials(connector, taskInfo.config())));
         }
         return maskedTaskInfoList;
     }
@@ -301,38 +300,6 @@ public class ConnectorsResource {
     private <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method,
                                            Object body, Boolean forward) throws Throwable {
         return completeOrForwardRequest(cb, path, method, body, null, new IdentityTranslator<T>(), forward);
-    }
-
-    private <T> T loadConnectorClass(final String className, final Class<T> type) {
-        try {
-            return type.cast(Class.forName(className).newInstance());
-        } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    // go through config parameters and replace password field value with "*"
-    // this return a new map, instead of making change to the original object
-    private Map<String, String> maskCredentials(Map<String, String> config) {
-        final String connectorClassStr = ConnectorConfig.CONNECTOR_CLASS_CONFIG;
-        if (!config.containsKey(connectorClassStr)) {
-            return config;
-        }
-
-        Connector connectorClass = loadConnectorClass(config.get(connectorClassStr), Connector.class);
-        Map<String, ConfigDef.ConfigKey> definedConfigKeys = connectorClass.config().configKeys();
-        Map<String, String> newConfig = new LinkedHashMap<>();
-
-        for (Map.Entry<String, String> entry : config.entrySet()) {
-            final String key = entry.getKey();
-            if (definedConfigKeys.containsKey(key) && definedConfigKeys.get(key).type.equals(ConfigDef.Type.PASSWORD)) {
-                newConfig.put(key, Password.HIDDEN);
-            } else {
-                newConfig.put(key, entry.getValue());
-            }
-        }
-
-        return newConfig;
     }
 
     private interface Translator<T, U> {

@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -182,6 +183,33 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         if (!configBackingStore.contains(connector))
             throw new NotFoundException("Unknown connector " + connector);
         configBackingStore.putTargetState(connector, TargetState.STARTED);
+    }
+
+    @Override
+    public ConfigDef getConfigDef(String connName) {
+        Connector connector = getConnector(connName);
+        if (connector == null) {
+            throw new NotFoundException("No status found for connector " + connName);
+        }
+
+        return connector.config();
+    }
+
+    @Override
+    public Map<String, String> maskCredentials(String connName, Map<String, String> config) {
+        ConfigDef configDef = getConfigDef(connName);
+        Map<String, String> newConfig = new LinkedHashMap<>();
+
+        for (Map.Entry<String, String> entry : config.entrySet()) {
+            final String key = entry.getKey();
+            if (configDef.configKeys().containsKey(key) && configDef.configKeys().get(key).type.equals(ConfigDef.Type.PASSWORD)) {
+                newConfig.put(key, Password.HIDDEN);
+            } else {
+                newConfig.put(key, entry.getValue());
+            }
+        }
+
+        return newConfig;
     }
 
     @Override
