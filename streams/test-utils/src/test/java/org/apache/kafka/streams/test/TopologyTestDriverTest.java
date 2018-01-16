@@ -36,9 +36,12 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -71,11 +74,19 @@ public class TopologyTestDriverTest {
     };
 
     private final static class Record {
-        final Object key;
-        final Object value;
-        final long timestamp;
-        final long offset;
-        final String topic;
+        Object key;
+        Object value;
+        long timestamp;
+        long offset;
+        String topic;
+
+        Record(final ConsumerRecord consumerRecord) {
+            key = consumerRecord.key();
+            value = consumerRecord.value();
+            timestamp = consumerRecord.timestamp();
+            offset = consumerRecord.offset();
+            topic = consumerRecord.topic();
+        }
 
         Record(final Object key,
                final Object value,
@@ -87,6 +98,32 @@ public class TopologyTestDriverTest {
             this.timestamp = timestamp;
             this.offset = offset;
             this.topic = topic;
+        }
+
+        @Override
+        public String toString() {
+            return "key: " + key + ", value: " + value + ", timestamp: " + timestamp + ", offset: " + offset + ", topic: " + topic;
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            final Record record = (Record) o;
+            return timestamp == record.timestamp &&
+                offset == record.offset &&
+                Objects.equals(key, record.key) &&
+                Objects.equals(value, record.value) &&
+                Objects.equals(topic, record.topic);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(key, value, timestamp, offset, topic);
         }
     }
 
@@ -245,7 +282,7 @@ public class TopologyTestDriverTest {
 
         testDriver = new TopologyTestDriver(new Topology(), config);
         try {
-            testDriver.process(consumerRecordFactory.create((byte[]) null));
+            testDriver.pipeInput(consumerRecordFactory.create((byte[]) null));
             fail("Should have throw IllegalArgumentException");
         } catch (final IllegalArgumentException exception) {
             assertEquals("Unknown topic: " + unknownTopic, exception.getMessage());
@@ -256,7 +293,7 @@ public class TopologyTestDriverTest {
     public void shouldProcessRecordForTopic() {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
 
-        testDriver.process(consumerRecord1);
+        testDriver.pipeInput(consumerRecord1);
         final ProducerRecord outputRecord = testDriver.readOutput(SINK_TOPIC);
 
         assertEquals(key1, outputRecord.key());
@@ -268,15 +305,16 @@ public class TopologyTestDriverTest {
     public void shouldSetRecordMetadata() {
         testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config);
 
-        testDriver.process(consumerRecord1);
+        testDriver.pipeInput(consumerRecord1);
 
         final List<Record> processedRecords = mockProcessors.get(0).processedRecords;
         assertEquals(1, processedRecords.size());
 
         final Record record = processedRecords.get(0);
-        assertEquals(timestamp1, record.timestamp);
-        assertEquals(0, record.offset);
-        assertEquals(SOURCE_TOPIC_1, record.topic);
+        final Record expectedResult = new Record(consumerRecord1);
+        expectedResult.offset = 0L;
+
+        assertThat(expectedResult, equalTo(record));
     }
 
     @Test
@@ -286,29 +324,25 @@ public class TopologyTestDriverTest {
         final List<Record> processedRecords1 = mockProcessors.get(0).processedRecords;
         final List<Record> processedRecords2 = mockProcessors.get(1).processedRecords;
 
-        testDriver.process(consumerRecord1);
+        testDriver.pipeInput(consumerRecord1);
 
         assertEquals(1, processedRecords1.size());
         assertEquals(0, processedRecords2.size());
 
         Record record = processedRecords1.get(0);
-        assertEquals(key1, record.key);
-        assertEquals(value1, record.value);
-        assertEquals(timestamp1, record.timestamp);
-        assertEquals(0, record.offset);
-        assertEquals(SOURCE_TOPIC_1, record.topic);
+        Record expectedResult = new Record(consumerRecord1);
+        expectedResult.offset = 0L;
+        assertThat(expectedResult, equalTo(record));
 
-        testDriver.process(consumerRecord2);
+        testDriver.pipeInput(consumerRecord2);
 
         assertEquals(1, processedRecords1.size());
         assertEquals(1, processedRecords2.size());
 
         record = processedRecords2.get(0);
-        assertEquals(key2, record.key);
-        assertEquals(value2, record.value);
-        assertEquals(timestamp2, record.timestamp);
-        assertEquals(0, record.offset);
-        assertEquals(SOURCE_TOPIC_2, record.topic);
+        expectedResult = new Record(consumerRecord2);
+        expectedResult.offset = 0L;
+        assertThat(expectedResult, equalTo(record));
     }
 
     @Test
@@ -322,39 +356,35 @@ public class TopologyTestDriverTest {
         testRecords.add(consumerRecord1);
         testRecords.add(consumerRecord2);
 
-        testDriver.process(testRecords);
+        testDriver.pipeInput(testRecords);
 
         assertEquals(1, processedRecords1.size());
         assertEquals(1, processedRecords2.size());
 
         Record record = processedRecords1.get(0);
-        assertEquals(key1, record.key);
-        assertEquals(value1, record.value);
-        assertEquals(timestamp1, record.timestamp);
-        assertEquals(0, record.offset);
-        assertEquals(SOURCE_TOPIC_1, record.topic);
+        Record expectedResult = new Record(consumerRecord1);
+        expectedResult.offset = 0L;
+        assertThat(expectedResult, equalTo(record));
 
         record = processedRecords2.get(0);
-        assertEquals(key2, record.key);
-        assertEquals(value2, record.value);
-        assertEquals(timestamp2, record.timestamp);
-        assertEquals(0, record.offset);
-        assertEquals(SOURCE_TOPIC_2, record.topic);
+        expectedResult = new Record(consumerRecord2);
+        expectedResult.offset = 0L;
+        assertThat(expectedResult, equalTo(record));
     }
 
     @Test
     public void shouldPopulateGlobalStore() {
         testDriver = new TopologyTestDriver(setupGlobalStoreTopology(SOURCE_TOPIC_1), config);
 
-        testDriver.process(consumerRecord1);
+        testDriver.pipeInput(consumerRecord1);
 
         final List<Record> processedRecords = mockProcessors.get(0).processedRecords;
         assertEquals(1, processedRecords.size());
 
         final Record record = processedRecords.get(0);
-        assertEquals(timestamp1, record.timestamp);
-        assertEquals(0, record.offset);
-        assertEquals(SOURCE_TOPIC_1, record.topic);
+        final Record expectedResult = new Record(consumerRecord1);
+        expectedResult.offset = 0L;
+        assertThat(expectedResult, equalTo(record));
     }
 
 }

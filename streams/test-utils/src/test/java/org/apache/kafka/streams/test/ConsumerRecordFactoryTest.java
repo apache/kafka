@@ -29,9 +29,8 @@ import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
 
-public class ConsumerRecordFactoryConsumer {
+public class ConsumerRecordFactoryTest {
     private final StringSerializer stringSerializer = new StringSerializer();
     private final IntegerSerializer integerSerializer = new IntegerSerializer();
 
@@ -46,142 +45,120 @@ public class ConsumerRecordFactoryConsumer {
     private final ConsumerRecordFactory<byte[], Integer> factory =
         new ConsumerRecordFactory<>(topicName, new ByteArraySerializer(), integerSerializer, 0L);
 
-    private ConsumerRecord<byte[], byte[]> record;
+    private final ConsumerRecordFactory<byte[], Integer> defaultFactory =
+        new ConsumerRecordFactory<>(new ByteArraySerializer(), integerSerializer);
 
     @Test
     public void shouldAdvanceTime() {
         factory.advanceTimeMs(3L);
-        record = factory.create(topicName, rawKey, value);
-        verifyRecord(topicName, rawKey, rawValue, 3L, record);
+        verifyRecord(topicName, rawKey, rawValue, 3L, factory.create(topicName, rawKey, value));
 
         factory.advanceTimeMs(2L);
-        record = factory.create(topicName, rawKey, value);
-        verifyRecord(topicName, rawKey, rawValue, 5L, record);
+        verifyRecord(topicName, rawKey, rawValue, 5L, factory.create(topicName, rawKey, value));
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void shouldNotAllowToCreateTopicWithNullTopicName() {
-        final String nullTopicName = null;
-
-        try {
-            factory.create(nullTopicName, rawKey, value, timestamp);
-            fail("Should have throw IllegalArgumentException");
-        } catch (final IllegalArgumentException expected) { /* pass */ }
-
-        try {
-            factory.create(nullTopicName, rawKey, value);
-            fail("Should have throw IllegalArgumentException");
-        } catch (final IllegalArgumentException expected) { /* pass */ }
-
-        try {
-            factory.create(nullTopicName, value, timestamp);
-            fail("Should have throw IllegalArgumentException");
-        } catch (final IllegalArgumentException expected) { /* pass */ }
-
-        try {
-            factory.create(nullTopicName, value);
-            fail("Should have throw IllegalArgumentException");
-        } catch (final IllegalArgumentException expected) { /* pass */ }
-
-        try {
-            factory.create(nullTopicName, Collections.singletonList(KeyValue.pair(rawKey, value)));
-            fail("Should have throw IllegalArgumentException");
-        } catch (final IllegalArgumentException expected) { /* pass */ }
-
-        try {
-            factory.create(nullTopicName, Collections.singletonList(KeyValue.pair(rawKey, value)), timestamp, 2L);
-            fail("Should have throw IllegalArgumentException");
-        } catch (final IllegalArgumentException expected) { /* pass */ }
+        factory.create(null, rawKey, value, timestamp);
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldNotAllowToCreateTopicWithNullTopicNameWithDefaultTimestamp() {
+        factory.create(null, rawKey, value);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldNotAllowToCreateTopicWithNullTopicNameWithNulKey() {
+        factory.create((String) null, value, timestamp);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldNotAllowToCreateTopicWithNullTopicNameWithNullKeyAndDefaultTimestamp() {
+        factory.create((String) null, value);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldNotAllowToCreateTopicWithNullTopicNameWithKeyValuePairs() {
+        factory.create(null, Collections.singletonList(KeyValue.pair(rawKey, value)));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldNotAllowToCreateTopicWithNullTopicNameWithKeyValuePairsAndCustomTimestamps() {
+        factory.create(null, Collections.singletonList(KeyValue.pair(rawKey, value)), timestamp, 2L);
+    }
+
+    @Test(expected = IllegalStateException.class)
     public void shouldRequireCustomTopicNameIfNotDefaultFactoryTopicName() {
-        final ConsumerRecordFactory<byte[], Integer> factory =
-            new ConsumerRecordFactory<>(new ByteArraySerializer(), integerSerializer);
+        defaultFactory.create(rawKey, value, timestamp);
+    }
 
-        try {
-            factory.create(rawKey, value, timestamp);
-            fail("Should have throw IllegalStateException");
-        } catch (final IllegalStateException expected) { /* pass */ }
+    @Test(expected = IllegalStateException.class)
+    public void shouldRequireCustomTopicNameIfNotDefaultFactoryTopicNameWithDefaultTimestamp() {
+        defaultFactory.create(rawKey, value);
+    }
 
-        try {
-            factory.create(rawKey, value);
-            fail("Should have throw IllegalStateException");
-        } catch (final IllegalStateException expected) { /* pass */ }
+    @Test(expected = IllegalStateException.class)
+    public void shouldRequireCustomTopicNameIfNotDefaultFactoryTopicNameWithNullKey() {
+        defaultFactory.create(value, timestamp);
+    }
 
-        try {
-            factory.create(value, timestamp);
-            fail("Should have throw IllegalStateException");
-        } catch (final IllegalStateException expected) { /* pass */ }
+    @Test(expected = IllegalStateException.class)
+    public void shouldRequireCustomTopicNameIfNotDefaultFactoryTopicNameWithNullKeyAndDefaultTimestamp() {
+        defaultFactory.create(value);
+    }
 
-        try {
-            factory.create(value);
-            fail("Should have throw IllegalStateException");
-        } catch (final IllegalStateException expected) { /* pass */ }
+    @Test(expected = IllegalStateException.class)
+    public void shouldRequireCustomTopicNameIfNotDefaultFactoryTopicNameWithKeyValuePairs() {
+        defaultFactory.create(Collections.singletonList(KeyValue.pair(rawKey, value)));
+    }
 
-        try {
-            factory.create(Collections.singletonList(KeyValue.pair(rawKey, value)));
-            fail("Should have throw IllegalStateException");
-        } catch (final IllegalStateException expected) { /* pass */ }
-
-        try {
-            factory.create(Collections.singletonList(KeyValue.pair(rawKey, value)), timestamp, 2L);
-            fail("Should have throw IllegalStateException");
-        } catch (final IllegalStateException expected) { /* pass */ }
+    @Test(expected = IllegalStateException.class)
+    public void shouldRequireCustomTopicNameIfNotDefaultFactoryTopicNameWithKeyValuePairsAndCustomTimestamps() {
+        defaultFactory.create(Collections.singletonList(KeyValue.pair(rawKey, value)), timestamp, 2L);
     }
 
     @Test
     public void shouldCreateConsumerRecordWithOtherTopicNameAndTimestamp() {
-        record = factory.create(otherTopicName, rawKey, value, timestamp);
-        verifyRecord(otherTopicName, rawKey, rawValue, timestamp, record);
+        verifyRecord(otherTopicName, rawKey, rawValue, timestamp, factory.create(otherTopicName, rawKey, value, timestamp));
     }
 
     @Test
     public void shouldCreateConsumerRecordWithTimestamp() {
-        record = factory.create(rawKey, value, timestamp);
-        verifyRecord(topicName, rawKey, rawValue, timestamp, record);
+        verifyRecord(topicName, rawKey, rawValue, timestamp, factory.create(rawKey, value, timestamp));
     }
 
     @Test
     public void shouldCreateConsumerRecordWithOtherTopicName() {
-        record = factory.create(otherTopicName, rawKey, value);
-        verifyRecord(otherTopicName, rawKey, rawValue, 0L, record);
+        verifyRecord(otherTopicName, rawKey, rawValue, 0L, factory.create(otherTopicName, rawKey, value));
 
         factory.advanceTimeMs(3L);
-        record = factory.create(otherTopicName, rawKey, value);
-        verifyRecord(otherTopicName, rawKey, rawValue, 3L, record);
+        verifyRecord(otherTopicName, rawKey, rawValue, 3L, factory.create(otherTopicName, rawKey, value));
     }
 
     @Test
     public void shouldCreateConsumerRecord() {
-        record = factory.create(rawKey, value);
-        verifyRecord(topicName, rawKey, rawValue, 0L, record);
+        verifyRecord(topicName, rawKey, rawValue, 0L, factory.create(rawKey, value));
 
         factory.advanceTimeMs(3L);
-        record = factory.create(rawKey, value);
-        verifyRecord(topicName, rawKey, rawValue, 3L, record);
+        verifyRecord(topicName, rawKey, rawValue, 3L, factory.create(rawKey, value));
     }
 
     @Test
     public void shouldCreateNullKeyConsumerRecordWithOtherTopicNameAndTimestampWithTimetamp() {
-        record = factory.create(value, timestamp);
-        verifyRecord(topicName, null, rawValue, timestamp, record);
+        verifyRecord(topicName, null, rawValue, timestamp, factory.create(value, timestamp));
     }
 
     @Test
-    public void shouldCreateNullKeyConsumerRecordWithTimestampWithTimetamp() {
-        record = factory.create(value, timestamp);
-        verifyRecord(topicName, null, rawValue, timestamp, record);
+    public void shouldCreateNullKeyConsumerRecordWithTimestampWithTimestamp() {
+        verifyRecord(topicName, null, rawValue, timestamp, factory.create(value, timestamp));
     }
 
     @Test
     public void shouldCreateNullKeyConsumerRecord() {
-        record = factory.create(value);
-        verifyRecord(topicName, null, rawValue, 0L, record);
+        verifyRecord(topicName, null, rawValue, 0L, factory.create(value));
 
         factory.advanceTimeMs(3L);
-        record = factory.create(value);
-        verifyRecord(topicName, null, rawValue, 3L, record);
+        verifyRecord(topicName, null, rawValue, 3L, factory.create(value));
     }
 
     @SuppressWarnings("unchecked")
@@ -271,8 +248,7 @@ public class ConsumerRecordFactoryConsumer {
         }
 
         // should not have incremented internally tracked time
-        record = factory.create(value);
-        verifyRecord(topicName, null, rawValue, 0L, record);
+        verifyRecord(topicName, null, rawValue, 0L, factory.create(value));
     }
 
     private void verifyRecord(final String topicName,

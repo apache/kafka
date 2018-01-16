@@ -59,6 +59,8 @@ import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.IOException;
@@ -120,10 +122,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * driver.process("input-topic", "key1", "value1", strSerializer, strSerializer);
  * </pre>
  *
- * {@link #process(ConsumerRecord) process(...)}
+ * {@link #pipeInput(ConsumerRecord) process(...)}
  * It's recommended to check them out.
  * In addition, you can use {@link ConsumerRecordFactory} to generate {@link ConsumerRecord ConsumerRecords} that can be
- * ingested into the driver via {@link #process(ConsumerRecord)}.
+ * ingested into the driver via {@link #pipeInput(ConsumerRecord)}.
  * <p>
  * When {@code #process()} is called, the driver passes the input message through to the appropriate source that
  * consumes the named topic, and will invoke the processor(s) downstream of the source.
@@ -309,7 +311,7 @@ public class TopologyTestDriver {
      *
      * @param consumerRecord the record to be processed
      */
-    public void process(final ConsumerRecord<byte[], byte[]> consumerRecord) {
+    public void pipeInput(final ConsumerRecord<byte[], byte[]> consumerRecord) {
         final String topicName = consumerRecord.topic();
 
         final TopicPartition topicPartition = partitionsByTopic.get(topicName);
@@ -349,7 +351,7 @@ public class TopologyTestDriver {
                     final byte[] serializedKey = record.key();
                     final byte[] serializedValue = record.value();
 
-                    process(new ConsumerRecord<>(
+                    pipeInput(new ConsumerRecord<>(
                         outputTopicName,
                         -1,
                         -1L,
@@ -388,9 +390,9 @@ public class TopologyTestDriver {
      *
      * @param records a lit of record to be processed
      */
-    public void process(final List<ConsumerRecord<byte[], byte[]>> records) {
+    public void pipeInput(final List<ConsumerRecord<byte[], byte[]>> records) {
         for (final ConsumerRecord<byte[], byte[]> record : records) {
-            process(record);
+            pipeInput(record);
         }
     }
 
@@ -409,7 +411,7 @@ public class TopologyTestDriver {
 
     /**
      * Read the next record from the given topic. These records were output by the topology during the previous calls to
-     * {@link #process(ConsumerRecord)}.
+     * {@link #pipeInput(ConsumerRecord)}.
      *
      * @param topic the name of the topic
      * @return the next record on that topic, or null if there is no record available
@@ -424,7 +426,7 @@ public class TopologyTestDriver {
 
     /**
      * Read the next record from the given topic. These records were output by the topology during the previous calls to
-     * {@link #process(ConsumerRecord)}.
+     * {@link #pipeInput(ConsumerRecord)}.
      *
      * @param topic the name of the topic
      * @param keyDeserializer the deserializer for the key type
@@ -444,38 +446,90 @@ public class TopologyTestDriver {
     }
 
     /**
-     * Get the {@link StateStore} with the given name. The name should have been supplied via
+     * Get the {@link StateStore} with the given name.
+     * The store can be a "regular" or global store.
+     * The name should have been supplied via
      * {@link #TopologyTestDriver(Topology, Properties) this object's constructor}, and is
      * presumed to be used by a Processor within the topology.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
-     * {@link #process(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
      * @return the state store, or null if no store has been registered with the given name
      * @see #getKeyValueStore(String)
+     * @see #getWindowStore(String)
+     * @see #getSessionStore(String)
      */
     public StateStore getStateStore(final String name) {
         return ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
     }
 
     /**
-     * Get the {@link KeyValueStore} with the given name. The name should have been supplied via
+     * Get the {@link KeyValueStore} with the given name.
+     * The store can be a "regular" or global store.
+     * The name should have been supplied via
      * {@link #TopologyTestDriver(Topology, Properties) this object's constructor}, and is
      * presumed to be used by a Processor within the topology.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
-     * {@link #process(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
      * <p>
      *
      * @param name the name of the store
      * @return the key value store, or null if no {@link KeyValueStore} has been registered with the given name
      * @see #getStateStore(String)
+     * @see #getWindowStore(String)
+     * @see #getSessionStore(String)
      */
     @SuppressWarnings("unchecked")
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
         final StateStore store = getStateStore(name);
         return store instanceof KeyValueStore ? (KeyValueStore<K, V>) getStateStore(name) : null;
+    }
+
+    /**
+     * Get the {@link SessionStore} with the given name.
+     * The store can be a "regular" or global store.
+     * The name should have been supplied via
+     * {@link #TopologyTestDriver(Topology, Properties) this object's constructor}, and is
+     * presumed to be used by a Processor within the topology.
+     * <p>
+     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
+     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     * <p>
+     *
+     * @param name the name of the store
+     * @return the key value store, or null if no {@link SessionStore} has been registered with the given name
+     * @see #getStateStore(String)
+     * @see #getKeyValueStore(String)
+     * @see #getWindowStore(String)
+     */
+    @SuppressWarnings("unchecked")
+    public <K, V> SessionStore<K, V> getWindowStore(final String name) {
+        final StateStore store = getStateStore(name);
+        return store instanceof SessionStore ? (SessionStore<K, V>) getStateStore(name) : null;
+    }
+
+    /**
+     * Get the {@link WindowStore} with the given name.
+     * The store can be a "regular" or global store.
+     * The name should have been supplied via
+     * {@link #TopologyTestDriver(Topology, Properties) this object's constructor}, and is
+     * presumed to be used by a Processor within the topology.
+     * <p>
+     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
+     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     * <p>
+     *
+     * @param name the name of the store
+     * @return the key value store, or null if no {@link WindowStore} has been registered with the given name
+     * @see #getStateStore(String)
+     */
+    @SuppressWarnings("unchecked")
+    public <K, V> WindowStore<K, V> getSessionStore(final String name) {
+        final StateStore store = getStateStore(name);
+        return store instanceof WindowStore ? (WindowStore<K, V>) getStateStore(name) : null;
     }
 
     /**
