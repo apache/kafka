@@ -403,30 +403,4 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             return null;
         }
     }
-
-    // go through config parameters and replace password field value with "*"
-    // this return a new map, instead of making change to the original object
-    public static Map<String, String> maskCredentials(Map<String, String> config) {
-        if (!config.containsKey(ConnectorConfig.CONNECTOR_CLASS_CONFIG)) {
-            return config;
-        }
-
-        Connector connectorClass = getConnector(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-
-        Map<String, ConfigDef.ConfigKey> definedConfigKeys = connectorClass.config().configKeys();
-        Map<String, String> newConfig = new LinkedHashMap<>();
-
-        for (Map.Entry<String, String> entry : config.entrySet()) {
-            final String key = entry.getKey();
-            if (definedConfigKeys.containsKey(key) && definedConfigKeys.get(key).type.equals(ConfigDef.Type.PASSWORD)) {
-                newConfig.put(key, "*********");
-            } else {
-                newConfig.put(key, entry.getValue());
-            }
-        }
-
-        return newConfig;
-    }
-
-
 }

@@ -116,7 +116,7 @@ public class ConnectorsResource {
         FutureCallback<ConnectorInfo> cb = new FutureCallback<>();
         herder.connectorInfo(connector, cb);
         ConnectorInfo connectorInfo = completeOrForwardRequest(cb, "/connectors/" + connector, "GET", null, forward);
-        return new ConnectorInfo(connectorInfo.name(), AbstractHerder.maskCredentials(connectorInfo.config()), connectorInfo.tasks(), connectorInfo.type());
+        return new ConnectorInfo(connectorInfo.name(), maskCredentials(connectorInfo.config()), connectorInfo.tasks(), connectorInfo.type());
     }
 
     @GET
