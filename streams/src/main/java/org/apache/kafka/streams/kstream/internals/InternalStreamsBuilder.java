@@ -174,7 +174,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     public synchronized void addStateStore(final StoreBuilder builder) {
         internalTopologyBuilder.addStateStore(builder);
     }
-
+    @Deprecated
     public synchronized void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,
                                             final String sourceName,
                                             final String topic,
@@ -193,5 +193,24 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                topic,
                                                processorName,
                                                stateUpdateSupplier);
+    }
+    public synchronized void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,
+                                            final String topic,
+                                            final ConsumedInternal consumed,
+                                            final ProcessorSupplier stateUpdateSupplier) {
+        // explicitly disable logging for global stores
+        storeBuilder.withLoggingDisabled();
+        final String sourceName = newProcessorName(KStreamImpl.SOURCE_NAME);
+        final String processorName = newProcessorName(KTableImpl.SOURCE_NAME);
+        final Deserializer keyDeserializer = consumed.keySerde() == null ? null : consumed.keySerde().deserializer();
+        final Deserializer valueDeserializer = consumed.valueSerde() == null ? null : consumed.valueSerde().deserializer();
+        internalTopologyBuilder.addGlobalStore(storeBuilder,
+                sourceName,
+                consumed.timestampExtractor(),
+                keyDeserializer,
+                valueDeserializer,
+                topic,
+                processorName,
+                stateUpdateSupplier);
     }
 }

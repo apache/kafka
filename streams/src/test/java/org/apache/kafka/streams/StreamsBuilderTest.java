@@ -23,12 +23,15 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
 import org.junit.Rule;
 import org.junit.Test;
 
@@ -195,6 +198,18 @@ public class StreamsBuilderTest {
         builder.stream(Arrays.<String>asList(null, null));
     }
 
+    @Test
+    public void testAddGobalStateStore(){
+        String globalTopicName = "testGlobalTopic";
+        String globalStoreName = "testAddGlobalStore";
+        final StreamsBuilder builder = new StreamsBuilder();
+        KeyValueStoreBuilder t = new KeyValueStoreBuilder();
+        final KeyValueStoreBuilder globalStoreBuilder = EasyMock.createNiceMock(KeyValueStoreBuilder.class);
+        EasyMock.expect(globalStoreBuilder.name()).andReturn(globalStoreName).anyTimes();
+        EasyMock.replay(globalStoreBuilder);
+        builder.addGlobalStore(globalStoreBuilder,globalTopicName,new ConsumedInternal(),new MockProcessorSupplier());
+    }
+
     // TODO: these two static functions are added because some non-TopologyBuilder unit tests need to access the internal topology builder,
     //       which is usually a bad sign of design patterns between TopologyBuilder and StreamThread. We need to consider getting rid of them later
     public static InternalTopologyBuilder internalTopologyBuilder(final StreamsBuilder builder) {
@@ -204,4 +219,6 @@ public class StreamsBuilderTest {
     public static Collection<Set<String>> getCopartitionedGroups(final StreamsBuilder builder) {
         return builder.internalTopologyBuilder.copartitionGroups();
     }
+
+
 }
