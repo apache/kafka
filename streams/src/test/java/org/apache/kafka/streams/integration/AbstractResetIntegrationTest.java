@@ -17,12 +17,15 @@
 package org.apache.kafka.streams.integration;
 
 import kafka.admin.AdminClient;
+import kafka.server.KafkaConfig$;
 import kafka.tools.StreamsResetter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -40,9 +43,17 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestCondition;
+import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
+import org.junit.AfterClass;
 import org.junit.Assert;
+import org.junit.Before;
+import org.junit.ClassRule;
+import org.junit.experimental.categories.Category;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,18 +65,74 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
+@Category({IntegrationTest.class})
+@RunWith(value = Parameterized.class)
 abstract class AbstractResetIntegrationTest {
     private final static Logger log = LoggerFactory.getLogger(AbstractResetIntegrationTest.class);
 
-    static final int NUM_BROKERS = 1;
+    @Parameterized.Parameters(name = "ssl enabled = {0}")
+    public static Collection<Object[]> data() {
+        List<Object[]> values = new ArrayList<>();
+        for (boolean cacheEnabled : Arrays.asList(true, false))
+            values.add(new Object[] {cacheEnabled});
+        return values;
+    }
+
+    private final Map<String, Object> sslConfig;
+
+    AbstractResetIntegrationTest(boolean sslEnabled) {
+
+        final Properties props = new Properties();
+
+        // we double the value passed to `time.sleep` in each iteration in one of the map functions, so we disable
+        // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
+        // very long sleep times
+        props.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
+
+        if (sslEnabled) {
+            try {
+                sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
+
+                props.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:0");
+                props.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(), "SSL");
+                props.putAll(sslConfig);
+            } catch (final Exception e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            sslConfig = null;
+        }
+
+        CLUSTER = new EmbeddedKafkaCluster(1, props);
+    }
+
+    Properties getSslClientConfig() {
+        if (sslConfig != null) {
+            final Properties props = new Properties();
+
+            props.put("bootstrap.servers", CLUSTER.bootstrapServers());
+            props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, sslConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+            props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
+            props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
+
+            return props;
+        } else {
+            return null;
+        }
+    }
+
+    @ClassRule
+    public final EmbeddedKafkaCluster CLUSTER;
 
     private static final String APP_ID = "cleanup-integration-test";
     private static final String INPUT_TOPIC = "inputTopic";
@@ -87,15 +154,14 @@ abstract class AbstractResetIntegrationTest {
     static String bootstrapServers;
     static MockTime mockTime;
 
-    private final AbstractResetIntegrationTest.WaitUntilConsumerGroupGotClosed consumerGroupInactive = new AbstractResetIntegrationTest.WaitUntilConsumerGroupGotClosed();
-
-    private class WaitUntilConsumerGroupGotClosed implements TestCondition {
+    private final TestCondition consumerGroupInactive = new TestCondition() {
         @Override
         public boolean conditionMet() {
             return adminClient.describeConsumerGroup(APP_ID, 0).consumers().get().isEmpty();
         }
-    }
+    };
 
+    @AfterClass
     static void afterClassGlobalCleanup() {
         if (adminClient != null) {
             adminClient.close();
@@ -108,6 +174,7 @@ abstract class AbstractResetIntegrationTest {
         }
     }
 
+    @Before
     void beforePrepareTest() throws Exception {
         ++testNo;
         mockTime = cluster.time;
@@ -118,7 +185,7 @@ abstract class AbstractResetIntegrationTest {
         final long alignedTime = (System.currentTimeMillis() / 1000 + 1) * 1000;
         mockTime.setCurrentTimeMs(alignedTime);
 
-        Properties sslConfig = getClientSslConfig();
+        Properties sslConfig = getSslClientConfig();
         if (sslConfig == null) {
             sslConfig = new Properties();
             sslConfig.put("bootstrap.servers", bootstrapServers);
@@ -148,12 +215,10 @@ abstract class AbstractResetIntegrationTest {
         prepareInputData();
     }
 
-    Properties getClientSslConfig() {
-        return null;
-    }
+
 
     void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final Properties sslConfig = getClientSslConfig();
+        final Properties sslConfig = getSslClientConfig();
         final Properties streamsConfiguration = prepareTest();
 
         final Properties resultTopicConsumerConfig = new Properties();
@@ -205,7 +270,7 @@ abstract class AbstractResetIntegrationTest {
     void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
         cluster.createTopic(INTERMEDIATE_USER_TOPIC);
 
-        final Properties sslConfig = getClientSslConfig();
+        final Properties sslConfig = getSslClientConfig();
         final Properties streamsConfiguration = prepareTest();
 
         final Properties resultTopicConsumerConfig = new Properties();
@@ -282,7 +347,7 @@ abstract class AbstractResetIntegrationTest {
     }
 
     void testReprocessingFromFileAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final Properties sslConfig = getClientSslConfig();
+        final Properties sslConfig = getSslClientConfig();
         final Properties streamsConfiguration = prepareTest();
 
         final Properties resultTopicConsumerConfig = new Properties();
@@ -342,7 +407,7 @@ abstract class AbstractResetIntegrationTest {
     }
 
     void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final Properties sslConfig = getClientSslConfig();
+        final Properties sslConfig = getSslClientConfig();
         final Properties streamsConfiguration = prepareTest();
 
         final Properties resultTopicConsumerConfig = new Properties();
@@ -406,7 +471,7 @@ abstract class AbstractResetIntegrationTest {
     }
 
     void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final Properties sslConfig = getClientSslConfig();
+        final Properties sslConfig = getSslClientConfig();
         final Properties streamsConfiguration = prepareTest();
 
         final Properties resultTopicConsumerConfig = new Properties();
@@ -465,7 +530,7 @@ abstract class AbstractResetIntegrationTest {
     }
 
     private Properties prepareTest() throws IOException {
-        Properties streamsConfiguration = getClientSslConfig();
+        Properties streamsConfiguration = getSslClientConfig();
         if (streamsConfiguration == null) {
             streamsConfiguration = new Properties();
         }
@@ -493,7 +558,7 @@ abstract class AbstractResetIntegrationTest {
     }
 
     private void add10InputElements() throws java.util.concurrent.ExecutionException, InterruptedException {
-        Properties producerConfig = getClientSslConfig();
+        Properties producerConfig = getSslClientConfig();
         if (producerConfig == null) {
             producerConfig = new Properties();
         }

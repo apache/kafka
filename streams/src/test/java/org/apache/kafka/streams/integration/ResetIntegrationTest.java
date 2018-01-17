@@ -27,7 +27,10 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import kafka.tools.StreamsResetter;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
+import java.util.Collection;
 import java.util.Properties;
 import java.util.Arrays;
 import java.util.ArrayList;
@@ -38,23 +41,18 @@ import java.util.List;
  * Tests local state store and global application cleanup.
  */
 @Category({IntegrationTest.class})
+@RunWith(value = Parameterized.class)
 public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
-    @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER;
     private static final long CLEANUP_CONSUMER_TIMEOUT = 2000L;
     private static final String APP_ID = "Integration-test";
+
     private static final String NON_EXISTING_TOPIC = "nonExistingTopic";
+
     private static int testNo = 1;
 
-    static {
-        final Properties props = new Properties();
-        // we double the value passed to `time.sleep` in each iteration in one of the map functions, so we disable
-        // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
-        // very long sleep times
-        props.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
-        CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, props);
-        cluster = CLUSTER;
+    public ResetIntegrationTest(boolean sslEnabled) {
+        super(sslEnabled);
     }
 
     @AfterClass

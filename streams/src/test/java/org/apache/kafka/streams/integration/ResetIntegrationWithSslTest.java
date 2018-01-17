@@ -49,20 +49,8 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         }
     }
 
-    @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER;
-
-    static {
-        final Properties props = new Properties();
-        // we double the value passed to `time.sleep` in each iteration in one of the map functions, so we disable
-        // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
-        // very long sleep times
-        props.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
-        props.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:0");
-        props.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(), "SSL");
-        props.putAll(sslConfig);
-        CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, props);
-        cluster = CLUSTER;
+    public ResetIntegrationWithSslTest(boolean sslEnabled) {
+        super(sslEnabled);
     }
 
     @AfterClass
@@ -75,7 +63,7 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         beforePrepareTest();
     }
 
-    Properties getClientSslConfig() {
+    Properties getSslClientConfig() {
         final Properties props = new Properties();
 
         props.put("bootstrap.servers", CLUSTER.bootstrapServers());
