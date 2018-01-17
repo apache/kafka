@@ -187,7 +187,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public ConfigDef getConfigDef(String connName) {
-        Connector connector = getConnector(connName);
+        Map<String, String> conf = config(connName);
+
+        ConnectorType connectorType = connectorTypeForClass(conf.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
+        Connector connector = getConnector(connectorType.toString());
         if (connector == null) {
             throw new NotFoundException("No status found for connector " + connName);
         }

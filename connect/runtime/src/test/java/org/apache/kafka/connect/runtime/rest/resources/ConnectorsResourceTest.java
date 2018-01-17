@@ -268,7 +268,10 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testGetConnector() throws Throwable {
+        EasyMock.expect(herder.maskCredentials(CONNECTOR_NAME, CONNECTOR_CONFIG)).andReturn(CONNECTOR_CONFIG);
+
         final Capture<Callback<ConnectorInfo>> cb = Capture.newInstance();
+
         herder.connectorInfo(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
         expectAndCallbackResult(cb, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES,
             ConnectorType.SOURCE));
@@ -276,6 +279,7 @@ public class ConnectorsResourceTest {
         PowerMock.replayAll();
 
         ConnectorInfo connInfo = connectorsResource.getConnector(CONNECTOR_NAME, FORWARD);
+
         assertEquals(new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES, ConnectorType.SOURCE),
             connInfo);
 
@@ -284,13 +288,15 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testGetConnectorConfig() throws Throwable {
+        EasyMock.expect(herder.maskCredentials(CONNECTOR_NAME, CONNECTOR_CONFIG)).andReturn(CONNECTOR_CONFIG);
+
         final Capture<Callback<Map<String, String>>> cb = Capture.newInstance();
         herder.connectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
         expectAndCallbackResult(cb, CONNECTOR_CONFIG);
 
         PowerMock.replayAll();
-
         Map<String, String> connConfig = connectorsResource.getConnectorConfig(CONNECTOR_NAME, FORWARD);
+
         assertEquals(CONNECTOR_CONFIG, connConfig);
 
         PowerMock.verifyAll();
@@ -298,6 +304,8 @@ public class ConnectorsResourceTest {
 
     @Test(expected = NotFoundException.class)
     public void testGetConnectorConfigConnectorNotFound() throws Throwable {
+        EasyMock.expect(herder.maskCredentials(CONNECTOR_NAME, CONNECTOR_CONFIG)).andReturn(CONNECTOR_CONFIG);
+
         final Capture<Callback<Map<String, String>>> cb = Capture.newInstance();
         herder.connectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
         expectAndCallbackException(cb, new NotFoundException("not found"));
@@ -375,6 +383,10 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testGetConnectorTaskConfigs() throws Throwable {
+        for (int i = 0; i < TASK_CONFIGS.size(); i++) {
+            EasyMock.expect(herder.maskCredentials(CONNECTOR_NAME, TASK_CONFIGS.get(i))).andReturn(TASK_CONFIGS.get(i));
+        }
+
         final Capture<Callback<List<TaskInfo>>> cb = Capture.newInstance();
         herder.taskConfigs(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
         expectAndCallbackResult(cb, TASK_INFOS);
