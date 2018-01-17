@@ -102,7 +102,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         super(ConnectServiceBase, self).start()
 
     def start_and_return_immediately(self, node, worker_type, remote_connector_configs):
-        cmd = self.worker_cmd(node, remote_connector_configs)
+        cmd = self.start_cmd(node, remote_connector_configs)
         self.logger.debug("Connect %s command: %s", worker_type, cmd)
         node.account.ssh(cmd)
 
@@ -249,7 +249,7 @@ class ConnectStandaloneService(ConnectServiceBase):
     def node(self):
         return self.nodes[0]
 
-    def worker_cmd(self, node, connector_configs):
+    def start_cmd(self, node, connector_configs):
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
         for envvar in self.environment:
@@ -295,7 +295,7 @@ class ConnectDistributedService(ConnectServiceBase):
         self.status_topic = status_topic
 
     # connector_configs argument is intentionally ignored in distributed service.
-    def worker_cmd(self, node, connector_configs):
+    def start_cmd(self, node, connector_configs):
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
         for envvar in self.environment:
