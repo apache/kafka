@@ -41,6 +41,15 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     LOG4J_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "connect-log4j.properties")
     PID_FILE = os.path.join(PERSISTENT_ROOT, "connect.pid")
     CONNECT_REST_PORT = 8083
+    """
+    Currently the Connect worker supports waiting on three modes:
+    INSTANT: return immediately
+    LOAD: return after discovering and loading plugins
+    LISTEN: return after opening the REST port.
+    """
+    STARTUP_MODE_INSTANT = 'INSTANT'
+    STARTUP_MODE_LOAD = 'LOAD'
+    STARTUP_MODE_LISTEN = 'LISTEN'
 
     logs = {
         "connect_log": {
@@ -59,7 +68,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
         self.files = files
-        self.startup_mode = 'LISTEN'
+        self.startup_mode = self.STARTUP_MODE_LISTEN
         self.environment = {}
 
     def pids(self, node):
@@ -89,13 +98,9 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         except (RemoteCommandError, ValueError) as e:
             return False
 
-    # Currently the Connect worker supports waiting on three modes:
-    # INSTANT: return immediately
-    # LOAD: return after discovering and loading plugins
-    # LISTEN: return after opening the REST port.
-    def start_async(self, mode='LISTEN'):
+    def start(self, mode=STARTUP_MODE_LISTEN):
         self.startup_mode = mode
-        self.start()
+        super(ConnectServiceBase, self).start()
 
     def start_and_return_immediately(self, node, worker_type, remote_connector_configs):
         cmd = self.worker_cmd(node, remote_connector_configs)
@@ -268,13 +273,13 @@ class ConnectStandaloneService(ConnectServiceBase):
             remote_connector_configs.append(target_file)
 
         self.logger.info("Starting Kafka Connect standalone process on " + str(node.account))
-        if self.startup_mode == 'LOAD':
+        if self.startup_mode == self.STARTUP_MODE_LOAD:
             self.start_and_wait_to_load_plugins(node, 'standalone', remote_connector_configs)
-        elif self.startup_mode == 'LISTEN':
-            self.start_and_wait_to_start_listening(node, 'standalone', remote_connector_configs)
-        else:
-            # mode 'INSTANT' is implied
+        elif self.startup_mode == self.STARTUP_MODE_INSTANT:
             self.start_and_return_immediately(node, 'standalone', remote_connector_configs)
+        else:
+            # The default mode is to wait until the complete startup of the worker
+            self.start_and_wait_to_start_listening(node, 'standalone', remote_connector_configs)
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
@@ -310,13 +315,13 @@ class ConnectDistributedService(ConnectServiceBase):
             raise DucktapeError("Config files are not valid in distributed mode, submit connectors via the REST API")
 
         self.logger.info("Starting Kafka Connect distributed process on " + str(node.account))
-        if self.startup_mode == 'LOAD':
+        if self.startup_mode == self.STARTUP_MODE_LOAD:
             self.start_and_wait_to_load_plugins(node, 'distributed', '')
-        elif self.startup_mode == 'LISTEN':
-            self.start_and_wait_to_start_listening(node, 'distributed', '')
-        else:
-            # mode 'INSTANT' is implied
+        elif self.startup_mode == self.STARTUP_MODE_INSTANT:
             self.start_and_return_immediately(node, 'distributed', '')
+        else:
+            # The default mode is to wait until the complete startup of the worker
+            self.start_and_wait_to_start_listening(node, 'distributed', '')
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
