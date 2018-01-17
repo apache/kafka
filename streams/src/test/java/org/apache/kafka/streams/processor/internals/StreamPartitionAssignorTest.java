@@ -138,6 +138,34 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
+    public void shouldInterleaveTasksByGroupId() {
+        final TaskId taskIdA0 = new TaskId(0, 0);
+        final TaskId taskIdA1 = new TaskId(0, 1);
+        final TaskId taskIdA2 = new TaskId(0, 2);
+        final TaskId taskIdA3 = new TaskId(0, 3);
+
+        final TaskId taskIdB0 = new TaskId(1, 0);
+        final TaskId taskIdB1 = new TaskId(1, 1);
+        final TaskId taskIdB2 = new TaskId(1, 2);
+        final TaskId taskIdB3 = new TaskId(1, 3);
+
+        final TaskId taskIdC0 = new TaskId(2, 0);
+        final TaskId taskIdC1 = new TaskId(2, 1);
+
+        List<TaskId> expectedInterleavedTaskIds = Arrays.asList(taskIdA0, taskIdB0, taskIdA1, taskIdB1, taskIdA2, taskIdB2, taskIdA3, taskIdB3);
+
+        List<TaskId> interleavedTaskIds = partitionAssignor.interleaveTasksByGroupId(Arrays.asList(taskIdA0, taskIdA1, taskIdA2, taskIdA3, taskIdB0, taskIdB1, taskIdB2, taskIdB3));
+
+        assertThat(interleavedTaskIds, equalTo(expectedInterleavedTaskIds));
+
+        List<TaskId> expectedInterLeavedTaskIdsII = Arrays.asList(taskIdA0, taskIdB0, taskIdC0, taskIdA1, taskIdB1, taskIdC1, taskIdA2, taskIdB2, taskIdA3);
+
+        List<TaskId> interleavedTaskIdsII = partitionAssignor.interleaveTasksByGroupId(Arrays.asList(taskIdC0, taskIdC1, taskIdB0, taskIdB1, taskIdB2, taskIdA0, taskIdA1, taskIdA2, taskIdA3));
+
+        assertThat(interleavedTaskIdsII, equalTo(expectedInterLeavedTaskIdsII));
+    }
+
+    @Test
     public void testSubscription() throws Exception {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");

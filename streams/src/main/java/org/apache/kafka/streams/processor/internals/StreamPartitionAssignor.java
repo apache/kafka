@@ -45,6 +45,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -508,7 +509,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             final ArrayList<TaskId> taskIds = new ArrayList<>(state.assignedTaskCount());
             final int numActiveTasks = state.activeTaskCount();
 
-            taskIds.addAll(state.activeTasks());
+            taskIds.addAll(interleaveTasksByGroupId(state.activeTasks()));
             taskIds.addAll(state.standbyTasks());
 
             final int numConsumers = consumers.size();
@@ -550,6 +551,32 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         return assignment;
+    }
+
+    // visible for testing
+    List<TaskId> interleaveTasksByGroupId(Collection<TaskId> taskIds) {
+        final Map<Integer, LinkedList<TaskId>> taskIdMap = new HashMap<>();
+        for (final TaskId taskId : taskIds) {
+            LinkedList<TaskId> taskIdList = taskIdMap.get(taskId.topicGroupId);
+            if (taskIdList == null) {
+                taskIdList = new LinkedList<>();
+            }
+            taskIdList.add(taskId);
+            taskIdMap.put(taskId.topicGroupId, taskIdList);
+        }
+
+        final LinkedList<LinkedList<TaskId>> taskIdDeque = new LinkedList<>();
+        taskIdDeque.addAll(taskIdMap.values());
+
+        final List<TaskId> interleaved = new ArrayList<>();
+        while (!taskIdDeque.isEmpty()) {
+            final LinkedList<TaskId> taskIdList = taskIdDeque.poll();
+            interleaved.add(taskIdList.poll());
+            if (!taskIdList.isEmpty()) {
+                taskIdDeque.offer(taskIdList);
+            }
+        }
+        return interleaved;
     }
 
     /**
