@@ -257,6 +257,9 @@ public class AbstractTaskTest {
             public boolean initializeStateStores() {
                 return false;
             }
+
+            @Override
+            public void initializeTopology() {}
         };
     }
 

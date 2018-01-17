@@ -70,6 +70,11 @@ public class StandbyTask extends AbstractTask {
         return true;
     }
 
+    @Override
+    public void initializeTopology() {
+        //no-op
+    }
+
     /**
      * <pre>
      * - update offset limits
