@@ -189,7 +189,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Map<String, String> newConfig = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : config.entrySet()) {
             // Password.toString() will return the hidden value
-            newConfig.put(entry.getKey(), entry.getValue().toString());
+            String value = null;
+            if (entry.getValue() != null) {
+                value = entry.getValue().toString();
+            }
+
+            newConfig.put(entry.getKey(), value);
         }
 
         return newConfig;
