@@ -61,14 +61,18 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
                     // we need to allow the downstream processor to be able to access both ends of the joining table's value getters
                     final String[] storeNames1 = parent1.valueGetterSupplier().storeNames();
                     final String[] storeNames2 = parent2.valueGetterSupplier().storeNames();
-                    final ArrayList<String> stores = new ArrayList<>(storeNames1.length + storeNames2.length);
+
+                    final String[] stores = new String[storeNames1.length + storeNames2.length];
+                    int i = 0;
                     for (final String storeName : storeNames1) {
-                        stores.add(storeName);
+                        stores[i] = storeName;
+                        i++;
                     }
                     for (final String storeName : storeNames2) {
-                        stores.add(storeName);
+                        stores[i] = storeName;
+                        i++;
                     }
-                    return stores.toArray(new String[stores.size()]);
+                    return stores;
                 }
             };
         }
