@@ -41,15 +41,14 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     LOG4J_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "connect-log4j.properties")
     PID_FILE = os.path.join(PERSISTENT_ROOT, "connect.pid")
     CONNECT_REST_PORT = 8083
-    """
-    Currently the Connect worker supports waiting on three modes:
-    INSTANT: return immediately
-    LOAD: return after discovering and loading plugins
-    LISTEN: return after opening the REST port.
-    """
+
+    # Currently the Connect worker supports waiting on three modes:
     STARTUP_MODE_INSTANT = 'INSTANT'
+    """STARTUP_MODE_INSTANT: Start Connect worker and return immediately"""
     STARTUP_MODE_LOAD = 'LOAD'
+    """STARTUP_MODE_LOAD: Start Connect worker and return after discovering and loading plugins"""
     STARTUP_MODE_LISTEN = 'LISTEN'
+    """STARTUP_MODE_LISTEN: Start Connect worker and return after opening the REST port."""
 
     logs = {
         "connect_log": {
