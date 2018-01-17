@@ -26,8 +26,8 @@ import java.net.URLClassLoader;
  * A custom classloader dedicated to loading Connect plugin classes in classloading isolation.
  * <p>
  * Under the current scheme for classloading isolation in Connect, a plugin classloader loads the
- * classes that finds in its urls. For classes that are either not found or are not supposed to be
- * loaded in isolation, this plugin classloader delegates their loading to its parent. This makes
+ * classes that it finds in its urls. For classes that are either not found or are not supposed to
+ * be loaded in isolation, this plugin classloader delegates their loading to its parent. This makes
  * this classloader a child-first classloader.
  */
 public class PluginClassLoader extends URLClassLoader {
