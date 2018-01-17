@@ -189,7 +189,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     public Map<String, String> maskCredentials(String connName, Map<String, String> config) {
         Map<String, String> newConfig = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : config.entrySet()) {
-            // Password .toString() will return the hidden value
+            // Password.toString() will return the hidden value
             newConfig.put(entry.getKey(), entry.getValue().toString());
         }
 
