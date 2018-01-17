@@ -16,39 +16,39 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
+import kafka.server.KafkaConfig$;
+import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
+
 import org.junit.After;
 import org.junit.AfterClass;
-import org.junit.Assert;
 import org.junit.Before;
+import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import kafka.tools.StreamsResetter;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 import java.util.Properties;
-import java.util.Arrays;
-import java.util.ArrayList;
-import java.util.List;
 
 
 /**
  * Tests local state store and global application cleanup.
  */
 @Category({IntegrationTest.class})
-@RunWith(value = Parameterized.class)
 public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
-    CLUSTER = new EmbeddedKafkaCluster(1);
+    @ClassRule
+    public static final EmbeddedKafkaCluster CLUSTER;
 
-    private static final long CLEANUP_CONSUMER_TIMEOUT = 2000L;
-    private static final String APP_ID = "Integration-test";
+    private static final String TEST_ID = "reset-integration-test";
 
-    private static final String NON_EXISTING_TOPIC = "nonExistingTopic";
-
-    private static int testNo = 1;
+    static {
+        final Properties brokerProps = new Properties();
+        // we double the value passed to `time.sleep` in each iteration in one of the map functions, so we disable
+        // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
+        // very long sleep times
+        brokerProps.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
+        CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
+    }
 
     @AfterClass
     public static void afterClass() {
@@ -57,11 +57,13 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Before
     public void before() throws Exception {
+        testId = TEST_ID;
+        cluster = CLUSTER;
         prepareTest();
     }
 
     @After
-    void after() throws Exception {
+    public void after() throws Exception {
         cleanupTest();
     }
 
@@ -97,36 +99,11 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void shouldNotAllowToResetWhenInputTopicAbsent() throws Exception {
-
-        final List<String> parameterList = new ArrayList<>(
-                Arrays.asList("--application-id", APP_ID + testNo,
-                        "--bootstrap-servers", CLUSTER.bootstrapServers(),
-                        "--input-topics", NON_EXISTING_TOPIC));
-
-        final String[] parameters = parameterList.toArray(new String[parameterList.size()]);
-        final Properties cleanUpConfig = new Properties();
-        cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
-        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
-
-        final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
-        Assert.assertEquals(1, exitCode);
+        super.shouldNotAllowToResetWhenInputTopicAbsent();
     }
 
     @Test
     public void shouldNotAllowToResetWhenIntermediateTopicAbsent() throws Exception {
-
-        final List<String> parameterList = new ArrayList<>(
-                Arrays.asList("--application-id", APP_ID + testNo,
-                        "--bootstrap-servers", CLUSTER.bootstrapServers(),
-                        "--intermediate-topics", NON_EXISTING_TOPIC));
-
-        final String[] parameters = parameterList.toArray(new String[parameterList.size()]);
-        final Properties cleanUpConfig = new Properties();
-        cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
-        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
-
-        final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
-        Assert.assertEquals(1, exitCode);
+        super.shouldNotAllowToResetWhenIntermediateTopicAbsent();
     }
-
 }
