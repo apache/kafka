@@ -101,12 +101,21 @@ public interface ProcessorContext {
      * The type parameter controls what notion of time is used for punctuation:
      * <ul>
      *   <li>{@link PunctuationType#STREAM_TIME} - uses "stream time", which is advanced by the processing of messages
-     *   in accordance with the timestamp as extracted by the {@link TimestampExtractor} in use.
+     *   in accordance with the timestamp as extracted by the {@link TimestampExtractor} in use. The first punctuation
+     *   will be called when stream-time reaches 0 i.e., as soon as the stream-time is known.
      *   <b>NOTE:</b> Only advanced if messages arrive</li>
      *   <li>{@link PunctuationType#WALL_CLOCK_TIME} - uses system time (the wall-clock time),
      *   which is advanced at the polling interval ({@link org.apache.kafka.streams.StreamsConfig#POLL_MS_CONFIG})
-     *   independent of whether new messages arrive. <b>NOTE:</b> This is best effort only as its granularity is limited
-     *   by how long an iteration of the processing loop takes to complete</li>
+     *   independent of whether new messages arrive. The first punctuation will be called after interval has elapsed.
+     *   <b>NOTE:</b> This is best effort only as its granularity is limited by how long an iteration of the
+     *   processing loop takes to complete</li>
+     * </ul>
+     *
+     * <b>Skipping punctuations:</b> Punctuations will not be called more than once at any given timestamp. This means
+     * that punctuations will be skipped when the following occurs:
+     * <ul>
+     *   <li>with {@link PunctuationType#STREAM_TIME}, when stream time advances more than interval</li>
+     *   <li>with {@link PunctuationType#WALL_CLOCK_TIME}, on GC pause, too short interval, ...</li>
      * </ul>
      *
      * @param intervalMs the time interval between punctuations in milliseconds

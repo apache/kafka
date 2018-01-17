@@ -27,12 +27,19 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
     // this Cancellable will be re-pointed at the successor schedule in next()
     private final RepointableCancellable cancellable;
 
-    PunctuationSchedule(ProcessorNode node, long time, long interval, Punctuator punctuator) {
+    PunctuationSchedule(final ProcessorNode node,
+                        final long time,
+                        final long interval,
+                        final Punctuator punctuator) {
         this(node, time, interval, punctuator, new RepointableCancellable());
         cancellable.setSchedule(this);
     }
 
-    private PunctuationSchedule(ProcessorNode node, long time, long interval, Punctuator punctuator, RepointableCancellable cancellable) {
+    private PunctuationSchedule(final ProcessorNode node,
+                                final long time,
+                                final long interval,
+                                final Punctuator punctuator,
+                                final RepointableCancellable cancellable) {
         super(node, time);
         this.interval = interval;
         this.punctuator = punctuator;
@@ -60,11 +67,8 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
     }
 
     public PunctuationSchedule next(final long currTimestamp) {
-        long nextPunctuationTime;
-        if (timestamp + interval > currTimestamp) {
-            // no gap between punctuations, continue as usual
-            nextPunctuationTime = timestamp + interval;
-        } else {
+        long nextPunctuationTime = timestamp + interval;
+        if (currTimestamp >= nextPunctuationTime) {
             // we missed one ore more punctuations
             // avoid scheduling a new punctuations immediately, this can happen:
             // - when using STREAM_TIME punctuation and there was a gap i.e., no data was
