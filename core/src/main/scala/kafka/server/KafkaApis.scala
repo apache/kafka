@@ -489,7 +489,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     val authorizedRequestInfo = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
 
     for ((topicPartition, partitionData) <- fetchRequest.fetchData.asScala) {
-      if (!authorize(request.session, Read, new Resource(Topic, topicPartition.topic)))
+      val topicResource = new Resource(Topic, topicPartition.topic)
+      if ((fetchRequest.isFromFollower() && !authorize(request.session, ClusterAction, topicResource)) ||  
+          !authorize(request.session, Read, topicResource))
         unauthorizedTopicResponseData += topicPartition -> new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
           FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
           FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
