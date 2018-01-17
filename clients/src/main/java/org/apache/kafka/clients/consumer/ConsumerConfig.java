@@ -475,6 +475,7 @@ public class ConsumerConfig extends AbstractConfig {
             newProperties.put(VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());
         return newProperties;
     }
+
     public ConsumerConfig(Properties props) {
         super(CONFIG, props);
     }
