@@ -186,7 +186,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     @Override
-    public ConfigDef getConfigDef(String connName) {
+    public ConfigDef configDef(String connName) {
         Map<String, String> conf = config(connName);
 
         ConnectorType connectorType = connectorTypeForClass(conf.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
@@ -200,7 +200,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public Map<String, String> maskCredentials(String connName, Map<String, String> config) {
-        ConfigDef configDef = getConfigDef(connName);
+        ConfigDef configDef = configDef(connName);
         Map<String, String> newConfig = new LinkedHashMap<>();
 
         for (Map.Entry<String, String> entry : config.entrySet()) {

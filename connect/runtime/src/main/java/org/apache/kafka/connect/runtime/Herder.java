@@ -175,7 +175,7 @@ public interface Herder {
      * @param connName name of the connector
      * @return ConfigDef of the connector
      */
-    ConfigDef getConfigDef(String connName);
+    ConfigDef configDef(String connName);
 
     /**
      * Goes through config parameters and replace password field value with "[hidden"]
