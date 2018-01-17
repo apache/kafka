@@ -101,7 +101,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
 
         private final KTableValueGetter<K, V> parentGetter;
 
-        KTableMapValueGetter(KTableValueGetter<K, V> parentGetter) {
+        KTableMapValueGetter(final KTableValueGetter<K, V> parentGetter) {
             this.parentGetter = parentGetter;
         }
 
