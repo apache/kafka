@@ -90,6 +90,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val topicDeleteAcl = Map(deleteTopicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Delete)))
   val topicDescribeConfigsAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, DescribeConfigs)))
   val topicAlterConfigsAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, AlterConfigs)))
+  val topicClusterAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, ClusterAction)))
   val transactionIdWriteAcl = Map(transactionalIdResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)))
   val transactionalIdDescribeAcl = Map(transactionalIdResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)))
 
@@ -271,6 +272,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createFetchRequest = {
+    val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
+    partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100))
+    requests.FetchRequest.Builder.forConsumer(100, Int.MaxValue, partitionMap).build()
+  }
+
+  private def createFetchFollowerRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
     partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100))
     val version = ApiKeys.FETCH.latestVersion
@@ -483,6 +490,24 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         addAndVerifyAcls(acls, resource)
       sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = true, topicExists = false)
     }
+  }
+
+  @Test
+  def testFetchFollowerRequest() {
+    val key = ApiKeys.FETCH
+    val request = createFetchFollowerRequest
+      
+    removeAllAcls()
+    val resources = Set(topicResource.resourceType)
+    sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false)
+
+    val readAcls = topicReadAcl.get(topicResource).get
+    addAndVerifyAcls(readAcls, topicResource)
+    sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false)
+ 
+    val clusterAcls = topicClusterAcl.get(topicResource).get
+    addAndVerifyAcls(clusterAcls, topicResource)
+    sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = true)
   }
 
   @Test
@@ -1290,7 +1315,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def addAndVerifyAcls(acls: Set[Acl], resource: Resource) = {
     servers.head.apis.authorizer.get.addAcls(acls, resource)
-    TestUtils.waitAndVerifyAcls(servers.head.apis.authorizer.get.getAcls(resource) ++ acls, servers.head.apis.authorizer.get, resource)
+    TestUtils.waitAndVerifyAcls(servers.head.apis.authorizer.get.getAcls(resource), servers.head.apis.authorizer.get, resource)
   }
 
   private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
