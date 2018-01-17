@@ -50,6 +50,10 @@ public final class Base64 {
         return FACTORY.decoder();
     }
 
+    public static Decoder urlDecoder() {
+        return FACTORY.urlDecoder();
+    }
+
     /* Contains a subset of methods from java.util.Base64.Encoder (introduced in Java 8) */
     public interface Encoder {
         String encodeToString(byte[] bytes);
@@ -63,6 +67,7 @@ public final class Base64 {
     private interface Factory {
         Encoder urlEncoderNoPadding();
         Encoder encoder();
+        Decoder urlDecoder();
         Decoder decoder();
     }
 
@@ -71,10 +76,12 @@ public final class Base64 {
         // Static final MethodHandles are optimised better by HotSpot
         private static final MethodHandle URL_ENCODE_NO_PADDING;
         private static final MethodHandle ENCODE;
+        private static final MethodHandle URL_DECODE;
         private static final MethodHandle DECODE;
 
         private static final Encoder URL_ENCODER_NO_PADDING;
         private static final Encoder ENCODER;
+        private static final Decoder URL_DECODER;
         private static final Decoder DECODER;
 
         static {
@@ -123,6 +130,17 @@ public final class Base64 {
                     throw (RuntimeException) throwable;
                 }
 
+                MethodHandle getUrlDecoder = lookup.findStatic(base64Class, "getUrlDecoder",
+                        MethodType.methodType(juDecoderClass));
+                MethodHandle urlDecode = lookup.findVirtual(juDecoderClass, "decode",
+                        MethodType.methodType(byte[].class, String.class));
+                try {
+                    URL_DECODE = urlDecode.bindTo(getUrlDecoder.invoke());
+                } catch (Throwable throwable) {
+                    // Invoked method doesn't throw checked exceptions, so safe to cast
+                    throw (RuntimeException) throwable;
+                }
+                
                 URL_ENCODER_NO_PADDING = new Encoder() {
                     @Override
                     public String encodeToString(byte[] bytes) {
@@ -140,6 +158,18 @@ public final class Base64 {
                     public String encodeToString(byte[] bytes) {
                         try {
                             return (String) ENCODE.invokeExact(bytes);
+                        } catch (Throwable throwable) {
+                            // Invoked method doesn't throw checked exceptions, so safe to cast
+                            throw (RuntimeException) throwable;
+                        }
+                    }
+                };
+
+                URL_DECODER = new Decoder() {
+                    @Override
+                    public byte[] decode(String string) {
+                        try {
+                            return (byte[]) URL_DECODE.invokeExact(string);
                         } catch (Throwable throwable) {
                             // Invoked method doesn't throw checked exceptions, so safe to cast
                             throw (RuntimeException) throwable;
@@ -179,6 +209,11 @@ public final class Base64 {
         public Decoder decoder() {
             return DECODER;
         }
+
+        @Override
+        public Decoder urlDecoder() {
+            return URL_DECODER;
+        }
     }
 
     private static class Java7Factory implements Factory {
@@ -209,8 +244,12 @@ public final class Base64 {
                 //Convert to URL safe variant by replacing + and / with - and _ respectively.
                 String urlSafeBase64EncodedUUID = base64EncodedUUID.replace("+", "-")
                         .replace("/", "_");
-                // Remove the "==" padding at the end.
-                return urlSafeBase64EncodedUUID.substring(0, urlSafeBase64EncodedUUID.length() - 2);
+                // Remove any "=" or "==" padding at the end.
+                return urlSafeBase64EncodedUUID.endsWith("==")
+                        ? urlSafeBase64EncodedUUID.substring(0, urlSafeBase64EncodedUUID.length() - 2)
+                        : urlSafeBase64EncodedUUID.endsWith("=")
+                                ? urlSafeBase64EncodedUUID.substring(0, urlSafeBase64EncodedUUID.length() - 1)
+                                : urlSafeBase64EncodedUUID;
             }
 
         };
@@ -227,6 +266,22 @@ public final class Base64 {
             public byte[] decode(String string) {
                 try {
                     return (byte[]) PARSE.invokeExact(string);
+                } catch (Throwable throwable) {
+                    // Invoked method doesn't throw checked exceptions, so safe to cast
+                    throw (RuntimeException) throwable;
+                }
+            }
+        };
+
+        public static final Decoder URL_DECODER = new Decoder() {
+            @Override
+            public byte[] decode(String string) {
+                try {
+                    // Convert from URL safe variant by replacing - and _ with + and / respectively,
+                    // and append "=" or "==" padding; then decode.
+                    String unpadded = string.replace("-", "+").replace("_", "/");
+                    int padLength = 4 - (unpadded.length() & 3);
+                    return (byte[]) PARSE.invokeExact(padLength > 2 ? unpadded : unpadded + "==".substring(0, padLength));
                 } catch (Throwable throwable) {
                     // Invoked method doesn't throw checked exceptions, so safe to cast
                     throw (RuntimeException) throwable;
@@ -251,6 +306,11 @@ public final class Base64 {
         @Override
         public Encoder encoder() {
             return ENCODER;
+        }
+
+        @Override
+        public Decoder urlDecoder() {
+            return URL_DECODER;
         }
 
         @Override
