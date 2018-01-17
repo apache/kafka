@@ -186,30 +186,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     @Override
-    public ConfigDef configDef(String connName) {
-        Map<String, String> conf = config(connName);
-
-        ConnectorType connectorType = connectorTypeForClass(conf.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
-        Connector connector = getConnector(connectorType.toString());
-        if (connector == null) {
-            throw new NotFoundException("No status found for connector " + connName);
-        }
-
-        return connector.config();
-    }
-
-    @Override
     public Map<String, String> maskCredentials(String connName, Map<String, String> config) {
-        ConfigDef configDef = configDef(connName);
         Map<String, String> newConfig = new LinkedHashMap<>();
-
         for (Map.Entry<String, String> entry : config.entrySet()) {
-            final String key = entry.getKey();
-            if (configDef.configKeys().containsKey(key) && configDef.configKeys().get(key).type.equals(ConfigDef.Type.PASSWORD)) {
-                newConfig.put(key, Password.HIDDEN);
-            } else {
-                newConfig.put(key, entry.getValue());
-            }
+            // Password .toString() will return the hidden value
+            newConfig.put(entry.getKey(), entry.getValue().toString());
         }
 
         return newConfig;

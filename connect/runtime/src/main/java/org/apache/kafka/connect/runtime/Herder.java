@@ -171,13 +171,6 @@ public interface Herder {
     void resumeConnector(String connector);
 
     /**
-     * Given connector name, returns the ConfigDef appropriately
-     * @param connName name of the connector
-     * @return ConfigDef of the connector
-     */
-    ConfigDef configDef(String connName);
-
-    /**
      * Goes through config parameters and replace password field value with "[hidden"]
      * @param connName name of the connector
      * @param config configuration of the connector
