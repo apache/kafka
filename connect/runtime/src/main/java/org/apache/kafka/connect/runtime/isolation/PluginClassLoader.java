@@ -29,10 +29,16 @@ import java.net.URLClassLoader;
  * classes that it finds in its urls. For classes that are either not found or are not supposed to
  * be loaded in isolation, this plugin classloader delegates their loading to its parent. This makes
  * this classloader a child-first classloader.
+ * <p>
+ * This class is thread-safe.
  */
 public class PluginClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(PluginClassLoader.class);
     private final URL pluginLocation;
+
+    static {
+        ClassLoader.registerAsParallelCapable();
+    }
 
     /**
      * Constructor that accepts a specific classloader as parent.
@@ -82,23 +88,25 @@ public class PluginClassLoader extends URLClassLoader {
     @Override
     protected synchronized Class<?> loadClass(String name, boolean resolve)
             throws ClassNotFoundException {
-        Class<?> klass = findLoadedClass(name);
-        if (klass == null) {
-            try {
-                if (PluginUtils.shouldLoadInIsolation(name)) {
-                    klass = findClass(name);
+        synchronized (getClassLoadingLock(name)) {
+            Class<?> klass = findLoadedClass(name);
+            if (klass == null) {
+                try {
+                    if (PluginUtils.shouldLoadInIsolation(name)) {
+                        klass = findClass(name);
+                    }
+                } catch (ClassNotFoundException e) {
+                    // Not found in loader's path. Search in parents.
+                    log.trace("Class '{}' not found. Delegating to parent", name);
                 }
-            } catch (ClassNotFoundException e) {
-                // Not found in loader's path. Search in parents.
-                log.trace("Class '{}' not found. Delegating to parent", name);
             }
+            if (klass == null) {
+                klass = super.loadClass(name, false);
+            }
+            if (resolve) {
+                resolveClass(klass);
+            }
+            return klass;
         }
-        if (klass == null) {
-            klass = super.loadClass(name, false);
-        }
-        if (resolve) {
-            resolveClass(klass);
-        }
-        return klass;
     }
 }
