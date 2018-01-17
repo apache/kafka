@@ -14,18 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.util;
+package org.apache.kafka.connect.data;
 
-import org.apache.kafka.connect.data.Date;
-import org.apache.kafka.connect.data.Decimal;
-import org.apache.kafka.connect.data.Field;
-import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Schema.Type;
-import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.data.SchemaBuilder;
-import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.data.Time;
-import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,12 +36,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
-public class ValueConversion {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ValueConversion.class);
+/**
+ * Utility for converting values into a different form.
+ */
+public class Values {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(Values.class);
 
     private static final SchemaAndValue NULL_SCHEMA_AND_VALUE = new SchemaAndValue(null, null);
     private static final SchemaAndValue TRUE_SCHEMA_AND_VALUE = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, Boolean.TRUE);
     private static final SchemaAndValue FALSE_SCHEMA_AND_VALUE = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, Boolean.FALSE);
+    private static final Schema ARRAY_SELECTOR_SCHEMA = SchemaBuilder.array(Schema.STRING_SCHEMA).build();
+    private static final Schema MAP_SELECTOR_SCHEMA = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).build();
+    private static final Schema STRUCT_SELECTOR_SCHEMA = SchemaBuilder.struct().build();
     private static final String TRUE_LITERAL = Boolean.TRUE.toString();
     private static final String FALSE_LITERAL = Boolean.TRUE.toString();
     private static final Charset UTF_8 = StandardCharsets.UTF_8;
@@ -71,11 +69,239 @@ public class ValueConversion {
     private static final int IS_8601_TIME_LENGTH = ISO_8601_TIME_FORMAT_PATTERN.length() - 2; // subtract single quotes
     private static final int IS_8601_TIMESTAMP_LENGTH = ISO_8601_TIMESTAMP_FORMAT_PATTERN.length() - 4; // subtract single quotes
 
-    private DateFormat dateFormatter = new SimpleDateFormat(ISO_8601_DATE_FORMAT_PATTERN);
-    private DateFormat timeFormatter = new SimpleDateFormat(ISO_8601_TIME_FORMAT_PATTERN);
-    private DateFormat timestampFormatter = new SimpleDateFormat(ISO_8601_TIMESTAMP_FORMAT_PATTERN);
+    /**
+     * Convert the specified value to an {@link Type#BOOLEAN} value.
+     *
+     * @param value the value to be converted; may be null
+     * @return the representation as a boolean, or null if the supplied value was null
+     * @throws DataException if the value could not be converted to a boolean
+     */
+    public static Boolean convertToBoolean(Object value) throws DataException {
+        return (Boolean) convertTo(Schema.OPTIONAL_BOOLEAN_SCHEMA, value);
+    }
 
-    public SchemaAndValue fromString(String value) {
+    /**
+     * Convert the specified value to an {@link Type#INT8} byte value.
+     *
+     * @param value the value to be converted; may be null
+     * @return the representation as a byte, or null if the supplied value was null
+     * @throws DataException if the value could not be converted to a byte
+     */
+    public static Byte convertToByte(Object value) throws DataException {
+        return (Byte) convertTo(Schema.OPTIONAL_INT8_SCHEMA, value);
+    }
+
+    /**
+     * Convert the specified value to an {@link Type#INT16} short value.
+     *
+     * @param value the value to be converted; may be null
+     * @return the representation as a short, or null if the supplied value was null
+     * @throws DataException if the value could not be converted to a short
+     */
+    public static Short convertToShort(Object value) throws DataException {
+        return (Short) convertTo(Schema.OPTIONAL_INT16_SCHEMA, value);
+    }
+
+    /**
+     * Convert the specified value to an {@link Type#INT32} int value.
+     *
+     * @param value the value to be converted; may be null
+     * @return the representation as an integer, or null if the supplied value was null
+     * @throws DataException if the value could not be converted to an integer
+     */
+    public static Integer convertToInteger(Object value) throws DataException {
+        return (Integer) convertTo(Schema.OPTIONAL_INT32_SCHEMA, value);
+    }
+
+    /**
+     * Convert the specified value to an {@link Type#INT64} long value.
+     *
+     * @param value the value to be converted; may be null
+     * @return the representation as a long, or null if the supplied value was null
+     * @throws DataException if the value could not be converted to a long
+     */
+    public static Long convertToLong(Object value) throws DataException {
+        return (Long) convertTo(Schema.OPTIONAL_INT64_SCHEMA, value);
+    }
+
+    /**
+     * Convert the specified value to an {@link Type#FLOAT32} float value.
+     *
+     * @param value the value to be converted; may be null
+     * @return the representation as a float, or null if the supplied value was null
+     * @throws DataException if the value could not be converted to a float
+     */
+    public static Float convertToFloat(Object value) throws DataException {
+        return (Float) convertTo(Schema.OPTIONAL_FLOAT32_SCHEMA, value);
+    }
+
+    /**
+     * Convert the specified value to an {@link Type#FLOAT64} double value.
+     *
+     * @param value the value to be converted; may be null
+     * @return the representation as a double, or null if the supplied value was null
+     * @throws DataException if the value could not be converted to a double
+     */
+    public static Double convertToDouble(Object value) throws DataException {
+        return (Double) convertTo(Schema.OPTIONAL_FLOAT64_SCHEMA, value);
+    }
+
+    /**
+     * Convert the specified value to an {@link Type#STRING} value.
+     *
+     * @param value the value to be converted; may be null
+     * @return the representation as a string, or null if the supplied value was null
+     */
+    public static String convertToString(Object value) {
+        return (String) convertTo(Schema.OPTIONAL_STRING_SCHEMA, value);
+    }
+
+    /**
+     * Convert the specified value to an {@link Type#STRING} value.
+     *
+     * @param value the value to be converted; may be null
+     * @return the representation as a list, or null if the supplied value was null
+     */
+    public static List<?> convertToList(Object value) {
+        return (List<?>) convertTo(ARRAY_SELECTOR_SCHEMA, value);
+    }
+
+    /**
+     * Convert the specified value to an {@link Type#STRING} value.
+     *
+     * @param value the value to be converted; may be null
+     * @return the representation as a list, or null if the supplied value was null
+     */
+    public static Map<?, ?> convertToMap(Object value) {
+        return (Map<?, ?>) convertTo(MAP_SELECTOR_SCHEMA, value);
+    }
+
+    /**
+     * Convert the specified value to an {@link Type#STRING} value.
+     *
+     * @param value the value to be converted; may be null
+     * @return the representation as a list, or null if the supplied value was null
+     */
+    public static Struct convertToStruct(Object value) {
+        return (Struct) convertTo(STRUCT_SELECTOR_SCHEMA, value);
+    }
+
+    /**
+     * Convert the specified value to an {@link Time#SCHEMA time} value.
+     *
+     * @param value the value to be converted; may be null
+     * @return the representation as a time, or null if the supplied value was null
+     */
+    public static java.util.Date convertToTime(Object value) {
+        return (java.util.Date) convertTo(Time.SCHEMA, value);
+    }
+
+    /**
+     * Convert the specified value to an {@link Date#SCHEMA date} value.
+     *
+     * @param value the value to be converted; may be null
+     * @return the representation as a date, or null if the supplied value was null
+     */
+    public static java.util.Date convertToDate(Object value) {
+        return (java.util.Date) convertTo(Date.SCHEMA, value);
+    }
+
+    /**
+     * Convert the specified value to an {@link Timestamp#SCHEMA timestamp} value.
+     *
+     * @param value the value to be converted; may be null
+     * @return the representation as a timestamp, or null if the supplied value was null
+     */
+    public static java.util.Date convertToTimestamp(Object value) {
+        return (java.util.Date) convertTo(Timestamp.SCHEMA, value);
+    }
+
+    /**
+     * Convert the specified value to an {@link Timestamp#SCHEMA timestamp} value.
+     *
+     * @param value the value to be converted; may be null
+     * @return the representation as a timestamp, or null if the supplied value was null
+     */
+    public static BigDecimal convertToDecimal(Object value, int scale) {
+        return (BigDecimal) convertTo(Decimal.schema(scale), value);
+    }
+
+    /**
+     * If possible infer a schema for the given value.
+     *
+     * @param value the value whose schema is to be inferred; may be null
+     * @return the inferred schema, or null if the value is null or no schema could be inferred
+     */
+    public static Schema inferSchema(Object value) {
+        if (value instanceof String) {
+            return Schema.STRING_SCHEMA;
+        }
+        if (value instanceof Boolean) {
+            return Schema.BOOLEAN_SCHEMA;
+        }
+        if (value instanceof Byte) {
+            return Schema.INT8_SCHEMA;
+        }
+        if (value instanceof Short) {
+            return Schema.INT16_SCHEMA;
+        }
+        if (value instanceof Integer) {
+            return Schema.INT32_SCHEMA;
+        }
+        if (value instanceof Long) {
+            return Schema.INT64_SCHEMA;
+        }
+        if (value instanceof Float) {
+            return Schema.FLOAT32_SCHEMA;
+        }
+        if (value instanceof Double) {
+            return Schema.FLOAT64_SCHEMA;
+        }
+        if (value instanceof byte[]) {
+            return Schema.BYTES_SCHEMA;
+        }
+        if (value instanceof List) {
+            List<?> list = (List<?>) value;
+            if (list.isEmpty()) {
+                return null;
+            }
+            SchemaDetector detector = new SchemaDetector();
+            for (Object element : list) {
+                if (!detector.canDetect(element)) {
+                    return null;
+                }
+            }
+            return SchemaBuilder.array(detector.schema()).build();
+        }
+        if (value instanceof Map) {
+            Map<?, ?> map = (Map<?, ?>) value;
+            if (map.isEmpty()) {
+                return null;
+            }
+            SchemaDetector keyDetector = new SchemaDetector();
+            SchemaDetector valueDetector = new SchemaDetector();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (!keyDetector.canDetect(entry.getKey()) || !valueDetector.canDetect(entry.getValue())) {
+                    return null;
+                }
+            }
+            return SchemaBuilder.map(keyDetector.schema(), valueDetector.schema()).build();
+        }
+        if (value instanceof Struct) {
+            return ((Struct) value).schema();
+        }
+        return null;
+    }
+
+
+    /**
+     * Parse the specified string representation of a value into its schema and value.
+     *
+     * @param value the string form of the value
+     * @return the schema and value; never null, but whose schema and value may be null
+     * @see #convertToString(Object)
+     */
+    public static SchemaAndValue parseString(String value) {
         if (value == null) {
             return NULL_SCHEMA_AND_VALUE;
         }
@@ -86,16 +312,209 @@ public class ValueConversion {
         return parse(parser, false);
     }
 
-    public String asString(Object value) {
+    /**
+     * Convert the value to the desired type.
+     *
+     * @param toSchema the schema for the desired type; may not be null
+     * @return the converted value; never null
+     * @throws DataException if the value could not be converted to the desired type
+     */
+    protected static Object convertTo(Schema toSchema, Object value) throws DataException {
         if (value == null) {
-            return null;
+            if (toSchema.isOptional()) {
+                return null;
+            }
+            throw new DataException("Unable to convert a null value to a non-null value");
         }
-        StringBuilder sb = new StringBuilder();
-        append(sb, value, false);
-        return sb.toString();
+        switch (toSchema.type()) {
+            case BYTES:
+                if (Decimal.LOGICAL_NAME.equals(toSchema.name())) {
+                    if (value instanceof byte[]) {
+                        return Decimal.toLogical(toSchema, (byte[]) value);
+                    }
+                    if (value instanceof BigDecimal) {
+                        return value;
+                    }
+                    if (value instanceof Number) {
+                        // Not already a decimal, so treat it as a double ...
+                        double converted = ((Number) value).doubleValue();
+                        return new BigDecimal(converted);
+                    }
+                    if (value instanceof String) {
+                        return new BigDecimal(value.toString()).doubleValue();
+                    }
+                }
+                if (value instanceof byte[]) {
+                    return value;
+                }
+                if (value instanceof BigDecimal) {
+                    return Decimal.fromLogical(toSchema, (BigDecimal) value);
+                }
+                break;
+            case STRING:
+                StringBuilder sb = new StringBuilder();
+                append(sb, value, false);
+                return sb.toString();
+            case BOOLEAN:
+                if (value instanceof Boolean) {
+                    return value;
+                }
+                if (value instanceof String) {
+                    SchemaAndValue parsed = parseString(value.toString());
+                    if (parsed.value() instanceof Boolean) {
+                        return parsed.value();
+                    }
+                }
+                return asLong(value, toSchema, null) == 1L ? Boolean.TRUE : Boolean.FALSE;
+            case INT8:
+                if (value instanceof Byte) {
+                    return value;
+                }
+                return (byte) asLong(value, toSchema, null);
+            case INT16:
+                if (value instanceof Short) {
+                    return value;
+                }
+                return (short) asLong(value, toSchema, null);
+            case INT32:
+                if (Date.LOGICAL_NAME.equals(toSchema.name())) {
+                    if (value instanceof String) {
+                        SchemaAndValue parsed = parseString(value.toString());
+                        value = parsed.value();
+                    }
+                    if (value instanceof java.util.Date) {
+                        return new SchemaAndValue(toSchema, value);
+                    }
+                }
+                if (Time.LOGICAL_NAME.equals(toSchema.name())) {
+                    if (value instanceof String) {
+                        SchemaAndValue parsed = parseString(value.toString());
+                        value = parsed.value();
+                    }
+                    if (value instanceof java.util.Date) {
+                        return new SchemaAndValue(toSchema, value);
+                    }
+                }
+                if (value instanceof Integer) {
+                    return value;
+                }
+                return (int) asLong(value, toSchema, null);
+            case INT64:
+                if (Timestamp.LOGICAL_NAME.equals(toSchema.name())) {
+                    if (value instanceof String) {
+                        SchemaAndValue parsed = parseString(value.toString());
+                        value = parsed.value();
+                    }
+                    if (value instanceof java.util.Date) {
+                        return new SchemaAndValue(toSchema, value);
+                    }
+                }
+                if (value instanceof Long) {
+                    return value;
+                }
+                return asLong(value, toSchema, null);
+            case FLOAT32:
+                if (value instanceof Float) {
+                    return value;
+                }
+                return (float) asDouble(value, toSchema, null);
+            case FLOAT64:
+                if (value instanceof Double) {
+                    return value;
+                }
+                return asDouble(value, toSchema, null);
+            case ARRAY:
+                if (value instanceof String) {
+                    SchemaAndValue schemaAndValue = parseString(value.toString());
+                    value = schemaAndValue.value();
+                }
+                if (value instanceof List) {
+                    return value;
+                }
+                break;
+            case MAP:
+                if (value instanceof String) {
+                    SchemaAndValue schemaAndValue = parseString(value.toString());
+                    value = schemaAndValue.value();
+                }
+                if (value instanceof Map) {
+                    return value;
+                }
+                break;
+            case STRUCT:
+                if (value instanceof Struct) {
+                    Struct struct = (Struct) value;
+                    return struct;
+                }
+        }
+        throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to " + toSchema);
     }
 
-    protected void append(StringBuilder sb, Object value, boolean embedded) {
+    /**
+     * Convert the specified value to the desired scalar value type.
+     *
+     * @param value  the value to be converted; may not be null
+     * @param schema the schema for the desired type; may not be null
+     * @param error  any previous error that should be included in an exception message; may be null
+     * @return the long value after conversion; never null
+     * @throws DataException if the value could not be converted to a long
+     */
+    protected static long asLong(Object value, Schema schema, Throwable error) {
+        try {
+            if (value instanceof Number) {
+                Number number = (Number) value;
+                return number.longValue();
+            }
+            if (value instanceof String) {
+                return new BigDecimal(value.toString()).longValue();
+            }
+        } catch (NumberFormatException e) {
+            error = e;
+            // fall through
+        }
+        if (value instanceof java.util.Date) {
+            if (schema == null) {
+                return ((java.util.Date) value).getTime();
+            }
+            if (Date.LOGICAL_NAME.equals(schema.name())) {
+                return Date.fromLogical(schema, (java.util.Date) value);
+            }
+            if (Time.LOGICAL_NAME.equals(schema.name())) {
+                return Time.fromLogical(schema, (java.util.Date) value);
+            }
+            if (Timestamp.LOGICAL_NAME.equals(schema.name())) {
+                return Timestamp.fromLogical(schema, (java.util.Date) value);
+            }
+        }
+        throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to " + schema, error);
+    }
+
+    /**
+     * Convert the specified value with the desired floating point type.
+     *
+     * @param value  the value to be converted; may not be null
+     * @param schema the schema for the desired type; may not be null
+     * @param error  any previous error that should be included in an exception message; may be null
+     * @return the double value after conversion; never null
+     * @throws DataException if the value could not be converted to a double
+     */
+    protected static double asDouble(Object value, Schema schema, Throwable error) {
+        try {
+            if (value instanceof Number) {
+                Number number = (Number) value;
+                return number.doubleValue();
+            }
+            if (value instanceof String) {
+                return new BigDecimal(value.toString()).doubleValue();
+            }
+        } catch (NumberFormatException e) {
+            error = e;
+            // fall through
+        }
+        return asLong(value, schema, error);
+    }
+
+    protected static void append(StringBuilder sb, Object value, boolean embedded) {
         if (value == null) {
             sb.append(NULL_VALUE);
         } else if (value instanceof Number) {
@@ -110,7 +529,7 @@ public class ValueConversion {
                 sb.append(value);
             }
         } else if (value instanceof byte[]) {
-            // Same as StringConverter
+            value = new String((byte[]) value, UTF_8);
             if (embedded) {
                 sb.append('"').append(value).append('"');
             } else {
@@ -156,7 +575,7 @@ public class ValueConversion {
         }
     }
 
-    protected void appendIterable(StringBuilder sb, Iterator<?> iter) {
+    protected static void appendIterable(StringBuilder sb, Iterator<?> iter) {
         if (iter.hasNext()) {
             append(sb, iter.next(), true);
             while (iter.hasNext()) {
@@ -166,21 +585,21 @@ public class ValueConversion {
         }
     }
 
-    protected String escape(String value) {
+    protected static String escape(String value) {
         return value.replaceAll("\\\\", "\\\\\\\\").replaceAll("\"", "\\\\\"");
     }
 
-    protected DateFormat dateFormatFor(java.util.Date value) {
+    protected static DateFormat dateFormatFor(java.util.Date value) {
         if (value.getTime() < MILLIS_PER_DAY) {
-            return timeFormatter;
+            return new SimpleDateFormat(ISO_8601_TIME_FORMAT_PATTERN);
         }
         if (value.getTime() % MILLIS_PER_DAY == 0) {
-            return dateFormatter;
+            return new SimpleDateFormat(ISO_8601_DATE_FORMAT_PATTERN);
         }
-        return timestampFormatter;
+        return new SimpleDateFormat(ISO_8601_TIMESTAMP_FORMAT_PATTERN);
     }
 
-    protected SchemaAndValue parse(Parser parser, boolean embedded) throws NoSuchElementException {
+    protected static SchemaAndValue parse(Parser parser, boolean embedded) throws NoSuchElementException {
         if (!parser.hasNext()) {
             return null;
         }
@@ -306,19 +725,19 @@ public class ValueConversion {
             int tokenLength = token.length();
             if (tokenLength == IS_8601_DATE_LENGTH) {
                 try {
-                    return new SchemaAndValue(Date.SCHEMA, dateFormatter.parse(token));
+                    return new SchemaAndValue(Date.SCHEMA, new SimpleDateFormat(ISO_8601_DATE_FORMAT_PATTERN).parse(token));
                 } catch (ParseException e) {
                     // not a valid date
                 }
             } else if (tokenLength == IS_8601_TIME_LENGTH) {
                 try {
-                    return new SchemaAndValue(Time.SCHEMA, timeFormatter.parse(token));
+                    return new SchemaAndValue(Time.SCHEMA, new SimpleDateFormat(ISO_8601_TIME_FORMAT_PATTERN).parse(token));
                 } catch (ParseException e) {
                     // not a valid date
                 }
             } else if (tokenLength == IS_8601_TIMESTAMP_LENGTH) {
                 try {
-                    return new SchemaAndValue(Time.SCHEMA, timestampFormatter.parse(token));
+                    return new SchemaAndValue(Time.SCHEMA, new SimpleDateFormat(ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(token));
                 } catch (ParseException e) {
                     // not a valid date
                 }
@@ -329,7 +748,7 @@ public class ValueConversion {
         return new SchemaAndValue(Schema.STRING_SCHEMA, parser.original());
     }
 
-    protected Schema commonSchemaFor(Schema previous, SchemaAndValue latest) {
+    protected static Schema commonSchemaFor(Schema previous, SchemaAndValue latest) {
         if (latest == null) {
             return previous;
         }
@@ -398,7 +817,7 @@ public class ValueConversion {
         return previous;
     }
 
-    protected List<Object> alignListEntriesWithSchema(Schema schema, List<Object> input) {
+    protected static List<Object> alignListEntriesWithSchema(Schema schema, List<Object> input) {
         if (schema == null) {
             return input;
         }
@@ -414,7 +833,7 @@ public class ValueConversion {
         return result;
     }
 
-    protected Map<Object, Object> alignMapKeysAndValuesWithSchema(Schema mapSchema, Map<Object, Object> input) {
+    protected static Map<Object, Object> alignMapKeysAndValuesWithSchema(Schema mapSchema, Map<Object, Object> input) {
         if (mapSchema == null) {
             return input;
         }
@@ -432,7 +851,7 @@ public class ValueConversion {
         return result;
     }
 
-    protected boolean isProjectable(Schema schema) {
+    protected static boolean isProjectable(Schema schema) {
         switch (schema.type()) {
             case BYTES:
                 if (Decimal.LOGICAL_NAME.equals(schema.name())) {
@@ -451,7 +870,7 @@ public class ValueConversion {
         }
     }
 
-    protected Object project(Schema desiredSchema, Object value) {
+    protected static Object project(Schema desiredSchema, Object value) {
         if (value instanceof Number) {
             Number number = (Number) value;
             switch (desiredSchema.type()) {
@@ -507,67 +926,6 @@ public class ValueConversion {
         return value;
     }
 
-    protected static Schema determineSchema(Object value) {
-        if (value instanceof String) {
-            return Schema.STRING_SCHEMA;
-        }
-        if (value instanceof Boolean) {
-            return Schema.BOOLEAN_SCHEMA;
-        }
-        if (value instanceof Byte) {
-            return Schema.INT8_SCHEMA;
-        }
-        if (value instanceof Short) {
-            return Schema.INT16_SCHEMA;
-        }
-        if (value instanceof Integer) {
-            return Schema.INT32_SCHEMA;
-        }
-        if (value instanceof Long) {
-            return Schema.INT64_SCHEMA;
-        }
-        if (value instanceof Float) {
-            return Schema.FLOAT32_SCHEMA;
-        }
-        if (value instanceof Double) {
-            return Schema.FLOAT64_SCHEMA;
-        }
-        if (value instanceof byte[]) {
-            return Schema.BYTES_SCHEMA;
-        }
-        if (value instanceof List) {
-            List<?> list = (List<?>) value;
-            if (list.isEmpty()) {
-                return null;
-            }
-            SchemaDetector detector = new SchemaDetector();
-            for (Object element : list) {
-                if (!detector.canDetect(element)) {
-                    return null;
-                }
-            }
-            return SchemaBuilder.array(detector.schema());
-        }
-        if (value instanceof Map) {
-            Map<?, ?> map = (Map<?, ?>) value;
-            if (map.isEmpty()) {
-                return null;
-            }
-            SchemaDetector keyDetector = new SchemaDetector();
-            SchemaDetector valueDetector = new SchemaDetector();
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                if (!keyDetector.canDetect(entry.getKey()) || !valueDetector.canDetect(entry.getValue())) {
-                    return null;
-                }
-            }
-            return SchemaBuilder.map(keyDetector.schema(), valueDetector.schema());
-        }
-        if (value instanceof Struct) {
-            return ((Struct) value).schema();
-        }
-        return null;
-    }
-
     protected static class SchemaDetector {
         private Type knownType = null;
         private boolean optional = false;
@@ -580,7 +938,7 @@ public class ValueConversion {
                 optional = true;
                 return true;
             }
-            Schema schema = determineSchema(value);
+            Schema schema = inferSchema(value);
             if (schema == null) {
                 return false;
             }
@@ -707,10 +1065,8 @@ public class ValueConversion {
                 if (!hasNext()) {
                     return false;
                 }
+                // There's another token, so consume it
                 nextToken = consumeNextToken();
-            }
-            if (nextToken == null) {
-                return false;
             }
             if (ignoreLeadingAndTrailingWhitespace) {
                 nextToken = nextToken.trim();
@@ -721,5 +1077,4 @@ public class ValueConversion {
             return nextToken.equals(expected);
         }
     }
-
 }

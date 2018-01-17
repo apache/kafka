@@ -34,6 +34,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
 
@@ -47,8 +48,29 @@ public class ConnectHeaders implements Headers {
     // Shared, immutable instance with a null schema and null value
     private static final SchemaAndValue NULL_SCHEMA_AND_VALUE = new SchemaAndValue(null, null);
 
+    /**
+     * An immutable and therefore sharable empty iterator.
+     */
+    private static final Iterator<Header> EMPTY_ITERATOR = new Iterator<Header>() {
+        @Override
+        public boolean hasNext() {
+            return false;
+        }
+
+        @Override
+        public Header next() {
+            throw new NoSuchElementException();
+        }
+
+        @Override
+        public void remove() {
+            throw new IllegalStateException();
+        }
+    };
+
+
     // This field is set lazily, but once set to a list it is never set back to null
-    private LinkedList<Header> headers;
+    private volatile LinkedList<Header> headers;
 
     public ConnectHeaders() {
     }
@@ -60,7 +82,7 @@ public class ConnectHeaders implements Headers {
                 if (!headers.isEmpty()) {
                     this.headers = new LinkedList<>(((ConnectHeaders) original).headers);
                 }
-            } else if (original != null) {
+            } else {
                 this.headers = new LinkedList<>();
                 for (Header header : original) {
                     this.headers.add(header);
@@ -253,22 +275,7 @@ public class ConnectHeaders implements Headers {
         if (headers != null) {
             return headers.iterator();
         }
-        return new Iterator<Header>() {
-            @Override
-            public boolean hasNext() {
-                return false;
-            }
-
-            @Override
-            public Header next() {
-                return null;
-            }
-
-            @Override
-            public void remove() {
-                throw new IllegalStateException();
-            }
-        };
+        return EMPTY_ITERATOR;
     }
 
     @Override
@@ -291,7 +298,8 @@ public class ConnectHeaders implements Headers {
             Set<String> keys = new HashSet<>();
             ListIterator<Header> iter = headers.listIterator(headers.size());
             while (iter.hasPrevious()) {
-                String key = iter.previous().key();
+                Header header = iter.previous();
+                String key = header.key();
                 if (!keys.add(key)) {
                     iter.remove();
                 }

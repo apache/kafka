@@ -19,8 +19,8 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
-import org.apache.kafka.connect.util.ValueConversion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,7 +61,7 @@ public class SimpleHeaderConverter implements HeaderConverter {
             if (str.isEmpty()) {
                 return new SchemaAndValue(Schema.STRING_SCHEMA, str);
             }
-            return new ValueConversion().fromString(str);
+            return Values.parseString(str);
         } catch (NoSuchElementException e) {
             throw new DataException("Failed to deserialize value for header '" + headerKey + "' on topic '" + topic + "'", e);
         } catch (Throwable t) {
@@ -75,7 +75,7 @@ public class SimpleHeaderConverter implements HeaderConverter {
         if (value == null) {
             return null;
         }
-        return new ValueConversion().asString(value).getBytes(UTF_8);
+        return Values.convertToString(value).getBytes(UTF_8);
     }
 
     @Override
