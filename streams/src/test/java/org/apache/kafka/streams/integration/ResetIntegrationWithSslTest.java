@@ -17,22 +17,16 @@
 package org.apache.kafka.streams.integration;
 
 import kafka.server.KafkaConfig$;
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.util.Map;
-import java.util.Properties;
 
 /**
  * Tests command line SSL setup for reset tool.
@@ -40,10 +34,17 @@ import java.util.Properties;
 @Category({IntegrationTest.class})
 public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
 
-    private static Map<String, Object> sslConfig;
     static {
         try {
-            sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
+            try {
+                sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
+
+                brokerProps.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:0");
+                brokerProps.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(), "SSL");
+                brokerProps.putAll(sslConfig);
+            } catch (final Exception e) {
+                throw new RuntimeException(e);
+            }
         } catch (final Exception e) {
             throw new RuntimeException(e);
         }
@@ -55,23 +56,12 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
 
     @AfterClass
     public static void globalCleanup() {
-        afterClassGlobalCleanup();
+        afterClassCleanup();
     }
 
     @Before
     public void before() throws Exception {
-        beforePrepareTest();
-    }
-
-    Properties getSslClientConfig() {
-        final Properties props = new Properties();
-
-        props.put("bootstrap.servers", CLUSTER.bootstrapServers());
-        props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, sslConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
-        props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
-        props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
-
-        return props;
+        prepareTest();
     }
 
     @Test

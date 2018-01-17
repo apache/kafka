@@ -16,21 +16,18 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.server.KafkaConfig$;
-import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.test.IntegrationTest;
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import kafka.tools.StreamsResetter;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
-import java.util.Collection;
 import java.util.Properties;
 import java.util.Arrays;
 import java.util.ArrayList;
@@ -44,6 +41,8 @@ import java.util.List;
 @RunWith(value = Parameterized.class)
 public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
+    CLUSTER = new EmbeddedKafkaCluster(1);
+
     private static final long CLEANUP_CONSUMER_TIMEOUT = 2000L;
     private static final String APP_ID = "Integration-test";
 
@@ -51,20 +50,20 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     private static int testNo = 1;
 
-    public ResetIntegrationTest(boolean sslEnabled) {
-        super(sslEnabled);
-    }
-
     @AfterClass
-    public static void globalCleanup() {
-        afterClassGlobalCleanup();
+    public static void afterClass() {
+        afterClassCleanup();
     }
 
     @Before
     public void before() throws Exception {
-        beforePrepareTest();
+        prepareTest();
     }
 
+    @After
+    void after() throws Exception {
+        cleanupTest();
+    }
 
     @Test
     public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
@@ -101,7 +100,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
         final List<String> parameterList = new ArrayList<>(
                 Arrays.asList("--application-id", APP_ID + testNo,
-                        "--bootstrap-servers", bootstrapServers,
+                        "--bootstrap-servers", CLUSTER.bootstrapServers(),
                         "--input-topics", NON_EXISTING_TOPIC));
 
         final String[] parameters = parameterList.toArray(new String[parameterList.size()]);
@@ -118,7 +117,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
         final List<String> parameterList = new ArrayList<>(
                 Arrays.asList("--application-id", APP_ID + testNo,
-                        "--bootstrap-servers", bootstrapServers,
+                        "--bootstrap-servers", CLUSTER.bootstrapServers(),
                         "--intermediate-topics", NON_EXISTING_TOPIC));
 
         final String[] parameters = parameterList.toArray(new String[parameterList.size()]);
