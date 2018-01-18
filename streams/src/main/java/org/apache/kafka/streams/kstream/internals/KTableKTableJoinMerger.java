@@ -28,9 +28,9 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final String queryableName;
     private boolean sendOldValues = false;
 
-    public KTableKTableJoinMerger(final KTableImpl<K, ?, V> parent1,
-                                  final KTableImpl<K, ?, V> parent2,
-                                  final String queryableName) {
+    KTableKTableJoinMerger(final KTableImpl<K, ?, V> parent1,
+                           final KTableImpl<K, ?, V> parent2,
+                           final String queryableName) {
         this.parent1 = parent1;
         this.parent2 = parent2;
         this.queryableName = queryableName;
@@ -38,12 +38,42 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     @Override
     public Processor<K, Change<V>> get() {
-        return new KTableKTableJoinMergeProcessor<>();
+        return new KTableKTableJoinMergeProcessor();
     }
 
     @Override
     public KTableValueGetterSupplier<K, V> view() {
-        return parent1.valueGetterSupplier();
+        // if the result KTable is materialized, use the materialized store to return getter value;
+        // otherwise rely on the parent getter and apply join on-the-fly
+        if (queryableName != null) {
+            return new KTableMaterializedValueGetterSupplier<>(queryableName);
+        } else {
+            return new KTableValueGetterSupplier<K, V>() {
+
+                public KTableValueGetter<K, V> get() {
+                    return parent1.valueGetterSupplier().get();
+                }
+
+                @Override
+                public String[] storeNames() {
+                    // we need to allow the downstream processor to be able to access both ends of the joining table's value getters
+                    final String[] storeNames1 = parent1.valueGetterSupplier().storeNames();
+                    final String[] storeNames2 = parent2.valueGetterSupplier().storeNames();
+
+                    final String[] stores = new String[storeNames1.length + storeNames2.length];
+                    int i = 0;
+                    for (final String storeName : storeNames1) {
+                        stores[i] = storeName;
+                        i++;
+                    }
+                    for (final String storeName : storeNames2) {
+                        stores[i] = storeName;
+                        i++;
+                    }
+                    return stores;
+                }
+            };
+        }
     }
 
     @Override
@@ -53,14 +83,13 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
         sendOldValues = true;
     }
 
-    private class KTableKTableJoinMergeProcessor<K, V>
-        extends AbstractProcessor<K, Change<V>> {
+    private class KTableKTableJoinMergeProcessor extends AbstractProcessor<K, Change<V>> {
         private KeyValueStore<K, V> store;
         private TupleForwarder<K, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
             if (queryableName != null) {
                 store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
@@ -72,7 +101,6 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
 
         @Override
         public void process(K key, Change<V> value) {
-
             if (queryableName != null) {
                 store.put(key, value.newValue);
                 tupleForwarder.maybeForward(key, value.newValue, value.oldValue);
@@ -81,5 +109,4 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
             }
         }
     }
-
 }
