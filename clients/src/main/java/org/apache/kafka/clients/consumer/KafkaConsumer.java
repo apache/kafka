@@ -37,6 +37,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.metrics.JmxReporter;
@@ -56,6 +57,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
@@ -900,18 +902,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 // treat subscribing to empty topic list as the same as unsubscribing
                 this.unsubscribe();
             } else {
-                IllegalArgumentException iae = new IllegalArgumentException("Detected issues with topic names in topic partitions to assign:");
-                for (String topic : topics) {
-                    try {
-                        Topic.validate(topic);
-                    } catch (Exception e) {
-                        iae.addSuppressed(e);
-                    }
-                }
-
-                if (iae.getSuppressed().length > 0)
-                    throw iae;
-
+                throwIfInvalidTopicName(new HashSet<String>(topics));
                 throwIfNoAssignorsConfigured();
 
                 log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
@@ -1055,21 +1046,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             } else if (partitions.isEmpty()) {
                 this.unsubscribe();
             } else {
-                IllegalArgumentException iae = new IllegalArgumentException("Detected issues with topic names in topic partitions to assign:");
-                Set<String> topics = new HashSet<>();
-                for (TopicPartition tp : partitions) {
-                    String topic = (tp != null) ? tp.topic() : null;
-                    try {
-                        Topic.validate(topic);
-                    } catch (Exception e) {
-                        iae.addSuppressed(e);
-                    }
-                    topics.add(topic);
-                }
-
-                if (iae.getSuppressed().length > 0)
-                    throw iae;
-
+                Collection<String> topics = throwIfInvalidTopicName(partitions);
                 // make sure the offsets of topic partitions the consumer is unsubscribing from
                 // are committed since there will be no following rebalance
                 this.coordinator.maybeAutoCommitOffsetsNow();
@@ -1846,5 +1823,27 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (assignors.isEmpty())
             throw new IllegalStateException("Must configure at least one partition assigner class name to " +
                 ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " configuration property");
+    }
+
+    private void throwIfInvalidTopicName(Set<String> topics) {
+        List<String> errors = new ArrayList<>();
+        for (String topic : topics) {
+            try {
+                Topic.validate(topic);
+            } catch (Exception e) {
+                errors.add(e.getMessage());
+            }
+        }
+
+        if (errors.size() > 0)
+            throw new InvalidTopicException(Utils.join(errors, "\n"));
+    }
+
+    private Collection<String> throwIfInvalidTopicName(Collection<TopicPartition> partitions) {
+        Set<String> topics = new HashSet<>();
+        for (TopicPartition partition : partitions)
+            topics.add(partition.topic());
+        throwIfInvalidTopicName(topics);
+        return topics;
     }
 }

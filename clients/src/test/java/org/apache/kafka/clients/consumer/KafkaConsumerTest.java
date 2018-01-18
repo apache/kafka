@@ -205,9 +205,9 @@ public class KafkaConsumerTest {
     public void testSubscriptionOnNullTopic() {
         try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
             consumer.subscribe(singletonList((String) null));
-            fail("Expected an IllegalArgumentException due to invalid topic name.");
-        } catch (IllegalArgumentException e) {
-            assertTrue("Expected an InvalidTopicException", e.getSuppressed()[0] instanceof InvalidTopicException);
+            fail("Expected an InvalidTopicException due to invalid topic name.");
+        } catch (InvalidTopicException e) {
+            // OK
         }
     }
 
@@ -215,9 +215,9 @@ public class KafkaConsumerTest {
     public void testSubscriptionOnEmptyTopic() {
         try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
             consumer.subscribe(singletonList("  "));
-            fail("Expected an IllegalArgumentException due to invalid topic name.");
-        } catch (IllegalArgumentException e) {
-            assertTrue("Expected an InvalidTopicException", e.getSuppressed()[0] instanceof InvalidTopicException);
+            fail("Expected an InvalidTopicException due to invalid topic name.");
+        } catch (InvalidTopicException e) {
+            // OK
         }
     }
 
@@ -225,11 +225,9 @@ public class KafkaConsumerTest {
     public void testSubscriptionOnMultipleInvalidTopicNames() {
         try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
             consumer.subscribe(Arrays.asList("  ", null, null, ".", "top!c", topic, TestUtils.randomString(250)));
-            fail("Expected an IllegalArgumentException due to invalid topic name.");
-        } catch (IllegalArgumentException e) {
-            assertEquals("Expected 6 InvalidTopicException errors", 6, e.getSuppressed().length);
-            for (Throwable t: e.getSuppressed())
-                assertTrue("Expected only InvalidTopicException errors", t instanceof InvalidTopicException);
+            fail("Expected an InvalidTopicException due to invalid topic name.");
+        } catch (InvalidTopicException e) {
+            // OK
         }
     }
 
@@ -295,9 +293,9 @@ public class KafkaConsumerTest {
     public void testAssignOnNullTopicInPartition() {
         try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
             consumer.assign(Arrays.asList(new TopicPartition(null, 0)));
-            fail("Expected an IllegalArgumentException due to invalid topic name.");
-        } catch (IllegalArgumentException e) {
-            assertTrue("Expected an InvalidTopicException", e.getSuppressed()[0] instanceof InvalidTopicException);
+            fail("Expected an InvalidTopicException due to invalid topic name.");
+        } catch (InvalidTopicException e) {
+            // OK
         }
     }
 
@@ -305,9 +303,9 @@ public class KafkaConsumerTest {
     public void testAssignOnEmptyTopicInPartition() {
         try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
             consumer.assign(Arrays.asList(new TopicPartition("  ", 0)));
-            fail("Expected an IllegalArgumentException due to invalid topic name.");
-        } catch (IllegalArgumentException e) {
-            assertTrue("Expected an InvalidTopicException", e.getSuppressed()[0] instanceof InvalidTopicException);
+            fail("Expected an InvalidTopicException due to invalid topic name.");
+        } catch (InvalidTopicException e) {
+            // OK
         }
     }
 
@@ -322,11 +320,9 @@ public class KafkaConsumerTest {
                     new TopicPartition("top!c", 0),
                     new TopicPartition(topic, 0), // a valid topic name
                     new TopicPartition(TestUtils.randomString(250), 0)));
-            fail("Expected an IllegalArgumentException due to invalid topic name.");
-        } catch (IllegalArgumentException e) {
-            assertEquals("Expected 6 InvalidTopicException errors", 6, e.getSuppressed().length);
-            for (Throwable t: e.getSuppressed())
-                assertTrue("Expected only InvalidTopicException errors", t instanceof InvalidTopicException);
+            fail("Expected an InvalidTopicException due to invalid topic name.");
+        } catch (InvalidTopicException e) {
+            // OK
         }
     }
 
