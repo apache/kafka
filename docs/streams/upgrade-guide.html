@@ -34,7 +34,9 @@
     </div>
 
     <p>
-        If you want to upgrade from 1.0.x to 1.1.0 you don't need to make any code changes as the public API is fully backward compatible.
+        If you want to upgrade from 1.0.x to 1.1.0 you don't need to make any code changes as the public API is fully backward compatible in Java 7.
+        If you are using Java8 lambdas in your Kafka Streams code you might need to update your code to resolve method ambiguties.
+	Hot-swaping the jar-file only might not work for this case.
         See <a href="#streams_api_changes_110">below</a> for a complete list of 1.1.0 API and semantic changes that allow you to advance your application and/or simplify your code base.
     </p>
 
