@@ -47,6 +47,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -107,9 +108,12 @@ public class ConnectorsResource {
     @Path("/{connector}")
     public ConnectorInfo getConnector(final @PathParam("connector") String connector,
                                       final @QueryParam("forward") Boolean forward) throws Throwable {
+
         FutureCallback<ConnectorInfo> cb = new FutureCallback<>();
         herder.connectorInfo(connector, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connector, "GET", null, forward);
+        ConnectorInfo connectorInfo = completeOrForwardRequest(cb, "/connectors/" + connector, "GET", null, forward);
+
+        return new ConnectorInfo(connectorInfo.name(), herder.maskCredentials(connector, connectorInfo.config()), connectorInfo.tasks(), connectorInfo.type());
     }
 
     @GET
@@ -118,7 +122,8 @@ public class ConnectorsResource {
                                                   final @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Map<String, String>> cb = new FutureCallback<>();
         herder.connectorConfig(connector, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", null, forward);
+        Map<String, String> config = completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", null, forward);
+        return herder.maskCredentials(connector, config);
     }
 
     @GET
@@ -177,8 +182,17 @@ public class ConnectorsResource {
                                          final @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<List<TaskInfo>> cb = new FutureCallback<>();
         herder.taskConfigs(connector, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "GET", null, new TypeReference<List<TaskInfo>>() {
-        }, forward);
+
+
+        List<TaskInfo> taskInfoList = completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "GET", null,
+            new TypeReference<List<TaskInfo>>() {}, forward);
+
+        List<TaskInfo> maskedTaskInfoList = new ArrayList<>();
+        for (TaskInfo taskInfo : taskInfoList) {
+            maskedTaskInfoList.add(new TaskInfo(taskInfo.id(), herder.maskCredentials(connector, taskInfo.config())));
+        }
+
+        return maskedTaskInfoList;
     }
 
     @POST

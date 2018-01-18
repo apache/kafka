@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
@@ -168,6 +169,14 @@ public interface Herder {
      * @param connector name of the connector
      */
     void resumeConnector(String connector);
+
+    /**
+     * Goes through config parameters and replace password field value with "[hidden"]
+     * @param connName name of the connector
+     * @param config configuration of the connector
+     * @return new map of the configurations, with password omitted from clear-text
+     */
+    Map<String, String> maskCredentials(String connName, Map<String, String> connectorInfo);
 
     /**
      * Returns a handle to the plugin factory used by this herder and its worker.

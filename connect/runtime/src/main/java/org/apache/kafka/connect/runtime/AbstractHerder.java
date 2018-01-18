@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -76,7 +77,6 @@ import java.util.concurrent.ConcurrentHashMap;
  *    we have proper producer groups with fenced groups, there is not much else we can do.
  */
 public abstract class AbstractHerder implements Herder, TaskStatus.Listener, ConnectorStatus.Listener {
-
     private final String workerId;
     protected final Worker worker;
     protected final StatusBackingStore statusBackingStore;
@@ -184,7 +184,31 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         configBackingStore.putTargetState(connector, TargetState.STARTED);
     }
 
-    @Override
+@Override
+public Map<String, String> maskCredentials(String connName, Map<String, String> config) {
+    Connector connector = getConnector(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
+    if (connector == null) {
+        throw new NotFoundException("No status found for connector " + connName);
+    }
+
+    ConfigDef configDef = connector.config();
+
+    Map<String, String> newConfig = new LinkedHashMap<>();
+    for (Map.Entry<String, String> entry : config.entrySet()) {
+        final String key = entry.getKey();
+
+        // If it exists in ConfigDef and it is type password
+        if (configDef.configKeys().containsKey(key) && configDef.configKeys().get(key).type.equals(ConfigDef.Type.PASSWORD)) {
+            newConfig.put(key, Password.HIDDEN);
+        } else {
+            newConfig.put(key, entry.getValue());
+        }
+    }
+
+    return newConfig;
+}
+
+@Override
     public Plugins plugins() {
         return worker.getPlugins();
     }
