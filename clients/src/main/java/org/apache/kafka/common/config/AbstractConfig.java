@@ -86,7 +86,7 @@ public class AbstractConfig {
         return Collections.emptyMap();
     }
 
-    protected Object get(String key) {
+    public Object get(String key) {
         if (!values.containsKey(key))
             throw new ConfigException(String.format("Unknown configuration '%s'", key));
         used.add(key);
