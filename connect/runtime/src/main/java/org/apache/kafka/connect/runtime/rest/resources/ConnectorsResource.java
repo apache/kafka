@@ -185,7 +185,8 @@ public class ConnectorsResource {
 
 
         List<TaskInfo> taskInfoList = completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "GET", null,
-            new TypeReference<List<TaskInfo>>() {}, forward);
+            new TypeReference<List<TaskInfo>>() {
+            }, forward);
 
         List<TaskInfo> maskedTaskInfoList = new ArrayList<>();
         for (TaskInfo taskInfo : taskInfoList) {

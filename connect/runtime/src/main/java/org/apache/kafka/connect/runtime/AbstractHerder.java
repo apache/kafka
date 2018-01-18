@@ -184,31 +184,31 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         configBackingStore.putTargetState(connector, TargetState.STARTED);
     }
 
-@Override
-public Map<String, String> maskCredentials(String connName, Map<String, String> config) {
-    Connector connector = getConnector(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
-    if (connector == null) {
-        throw new NotFoundException("No status found for connector " + connName);
-    }
-
-    ConfigDef configDef = connector.config();
-
-    Map<String, String> newConfig = new LinkedHashMap<>();
-    for (Map.Entry<String, String> entry : config.entrySet()) {
-        final String key = entry.getKey();
-
-        // If it exists in ConfigDef and it is type password
-        if (configDef.configKeys().containsKey(key) && configDef.configKeys().get(key).type.equals(ConfigDef.Type.PASSWORD)) {
-            newConfig.put(key, Password.HIDDEN);
-        } else {
-            newConfig.put(key, entry.getValue());
+    @Override
+    public Map<String, String> maskCredentials(String connName, Map<String, String> config) {
+        Connector connector = getConnector(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
+        if (connector == null) {
+            throw new NotFoundException("No status found for connector " + connName);
         }
+
+        ConfigDef configDef = connector.config();
+
+        Map<String, String> newConfig = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : config.entrySet()) {
+            final String key = entry.getKey();
+
+            // If it exists in ConfigDef and it is type password
+            if (configDef.configKeys().containsKey(key) && configDef.configKeys().get(key).type.equals(ConfigDef.Type.PASSWORD)) {
+                newConfig.put(key, Password.HIDDEN);
+            } else {
+                newConfig.put(key, entry.getValue());
+            }
+        }
+
+        return newConfig;
     }
 
-    return newConfig;
-}
-
-@Override
+    @Override
     public Plugins plugins() {
         return worker.getPlugins();
     }
