@@ -203,9 +203,9 @@ public abstract class AbstractResetIntegrationTest {
     void shouldNotAllowToResetWhileStreamsIsRunning() throws Exception {
         appID = testId + "-not-reset-during-runtime";
         final String[] parameters = new String[] {
-                "--application-id", appID,
-                "--bootstrap-servers", cluster.bootstrapServers(),
-                "--input-topics", NON_EXISTING_TOPIC };
+            "--application-id", appID,
+            "--bootstrap-servers", cluster.bootstrapServers(),
+            "--input-topics", NON_EXISTING_TOPIC };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
@@ -225,9 +225,9 @@ public abstract class AbstractResetIntegrationTest {
     public void shouldNotAllowToResetWhenInputTopicAbsent() throws Exception {
         appID = testId + "-not-reset-without-input-topic";
         final String[] parameters = new String[] {
-                "--application-id", appID,
-                "--bootstrap-servers", cluster.bootstrapServers(),
-                "--input-topics", NON_EXISTING_TOPIC };
+            "--application-id", appID,
+            "--bootstrap-servers", cluster.bootstrapServers(),
+            "--input-topics", NON_EXISTING_TOPIC };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
@@ -239,9 +239,9 @@ public abstract class AbstractResetIntegrationTest {
     public void shouldNotAllowToResetWhenIntermediateTopicAbsent() throws Exception {
         appID = testId + "-not-reset-without-intermediate-topic";
         final String[] parameters = new String[] {
-                "--application-id", appID,
-                "--bootstrap-servers", cluster.bootstrapServers(),
-                "--input-topics", NON_EXISTING_TOPIC };
+            "--application-id", appID,
+            "--bootstrap-servers", cluster.bootstrapServers(),
+            "--input-topics", NON_EXISTING_TOPIC };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
@@ -257,7 +257,7 @@ public abstract class AbstractResetIntegrationTest {
         // RUN
         KafkaStreams streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
         streams.start();
-        final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(RESULT_CONSUMER_CONFIG, OUTPUT_TOPIC,10);
+        final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(RESULT_CONSUMER_CONFIG, OUTPUT_TOPIC, 10);
 
         streams.close();
         TestUtils.waitForCondition(consumerGroupInactiveCondition, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT,
@@ -274,7 +274,7 @@ public abstract class AbstractResetIntegrationTest {
 
         // RE-RUN
         streams.start();
-        final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(RESULT_CONSUMER_CONFIG, OUTPUT_TOPIC,10);
+        final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(RESULT_CONSUMER_CONFIG, OUTPUT_TOPIC, 10);
         streams.close();
 
         assertThat(resultRerun, equalTo(result));
@@ -395,7 +395,7 @@ public abstract class AbstractResetIntegrationTest {
         // RUN
         KafkaStreams streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
         streams.start();
-        final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(RESULT_CONSUMER_CONFIG, OUTPUT_TOPIC,10);
+        final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(RESULT_CONSUMER_CONFIG, OUTPUT_TOPIC, 10);
 
         streams.close();
         TestUtils.waitForCondition(consumerGroupInactiveCondition, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT,
@@ -443,7 +443,7 @@ public abstract class AbstractResetIntegrationTest {
         // RUN
         KafkaStreams streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
         streams.start();
-        final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived( RESULT_CONSUMER_CONFIG, OUTPUT_TOPIC, 10);
+        final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(RESULT_CONSUMER_CONFIG, OUTPUT_TOPIC, 10);
 
         streams.close();
         TestUtils.waitForCondition(consumerGroupInactiveCondition, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT,
@@ -469,7 +469,7 @@ public abstract class AbstractResetIntegrationTest {
 
         // RE-RUN
         streams.start();
-        final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(RESULT_CONSUMER_CONFIG, OUTPUT_TOPIC,10);
+        final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(RESULT_CONSUMER_CONFIG, OUTPUT_TOPIC, 10);
         streams.close();
 
         assertThat(resultRerun, equalTo(result));
