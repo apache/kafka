@@ -322,6 +322,7 @@ public class StreamTaskTest {
         task.initializeTopology();
 
         task.addRecords(partition1, records(
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 32, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 40, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
@@ -338,63 +339,70 @@ public class StreamTaskTest {
         assertTrue(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
-        assertEquals(7, task.numBuffered());
+        assertEquals(8, task.numBuffered());
         assertEquals(1, source1.numReceived);
+        assertEquals(0, source2.numReceived);
+
+        assertTrue(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(7, task.numBuffered());
+        assertEquals(2, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
         assertFalse(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
         assertEquals(6, task.numBuffered());
-        assertEquals(1, source1.numReceived);
+        assertEquals(2, source1.numReceived);
         assertEquals(1, source2.numReceived);
 
         assertTrue(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
         assertEquals(5, task.numBuffered());
-        assertEquals(2, source1.numReceived);
+        assertEquals(3, source1.numReceived);
         assertEquals(1, source2.numReceived);
 
         assertFalse(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
         assertEquals(4, task.numBuffered());
-        assertEquals(2, source1.numReceived);
+        assertEquals(3, source1.numReceived);
         assertEquals(2, source2.numReceived);
 
         assertTrue(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
         assertEquals(3, task.numBuffered());
-        assertEquals(3, source1.numReceived);
+        assertEquals(4, source1.numReceived);
         assertEquals(2, source2.numReceived);
 
         assertFalse(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
         assertEquals(2, task.numBuffered());
-        assertEquals(3, source1.numReceived);
+        assertEquals(4, source1.numReceived);
         assertEquals(3, source2.numReceived);
 
         assertTrue(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
         assertEquals(1, task.numBuffered());
-        assertEquals(4, source1.numReceived);
+        assertEquals(5, source1.numReceived);
         assertEquals(3, source2.numReceived);
 
         assertFalse(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
         assertEquals(0, task.numBuffered());
-        assertEquals(4, source1.numReceived);
+        assertEquals(5, source1.numReceived);
         assertEquals(4, source2.numReceived);
 
         assertFalse(task.process());
         assertFalse(task.maybePunctuateStreamTime());
 
-        processorStreamTime.supplier.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 20L, 32L, 40L, 60L);
+        processorStreamTime.supplier.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 0L, 20L, 32L, 40L, 60L);
     }
 
     @SuppressWarnings("unchecked")
