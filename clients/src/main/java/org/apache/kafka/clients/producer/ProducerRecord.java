@@ -104,7 +104,7 @@ public class ProducerRecord<K, V> {
      * @param value The record contents
      * @param headers The headers that will be included in the record
      */
-    public ProducerRecord(String topic, Integer partition, K key, V value,  Iterable<Header> headers) {
+    public ProducerRecord(String topic, Integer partition, K key, V value, Iterable<Header> headers) {
         this(topic, partition, null, key, value, headers);
     }
     
