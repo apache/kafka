@@ -46,8 +46,6 @@ public class KTableKTableJoinTest {
 
     final private String topic1 = "topic1";
     final private String topic2 = "topic2";
-    final private String storeName1 = "store-name-1";
-    final private String storeName2 = "store-name-2";
 
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();

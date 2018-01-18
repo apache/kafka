@@ -46,7 +46,7 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
         // if the result KTable is materialized, use the materialized store to return getter value;
         // otherwise rely on the parent getter and apply join on-the-fly
         if (queryableName != null) {
-            return new KTableMaterializedValueGetterSupplier<K, V>(queryableName);
+            return new KTableMaterializedValueGetterSupplier<>(queryableName);
         } else {
             return new KTableValueGetterSupplier<K, V>() {
 
