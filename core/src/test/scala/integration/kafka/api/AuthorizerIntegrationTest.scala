@@ -90,7 +90,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val topicDeleteAcl = Map(deleteTopicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Delete)))
   val topicDescribeConfigsAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, DescribeConfigs)))
   val topicAlterConfigsAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, AlterConfigs)))
-  val topicClusterAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, ClusterAction)))
   val transactionIdWriteAcl = Map(transactionalIdResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)))
   val transactionalIdDescribeAcl = Map(transactionalIdResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)))
 
@@ -498,15 +497,15 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val request = createFetchFollowerRequest
       
     removeAllAcls()
-    val resources = Set(topicResource.resourceType)
+    val resources = Set(topicResource.resourceType, Resource.ClusterResource.resourceType)
     sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false)
 
     val readAcls = topicReadAcl.get(topicResource).get
     addAndVerifyAcls(readAcls, topicResource)
     sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false)
  
-    val clusterAcls = topicClusterAcl.get(topicResource).get
-    addAndVerifyAcls(clusterAcls, topicResource)
+    val clusterAcls = clusterAcl.get(Resource.ClusterResource).get
+    addAndVerifyAcls(clusterAcls, Resource.ClusterResource)
     sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = true)
   }
 

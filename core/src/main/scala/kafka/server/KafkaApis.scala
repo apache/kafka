@@ -488,10 +488,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     val nonExistingTopicResponseData = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData)]()
     val authorizedRequestInfo = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
 
-    for ((topicPartition, partitionData) <- fetchRequest.fetchData.asScala) {
-      val topicResource = new Resource(Topic, topicPartition.topic)
-      if ((fetchRequest.isFromFollower() && !authorize(request.session, ClusterAction, topicResource)) ||  
-          !authorize(request.session, Read, topicResource))
+    if (fetchRequest.isFromFollower() && !authorize(request.session, ClusterAction, Resource.ClusterResource))    
+      for (topicPartition <- fetchRequest.fetchData.asScala.keys) 
+        unauthorizedTopicResponseData += topicPartition -> new FetchResponse.PartitionData(Errors.CLUSTER_AUTHORIZATION_FAILED,
+          FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+          FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
+    else for ((topicPartition, partitionData) <- fetchRequest.fetchData.asScala) {
+      if (!authorize(request.session, Read, new Resource(Topic, topicPartition.topic)))
         unauthorizedTopicResponseData += topicPartition -> new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
           FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
           FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
