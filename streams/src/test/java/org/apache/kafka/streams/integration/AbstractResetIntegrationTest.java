@@ -27,6 +27,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
@@ -48,8 +49,6 @@ import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -69,8 +68,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category({IntegrationTest.class})
 public abstract class AbstractResetIntegrationTest {
-    private final static Logger log = LoggerFactory.getLogger(AbstractResetIntegrationTest.class);
-
     static String testId;
     static EmbeddedKafkaCluster cluster;
     static Map<String, Object> sslConfig = null;
@@ -307,12 +304,11 @@ public abstract class AbstractResetIntegrationTest {
 
         // insert bad record to make sure intermediate user topic gets seekToEnd()
         mockTime.sleep(1);
-        final Properties producerConfig = TestUtils.producerConfig(cluster.bootstrapServers(), LongSerializer.class, StringSerializer.class);
-        producerConfig.putAll(commonClientConfig);
+        KeyValue<Long, String> badMessage = new KeyValue<>(-1L, "badRecord-ShouldBeSkipped");
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             INTERMEDIATE_USER_TOPIC,
-            Collections.singleton(new KeyValue<>(-1L, "badRecord-ShouldBeSkipped")),
-            producerConfig,
+            Collections.singleton(badMessage),
+            PRODUCER_CONFIG,
             mockTime.milliseconds());
 
         // RESET
@@ -332,6 +328,14 @@ public abstract class AbstractResetIntegrationTest {
 
         assertThat(resultRerun, equalTo(result));
         assertThat(resultRerun2, equalTo(result2));
+
+        final Properties props = TestUtils.consumerConfig(cluster.bootstrapServers(), testId + "-result-consumer", LongDeserializer.class, StringDeserializer.class, commonClientConfig);
+        final List<KeyValue<Long, String>> resultIntermediate = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(props, INTERMEDIATE_USER_TOPIC, 21);
+
+        for (int i = 0; i < 10; i++) {
+            assertThat(resultIntermediate.get(i), equalTo(resultIntermediate.get(i + 11)));
+        }
+        assertThat(resultIntermediate.get(10), equalTo(badMessage));
 
         TestUtils.waitForCondition(consumerGroupInactiveCondition, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
@@ -559,8 +563,6 @@ public abstract class AbstractResetIntegrationTest {
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
-
-        log.info("Calling StreamsResetter with parameters {} and configs {}", parameters, cleanUpConfig);
 
         final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
         Assert.assertEquals(0, exitCode);
