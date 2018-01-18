@@ -51,6 +51,4 @@ public class KTableMaterializedValueGetterSupplier<K, V> implements KTableValueG
             return store.get(key);
         }
     }
-
-
 }

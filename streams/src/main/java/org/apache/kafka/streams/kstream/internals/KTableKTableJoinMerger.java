@@ -21,8 +21,6 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-import java.util.ArrayList;
-
 class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private final KTableImpl<K, ?, V> parent1;
