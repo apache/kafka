@@ -30,7 +30,6 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
@@ -294,8 +293,7 @@ class WorkerSourceTask extends WorkerTask {
             String topic = record.topic();
             for (Header header : headers) {
                 String key = header.key();
-                SchemaAndValue schemaAndValue = header.schemaAndValue();
-                byte[] rawHeader = headerConverter.fromConnectHeader(topic, key, schemaAndValue.schema(), schemaAndValue.value());
+                byte[] rawHeader = headerConverter.fromConnectHeader(topic, key, header.schema(), header.value());
                 result.add(key, rawHeader);
             }
         }

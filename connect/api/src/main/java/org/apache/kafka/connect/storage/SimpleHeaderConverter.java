@@ -75,7 +75,7 @@ public class SimpleHeaderConverter implements HeaderConverter {
         if (value == null) {
             return null;
         }
-        return Values.convertToString(value).getBytes(UTF_8);
+        return Values.convertToString(schema, value).getBytes(UTF_8);
     }
 
     @Override

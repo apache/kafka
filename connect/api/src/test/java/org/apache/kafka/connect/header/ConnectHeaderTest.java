@@ -16,48 +16,19 @@
  */
 package org.apache.kafka.connect.header;
 
-import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.data.Time;
-import org.apache.kafka.connect.data.Timestamp;
-import org.apache.kafka.connect.errors.DataException;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Collections;
-import java.util.GregorianCalendar;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.TimeZone;
-
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.fail;
 
 public class ConnectHeaderTest {
-
-    private static final GregorianCalendar EPOCH_PLUS_TEN_THOUSAND_DAYS;
-    private static final GregorianCalendar EPOCH_PLUS_TEN_THOUSAND_MILLIS;
-    private static final double TOLERANCE = 0.00001d;
-
-    static {
-        EPOCH_PLUS_TEN_THOUSAND_DAYS = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
-        EPOCH_PLUS_TEN_THOUSAND_DAYS.setTimeZone(TimeZone.getTimeZone("UTC"));
-        EPOCH_PLUS_TEN_THOUSAND_DAYS.add(Calendar.DATE, 10000);
-
-        EPOCH_PLUS_TEN_THOUSAND_MILLIS = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
-        EPOCH_PLUS_TEN_THOUSAND_MILLIS.setTimeZone(TimeZone.getTimeZone("UTC"));
-        EPOCH_PLUS_TEN_THOUSAND_MILLIS.add(Calendar.MILLISECOND, 10000);
-    }
 
     private String key;
     private ConnectHeader header;
@@ -68,246 +39,70 @@ public class ConnectHeaderTest {
         withString("value");
     }
 
-    protected void withValue(Schema schema, Object value) {
+    protected Header withValue(Schema schema, Object value) {
         header = new ConnectHeader(key, new SchemaAndValue(schema, value));
+        return header;
     }
 
-    protected void withString(String value) {
+    protected Header withString(String value) {
+        return withValue(Schema.STRING_SCHEMA, value);
+    }
+
+    @Test
+    public void shouldAllowNullValues() {
+        withValue(Schema.OPTIONAL_STRING_SCHEMA, null);
+    }
+
+    @Test
+    public void shouldAllowNullSchema() {
+        withValue(null, null);
+        assertNull(header.schema());
+        assertNull(header.value());
+
+        String value = "non-null value";
+        withValue(null, value);
+        assertNull(header.schema());
+        assertSame(value, header.value());
+    }
+
+    @Test
+    public void shouldAllowNonNullValue() {
+        String value = "non-null value";
         withValue(Schema.STRING_SCHEMA, value);
+        assertSame(Schema.STRING_SCHEMA, header.schema());
+        assertEquals(value, header.value());
+
+        withValue(Schema.BOOLEAN_SCHEMA, true);
+        assertSame(Schema.BOOLEAN_SCHEMA, header.schema());
+        assertEquals(true, header.value());
     }
 
     @Test
-    public void shouldConvertFromStringToBoolean() {
-        withString("1");
-        assertEquals(true, header.valueAsBoolean());
-        assertEquals(true, header.valueAsType(Type.BOOLEAN));
-
-        withString("t");
-        assertEquals(true, header.valueAsBoolean());
-        assertEquals(true, header.valueAsType(Type.BOOLEAN));
-
-        withString("true");
-        assertEquals(true, header.valueAsBoolean());
-        assertEquals(true, header.valueAsType(Type.BOOLEAN));
-
-        withString("  trUE  ");
-        assertEquals(true, header.valueAsBoolean());
-        assertEquals(true, header.valueAsType(Type.BOOLEAN));
-
-        withString("  FalSE  ");
-        assertEquals(false, header.valueAsBoolean());
-        assertEquals(false, header.valueAsType(Type.BOOLEAN));
-
-        withString("false");
-        assertEquals(false, header.valueAsBoolean());
-        assertEquals(false, header.valueAsType(Type.BOOLEAN));
-
-        withString("f");
-        assertEquals(false, header.valueAsBoolean());
-        assertEquals(false, header.valueAsType(Type.BOOLEAN));
-
-        withString("10");
-        assertEquals(false, header.valueAsBoolean());
-        assertEquals(false, header.valueAsType(Type.BOOLEAN));
+    public void shouldGetSchemaFromStruct() {
+        Schema schema = SchemaBuilder.struct()
+                                     .field("foo", Schema.STRING_SCHEMA)
+                                     .field("bar", Schema.INT32_SCHEMA)
+                                     .build();
+        Struct value = new Struct(schema);
+        value.put("foo", "value");
+        value.put("bar", 100);
+        withValue(null, value);
+        assertSame(schema, header.schema());
+        assertSame(value, header.value());
     }
 
     @Test
-    public void shouldConvertFromStringToScalar() {
-        withString("10");
-        assertEquals((byte) 10, header.valueAsByte());
-        assertEquals((short) 10, header.valueAsShort());
-        assertEquals(10, header.valueAsInt());
-        assertEquals(10L, header.valueAsLong());
-        assertEquals(10.0f, header.valueAsFloat(), TOLERANCE);
-        assertEquals(10.0d, header.valueAsDouble(), TOLERANCE);
+    public void shouldSatisfyEquals() {
+        String value = "non-null value";
+        Header h1 = withValue(Schema.STRING_SCHEMA, value);
+        assertSame(Schema.STRING_SCHEMA, header.schema());
+        assertEquals(value, header.value());
 
-        assertEquals((byte) 10, header.valueAsType(Type.INT8));
-        assertEquals((short) 10, header.valueAsType(Type.INT16));
-        assertEquals(10, header.valueAsType(Type.INT32));
-        assertEquals(10L, header.valueAsType(Type.INT64));
-        assertEquals(10.0f, (float) header.valueAsType(Type.FLOAT32), TOLERANCE);
-        assertEquals(10.0d, (double) header.valueAsType(Type.FLOAT64), TOLERANCE);
+        Header h2 = withValue(Schema.STRING_SCHEMA, value);
+        assertEquals(h1, h2);
+        assertEquals(h1.hashCode(), h2.hashCode());
 
-        withString("10.9");
-        assertEquals((byte) 10, header.valueAsByte());
-        assertEquals((short) 10, header.valueAsShort());
-        assertEquals(10, header.valueAsInt());
-        assertEquals(10L, header.valueAsLong());
-        assertEquals(10.9f, header.valueAsFloat(), TOLERANCE);
-        assertEquals(10.9d, header.valueAsDouble(), TOLERANCE);
-
-        assertEquals((byte) 10, header.valueAsType(Type.INT8));
-        assertEquals((short) 10, header.valueAsType(Type.INT16));
-        assertEquals(10, header.valueAsType(Type.INT32));
-        assertEquals(10L, header.valueAsType(Type.INT64));
-        assertEquals(10.9f, (float) header.valueAsType(Type.FLOAT32), TOLERANCE);
-        assertEquals(10.9d, (double) header.valueAsType(Type.FLOAT64), TOLERANCE);
-    }
-
-    @Test(expected = DataException.class)
-    public void shouldNotConvertNullValueToByte() {
-        withValue(null, null);
-        header.valueAsByte();
-    }
-
-    @Test(expected = DataException.class)
-    public void shouldNotConvertNullValueToShort() {
-        withValue(null, null);
-        header.valueAsShort();
-    }
-
-    @Test(expected = DataException.class)
-    public void shouldNotConvertNullValueToInt() {
-        withValue(null, null);
-        header.valueAsInt();
-    }
-
-    @Test(expected = DataException.class)
-    public void shouldNotConvertNullValueToLong() {
-        withValue(null, null);
-        header.valueAsLong();
-    }
-
-    @Test(expected = DataException.class)
-    public void shouldNotConvertNullValueToDouble() {
-        withValue(null, null);
-        header.valueAsDouble();
-    }
-
-    @Test(expected = DataException.class)
-    public void shouldNotConvertNullValueToFloat() {
-        withValue(null, null);
-        header.valueAsFloat();
-    }
-
-    @Test(expected = DataException.class)
-    public void shouldNotConvertNullValueToBoolean() {
-        withValue(null, null);
-        header.valueAsBoolean();
-    }
-
-    @Test
-    public void shouldConvertNullValueToEveryTypeReturningObject() {
-        withValue(null, null);
-        for (Type type : Type.values()) {
-            assertNull(header.valueAsType(type));
-        }
-    }
-
-    @Test
-    public void shouldNotConvertListToAnythingButList() {
-        Schema schema = SchemaBuilder.array(Schema.STRING_SCHEMA);
-        List<String> list = new ArrayList<>();
-        assertValueAsTypeOnlyForMatchingOrStringType(schema, list);
-        assertSame(list, header.valueAsList());
-
-        list = Collections.singletonList("value");
-        assertValueAsTypeOnlyForMatchingOrStringType(schema, list);
-        assertSame(list, header.valueAsList());
-    }
-
-    @Test
-    public void shouldNotConvertMapToAnythingButMap() {
-        Schema schema = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA);
-        Map<String, Integer> map = new HashMap<String, Integer>();
-        assertValueAsTypeOnlyForMatchingOrStringType(schema, map);
-        assertSame(map, header.valueAsMap());
-
-        map = Collections.singletonMap("value", 10);
-        assertValueAsTypeOnlyForMatchingOrStringType(schema, map);
-        assertSame(map, header.valueAsMap());
-    }
-
-    @Test
-    public void shouldNotConvertStructToAnythingButStruct() {
-        Schema schema = SchemaBuilder.struct(); // empty
-        Struct struct = new Struct(schema);
-        assertValueAsTypeOnlyForMatchingOrStringType(schema, struct);
-
-        schema = SchemaBuilder.struct().field("foo", Schema.OPTIONAL_BOOLEAN_SCHEMA).field("bar", Schema.STRING_SCHEMA).schema();
-        struct = new Struct(schema).put("foo", true).put("bar", "v");
-        assertValueAsTypeOnlyForMatchingOrStringType(schema, struct);
-        assertSame(struct, header.valueAsStruct());
-    }
-
-    @Test
-    public void shouldConvertToDecimal() {
-        withValue(null, null);
-        assertEquals(null, header.valueAsDecimal(4, null));
-
-        withValue(Schema.INT8_SCHEMA, (byte) 10);
-        assertEquals(10, header.valueAsDecimal(4, null).intValueExact());
-
-        withValue(Schema.INT16_SCHEMA, (short) 10);
-        assertEquals(10, header.valueAsDecimal(4, null).intValueExact());
-
-        withValue(Schema.INT32_SCHEMA, 300);
-        assertEquals(300, header.valueAsDecimal(4, null).intValueExact());
-
-        withValue(Schema.INT64_SCHEMA, 300L);
-        assertEquals(300L, header.valueAsDecimal(4, null).longValueExact());
-
-        withValue(Schema.BOOLEAN_SCHEMA, Boolean.TRUE);
-        assertEquals(1, header.valueAsDecimal(4, null).intValueExact());
-        withValue(Schema.BOOLEAN_SCHEMA, Boolean.FALSE);
-        assertEquals(0, header.valueAsDecimal(4, null).intValueExact());
-
-        BigDecimal value = new BigDecimal("3.038573478e+3");
-        withValue(Schema.STRING_SCHEMA, value);
-        assertEquals(value, header.valueAsDecimal(value.scale(), null));
-    }
-
-    @Test
-    public void shouldConvertToDate() {
-        withValue(null, null);
-        assertEquals(null, header.valueAsDate());
-
-        java.util.Date dateObj = EPOCH_PLUS_TEN_THOUSAND_DAYS.getTime();
-        int days = Date.fromLogical(Date.SCHEMA, dateObj);
-        assertEquals(10000, days);
-        withValue(Schema.INT32_SCHEMA, days);
-        assertEquals(dateObj, header.valueAsDate());
-    }
-
-    @Test
-    public void shouldConvertToTime() {
-        withValue(null, null);
-        assertEquals(null, header.valueAsTime());
-
-        java.util.Date dateObj = EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime();
-        int millis = Time.fromLogical(Time.SCHEMA, dateObj);
-        assertEquals(10000, millis);
-        withValue(Schema.INT32_SCHEMA, millis);
-        assertEquals(dateObj, header.valueAsTime());
-    }
-
-    @Test
-    public void shouldConvertToTimestamp() {
-        withValue(null, null);
-        assertEquals(null, header.valueAsTimestamp());
-
-        java.util.Date dateObj = EPOCH_PLUS_TEN_THOUSAND_MILLIS.getTime();
-        long millis = Timestamp.fromLogical(Timestamp.SCHEMA, dateObj);
-        assertEquals(10000, millis);
-        withValue(Schema.INT32_SCHEMA, millis);
-        assertEquals(dateObj, header.valueAsTimestamp());
-    }
-
-    protected void assertValueAsTypeOnlyForMatchingOrStringType(Schema schema, Object value) {
-        withValue(schema, value);
-        for (Type type : Type.values()) {
-            if (type == schema.type()) {
-                assertSame(value, header.valueAsType(type));
-            } else if (type == Type.STRING) {
-                assertEquals(value.toString(), header.valueAsType(type));
-            } else {
-                try {
-                    header.valueAsType(type);
-                    fail("Should not have allowed converting a header " + schema.type() + " value to " + type);
-                } catch (DataException e) {
-                    // expected
-                }
-            }
-        }
+        Header h3 = withValue(Schema.INT8_SCHEMA, 100);
+        assertNotEquals(h3, h2);
     }
 }

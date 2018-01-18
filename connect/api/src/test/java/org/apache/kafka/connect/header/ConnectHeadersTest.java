@@ -25,6 +25,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.header.Headers.HeaderTransform;
 import org.junit.Before;
@@ -418,13 +419,13 @@ public class ConnectHeadersTest {
         int days = Date.fromLogical(Date.SCHEMA, dateObj);
         headers.addDate(key, dateObj);
         Header header = headers.lastWithName(key);
-        assertEquals(days, header.valueAsInt());
-        assertSame(dateObj, header.valueAsDate());
+        assertEquals(days, (int) Values.convertToInteger(header.schema(), header.value()));
+        assertSame(dateObj, Values.convertToDate(header.schema(), header.value()));
 
         headers.addInt(other, days);
         header = headers.lastWithName(other);
-        assertEquals(days, header.valueAsInt());
-        assertEquals(dateObj, header.valueAsDate());
+        assertEquals(days, (int) Values.convertToInteger(header.schema(), header.value()));
+        assertEquals(dateObj, Values.convertToDate(header.schema(), header.value()));
     }
 
     @Test
@@ -433,13 +434,13 @@ public class ConnectHeadersTest {
         long millis = Time.fromLogical(Time.SCHEMA, dateObj);
         headers.addTime(key, dateObj);
         Header header = headers.lastWithName(key);
-        assertEquals(millis, header.valueAsLong());
-        assertSame(dateObj, header.valueAsTime());
+        assertEquals(millis, (long) Values.convertToLong(header.schema(), header.value()));
+        assertSame(dateObj, Values.convertToTime(header.schema(), header.value()));
 
         headers.addLong(other, millis);
         header = headers.lastWithName(other);
-        assertEquals(millis, header.valueAsLong());
-        assertEquals(dateObj, header.valueAsTime());
+        assertEquals(millis, (long) Values.convertToLong(header.schema(), header.value()));
+        assertEquals(dateObj, Values.convertToTime(header.schema(), header.value()));
     }
 
     @Test
@@ -448,13 +449,13 @@ public class ConnectHeadersTest {
         long millis = Timestamp.fromLogical(Timestamp.SCHEMA, dateObj);
         headers.addTimestamp(key, dateObj);
         Header header = headers.lastWithName(key);
-        assertEquals(millis, header.valueAsLong());
-        assertSame(dateObj, header.valueAsTimestamp());
+        assertEquals(millis, (long) Values.convertToLong(header.schema(), header.value()));
+        assertSame(dateObj, Values.convertToTimestamp(header.schema(), header.value()));
 
         headers.addLong(other, millis);
         header = headers.lastWithName(other);
-        assertEquals(millis, header.valueAsLong());
-        assertEquals(dateObj, header.valueAsTimestamp());
+        assertEquals(millis, (long) Values.convertToLong(header.schema(), header.value()));
+        assertEquals(dateObj, Values.convertToTimestamp(header.schema(), header.value()));
     }
 
     @Test
@@ -462,11 +463,12 @@ public class ConnectHeadersTest {
         BigDecimal value = new BigDecimal("3.038573478e+3");
         headers.addDecimal(key, value);
         Header header = headers.lastWithName(key);
-        assertEquals(value.doubleValue(), header.valueAsDouble(), 0.00001d);
-        assertEquals(value, header.valueAsDecimal(value.scale(), null));
+        assertEquals(value.doubleValue(), Values.convertToDouble(header.schema(), header.value()), 0.00001d);
+        assertEquals(value, Values.convertToDecimal(header.schema(), header.value(), value.scale()));
 
         value = value.setScale(3, RoundingMode.DOWN);
-        assertEquals(value, header.valueAsDecimal(value.scale(), RoundingMode.DOWN));
+        BigDecimal decimal = Values.convertToDecimal(header.schema(), header.value(), value.scale());
+        assertEquals(value, decimal.setScale(value.scale(), RoundingMode.DOWN));
     }
 
     @Test
@@ -540,6 +542,6 @@ public class ConnectHeadersTest {
     protected void assertHeader(Header header, String key, Schema schema, Object value) {
         assertNotNull(header);
         assertSame(schema, header.schema());
-        assertSame(value, header.valueAsObject());
+        assertSame(value, header.value());
     }
 }

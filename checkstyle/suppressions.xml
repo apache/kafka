@@ -107,6 +107,8 @@
 
     <suppress checks="JavaNCSS"
               files="KafkaConfigBackingStore.java"/>
+    <suppress checks="JavaNCSS"
+              files="Values.java"/>
 
     <suppress checks="NPathComplexity"
               files="ConnectRecord.java"/>
@@ -122,6 +124,8 @@
               files="ConnectHeader.java"/>
     <suppress checks="NPathComplexity"
               files="ConnectHeaders.java"/>
+    <suppress checks="MethodLength"
+              files="Values.java"/>
 
     <!-- connect tests-->
     <suppress checks="ClassDataAbstractionCoupling"

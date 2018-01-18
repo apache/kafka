@@ -17,7 +17,9 @@
 package org.apache.kafka.connect.source;
 
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.junit.Before;
 import org.junit.Test;
@@ -121,6 +123,7 @@ public class SourceRecordTest {
         assertTrue(record.headers().isEmpty());
         record.headers().addInt("intHeader", 100);
         assertEquals(1, record.headers().size());
-        assertEquals(100, record.headers().lastWithName("intHeader").valueAsInt());
+        Header header = record.headers().lastWithName("intHeader");
+        assertEquals(100, (int) Values.convertToInteger(header.schema(), header.value()));
     }
 }

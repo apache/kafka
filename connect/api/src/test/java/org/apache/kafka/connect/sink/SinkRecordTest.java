@@ -18,7 +18,9 @@ package org.apache.kafka.connect.sink;
 
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.junit.Before;
 import org.junit.Test;
@@ -120,6 +122,7 @@ public class SinkRecordTest {
         assertTrue(record.headers().isEmpty());
         record.headers().addInt("intHeader", 100);
         assertEquals(1, record.headers().size());
-        assertEquals(100, record.headers().lastWithName("intHeader").valueAsInt());
+        Header header = record.headers().lastWithName("intHeader");
+        assertEquals(100, (int) Values.convertToInteger(header.schema(), header.value()));
     }
 }

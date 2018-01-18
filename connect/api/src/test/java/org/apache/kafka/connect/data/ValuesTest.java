@@ -72,13 +72,13 @@ public class ValuesTest {
 
     @Test
     public void shouldConvertNullValue() {
-        assertRoundTrip(Schema.STRING_SCHEMA, null);
-        assertRoundTrip(Schema.OPTIONAL_STRING_SCHEMA, null);
+        assertRoundTrip(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA, null);
+        assertRoundTrip(Schema.OPTIONAL_STRING_SCHEMA, Schema.STRING_SCHEMA, null);
     }
 
     @Test
     public void shouldConvertSimpleString() {
-        assertRoundTrip(Schema.STRING_SCHEMA, "simple");
+        assertRoundTrip(Schema.STRING_SCHEMA,  "simple");
     }
 
     @Test
@@ -88,13 +88,13 @@ public class ValuesTest {
 
     @Test
     public void shouldConvertStringWithQuotesAndOtherDelimiterCharacters() {
-        assertRoundTrip(Schema.STRING_SCHEMA, "three\"blind\\\"mice");
-        assertRoundTrip(Schema.STRING_SCHEMA, "string with delimiters: <>?,./\\=+-!@#$%^&*(){}[]|;':");
+        assertRoundTrip(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA, "three\"blind\\\"mice");
+        assertRoundTrip(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA, "string with delimiters: <>?,./\\=+-!@#$%^&*(){}[]|;':");
     }
 
     @Test
     public void shouldConvertMapWithStringKeys() {
-        assertRoundTrip(STRING_MAP_SCHEMA, STRING_MAP);
+        assertRoundTrip(STRING_MAP_SCHEMA, STRING_MAP_SCHEMA, STRING_MAP);
     }
 
     @Test
@@ -113,7 +113,7 @@ public class ValuesTest {
 
     @Test
     public void shouldConvertMapWithStringKeysAndShortValues() {
-        assertRoundTrip(STRING_SHORT_MAP_SCHEMA, STRING_SHORT_MAP);
+        assertRoundTrip(STRING_SHORT_MAP_SCHEMA, STRING_SHORT_MAP_SCHEMA, STRING_SHORT_MAP);
     }
 
     @Test
@@ -132,7 +132,7 @@ public class ValuesTest {
 
     @Test
     public void shouldConvertMapWithStringKeysAndIntegerValues() {
-        assertRoundTrip(STRING_INT_MAP_SCHEMA, STRING_INT_MAP);
+        assertRoundTrip(STRING_INT_MAP_SCHEMA, STRING_INT_MAP_SCHEMA, STRING_INT_MAP);
     }
 
     @Test
@@ -151,12 +151,12 @@ public class ValuesTest {
 
     @Test
     public void shouldConvertListWithStringValues() {
-        assertRoundTrip(STRING_LIST_SCHEMA, STRING_LIST);
+        assertRoundTrip(STRING_LIST_SCHEMA, STRING_LIST_SCHEMA, STRING_LIST);
     }
 
     @Test
     public void shouldConvertListWithIntegerValues() {
-        assertRoundTrip(INT_LIST_SCHEMA, INT_LIST);
+        assertRoundTrip(INT_LIST_SCHEMA, INT_LIST_SCHEMA, INT_LIST);
     }
 
     @Test
@@ -268,10 +268,14 @@ public class ValuesTest {
         }
     }
 
+    protected SchemaAndValue roundTrip(Schema desiredSchema, String currentValue) {
+        return roundTrip(desiredSchema, new SchemaAndValue(Schema.STRING_SCHEMA, currentValue));
+    }
 
-    protected SchemaAndValue roundTrip(Schema desiredSchema, Object input) {
-        String serialized = Values.convertToString(input);
-        if (input != null) {
+
+    protected SchemaAndValue roundTrip(Schema desiredSchema, SchemaAndValue input) {
+        String serialized = Values.convertToString(input.schema(), input.value());
+        if (input != null && input.value() != null) {
             assertNotNull(serialized);
         }
         if (desiredSchema == null) {
@@ -282,37 +286,37 @@ public class ValuesTest {
         Schema newSchema = null;
         switch (desiredSchema.type()) {
             case STRING:
-                newValue = Values.convertToString(serialized);
+                newValue = Values.convertToString(Schema.STRING_SCHEMA, serialized);
                 break;
             case INT8:
-                newValue = Values.convertToByte(serialized);
+                newValue = Values.convertToByte(Schema.STRING_SCHEMA, serialized);
                 break;
             case INT16:
-                newValue = Values.convertToShort(serialized);
+                newValue = Values.convertToShort(Schema.STRING_SCHEMA, serialized);
                 break;
             case INT32:
-                newValue = Values.convertToInteger(serialized);
+                newValue = Values.convertToInteger(Schema.STRING_SCHEMA, serialized);
                 break;
             case INT64:
-                newValue = Values.convertToLong(serialized);
+                newValue = Values.convertToLong(Schema.STRING_SCHEMA, serialized);
                 break;
             case FLOAT32:
-                newValue = Values.convertToFloat(serialized);
+                newValue = Values.convertToFloat(Schema.STRING_SCHEMA, serialized);
                 break;
             case FLOAT64:
-                newValue = Values.convertToDouble(serialized);
+                newValue = Values.convertToDouble(Schema.STRING_SCHEMA, serialized);
                 break;
             case BOOLEAN:
-                newValue = Values.convertToBoolean(serialized);
+                newValue = Values.convertToBoolean(Schema.STRING_SCHEMA, serialized);
                 break;
             case ARRAY:
-                newValue = Values.convertToList(serialized);
+                newValue = Values.convertToList(Schema.STRING_SCHEMA, serialized);
                 break;
             case MAP:
-                newValue = Values.convertToMap(serialized);
+                newValue = Values.convertToMap(Schema.STRING_SCHEMA, serialized);
                 break;
             case STRUCT:
-                newValue = Values.convertToStruct(serialized);
+                newValue = Values.convertToStruct(Schema.STRING_SCHEMA, serialized);
                 break;
             case BYTES:
                 fail("unexpected schema type");
@@ -322,8 +326,12 @@ public class ValuesTest {
         return new SchemaAndValue(newSchema, newValue);
     }
 
-    protected void assertRoundTrip(Schema schema, Object value) {
-        SchemaAndValue result = roundTrip(schema, value);
+    protected void assertRoundTrip(Schema schema, String value) {
+        assertRoundTrip(schema, Schema.STRING_SCHEMA, value);
+    }
+
+    protected void assertRoundTrip(Schema schema, Schema currentSchema, Object value) {
+        SchemaAndValue result = roundTrip(schema, new SchemaAndValue(currentSchema, value));
 
         if (value == null) {
             assertNull(result.schema());
@@ -332,7 +340,7 @@ public class ValuesTest {
             assertEquals(value, result.value());
             assertEquals(schema, result.schema());
 
-            SchemaAndValue result2 = roundTrip(result.schema(), result.value());
+            SchemaAndValue result2 = roundTrip(result.schema(), result);
             assertEquals(schema, result2.schema());
             assertEquals(value, result2.value());
             assertEquals(result, result2);

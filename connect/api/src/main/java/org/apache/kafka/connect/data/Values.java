@@ -30,11 +30,13 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.text.StringCharacterIterator;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.TimeZone;
 
 /**
  * Utility for converting values into a different form.
@@ -43,6 +45,7 @@ public class Values {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Values.class);
 
+    private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
     private static final SchemaAndValue NULL_SCHEMA_AND_VALUE = new SchemaAndValue(null, null);
     private static final SchemaAndValue TRUE_SCHEMA_AND_VALUE = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, Boolean.TRUE);
     private static final SchemaAndValue FALSE_SCHEMA_AND_VALUE = new SchemaAndValue(Schema.BOOLEAN_SCHEMA, Boolean.FALSE);
@@ -71,159 +74,196 @@ public class Values {
 
     /**
      * Convert the specified value to an {@link Type#BOOLEAN} value.
+     * Not supplying a schema may limit the ability to convert to the desired type.
      *
-     * @param value the value to be converted; may be null
+     * @param schema the schema for the value; may be null
+     * @param value  the value to be converted; may be null
      * @return the representation as a boolean, or null if the supplied value was null
      * @throws DataException if the value could not be converted to a boolean
      */
-    public static Boolean convertToBoolean(Object value) throws DataException {
-        return (Boolean) convertTo(Schema.OPTIONAL_BOOLEAN_SCHEMA, value);
+    public static Boolean convertToBoolean(Schema schema, Object value) throws DataException {
+        return (Boolean) convertTo(Schema.OPTIONAL_BOOLEAN_SCHEMA, schema, value);
     }
 
     /**
      * Convert the specified value to an {@link Type#INT8} byte value.
+     * Not supplying a schema may limit the ability to convert to the desired type.
      *
-     * @param value the value to be converted; may be null
+     * @param schema the schema for the value; may be null
+     * @param value  the value to be converted; may be null
      * @return the representation as a byte, or null if the supplied value was null
      * @throws DataException if the value could not be converted to a byte
      */
-    public static Byte convertToByte(Object value) throws DataException {
-        return (Byte) convertTo(Schema.OPTIONAL_INT8_SCHEMA, value);
+    public static Byte convertToByte(Schema schema, Object value) throws DataException {
+        return (Byte) convertTo(Schema.OPTIONAL_INT8_SCHEMA, schema, value);
     }
 
     /**
      * Convert the specified value to an {@link Type#INT16} short value.
+     * Not supplying a schema may limit the ability to convert to the desired type.
      *
-     * @param value the value to be converted; may be null
+     * @param schema the schema for the value; may be null
+     * @param value  the value to be converted; may be null
      * @return the representation as a short, or null if the supplied value was null
      * @throws DataException if the value could not be converted to a short
      */
-    public static Short convertToShort(Object value) throws DataException {
-        return (Short) convertTo(Schema.OPTIONAL_INT16_SCHEMA, value);
+    public static Short convertToShort(Schema schema, Object value) throws DataException {
+        return (Short) convertTo(Schema.OPTIONAL_INT16_SCHEMA, schema, value);
     }
 
     /**
      * Convert the specified value to an {@link Type#INT32} int value.
+     * Not supplying a schema may limit the ability to convert to the desired type.
      *
-     * @param value the value to be converted; may be null
+     * @param schema the schema for the value; may be null
+     * @param value  the value to be converted; may be null
      * @return the representation as an integer, or null if the supplied value was null
      * @throws DataException if the value could not be converted to an integer
      */
-    public static Integer convertToInteger(Object value) throws DataException {
-        return (Integer) convertTo(Schema.OPTIONAL_INT32_SCHEMA, value);
+    public static Integer convertToInteger(Schema schema, Object value) throws DataException {
+        return (Integer) convertTo(Schema.OPTIONAL_INT32_SCHEMA, schema, value);
     }
 
     /**
      * Convert the specified value to an {@link Type#INT64} long value.
+     * Not supplying a schema may limit the ability to convert to the desired type.
      *
-     * @param value the value to be converted; may be null
+     * @param schema the schema for the value; may be null
+     * @param value  the value to be converted; may be null
      * @return the representation as a long, or null if the supplied value was null
      * @throws DataException if the value could not be converted to a long
      */
-    public static Long convertToLong(Object value) throws DataException {
-        return (Long) convertTo(Schema.OPTIONAL_INT64_SCHEMA, value);
+    public static Long convertToLong(Schema schema, Object value) throws DataException {
+        return (Long) convertTo(Schema.OPTIONAL_INT64_SCHEMA, schema, value);
     }
 
     /**
      * Convert the specified value to an {@link Type#FLOAT32} float value.
+     * Not supplying a schema may limit the ability to convert to the desired type.
      *
-     * @param value the value to be converted; may be null
+     * @param schema the schema for the value; may be null
+     * @param value  the value to be converted; may be null
      * @return the representation as a float, or null if the supplied value was null
      * @throws DataException if the value could not be converted to a float
      */
-    public static Float convertToFloat(Object value) throws DataException {
-        return (Float) convertTo(Schema.OPTIONAL_FLOAT32_SCHEMA, value);
+    public static Float convertToFloat(Schema schema, Object value) throws DataException {
+        return (Float) convertTo(Schema.OPTIONAL_FLOAT32_SCHEMA, schema, value);
     }
 
     /**
      * Convert the specified value to an {@link Type#FLOAT64} double value.
+     * Not supplying a schema may limit the ability to convert to the desired type.
      *
-     * @param value the value to be converted; may be null
+     * @param schema the schema for the value; may be null
+     * @param value  the value to be converted; may be null
      * @return the representation as a double, or null if the supplied value was null
      * @throws DataException if the value could not be converted to a double
      */
-    public static Double convertToDouble(Object value) throws DataException {
-        return (Double) convertTo(Schema.OPTIONAL_FLOAT64_SCHEMA, value);
+    public static Double convertToDouble(Schema schema, Object value) throws DataException {
+        return (Double) convertTo(Schema.OPTIONAL_FLOAT64_SCHEMA, schema, value);
     }
 
     /**
      * Convert the specified value to an {@link Type#STRING} value.
+     * Not supplying a schema may limit the ability to convert to the desired type.
      *
-     * @param value the value to be converted; may be null
+     * @param schema the schema for the value; may be null
+     * @param value  the value to be converted; may be null
      * @return the representation as a string, or null if the supplied value was null
      */
-    public static String convertToString(Object value) {
-        return (String) convertTo(Schema.OPTIONAL_STRING_SCHEMA, value);
+    public static String convertToString(Schema schema, Object value) {
+        return (String) convertTo(Schema.OPTIONAL_STRING_SCHEMA, schema, value);
     }
 
     /**
-     * Convert the specified value to an {@link Type#STRING} value.
+     * Convert the specified value to an {@link Type#ARRAY} value.
+     * Not supplying a schema may limit the ability to convert to the desired type.
      *
-     * @param value the value to be converted; may be null
+     * @param schema the schema for the value; may be null
+     * @param value  the value to be converted; may be null
      * @return the representation as a list, or null if the supplied value was null
+     * @throws DataException if the value cannot be converted to a list value
      */
-    public static List<?> convertToList(Object value) {
-        return (List<?>) convertTo(ARRAY_SELECTOR_SCHEMA, value);
+    public static List<?> convertToList(Schema schema, Object value) {
+        return (List<?>) convertTo(ARRAY_SELECTOR_SCHEMA, schema, value);
     }
 
     /**
-     * Convert the specified value to an {@link Type#STRING} value.
+     * Convert the specified value to an {@link Type#MAP} value.
+     * Not supplying a schema may limit the ability to convert to the desired type.
      *
-     * @param value the value to be converted; may be null
-     * @return the representation as a list, or null if the supplied value was null
+     * @param schema the schema for the value; may be null
+     * @param value  the value to be converted; may be null
+     * @return the representation as a map, or null if the supplied value was null
+     * @throws DataException if the value cannot be converted to a map value
      */
-    public static Map<?, ?> convertToMap(Object value) {
-        return (Map<?, ?>) convertTo(MAP_SELECTOR_SCHEMA, value);
+    public static Map<?, ?> convertToMap(Schema schema, Object value) {
+        return (Map<?, ?>) convertTo(MAP_SELECTOR_SCHEMA, schema, value);
     }
 
     /**
-     * Convert the specified value to an {@link Type#STRING} value.
+     * Convert the specified value to an {@link Type#STRUCT} value.
+     * Not supplying a schema may limit the ability to convert to the desired type.
      *
-     * @param value the value to be converted; may be null
-     * @return the representation as a list, or null if the supplied value was null
+     * @param schema the schema for the value; may be null
+     * @param value  the value to be converted; may be null
+     * @return the representation as a struct, or null if the supplied value was null
+     * @throws DataException if the value cannot be converted to a struct
      */
-    public static Struct convertToStruct(Object value) {
-        return (Struct) convertTo(STRUCT_SELECTOR_SCHEMA, value);
+    public static Struct convertToStruct(Schema schema, Object value) {
+        return (Struct) convertTo(STRUCT_SELECTOR_SCHEMA, schema, value);
     }
 
     /**
      * Convert the specified value to an {@link Time#SCHEMA time} value.
+     * Not supplying a schema may limit the ability to convert to the desired type.
      *
-     * @param value the value to be converted; may be null
+     * @param schema the schema for the value; may be null
+     * @param value  the value to be converted; may be null
      * @return the representation as a time, or null if the supplied value was null
+     * @throws DataException if the value cannot be converted to a time value
      */
-    public static java.util.Date convertToTime(Object value) {
-        return (java.util.Date) convertTo(Time.SCHEMA, value);
+    public static java.util.Date convertToTime(Schema schema, Object value) {
+        return (java.util.Date) convertTo(Time.SCHEMA, schema, value);
     }
 
     /**
      * Convert the specified value to an {@link Date#SCHEMA date} value.
+     * Not supplying a schema may limit the ability to convert to the desired type.
      *
-     * @param value the value to be converted; may be null
+     * @param schema the schema for the value; may be null
+     * @param value  the value to be converted; may be null
      * @return the representation as a date, or null if the supplied value was null
+     * @throws DataException if the value cannot be converted to a date value
      */
-    public static java.util.Date convertToDate(Object value) {
-        return (java.util.Date) convertTo(Date.SCHEMA, value);
+    public static java.util.Date convertToDate(Schema schema, Object value) {
+        return (java.util.Date) convertTo(Date.SCHEMA, schema, value);
     }
 
     /**
      * Convert the specified value to an {@link Timestamp#SCHEMA timestamp} value.
+     * Not supplying a schema may limit the ability to convert to the desired type.
      *
-     * @param value the value to be converted; may be null
+     * @param schema the schema for the value; may be null
+     * @param value  the value to be converted; may be null
      * @return the representation as a timestamp, or null if the supplied value was null
+     * @throws DataException if the value cannot be converted to a timestamp value
      */
-    public static java.util.Date convertToTimestamp(Object value) {
-        return (java.util.Date) convertTo(Timestamp.SCHEMA, value);
+    public static java.util.Date convertToTimestamp(Schema schema, Object value) {
+        return (java.util.Date) convertTo(Timestamp.SCHEMA, schema, value);
     }
 
     /**
-     * Convert the specified value to an {@link Timestamp#SCHEMA timestamp} value.
+     * Convert the specified value to an {@link Decimal decimal} value.
+     * Not supplying a schema may limit the ability to convert to the desired type.
      *
-     * @param value the value to be converted; may be null
-     * @return the representation as a timestamp, or null if the supplied value was null
+     * @param schema the schema for the value; may be null
+     * @param value  the value to be converted; may be null
+     * @return the representation as a decimal, or null if the supplied value was null
+     * @throws DataException if the value cannot be converted to a decimal value
      */
-    public static BigDecimal convertToDecimal(Object value, int scale) {
-        return (BigDecimal) convertTo(Decimal.schema(scale), value);
+    public static BigDecimal convertToDecimal(Schema schema, Object value, int scale) {
+        return (BigDecimal) convertTo(Decimal.schema(scale), schema, value);
     }
 
     /**
@@ -299,7 +339,7 @@ public class Values {
      *
      * @param value the string form of the value
      * @return the schema and value; never null, but whose schema and value may be null
-     * @see #convertToString(Object)
+     * @see #convertToString
      */
     public static SchemaAndValue parseString(String value) {
         if (value == null) {
@@ -315,11 +355,12 @@ public class Values {
     /**
      * Convert the value to the desired type.
      *
-     * @param toSchema the schema for the desired type; may not be null
+     * @param toSchema   the schema for the desired type; may not be null
+     * @param fromSchema the schema for the supplied value; may be null if not known
      * @return the converted value; never null
      * @throws DataException if the value could not be converted to the desired type
      */
-    protected static Object convertTo(Schema toSchema, Object value) throws DataException {
+    protected static Object convertTo(Schema toSchema, Schema fromSchema, Object value) throws DataException {
         if (value == null) {
             if (toSchema.isOptional()) {
                 return null;
@@ -365,17 +406,17 @@ public class Values {
                         return parsed.value();
                     }
                 }
-                return asLong(value, toSchema, null) == 1L ? Boolean.TRUE : Boolean.FALSE;
+                return asLong(value, fromSchema, null) == 1L ? Boolean.TRUE : Boolean.FALSE;
             case INT8:
                 if (value instanceof Byte) {
                     return value;
                 }
-                return (byte) asLong(value, toSchema, null);
+                return (byte) asLong(value, fromSchema, null);
             case INT16:
                 if (value instanceof Short) {
                     return value;
                 }
-                return (short) asLong(value, toSchema, null);
+                return (short) asLong(value, fromSchema, null);
             case INT32:
                 if (Date.LOGICAL_NAME.equals(toSchema.name())) {
                     if (value instanceof String) {
@@ -383,8 +424,21 @@ public class Values {
                         value = parsed.value();
                     }
                     if (value instanceof java.util.Date) {
-                        return new SchemaAndValue(toSchema, value);
+                        if (fromSchema != null) {
+                            String fromSchemaName = fromSchema.name();
+                            if (Date.LOGICAL_NAME.equals(fromSchemaName)) {
+                                return value;
+                            }
+                            if (Timestamp.LOGICAL_NAME.equals(fromSchemaName)) {
+                                // Just get the number of days from this timestamp
+                                long millis = ((java.util.Date) value).getTime();
+                                int days = (int) (millis / MILLIS_PER_DAY); // truncates
+                                return Date.toLogical(toSchema, days);
+                            }
+                        }
                     }
+                    long numeric = asLong(value, fromSchema, null);
+                    return Date.toLogical(toSchema, (int) numeric);
                 }
                 if (Time.LOGICAL_NAME.equals(toSchema.name())) {
                     if (value instanceof String) {
@@ -392,13 +446,29 @@ public class Values {
                         value = parsed.value();
                     }
                     if (value instanceof java.util.Date) {
-                        return new SchemaAndValue(toSchema, value);
+                        if (fromSchema != null) {
+                            String fromSchemaName = fromSchema.name();
+                            if (Time.LOGICAL_NAME.equals(fromSchemaName)) {
+                                return value;
+                            }
+                            if (Timestamp.LOGICAL_NAME.equals(fromSchemaName)) {
+                                // Just get the time portion of this timestamp
+                                Calendar calendar = Calendar.getInstance(UTC);
+                                calendar.setTime((java.util.Date) value);
+                                calendar.set(Calendar.YEAR, 1970);
+                                calendar.set(Calendar.MONTH, 1);
+                                calendar.set(Calendar.DAY_OF_MONTH, 1);
+                                return Time.toLogical(toSchema, (int) calendar.getTimeInMillis());
+                            }
+                        }
                     }
+                    long numeric = asLong(value, fromSchema, null);
+                    return Time.toLogical(toSchema, (int) numeric);
                 }
                 if (value instanceof Integer) {
                     return value;
                 }
-                return (int) asLong(value, toSchema, null);
+                return (int) asLong(value, fromSchema, null);
             case INT64:
                 if (Timestamp.LOGICAL_NAME.equals(toSchema.name())) {
                     if (value instanceof String) {
@@ -406,23 +476,40 @@ public class Values {
                         value = parsed.value();
                     }
                     if (value instanceof java.util.Date) {
-                        return new SchemaAndValue(toSchema, value);
+                        java.util.Date date = (java.util.Date) value;
+                        if (fromSchema != null) {
+                            String fromSchemaName = fromSchema.name();
+                            if (Date.LOGICAL_NAME.equals(fromSchemaName)) {
+                                int days = Date.fromLogical(fromSchema, date);
+                                long millis = days * MILLIS_PER_DAY;
+                                return Timestamp.toLogical(toSchema, millis);
+                            }
+                            if (Time.LOGICAL_NAME.equals(fromSchemaName)) {
+                                long millis = Time.fromLogical(fromSchema, date);
+                                return Timestamp.toLogical(toSchema, millis);
+                            }
+                            if (Timestamp.LOGICAL_NAME.equals(fromSchemaName)) {
+                                return value;
+                            }
+                        }
                     }
+                    long numeric = asLong(value, fromSchema, null);
+                    return Timestamp.toLogical(toSchema, numeric);
                 }
                 if (value instanceof Long) {
                     return value;
                 }
-                return asLong(value, toSchema, null);
+                return asLong(value, fromSchema, null);
             case FLOAT32:
                 if (value instanceof Float) {
                     return value;
                 }
-                return (float) asDouble(value, toSchema, null);
+                return (float) asDouble(value, fromSchema, null);
             case FLOAT64:
                 if (value instanceof Double) {
                     return value;
                 }
-                return asDouble(value, toSchema, null);
+                return asDouble(value, fromSchema, null);
             case ARRAY:
                 if (value instanceof String) {
                     SchemaAndValue schemaAndValue = parseString(value.toString());
@@ -453,13 +540,13 @@ public class Values {
     /**
      * Convert the specified value to the desired scalar value type.
      *
-     * @param value  the value to be converted; may not be null
-     * @param schema the schema for the desired type; may not be null
-     * @param error  any previous error that should be included in an exception message; may be null
+     * @param value      the value to be converted; may not be null
+     * @param fromSchema the schema for the current value type; may not be null
+     * @param error      any previous error that should be included in an exception message; may be null
      * @return the long value after conversion; never null
      * @throws DataException if the value could not be converted to a long
      */
-    protected static long asLong(Object value, Schema schema, Throwable error) {
+    protected static long asLong(Object value, Schema fromSchema, Throwable error) {
         try {
             if (value instanceof Number) {
                 Number number = (Number) value;
@@ -472,28 +559,29 @@ public class Values {
             error = e;
             // fall through
         }
-        if (value instanceof java.util.Date) {
-            if (schema == null) {
-                return ((java.util.Date) value).getTime();
+        if (fromSchema != null) {
+            String schemaName = fromSchema.name();
+            if (value instanceof java.util.Date) {
+                if (Date.LOGICAL_NAME.equals(schemaName)) {
+                    return Date.fromLogical(fromSchema, (java.util.Date) value);
+                }
+                if (Time.LOGICAL_NAME.equals(schemaName)) {
+                    return Time.fromLogical(fromSchema, (java.util.Date) value);
+                }
+                if (Timestamp.LOGICAL_NAME.equals(schemaName)) {
+                    return Timestamp.fromLogical(fromSchema, (java.util.Date) value);
+                }
             }
-            if (Date.LOGICAL_NAME.equals(schema.name())) {
-                return Date.fromLogical(schema, (java.util.Date) value);
-            }
-            if (Time.LOGICAL_NAME.equals(schema.name())) {
-                return Time.fromLogical(schema, (java.util.Date) value);
-            }
-            if (Timestamp.LOGICAL_NAME.equals(schema.name())) {
-                return Timestamp.fromLogical(schema, (java.util.Date) value);
-            }
+            throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to " + fromSchema, error);
         }
-        throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to " + schema, error);
+        throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to a number", error);
     }
 
     /**
      * Convert the specified value with the desired floating point type.
      *
      * @param value  the value to be converted; may not be null
-     * @param schema the schema for the desired type; may not be null
+     * @param schema the schema for the current value type; may not be null
      * @param error  any previous error that should be included in an exception message; may be null
      * @return the double value after conversion; never null
      * @throws DataException if the value could not be converted to a double
