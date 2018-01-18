@@ -425,7 +425,7 @@ class Log(@volatile var dir: File,
   private def recoverLog(): Long = {
     // if we have the clean shutdown marker, skip recovery
     if (!hasCleanShutdownFile) {
-      // okay we need to actually recovery this log
+      // okay we need to actually recover this log
       val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
       while (unflushed.hasNext) {
         val segment = unflushed.next
