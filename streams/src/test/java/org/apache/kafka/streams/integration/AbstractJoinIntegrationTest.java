@@ -118,6 +118,7 @@ public abstract class AbstractJoinIntegrationTest {
     final ValueJoiner<String, String, String> valueJoiner = new ValueJoiner<String, String, String>() {
         @Override
         public String apply(final String value1, final String value2) {
+            System.out.println("DEBUG -> JOINING " + value1 + " and " + value2);
             return value1 + "-" + value2;
         }
     };
@@ -132,7 +133,8 @@ public abstract class AbstractJoinIntegrationTest {
     public static void setupConfigsAndUtils() {
         PRODUCER_CONFIG.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         PRODUCER_CONFIG.put(ProducerConfig.ACKS_CONFIG, "all");
-        PRODUCER_CONFIG.put(ProducerConfig.RETRIES_CONFIG, 0);
+        PRODUCER_CONFIG.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+        PRODUCER_CONFIG.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
         PRODUCER_CONFIG.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
         PRODUCER_CONFIG.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
@@ -153,8 +155,9 @@ public abstract class AbstractJoinIntegrationTest {
     void prepareEnvironment() throws InterruptedException {
         CLUSTER.createTopics(INPUT_TOPIC_LEFT, INPUT_TOPIC_RIGHT, OUTPUT_TOPIC);
 
-        if (!cacheEnabled)
+        if (!cacheEnabled) {
             STREAMS_CONFIG.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        }
 
         STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath());
 
@@ -167,12 +170,12 @@ public abstract class AbstractJoinIntegrationTest {
     }
 
     private void checkResult(final String outputTopic, final List<String> expectedResult) throws InterruptedException {
-        final List<String> result = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(RESULT_CONSUMER_CONFIG, outputTopic, expectedResult.size(), 30 * 1000L);
+        final List<String> result = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(RESULT_CONSUMER_CONFIG, outputTopic, expectedResult.size());
         assertThat(result, is(expectedResult));
     }
 
     private void checkResult(final String outputTopic, final String expectedFinalResult, final int expectedTotalNumRecords) throws InterruptedException {
-        final List<String> result = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(RESULT_CONSUMER_CONFIG, outputTopic, expectedTotalNumRecords, 30 * 1000L);
+        final List<String> result = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(RESULT_CONSUMER_CONFIG, outputTopic, expectedTotalNumRecords);
         assertThat(result.get(result.size() - 1), is(expectedFinalResult));
     }
 
@@ -183,7 +186,6 @@ public abstract class AbstractJoinIntegrationTest {
     void runTest(final List<List<String>> expectedResult) throws Exception {
         runTest(expectedResult, null);
     }
-
 
     /*
      * Runs the actual test. Checks the result after each input record to ensure fixed processing order.
