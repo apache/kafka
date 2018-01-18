@@ -1314,7 +1314,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def addAndVerifyAcls(acls: Set[Acl], resource: Resource) = {
     servers.head.apis.authorizer.get.addAcls(acls, resource)
-    TestUtils.waitAndVerifyAcls(servers.head.apis.authorizer.get.getAcls(resource), servers.head.apis.authorizer.get, resource)
+    TestUtils.waitAndVerifyAcls(servers.head.apis.authorizer.get.getAcls(resource) ++ acls, servers.head.apis.authorizer.get, resource)
   }
 
   private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
