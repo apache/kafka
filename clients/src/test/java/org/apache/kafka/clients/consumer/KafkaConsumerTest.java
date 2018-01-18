@@ -33,6 +33,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -200,27 +201,33 @@ public class KafkaConsumerTest {
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testSubscriptionOnNullTopic() {
-        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
-        String nullTopic = null;
-
-        try {
-            consumer.subscribe(singletonList(nullTopic));
-        } finally {
-            consumer.close();
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+            consumer.subscribe(singletonList((String) null));
+            fail("Expected an InvalidTopicException due to invalid topic name.");
+        } catch (InvalidTopicException e) {
+            // OK
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testSubscriptionOnEmptyTopic() {
-        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
-        String emptyTopic = "  ";
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+            consumer.subscribe(singletonList("  "));
+            fail("Expected an InvalidTopicException due to invalid topic name.");
+        } catch (InvalidTopicException e) {
+            // OK
+        }
+    }
 
-        try {
-            consumer.subscribe(singletonList(emptyTopic));
-        } finally {
-            consumer.close();
+    @Test
+    public void testSubscriptionOnMultipleInvalidTopicNames() {
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+            consumer.subscribe(Arrays.asList("  ", null, null, ".", "top!c", topic, TestUtils.randomString(250)));
+            fail("Expected an InvalidTopicException due to invalid topic name.");
+        } catch (InvalidTopicException e) {
+            // OK
         }
     }
 
@@ -282,23 +289,40 @@ public class KafkaConsumerTest {
         consumer.close();
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testAssignOnNullTopicInPartition() {
-        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
-        try {
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
             consumer.assign(Arrays.asList(new TopicPartition(null, 0)));
-        } finally {
-            consumer.close();
+            fail("Expected an InvalidTopicException due to invalid topic name.");
+        } catch (InvalidTopicException e) {
+            // OK
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testAssignOnEmptyTopicInPartition() {
-        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
-        try {
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
             consumer.assign(Arrays.asList(new TopicPartition("  ", 0)));
-        } finally {
-            consumer.close();
+            fail("Expected an InvalidTopicException due to invalid topic name.");
+        } catch (InvalidTopicException e) {
+            // OK
+        }
+    }
+
+    @Test
+    public void testAssignOnMultipleInvalidTopicNames() {
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer()) {
+            consumer.assign(Arrays.asList(
+                    new TopicPartition("  ", 0),
+                    new TopicPartition(null, 0),
+                    new TopicPartition(null, 1),
+                    new TopicPartition(".", 0),
+                    new TopicPartition("top!c", 0),
+                    new TopicPartition(topic, 0), // a valid topic name
+                    new TopicPartition(TestUtils.randomString(250), 0)));
+            fail("Expected an InvalidTopicException due to invalid topic name.");
+        } catch (InvalidTopicException e) {
+            // OK
         }
     }
 
