@@ -177,6 +177,7 @@ public class KTableFilterTest {
 
         driver.process(topic1, "A", 2);
         driver.process(topic1, "B", 2);
+        driver.flushState();
 
         assertEquals(2, (int) getter2.get("A"));
         assertEquals(2, (int) getter2.get("B"));
@@ -187,6 +188,7 @@ public class KTableFilterTest {
         assertEquals(1, (int) getter3.get("C"));
 
         driver.process(topic1, "A", 3);
+        driver.flushState();
 
         assertNull(getter2.get("A"));
         assertEquals(2, (int) getter2.get("B"));
@@ -198,6 +200,7 @@ public class KTableFilterTest {
 
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
+        driver.flushState();
 
         assertNull(getter2.get("A"));
         assertNull(getter2.get("B"));
