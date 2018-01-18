@@ -131,10 +131,10 @@ public abstract class AbstractStream<K> {
 
     static <K, V, VR> InternalValueTransformerWithKeySupplier<K, V, VR> toInternalValueTransformerSupplier(final ValueTransformerSupplier<V, VR> valueTransformerSupplier) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
-        final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
         return new InternalValueTransformerWithKeySupplier<K, V, VR>() {
             @Override
             public InternalValueTransformerWithKey<K, V, VR> get() {
+                final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
                 return new InternalValueTransformerWithKey<K, V, VR>() {
                     @Override
                     public VR punctuate(final long timestamp) {
@@ -162,10 +162,10 @@ public abstract class AbstractStream<K> {
 
     static <K, V, VR> InternalValueTransformerWithKeySupplier<K, V, VR> toInternalValueTransformerSupplier(final ValueTransformerWithKeySupplier<K, V, VR> valueTransformerWithKeySupplier) {
         Objects.requireNonNull(valueTransformerWithKeySupplier, "valueTransformerSupplier can't be null");
-        final ValueTransformerWithKey<K, V, VR> valueTransformerWithKey = valueTransformerWithKeySupplier.get();
         return new InternalValueTransformerWithKeySupplier<K, V, VR>() {
             @Override
             public InternalValueTransformerWithKey<K, V, VR> get() {
+                final ValueTransformerWithKey<K, V, VR> valueTransformerWithKey = valueTransformerWithKeySupplier.get();
                 return new InternalValueTransformerWithKey<K, V, VR>() {
                     @Override
                     public VR punctuate(final long timestamp) {

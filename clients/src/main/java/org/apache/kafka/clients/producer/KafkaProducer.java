@@ -267,7 +267,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @param configs   The producer configs
      *
      */
-    public KafkaProducer(Map<String, Object> configs) {
+    public KafkaProducer(final Map<String, Object> configs) {
         this(new ProducerConfig(configs), null, null, null, null);
     }
 
@@ -286,7 +286,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public KafkaProducer(Map<String, Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         this(new ProducerConfig(ProducerConfig.addSerializerToConfig(configs, keySerializer, valueSerializer)),
-                keySerializer, valueSerializer, null, null);
+            keySerializer,
+            valueSerializer,
+            null,
+            null);
     }
 
     /**
