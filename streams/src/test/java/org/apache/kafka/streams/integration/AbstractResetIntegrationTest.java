@@ -68,7 +68,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category({IntegrationTest.class})
-abstract class AbstractResetIntegrationTest {
+public abstract class AbstractResetIntegrationTest {
     private final static Logger log = LoggerFactory.getLogger(AbstractResetIntegrationTest.class);
 
     static String testId;
@@ -94,15 +94,6 @@ abstract class AbstractResetIntegrationTest {
     private Properties commonClientConfig;
 
     private void prepareEnvironment() {
-        commonClientConfig = new Properties();
-        commonClientConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-
-        if (sslConfig != null) {
-            commonClientConfig.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, sslConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
-            commonClientConfig.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
-            commonClientConfig.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
-        }
-
         if (adminClient == null) {
             adminClient = AdminClient.create(commonClientConfig);
         }
@@ -118,6 +109,15 @@ abstract class AbstractResetIntegrationTest {
     }
 
     private void prepareConfigs() {
+        commonClientConfig = new Properties();
+        commonClientConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+
+        if (sslConfig != null) {
+            commonClientConfig.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, sslConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+            commonClientConfig.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
+            commonClientConfig.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
+        }
+
         PRODUCER_CONFIG.put(ProducerConfig.ACKS_CONFIG, "all");
         PRODUCER_CONFIG.put(ProducerConfig.RETRIES_CONFIG, 0);
         PRODUCER_CONFIG.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
@@ -269,7 +269,7 @@ abstract class AbstractResetIntegrationTest {
         // RESET
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
         streams.cleanUp();
-        cleanGlobal(commonClientConfig, false, null, null);
+        cleanGlobal(false, null, null);
         TestUtils.waitForCondition(consumerGroupInactiveCondition, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
 
@@ -284,7 +284,7 @@ abstract class AbstractResetIntegrationTest {
 
         TestUtils.waitForCondition(consumerGroupInactiveCondition, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
-        cleanGlobal(commonClientConfig, false, null, null);
+        cleanGlobal(false, null, null);
     }
 
     void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
@@ -318,7 +318,7 @@ abstract class AbstractResetIntegrationTest {
         // RESET
         streams = new KafkaStreams(setupTopologyWithIntermediateUserTopic(OUTPUT_TOPIC_2_RERUN), STREAMS_CONFIG);
         streams.cleanUp();
-        cleanGlobal(commonClientConfig, true, null, null);
+        cleanGlobal(true, null, null);
         TestUtils.waitForCondition(consumerGroupInactiveCondition, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
 
@@ -335,7 +335,7 @@ abstract class AbstractResetIntegrationTest {
 
         TestUtils.waitForCondition(consumerGroupInactiveCondition, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
-        cleanGlobal(commonClientConfig, true, null, null);
+        cleanGlobal(true, null, null);
 
         cluster.deleteTopicAndWait(INTERMEDIATE_USER_TOPIC);
     }
@@ -363,7 +363,7 @@ abstract class AbstractResetIntegrationTest {
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
         streams.cleanUp();
 
-        cleanGlobal(commonClientConfig, false, "--from-file", resetFile.getAbsolutePath());
+        cleanGlobal(false, "--from-file", resetFile.getAbsolutePath());
         TestUtils.waitForCondition(consumerGroupInactiveCondition, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
 
@@ -381,7 +381,7 @@ abstract class AbstractResetIntegrationTest {
 
         TestUtils.waitForCondition(consumerGroupInactiveCondition, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
-        cleanGlobal(commonClientConfig, false, null, null);
+        cleanGlobal(false, null, null);
     }
 
     void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
@@ -412,7 +412,7 @@ abstract class AbstractResetIntegrationTest {
         final Calendar calendar = Calendar.getInstance();
         calendar.add(Calendar.DATE, -1);
 
-        cleanGlobal(commonClientConfig, false, "--to-datetime", format.format(calendar.getTime()));
+        cleanGlobal(false, "--to-datetime", format.format(calendar.getTime()));
         TestUtils.waitForCondition(consumerGroupInactiveCondition, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
 
@@ -429,11 +429,12 @@ abstract class AbstractResetIntegrationTest {
 
         TestUtils.waitForCondition(consumerGroupInactiveCondition, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
-        cleanGlobal(commonClientConfig, false, null, null);
+        cleanGlobal(false, null, null);
     }
 
     void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-from-duration");
+        appID = testId + "-from-duration";
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
         KafkaStreams streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
@@ -453,7 +454,7 @@ abstract class AbstractResetIntegrationTest {
 
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
         streams.cleanUp();
-        cleanGlobal(commonClientConfig, false, "--by-duration", "PT1M");
+        cleanGlobal(false, "--by-duration", "PT1M");
 
         TestUtils.waitForCondition(consumerGroupInactiveCondition, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
@@ -471,7 +472,7 @@ abstract class AbstractResetIntegrationTest {
 
         TestUtils.waitForCondition(consumerGroupInactiveCondition, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
-        cleanGlobal(commonClientConfig, false, null, null);
+        cleanGlobal(false, null, null);
     }
 
     private Topology setupTopologyWithIntermediateUserTopic(final String outputTopic2) {
@@ -523,8 +524,7 @@ abstract class AbstractResetIntegrationTest {
         return builder.build();
     }
 
-    private void cleanGlobal(final Properties sslConfig,
-                             final boolean withIntermediateTopics,
+    private void cleanGlobal(final boolean withIntermediateTopics,
                              final String resetScenario,
                              final String resetScenarioArg) throws Exception {
         // leaving --zookeeper arg here to ensure tool works if users add it
@@ -536,12 +536,12 @@ abstract class AbstractResetIntegrationTest {
             parameterList.add("--intermediate-topics");
             parameterList.add(INTERMEDIATE_USER_TOPIC);
         }
-        if (!sslConfig.isEmpty()) {
+        if (sslConfig != null) {
             final File configFile = TestUtils.tempFile();
             final BufferedWriter writer = new BufferedWriter(new FileWriter(configFile));
             writer.write(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG + "=SSL\n");
             writer.write(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG + "=" + sslConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG) + "\n");
-            writer.write(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG + "=" + sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG) + "\n");
+            writer.write(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG + "=" + ((Password) sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value() + "\n");
             writer.close();
 
             parameterList.add("--config-file");
