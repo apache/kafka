@@ -23,7 +23,6 @@ import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -60,11 +59,6 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         }
 
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
-    }
-
-    @AfterClass
-    public static void afterClass() {
-        afterClassCleanup();
     }
 
     @Before

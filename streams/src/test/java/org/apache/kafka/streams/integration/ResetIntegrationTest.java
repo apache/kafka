@@ -21,7 +21,6 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
 
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -48,11 +47,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // very long sleep times
         brokerProps.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
-    }
-
-    @AfterClass
-    public static void afterClass() {
-        afterClassCleanup();
     }
 
     @Before

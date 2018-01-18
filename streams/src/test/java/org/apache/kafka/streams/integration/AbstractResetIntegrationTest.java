@@ -45,6 +45,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.experimental.categories.Category;
@@ -71,12 +72,13 @@ public abstract class AbstractResetIntegrationTest {
     static String testId;
     static EmbeddedKafkaCluster cluster;
     static Map<String, Object> sslConfig = null;
+    private static KafkaStreams streams;
     private static MockTime mockTime;
     private static AdminClient adminClient = null;
     private static KafkaAdminClient kafkaAdminClient = null;
 
-
-    static void afterClassCleanup() {
+    @AfterClass
+    public static void afterClassCleanup() {
         if (adminClient != null) {
             adminClient.close();
             adminClient = null;
@@ -174,30 +176,28 @@ public abstract class AbstractResetIntegrationTest {
     }
 
     void cleanupTest() throws Exception {
+        if (streams != null) {
+            streams.close(30, TimeUnit.SECONDS);
+        }
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
     }
 
     private void add10InputElements() throws java.util.concurrent.ExecutionException, InterruptedException {
-        mockTime.sleep(10);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "aaa")), PRODUCER_CONFIG, mockTime.milliseconds());
-        mockTime.sleep(10);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "bbb")), PRODUCER_CONFIG, mockTime.milliseconds());
-        mockTime.sleep(10);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "ccc")), PRODUCER_CONFIG, mockTime.milliseconds());
-        mockTime.sleep(10);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "ddd")), PRODUCER_CONFIG, mockTime.milliseconds());
-        mockTime.sleep(10);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "eee")), PRODUCER_CONFIG, mockTime.milliseconds());
-        mockTime.sleep(10);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "fff")), PRODUCER_CONFIG, mockTime.milliseconds());
-        mockTime.sleep(1);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "ggg")), PRODUCER_CONFIG, mockTime.milliseconds());
-        mockTime.sleep(1);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "hhh")), PRODUCER_CONFIG, mockTime.milliseconds());
-        mockTime.sleep(1);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "iii")), PRODUCER_CONFIG, mockTime.milliseconds());
-        mockTime.sleep(1);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "jjj")), PRODUCER_CONFIG, mockTime.milliseconds());
+        List<KeyValue<Long, String>> records = Arrays.asList(KeyValue.pair(0L, "aaa"),
+                KeyValue.pair(1L, "bbb"),
+                KeyValue.pair(0L, "ccc"),
+                KeyValue.pair(1L, "ddd"),
+                KeyValue.pair(0L, "eee"),
+                KeyValue.pair(1L, "fff"),
+                KeyValue.pair(0L, "ggg"),
+                KeyValue.pair(1L, "hhh"),
+                KeyValue.pair(0L, "iii"),
+                KeyValue.pair(1L, "jjj"));
+
+        for (KeyValue<Long, String> record : records) {
+            mockTime.sleep(10);
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(record), PRODUCER_CONFIG, mockTime.milliseconds());
+        }
     }
 
     void shouldNotAllowToResetWhileStreamsIsRunning() throws Exception {
@@ -213,7 +213,7 @@ public abstract class AbstractResetIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
-        KafkaStreams streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
         streams.start();
 
         final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
@@ -255,7 +255,7 @@ public abstract class AbstractResetIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
-        KafkaStreams streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
         streams.start();
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(RESULT_CONSUMER_CONFIG, OUTPUT_TOPIC, 10);
 
@@ -291,7 +291,7 @@ public abstract class AbstractResetIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
-        KafkaStreams streams = new KafkaStreams(setupTopologyWithIntermediateUserTopic(OUTPUT_TOPIC_2), STREAMS_CONFIG);
+        streams = new KafkaStreams(setupTopologyWithIntermediateUserTopic(OUTPUT_TOPIC_2), STREAMS_CONFIG);
         streams.start();
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(RESULT_CONSUMER_CONFIG, OUTPUT_TOPIC, 10);
         // receive only first values to make sure intermediate user topic is not consumed completely
@@ -349,7 +349,7 @@ public abstract class AbstractResetIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
-        KafkaStreams streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
         streams.start();
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(RESULT_CONSUMER_CONFIG, OUTPUT_TOPIC, 10);
 
@@ -393,7 +393,7 @@ public abstract class AbstractResetIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
-        KafkaStreams streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
         streams.start();
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(RESULT_CONSUMER_CONFIG, OUTPUT_TOPIC, 10);
 
@@ -441,7 +441,7 @@ public abstract class AbstractResetIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
-        KafkaStreams streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), STREAMS_CONFIG);
         streams.start();
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(RESULT_CONSUMER_CONFIG, OUTPUT_TOPIC, 10);
 
