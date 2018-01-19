@@ -249,6 +249,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def createFetchRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
     partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100))
+    requests.FetchRequest.Builder.forConsumer(100, Int.MaxValue, partitionMap).build()
+  }
+
+  private def createFetchFollowerRequest = {
+    val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
+    partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100))
     val version = ApiKeys.FETCH.latestVersion
     requests.FetchRequest.Builder.forReplica(version, 5000, 100, Int.MaxValue, partitionMap).build()
   }
@@ -483,6 +489,24 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Create)), Resource.ClusterResource)
     sendRecords(numRecords, topicPartition)
+  }
+
+  @Test
+  def testFetchFollowerRequest() {
+    val key = ApiKeys.FETCH
+    val request = createFetchFollowerRequest
+
+    removeAllAcls()
+    val resources = Set(topicResource.resourceType, Resource.ClusterResource.resourceType)
+    sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false, isAuthorizedTopicDescribe = false)
+
+    val readAcls = topicReadAcl.get(topicResource).get
+    addAndVerifyAcls(readAcls, topicResource)
+    sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false, isAuthorizedTopicDescribe = true)
+
+    val clusterAcls = clusterAcl.get(Resource.ClusterResource).get
+    addAndVerifyAcls(clusterAcls, Resource.ClusterResource)
+    sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = true, isAuthorizedTopicDescribe = true)
   }
 
   @Test(expected = classOf[GroupAuthorizationException])

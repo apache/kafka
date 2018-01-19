@@ -481,12 +481,24 @@ class KafkaApis(val requestChannel: RequestChannel,
     val versionId = request.header.apiVersion
     val clientId = request.header.clientId
 
-    val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = fetchRequest.fetchData.asScala.toSeq.partition {
+    val (clusterAuthorizedTopics, clusterUnauthorizedTopics) =
+      if (fetchRequest.isFromFollower() && !authorize(request.session, ClusterAction, Resource.ClusterResource)) {
+        (Seq.empty, fetchRequest.fetchData.asScala.toSeq)
+      } else {
+        (fetchRequest.fetchData.asScala.toSeq, Seq.empty)
+      }
+
+    val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = clusterAuthorizedTopics.partition {
       case (tp, _) => authorize(request.session, Describe, new Resource(Topic, tp.topic)) && metadataCache.contains(tp.topic)
     }
 
     val (authorizedRequestInfo, unauthorizedForReadRequestInfo) = existingAndAuthorizedForDescribeTopics.partition {
       case (tp, _) => authorize(request.session, Read, new Resource(Topic, tp.topic))
+    }
+
+    val clusterUnauthorizedPartitionData = clusterUnauthorizedTopics.map {
+      case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.CLUSTER_AUTHORIZATION_FAILED,
+        FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY))
     }
 
     val nonExistingOrUnauthorizedForDescribePartitionData = nonExistingOrUnauthorizedForDescribeTopics.map {
@@ -539,7 +551,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
 
-      val mergedPartitionData = partitionData ++ unauthorizedForReadPartitionData ++ nonExistingOrUnauthorizedForDescribePartitionData
+      val mergedPartitionData =
+        partitionData ++ unauthorizedForReadPartitionData ++ nonExistingOrUnauthorizedForDescribePartitionData ++ clusterUnauthorizedPartitionData
 
       val fetchedPartitionData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]()
 
