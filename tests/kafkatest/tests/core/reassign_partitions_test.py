@@ -13,10 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import parametrize
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 
+from kafkatest.services.kafka import config_property
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
@@ -24,7 +25,7 @@ from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
 import random
-
+import time
 
 class ReassignPartitionsTest(ProduceConsumeValidateTest):
     """
@@ -38,13 +39,25 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         super(ReassignPartitionsTest, self).__init__(test_context=test_context)
 
         self.topic = "test_topic"
-        self.zk = ZookeeperService(test_context, num_nodes=1)
-        self.kafka = KafkaService(test_context, num_nodes=4, zk=self.zk, topics={self.topic: {
-                                                                    "partitions": 20,
-                                                                    "replication-factor": 3,
-                                                                    'configs': {"min.insync.replicas": 2}}
-                                                                })
         self.num_partitions = 20
+        self.zk = ZookeeperService(test_context, num_nodes=1)
+        # We set the min.insync.replicas to match the replication factor because
+        # it makes the test more stringent. If min.isr = 2 and
+        # replication.factor=3, then the test would tolerate the failure of
+        # reassignment for upto one replica per partition, which is not
+        # desirable for this test in particular.
+        self.kafka = KafkaService(test_context, num_nodes=4, zk=self.zk,
+                                  server_prop_overides=[
+                                      [config_property.LOG_ROLL_TIME_MS, "5000"],
+                                      [config_property.LOG_RETENTION_CHECK_INTERVAL_MS, "5000"]
+                                  ],
+                                  topics={self.topic: {
+                                      "partitions": self.num_partitions,
+                                      "replication-factor": 3,
+                                      'configs': {
+                                          "min.insync.replicas": 3,
+                                      }}
+                                  })
         self.timeout_sec = 60
         self.producer_throughput = 1000
         self.num_producers = 1
@@ -86,14 +99,42 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
             self.clean_bounce_some_brokers()
 
         # Wait until finished or timeout
-        wait_until(lambda: self.kafka.verify_reassign_partitions(partition_info), timeout_sec=self.timeout_sec, backoff_sec=.5)
+        wait_until(lambda: self.kafka.verify_reassign_partitions(partition_info),
+                   timeout_sec=self.timeout_sec, backoff_sec=.5)
 
-    @cluster(num_nodes=7)
-    @parametrize(security_protocol="PLAINTEXT", bounce_brokers=True)
-    @parametrize(security_protocol="PLAINTEXT", bounce_brokers=False)
-    def test_reassign_partitions(self, bounce_brokers, security_protocol):
+    def move_start_offset(self):
+        """We move the start offset of the topic by writing really old messages
+        and waiting for them to be cleaned up.
+        """
+        producer = VerifiableProducer(self.test_context, 1, self.kafka, self.topic,
+                                      throughput=-1, enable_idempotence=True,
+                                      create_time=1000)
+        producer.start()
+        wait_until(lambda: producer.num_acked > 0,
+                   timeout_sec=30,
+                   err_msg="Failed to get an acknowledgement for %ds" % 30)
+        # Wait 8 seconds to let the topic be seeded with messages that will
+        # be deleted. The 8 seconds is important, since we should get 2 deleted
+        # segments in this period based on the configured log roll time and the
+        # retention check interval.
+        time.sleep(8)
+        producer.stop()
+        self.logger.info("Seeded topic with %d messages which will be deleted" %\
+                         producer.num_acked)
+        # Since the configured check interval is 5 seconds, we wait another
+        # 6 seconds to ensure that at least one more cleaning so that the last
+        # segment is deleted. An altenate to using timeouts is to poll each
+        # partition untill the log start offset matches the end offset. The
+        # latter is more robust.
+        time.sleep(6)
+
+    @cluster(num_nodes=8)
+    @matrix(bounce_brokers=[True, False],
+            reassign_from_offset_zero=[True, False])
+    def test_reassign_partitions(self, bounce_brokers, reassign_from_offset_zero):
         """Reassign partitions tests.
-        Setup: 1 zk, 3 kafka nodes, 1 topic with partitions=3, replication-factor=3, and min.insync.replicas=2
+        Setup: 1 zk, 4 kafka nodes, 1 topic with partitions=20, replication-factor=3,
+        and min.insync.replicas=3
 
             - Produce messages in the background
             - Consume messages in the background
@@ -101,13 +142,19 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
             - If bounce_brokers is True, also bounce a few brokers while partition re-assignment is in progress
             - When done reassigning partitions and bouncing brokers, stop producing, and finish consuming
             - Validate that every acked message was consumed
-        """
-
-        self.kafka.security_protocol = security_protocol
-        self.kafka.interbroker_security_protocol = security_protocol
-        new_consumer = False if  self.kafka.security_protocol == "PLAINTEXT" else True
-        self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic, throughput=self.producer_throughput)
-        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, new_consumer=new_consumer, consumer_timeout_ms=60000, message_validator=is_int)
+            """
         self.kafka.start()
+        if not reassign_from_offset_zero:
+            self.move_start_offset()
 
+        self.producer = VerifiableProducer(self.test_context, self.num_producers,
+                                           self.kafka, self.topic,
+                                           throughput=self.producer_throughput,
+                                           enable_idempotence=True)
+        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers,
+                                        self.kafka, self.topic,
+                                        consumer_timeout_ms=60000,
+                                        message_validator=is_int)
+
+        self.enable_idempotence=True
         self.run_produce_consume_validate(core_test_action=lambda: self.reassign_partitions(bounce_brokers))

@@ -38,7 +38,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
     try {
       zkUtils.zkPath.resetNamespaceCheckedState
       zkUtils.createPersistentPath(path)
-      fail("Failed to throw ConfigException for missing zookeeper root node")
+      fail("Failed to throw ConfigException for missing ZooKeeper root node")
     } catch {
       case _: ConfigException =>
     }
@@ -62,7 +62,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
     try {
       zkUtils.zkPath.resetNamespaceCheckedState
       zkUtils.makeSurePersistentPathExists(path)
-      fail("Failed to throw ConfigException for missing zookeeper root node")
+      fail("Failed to throw ConfigException for missing ZooKeeper root node")
     } catch {
       case _: ConfigException =>
     }
@@ -86,7 +86,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
     try {
       zkUtils.zkPath.resetNamespaceCheckedState
       zkUtils.createEphemeralPathExpectConflict(path, "somedata")
-      fail("Failed to throw ConfigException for missing zookeeper root node")
+      fail("Failed to throw ConfigException for missing ZooKeeper root node")
     } catch {
       case _: ConfigException =>
     }
@@ -111,7 +111,7 @@ class ZKPathTest extends ZooKeeperTestHarness {
     try {
       zkUtils.zkPath.resetNamespaceCheckedState
       zkUtils.createSequentialPersistentPath(path)
-      fail("Failed to throw ConfigException for missing zookeeper root node")
+      fail("Failed to throw ConfigException for missing ZooKeeper root node")
     } catch {
       case _: ConfigException =>
     }

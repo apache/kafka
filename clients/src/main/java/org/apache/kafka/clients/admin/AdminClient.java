@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -30,10 +31,10 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
- * <p>
+ *
  * The minimum broker version required is 0.10.0.0. Methods with stricter requirements will specify the minimum broker
  * version required.
- * <p>
+ *
  * This client was introduced in 0.11.0.0 and the API is still evolving. We will try to evolve the API in a compatible
  * manner, but we reserve the right to make breaking changes in minor releases, if necessary. We will update the
  * {@code InterfaceStability} annotation and this notice once the API is considered stable.
@@ -104,7 +105,7 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * This operation is not transactional so it may succeed for some topics while fail for others.
      *
-     * It may take several seconds after this method returns
+     * It may take several seconds after {@code CreateTopicsResult} returns
      * success for all the brokers to become aware that the topics have been created.
      * During this time, {@link AdminClient#listTopics()} and {@link AdminClient#describeTopics(Collection)}
      * may not return information about the new topics.
@@ -137,7 +138,7 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * This operation is not transactional so it may succeed for some topics while fail for others.
      *
-     * It may take several seconds after AdminClient#deleteTopics returns
+     * It may take several seconds after the {@code DeleteTopicsResult} returns
      * success for all the brokers to become aware that the topics are gone.
      * During this time, AdminClient#listTopics and AdminClient#describeTopics
      * may continue to return information about the deleted topics.
@@ -247,7 +248,7 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract DescribeAclsResult describeAcls(AclBindingFilter filter, DescribeAclsOptions options);
 
     /**
-     * This is a convenience method for #{@link AdminClient#createAcls(Collection<AclBinding>, CreateAclsOptions)} with
+     * This is a convenience method for #{@link AdminClient#createAcls(Collection, CreateAclsOptions)} with
      * default options. See the overload for more details.
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
@@ -276,7 +277,7 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options);
 
     /**
-     * This is a convenience method for #{@link AdminClient#deleteAcls(Collection<AclBinding>, DeleteAclsOptions)} with default options.
+     * This is a convenience method for #{@link AdminClient#deleteAcls(Collection, DeleteAclsOptions)} with default options.
      * See the overload for more details.
      *
      * This operation is supported by brokers with version 0.11.0.0 or higher.
@@ -508,6 +509,32 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions,
                                                             CreatePartitionsOptions options);
 
+    /**
+     * Delete records whose offset is smaller than the given offset of the corresponding partition.
+     *
+     * This is a convenience method for {@link #deleteRecords(Map, DeleteRecordsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * This operation is supported by brokers with version 0.11.0.0 or higher.
+     *
+     * @param recordsToDelete       The topic partitions and related offsets from which records deletion starts.
+     * @return                      The DeleteRecordsResult.
+     */
+    public DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete) {
+        return deleteRecords(recordsToDelete, new DeleteRecordsOptions());
+    }
+
+    /**
+     * Delete records whose offset is smaller than the given offset of the corresponding partition.
+     *
+     * This operation is supported by brokers with version 0.11.0.0 or higher.
+     *
+     * @param recordsToDelete       The topic partitions and related offsets from which records deletion starts.
+     * @param options               The options to use when deleting records.
+     * @return                      The DeleteRecordsResult.
+     */
+    public abstract DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete,
+                                                      DeleteRecordsOptions options);
     /**
      * Describe some group IDs in the cluster.
      *

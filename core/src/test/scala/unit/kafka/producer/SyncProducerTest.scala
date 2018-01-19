@@ -20,7 +20,6 @@ package kafka.producer
 import java.net.SocketTimeoutException
 import java.util.Properties
 
-import kafka.admin.AdminUtils
 import kafka.api.{ProducerRequest, ProducerResponseStatus}
 import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
@@ -97,7 +96,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
     val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
-    TestUtils.createTopic(zkUtils, "test", numPartitions = 1, replicationFactor = 1, servers = servers)
+    createTopic("test", numPartitions = 1, replicationFactor = 1)
 
     val message1 = new Message(new Array[Byte](configs.head.messageMaxBytes + 1))
     val messageSet1 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message1)
@@ -125,8 +124,8 @@ class SyncProducerTest extends KafkaServerTestHarness {
     props.put("request.required.acks", "0")
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
-    AdminUtils.createTopic(zkUtils, "test", 1, 1)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, "test", 0)
+    adminZkClient.createTopic("test", 1, 1)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "test", 0)
 
     // This message will be dropped silently since message size too large.
     producer.send(produceRequest("test", 0,
@@ -167,10 +166,10 @@ class SyncProducerTest extends KafkaServerTestHarness {
     }
 
     // #2 - test that we get correct offsets when partition is owned by broker
-    AdminUtils.createTopic(zkUtils, "topic1", 1, 1)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, "topic1", 0)
-    AdminUtils.createTopic(zkUtils, "topic3", 1, 1)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, "topic3", 0)
+    adminZkClient.createTopic("topic1", 1, 1)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "topic1", 0)
+    adminZkClient.createTopic("topic3", 1, 1)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "topic3", 0)
 
     val response2 = producer.send(request)
     assertNotNull(response2)
@@ -243,8 +242,8 @@ class SyncProducerTest extends KafkaServerTestHarness {
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val topicProps = new Properties()
     topicProps.put("min.insync.replicas","2")
-    AdminUtils.createTopic(zkUtils, topicName, 1, 1,topicProps)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topicName, 0)
+    adminZkClient.createTopic(topicName, 1, 1,topicProps)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topicName, 0)
 
     val response = producer.send(produceRequest(topicName, 0,
       new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)),-1))

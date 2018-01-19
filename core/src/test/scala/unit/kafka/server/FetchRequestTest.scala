@@ -16,19 +16,19 @@
   */
 package kafka.server
 
+import java.io.DataInputStream
 import java.util
 import java.util.Properties
 
 import kafka.api.KAFKA_0_11_0_IV2
 import kafka.log.LogConfig
 import kafka.utils.TestUtils
-import kafka.utils.TestUtils._
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{Record, RecordBatch}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
-import org.apache.kafka.common.serialization.StringSerializer
+import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.junit.Assert._
 import org.junit.Test
 
@@ -44,7 +44,8 @@ class FetchRequestTest extends BaseRequestTest {
   private var producer: KafkaProducer[String, String] = null
 
   override def tearDown() {
-    producer.close()
+    if (producer != null)
+      producer.close()
     super.tearDown()
   }
 
@@ -169,6 +170,69 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   /**
+   * Tests that down-conversions dont leak memory. Large down conversions are triggered
+   * in the server. The client closes its connection after reading partial data when the
+   * channel is muted in the server. If buffers are not released this will result in OOM.
+   */
+  @Test
+  def testDownConversionWithConnectionFailure(): Unit = {
+    val (topicPartition, leaderId) = createTopics(numTopics = 1, numPartitions = 1).head
+
+    val msgValueLen = 100 * 1000
+    val batchSize = 4 * msgValueLen
+    val propsOverride = new Properties
+    propsOverride.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
+    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+      retries = 5, lingerMs = Long.MaxValue,
+      keySerializer = new StringSerializer, valueSerializer = new ByteArraySerializer, props = Some(propsOverride))
+    val bytes = new Array[Byte](msgValueLen)
+    val futures = try {
+      (0 to 1000).map { _ =>
+        producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition, "key", bytes))
+      }
+    } finally {
+      producer.close()
+    }
+    // Check futures to ensure sends succeeded, but do this after close since the last
+    // batch is not complete, but sent when the producer is closed
+    futures.foreach(_.get)
+
+    def fetch(version: Short, maxPartitionBytes: Int, closeAfterPartialResponse: Boolean): Option[FetchResponse] = {
+      val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes,
+        Seq(topicPartition))).build(version)
+
+      val socket = connect(brokerSocketServer(leaderId))
+      try {
+        send(fetchRequest, ApiKeys.FETCH, socket)
+        if (closeAfterPartialResponse) {
+          // read some data to ensure broker has muted this channel and then close socket
+          val size = new DataInputStream(socket.getInputStream).readInt()
+          // Check that we have received almost `maxPartitionBytes` (minus a tolerance) since in
+          // the case of OOM, the size will be significantly smaller. We can't check for exactly
+          // maxPartitionBytes since we use approx message sizes that include only the message value.
+          assertTrue(s"Fetch size too small $size, broker may have run out of memory",
+              size > maxPartitionBytes - batchSize)
+          None
+        } else {
+          Some(FetchResponse.parse(receive(socket), version))
+        }
+      } finally {
+        socket.close()
+      }
+    }
+
+    val version = 1.toShort
+    (0 to 15).foreach(_ => fetch(version, maxPartitionBytes = msgValueLen * 1000, closeAfterPartialResponse = true))
+
+    val response = fetch(version, maxPartitionBytes = batchSize, closeAfterPartialResponse = false)
+    val fetchResponse = response.getOrElse(throw new IllegalStateException("No fetch response"))
+    val partitionData = fetchResponse.responseData.get(topicPartition)
+    assertEquals(Errors.NONE, partitionData.error)
+    val batches = partitionData.records.batches.asScala.toBuffer
+    assertEquals(3, batches.size) // size is 3 (not 4) since maxPartitionBytes=msgValueSize*4, excluding key and headers
+  }
+
+  /**
     * Ensure that we respect the fetch offset when returning records that were converted from an uncompressed v2
     * record batch to multiple v0/v1 record batches with size 1. If the fetch offset points to inside the record batch,
     * some records have to be dropped during the conversion.
@@ -277,8 +341,8 @@ class FetchRequestTest extends BaseRequestTest {
     topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, 2.toString)
     configs.foreach { case (k, v) => topicConfig.setProperty(k, v) }
     topics.flatMap { topic =>
-      val partitionToLeader = createTopic(zkUtils, topic, numPartitions = numPartitions, replicationFactor = 2,
-        servers = servers, topicConfig = topicConfig)
+      val partitionToLeader = createTopic(topic, numPartitions = numPartitions, replicationFactor = 2,
+        topicConfig = topicConfig)
       partitionToLeader.map { case (partition, leader) => new TopicPartition(topic, partition) -> leader }
     }.toMap
   }

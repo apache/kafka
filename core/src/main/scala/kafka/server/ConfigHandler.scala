@@ -29,8 +29,9 @@ import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.metrics.{Quota, Sanitizer}
+import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
+import org.apache.kafka.common.utils.Sanitizer
 
 import scala.collection.JavaConverters._
 
@@ -51,7 +52,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     // Validate the configurations.
     val configNamesToExclude = excludedConfigs(topic, topicConfig)
 
-    val logs = logManager.logsByTopicPartition.filterKeys(_.topic == topic).values.toBuffer
+    val logs = logManager.logsByTopic(topic).toBuffer
     if (logs.nonEmpty) {
       /* combine the default properties with the overrides in zk to create the new LogConfig */
       val props = new Properties()
@@ -60,10 +61,10 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
         if (!configNamesToExclude.contains(key)) props.put(key, value)
       }
       val logConfig = LogConfig(props)
-      if ((topicConfig.containsKey(LogConfig.RetentionMsProp) 
+      if ((topicConfig.containsKey(LogConfig.RetentionMsProp)
         || topicConfig.containsKey(LogConfig.MessageTimestampDifferenceMaxMsProp))
         && logConfig.retentionMs < logConfig.messageTimestampDifferenceMaxMs)
-        warn(s"${LogConfig.RetentionMsProp} for topic $topic is set to ${logConfig.retentionMs}. It is smaller than " + 
+        warn(s"${LogConfig.RetentionMsProp} for topic $topic is set to ${logConfig.retentionMs}. It is smaller than " +
           s"${LogConfig.MessageTimestampDifferenceMaxMsProp}'s value ${logConfig.messageTimestampDifferenceMaxMs}. " +
           s"This may result in frequent log rolling.")
       logs.foreach(_.config = logConfig)
@@ -73,10 +74,10 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
       if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).length > 0) {
         val partitions = parseThrottledPartitions(topicConfig, kafkaConfig.brokerId, prop)
         quotaManager.markThrottled(topic, partitions)
-        logger.debug(s"Setting $prop on broker ${kafkaConfig.brokerId} for topic: $topic and partitions $partitions")
+        debug(s"Setting $prop on broker ${kafkaConfig.brokerId} for topic: $topic and partitions $partitions")
       } else {
         quotaManager.removeThrottle(topic)
-        logger.debug(s"Removing $prop from broker ${kafkaConfig.brokerId} for topic $topic")
+        debug(s"Removing $prop from broker ${kafkaConfig.brokerId} for topic $topic")
       }
     }
     updateThrottledList(LogConfig.LeaderReplicationThrottledReplicasProp, quotas.leader)
@@ -96,7 +97,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
         .map(_ (0).toInt).toSeq //convert to list of partition ids
     }
   }
-  
+
   def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
     // Verify message format version
     Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).flatMap { versionString =>
@@ -118,24 +119,25 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
 class QuotaConfigHandler(private val quotaManagers: QuotaManagers) {
 
   def updateQuotaConfig(sanitizedUser: Option[String], sanitizedClientId: Option[String], config: Properties) {
+    val clientId = sanitizedClientId.map(Sanitizer.desanitize)
     val producerQuota =
       if (config.containsKey(DynamicConfig.Client.ProducerByteRateOverrideProp))
         Some(new Quota(config.getProperty(DynamicConfig.Client.ProducerByteRateOverrideProp).toLong, true))
       else
         None
-    quotaManagers.produce.updateQuota(sanitizedUser, sanitizedClientId, producerQuota)
+    quotaManagers.produce.updateQuota(sanitizedUser, clientId, sanitizedClientId, producerQuota)
     val consumerQuota =
       if (config.containsKey(DynamicConfig.Client.ConsumerByteRateOverrideProp))
         Some(new Quota(config.getProperty(DynamicConfig.Client.ConsumerByteRateOverrideProp).toLong, true))
       else
         None
-    quotaManagers.fetch.updateQuota(sanitizedUser, sanitizedClientId, consumerQuota)
+    quotaManagers.fetch.updateQuota(sanitizedUser, clientId, sanitizedClientId, consumerQuota)
     val requestQuota =
       if (config.containsKey(DynamicConfig.Client.RequestPercentageOverrideProp))
         Some(new Quota(config.getProperty(DynamicConfig.Client.RequestPercentageOverrideProp).toDouble, true))
       else
         None
-    quotaManagers.request.updateQuota(sanitizedUser, sanitizedClientId, requestQuota)
+    quotaManagers.request.updateQuota(sanitizedUser, clientId, sanitizedClientId, requestQuota)
   }
 }
 
@@ -187,6 +189,7 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quo
     if (brokerConfig.brokerId == brokerId.trim.toInt) {
       quotaManagers.leader.updateQuota(upperBound(getOrDefault(LeaderReplicationThrottledRateProp)))
       quotaManagers.follower.updateQuota(upperBound(getOrDefault(FollowerReplicationThrottledRateProp)))
+      quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(ReplicaAlterLogDirsIoMaxBytesPerSecondProp)))
     }
   }
 }

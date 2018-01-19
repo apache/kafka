@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
@@ -29,17 +30,16 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
-import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.ProcessorTopologyTestDriver;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -377,29 +377,15 @@ public class InternalTopologyBuilderTest {
         expectedTopicGroups.put(0, new InternalTopologyBuilder.TopicsInfo(
             Collections.<String>emptySet(), mkSet("topic-1", "topic-1x", "topic-2"),
             Collections.<String, InternalTopicConfig>emptyMap(),
-            Collections.singletonMap(
-                store1,
-                new InternalTopicConfig(
-                    store1,
-                    Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                    Collections.<String, String>emptyMap()))));
+            Collections.singletonMap(store1, (InternalTopicConfig) new UnwindowedChangelogTopicConfig(store1, Collections.<String, String>emptyMap()))));
         expectedTopicGroups.put(1, new InternalTopologyBuilder.TopicsInfo(
             Collections.<String>emptySet(), mkSet("topic-3", "topic-4"),
             Collections.<String, InternalTopicConfig>emptyMap(),
-            Collections.singletonMap(
-                store2,
-                new InternalTopicConfig(
-                    store2,
-                    Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                    Collections.<String, String>emptyMap()))));
+            Collections.singletonMap(store2, (InternalTopicConfig) new UnwindowedChangelogTopicConfig(store2, Collections.<String, String>emptyMap()))));
         expectedTopicGroups.put(2, new InternalTopologyBuilder.TopicsInfo(
             Collections.<String>emptySet(), mkSet("topic-5"),
             Collections.<String, InternalTopicConfig>emptyMap(),
-            Collections.singletonMap(store3,
-                new InternalTopicConfig(
-                    store3,
-                    Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                    Collections.<String, String>emptyMap()))));
+            Collections.singletonMap(store3, (InternalTopicConfig) new UnwindowedChangelogTopicConfig(store3, Collections.<String, String>emptyMap()))));
 
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);
@@ -463,6 +449,11 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullStateStoreNameWhenConnectingProcessorAndStateStores() throws Exception {
+        builder.connectProcessorAndStateStores("processor", new String[]{null});
+    }
+
+    @Test(expected = NullPointerException.class)
     public void shouldNotAddNullInternalTopic() throws Exception {
         builder.addInternalTopic(null);
     }
@@ -520,7 +511,7 @@ public class InternalTopologyBuilderTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldAddInternalTopicConfigWithCompactAndDeleteSetForWindowStores() throws Exception {
+    public void shouldAddInternalTopicConfigForWindowStores() throws Exception {
         builder.setApplicationId("appId");
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
@@ -528,44 +519,44 @@ public class InternalTopologyBuilderTest {
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
-        final Properties properties = topicConfig.toProperties(0);
-        final List<String> policies = Arrays.asList(properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP).split(","));
-        assertEquals("appId-store-changelog", topicConfig.name());
-        assertTrue(policies.contains("compact"));
-        assertTrue(policies.contains("delete"));
-        assertEquals(2, policies.size());
-        assertEquals("30000", properties.getProperty(InternalTopicManager.RETENTION_MS));
+        final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
         assertEquals(2, properties.size());
+        assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
+        assertEquals("40000", properties.get(TopicConfig.RETENTION_MS_CONFIG));
+        assertEquals("appId-store-changelog", topicConfig.name());
+        assertTrue(topicConfig instanceof WindowedChangelogTopicConfig);
     }
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldAddInternalTopicConfigWithCompactForNonWindowStores() throws Exception {
+    public void shouldAddInternalTopicConfigForNonWindowStores() throws Exception {
         builder.setApplicationId("appId");
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(new MockStateStoreSupplier("name", true), "processor");
+        builder.addStateStore(new MockStateStoreSupplier("store", true), "processor");
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
-        final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-name-changelog");
-        final Properties properties = topicConfig.toProperties(0);
-        assertEquals("appId-name-changelog", topicConfig.name());
-        assertEquals("compact", properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP));
+        final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
+        final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
         assertEquals(1, properties.size());
+        assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
+        assertEquals("appId-store-changelog", topicConfig.name());
+        assertTrue(topicConfig instanceof UnwindowedChangelogTopicConfig);
     }
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldAddInternalTopicConfigWithCleanupPolicyDeleteForInternalTopics() throws Exception {
+    public void shouldAddInternalTopicConfigForRepartitionTopics() throws Exception {
         builder.setApplicationId("appId");
         builder.addInternalTopic("foo");
         builder.addSource(null, "source", null, null, null, "foo");
         final InternalTopologyBuilder.TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");
-        final Properties properties = topicConfig.toProperties(0);
+        final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
+        assertEquals(4, properties.size());
+        assertEquals(TopicConfig.CLEANUP_POLICY_DELETE, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("appId-foo", topicConfig.name());
-        assertEquals("delete", properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP));
-        assertEquals(1, properties.size());
+        assertTrue(topicConfig instanceof RepartitionTopicConfig);
     }
 
     @SuppressWarnings("deprecation")
@@ -578,6 +569,7 @@ public class InternalTopologyBuilderTest {
         final Properties config = new Properties();
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         final StreamsConfig streamsConfig = new StreamsConfig(config);
 
         builder.addSource(null, sourceNodeName, null, null, null, "topic");
@@ -631,7 +623,7 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-2", null, null, null, Pattern.compile("topic-[A-C]"));
         builder.addSource(null, "source-3", null, null, null, Pattern.compile("topic-\\d"));
 
-        final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
+        final InternalTopologyBuilder.SubscriptionUpdates subscriptionUpdates = new InternalTopologyBuilder.SubscriptionUpdates();
         final Field updatedTopicsField  = subscriptionUpdates.getClass().getDeclaredField("updatedTopicSubscriptions");
         updatedTopicsField.setAccessible(true);
 
@@ -719,7 +711,7 @@ public class InternalTopologyBuilderTest {
         builder.addProcessor("my-processor", new MockProcessorSupplier(), "ingest");
         builder.addStateStore(new MockStateStoreSupplier("testStateStore", false), "my-processor");
 
-        final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
+        final InternalTopologyBuilder.SubscriptionUpdates subscriptionUpdates = new InternalTopologyBuilder.SubscriptionUpdates();
         final Field updatedTopicsField  = subscriptionUpdates.getClass().getDeclaredField("updatedTopicSubscriptions");
         updatedTopicsField.setAccessible(true);
 

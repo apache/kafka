@@ -42,7 +42,6 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.Sanitizer;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
@@ -192,7 +191,7 @@ import java.util.regex.Pattern;
  * demonstrate how to use them.
  *
  * <h4>Automatic Offset Committing</h4>
- * This example demonstrates a simple usage of Kafka's consumer api that relying on automatic offset committing.
+ * This example demonstrates a simple usage of Kafka's consumer api that relies on automatic offset committing.
  * <p>
  * <pre>
  *     Properties props = new Properties();
@@ -424,7 +423,7 @@ import java.util.regex.Pattern;
  * <p>
  * Transactions were introduced in Kafka 0.11.0 wherein applications can write to multiple topics and partitions atomically.
  * In order for this to work, consumers reading from these partitions should be configured to only read committed data.
- * This can be achieved by by setting the {@code isolation.level=read_committed} in the consumer's configuration.
+ * This can be achieved by setting the {@code isolation.level=read_committed} in the consumer's configuration.
  *
  * <p>
  * In <code>read_committed</code> mode, the consumer will read only those transactional messages which have been
@@ -580,7 +579,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * either strings or objects of the appropriate type (for example a numeric configuration would accept either the
      * string "42" or the integer 42).
      * <p>
-     * Valid configuration strings are documented at {@link ConsumerConfig}
+     * Valid configuration strings are documented at {@link ConsumerConfig}.
+     * <p>
+     * Note: after creating a {@code KafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
      *
      * @param configs The consumer configs
      */
@@ -591,7 +592,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * A consumer is instantiated by providing a set of key-value pairs as configuration, and a key and a value {@link Deserializer}.
      * <p>
-     * Valid configuration strings are documented at {@link ConsumerConfig}
+     * Valid configuration strings are documented at {@link ConsumerConfig}.
+     * <p>
+     * Note: after creating a {@code KafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
      *
      * @param configs The consumer configs
      * @param keyDeserializer The deserializer for key that implements {@link Deserializer}. The configure() method
@@ -610,7 +613,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * A consumer is instantiated by providing a {@link java.util.Properties} object as configuration.
      * <p>
-     * Valid configuration strings are documented at {@link ConsumerConfig}
+     * Valid configuration strings are documented at {@link ConsumerConfig}.
+     * <p>
+     * Note: after creating a {@code KafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
      *
      * @param properties The consumer configuration properties
      */
@@ -622,7 +627,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * A consumer is instantiated by providing a {@link java.util.Properties} object as configuration, and a
      * key and a value {@link Deserializer}.
      * <p>
-     * Valid configuration strings are documented at {@link ConsumerConfig}
+     * Valid configuration strings are documented at {@link ConsumerConfig}.
+     * <p>
+     * Note: after creating a {@code KafkaConsumer} you must always {@link #close()} it to avoid resource leaks.
      *
      * @param properties The consumer configuration properties
      * @param keyDeserializer The deserializer for key that implements {@link Deserializer}. The configure() method
@@ -647,7 +654,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (clientId.isEmpty())
                 clientId = "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
             this.clientId = clientId;
-            String sanitizedClientId = Sanitizer.sanitize(this.clientId);
             String groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
 
             LogContext logContext = new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId + "] ");
@@ -661,7 +667,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new ConfigException(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG + " should be greater than " + ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG + " and " + ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG);
             this.time = Time.SYSTEM;
 
-            Map<String, String> metricsTags = Collections.singletonMap("client-id", sanitizedClientId);
+            Map<String, String> metricsTags = Collections.singletonMap("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                     .recordLevel(Sensor.RecordingLevel.forName(config.getString(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
@@ -707,6 +713,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
             Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics, metricsRegistry.fetcherMetrics);
 
+            int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
+
             NetworkClient netClient = new NetworkClient(
                     new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
                     this.metadata,
@@ -728,7 +736,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     metadata,
                     time,
                     retryBackoffMs,
-                    config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG));
+                    config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                    heartbeatIntervalMs); //Will avoid blocking an extended period of time to prevent heartbeat thread starvation
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
             this.subscriptions = new SubscriptionState(offsetResetStrategy);
             this.assignors = config.getConfiguredInstances(
@@ -739,7 +748,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     groupId,
                     config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
                     config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
-                    config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
+                    heartbeatIntervalMs,
                     assignors,
                     this.metadata,
                     this.subscriptions,
@@ -772,7 +781,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     isolationLevel);
 
             config.logUnused();
-            AppInfoParser.registerAppInfo(JMX_PREFIX, sanitizedClientId, metrics);
+            AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
 
             log.debug("Kafka consumer initialized");
         } catch (Throwable t) {
@@ -1387,6 +1396,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Get the offset of the <i>next record</i> that will be fetched (if a record with that offset exists).
+     * This method may issue a remote call to the server if there is no current position for the given partition.
+     * <p>
+     * This call will block until either the position could be determined or an unrecoverable error is
+     * encountered (in which case it is thrown to the caller).
      *
      * @param partition The partition to get the position for
      * @return The offset
@@ -1582,6 +1595,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
      *         such message.
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws IllegalArgumentException if the target timestamp is negative.
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
      *         expiration of the configured request timeout
@@ -1616,6 +1630,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param partitions the partitions to get the earliest offsets.
      * @return The earliest available offsets for the given partitions
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
      *         expiration of the configured request timeout
      */
@@ -1645,6 +1660,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param partitions the partitions to get the end offsets.
      * @return The end offsets for the given partitions.
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
      *         expiration of the configured request timeout
      */
@@ -1665,9 +1681,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * timeout. See {@link #close(long, TimeUnit)} for details. Note that {@link #wakeup()}
      * cannot be used to interrupt close.
      *
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
      *             before or while this function is called
+     * @throws org.apache.kafka.common.KafkaException for any other error during close
      */
     @Override
     public void close() {
@@ -1685,9 +1701,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
      *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
      * @param timeUnit The time unit for the {@code timeout}
-     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
-     * @throws InterruptException If the thread is interrupted before or while this function is called
      * @throws IllegalArgumentException If the {@code timeout} is negative.
+     * @throws InterruptException If the thread is interrupted before or while this function is called
+     * @throws org.apache.kafka.common.KafkaException for any other error during close
      */
     public void close(long timeout, TimeUnit timeUnit) {
         if (timeout < 0)
@@ -1739,7 +1755,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         ClientUtils.closeQuietly(client, "consumer network client", firstException);
         ClientUtils.closeQuietly(keyDeserializer, "consumer key deserializer", firstException);
         ClientUtils.closeQuietly(valueDeserializer, "consumer value deserializer", firstException);
-        AppInfoParser.unregisterAppInfo(JMX_PREFIX, Sanitizer.sanitize(clientId), metrics);
+        AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
         log.debug("Kafka consumer has been closed");
         Throwable exception = firstException.get();
         if (exception != null && !swallowException) {

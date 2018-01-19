@@ -256,6 +256,7 @@ public class FetchRequest extends AbstractRequest {
                     append(", minBytes=").append(minBytes).
                     append(", maxBytes=").append(maxBytes).
                     append(", fetchData=").append(fetchData).
+                    append(", isolationLevel=").append(isolationLevel).
                     append(")");
             return bld.toString();
         }

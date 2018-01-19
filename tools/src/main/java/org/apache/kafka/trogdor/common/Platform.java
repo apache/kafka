@@ -21,6 +21,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.File;
 import java.io.IOException;
+
+import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Utils;
 
 /**
@@ -47,6 +49,7 @@ public interface Platform {
             String platformName = platformNode.textValue();
             return Utils.newParameterizedInstance(platformName,
                 String.class, curNodeName,
+                Scheduler.class, Scheduler.SYSTEM,
                 JsonNode.class, root);
         }
     }
@@ -65,6 +68,11 @@ public interface Platform {
      * Get the cluster topology.
      */
     Topology topology();
+
+    /**
+     * Get the scheduler to use.
+     */
+    Scheduler scheduler();
 
     /**
      * Run a command on this local node.

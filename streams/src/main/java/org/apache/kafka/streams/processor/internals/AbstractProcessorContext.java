@@ -26,6 +26,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -46,13 +47,12 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     final StateManager stateManager;
 
     public AbstractProcessorContext(final TaskId taskId,
-                                    final String applicationId,
                                     final StreamsConfig config,
                                     final StreamsMetrics metrics,
                                     final StateManager stateManager,
                                     final ThreadCache cache) {
         this.taskId = taskId;
-        this.applicationId = applicationId;
+        this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.config = config;
         this.metrics = metrics;
         this.stateManager = stateManager;
@@ -164,6 +164,20 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         return combined;
     }
 
+    @SuppressWarnings("unchecked")
+    @Override
+    public <K, V> void forward(final K key, final V value) {
+        final ProcessorNode previousNode = currentNode();
+        try {
+            for (final ProcessorNode child : (List<ProcessorNode>) currentNode().children()) {
+                setCurrentNode(child);
+                child.process(key, value);
+            }
+        } finally {
+            setCurrentNode(previousNode);
+        }
+    }
+
     @Override
     public Map<String, Object> appConfigsWithPrefix(final String prefix) {
         return config.originalsWithPrefix(prefix);
@@ -197,5 +211,10 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     @Override
     public void initialized() {
         initialized = true;
+    }
+
+    @Override
+    public void uninitialize() {
+        initialized = false;
     }
 }

@@ -49,9 +49,9 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testCanRebalanceWhenAwaitingSync() {
+  def testCanRebalanceWhenCompletingRebalance() {
     group.transitionTo(PreparingRebalance)
-    group.transitionTo(AwaitingSync)
+    group.transitionTo(CompletingRebalance)
     assertTrue(group.canRebalance)
   }
 
@@ -82,9 +82,9 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testAwaitingSyncToPreparingRebalanceTransition() {
+  def testAwaitingRebalanceToPreparingRebalanceTransition() {
     group.transitionTo(PreparingRebalance)
-    group.transitionTo(AwaitingSync)
+    group.transitionTo(CompletingRebalance)
     group.transitionTo(PreparingRebalance)
     assertState(group, PreparingRebalance)
   }
@@ -112,9 +112,9 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testAwaitingSyncToStableTransition() {
+  def testAwaitingRebalanceToStableTransition() {
     group.transitionTo(PreparingRebalance)
-    group.transitionTo(AwaitingSync)
+    group.transitionTo(CompletingRebalance)
     group.transitionTo(Stable)
     assertState(group, Stable)
   }
@@ -127,7 +127,7 @@ class GroupMetadataTest extends JUnitSuite {
   @Test
   def testStableToStableIllegalTransition() {
     group.transitionTo(PreparingRebalance)
-    group.transitionTo(AwaitingSync)
+    group.transitionTo(CompletingRebalance)
     group.transitionTo(Stable)
     try {
       group.transitionTo(Stable)
@@ -138,8 +138,8 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test(expected = classOf[IllegalStateException])
-  def testEmptyToAwaitingSyncIllegalTransition() {
-    group.transitionTo(AwaitingSync)
+  def testEmptyToAwaitingRebalanceIllegalTransition() {
+    group.transitionTo(CompletingRebalance)
   }
 
   @Test(expected = classOf[IllegalStateException])
@@ -155,10 +155,10 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test(expected = classOf[IllegalStateException])
-  def testAwaitingSyncToAwaitingSyncIllegalTransition() {
+  def testAwaitingRebalanceToAwaitingRebalanceIllegalTransition() {
     group.transitionTo(PreparingRebalance)
-    group.transitionTo(AwaitingSync)
-    group.transitionTo(AwaitingSync)
+    group.transitionTo(CompletingRebalance)
+    group.transitionTo(CompletingRebalance)
   }
 
   def testDeadToDeadIllegalTransition() {
@@ -183,10 +183,10 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test(expected = classOf[IllegalStateException])
-  def testDeadToAwaitingSyncIllegalTransition() {
+  def testDeadToAwaitingRebalanceIllegalTransition() {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
-    group.transitionTo(AwaitingSync)
+    group.transitionTo(CompletingRebalance)
   }
 
   @Test
@@ -466,7 +466,7 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   private def assertState(group: GroupMetadata, targetState: GroupState) {
-    val states: Set[GroupState] = Set(Stable, PreparingRebalance, AwaitingSync, Dead)
+    val states: Set[GroupState] = Set(Stable, PreparingRebalance, CompletingRebalance, Dead)
     val otherStates = states - targetState
     otherStates.foreach { otherState =>
       assertFalse(group.is(otherState))

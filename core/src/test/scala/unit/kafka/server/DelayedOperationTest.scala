@@ -124,12 +124,28 @@ class DelayedOperationTest {
 
   @Test
   def testDelayedOperationLock() {
+    verifyDelayedOperationLock(new MockDelayedOperation(100000L), mismatchedLocks = false)
+  }
+
+  @Test
+  def testDelayedOperationLockOverride() {
+    def newMockOperation = {
+      val lock = new ReentrantLock
+      new MockDelayedOperation(100000L, Some(lock), Some(lock))
+    }
+    verifyDelayedOperationLock(newMockOperation, mismatchedLocks = false)
+
+    verifyDelayedOperationLock(new MockDelayedOperation(100000L, None, Some(new ReentrantLock)),
+        mismatchedLocks = true)
+  }
+
+  def verifyDelayedOperationLock(mockDelayedOperation: => MockDelayedOperation, mismatchedLocks: Boolean) {
     val key = "key"
     val executorService = Executors.newSingleThreadExecutor
     try {
       def createDelayedOperations(count: Int): Seq[MockDelayedOperation] = {
         (1 to count).map { _ =>
-          val op = new MockDelayedOperation(100000L)
+          val op = mockDelayedOperation
           purgatory.tryCompleteElseWatch(op, Seq(key))
           assertFalse("Not completable", op.isCompleted)
           op
@@ -138,7 +154,7 @@ class DelayedOperationTest {
 
       def createCompletableOperations(count: Int): Seq[MockDelayedOperation] = {
         (1 to count).map { _ =>
-          val op = new MockDelayedOperation(100000L)
+          val op = mockDelayedOperation
           op.completable = true
           op
         }
@@ -182,6 +198,27 @@ class DelayedOperationTest {
         checkAndComplete(ops, Seq(ops(1)))
       } finally {
         runOnAnotherThread(ops(0).lock.unlock(), true)
+        checkAndComplete(Seq(ops(0)), Seq(ops(0)))
+      }
+
+      // Lock acquired by response callback held by another thread, should not block
+      // if the response lock is used as operation lock, only operations
+      // that can be locked without blocking on the current thread should complete
+      ops = createDelayedOperations(2)
+      ops(0).responseLockOpt.foreach { lock =>
+        runOnAnotherThread(lock.lock(), true)
+        try {
+          try {
+            checkAndComplete(ops, Seq(ops(1)))
+            assertFalse("Should have failed with mismatched locks", mismatchedLocks)
+          } catch {
+            case e: IllegalStateException =>
+              assertTrue("Should not have failed with valid locks", mismatchedLocks)
+          }
+        } finally {
+          runOnAnotherThread(lock.unlock(), true)
+          checkAndComplete(Seq(ops(0)), Seq(ops(0)))
+        }
       }
 
       // Immediately completable operations should complete without locking
@@ -197,8 +234,9 @@ class DelayedOperationTest {
   }
 
 
-  class MockDelayedOperation(delayMs: Long)
-    extends DelayedOperation(delayMs) {
+  class MockDelayedOperation(delayMs: Long,
+      lockOpt: Option[ReentrantLock] = None,
+      val responseLockOpt: Option[ReentrantLock] = None) extends DelayedOperation(delayMs, lockOpt) {
     var completable = false
 
     def awaitExpiration() {
@@ -219,6 +257,10 @@ class DelayedOperationTest {
     }
 
     override def onComplete() {
+      responseLockOpt.foreach { lock =>
+        if (!lock.tryLock())
+          throw new IllegalStateException("Response callback lock could not be acquired in callback")
+      }
       synchronized {
         notify()
       }

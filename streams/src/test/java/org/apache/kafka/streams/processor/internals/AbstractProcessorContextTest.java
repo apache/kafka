@@ -26,7 +26,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.apache.kafka.test.MockStateStoreSupplier;
+import org.apache.kafka.test.MockStateStore;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -42,7 +42,7 @@ public class AbstractProcessorContextTest {
 
     private final MockStreamsMetrics metrics = new MockStreamsMetrics(new Metrics());
     private final AbstractProcessorContext context = new TestProcessorContext(metrics);
-    private final MockStateStoreSupplier.MockStateStore stateStore = new MockStateStoreSupplier.MockStateStore("store", false);
+    private final MockStateStore stateStore = new MockStateStore("store", false);
     private final RecordContext recordContext = new RecordContextStub(10, System.currentTimeMillis(), 1, "foo");
 
     @Before
@@ -162,7 +162,7 @@ public class AbstractProcessorContextTest {
         }
 
         TestProcessorContext(final MockStreamsMetrics metrics) {
-            super(new TaskId(0, 0), "appId", new StreamsConfig(config), metrics, new StateManagerStub(), new ThreadCache(new LogContext("name "), 0, metrics));
+            super(new TaskId(0, 0), new StreamsConfig(config), metrics, new StateManagerStub(), new ThreadCache(new LogContext("name "), 0, metrics));
         }
 
         @Override

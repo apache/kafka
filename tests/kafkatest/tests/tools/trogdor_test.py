@@ -19,8 +19,8 @@ from ducktape.cluster.cluster_spec import ClusterSpec
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
-from kafkatest.services.trogdor.fault_spec import FaultSpec
-from kafkatest.services.trogdor.no_op_fault_spec import NoOpFaultSpec
+from kafkatest.services.trogdor.task_spec import TaskSpec
+from kafkatest.services.trogdor.no_op_task_spec import NoOpTaskSpec
 from kafkatest.services.trogdor.trogdor import TrogdorService
 from kafkatest.utils import node_is_reachable
 
@@ -58,14 +58,15 @@ class TrogdorTest(Test):
         Test that we can bring up Trogdor and create a no-op fault.
         """
         self.set_up_trogdor(3)
-        spec = NoOpFaultSpec(0, FaultSpec.MAX_DURATION_MS)
-        self.trogdor.create_fault("myfault", spec)
-        def check_for_faults():
-            faults = self.trogdor.get_faults()
-            self.logger.info("faults = %s" % faults)
+        spec = NoOpTaskSpec(0, TaskSpec.MAX_DURATION_MS)
+        self.trogdor.create_task("myfault", spec)
+        def check_for_myfault():
+            faults = self.trogdor.tasks()["tasks"]
+            self.logger.info("tasks = %s" % faults)
             return "myfault" in faults
-        wait_until(lambda: check_for_faults,
+        wait_until(lambda: check_for_myfault,
                    timeout_sec=10, backoff_sec=.2, err_msg="Failed to read back myfault.")
+        self.trogdor.stop_task("myfault")
 
     @cluster(num_nodes=4)
     def test_network_partition_fault(self):
@@ -73,12 +74,13 @@ class TrogdorTest(Test):
         Test that the network partition fault results in a true network partition between nodes.
         """
         self.set_up_trogdor(3)
-        spec = NetworkPartitionFaultSpec(0, FaultSpec.MAX_DURATION_MS,
+        spec = NetworkPartitionFaultSpec(0, TaskSpec.MAX_DURATION_MS,
                                             [[self.agent_nodes[0]], self.agent_nodes[1:]])
-        assert 2 == len(spec.partitions)
-        assert [self.agent_nodes[0].name] == spec.partitions[0]
-        assert [self.agent_nodes[1].name, self.agent_nodes[2].name] == spec.partitions[1]
-        self.trogdor.create_fault("partition0", spec)
+        partitions = spec.message["partitions"]
+        assert 2 == len(partitions)
+        assert [self.agent_nodes[0].name] == partitions[0]
+        assert [self.agent_nodes[1].name, self.agent_nodes[2].name] == partitions[1]
+        self.trogdor.create_task("partition0", spec)
         def verify_nodes_partitioned():
             if node_is_reachable(self.agent_nodes[0], self.agent_nodes[1]):
                 return False

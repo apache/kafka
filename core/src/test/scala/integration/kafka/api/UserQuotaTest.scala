@@ -17,12 +17,11 @@ package kafka.api
 import java.io.File
 import java.util.Properties
 
-import kafka.admin.AdminUtils
 import kafka.server.{ConfigEntityName, KafkaConfig, QuotaId}
 import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.utils.Sanitizer
 import org.junit.{After, Before}
-import org.apache.kafka.common.metrics.Sanitizer
 
 class UserQuotaTest extends BaseQuotaTest with SaslSetup {
 
@@ -34,8 +33,8 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
   override val userPrincipal = JaasTestUtils.KafkaClientPrincipalUnqualifiedName2
-  override val producerQuotaId = QuotaId(Some(userPrincipal), None)
-  override val consumerQuotaId = QuotaId(Some(userPrincipal), None)
+  override val producerQuotaId = QuotaId(Some(userPrincipal), None, None)
+  override val consumerQuotaId = QuotaId(Some(userPrincipal), None, None)
 
 
   @Before
@@ -45,7 +44,7 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
     this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
     super.setUp()
     val defaultProps = quotaProperties(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, ConfigEntityName.Default, defaultProps)
+    adminZkClient.changeUserOrUserClientIdConfig(ConfigEntityName.Default, defaultProps)
     waitForQuotaUpdate(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
   }
 
@@ -67,6 +66,6 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
   }
 
   private def updateQuotaOverride(properties: Properties) {
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, Sanitizer.sanitize(userPrincipal), properties)
+    adminZkClient.changeUserOrUserClientIdConfig(Sanitizer.sanitize(userPrincipal), properties)
   }
 }

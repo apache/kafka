@@ -18,6 +18,7 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -27,10 +28,12 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.state.Stores;
 
 import java.io.File;
 import java.util.Properties;
@@ -104,6 +107,8 @@ public class SmokeTestClient extends SmokeTestUtil {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
         props.put(ProducerConfig.ACKS_CONFIG, "all");
+        //TODO remove this config or set to smaller value when KIP-91 is merged
+        props.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 80000);
 
         StreamsBuilder builder = new StreamsBuilder();
         Consumed<String, Integer> stringIntConsumed = Consumed.with(stringSerde, intSerde);
@@ -115,7 +120,6 @@ public class SmokeTestClient extends SmokeTestUtil {
                 return value == null || value != END;
             }
         });
-
         data.process(SmokeTestUtil.printProcessorSupplier("data"));
 
         // min
@@ -185,11 +189,9 @@ public class SmokeTestClient extends SmokeTestUtil {
                 new Unwindow<String, Long>()
         ).to(stringSerde, longSerde, "sum");
 
-
         Consumed<String, Long> stringLongConsumed = Consumed.with(stringSerde, longSerde);
         KTable<String, Long> sumTable = builder.table("sum", stringLongConsumed);
         sumTable.toStream().process(SmokeTestUtil.printProcessorSupplier("sum"));
-
         // cnt
         groupedData.count(TimeWindows.of(TimeUnit.DAYS.toMillis(2)), "uwin-cnt")
             .toStream().map(
@@ -225,8 +227,9 @@ public class SmokeTestClient extends SmokeTestUtil {
         ).aggregate(agg.init(),
                     agg.adder(),
                     agg.remover(),
-                    longSerde,
-                    "cntByCnt"
+                    Materialized.<String, Long>as(Stores.inMemoryKeyValueStore("cntByCnt"))
+                            .withKeySerde(Serdes.String())
+                            .withValueSerde(Serdes.Long())
         ).to(stringSerde, longSerde, "tagg");
 
         final KafkaStreams streamsClient = new KafkaStreams(builder.build(), props);

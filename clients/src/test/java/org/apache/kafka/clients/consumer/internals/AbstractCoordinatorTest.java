@@ -77,7 +77,7 @@ public class AbstractCoordinatorTest {
 
         Metadata metadata = new Metadata(100L, 60 * 60 * 1000L, true);
         this.consumerClient = new ConsumerNetworkClient(new LogContext(), mockClient, metadata, mockTime,
-                retryBackoffMs, REQUEST_TIMEOUT_MS);
+                retryBackoffMs, REQUEST_TIMEOUT_MS, HEARTBEAT_INTERVAL_MS);
         Metrics metrics = new Metrics();
 
         Cluster cluster = TestUtils.singletonCluster("topic", 1);

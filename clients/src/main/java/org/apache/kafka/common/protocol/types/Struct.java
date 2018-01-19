@@ -83,6 +83,10 @@ public class Struct {
         return getInt(field.name);
     }
 
+    public Long get(Field.Int64 field) {
+        return getLong(field.name);
+    }
+
     public Short get(Field.Int16 field) {
         return getShort(field.name);
     }
@@ -108,6 +112,12 @@ public class Struct {
     }
 
     public String getOrElse(Field.NullableStr field, String alternative) {
+        if (hasField(field.name))
+            return getString(field.name);
+        return alternative;
+    }
+
+    public String getOrElse(Field.Str field, String alternative) {
         if (hasField(field.name))
             return getString(field.name);
         return alternative;
@@ -267,6 +277,10 @@ public class Struct {
     }
 
     public Struct set(Field.Int32 def, int value) {
+        return set(def.name, value);
+    }
+
+    public Struct set(Field.Int64 def, long value) {
         return set(def.name, value);
     }
 

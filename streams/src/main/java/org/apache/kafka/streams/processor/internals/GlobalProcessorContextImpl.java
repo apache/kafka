@@ -25,8 +25,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
-import java.util.List;
-
 public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
 
@@ -34,28 +32,13 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
                                       final StateManager stateMgr,
                                       final StreamsMetrics metrics,
                                       final ThreadCache cache) {
-        super(new TaskId(-1, -1), config.getString(StreamsConfig.APPLICATION_ID_CONFIG), config, metrics, stateMgr, cache);
+        super(new TaskId(-1, -1), config, metrics, stateMgr, cache);
     }
 
     @Override
     public StateStore getStateStore(final String name) {
         return stateManager.getGlobalStore(name);
     }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public <K, V> void forward(K key, V value) {
-        final ProcessorNode previousNode = currentNode();
-        try {
-            for (ProcessorNode child : (List<ProcessorNode>) currentNode().children()) {
-                setCurrentNode(child);
-                child.process(key, value);
-            }
-        } finally {
-            setCurrentNode(previousNode);
-        }
-    }
-
 
     /**
      * @throws UnsupportedOperationException on every invocation

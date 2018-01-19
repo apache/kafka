@@ -37,6 +37,7 @@ import javax.management.ReflectionException;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.utils.Sanitizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,6 +75,9 @@ public class JmxReporter implements MetricsReporter {
         }
     }
 
+    boolean containsMbean(String mbeanName) {
+        return mbeans.containsKey(mbeanName);
+    }
     @Override
     public void metricChange(KafkaMetric metric) {
         synchronized (LOCK) {
@@ -85,19 +89,21 @@ public class JmxReporter implements MetricsReporter {
     @Override
     public void metricRemoval(KafkaMetric metric) {
         synchronized (LOCK) {
-            KafkaMbean mbean = removeAttribute(metric);
+            MetricName metricName = metric.metricName();
+            String mBeanName = getMBeanName(prefix, metricName);
+            KafkaMbean mbean = removeAttribute(metric, mBeanName);
             if (mbean != null) {
-                if (mbean.metrics.isEmpty())
+                if (mbean.metrics.isEmpty()) {
                     unregister(mbean);
-                else
+                    mbeans.remove(mBeanName);
+                } else
                     reregister(mbean);
             }
         }
     }
 
-    private KafkaMbean removeAttribute(KafkaMetric metric) {
+    private KafkaMbean removeAttribute(KafkaMetric metric, String mBeanName) {
         MetricName metricName = metric.metricName();
-        String mBeanName = getMBeanName(prefix, metricName);
         KafkaMbean mbean = this.mbeans.get(mBeanName);
         if (mbean != null)
             mbean.removeAttribute(metricName.name());
@@ -133,7 +139,7 @@ public class JmxReporter implements MetricsReporter {
             mBeanName.append(",");
             mBeanName.append(entry.getKey());
             mBeanName.append("=");
-            mBeanName.append(entry.getValue());
+            mBeanName.append(Sanitizer.jmxSanitize(entry.getValue()));
         }
         return mBeanName.toString();
     }

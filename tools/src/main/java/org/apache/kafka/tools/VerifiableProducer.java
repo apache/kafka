@@ -80,13 +80,22 @@ public class VerifiableProducer {
     // if null, then values are produced without a prefix
     private final Integer valuePrefix;
 
-    public VerifiableProducer(KafkaProducer<String, String> producer, String topic, int throughput, int maxMessages, Integer valuePrefix) {
+    // The create time to set in messages, in milliseconds since epoch
+    private Long createTime;
+
+    private final Long startTime;
+
+    public VerifiableProducer(KafkaProducer<String, String> producer, String topic, int throughput, int maxMessages,
+                              Integer valuePrefix, Long createTime) {
 
         this.topic = topic;
         this.throughput = throughput;
         this.maxMessages = maxMessages;
         this.producer = producer;
         this.valuePrefix = valuePrefix;
+        this.createTime = createTime;
+        this.startTime = System.currentTimeMillis();
+
     }
 
     /** Get the command-line argument parser. */
@@ -144,6 +153,15 @@ public class VerifiableProducer {
                 .metavar("CONFIG_FILE")
                 .help("Producer config properties file.");
 
+        parser.addArgument("--message-create-time")
+                .action(store())
+                .required(false)
+                .setDefault(-1)
+                .type(Integer.class)
+                .metavar("CREATETIME")
+                .dest("createTime")
+                .help("Send messages with creation time starting at the arguments value, in milliseconds since epoch");
+
         parser.addArgument("--value-prefix")
             .action(store())
             .required(false)
@@ -181,6 +199,10 @@ public class VerifiableProducer {
         int throughput = res.getInt("throughput");
         String configFile = res.getString("producer.config");
         Integer valuePrefix = res.getInt("valuePrefix");
+        Long createTime = (long) res.getInt("createTime");
+
+        if (createTime == -1L)
+            createTime = null;
 
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
@@ -202,12 +224,23 @@ public class VerifiableProducer {
         StringSerializer serializer = new StringSerializer();
         KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps, serializer, serializer);
 
-        return new VerifiableProducer(producer, topic, throughput, maxMessages, valuePrefix);
+        return new VerifiableProducer(producer, topic, throughput, maxMessages, valuePrefix, createTime);
     }
 
     /** Produce a message with given key and value. */
     public void send(String key, String value) {
-        ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
+        ProducerRecord<String, String> record;
+
+        // Older versions of ProducerRecord don't include the message create time in the constructor. So including
+        // even a 'null' argument results in a NoSuchMethodException. Thus we only include the create time if it is
+        // explicitly specified to remain fully backward compatible with older clients.
+        if (createTime != null) {
+            record = new ProducerRecord<>(topic, null, createTime, key, value);
+            createTime += System.currentTimeMillis() - startTime;
+        } else {
+            record = new ProducerRecord<>(topic, key, value);
+        }
+
         numSent++;
         try {
             producer.send(record, new PrintInfoCallback(key, value));

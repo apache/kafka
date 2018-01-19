@@ -16,10 +16,20 @@
  */
 package org.apache.kafka.connect.util;
 
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.ExecutionException;
 
 public final class ConnectUtils {
+    private static final Logger log = LoggerFactory.getLogger(ConnectUtils.class);
+
     public static Long checkAndConvertTimestamp(Long timestamp) {
         if (timestamp == null || timestamp >= 0)
             return timestamp;
@@ -27,5 +37,29 @@ public final class ConnectUtils {
             return null;
         else
             throw new InvalidRecordException(String.format("Invalid record timestamp %d", timestamp));
+    }
+
+    public static String lookupKafkaClusterId(WorkerConfig config) {
+        try (AdminClient adminClient = AdminClient.create(config.originals())) {
+            return lookupKafkaClusterId(adminClient);
+        }
+    }
+
+    static String lookupKafkaClusterId(AdminClient adminClient) {
+        log.debug("Looking up Kafka cluster ID");
+        try {
+            KafkaFuture<String> clusterIdFuture = adminClient.describeCluster().clusterId();
+            if (clusterIdFuture == null) {
+                log.info("Kafka cluster version is too old to return cluster ID");
+                return null;
+            }
+            String kafkaClusterId = clusterIdFuture.get();
+            log.info("Kafka cluster ID: {}", kafkaClusterId);
+            return kafkaClusterId;
+        } catch (InterruptedException e) {
+            throw new ConnectException("Unexpectedly interrupted when looking up Kafka cluster info", e);
+        } catch (ExecutionException e) {
+            throw new ConnectException("Failed to connect to and describe Kafka cluster", e);
+        }
     }
 }

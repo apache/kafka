@@ -106,7 +106,14 @@ final class ClusterConnectionStates {
      * @param now the current time
      */
     public void connecting(String id, long now) {
-        nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now, this.reconnectBackoffInitMs));
+        if (nodeState.containsKey(id)) {
+            NodeConnectionState node = nodeState.get(id);
+            node.lastConnectAttemptMs = now;
+            node.state = ConnectionState.CONNECTING;
+        } else {
+            nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
+                this.reconnectBackoffInitMs));
+        }
     }
 
     /**
@@ -199,7 +206,7 @@ final class ClusterConnectionStates {
      *
      * @param nodeState The node state object to update
      */
-    public void resetReconnectBackoff(NodeConnectionState nodeState) {
+    private void resetReconnectBackoff(NodeConnectionState nodeState) {
         nodeState.failedAttempts = 0;
         nodeState.reconnectBackoffMs = this.reconnectBackoffInitMs;
     }
@@ -211,7 +218,7 @@ final class ClusterConnectionStates {
      *
      * @param nodeState The node state object to update
      */
-    public void updateReconnectBackoff(NodeConnectionState nodeState) {
+    private void updateReconnectBackoff(NodeConnectionState nodeState) {
         if (this.reconnectBackoffMaxMs > this.reconnectBackoffInitMs) {
             nodeState.failedAttempts += 1;
             double backoffExp = Math.min(nodeState.failedAttempts - 1, this.reconnectBackoffMaxExp);
@@ -274,7 +281,7 @@ final class ClusterConnectionStates {
         }
 
         public String toString() {
-            return "NodeState(" + state + ", " + lastConnectAttemptMs + ")";
+            return "NodeState(" + state + ", " + lastConnectAttemptMs + ", " + failedAttempts + ")";
         }
     }
 }

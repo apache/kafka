@@ -19,7 +19,6 @@ import java.util.regex.Pattern
 import java.util.{ArrayList, Collections, Properties}
 
 import kafka.admin.AdminClient
-import kafka.admin.AdminUtils
 import kafka.admin.ConsumerGroupCommand.ConsumerGroupCommandOptions
 import kafka.admin.ConsumerGroupCommand.KafkaConsumerGroupService
 import kafka.common.TopicAndPartition
@@ -242,14 +241,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       consumers += TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT)
 
     // create the consumer offset topic
-    TestUtils.createTopic(zkUtils, GROUP_METADATA_TOPIC_NAME,
+    TestUtils.createTopic(zkClient, GROUP_METADATA_TOPIC_NAME,
       1,
       1,
       servers,
       servers.head.groupCoordinator.offsetsTopicConfigs)
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(zkUtils, topic, 1, 1, this.servers)
-    TestUtils.createTopic(zkUtils, deleteTopic, 1, 1, this.servers)
+    TestUtils.createTopic(zkClient, topic, 1, 1, this.servers)
+    TestUtils.createTopic(zkClient, deleteTopic, 1, 1, this.servers)
   }
 
   @After
@@ -272,6 +271,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createFetchRequest = {
+    val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
+    partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100))
+    requests.FetchRequest.Builder.forConsumer(100, Int.MaxValue, partitionMap).build()
+  }
+
+  private def createFetchFollowerRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
     partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 0, 100))
     val version = ApiKeys.FETCH.latestVersion
@@ -447,10 +452,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
    */
   @Test
   def testAuthorizationWithTopicNotExisting() {
-    AdminUtils.deleteTopic(zkUtils, topic)
-    TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
-    AdminUtils.deleteTopic(zkUtils, deleteTopic)
-    TestUtils.verifyTopicDeletion(zkUtils, deleteTopic, 1, servers)
+    adminZkClient.deleteTopic(topic)
+    TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
+    adminZkClient.deleteTopic(deleteTopic)
+    TestUtils.verifyTopicDeletion(zkClient, deleteTopic, 1, servers)
 
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
       ApiKeys.METADATA -> createMetadataRequest(allowAutoTopicCreation = false),
@@ -484,6 +489,24 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         addAndVerifyAcls(acls, resource)
       sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = true, topicExists = false)
     }
+  }
+
+  @Test
+  def testFetchFollowerRequest() {
+    val key = ApiKeys.FETCH
+    val request = createFetchFollowerRequest
+      
+    removeAllAcls()
+    val resources = Set(topicResource.resourceType, Resource.ClusterResource.resourceType)
+    sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false)
+
+    val readAcls = topicReadAcl.get(topicResource).get
+    addAndVerifyAcls(readAcls, topicResource)
+    sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false)
+ 
+    val clusterAcls = clusterAcl.get(Resource.ClusterResource).get
+    addAndVerifyAcls(clusterAcls, Resource.ClusterResource)
+    sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = true)
   }
 
   @Test
@@ -681,7 +704,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     // create an unmatched topic
     val unmatchedTopic = "unmatched"
-    TestUtils.createTopic(zkUtils, unmatchedTopic, 1, 1, this.servers)
+    TestUtils.createTopic(zkClient, unmatchedTopic, 1, 1, this.servers)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)),  new Resource(Topic, unmatchedTopic))
     sendRecords(1, new TopicPartition(unmatchedTopic, part))
     removeAllAcls()

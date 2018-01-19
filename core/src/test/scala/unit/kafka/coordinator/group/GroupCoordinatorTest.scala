@@ -28,7 +28,9 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetCommitRequest, OffsetFetchResponse, TransactionResult}
 import org.easymock.{Capture, EasyMock, IAnswer}
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
 
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.internals.Topic
 import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
@@ -60,7 +62,7 @@ class GroupCoordinatorTest extends JUnitSuite {
   var groupCoordinator: GroupCoordinator = null
   var replicaManager: ReplicaManager = null
   var scheduler: KafkaScheduler = null
-  var zkUtils: ZkUtils = null
+  var zkClient: KafkaZkClient = null
 
   private val groupId = "groupId"
   private val protocolType = "consumer"
@@ -84,10 +86,10 @@ class GroupCoordinatorTest extends JUnitSuite {
 
     replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
 
-    zkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
+    zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
-    EasyMock.expect(zkUtils.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(Some(2))
-    EasyMock.replay(zkUtils)
+    EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(Some(2))
+    EasyMock.replay(zkClient)
 
     timer = new MockTimer
 
@@ -96,7 +98,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     val heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
     val joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
-    groupCoordinator = GroupCoordinator(config, zkUtils, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time)
+    groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time)
     groupCoordinator.startup(false)
 
     // add the partition into the owned partition list
@@ -1049,7 +1051,7 @@ class GroupCoordinatorTest extends JUnitSuite {
   }
 
   @Test
-  def testCommitOffsetInAwaitingSync() {
+  def testCommitOffsetInCompletingRebalance() {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val tp = new TopicPartition("topic", 0)
     val offset = OffsetAndMetadata(0)
@@ -1232,7 +1234,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Errors.NONE, error)
     assertEquals(protocolType, summary.protocolType)
     assertEquals(GroupCoordinator.NoProtocol, summary.protocol)
-    assertEquals(AwaitingSync.toString, summary.state)
+    assertEquals(CompletingRebalance.toString, summary.state)
     assertTrue(summary.members.map(_.memberId).contains(joinGroupResult.memberId))
     assertTrue(summary.members.forall(_.metadata.isEmpty))
     assertTrue(summary.members.forall(_.assignment.isEmpty))
@@ -1367,6 +1369,7 @@ class GroupCoordinatorTest extends JUnitSuite {
       isFromClient = EasyMock.eq(false),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
+      EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
       EasyMock.anyObject())).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
@@ -1450,6 +1453,7 @@ class GroupCoordinatorTest extends JUnitSuite {
       isFromClient = EasyMock.eq(false),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
+      EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
       EasyMock.anyObject())
     ).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
@@ -1479,6 +1483,7 @@ class GroupCoordinatorTest extends JUnitSuite {
       isFromClient = EasyMock.eq(false),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
+      EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
       EasyMock.anyObject())
     ).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(

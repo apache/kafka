@@ -22,12 +22,16 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockMapper;
+import org.apache.kafka.test.MockPredicate;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Rule;
 import org.junit.Test;
@@ -36,12 +40,14 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 public class StreamsBuilderTest {
 
@@ -55,6 +61,30 @@ public class StreamsBuilderTest {
         builder.stream(Arrays.asList("topic-1", "topic-2"));
 
         builder.build().addSource(KStreamImpl.SOURCE_NAME + "0000000000", "topic-3");
+    }
+
+    @Test
+    public void shouldAllowJoinUnmaterializedFilteredKTable() {
+        final KTable<Bytes, String> filteredKTable = builder.<Bytes, String>table("table-topic").filter(MockPredicate.<Bytes, String>allGoodPredicate());
+        builder.<Bytes, String>stream("stream-topic").join(filteredKTable, MockValueJoiner.TOSTRING_JOINER);
+
+        driver.setUp(builder, TestUtils.tempDirectory());
+    }
+
+    @Test
+    public void shouldAllowJoinUnmaterializedMapValuedKTable() {
+        final KTable<Bytes, String> mappedKTable = builder.<Bytes, String>table("table-topic").mapValues(MockMapper.<String>noOpValueMapper());
+        builder.<Bytes, String>stream("stream-topic").join(mappedKTable, MockValueJoiner.TOSTRING_JOINER);
+
+        driver.setUp(builder, TestUtils.tempDirectory());
+    }
+
+    @Test
+    public void shouldAllowJoinMaterializedSourceKTable() {
+        final KTable<Bytes, String> table = builder.<Bytes, String>table("table-topic");
+        builder.<Bytes, String>stream("stream-topic").join(table, MockValueJoiner.TOSTRING_JOINER);
+
+        driver.setUp(builder, TestUtils.tempDirectory());
     }
 
     @Test
@@ -159,6 +189,28 @@ public class StreamsBuilderTest {
         final KeyValueStore<Long, String> store = (KeyValueStore) driver.allStateStores().get("store");
         assertThat(store.get(1L), equalTo("value1"));
         assertThat(store.get(2L), equalTo("value2"));
+    }
+
+    @Test
+    public void shouldUseDefaultNodeAndStoreNames() {
+        final String topic = "topic";
+        builder.table(topic,
+                Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>with(Serdes.Long(), Serdes.String()));
+
+        final Iterator<TopologyDescription.Subtopology> subtopologies = builder.build().describe().subtopologies().iterator();
+        final TopologyDescription.Subtopology subtopology = subtopologies.next();
+
+        final Iterator<TopologyDescription.Node> nodes = subtopology.nodes().iterator();
+        TopologyDescription.Node node = nodes.next();
+        assertThat(node.name(), equalTo("KSTREAM-SOURCE-0000000001"));
+        node = nodes.next();
+        assertThat(node.name(), equalTo("KTABLE-SOURCE-0000000002"));
+        final Iterator<String> stores = ((TopologyDescription.Processor) node).stores().iterator();
+        assertThat(stores.next(), equalTo(topic + "-STATE-STORE-0000000000"));
+
+        assertFalse(nodes.hasNext());
+        assertFalse(stores.hasNext());
+        assertFalse(subtopologies.hasNext());
     }
     
     @Test(expected = TopologyException.class)

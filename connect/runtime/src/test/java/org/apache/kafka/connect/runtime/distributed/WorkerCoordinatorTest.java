@@ -95,7 +95,7 @@ public class WorkerCoordinatorTest {
         this.client = new MockClient(time);
         this.metadata = new Metadata(0, Long.MAX_VALUE, true);
         this.metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
-        this.consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time, 100, 1000);
+        this.consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time, 100, 1000, heartbeatIntervalMs);
         this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();
         this.configStorage = PowerMock.createMock(KafkaConfigBackingStore.class);

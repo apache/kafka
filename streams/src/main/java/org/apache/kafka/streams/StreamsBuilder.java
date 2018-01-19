@@ -59,7 +59,7 @@ public class StreamsBuilder {
     final InternalTopologyBuilder internalTopologyBuilder = topology.internalTopologyBuilder;
 
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
-    
+
     /**
      * Create a {@link KStream} from the specified topics.
      * The default {@code "auto.offset.reset"} strategy, default {@link TimestampExtractor}, and default key and value
@@ -81,7 +81,7 @@ public class StreamsBuilder {
     /**
      * Create a {@link KStream} from the specified topics.
      * The {@code "auto.offset.reset"} strategy, {@link TimestampExtractor}, key and value deserializers
-     * are defined by the options in {@link Consumed}.
+     * are defined by the options in {@link Consumed} are used.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
@@ -117,7 +117,7 @@ public class StreamsBuilder {
     /**
      * Create a {@link KStream} from the specified topics.
      * The {@code "auto.offset.reset"} strategy, {@link TimestampExtractor}, key and value deserializers
-     * are defined by the options in {@link Consumed}.
+     * are defined by the options in {@link Consumed} are used.
      * <p>
      * If multiple topics are specified there is no ordering guarantee for records from different topics.
      * <p>
@@ -159,7 +159,7 @@ public class StreamsBuilder {
     /**
      * Create a {@link KStream} from the specified topic pattern.
      * The {@code "auto.offset.reset"} strategy, {@link TimestampExtractor}, key and value deserializers
-     * are defined by the options in {@link Consumed}.
+     * are defined by the options in {@link Consumed} are used.
      * <p>
      * If multiple topics are matched by the specified pattern, the created {@link KStream} will read data from all of
      * them and there is no ordering guarantee between records from different topics.
@@ -181,8 +181,8 @@ public class StreamsBuilder {
 
     /**
      * Create a {@link KTable} for the specified topic.
-     * The default {@code "auto.offset.reset"} strategy, default {@link TimestampExtractor}, and
-     * default key and value deserializers as specified in the {@link StreamsConfig config} are used.
+     * The {@code "auto.offset.reset"} strategy, {@link TimestampExtractor}, key and value deserializers
+     * are defined by the options in {@link Consumed} are used.
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * Note that the specified input topic must be partitioned by key.
@@ -224,7 +224,7 @@ public class StreamsBuilder {
         materialized.withKeySerde(consumed.keySerde).withValueSerde(consumed.valueSerde);
         return internalStreamsBuilder.table(topic,
                                             new ConsumedInternal<>(consumed),
-                                            new MaterializedInternal<>(materialized, internalStreamsBuilder, topic));
+                                            new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-"));
     }
 
     /**
@@ -237,7 +237,7 @@ public class StreamsBuilder {
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that that store name may not be queriable through Interactive Queries.
+     * store name. Note that store name may not be queriable through Interactive Queries.
      * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      *
@@ -251,14 +251,14 @@ public class StreamsBuilder {
     /**
      * Create a {@link KTable} for the specified topic.
      * The {@code "auto.offset.reset"} strategy, {@link TimestampExtractor}, key and value deserializers
-     * are defined by the options in {@link Consumed}.
+     * are defined by the options in {@link Consumed} are used.
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that that store name may not be queriable through Interactive Queries.
+     * store name. Note that store name may not be queriable through Interactive Queries.
      * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      *
@@ -275,13 +275,13 @@ public class StreamsBuilder {
                                             new MaterializedInternal<>(
                                                     Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumed.keySerde, consumed.valueSerde),
                                                     internalStreamsBuilder,
-                                                    topic));
+                                                    topic + "-"));
     }
 
     /**
      * Create a {@link KTable} for the specified topic.
-     * The default {@code "auto.offset.reset"} strategy and default key and value deserializers as specified in the
-     * {@link StreamsConfig config} are used.
+     * The default {@code "auto.offset.reset"} strategy as specified in the {@link StreamsConfig config} are used.
+     * Key and value deserializers as defined by the options in {@link Materialized} are used.
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * Note that the specified input topics must be partitioned by key.
@@ -300,7 +300,7 @@ public class StreamsBuilder {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal
-                = new MaterializedInternal<>(materialized, internalStreamsBuilder, topic);
+                = new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-");
         return internalStreamsBuilder.table(topic,
                                             new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(),
                                                                                  materializedInternal.valueSerde())),
@@ -312,12 +312,12 @@ public class StreamsBuilder {
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that that store name may not be queriable through Interactive Queries.
+     * store name. Note that store name may not be queriable through Interactive Queries.
      * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
      * Note that {@link GlobalKTable} always applies {@code "auto.offset.reset"} strategy {@code "earliest"}
-     * regardless of the specified value in {@link StreamsConfig}.
+     * regardless of the specified value in {@link StreamsConfig} or {@link Consumed}.
      *
      * @param topic the topic name; cannot be {@code null}
      * @param consumed  the instance of {@link Consumed} used to define optional parameters
@@ -331,7 +331,7 @@ public class StreamsBuilder {
                 new MaterializedInternal<>(
                         Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumed.keySerde, consumed.valueSerde),
                         internalStreamsBuilder,
-                        topic);
+                        topic + "-");
 
 
         return internalStreamsBuilder.globalTable(topic, new ConsumedInternal<>(consumed), materialized);
@@ -343,7 +343,7 @@ public class StreamsBuilder {
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with an internal
-     * store name. Note that that store name may not be queriable through Interactive Queries.
+     * store name. Note that store name may not be queriable through Interactive Queries.
      * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
@@ -382,7 +382,7 @@ public class StreamsBuilder {
      * Long valueForKey = localStore.get(key);
      * }</pre>
      * Note that {@link GlobalKTable} always applies {@code "auto.offset.reset"} strategy {@code "earliest"}
-     * regardless of the specified value in {@link StreamsConfig}.
+     * regardless of the specified value in {@link StreamsConfig} or {@link Consumed}.
      *
      * @param topic         the topic name; cannot be {@code null}
      * @param consumed      the instance of {@link Consumed} used to define optional parameters; can't be {@code null}
@@ -399,7 +399,7 @@ public class StreamsBuilder {
         materialized.withKeySerde(consumed.keySerde).withValueSerde(consumed.valueSerde);
         return internalStreamsBuilder.globalTable(topic,
                                                   new ConsumedInternal<>(consumed),
-                                                  new MaterializedInternal<>(materialized, internalStreamsBuilder, topic));
+                                                  new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-"));
     }
 
     /**
@@ -432,7 +432,7 @@ public class StreamsBuilder {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
-                new MaterializedInternal<>(materialized, internalStreamsBuilder, topic);
+                new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-");
         return internalStreamsBuilder.globalTable(topic,
                                                   new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(),
                                                                                        materializedInternal.valueSerde())),

@@ -23,7 +23,7 @@ import kafka.common.OffsetAndMetadata
 import kafka.log.{Log, LogAppendInfo}
 import kafka.server.{FetchDataInfo, KafkaConfig, LogOffsetMetadata, ReplicaManager}
 import kafka.utils.TestUtils.fail
-import kafka.utils.{KafkaScheduler, MockTime, TestUtils, ZkUtils}
+import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
@@ -34,10 +34,15 @@ import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{Before, Test}
 import java.nio.ByteBuffer
 
+import com.yammer.metrics.Metrics
+import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.internals.Topic
 
 import scala.collection.JavaConverters._
 import scala.collection._
+import java.util.concurrent.locks.ReentrantLock
+
+import kafka.zk.KafkaZkClient
 
 class GroupMetadataManagerTest {
 
@@ -45,7 +50,7 @@ class GroupMetadataManagerTest {
   var replicaManager: ReplicaManager = null
   var groupMetadataManager: GroupMetadataManager = null
   var scheduler: KafkaScheduler = null
-  var zkUtils: ZkUtils = null
+  var zkClient: KafkaZkClient = null
   var partition: Partition = null
 
   val groupId = "foo"
@@ -71,13 +76,13 @@ class GroupMetadataManagerTest {
       offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
 
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
-    zkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
-    EasyMock.expect(zkUtils.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(Some(2))
-    EasyMock.replay(zkUtils)
+    zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(Some(2))
+    EasyMock.replay(zkClient)
 
     time = new MockTime
     replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
-    groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, zkUtils, time)
+    groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, zkClient, time)
     partition = EasyMock.niceMock(classOf[Partition])
   }
 
@@ -1306,6 +1311,7 @@ class GroupMetadataManagerTest {
       isFromClient = EasyMock.eq(false),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
+      EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
       EasyMock.anyObject())
     )
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
@@ -1320,6 +1326,7 @@ class GroupMetadataManagerTest {
       isFromClient = EasyMock.eq(false),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument),
+      EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
       EasyMock.anyObject())
     ).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
@@ -1392,4 +1399,29 @@ class GroupMetadataManagerTest {
     EasyMock.expect(replicaManager.nonOfflinePartition(groupTopicPartition)).andStubReturn(Some(partition))
   }
 
+  private def getGauge(manager: GroupMetadataManager, name: String): Gauge[Int]  = {
+    Metrics.defaultRegistry().allMetrics().get(manager.metricName(name, Map.empty)).asInstanceOf[Gauge[Int]]
+  }
+
+  private def expectMetrics(manager: GroupMetadataManager,
+                            expectedNumGroups: Int,
+                            expectedNumGroupsPreparingRebalance: Int,
+                            expectedNumGroupsCompletingRebalance: Int): Unit = {
+    assertEquals(expectedNumGroups, getGauge(manager, "NumGroups").value)
+    assertEquals(expectedNumGroupsPreparingRebalance, getGauge(manager, "NumGroupsPreparingRebalance").value)
+    assertEquals(expectedNumGroupsCompletingRebalance, getGauge(manager, "NumGroupsCompletingRebalance").value)
+  }
+
+  @Test
+  def testMetrics() {
+    groupMetadataManager.cleanupGroupMetadata()
+    expectMetrics(groupMetadataManager, 0, 0, 0)
+    val group = new GroupMetadata("foo2", Stable)
+    groupMetadataManager.addGroup(group)
+    expectMetrics(groupMetadataManager, 1, 0, 0)
+    group.transitionTo(PreparingRebalance)
+    expectMetrics(groupMetadataManager, 1, 1, 0)
+    group.transitionTo(CompletingRebalance)
+    expectMetrics(groupMetadataManager, 1, 0, 1)
+  }
 }

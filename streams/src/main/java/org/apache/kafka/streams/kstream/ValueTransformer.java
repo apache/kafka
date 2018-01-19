@@ -40,7 +40,9 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
  * @param <V>  value type
  * @param <VR> transformed value type
  * @see ValueTransformerSupplier
+ * @see ValueTransformerWithKeySupplier
  * @see KStream#transformValues(ValueTransformerSupplier, String...)
+ * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
  * @see Transformer
  */
 public interface ValueTransformer<V, VR> {

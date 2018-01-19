@@ -56,7 +56,8 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000,
                  message_validator=is_int, compression_types=None, version=DEV_BRANCH, acks=None,
-                 stop_timeout_sec=150, request_timeout_sec=30, log_level="INFO", enable_idempotence=False, offline_nodes=[]):
+                 stop_timeout_sec=150, request_timeout_sec=30, log_level="INFO",
+                 enable_idempotence=False, offline_nodes=[], create_time=-1):
         """
         :param max_messages is a number of messages to be produced per producer
         :param message_validator checks for an expected format of messages produced. There are
@@ -91,6 +92,7 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.request_timeout_sec = request_timeout_sec
         self.enable_idempotence = enable_idempotence
         self.offline_nodes = offline_nodes
+        self.create_time = create_time
 
     def java_class_name(self):
         return "VerifiableProducer"
@@ -125,8 +127,8 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         producer_prop_file += "\nrequest.timeout.ms=%d\n" % (self.request_timeout_sec * 1000)
         if self.enable_idempotence:
             self.logger.info("Setting up an idempotent producer")
-            producer_prop_file += "\nmax.in.flight.requests.per.connection=1\n"
-            producer_prop_file += "\nretries=50\n"
+            producer_prop_file += "\nmax.in.flight.requests.per.connection=5\n"
+            producer_prop_file += "\nretries=1000000\n"
             producer_prop_file += "\nenable.idempotence=true\n"
 
         self.logger.info("verifiable_producer.properties:")
@@ -194,6 +196,8 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             cmd += " --value-prefix %s" % str(idx)
         if self.acks is not None:
             cmd += " --acks %s " % str(self.acks)
+        if self.create_time > -1:
+            cmd += " --message-create-time %s " % str(self.create_time)
 
         cmd += " --producer.config %s" % VerifiableProducer.CONFIG_FILE
         cmd += " 2>> %s | tee -a %s &" % (VerifiableProducer.STDOUT_CAPTURE, VerifiableProducer.STDOUT_CAPTURE)

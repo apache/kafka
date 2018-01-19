@@ -49,6 +49,10 @@ import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourceType;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.token.delegation.DelegationToken;
+import org.apache.kafka.common.security.token.delegation.TokenInformation;
+import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
@@ -62,6 +66,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -245,6 +250,18 @@ public class RequestResponseTest {
         checkRequest(createCreatePartitionsRequestWithAssignments());
         checkErrorResponse(createCreatePartitionsRequest(), new InvalidTopicException());
         checkResponse(createCreatePartitionsResponse(), 0);
+        checkRequest(createCreateTokenRequest());
+        checkErrorResponse(createCreateTokenRequest(), new UnknownServerException());
+        checkResponse(createCreateTokenResponse(), 0);
+        checkRequest(createDescribeTokenRequest());
+        checkErrorResponse(createDescribeTokenRequest(), new UnknownServerException());
+        checkResponse(createDescribeTokenResponse(), 0);
+        checkRequest(createExpireTokenRequest());
+        checkErrorResponse(createExpireTokenRequest(), new UnknownServerException());
+        checkResponse(createExpireTokenResponse(), 0);
+        checkRequest(createRenewTokenRequest());
+        checkErrorResponse(createRenewTokenRequest(), new UnknownServerException());
+        checkResponse(createRenewTokenResponse(), 0);
     }
 
     @Test
@@ -1082,4 +1099,57 @@ public class RequestResponseTest {
         return new CreatePartitionsResponse(42, results);
     }
 
+    private CreateDelegationTokenRequest createCreateTokenRequest() {
+        List<KafkaPrincipal> renewers = new ArrayList<>();
+        renewers.add(SecurityUtils.parseKafkaPrincipal("User:user1"));
+        renewers.add(SecurityUtils.parseKafkaPrincipal("User:user2"));
+        return new CreateDelegationTokenRequest.Builder(renewers, System.currentTimeMillis()).build();
+    }
+
+    private CreateDelegationTokenResponse createCreateTokenResponse() {
+        return new CreateDelegationTokenResponse(20, Errors.NONE, SecurityUtils.parseKafkaPrincipal("User:user1"), System.currentTimeMillis(),
+            System.currentTimeMillis(), System.currentTimeMillis(), "token1", ByteBuffer.wrap("test".getBytes()));
+    }
+
+    private RenewDelegationTokenRequest createRenewTokenRequest() {
+        return new RenewDelegationTokenRequest.Builder(ByteBuffer.wrap("test".getBytes()), System.currentTimeMillis()).build();
+    }
+
+    private RenewDelegationTokenResponse createRenewTokenResponse() {
+        return new RenewDelegationTokenResponse(20, Errors.NONE, System.currentTimeMillis());
+    }
+
+    private ExpireDelegationTokenRequest createExpireTokenRequest() {
+        return new ExpireDelegationTokenRequest.Builder(ByteBuffer.wrap("test".getBytes()), System.currentTimeMillis()).build();
+    }
+
+    private ExpireDelegationTokenResponse createExpireTokenResponse() {
+        return new ExpireDelegationTokenResponse(20, Errors.NONE, System.currentTimeMillis());
+    }
+
+    private DescribeDelegationTokenRequest createDescribeTokenRequest() {
+        List<KafkaPrincipal> owners = new ArrayList<>();
+        owners.add(SecurityUtils.parseKafkaPrincipal("User:user1"));
+        owners.add(SecurityUtils.parseKafkaPrincipal("User:user2"));
+        return new DescribeDelegationTokenRequest.Builder(owners).build();
+    }
+
+    private DescribeDelegationTokenResponse createDescribeTokenResponse() {
+        List<KafkaPrincipal> renewers = new ArrayList<>();
+        renewers.add(SecurityUtils.parseKafkaPrincipal("User:user1"));
+        renewers.add(SecurityUtils.parseKafkaPrincipal("User:user2"));
+
+        List<DelegationToken> tokenList = new LinkedList<>();
+
+        TokenInformation tokenInfo1 = new TokenInformation("1", SecurityUtils.parseKafkaPrincipal("User:owner"), renewers,
+            System.currentTimeMillis(), System.currentTimeMillis(), System.currentTimeMillis());
+
+        TokenInformation tokenInfo2 = new TokenInformation("2", SecurityUtils.parseKafkaPrincipal("User:owner1"), renewers,
+            System.currentTimeMillis(), System.currentTimeMillis(), System.currentTimeMillis());
+
+        tokenList.add(new DelegationToken(tokenInfo1, "test".getBytes()));
+        tokenList.add(new DelegationToken(tokenInfo2, "test".getBytes()));
+
+        return new DescribeDelegationTokenResponse(20, Errors.NONE, tokenList);
+    }
 }

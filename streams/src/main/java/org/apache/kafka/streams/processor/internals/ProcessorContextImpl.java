@@ -39,7 +39,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                          final ProcessorStateManager stateMgr,
                          final StreamsMetrics metrics,
                          final ThreadCache cache) {
-        super(id, task.applicationId(), config, metrics, stateMgr, cache);
+        super(id, config, metrics, stateMgr, cache);
         this.task = task;
         this.collector = collector;
     }
@@ -73,20 +73,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         return stateManager.getStore(name);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public <K, V> void forward(final K key, final V value) {
-        final ProcessorNode previousNode = currentNode();
-        try {
-            for (ProcessorNode child : (List<ProcessorNode>) currentNode().children()) {
-                setCurrentNode(child);
-                child.process(key, value);
-            }
-        } finally {
-            setCurrentNode(previousNode);
-        }
     }
 
     @SuppressWarnings("unchecked")

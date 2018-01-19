@@ -104,13 +104,13 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
         Internal, config.interBrokerListenerName.value)
     }
 
-    TestUtils.createTopic(zkUtils, Topic.GROUP_METADATA_TOPIC_NAME, OffsetConfig.DefaultOffsetsTopicNumPartitions,
+    TestUtils.createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, OffsetConfig.DefaultOffsetsTopicNumPartitions,
       replicationFactor = 2, servers, servers.head.groupCoordinator.offsetsTopicConfigs)
 
     servers.head.config.listeners.foreach { endPoint =>
       val listenerName = endPoint.listenerName
 
-      TestUtils.createTopic(zkUtils, listenerName.value, 2, 2, servers)
+      TestUtils.createTopic(zkClient, listenerName.value, 2, 2, servers)
 
       val trustStoreFile =
         if (TestUtils.usesSslTransportLayer(endPoint.securityProtocol)) Some(this.trustStoreFile)

@@ -27,14 +27,15 @@ import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
 
-object AclCommand {
+object AclCommand extends Logging {
 
   val Newline = scala.util.Properties.lineSeparator
   val ResourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
     Topic -> Set(Read, Write, Describe, Delete, DescribeConfigs, AlterConfigs, All),
     Group -> Set(Read, Describe, All),
     Cluster -> Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, Alter, Describe, All),
-    TransactionalId -> Set(Describe, Write, All)
+    TransactionalId -> Set(Describe, Write, All),
+    DelegationToken -> Set(Describe, All)
   )
 
   def main(args: Array[String]) {
@@ -77,7 +78,7 @@ object AclCommand {
       authZ.configure(authorizerProperties.asJava)
       f(authZ)
     }
-    finally CoreUtils.swallow(authZ.close())
+    finally CoreUtils.swallow(authZ.close(), this)
   }
 
   private def addAcl(opts: AclCommandOptions) {
@@ -246,8 +247,11 @@ object AclCommand {
       opts.options.valuesOf(opts.transactionalIdOpt).asScala.foreach(transactionalId =>
         resources += new Resource(TransactionalId, transactionalId))
 
+    if (opts.options.has(opts.delegationTokenOpt))
+      opts.options.valuesOf(opts.delegationTokenOpt).asScala.foreach(token => resources += new Resource(DelegationToken, token.trim))
+
     if (resources.isEmpty && dieIfNoResourceFound)
-      CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group>")
+      CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>")
 
     resources
   }
@@ -303,6 +307,12 @@ object AclCommand {
     val idempotentOpt = parser.accepts("idempotent", "Enable idempotence for the producer. This should be " +
       "used in combination with the --producer option. Note that idempotence is enabled automatically if " +
       "the producer is authorized to a particular transactional-id.")
+
+    val delegationTokenOpt = parser.accepts("delegation-token", "Delegation token to which ACLs should be added or removed. " +
+      "A value of * indicates ACL should apply to all tokens.")
+      .withRequiredArg
+      .describedAs("delegation-token")
+      .ofType(classOf[String])
 
     val addOpt = parser.accepts("add", "Indicates you are trying to add ACLs.")
     val removeOpt = parser.accepts("remove", "Indicates you are trying to remove ACLs.")

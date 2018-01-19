@@ -17,32 +17,28 @@
 
 package kafka.utils
 
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.CountDownLatch
 
 import kafka.admin._
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster._
 import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndPartition}
 import kafka.consumer.{ConsumerThreadId, TopicCount}
-import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
-import kafka.metrics.KafkaMetricsGroup
-import kafka.server.ConfigType
-import kafka.utils.ZkUtils._
-
-import com.yammer.metrics.core.MetricName
+import kafka.controller.{LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
+import kafka.zk.{BrokerIdZNode, ZkData}
 import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
-import kafka.utils.Json._
 
 import scala.collection._
 import scala.collection.JavaConverters._
+import org.apache.kafka.common.TopicPartition
 
 object ZkUtils {
 
@@ -71,28 +67,10 @@ object ZkUtils {
   val ConfigChangesPath = s"$ConfigPath/changes"
   val ConfigUsersPath = s"$ConfigPath/users"
   val ProducerIdBlockPath = "/latest_producer_id_block"
-  // Important: it is necessary to add any new top level Zookeeper path to the Seq
-  val SecureZkRootPaths = Seq(AdminPath,
-                              BrokersPath,
-                              ClusterPath,
-                              ConfigPath,
-                              ControllerPath,
-                              ControllerEpochPath,
-                              IsrChangeNotificationPath,
-                              KafkaAclPath,
-                              KafkaAclChangesPath,
-                              ProducerIdBlockPath,
-                              LogDirEventNotificationPath)
 
-  // Important: it is necessary to add any new top level Zookeeper path that contains
-  //            sensitive information that should not be world readable to the Seq
-  val SensitiveZkRootPaths = Seq(ConfigUsersPath)
+  val SecureZkRootPaths = ZkData.SecureRootPaths
 
-  def withMetrics(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isZkSecurityEnabled: Boolean,
-                  time: Time): ZkUtils = {
-    val (zkClient, zkConnection) = createZkClientAndConnection(zkUrl, sessionTimeout, connectionTimeout)
-    new ZkUtils(new ZooKeeperClientMetrics(zkClient, time), zkConnection, isZkSecurityEnabled)
-  }
+  val SensitiveZkRootPaths = ZkData.SensitiveRootPaths
 
   def apply(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isZkSecurityEnabled: Boolean): ZkUtils = {
     val (zkClient, zkConnection) = createZkClientAndConnection(zkUrl, sessionTimeout, connectionTimeout)
@@ -117,24 +95,12 @@ object ZkUtils {
     (zkClient, zkConnection)
   }
 
-  def sensitivePath(path: String): Boolean = {
-    path != null && SensitiveZkRootPaths.exists(path.startsWith(_))
-  }
-
   @deprecated("This is deprecated, use defaultAcls(isSecure, path) which doesn't make sensitive data world readable", since = "0.10.2.1")
   def DefaultAcls(isSecure: Boolean): java.util.List[ACL] = defaultAcls(isSecure, "")
 
-  def defaultAcls(isSecure: Boolean, path: String): java.util.List[ACL] = {
-    if (isSecure) {
-      val list = new java.util.ArrayList[ACL]
-      list.addAll(ZooDefs.Ids.CREATOR_ALL_ACL)
-      if (!sensitivePath(path)) {
-        list.addAll(ZooDefs.Ids.READ_ACL_UNSAFE)
-      }
-      list
-    } else
-      ZooDefs.Ids.OPEN_ACL_UNSAFE
-  }
+  def sensitivePath(path: String): Boolean = ZkData.sensitivePath(path)
+
+  def defaultAcls(isSecure: Boolean, path: String): java.util.List[ACL] = ZkData.defaultAcls(isSecure, path).asJava
 
   def maybeDeletePath(zkUrl: String, dir: String) {
     try {
@@ -200,15 +166,15 @@ object ZkUtils {
   }
 
   def controllerZkData(brokerId: Int, timestamp: Long): String = {
-    Json.encode(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp.toString))
+    Json.legacyEncodeAsString(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp.toString))
   }
 
   def preferredReplicaLeaderElectionZkData(partitions: scala.collection.Set[TopicAndPartition]): String = {
-    Json.encode(Map("version" -> 1, "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition))))
+    Json.legacyEncodeAsString(Map("version" -> 1, "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition))))
   }
 
   def formatAsReassignmentJson(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {
-    Json.encode(Map(
+    Json.legacyEncodeAsString(Map(
       "version" -> 1,
       "partitions" -> partitionsToBeReassigned.map { case (TopicAndPartition(topic, partition), replicas) =>
         Map(
@@ -220,75 +186,61 @@ object ZkUtils {
     ))
   }
 
-}
-
-class ZooKeeperClientWrapper(val zkClient: ZkClient) {
-  def apply[T](method: ZkClient => T): T = method(zkClient)
-  def close(): Unit = {
-    if(zkClient != null)
-      zkClient.close()
+  def getReassignmentJson(partitionsToBeReassigned: Map[TopicPartition, Seq[Int]]): String = {
+    Json.encodeAsString(Map(
+      "version" -> 1,
+      "partitions" -> partitionsToBeReassigned.map { case (tp, replicas) =>
+        Map(
+          "topic" -> tp.topic,
+          "partition" -> tp.partition,
+          "replicas" -> replicas
+        )
+      }
+    ))
   }
 }
 
-class ZooKeeperClientMetrics(zkClient: ZkClient, val time: Time)
-    extends ZooKeeperClientWrapper(zkClient) with KafkaMetricsGroup {
-  val latencyMetric = newHistogram("ZooKeeperRequestLatencyMs")
-
-  override protected def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
-    explicitMetricName("kafka.server", "ZooKeeperClientMetrics", name, metricTags)
-  }
-
-  override def apply[T](method: ZkClient => T): T = {
-    val startNs = time.nanoseconds
-    val ret =
-      try method(zkClient)
-      finally latencyMetric.update(TimeUnit.NANOSECONDS.toMillis(time.nanoseconds - startNs))
-    ret
-  }
-
-  override def close(): Unit = {
-    if (latencyMetric != null)
-      removeMetric("ZooKeeperRequestLatencyMs")
-    super.close()
-  }
-}
-
-class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
+/**
+ * Legacy class for interacting with ZooKeeper. Whenever possible, ``KafkaZkClient`` should be used instead.
+ */
+class ZkUtils(val zkClient: ZkClient,
               val zkConnection: ZkConnection,
               val isSecure: Boolean) extends Logging {
-  // These are persistent ZK paths that should exist on kafka broker startup.
-  val persistentZkPaths = Seq(ConsumersPath,
-                              BrokerIdsPath,
-                              BrokerTopicsPath,
-                              ConfigChangesPath,
-                              getEntityConfigRootPath(ConfigType.Topic),
-                              getEntityConfigRootPath(ConfigType.Client),
-                              DeleteTopicsPath,
-                              BrokerSequenceIdPath,
-                              IsrChangeNotificationPath,
-                              ProducerIdBlockPath,
-                              LogDirEventNotificationPath)
+  import ZkUtils._
 
-  /** Present for compatibility */
-  def this(zkClient: ZkClient, zkConnection: ZkConnection, isSecure: Boolean) =
-    this(new ZooKeeperClientWrapper(zkClient), zkConnection, isSecure)
+  // These are persistent ZK paths that should exist on kafka broker startup.
+  val persistentZkPaths = ZkData.PersistentZkPaths
 
   // Visible for testing
-  val zkPath = new ZkPath(zkClientWrap)
-
-  import ZkUtils._
+  val zkPath = new ZkPath(zkClient)
 
   @deprecated("This is deprecated, use defaultAcls(path) which doesn't make sensitive data world readable", since = "0.10.2.1")
   val DefaultAcls: java.util.List[ACL] = ZkUtils.defaultAcls(isSecure, "")
 
   def defaultAcls(path: String): java.util.List[ACL] = ZkUtils.defaultAcls(isSecure, path)
 
-  def zkClient: ZkClient = zkClientWrap.zkClient
-
   def getController(): Int = {
     readDataMaybeNull(ControllerPath)._1 match {
-      case Some(controller) => KafkaController.parseControllerId(controller)
+      case Some(controller) => parseControllerId(controller)
       case None => throw new KafkaException("Controller doesn't exist")
+    }
+  }
+
+  def parseControllerId(controllerInfoString: String): Int = {
+    try {
+      Json.parseFull(controllerInfoString) match {
+        case Some(js) => js.asJsonObject("brokerid").to[Int]
+        case None => throw new KafkaException("Failed to parse the controller info json [%s].".format(controllerInfoString))
+      }
+    } catch {
+      case _: Throwable =>
+        // It may be due to an incompatible controller register version
+        warn("Failed to parse the controller info as json. "
+          + "Probably this controller is still using the old format [%s] to store the broker id in zookeeper".format(controllerInfoString))
+        try controllerInfoString.toInt
+        catch {
+          case t: Throwable => throw new KafkaException("Failed to parse the controller info: " + controllerInfoString + ". This is neither the new or the old format.", t)
+        }
     }
   }
 
@@ -296,8 +248,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   object ClusterId {
 
     def toJson(id: String) = {
-      val jsonMap = Map("version" -> "1", "id" -> id)
-      Json.encode(jsonMap)
+      Json.legacyEncodeAsString(Map("version" -> "1", "id" -> id))
     }
 
     def fromJson(clusterIdJson: String): String = {
@@ -328,8 +279,23 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
     brokerIds.map(_.toInt).map(getBrokerInfo(_)).filter(_.isDefined).map(_.get)
   }
 
-  def getLeaderAndIsrForPartition(topic: String, partition: Int):Option[LeaderAndIsr] = {
-    ReplicationUtils.getLeaderIsrAndEpochForPartition(this, topic, partition).map(_.leaderAndIsr)
+  def getLeaderAndIsrForPartition(topic: String, partition: Int): Option[LeaderAndIsr] = {
+    val leaderAndIsrPath = getTopicPartitionLeaderAndIsrPath(topic, partition)
+    val (leaderAndIsrOpt, stat) = readDataMaybeNull(leaderAndIsrPath)
+    debug(s"Read leaderISR $leaderAndIsrOpt for $topic-$partition")
+    leaderAndIsrOpt.flatMap(leaderAndIsrStr => parseLeaderAndIsr(leaderAndIsrStr, leaderAndIsrPath, stat).map(_.leaderAndIsr))
+  }
+
+  private def parseLeaderAndIsr(leaderAndIsrStr: String, path: String, stat: Stat): Option[LeaderIsrAndControllerEpoch] = {
+    Json.parseFull(leaderAndIsrStr).flatMap { js =>
+      val leaderIsrAndEpochInfo = js.asJsonObject
+      val leader = leaderIsrAndEpochInfo("leader").to[Int]
+      val epoch = leaderIsrAndEpochInfo("leader_epoch").to[Int]
+      val isr = leaderIsrAndEpochInfo("isr").to[List[Int]]
+      val controllerEpoch = leaderIsrAndEpochInfo("controller_epoch").to[Int]
+      val zkPathVersion = stat.getVersion
+      trace(s"Leader $leader, Epoch $epoch, Isr $isr, Zk path version $zkPathVersion for leaderAndIsrPath $path")
+      Some(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr, zkPathVersion), controllerEpoch))}
   }
 
   def setupCommonPaths() {
@@ -423,7 +389,8 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
     val brokerIdPath = BrokerIdsPath + "/" + id
     // see method documentation for reason why we do this
     val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
-    val json = Broker.toJson(version, id, host, port, advertisedEndpoints, jmxPort, rack)
+    val json = new String(BrokerIdZNode.encode(version, host, port, advertisedEndpoints, jmxPort, rack),
+      StandardCharsets.UTF_8)
     registerBrokerInZk(brokerIdPath, json)
 
     info("Registered broker %d at path %s with addresses: %s".format(id, brokerIdPath, advertisedEndpoints.mkString(",")))
@@ -435,7 +402,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
                                                       brokerInfo,
                                                       zkConnection.getZookeeper,
                                                       isSecure)
-      zkClientWrap(_ => zkCheckedEphemeral.create())
+      zkCheckedEphemeral.create()
     } catch {
       case _: ZkNodeExistsException =>
         throw new RuntimeException("A broker is already registered on the path " + brokerIdPath
@@ -452,7 +419,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   }
 
   def leaderAndIsrZkData(leaderAndIsr: LeaderAndIsr, controllerEpoch: Int): String = {
-    Json.encode(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
+    Json.legacyEncodeAsString(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
                     "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr))
   }
 
@@ -460,7 +427,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
    * Get JSON partition to replica map from zookeeper.
    */
   def replicaAssignmentZkData(map: Map[String, Seq[Int]]): String = {
-    Json.encode(Map("version" -> 1, "partitions" -> map))
+    Json.legacyEncodeAsString(Map("version" -> 1, "partitions" -> map))
   }
 
   /**
@@ -476,7 +443,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
       acls
     }
 
-    if (!zkClientWrap(zkClient => zkClient.exists(path)))
+    if (!zkClient.exists(path))
       zkPath.createPersistent(path, createParents = true, acl) //won't throw NoNodeException or NodeExistsException
   }
 
@@ -494,7 +461,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   /**
    * Create an ephemeral node with the given path and data. Create parents if necessary.
    */
-  private def createEphemeralPath(path: String, data: String, acls: java.util.List[ACL] = UseDefaultAcls): Unit = {
+  private def createEphemeralPath(path: String, data: String, acls: java.util.List[ACL]): Unit = {
     val acl = if (acls eq UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
     try {
       zkPath.createEphemeral(path, data, acl)
@@ -559,7 +526,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   def updatePersistentPath(path: String, data: String, acls: java.util.List[ACL] = UseDefaultAcls) = {
     val acl = if (acls eq UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
     try {
-      zkClientWrap(_.writeData(path, data))
+      zkClient.writeData(path, data)
     } catch {
       case _: ZkNoNodeException =>
         createParentPath(path)
@@ -567,7 +534,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
           zkPath.createPersistent(path, data, acl)
         } catch {
           case _: ZkNodeExistsException =>
-            zkClientWrap(_.writeData(path, data))
+            zkClient.writeData(path, data)
         }
     }
   }
@@ -583,7 +550,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   def conditionalUpdatePersistentPath(path: String, data: String, expectVersion: Int,
     optionalChecker:Option[(ZkUtils, String, String) => (Boolean,Int)] = None): (Boolean, Int) = {
     try {
-      val stat = zkClientWrap(_.writeDataReturnStat(path, data, expectVersion))
+      val stat = zkClient.writeDataReturnStat(path, data, expectVersion)
       debug("Conditional update of path %s with value %s and expected version %d succeeded, returning the new version: %d"
         .format(path, data, expectVersion, stat.getVersion))
       (true, stat.getVersion)
@@ -610,7 +577,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
    */
   def conditionalUpdatePersistentPathIfExists(path: String, data: String, expectVersion: Int): (Boolean, Int) = {
     try {
-      val stat = zkClientWrap(_.writeDataReturnStat(path, data, expectVersion))
+      val stat = zkClient.writeDataReturnStat(path, data, expectVersion)
       debug("Conditional update of path %s with value %s and expected version %d succeeded, returning the new version: %d"
         .format(path, data, expectVersion, stat.getVersion))
       (true, stat.getVersion)
@@ -630,7 +597,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   def updateEphemeralPath(path: String, data: String, acls: java.util.List[ACL] = UseDefaultAcls): Unit = {
     val acl = if (acls eq UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
     try {
-      zkClientWrap(_.writeData(path, data))
+      zkClient.writeData(path, data)
     } catch {
       case _: ZkNoNodeException =>
         createParentPath(path)
@@ -639,7 +606,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   }
 
   def deletePath(path: String): Boolean = {
-    zkClientWrap(_.delete(path))
+    zkClient.delete(path)
   }
 
   /**
@@ -648,7 +615,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
     */
    def conditionalDeletePath(path: String, expectedVersion: Int): Boolean = {
     try {
-      zkClientWrap(_.delete(path, expectedVersion))
+      zkClient.delete(path, expectedVersion)
       true
     } catch {
       case _: ZkBadVersionException => false
@@ -656,37 +623,37 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   }
 
   def deletePathRecursive(path: String) {
-    zkClientWrap(_.deleteRecursive(path))
+    zkClient.deleteRecursive(path)
   }
 
   def subscribeDataChanges(path: String, listener: IZkDataListener): Unit =
-    zkClientWrap(_.subscribeDataChanges(path, listener))
+    zkClient.subscribeDataChanges(path, listener)
 
   def unsubscribeDataChanges(path: String, dataListener: IZkDataListener): Unit =
-    zkClientWrap(_.unsubscribeDataChanges(path, dataListener))
+    zkClient.unsubscribeDataChanges(path, dataListener)
 
   def subscribeStateChanges(listener: IZkStateListener): Unit =
-    zkClientWrap(_.subscribeStateChanges(listener))
+    zkClient.subscribeStateChanges(listener)
 
   def subscribeChildChanges(path: String, listener: IZkChildListener): Option[Seq[String]] =
-    Option(zkClientWrap(_.subscribeChildChanges(path, listener))).map(_.asScala)
+    Option(zkClient.subscribeChildChanges(path, listener)).map(_.asScala)
 
   def unsubscribeChildChanges(path: String, childListener: IZkChildListener): Unit =
-    zkClientWrap(_.unsubscribeChildChanges(path, childListener))
+    zkClient.unsubscribeChildChanges(path, childListener)
 
   def unsubscribeAll(): Unit =
-    zkClientWrap(_.unsubscribeAll())
+    zkClient.unsubscribeAll()
 
   def readData(path: String): (String, Stat) = {
     val stat: Stat = new Stat()
-    val dataStr: String = zkClientWrap(_.readData[String](path, stat))
+    val dataStr: String = zkClient.readData[String](path, stat)
     (dataStr, stat)
   }
 
   def readDataMaybeNull(path: String): (Option[String], Stat) = {
     val stat = new Stat()
     val dataAndStat = try {
-                        val dataStr = zkClientWrap(_.readData[String](path, stat))
+                        val dataStr = zkClient.readData[String](path, stat)
                         (Some(dataStr), stat)
                       } catch {
                         case _: ZkNoNodeException =>
@@ -698,18 +665,18 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   def readDataAndVersionMaybeNull(path: String): (Option[String], Int) = {
     val stat = new Stat()
     try {
-      val data = zkClientWrap(_.readData[String](path, stat))
+      val data = zkClient.readData[String](path, stat)
       (Option(data), stat.getVersion)
     } catch {
       case _: ZkNoNodeException => (None, stat.getVersion)
     }
   }
 
-  def getChildren(path: String): Seq[String] = zkClientWrap(_.getChildren(path)).asScala
+  def getChildren(path: String): Seq[String] = zkClient.getChildren(path).asScala
 
   def getChildrenParentMayNotExist(path: String): Seq[String] = {
     try {
-      zkClientWrap(_.getChildren(path)).asScala
+      zkClient.getChildren(path).asScala
     } catch {
       case _: ZkNoNodeException => Nil
     }
@@ -719,7 +686,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
    * Check if the given path exists
    */
   def pathExists(path: String): Boolean = {
-    zkClientWrap(_.exists(path))
+    zkClient.exists(path)
   }
 
   def isTopicMarkedForDeletion(topic: String): Boolean = {
@@ -731,19 +698,30 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
     val nodes = getChildrenParentMayNotExist(BrokerIdsPath)
     for (node <- nodes) {
       val brokerZKString = readData(BrokerIdsPath + "/" + node)._1
-      cluster.add(Broker.createBroker(node.toInt, brokerZKString))
+      cluster.add(parseBrokerJson(node.toInt, brokerZKString))
     }
     cluster
+  }
+
+  private def parseBrokerJson(id: Int, jsonString: String): Broker = {
+    BrokerIdZNode.decode(id, jsonString.getBytes(StandardCharsets.UTF_8)).broker
   }
 
   def getPartitionLeaderAndIsrForTopics(topicAndPartitions: Set[TopicAndPartition]): mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = {
     val ret = new mutable.HashMap[TopicAndPartition, LeaderIsrAndControllerEpoch]
     for(topicAndPartition <- topicAndPartitions) {
-      ReplicationUtils.getLeaderIsrAndEpochForPartition(this, topicAndPartition.topic, topicAndPartition.partition).foreach { leaderIsrAndControllerEpoch =>
+      getLeaderIsrAndEpochForPartition(topicAndPartition.topic, topicAndPartition.partition).foreach { leaderIsrAndControllerEpoch =>
         ret.put(topicAndPartition, leaderIsrAndControllerEpoch)
       }
     }
     ret
+  }
+
+  private[utils] def getLeaderIsrAndEpochForPartition(topic: String, partition: Int): Option[LeaderIsrAndControllerEpoch] = {
+    val leaderAndIsrPath = getTopicPartitionLeaderAndIsrPath(topic, partition)
+    val (leaderAndIsrOpt, stat) = readDataMaybeNull(leaderAndIsrPath)
+    debug(s"Read leaderISR $leaderAndIsrOpt for $topic-$partition")
+    leaderAndIsrOpt.flatMap(leaderAndIsrStr => parseLeaderAndIsr(leaderAndIsrStr, leaderAndIsrPath, stat))
   }
 
   def getReplicaAssignmentForTopics(topics: Seq[String]): mutable.Map[TopicAndPartition, Seq[Int]] = {
@@ -801,7 +779,9 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
     jsonPartitionMapOpt match {
       case Some(jsonPartitionMap) =>
         val reassignedPartitions = parsePartitionReassignmentData(jsonPartitionMap)
-        reassignedPartitions.map(p => p._1 -> new ReassignedPartitionsContext(p._2))
+        reassignedPartitions.map { case (tp, newReplicas) =>
+          tp -> new ReassignedPartitionsContext(newReplicas, null)
+        }
       case None => Map.empty[TopicAndPartition, ReassignedPartitionsContext]
     }
   }
@@ -830,16 +810,16 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
     // read the partitions and their new replica list
     val jsonPartitionListOpt = readDataMaybeNull(PreferredReplicaLeaderElectionPath)._1
     jsonPartitionListOpt match {
-      case Some(jsonPartitionList) => PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(jsonPartitionList)
+      case Some(jsonPartitionList) => PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(jsonPartitionList).map(tp => new TopicAndPartition(tp))
       case None => Set.empty[TopicAndPartition]
     }
   }
 
   def deletePartition(brokerId: Int, topic: String) {
     val brokerIdPath = BrokerIdsPath + "/" + brokerId
-    zkClientWrap(_.delete(brokerIdPath))
+    zkClient.delete(brokerIdPath)
     val brokerPartTopicPath = ZkUtils.BrokerTopicsPath + "/" + topic + "/" + brokerId
-    zkClientWrap(_.delete(brokerPartTopicPath))
+    zkClient.delete(brokerPartTopicPath)
   }
 
   @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
@@ -887,7 +867,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
    */
   def getBrokerInfo(brokerId: Int): Option[Broker] = {
     readDataMaybeNull(BrokerIdsPath + "/" + brokerId)._1 match {
-      case Some(brokerInfo) => Some(Broker.createBroker(brokerId, brokerInfo))
+      case Some(brokerInfo) => Some(parseBrokerJson(brokerId, brokerInfo))
       case None => None
     }
   }
@@ -899,7 +879,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
     */
   def getSequenceId(path: String, acls: java.util.List[ACL] = UseDefaultAcls): Int = {
     val acl = if (acls == UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
-    def writeToZk: Int = zkClientWrap(_.writeDataReturnStat(path, "", -1)).getVersion
+    def writeToZk: Int = zkClient.writeDataReturnStat(path, "", -1).getVersion
     try {
       writeToZk
     } catch {
@@ -963,7 +943,7 @@ class ZkUtils(zkClientWrap: ZooKeeperClientWrapper,
   }
 
   def close() {
-    zkClientWrap.close()
+    zkClient.close()
   }
 }
 
@@ -983,7 +963,7 @@ private object ZKStringSerializer extends ZkSerializer {
 
 @deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 class ZKGroupDirs(val group: String) {
-  def consumerDir = ConsumersPath
+  def consumerDir = ZkUtils.ConsumersPath
   def consumerGroupDir = consumerDir + "/" + group
   def consumerRegistryDir = consumerGroupDir + "/ids"
   def consumerGroupOffsetsDir = consumerGroupDir + "/offsets"
@@ -1019,7 +999,7 @@ class ZKConfig(props: VerifiableProperties) {
   val zkSyncTimeMs = props.getInt(ZkSyncTimeMsProp, 2000)
 }
 
-class ZkPath(clientWrap: ZooKeeperClientWrapper) {
+class ZkPath(zkClient: ZkClient) {
 
   @volatile private var isNamespacePresent: Boolean = false
 
@@ -1027,7 +1007,7 @@ class ZkPath(clientWrap: ZooKeeperClientWrapper) {
     if (isNamespacePresent)
       return
 
-    if (!clientWrap(_.exists("/"))) {
+    if (!zkClient.exists("/")) {
       throw new ConfigException("Zookeeper namespace does not exist")
     }
     isNamespacePresent = true
@@ -1039,22 +1019,22 @@ class ZkPath(clientWrap: ZooKeeperClientWrapper) {
 
   def createPersistent(path: String, data: Object, acls: java.util.List[ACL]) {
     checkNamespace()
-    clientWrap(_.createPersistent(path, data, acls))
+    zkClient.createPersistent(path, data, acls)
   }
 
   def createPersistent(path: String, createParents: Boolean, acls: java.util.List[ACL]) {
     checkNamespace()
-    clientWrap(_.createPersistent(path, createParents, acls))
+    zkClient.createPersistent(path, createParents, acls)
   }
 
   def createEphemeral(path: String, data: Object, acls: java.util.List[ACL]) {
     checkNamespace()
-    clientWrap(_.createEphemeral(path, data, acls))
+    zkClient.createEphemeral(path, data, acls)
   }
 
   def createPersistentSequential(path: String, data: Object, acls: java.util.List[ACL]): String = {
     checkNamespace()
-    clientWrap(_.createPersistentSequential(path, data, acls))
+    zkClient.createPersistentSequential(path, data, acls)
   }
 }
 

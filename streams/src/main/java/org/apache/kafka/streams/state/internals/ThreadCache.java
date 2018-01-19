@@ -195,8 +195,7 @@ public class ThreadCache {
         }
         return new MemoryLRUCacheBytesIterator(cache.allKeys(), cache);
     }
-
-
+    
     public long size() {
         long size = 0;
         for (NamedCache cache : caches.values()) {
@@ -204,10 +203,6 @@ public class ThreadCache {
             if (isOverflowing(size)) {
                 return Long.MAX_VALUE;
             }
-        }
-
-        if (isOverflowing(size)) {
-            return Long.MAX_VALUE;
         }
         return size;
     }
@@ -220,6 +215,9 @@ public class ThreadCache {
         long sizeInBytes = 0;
         for (final NamedCache namedCache : caches.values()) {
             sizeInBytes += namedCache.sizeInBytes();
+            if (isOverflowing(sizeInBytes)) {
+                return Long.MAX_VALUE;
+            }
         }
         return sizeInBytes;
     }

@@ -23,7 +23,7 @@ import java.util.Collection;
 
 
 /**
- * Options for {@link AdminClient#describeLogDirs(Collection<Integer>)}
+ * Options for {@link AdminClient#describeLogDirs(Collection)}
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */

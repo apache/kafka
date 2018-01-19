@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -53,6 +54,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
 
@@ -258,11 +260,31 @@ class WorkerSinkTask extends WorkerTask {
      */
     protected void initializeAndStart() {
         String topicsStr = taskConfig.get(SinkTask.TOPICS_CONFIG);
-        if (topicsStr == null || topicsStr.isEmpty())
-            throw new ConnectException("Sink tasks require a list of topics.");
-        String[] topics = topicsStr.split(",");
-        consumer.subscribe(Arrays.asList(topics), new HandleRebalance());
-        log.debug("{} Initializing and starting task for topics {}", this, topics);
+        boolean topicsStrPresent = topicsStr != null && !topicsStr.trim().isEmpty();
+
+        String topicsRegexStr = taskConfig.get(SinkTask.TOPICS_REGEX_CONFIG);
+        boolean topicsRegexStrPresent = topicsRegexStr != null && !topicsRegexStr.trim().isEmpty();
+
+        if (topicsStrPresent && topicsRegexStrPresent) {
+            throw new ConfigException(SinkTask.TOPICS_CONFIG + " and " + SinkTask.TOPICS_REGEX_CONFIG +
+                " are mutually exclusive options, but both are set.");
+        }
+
+        if (!topicsStrPresent && !topicsRegexStrPresent) {
+            throw new ConfigException("Must configure one of " +
+                SinkTask.TOPICS_CONFIG + " or " + SinkTask.TOPICS_REGEX_CONFIG);
+        }
+
+        if (topicsStrPresent) {
+            String[] topics = topicsStr.split(",");
+            consumer.subscribe(Arrays.asList(topics), new HandleRebalance());
+            log.debug("{} Initializing and starting task for topics {}", this, topics);
+        } else {
+            Pattern pattern = Pattern.compile(topicsRegexStr);
+            consumer.subscribe(pattern, new HandleRebalance());
+            log.debug("{} Initializing and starting task for topics regex {}", this, topicsRegexStr);
+        }
+
         task.initialize(context);
         task.start(taskConfig);
         log.info("{} Sink task finished initialization and start", this);
@@ -652,6 +674,8 @@ class WorkerSinkTask extends WorkerTask {
             metricGroup = connectMetrics
                                   .group(registry.sinkTaskGroupName(), registry.connectorTagName(), id.connector(), registry.taskTagName(),
                                          Integer.toString(id.task()));
+            // prevent collisions by removing any previously created metrics in this group.
+            metricGroup.close();
 
             sinkRecordRead = metricGroup.metrics().sensor("sink-record-read");
             sinkRecordRead.add(metricGroup.metricName(registry.sinkRecordReadRate), new Rate());

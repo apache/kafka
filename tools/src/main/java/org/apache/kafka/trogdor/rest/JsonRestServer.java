@@ -21,6 +21,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 
 import org.apache.kafka.trogdor.common.JsonUtil;
+import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
@@ -43,6 +44,10 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Embedded server for the REST API that provides the control plane for Trogdor.
@@ -50,7 +55,9 @@ import java.nio.charset.StandardCharsets;
 public class JsonRestServer {
     private static final Logger log = LoggerFactory.getLogger(JsonRestServer.class);
 
-    private static final long GRACEFUL_SHUTDOWN_TIMEOUT_MS = 2 * 1000;
+    private static final long GRACEFUL_SHUTDOWN_TIMEOUT_MS = 100;
+
+    private final ScheduledExecutorService shutdownExecutor;
 
     private final Server jettyServer;
 
@@ -63,6 +70,8 @@ public class JsonRestServer {
      *                          0 to use a random port.
      */
     public JsonRestServer(int port) {
+        this.shutdownExecutor = Executors.newSingleThreadScheduledExecutor(
+            ThreadUtils.createThreadFactory("JsonRestServerCleanupExecutor", false));
         this.jettyServer = new Server();
         this.connector = new ServerConnector(jettyServer);
         if (port > 0) {
@@ -78,7 +87,6 @@ public class JsonRestServer {
      */
     public void start(Object... resources) {
         log.info("Starting REST server");
-
         ResourceConfig resourceConfig = new ResourceConfig();
         resourceConfig.register(new JacksonJsonProvider(JsonUtil.JSON_SERDE));
         for (Object resource : resources) {
@@ -119,17 +127,37 @@ public class JsonRestServer {
         return connector.getLocalPort();
     }
 
-    public void stop() {
-        log.info("Stopping REST server");
+    /**
+     * Initiate shutdown, but do not wait for it to complete.
+     */
+    public void beginShutdown() {
+        if (!shutdownExecutor.isShutdown()) {
+            shutdownExecutor.submit(new Callable<Void>() {
+                @Override
+                public Void call() throws Exception {
+                    try {
+                        log.info("Stopping REST server");
+                        jettyServer.stop();
+                        jettyServer.join();
+                        log.info("REST server stopped");
+                    } catch (Exception e) {
+                        log.error("Unable to stop REST server", e);
+                    } finally {
+                        jettyServer.destroy();
+                    }
+                    shutdownExecutor.shutdown();
+                    return null;
+                }
+            });
+        }
+    }
 
-        try {
-            jettyServer.stop();
-            jettyServer.join();
-            log.info("REST server stopped");
-        } catch (Exception e) {
-            log.error("Unable to stop REST server", e);
-        } finally {
-            jettyServer.destroy();
+    /**
+     * Wait for shutdown to complete.  May be called prior to beginShutdown.
+     */
+    public void waitForShutdown() throws InterruptedException {
+        while (!shutdownExecutor.isShutdown()) {
+            shutdownExecutor.awaitTermination(1, TimeUnit.DAYS);
         }
     }
 
@@ -195,6 +223,24 @@ public class JsonRestServer {
                 connection.disconnect();
             }
         }
+    }
+
+    public static <T> HttpResponse<T> httpRequest(String url, String method,
+            Object requestBodyData, TypeReference<T> responseFormat, int maxTries)
+            throws IOException, InterruptedException {
+        IOException exc = null;
+        for (int tries = 0; tries < maxTries; tries++) {
+            if (tries > 0) {
+                Thread.sleep(tries > 1 ? 10 : 2);
+            }
+            try {
+                return httpRequest(url, method, requestBodyData, responseFormat);
+            } catch (IOException e) {
+                log.info("{} {}: error: {}", method, url, e.getMessage());
+                exc = e;
+            }
+        }
+        throw exc;
     }
 
     public static class HttpResponse<T> {

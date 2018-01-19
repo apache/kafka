@@ -16,14 +16,19 @@
  */
 package org.apache.kafka.trogdor.coordinator;
 
-import org.apache.kafka.trogdor.rest.CoordinatorFaultsResponse;
+import org.apache.kafka.trogdor.rest.CoordinatorShutdownRequest;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
-import org.apache.kafka.trogdor.rest.CreateCoordinatorFaultRequest;
+import org.apache.kafka.trogdor.rest.CreateTaskRequest;
+import org.apache.kafka.trogdor.rest.CreateTaskResponse;
 import org.apache.kafka.trogdor.rest.Empty;
+import org.apache.kafka.trogdor.rest.StopTaskRequest;
+import org.apache.kafka.trogdor.rest.StopTaskResponse;
+import org.apache.kafka.trogdor.rest.TasksResponse;
 
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
+import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -46,27 +51,32 @@ public class CoordinatorRestResource {
 
     @GET
     @Path("/status")
-    public CoordinatorStatusResponse getStatus() throws Throwable {
-        return new CoordinatorStatusResponse(coordinator().startTimeMs());
+    public CoordinatorStatusResponse status() throws Throwable {
+        return coordinator().status();
     }
 
-    @GET
-    @Path("/faults")
-    public CoordinatorFaultsResponse getCoordinatorFaults() throws Throwable {
-        return coordinator().getFaults();
+    @POST
+    @Path("/task/create")
+    public CreateTaskResponse createTask(CreateTaskRequest request) throws Throwable {
+        return coordinator().createTask(request);
     }
 
     @PUT
-    @Path("/fault")
-    public Empty putCoordinatorFault(CreateCoordinatorFaultRequest request) throws Throwable {
-        coordinator().createFault(request);
-        return Empty.INSTANCE;
+    @Path("/task/stop")
+    public StopTaskResponse stopTask(StopTaskRequest request) throws Throwable {
+        return coordinator().stopTask(request);
+    }
+
+    @GET
+    @Path("/tasks")
+    public TasksResponse tasks() throws Throwable {
+        return coordinator().tasks();
     }
 
     @PUT
     @Path("/shutdown")
-    public Empty shutdown() throws Throwable {
-        coordinator().beginShutdown();
+    public Empty beginShutdown(CoordinatorShutdownRequest request) throws Throwable {
+        coordinator().beginShutdown(request.stopAgents());
         return Empty.INSTANCE;
     }
 

@@ -17,8 +17,10 @@
 
 package kafka.server
 
+import kafka.common.KafkaException
 import kafka.utils.{TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.zookeeper.KeeperException.NodeExistsException
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Test}
@@ -62,7 +64,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
       TestUtils.createServer(KafkaConfig.fromProps(props2))
       fail("Starting a broker with the same port should fail")
     } catch {
-      case _: RuntimeException => // expected
+      case _: KafkaException => // expected
     }
   }
 
@@ -81,7 +83,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
       TestUtils.createServer(KafkaConfig.fromProps(props2))
       fail("Registering a broker with a conflicting id should fail")
     } catch {
-      case _: RuntimeException =>
+      case _: NodeExistsException =>
       // this is expected
     }
 
@@ -107,7 +109,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
 
     class BrokerStateInterceptor() extends BrokerState {
       override def newState(newState: BrokerStates): Unit = {
-        val brokers = zkUtils.getAllBrokersInCluster()
+        val brokers = zkClient.getAllBrokersInCluster
         assertEquals(1, brokers.size)
         assertEquals(brokerId, brokers.head.id)
       }

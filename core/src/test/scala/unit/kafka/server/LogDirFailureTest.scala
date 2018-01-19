@@ -23,14 +23,15 @@ import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.server.LogDirFailureTest._
 import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
-import kafka.utils.{CoreUtils, Exit, TestUtils, ZkUtils}
+import kafka.utils.{CoreUtils, Exit, TestUtils}
+import kafka.zk.LogDirEventNotificationZNode
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException}
 import org.junit.{Before, Test}
-import org.junit.Assert.{assertTrue, assertFalse, assertEquals}
+import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 
 import scala.collection.JavaConverters._
 
@@ -54,7 +55,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    TestUtils.createTopic(zkUtils, topic, partitionNum, serverCount, servers = servers)
+    createTopic(topic, partitionNum, serverCount)
   }
 
   @Test
@@ -79,7 +80,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
       val kafkaConfig = KafkaConfig.fromProps(props)
       val logDir = new File(kafkaConfig.logDirs.head)
       // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
-      CoreUtils.swallow(Utils.delete(logDir))
+      CoreUtils.swallow(Utils.delete(logDir), this)
       logDir.createNewFile()
       assertTrue(logDir.isFile)
 
@@ -144,7 +145,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
     val replica = leaderServer.replicaManager.getReplicaOrException(partition)
     val logDir = replica.log.get.dir.getParentFile
-    CoreUtils.swallow(Utils.delete(logDir))
+    CoreUtils.swallow(Utils.delete(logDir), this)
     logDir.createNewFile()
     assertTrue(logDir.isFile)
 
@@ -190,12 +191,12 @@ class LogDirFailureTest extends IntegrationTestHarness {
     }, "Expected some messages", 3000L)
 
     // There should be no remaining LogDirEventNotification znode
-    assertTrue(zkUtils.getChildrenParentMayNotExist(ZkUtils.LogDirEventNotificationPath).isEmpty)
+    assertTrue(zkUtils.getChildrenParentMayNotExist(LogDirEventNotificationZNode.path).isEmpty)
 
     // The controller should have marked the replica on the original leader as offline
     val controllerServer = servers.find(_.kafkaController.isActive).get
     val offlineReplicas = controllerServer.kafkaController.replicaStateMachine.replicasInState(topic, OfflineReplica)
-    assertTrue(offlineReplicas.contains(PartitionAndReplica(topic, 0, leaderServerId)))
+    assertTrue(offlineReplicas.contains(PartitionAndReplica(new TopicPartition(topic, 0), leaderServerId)))
   }
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {

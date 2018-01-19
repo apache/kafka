@@ -51,19 +51,17 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER;
+
     static {
         final Properties props = new Properties();
         // we double the value passed to `time.sleep` in each iteration in one of the map functions, so we disable
         // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
         // very long sleep times
         props.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
-        props.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:9092");
+        props.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:0");
         props.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(), "SSL");
         props.putAll(sslConfig);
-        // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
-        // otherwise, input records could fall into different windows for different runs depending on the initial mock time
-        final long alignedTime = (System.currentTimeMillis() / 1000) * 1000;
-        CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, props, alignedTime);
+        CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, props);
         cluster = CLUSTER;
     }
 
@@ -92,5 +90,4 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
     public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
         super.testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic();
     }
-
 }

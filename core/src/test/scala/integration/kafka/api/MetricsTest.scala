@@ -71,7 +71,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     val topic = "topicWithOldMessageFormat"
     val props = new Properties
     props.setProperty(LogConfig.MessageFormatVersionProp, "0.9.0")
-    TestUtils.createTopic(this.zkUtils, topic, numPartitions = 1, replicationFactor = 1, this.servers, props)
+    createTopic(topic, numPartitions = 1, replicationFactor = 1, props)
     val tp = new TopicPartition(topic, 0)
 
     // Produce and consume some records
@@ -205,15 +205,13 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   }
 
   private def verifyBrokerZkMetrics(server: KafkaServer, topic: String): Unit = {
-    // Latency is rounded to milliseconds, so we may need to retry some operations to get latency > 0.
-    val (_, recorded) = TestUtils.computeUntilTrue({
-      servers.head.zkUtils.getLeaderAndIsrForPartition(topic, 0)
-      yammerMetricValue("kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs").asInstanceOf[Double]
-    })(latency => latency > 0.0)
-    assertTrue("ZooKeeper latency not recorded", recorded)
+    // Latency is rounded to milliseconds, so check the count instead.
+    val initialCount = yammerHistogramCount("kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs")
+    servers.head.zkClient.getLeaderForPartition(new TopicPartition(topic, 0))
+    val newCount = yammerHistogramCount("kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs")
+    assertTrue("ZooKeeper latency not recorded",  newCount > initialCount)
 
-    assertEquals(s"Unexpected ZK state ${server.zkUtils.zkConnection.getZookeeperState}",
-        "CONNECTED", yammerMetricValue("SessionState"))
+    assertEquals(s"Unexpected ZK state", "CONNECTED", yammerMetricValue("SessionState"))
   }
 
   private def verifyBrokerErrorMetrics(server: KafkaServer): Unit = {
@@ -272,6 +270,16 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
       case m: Meter => m.count.toDouble
       case m: Histogram => m.max
       case m: Gauge[_] => m.value
+      case m => fail(s"Unexpected broker metric of class ${m.getClass}")
+    }
+  }
+
+  private def yammerHistogramCount(name: String): Long = {
+    val allMetrics = Metrics.defaultRegistry.allMetrics.asScala
+    val (_, metric) = allMetrics.find { case (n, _) => n.getMBeanName.endsWith(name) }
+      .getOrElse(fail(s"Unable to find broker metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))
+    metric match {
+      case m: Histogram => m.count
       case m => fail(s"Unexpected broker metric of class ${m.getClass}")
     }
   }

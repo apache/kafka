@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package kafka.log
+package kafka.log
 
 import java.io.File
 
@@ -37,18 +37,12 @@ class LogSegmentTest {
 
   /* create a segment with the given base offset */
   def createSegment(offset: Long, indexIntervalBytes: Int = 10): LogSegment = {
-    val msFile = TestUtils.tempFile()
-    val ms = FileRecords.open(msFile)
-    val idxFile = TestUtils.tempFile()
-    val timeIdxFile = TestUtils.tempFile()
-    val txnIdxFile = TestUtils.tempFile()
-    idxFile.delete()
-    timeIdxFile.delete()
-    txnIdxFile.delete()
-    val idx = new OffsetIndex(idxFile, offset, 1000)
-    val timeIdx = new TimeIndex(timeIdxFile, offset, 1500)
-    val txnIndex = new TransactionIndex(offset, txnIdxFile)
-    val seg = new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, Time.SYSTEM)
+    val ms = FileRecords.open(Log.logFile(logDir, offset))
+    val idx = new OffsetIndex(Log.offsetIndexFile(logDir, offset), offset, maxIndexSize = 1000)
+    val timeIdx = new TimeIndex(Log.timeIndexFile(logDir, offset), offset, maxIndexSize = 1500)
+    val txnIndex = new TransactionIndex(offset, Log.transactionIndexFile(logDir, offset))
+    val seg = new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, maxSegmentMs = Int.MaxValue,
+      maxSegmentBytes = Int.MaxValue, Time.SYSTEM)
     segments += seg
     seg
   }
@@ -66,12 +60,7 @@ class LogSegmentTest {
 
   @After
   def teardown() {
-    for(seg <- segments) {
-      seg.index.delete()
-      seg.timeIndex.delete()
-      seg.txnIndex.delete()
-      seg.log.delete()
-    }
+    segments.foreach(_.close())
     Utils.delete(logDir)
   }
 
@@ -177,7 +166,7 @@ class LogSegmentTest {
       seg.append(offset, offset, offset, offset, records(offset, "hello"))
       offset += 1
     }
-    assertEquals(offset, seg.nextOffset)
+    assertEquals(offset, seg.readNextOffset)
 
     val expectedNumEntries = numMessages / 2 - 1
     assertEquals(s"Should have $expectedNumEntries time indexes", expectedNumEntries, seg.timeIndex.entries)
@@ -185,7 +174,7 @@ class LogSegmentTest {
     seg.truncateTo(41)
     assertEquals(s"Should have 0 time indexes", 0, seg.timeIndex.entries)
     assertEquals(s"Largest timestamp should be 400", 400L, seg.largestTimestamp)
-    assertEquals(41, seg.nextOffset)
+    assertEquals(41, seg.readNextOffset)
   }
 
   /**
@@ -233,9 +222,9 @@ class LogSegmentTest {
   @Test
   def testNextOffsetCalculation() {
     val seg = createSegment(40)
-    assertEquals(40, seg.nextOffset)
+    assertEquals(40, seg.readNextOffset)
     seg.append(50, 52, RecordBatch.NO_TIMESTAMP, -1L, records(50, "hello", "there", "you"))
-    assertEquals(53, seg.nextOffset)
+    assertEquals(53, seg.readNextOffset)
   }
 
   /**
@@ -245,12 +234,12 @@ class LogSegmentTest {
   def testChangeFileSuffixes() {
     val seg = createSegment(40)
     val logFile = seg.log.file
-    val indexFile = seg.index.file
+    val indexFile = seg.offsetIndex.file
     seg.changeFileSuffixes("", ".deleted")
     assertEquals(logFile.getAbsolutePath + ".deleted", seg.log.file.getAbsolutePath)
-    assertEquals(indexFile.getAbsolutePath + ".deleted", seg.index.file.getAbsolutePath)
+    assertEquals(indexFile.getAbsolutePath + ".deleted", seg.offsetIndex.file.getAbsolutePath)
     assertTrue(seg.log.file.exists)
-    assertTrue(seg.index.file.exists)
+    assertTrue(seg.offsetIndex.file.exists)
   }
 
   /**
@@ -262,7 +251,7 @@ class LogSegmentTest {
     val seg = createSegment(0)
     for(i <- 0 until 100)
       seg.append(i, i, RecordBatch.NO_TIMESTAMP, -1L, records(i, i.toString))
-    val indexFile = seg.index.file
+    val indexFile = seg.offsetIndex.file
     TestUtils.writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
     seg.recover(new ProducerStateManager(topicPartition, logDir))
     for(i <- 0 until 100)
@@ -369,7 +358,7 @@ class LogSegmentTest {
     val messagesAppended = 20
     for (_ <- 0 until 10) {
       val seg = createSegment(0)
-      for(i <- 0 until messagesAppended)
+      for (i <- 0 until messagesAppended)
         seg.append(i, i, RecordBatch.NO_TIMESTAMP, -1L, records(i, i.toString))
       val offsetToBeginCorruption = TestUtils.random.nextInt(messagesAppended)
       // start corrupting somewhere in the middle of the chosen record all the way to the end
@@ -380,14 +369,18 @@ class LogSegmentTest {
       seg.recover(new ProducerStateManager(topicPartition, logDir))
       assertEquals("Should have truncated off bad messages.", (0 until offsetToBeginCorruption).toList,
         seg.log.batches.asScala.map(_.lastOffset).toList)
-      seg.delete()
+      seg.deleteIfExists()
     }
   }
 
-  /* create a segment with   pre allocate */
-  def createSegment(offset: Long, fileAlreadyExists: Boolean, initFileSize: Int, preallocate: Boolean): LogSegment = {
+  private def createSegment(baseOffset: Long, fileAlreadyExists: Boolean, initFileSize: Int, preallocate: Boolean): LogSegment = {
     val tempDir = TestUtils.tempDir()
-    val seg = new LogSegment(tempDir, offset, 10, 1000, 0, Time.SYSTEM, fileAlreadyExists = fileAlreadyExists,
+    val logConfig = LogConfig(Map(
+      LogConfig.IndexIntervalBytesProp -> 10,
+      LogConfig.SegmentIndexBytesProp -> 1000,
+      LogConfig.SegmentJitterMsProp -> 0
+    ).asJava)
+    val seg = LogSegment.open(tempDir, baseOffset, logConfig, Time.SYSTEM, fileAlreadyExists = fileAlreadyExists,
       initFileSize = initFileSize, preallocate = preallocate)
     segments += seg
     seg
@@ -409,7 +402,14 @@ class LogSegmentTest {
   @Test
   def testCreateWithInitFileSizeClearShutdown() {
     val tempDir = TestUtils.tempDir()
-    val seg = new LogSegment(tempDir, 40, 10, 1000, 0, Time.SYSTEM, false, 512*1024*1024, true)
+    val logConfig = LogConfig(Map(
+      LogConfig.IndexIntervalBytesProp -> 10,
+      LogConfig.SegmentIndexBytesProp -> 1000,
+      LogConfig.SegmentJitterMsProp -> 0
+    ).asJava)
+
+    val seg = LogSegment.open(tempDir, baseOffset = 40, logConfig, Time.SYSTEM, fileAlreadyExists = false,
+      initFileSize = 512 * 1024 * 1024, preallocate = true)
 
     val ms = records(50, "hello", "there")
     seg.append(50, 51, RecordBatch.NO_TIMESTAMP, -1L, ms)
@@ -425,7 +425,8 @@ class LogSegmentTest {
     //After close, file should be trimmed
     assertEquals(oldSize, seg.log.file.length)
 
-    val segReopen = new LogSegment(tempDir, 40, 10, 1000, 0, Time.SYSTEM, true,  512*1024*1024, true)
+    val segReopen = LogSegment.open(tempDir, baseOffset = 40, logConfig, Time.SYSTEM, fileAlreadyExists = true,
+      initFileSize = 512 * 1024 * 1024, preallocate = true)
     segments += segReopen
 
     val readAgain = segReopen.read(startOffset = 55, maxSize = 200, maxOffset = None)

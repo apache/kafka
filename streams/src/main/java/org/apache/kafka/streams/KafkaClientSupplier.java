@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.StreamThread;
 
 import java.util.Map;
 
@@ -29,6 +29,14 @@ import java.util.Map;
  * @see KafkaStreams#KafkaStreams(org.apache.kafka.streams.Topology, StreamsConfig, KafkaClientSupplier)
  */
 public interface KafkaClientSupplier {
+    /**
+     * Create an {@link AdminClient} which is used for internal topic management.
+     *
+     * @param config Supplied by the {@link StreamsConfig} given to the {@link KafkaStreams}
+     * @return an instance of {@link AdminClient}
+     */
+    AdminClient getAdminClient(final Map<String, Object> config);
+
     /**
      * Create a {@link Producer} which is used to write records to sink topics.
      *
@@ -41,7 +49,7 @@ public interface KafkaClientSupplier {
     /**
      * Create a {@link Consumer} which is used to read records of source topics.
      *
-     * @param config {@link StreamsConfig#getConsumerConfigs(StreamThread, String, String) consumer config} which is
+     * @param config {@link StreamsConfig#getConsumerConfigs(String, String) consumer config} which is
      *               supplied by the {@link StreamsConfig} given to the {@link KafkaStreams} instance
      * @return an instance of Kafka consumer
      */

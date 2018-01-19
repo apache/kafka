@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
-import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Rule;
@@ -451,7 +451,7 @@ public class KTableFilterTest {
                 public boolean test(String key, String value) {
                     return value.equalsIgnoreCase("accept");
                 }
-            }).groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
+            }).groupBy(MockMapper.<String, String>noOpKeyValueMapper())
             .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result");
 
         doTestSkipNullOnMaterialization(builder, table1, table2, topic1);
@@ -473,7 +473,7 @@ public class KTableFilterTest {
                 public boolean test(String key, String value) {
                     return value.equalsIgnoreCase("accept");
                 }
-            }, "anyStoreNameFilter").groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
+            }, "anyStoreNameFilter").groupBy(MockMapper.<String, String>noOpKeyValueMapper())
             .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result");
 
         doTestSkipNullOnMaterialization(builder, table1, table2, topic1);

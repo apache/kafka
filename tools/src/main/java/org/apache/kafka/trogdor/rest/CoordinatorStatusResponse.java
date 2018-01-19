@@ -19,41 +19,20 @@ package org.apache.kafka.trogdor.rest;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.trogdor.common.JsonUtil;
-
-import java.util.Objects;
 
 /**
- * The status of the Trogdor coordinator.
+ * A status response from the Trogdor coordinator.
  */
-public class CoordinatorStatusResponse {
-    private final long startTimeMs;
+public class CoordinatorStatusResponse extends Message {
+    private final long serverStartMs;
 
     @JsonCreator
-    public CoordinatorStatusResponse(@JsonProperty("startTimeMs") long startTimeMs) {
-        this.startTimeMs = startTimeMs;
+    public CoordinatorStatusResponse(@JsonProperty("serverStartMs") long serverStartMs) {
+        this.serverStartMs = serverStartMs;
     }
 
     @JsonProperty
-    public long startTimeMs() {
-        return startTimeMs;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        CoordinatorStatusResponse that = (CoordinatorStatusResponse) o;
-        return Objects.equals(startTimeMs, that.startTimeMs);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(startTimeMs);
-    }
-
-    @Override
-    public String toString() {
-        return JsonUtil.toJsonString(this);
+    public long serverStartMs() {
+        return serverStartMs;
     }
 }

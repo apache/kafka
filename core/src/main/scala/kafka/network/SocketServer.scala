@@ -38,6 +38,7 @@ import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaCh
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
+import org.slf4j.event.Level
 
 import scala.collection._
 import JavaConverters._
@@ -72,6 +73,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
   private[network] val acceptors = mutable.Map[EndPoint, Acceptor]()
   private var connectionQuotas: ConnectionQuotas = _
+  private var stoppedProcessingRequests = false
 
   /**
    * Start the socket server
@@ -132,13 +134,28 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   requestChannel.addResponseListener(id => processors(id).wakeup())
 
   /**
-   * Shutdown the socket server
-   */
-  def shutdown() = {
-    info("Shutting down")
+    * Stop processing requests and new connections.
+    */
+  def stopProcessingRequests() = {
+    info("Stopping socket server request processors")
     this.synchronized {
       acceptors.values.foreach(_.shutdown)
       processors.foreach(_.shutdown)
+      requestChannel.clear()
+      stoppedProcessingRequests = true
+    }
+    info("Stopped socket server request processors")
+  }
+
+  /**
+    * Shutdown the socket server. If still processing requests, shutdown
+    * acceptors and processors first.
+    */
+  def shutdown() = {
+    info("Shutting down socket server")
+    this.synchronized {
+      if (!stoppedProcessingRequests)
+        stopProcessingRequests()
       requestChannel.shutdown()
     }
     info("Shutdown completed")
@@ -236,8 +253,8 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
     if (channel != null) {
       debug("Closing connection from " + channel.socket.getRemoteSocketAddress())
       connectionQuotas.dec(channel.socket.getInetAddress)
-      swallowError(channel.socket().close())
-      swallowError(channel.close())
+      CoreUtils.swallow(channel.socket().close(), this, Level.ERROR)
+      CoreUtils.swallow(channel.close(), this, Level.ERROR)
     }
   }
 }
@@ -303,8 +320,8 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
       }
     } finally {
       debug("Closing server socket and selector.")
-      swallowError(serverChannel.close())
-      swallowError(nioSelector.close())
+      CoreUtils.swallow(serverChannel.close(), this, Level.ERROR)
+      CoreUtils.swallow(nioSelector.close(), this, Level.ERROR)
       shutdownComplete()
     }
   }
@@ -420,7 +437,7 @@ private[kafka] class Processor(val id: Int,
   )
 
   private val selector = createSelector(
-      ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialProvider.credentialCache))
+      ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialProvider.credentialCache, credentialProvider.tokenCache))
   // Visible to override for testing
   protected[network] def createSelector(channelBuilder: ChannelBuilder): KSelector = new KSelector(
     maxRequestSize,
@@ -465,7 +482,7 @@ private[kafka] class Processor(val id: Int,
       }
     } finally {
       debug("Closing selector - processor " + id)
-      swallowError(closeAll())
+      CoreUtils.swallow(closeAll(), this, Level.ERROR)
       shutdownComplete()
     }
   }

@@ -69,7 +69,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     super.setUp()
 
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(this.zkUtils, topic, 1, serverCount, this.servers)
+    createTopic(topic, 1, serverCount)
   }
 
   @After
@@ -173,7 +173,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     val consumer = this.consumers.head
     consumer.subscribe(Collections.singleton(newtopic))
     executor.schedule(new Runnable {
-        def run() = TestUtils.createTopic(zkUtils, newtopic, serverCount, serverCount, servers)
+        def run() = TestUtils.createTopic(zkClient, newtopic, serverCount, serverCount, servers)
       }, 2, TimeUnit.SECONDS)
     consumer.poll(0)
 
@@ -288,7 +288,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   @Test
   def testCloseDuringRebalance() {
     val topic = "closetest"
-    TestUtils.createTopic(this.zkUtils, topic, 10, serverCount, this.servers)
+    createTopic(topic, 10, serverCount)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")

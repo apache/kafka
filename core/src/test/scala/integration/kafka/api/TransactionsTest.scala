@@ -19,7 +19,7 @@ package kafka.api
 
 import java.lang.{Long => JLong}
 import java.util.Properties
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{ExecutionException, TimeUnit}
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
@@ -60,8 +60,8 @@ class TransactionsTest extends KafkaServerTestHarness {
     val numPartitions = 4
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-    TestUtils.createTopic(zkUtils, topic1, numPartitions, numServers, servers, topicConfig)
-    TestUtils.createTopic(zkUtils, topic2, numPartitions, numServers, servers, topicConfig)
+    createTopic(topic1, numPartitions, numServers, topicConfig)
+    createTopic(topic2, numPartitions, numServers, topicConfig)
 
     for (_ <- 0 until transactionalProducerCount)
       createTransactionalProducer("transactional-producer")
@@ -456,6 +456,44 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   @Test
+  def testFencingOnTransactionExpiration(): Unit = {
+    val producer = createTransactionalProducer("expiringProducer", transactionTimeoutMs = 100)
+
+    producer.initTransactions()
+    producer.beginTransaction()
+
+    // The first message and hence the first AddPartitions request should be successfully sent.
+    val firstMessageResult = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "1", "1", willBeCommitted = false)).get()
+    assertTrue(firstMessageResult.hasOffset)
+
+    // Wait for the expiration cycle to kick in.
+    Thread.sleep(600)
+
+    try {
+      // Now that the transaction has expired, the second send should fail with a ProducerFencedException.
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "2", "2", willBeCommitted = false)).get()
+      fail("should have raised a ProducerFencedException since the transaction has expired")
+    } catch {
+      case _: ProducerFencedException =>
+      case e: ExecutionException =>
+      assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
+    }
+
+    // Verify that the first message was aborted and the second one was never written at all.
+    val nonTransactionalConsumer = nonTransactionalConsumers(0)
+    nonTransactionalConsumer.subscribe(List(topic1).asJava)
+    val records = TestUtils.consumeRecordsFor(nonTransactionalConsumer, 1000)
+    assertEquals(1, records.size)
+    assertEquals("1", TestUtils.recordValueAsString(records.head))
+
+    val transactionalConsumer = transactionalConsumers.head
+    transactionalConsumer.subscribe(List(topic1).asJava)
+
+    val transactionalRecords = TestUtils.consumeRecordsFor(transactionalConsumer, 1000)
+    assertTrue(transactionalRecords.isEmpty)
+  }
+
+  @Test
   def testMultipleMarkersOneLeader(): Unit = {
     val firstProducer = transactionalProducers.head
     val consumer = transactionalConsumers.head
@@ -465,8 +503,8 @@ class TransactionsTest extends KafkaServerTestHarness {
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
 
-    TestUtils.createTopic(zkUtils, topicWith10Partitions, 10, numServers, servers, topicConfig)
-    TestUtils.createTopic(zkUtils, topicWith10PartitionsAndOneReplica, 10, 1, servers, new Properties())
+    createTopic(topicWith10Partitions, 10, numServers, topicConfig)
+    createTopic(topicWith10PartitionsAndOneReplica, 10, 1, new Properties())
 
     firstProducer.initTransactions()
 
@@ -515,6 +553,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     serverProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
     serverProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
     serverProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+    serverProps.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
     serverProps
   }
 
@@ -539,8 +578,9 @@ class TransactionsTest extends KafkaServerTestHarness {
     consumer
   }
 
-  private def createTransactionalProducer(transactionalId: String): KafkaProducer[Array[Byte], Array[Byte]] = {
-    val producer = TestUtils.createTransactionalProducer(transactionalId, servers)
+  private def createTransactionalProducer(transactionalId: String, transactionTimeoutMs: Long = 60000): KafkaProducer[Array[Byte], Array[Byte]] = {
+    val producer = TestUtils.createTransactionalProducer(transactionalId, servers,
+      transactionTimeoutMs = transactionTimeoutMs)
     transactionalProducers += producer
     producer
   }
