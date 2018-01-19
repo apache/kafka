@@ -167,6 +167,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class TopologyTestDriver {
 
     private final Time mockTime;
+    private final InternalTopologyBuilder internalTopologyBuilder;
 
     private final static int PARTITION_ID = 0;
     private final static TaskId TASK_ID = new TaskId(0, PARTITION_ID);
@@ -207,11 +208,11 @@ public class TopologyTestDriver {
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         mockTime = new MockTime(initialWallClockTimeMs);
 
-        InternalTopologyBuilder builder = InternalTopologyBuilderAccessor.getInternalTopologyBuilder(topology);
-        builder.setApplicationId(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG));
+        internalTopologyBuilder = InternalTopologyBuilderAccessor.getInternalTopologyBuilder(topology);
+        internalTopologyBuilder.setApplicationId(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG));
 
-        processorTopology = builder.build(null);
-        final ProcessorTopology globalTopology  = builder.buildGlobalStateTopology();
+        processorTopology = internalTopologyBuilder.build(null);
+        final ProcessorTopology globalTopology  = internalTopologyBuilder.buildGlobalStateTopology();
 
         final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
         producer = new MockProducer<byte[], byte[]>(true, bytesSerializer, bytesSerializer) {
@@ -242,7 +243,7 @@ public class TopologyTestDriver {
             public void onRestoreEnd(TopicPartition topicPartition, String storeName, long totalRestored) {}
         };
 
-        for (final InternalTopologyBuilder.TopicsInfo topicsInfo : builder.topicGroups().values()) {
+        for (final InternalTopologyBuilder.TopicsInfo topicsInfo : internalTopologyBuilder.topicGroups().values()) {
             internalTopics.addAll(topicsInfo.repartitionSourceTopics.keySet());
         }
 
@@ -446,6 +447,27 @@ public class TopologyTestDriver {
     }
 
     /**
+     * Get all {@link StateStore StateStores} from the topology.
+     * The store can be a "regular" or global store.
+     * <p>
+     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
+     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     *
+     * @return all stores my name
+     * @see #getStateStore(String)
+     * @see #getKeyValueStore(String)
+     * @see #getWindowStore(String)
+     * @see #getSessionStore(String)
+     */
+    public Map<String, StateStore> getAllStateStores() {
+        final Map<String, StateStore> allStores = new HashMap<>();
+        for (final String storeName : internalTopologyBuilder.allStateStoreName()) {
+            allStores.put(storeName, ((ProcessorContextImpl) task.context()).getStateMgr().getStore(storeName));
+        }
+        return allStores;
+    }
+
+    /**
      * Get the {@link StateStore} with the given name.
      * The store can be a "regular" or global store.
      * The name should have been supplied via
@@ -457,6 +479,7 @@ public class TopologyTestDriver {
      *
      * @param name the name of the store
      * @return the state store, or null if no store has been registered with the given name
+     * @see #getAllStateStores()
      * @see #getKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getSessionStore(String)
@@ -478,6 +501,7 @@ public class TopologyTestDriver {
      *
      * @param name the name of the store
      * @return the key value store, or null if no {@link KeyValueStore} has been registered with the given name
+     * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getWindowStore(String)
      * @see #getSessionStore(String)
@@ -501,9 +525,10 @@ public class TopologyTestDriver {
      *
      * @param name the name of the store
      * @return the key value store, or null if no {@link SessionStore} has been registered with the given name
+     * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
-     * @see #getWindowStore(String)
+     * @see #getSessionStore(String) (String)
      */
     @SuppressWarnings("unchecked")
     public <K, V> SessionStore<K, V> getWindowStore(final String name) {
@@ -524,7 +549,10 @@ public class TopologyTestDriver {
      *
      * @param name the name of the store
      * @return the key value store, or null if no {@link WindowStore} has been registered with the given name
+     * @see #getAllStateStores()
      * @see #getStateStore(String)
+     * @see #getKeyValueStore(String)
+     * @see #getWindowStore(String)
      */
     @SuppressWarnings("unchecked")
     public <K, V> WindowStore<K, V> getSessionStore(final String name) {

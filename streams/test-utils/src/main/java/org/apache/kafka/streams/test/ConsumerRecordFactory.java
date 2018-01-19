@@ -163,9 +163,7 @@ public class ConsumerRecordFactory<K, V> {
                                                  final K key,
                                                  final V value,
                                                  final long timestampMs) {
-        if (topicName == null) {
-            throw new IllegalArgumentException("topicName cannot be null.");
-        }
+        Objects.requireNonNull(topicName, "topicName cannot be null.");
         final byte[] serializedKey = keySerializer.serialize(topicName, key);
         final byte[] serializedValue = valueSerializer.serialize(topicName, value);
         return new ConsumerRecord<>(

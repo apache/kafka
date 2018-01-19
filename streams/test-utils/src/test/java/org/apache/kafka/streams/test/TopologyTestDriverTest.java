@@ -18,8 +18,11 @@ package org.apache.kafka.streams.test;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.Processor;
@@ -28,6 +31,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
@@ -35,10 +39,12 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
@@ -530,4 +536,39 @@ public class TopologyTestDriverTest {
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
     }
 
+    @Test
+    public void shouldReturnAllStores() {
+        final Topology topology = setupSourceSinkTopology();
+        topology.addStateStore(
+            new KeyValueStoreBuilder<>(
+                Stores.inMemoryKeyValueStore("store"),
+                new Serdes.ByteArraySerde(),
+                new Serdes.ByteArraySerde(),
+                new SystemTime())
+                .withLoggingDisabled());
+        topology.addGlobalStore(
+            new KeyValueStoreBuilder<>(
+                Stores.inMemoryKeyValueStore("globalStore"),
+                new Serdes.ByteArraySerde(),
+                new Serdes.ByteArraySerde(),
+                new SystemTime()).withLoggingDisabled(),
+            "sourceProcessorName",
+            new ByteArrayDeserializer(),
+            new ByteArrayDeserializer(),
+            "globalTopicName",
+            "globalProcessorName",
+            new ProcessorSupplier() {
+                @Override
+                public Processor get() {
+                    return null;
+                }
+            });
+
+        testDriver = new TopologyTestDriver(topology, config);
+
+        final Set<String> expectedStoreNames = new HashSet<>();
+        expectedStoreNames.add("store");
+        expectedStoreNames.add("globalStore");
+        assertThat(testDriver.getAllStateStores().keySet(), equalTo(expectedStoreNames));
+    }
 }
