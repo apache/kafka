@@ -87,7 +87,7 @@ public class RestServerTest {
     public void testParseListeners() {
         // Use listeners field
         Map<String, String> configMap = new HashMap<>(baseWorkerProps());
-        configMap.put("listeners", "http://localhost:8080,https://localhost:8443");
+        configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
         DistributedConfig config = new DistributedConfig(configMap);
 
         server = new RestServer(config);
@@ -95,8 +95,8 @@ public class RestServerTest {
 
         // Build listener from hostname and port
         configMap = new HashMap<>(baseWorkerProps());
-        configMap.put("rest.host.name", "my-hostname");
-        configMap.put("rest.port", "8080");
+        configMap.put(WorkerConfig.REST_HOST_NAME_CONFIG, "my-hostname");
+        configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
         config = new DistributedConfig(configMap);
         server = new RestServer(config);
         Assert.assertArrayEquals(new String[] {"HTTP://my-hostname:8080"}, server.parseListeners().toArray());
@@ -106,7 +106,7 @@ public class RestServerTest {
     public void testAdvertisedUri() {
         // Advertised URI from listeenrs without protocol
         Map<String, String> configMap = new HashMap<>(baseWorkerProps());
-        configMap.put("listeners", "http://localhost:8080,https://localhost:8443");
+        configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
         DistributedConfig config = new DistributedConfig(configMap);
 
         server = new RestServer(config);
@@ -114,8 +114,8 @@ public class RestServerTest {
 
         // Advertised URI from listeners with protocol
         configMap = new HashMap<>(baseWorkerProps());
-        configMap.put("listeners", "http://localhost:8080,https://localhost:8443");
-        configMap.put("rest.advertised.security.protocol", "https");
+        configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
+        configMap.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, "https");
         config = new DistributedConfig(configMap);
 
         server = new RestServer(config);
@@ -123,7 +123,7 @@ public class RestServerTest {
 
         // Advertised URI from listeners with only SSL available
         configMap = new HashMap<>(baseWorkerProps());
-        configMap.put("listeners", "https://localhost:8443");
+        configMap.put(WorkerConfig.LISTENERS_CONFIG, "https://localhost:8443");
         config = new DistributedConfig(configMap);
 
         server = new RestServer(config);
@@ -131,10 +131,10 @@ public class RestServerTest {
 
         // Listener is overriden by advertised values
         configMap = new HashMap<>(baseWorkerProps());
-        configMap.put("listeners", "https://localhost:8443");
-        configMap.put("rest.advertised.security.protocol", "http");
-        configMap.put("rest.advertised.host.name", "somehost");
-        configMap.put("rest.advertised.port", "10000");
+        configMap.put(WorkerConfig.LISTENERS_CONFIG, "https://localhost:8443");
+        configMap.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, "http");
+        configMap.put(WorkerConfig.REST_ADVERTISED_HOST_NAME_CONFIG, "somehost");
+        configMap.put(WorkerConfig.REST_ADVERTISED_PORT_CONFIG, "10000");
         config = new DistributedConfig(configMap);
 
         server = new RestServer(config);
@@ -142,8 +142,8 @@ public class RestServerTest {
 
         // listener from hostname and port
         configMap = new HashMap<>(baseWorkerProps());
-        configMap.put("rest.host.name", "my-hostname");
-        configMap.put("rest.port", "8080");
+        configMap.put(WorkerConfig.REST_HOST_NAME_CONFIG, "my-hostname");
+        configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
         config = new DistributedConfig(configMap);
         server = new RestServer(config);
         Assert.assertEquals("http://my-hostname:8080/", server.advertisedUrl().toString());

@@ -132,9 +132,9 @@ public class WorkerConfig extends AbstractConfig {
     private static final String REST_ADVERTISED_PORT_DOC
             = "If this is set, this is the port that will be given out to other workers to connect to.";
 
-    public static final String REST_ADVERTISED_SECURITY_PROTOCOL_CONFIG = "rest.advertised.security.protocol";
-    private static final String REST_ADVERTISED_SECURITY_PROTOCOL_DOC
-            = "Sets the advertised security protocol (HTTP or HTTPS) which will be given to other workers to use.";
+    public static final String REST_ADVERTISED_LISTENER_CONFIG = "rest.advertised.listener";
+    private static final String REST_ADVERTISED_LISTENER_DOC
+            = "Sets the advertised listener (HTTP or HTTPS) which will be given to other workers to use.";
 
     public static final String ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG = "access.control.allow.origin";
     protected static final String ACCESS_CONTROL_ALLOW_ORIGIN_DOC =
@@ -196,7 +196,7 @@ public class WorkerConfig extends AbstractConfig {
                 .define(LISTENERS_CONFIG, Type.LIST, null, Importance.LOW, LISTENERS_DOC)
                 .define(REST_ADVERTISED_HOST_NAME_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_HOST_NAME_DOC)
                 .define(REST_ADVERTISED_PORT_CONFIG, Type.INT,  null, Importance.LOW, REST_ADVERTISED_PORT_DOC)
-                .define(REST_ADVERTISED_SECURITY_PROTOCOL_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_SECURITY_PROTOCOL_DOC)
+                .define(REST_ADVERTISED_LISTENER_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_LISTENER_DOC)
                 .define(ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, Type.STRING,
                         ACCESS_CONTROL_ALLOW_ORIGIN_DEFAULT, Importance.LOW,
                         ACCESS_CONTROL_ALLOW_ORIGIN_DOC)

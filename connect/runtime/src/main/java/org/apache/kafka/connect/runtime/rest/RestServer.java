@@ -248,7 +248,7 @@ public class RestServer {
     }
 
     protected String determineAdvertisedProtocol() {
-        String advertisedSecurityProtocol = config.getString(WorkerConfig.REST_ADVERTISED_SECURITY_PROTOCOL_CONFIG);
+        String advertisedSecurityProtocol = config.getString(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG);
         if (advertisedSecurityProtocol == null) {
             String listeners = (String) config.originals().get(WorkerConfig.LISTENERS_CONFIG);
 
