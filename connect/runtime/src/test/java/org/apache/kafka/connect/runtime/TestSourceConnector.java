@@ -56,6 +56,8 @@ public class TestSourceConnector extends SourceConnector {
     public ConfigDef config() {
         return new ConfigDef()
                 .define("required", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "required docs")
-                .define("optional", ConfigDef.Type.STRING, "defaultVal", ConfigDef.Importance.HIGH, "optional docs");
+                .define("optional", ConfigDef.Type.STRING, "defaultVal", ConfigDef.Importance.HIGH, "optional docs")
+                .define("password", ConfigDef.Type.PASSWORD, "123", ConfigDef.Importance.MEDIUM, "password");
+
     }
 }

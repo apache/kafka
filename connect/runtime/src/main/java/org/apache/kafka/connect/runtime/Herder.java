@@ -171,11 +171,10 @@ public interface Herder {
 
     /**
      * Goes through config parameters and replace password field value with "[hidden"]
-     * @param connName name of the connector
-     * @param config configuration of the connector
+     * @param config configuration of the connector; may not be null
      * @return new map of the configurations, with password omitted from clear-text
      */
-    Map<String, String> maskCredentials(String connName, Map<String, String> connectorInfo);
+    Map<String, String> maskCredentials(Map<String, String> config);
 
     /**
      * Returns a handle to the plugin factory used by this herder and its worker.

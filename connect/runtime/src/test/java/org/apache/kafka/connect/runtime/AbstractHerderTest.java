@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
@@ -172,6 +173,22 @@ public class AbstractHerderTest extends EasyMockSupport {
         assertEquals(1, result.values().get(6).configValue().errors().size());
 
         verifyAll();
+    }
+
+    @Test()
+    public void testMaskCredentials() {
+        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class);
+        replayAll();
+
+        Password password = new Password("hello_world123");
+        Map<String, String> config = new HashMap<>();
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestSourceConnector.class.getName());
+        config.put("password", password.value());
+
+        Map<String, String> newConfig = herder.maskCredentials(config);
+
+        // password.toString() => [hidden]
+        assertEquals(password.toString(), newConfig.get("password"));
     }
 
     @Test()

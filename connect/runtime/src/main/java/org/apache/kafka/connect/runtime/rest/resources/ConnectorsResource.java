@@ -113,7 +113,7 @@ public class ConnectorsResource {
         herder.connectorInfo(connector, cb);
         ConnectorInfo connectorInfo = completeOrForwardRequest(cb, "/connectors/" + connector, "GET", null, forward);
 
-        return new ConnectorInfo(connectorInfo.name(), herder.maskCredentials(connector, connectorInfo.config()), connectorInfo.tasks(), connectorInfo.type());
+        return new ConnectorInfo(connectorInfo.name(), herder.maskCredentials(connectorInfo.config()), connectorInfo.tasks(), connectorInfo.type());
     }
 
     @GET
@@ -123,7 +123,7 @@ public class ConnectorsResource {
         FutureCallback<Map<String, String>> cb = new FutureCallback<>();
         herder.connectorConfig(connector, cb);
         Map<String, String> config = completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", null, forward);
-        return herder.maskCredentials(connector, config);
+        return herder.maskCredentials(config);
     }
 
     @GET
@@ -190,7 +190,7 @@ public class ConnectorsResource {
 
         List<TaskInfo> maskedTaskInfoList = new ArrayList<>();
         for (TaskInfo taskInfo : taskInfoList) {
-            maskedTaskInfoList.add(new TaskInfo(taskInfo.id(), herder.maskCredentials(connector, taskInfo.config())));
+            maskedTaskInfoList.add(new TaskInfo(taskInfo.id(), herder.maskCredentials(taskInfo.config())));
         }
 
         return maskedTaskInfoList;

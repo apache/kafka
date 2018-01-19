@@ -185,10 +185,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     @Override
-    public Map<String, String> maskCredentials(String connName, Map<String, String> config) {
+    public Map<String, String> maskCredentials(Map<String, String> config) {
         Connector connector = getConnector(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
         if (connector == null) {
-            throw new NotFoundException("No status found for connector " + connName);
+            throw new NotFoundException("No status found for connector");
         }
 
         ConfigDef configDef = connector.config();
