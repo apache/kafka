@@ -213,7 +213,9 @@ public class ConsumerCoordinatorTest {
                 @Override
                 public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
                     responses.incrementAndGet();
-                    assertTrue(exception.getCause() instanceof DisconnectException);
+                    Throwable cause = exception.getCause();
+                    assertTrue("Unexpected exception cause type: " + (cause == null ? null : cause.getClass()),
+                            cause instanceof DisconnectException);
                 }
             });
         }
@@ -242,7 +244,7 @@ public class ConsumerCoordinatorTest {
 
                     @Override
                     public void onFailure(RuntimeException e, RequestFuture<Object> future) {
-                        assertTrue(e instanceof DisconnectException);
+                        assertTrue("Unexpected exception type: " + e.getClass(), e instanceof DisconnectException);
                         assertTrue(coordinator.coordinatorUnknown());
                         asyncCallbackInvoked.set(true);
                     }
