@@ -351,6 +351,23 @@ public class BufferPoolTest {
         assertEquals(bufferPool.availableMemory(), 1024);
     }
 
+    @Test
+    public void overDeallocate() {
+        BufferPool bufferPool = new BufferPool(1024, 512, metrics, time, metricGroup);
+        bufferPool.deallocate(ByteBuffer.allocate(512));
+        assertEquals(bufferPool.availableMemory(), bufferPool.totalMemory());
+    }
+
+    @Test
+    public void dedupeDeallocations() throws Exception {
+        BufferPool bufferPool = new BufferPool(1024, 512, metrics, time, metricGroup);
+        ByteBuffer bbuf = bufferPool.allocate(512, 1);
+        ByteBuffer shallowCopy = bbuf.slice();
+        bufferPool.deallocate(bbuf);
+        bufferPool.deallocate(shallowCopy);
+        assertEquals(bufferPool.totalMemory(), bufferPool.availableMemory());
+    }
+
     public static class StressTestThread extends Thread {
         private final int iterations;
         private final BufferPool pool;
