@@ -506,27 +506,43 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             final Set<String> consumers = entry.getValue().consumers;
             final ClientState state = entry.getValue().state;
 
-            final ArrayList<TaskId> taskIds = new ArrayList<>(state.assignedTaskCount());
-            final int numActiveTasks = state.activeTaskCount();
-
-            taskIds.addAll(interleaveTasksByGroupId(state.activeTasks()));
-            taskIds.addAll(state.standbyTasks());
+            final List<TaskId> interleavedActive = interleaveTasksByGroupId(state.activeTasks());
+            final List<TaskId> interleavedStandby = interleaveTasksByGroupId(state.standbyTasks());
 
             final int numConsumers = consumers.size();
 
-            int i = 0;
+            final int taskAssignmentLength = interleavedActive.size() % numConsumers > 0 ? (interleavedActive.size() % numConsumers) + 1 : interleavedActive.size() / numConsumers;
+            int standbyAssignmentLength =  0;
+
+            if (!interleavedStandby.isEmpty()) {
+                standbyAssignmentLength = interleavedStandby.size() % numConsumers > 0 ? (interleavedStandby.size() % numConsumers) + 1 : interleavedStandby.size() / numConsumers;
+            }
+
+            int activeStartIndex = 0;
+            int activeEndIndex = 0;
+            int standbyStartIndex = 0;
+            int standbyEndIndex = 0;
+
             for (String consumer : consumers) {
                 final Map<TaskId, Set<TopicPartition>> standby = new HashMap<>();
                 final ArrayList<AssignedPartition> assignedPartitions = new ArrayList<>();
 
-                final int numTaskIds = taskIds.size();
-                for (int j = i; j < numTaskIds; j += numConsumers) {
-                    final TaskId taskId = taskIds.get(j);
-                    if (j < numActiveTasks) {
-                        for (TopicPartition partition : partitionsForTask.get(taskId)) {
-                            assignedPartitions.add(new AssignedPartition(taskId, partition));
-                        }
-                    } else {
+                activeEndIndex = (activeEndIndex + taskAssignmentLength) < interleavedActive.size() ? activeEndIndex + taskAssignmentLength : interleavedActive.size();
+
+                final List<TaskId> assignedActiveList = interleavedActive.subList(activeStartIndex, activeEndIndex);
+                List<TaskId> assignedStandbyList;
+
+                for (TaskId taskId : assignedActiveList) {
+                    for (TopicPartition partition : partitionsForTask.get(taskId)) {
+                        assignedPartitions.add(new AssignedPartition(taskId, partition));
+                    }
+                }
+                activeStartIndex = activeEndIndex;
+
+                if (standbyAssignmentLength > 0) {
+                    standbyEndIndex = (standbyEndIndex + standbyAssignmentLength) < interleavedStandby.size() ? standbyEndIndex + standbyAssignmentLength : interleavedStandby.size();
+                    assignedStandbyList = interleavedStandby.subList(standbyStartIndex, standbyEndIndex);
+                    for (TaskId taskId : assignedStandbyList) {
                         Set<TopicPartition> standbyPartitions = standby.get(taskId);
                         if (standbyPartitions == null) {
                             standbyPartitions = new HashSet<>();
@@ -534,6 +550,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         }
                         standbyPartitions.addAll(partitionsForTask.get(taskId));
                     }
+                    standbyStartIndex = standbyEndIndex;
                 }
 
                 Collections.sort(assignedPartitions);
@@ -546,7 +563,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
                 // finally, encode the assignment before sending back to coordinator
                 assignment.put(consumer, new Assignment(activePartitions, new AssignmentInfo(active, standby, partitionsByHostState).encode()));
-                i++;
             }
         }
 
