@@ -426,21 +426,17 @@ class AdminManager(val config: KafkaConfig,
     val dynamicConfig = config.dynamicConfig
     val allSynonyms = mutable.Buffer[DescribeConfigsResponse.ConfigSynonym]()
 
-    def maybeAddSynonym(name: String, map: Map[String, String], isSensitive: Boolean, source: ConfigSource): Unit = {
+    def maybeAddSynonym(map: Map[String, String], source: ConfigSource)(name: String): Unit = {
       map.get(name).map { value =>
         val configValue = if (isSensitive) null else value
         allSynonyms += new DescribeConfigsResponse.ConfigSynonym(name, configValue, source)
       }
     }
 
-    synonyms.foreach(name => maybeAddSynonym(name, dynamicConfig.currentDynamicBrokerConfigs,
-      isSensitive, ConfigSource.DYNAMIC_BROKER_CONFIG))
-    synonyms.foreach(name => maybeAddSynonym(name, dynamicConfig.currentDynamicDefaultConfigs,
-      isSensitive, ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG))
-    synonyms.foreach(name => maybeAddSynonym(name, dynamicConfig.staticBrokerConfigs,
-      isSensitive, ConfigSource.STATIC_BROKER_CONFIG))
-    synonyms.foreach(name => maybeAddSynonym(name, dynamicConfig.staticDefaultConfigs,
-      isSensitive, ConfigSource.DEFAULT_CONFIG))
+    synonyms.foreach(maybeAddSynonym(dynamicConfig.currentDynamicBrokerConfigs, ConfigSource.DYNAMIC_BROKER_CONFIG))
+    synonyms.foreach(maybeAddSynonym(dynamicConfig.currentDynamicDefaultConfigs, ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG))
+    synonyms.foreach(maybeAddSynonym(dynamicConfig.staticBrokerConfigs, ConfigSource.STATIC_BROKER_CONFIG))
+    synonyms.foreach(maybeAddSynonym(dynamicConfig.staticDefaultConfigs, ConfigSource.DEFAULT_CONFIG))
     allSynonyms.dropWhile(s => s.name != name).toList // e.g. drop listener overrides when describing base config
   }
 

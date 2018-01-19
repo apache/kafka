@@ -242,13 +242,13 @@ public class RequestResponseTest {
         checkRequest(createAlterConfigsRequest());
         checkErrorResponse(createAlterConfigsRequest(), new UnknownServerException());
         checkResponse(createAlterConfigsResponse(), 0);
-        checkRequest(createDescribeConfigsRequest((short) 0));
-        checkRequest(createDescribeConfigsRequestWithConfigEntries((short) 0));
-        checkErrorResponse(createDescribeConfigsRequest((short) 0), new UnknownServerException());
+        checkRequest(createDescribeConfigsRequest(0));
+        checkRequest(createDescribeConfigsRequestWithConfigEntries(0));
+        checkErrorResponse(createDescribeConfigsRequest(0), new UnknownServerException());
         checkResponse(createDescribeConfigsResponse(), 0);
-        checkRequest(createDescribeConfigsRequest((short) 1));
-        checkRequest(createDescribeConfigsRequestWithConfigEntries((short) 1));
-        checkErrorResponse(createDescribeConfigsRequest((short) 1), new UnknownServerException());
+        checkRequest(createDescribeConfigsRequest(1));
+        checkRequest(createDescribeConfigsRequestWithConfigEntries(1));
+        checkErrorResponse(createDescribeConfigsRequest(1), new UnknownServerException());
         checkResponse(createDescribeConfigsResponse(), 1);
         checkRequest(createCreatePartitionsRequest());
         checkRequest(createCreatePartitionsRequestWithAssignments());
@@ -1035,18 +1035,19 @@ public class RequestResponseTest {
         return new DeleteAclsResponse(0, responses);
     }
 
-    private DescribeConfigsRequest createDescribeConfigsRequest(short version) {
+    private DescribeConfigsRequest createDescribeConfigsRequest(int version) {
         return new DescribeConfigsRequest.Builder(asList(
                 new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"),
-                new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"))).build(version);
+                new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic")))
+                .build((short) version);
     }
 
-    private DescribeConfigsRequest createDescribeConfigsRequestWithConfigEntries(short version) {
+    private DescribeConfigsRequest createDescribeConfigsRequestWithConfigEntries(int version) {
         Map<org.apache.kafka.common.requests.Resource, Collection<String>> resources = new HashMap<>();
         resources.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"), asList("foo", "bar"));
         resources.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"), null);
         resources.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic a"), Collections.<String>emptyList());
-        return new DescribeConfigsRequest.Builder(resources).build(version);
+        return new DescribeConfigsRequest.Builder(resources).build((short) version);
     }
 
     private DescribeConfigsResponse createDescribeConfigsResponse() {

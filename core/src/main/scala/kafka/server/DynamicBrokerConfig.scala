@@ -26,7 +26,6 @@ import kafka.server.DynamicBrokerConfig._
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigDef, ConfigException, SslConfigs}
 import org.apache.kafka.common.network.ListenerReconfigurable
 import org.apache.kafka.common.utils.Base64
@@ -37,14 +36,14 @@ import scala.collection.JavaConverters._
 /**
   * Dynamic broker configurations are stored in ZooKeeper and may be defined at two levels:
   * <ul>
-  *   <li>Per-broker configs persisted at <tt>/configs/brokers/brokerId</tt>: These can be described/altered
+  *   <li>Per-broker configs persisted at <tt>/configs/brokers/{brokerId}</tt>: These can be described/altered
   *       using AdminClient using the resource name brokerId.</li>
   *   <li>Cluster-wide defaults persisted at <tt>/configs/brokers/&lt;default&gt;</tt>: These can be described/altered
   *       using AdminClient using an empty resource name.</li>
   * </ul>
   * The order of precedence for broker configs is:
   * <ol>
-  *   <li>DYNAMIC_BROKER_CONFIG: stored in ZK at /configs/brokers/brokerId</li>
+  *   <li>DYNAMIC_BROKER_CONFIG: stored in ZK at /configs/brokers/{brokerId}</li>
   *   <li>DYNAMIC_DEFAULT_BROKER_CONFIG: stored in ZK at /configs/brokers/&lt;default&gt;</li>
   *   <li>STATIC_BROKER_CONFIG: properties that broker is started up with, typically from server.properties file</li>
   *   <li>DEFAULT_CONFIG: Default configs defined in KafkaConfig</li>
@@ -58,7 +57,7 @@ import scala.collection.JavaConverters._
   * some configs have additional synonyms.
   * </p>
   * <ul>
-  *   <li>Listener configs may be defined using the prefix <tt>listener.name.listenerName.configName</tt>. These may be
+  *   <li>Listener configs may be defined using the prefix <tt>listener.name.{listenerName}.{configName}</tt>. These may be
   *       configured as dynamic or static broker configs. Listener configs have higher precedence than the base configs
   *       that don't specify the listener name. Listeners without a listener config use the base config. Base configs
   *       may be defined only as STATIC_BROKER_CONFIG or DEFAULT_CONFIG and cannot be updated dynamically.<li>
@@ -110,8 +109,8 @@ object DynamicBrokerConfig {
 
 class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging {
 
-  private[server] val staticBrokerConfigs = configToMap(kafkaConfig.originalsFromThisConfig.asScala)
-  private[server] val staticDefaultConfigs = configToMap(KafkaConfig.defaultValues)
+  private[server] val staticBrokerConfigs = ConfigDef.convertToStringMapWithPasswordValues(kafkaConfig.originalsFromThisConfig).asScala
+  private[server] val staticDefaultConfigs = ConfigDef.convertToStringMapWithPasswordValues(KafkaConfig.defaultValues.asJava).asScala
   private val dynamicBrokerConfigs = mutable.Map[String, String]()
   private val dynamicDefaultConfigs = mutable.Map[String, String]()
   private val brokerId = kafkaConfig.brokerId
@@ -214,14 +213,12 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
   private[server] def validate(props: Properties, perBrokerConfig: Boolean): Unit = CoreUtils.inReadLock(lock) {
     def checkInvalidProps(invalidPropNames: Set[String], errorMessage: String): Unit = {
-      if (invalidPropNames.nonEmpty) {
-        invalidPropNames.foreach(props.remove)
+      if (invalidPropNames.nonEmpty)
         throw new ConfigException(s"$errorMessage: $invalidPropNames")
-      }
     }
     checkInvalidProps(nonDynamicConfigs(props), "Cannot update these configs dynamically")
     checkInvalidProps(securityConfigsWithoutListenerPrefix(props),
-      "Security configs can be dynamically updated only per-listener using the listener prefix")
+      "These security configs can be dynamically updated only per-listener using the listener prefix")
     validateConfigTypes(props)
     val newProps = mutable.Map[String, String]()
     newProps ++= staticBrokerConfigs
@@ -234,7 +231,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       overrideProps(newProps, props.asScala)
       overrideProps(newProps, dynamicBrokerConfigs)
     }
-    processConfig(newProps, validateOnly = true)
+    processReconfiguration(newProps, validateOnly = true)
   }
 
   private def perBrokerConfigs(props: Properties): Set[String] = {
@@ -281,21 +278,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     }
   }
 
-  /**
-    * Converts a map of config (key, value) pairs to a map of strings where each value
-    * is converted to a string. This method should be used with care since it stores
-    * actual password values to String. Values from this map should never be used in log entries.
-    */
-  private def configToMap(config: Map[String, _]): immutable.Map[String, String] = {
-    config.filter(_._2 != null).map {
-      case (k, v: String) => (k, v)
-      case (k, v: Password) => (k, v.value)
-      case (k, v: java.util.List[_]) => (k, ConfigDef.convertToString(v, ConfigDef.Type.LIST))
-      case (k, v: Class[_]) => (k, ConfigDef.convertToString(v, ConfigDef.Type.CLASS))
-      case (k, v) => (k, String.valueOf(v))
-    }.toMap
-  }
-
   private def updatedConfigs(newProps: java.util.Map[String, _], currentProps: java.util.Map[_, _]): mutable.Map[String, _] = {
     newProps.asScala.filter {
       case (k, v) => v != currentProps.get(k)
@@ -325,14 +307,14 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     newProps ++= staticBrokerConfigs
     overrideProps(newProps, dynamicDefaultConfigs)
     overrideProps(newProps, dynamicBrokerConfigs)
-    val newConfig = processConfig(newProps, validateOnly = false)
+    val newConfig = processReconfiguration(newProps, validateOnly = false)
     if (newConfig ne currentConfig) {
       currentConfig = newConfig
       kafkaConfig.updateCurrentConfig(currentConfig)
     }
   }
 
-  private def processConfig(newProps: Map[String, String], validateOnly: Boolean): KafkaConfig = {
+  private def processReconfiguration(newProps: Map[String, String], validateOnly: Boolean): KafkaConfig = {
     val newConfig = new KafkaConfig(newProps.asJava, !validateOnly, None)
     val updatedMap = updatedConfigs(newConfig.originalsFromThisConfig, currentConfig.originals)
     if (updatedMap.nonEmpty) {
