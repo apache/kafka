@@ -57,32 +57,32 @@ public class ConsumerRecordFactoryTest {
         verifyRecord(topicName, rawKey, rawValue, 5L, factory.create(topicName, rawKey, value));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test(expected = NullPointerException.class)
     public void shouldNotAllowToCreateTopicWithNullTopicName() {
         factory.create(null, rawKey, value, timestamp);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test(expected = NullPointerException.class)
     public void shouldNotAllowToCreateTopicWithNullTopicNameWithDefaultTimestamp() {
         factory.create(null, rawKey, value);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test(expected = NullPointerException.class)
     public void shouldNotAllowToCreateTopicWithNullTopicNameWithNulKey() {
         factory.create((String) null, value, timestamp);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test(expected = NullPointerException.class)
     public void shouldNotAllowToCreateTopicWithNullTopicNameWithNullKeyAndDefaultTimestamp() {
         factory.create((String) null, value);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test(expected = NullPointerException.class)
     public void shouldNotAllowToCreateTopicWithNullTopicNameWithKeyValuePairs() {
         factory.create(null, Collections.singletonList(KeyValue.pair(rawKey, value)));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test(expected = NullPointerException.class)
     public void shouldNotAllowToCreateTopicWithNullTopicNameWithKeyValuePairsAndCustomTimestamps() {
         factory.create(null, Collections.singletonList(KeyValue.pair(rawKey, value)), timestamp, 2L);
     }
