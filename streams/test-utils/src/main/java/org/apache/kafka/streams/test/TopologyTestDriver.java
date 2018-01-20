@@ -78,22 +78,20 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * This class makes it easier to write tests to verify the behavior of topologies created with a {@link Topology} or
+ * This class makes it easier to write tests to verify the behavior of topologies created with {@link Topology} or
  * {@link StreamsBuilder}.
  * You can test simple topologies that have a single processor, or very complex topologies that have multiple sources,
- * processors, and sinks.
+ * processors, sinks, or sub-topologies.
  * Best of all, the class works without a real Kafka broker, so the tests execute very quickly with very little overhead.
  * <p>
- * Using the {@code TopologyTestDriver} in tests is easy: simply instantiate the driver and provide
- * {@link Properties configs} and a {@link Topology} (cf. {@link StreamsBuilder#build()}), use the driver to supply an
+ * Using the {@code TopologyTestDriver} in tests is easy: simply instantiate the driver and provide a {@link Topology}
+ * (cf. {@link StreamsBuilder#build()}) and {@link Properties configs}, use the driver to supply an
  * input message to the topology, and then use the driver to read and verify any messages output by the topology.
  * <p>
  * Although the driver doesn't use a real Kafka broker, it does simulate Kafka {@link Consumer consumers} and
  * {@link Producer producers} that read and write raw {@code byte[]} messages.
- * TODO update next paragraph
- * You can either deal with messages that have {@code byte[]} keys and values, or you can supply the
- * {@link Serializer serializers} and {@link Deserializer deserializer} that the driver can use to convert the keys and
- * values into objects.
+ * You can either deal with messages that have {@code byte[]} keys and values or you use {@link ConsumerRecordFactory}
+ * and {@link OutputVerifier} that work with regular Java objects instead of raw bytes.
  *
  * <h2>Driver setup</h2>
  * In order to create a {@code TopologyTestDriver} instance, you need a {@link Topology} and a {@link Properties config}.
@@ -115,19 +113,15 @@ import java.util.concurrent.atomic.AtomicLong;
  * <h2>Processing messages</h2>
  * <p>
  * Your test can supply new input records on any of the topics that the topology's sources consume.
- * This test driver simulates single partition input topics.
+ * This test driver simulates single-partitioned input topics.
  * Here's an example of an input message on the topic named {@code input-topic}:
  *
  * <pre>
- * driver.process("input-topic", "key1", "value1", strSerializer, strSerializer);
+ * ConsumerRecordFactory factory = new ConsumerRecordFactory(strSerializer, strSerializer);
+ * driver.pipeInput(factory.create("input-topic","key1", "value1"));
  * </pre>
  *
- * {@link #pipeInput(ConsumerRecord) process(...)}
- * It's recommended to check them out.
- * In addition, you can use {@link ConsumerRecordFactory} to generate {@link ConsumerRecord ConsumerRecords} that can be
- * ingested into the driver via {@link #pipeInput(ConsumerRecord)}.
- * <p>
- * When {@code #process()} is called, the driver passes the input message through to the appropriate source that
+ * When {@code #pipeInput()} is called, the driver passes the input message through to the appropriate source that
  * consumes the named topic, and will invoke the processor(s) downstream of the source.
  * If your topology's processors forward messages to sinks, your test can then consume these output messages to verify
  * they match the expected outcome.
@@ -144,11 +138,15 @@ import java.util.concurrent.atomic.AtomicLong;
  * Again, our example topology generates messages with string keys and values, so we supply our string deserializer
  * instance for use on both the keys and values. Your test logic can then verify whether these output records are
  * correct.
+ * Note, that calling {@link ProducerRecord#equals(Object)} compares all attributes including key, value, timestamp,
+ * topic, partition, and headers.
+ * If you only want to compare key and value (and maybe timestamp), using {@link OutputVerifier} instead of
+ * {@link ProducerRecord#equals(Object)} can simplify your code as you can ignore attributes you are not interested in.
  * <p>
- * Note, that calling {@code process()} will only trigger {@link PunctuationType#STREAM_TIME event-time} base
- * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) punctuation} call backs.
- * However, you can test {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type punctuations manually via
- * {@link #advanceWallClockTime(long)}.
+ * Note, that calling {@code pipeInput()} will also trigger {@link PunctuationType#STREAM_TIME event-time} base
+ * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) punctuation} callbacks.
+ * However, you won't trigger {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type punctuations that you must
+ * trigger manually via {@link #advanceWallClockTime(long)}.
  * <p>
  * Finally, when completed, make sure your tests {@link #close()} the driver to release all resources and
  * {@link org.apache.kafka.streams.processor.Processor processors}.
@@ -162,6 +160,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * could also check the key value store to verify the processor correctly added, removed, or updated internal state.
  * Or, our test might have pre-populated some state <em>before</em> submitting the input message, and verified afterward
  * that the processor(s) correctly updated the state.
+ *
+ * @see ConsumerRecordFactory
+ * @see OutputVerifier
  */
 @InterfaceStability.Evolving
 public class TopologyTestDriver {
@@ -389,7 +390,7 @@ public class TopologyTestDriver {
     /**
      * Send input messages to the topology and then commit each message individually.
      *
-     * @param records a lit of record to be processed
+     * @param records a list of records to be processed
      */
     public void pipeInput(final List<ConsumerRecord<byte[], byte[]>> records) {
         for (final ConsumerRecord<byte[], byte[]> record : records) {
@@ -400,7 +401,7 @@ public class TopologyTestDriver {
     /**
      * Advances the internally mocked wall-clock time.
      * This might trigger a {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type
-     * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) punctuation}.
+     * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) punctuations}.
      *
      * @param advanceMs the amount of time to advance wall-clock time in milliseconds
      */
@@ -411,11 +412,11 @@ public class TopologyTestDriver {
     }
 
     /**
-     * Read the next record from the given topic. These records were output by the topology during the previous calls to
-     * {@link #pipeInput(ConsumerRecord)}.
+     * Read the next record from the given topic.
+     * These records were output by the topology during the previous calls to {@link #pipeInput(ConsumerRecord)}.
      *
      * @param topic the name of the topic
-     * @return the next record on that topic, or null if there is no record available
+     * @return the next record on that topic, or {@code null} if there is no record available
      */
     public ProducerRecord<byte[], byte[]> readOutput(final String topic) {
         final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
@@ -426,13 +427,13 @@ public class TopologyTestDriver {
     }
 
     /**
-     * Read the next record from the given topic. These records were output by the topology during the previous calls to
-     * {@link #pipeInput(ConsumerRecord)}.
+     * Read the next record from the given topic.
+     * These records were output by the topology during the previous calls to {@link #pipeInput(ConsumerRecord)}.
      *
      * @param topic the name of the topic
      * @param keyDeserializer the deserializer for the key type
      * @param valueDeserializer the deserializer for the value type
-     * @return the next record on that topic, or null if there is no record available
+     * @return the next record on that topic, or {@code null} if there is no record available
      */
     public <K, V> ProducerRecord<K, V> readOutput(final String topic,
                                                   final Deserializer<K> keyDeserializer,
@@ -448,7 +449,7 @@ public class TopologyTestDriver {
 
     /**
      * Get all {@link StateStore StateStores} from the topology.
-     * The store can be a "regular" or global store.
+     * The stores can be a "regular" or global stores.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
@@ -470,15 +471,12 @@ public class TopologyTestDriver {
     /**
      * Get the {@link StateStore} with the given name.
      * The store can be a "regular" or global store.
-     * The name should have been supplied via
-     * {@link #TopologyTestDriver(Topology, Properties) this object's constructor}, and is
-     * presumed to be used by a Processor within the topology.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the state store, or null if no store has been registered with the given name
+     * @return the state store, or {@code null} if no store has been registered with the given name
      * @see #getAllStateStores()
      * @see #getKeyValueStore(String)
      * @see #getWindowStore(String)
@@ -491,16 +489,12 @@ public class TopologyTestDriver {
     /**
      * Get the {@link KeyValueStore} with the given name.
      * The store can be a "regular" or global store.
-     * The name should have been supplied via
-     * {@link #TopologyTestDriver(Topology, Properties) this object's constructor}, and is
-     * presumed to be used by a Processor within the topology.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
-     * <p>
      *
      * @param name the name of the store
-     * @return the key value store, or null if no {@link KeyValueStore} has been registered with the given name
+     * @return the key value store, or {@code null} if no {@link KeyValueStore} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getWindowStore(String)
@@ -513,51 +507,43 @@ public class TopologyTestDriver {
     }
 
     /**
-     * Get the {@link SessionStore} with the given name.
+     * Get the {@link WindowStore} with the given name.
      * The store can be a "regular" or global store.
-     * The name should have been supplied via
-     * {@link #TopologyTestDriver(Topology, Properties) this object's constructor}, and is
-     * presumed to be used by a Processor within the topology.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
-     * <p>
      *
      * @param name the name of the store
-     * @return the key value store, or null if no {@link SessionStore} has been registered with the given name
+     * @return the key value store, or {@code null} if no {@link WindowStore} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getSessionStore(String) (String)
      */
     @SuppressWarnings("unchecked")
-    public <K, V> SessionStore<K, V> getWindowStore(final String name) {
+    public <K, V> WindowStore<K, V> getWindowStore(final String name) {
         final StateStore store = getStateStore(name);
-        return store instanceof SessionStore ? (SessionStore<K, V>) getStateStore(name) : null;
+        return store instanceof WindowStore ? (WindowStore<K, V>) getStateStore(name) : null;
     }
 
     /**
-     * Get the {@link WindowStore} with the given name.
+     * Get the {@link SessionStore} with the given name.
      * The store can be a "regular" or global store.
-     * The name should have been supplied via
-     * {@link #TopologyTestDriver(Topology, Properties) this object's constructor}, and is
-     * presumed to be used by a Processor within the topology.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
-     * <p>
      *
      * @param name the name of the store
-     * @return the key value store, or null if no {@link WindowStore} has been registered with the given name
+     * @return the key value store, or {@code null} if no {@link SessionStore} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getWindowStore(String)
      */
     @SuppressWarnings("unchecked")
-    public <K, V> WindowStore<K, V> getSessionStore(final String name) {
+    public <K, V> SessionStore<K, V> getSessionStore(final String name) {
         final StateStore store = getStateStore(name);
-        return store instanceof WindowStore ? (WindowStore<K, V>) getStateStore(name) : null;
+        return store instanceof SessionStore ? (SessionStore<K, V>) getStateStore(name) : null;
     }
 
     /**
@@ -594,7 +580,7 @@ public class TopologyTestDriver {
         for (final Map.Entry<String, String> storeAndTopic: storeToChangelogTopic.entrySet()) {
             final String topicName = storeAndTopic.getValue();
             // Set up the restore-state topic ...
-            // consumer.subscribe(new TopicPartition(topicName, 1));
+            // consumer.subscribe(new TopicPartition(topicName, 0));
             // Set up the partition that matches the ID (which is what ProcessorStateManager expects) ...
             final List<PartitionInfo> partitionInfos = new ArrayList<>();
             partitionInfos.add(new PartitionInfo(topicName, PARTITION_ID, null, null, null));

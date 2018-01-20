@@ -32,6 +32,8 @@ import java.util.Objects;
  *
  * @param <K> the type of the key
  * @param <V> the type of the value
+ *
+ * @see TopologyTestDriver
  */
 @InterfaceStability.Evolving
 public class ConsumerRecordFactory<K, V> {
