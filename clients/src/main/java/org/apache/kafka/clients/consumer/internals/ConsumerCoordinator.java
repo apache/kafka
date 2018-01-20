@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -47,6 +48,7 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -112,6 +114,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private AtomicBoolean asyncCommitFenced;
     private ConsumerGroupMetadata groupMetadata;
     private final boolean throwOnFetchStableOffsetsUnsupported;
+
+    private volatile long prevPollTime = Long.MIN_VALUE; //volatile for metrics
+
 
     // hold onto request&future for committed offset requests to enable async calls.
     private PendingCommittedOffsetRequest pendingCommittedOffsetRequest = null;
@@ -468,6 +473,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @return true iff the operation succeeded
      */
     public boolean poll(Timer timer, boolean waitForJoinGroup) {
+        long currentTime = time.milliseconds();
+        if (prevPollTime > Long.MIN_VALUE) {
+            sensors.pollInterval.record(currentTime - prevPollTime);
+        }
+        prevPollTime = currentTime;
         maybeUpdateSubscriptionMetadata();
 
         invokeCompletedOffsetCommitCallbacks();
@@ -1412,6 +1422,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         private final Sensor revokeCallbackSensor;
         private final Sensor assignCallbackSensor;
         private final Sensor loseCallbackSensor;
+        private final Sensor pollInterval;
 
         private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
@@ -1453,6 +1464,30 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             metrics.addMetric(metrics.metricName("assigned-partitions",
                 this.metricGrpName,
                 "The number of partitions currently assigned to this consumer"), numParts);
+
+            //HOTFIX - extra liveliness-related metrics
+
+            this.pollInterval = metrics.sensor("poll-interval");
+            this.pollInterval.add(metrics.metricName("poll-interval-avg",
+                this.metricGrpName,
+                "The average time between subsequent poll calls"), new Avg());
+            this.pollInterval.add(metrics.metricName("poll-interval-max",
+                this.metricGrpName,
+                "The max time between subsequent poll calls"), new Max());
+            this.pollInterval.add(createMeter(metrics, metricGrpName, "poll", "poll calls"));
+
+            Measurable lastHeartbeat =
+                new Measurable() {
+                    public double measure(MetricConfig config, long now) {
+                        return TimeUnit.SECONDS.convert(now - prevPollTime, TimeUnit.MILLISECONDS);
+                    }
+                };
+            metrics.addMetric(metrics.metricName("last-poll-seconds-ago",
+                this.metricGrpName,
+                "The number of seconds since the last poll call"),
+                lastHeartbeat);
+
+            //end HOTFIX
         }
     }
 
