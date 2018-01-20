@@ -32,6 +32,7 @@ public final class Heartbeat {
     private final Timer pollTimer;
 
     private volatile long lastHeartbeatSend = 0L;
+    private volatile long lastHeartbeatReceive;
 
     public Heartbeat(GroupRebalanceConfig config,
                      Time time) {
@@ -46,6 +47,7 @@ public final class Heartbeat {
     }
 
     private void update(long now) {
+        lastHeartbeatReceive = now;
         heartbeatTimer.update(now);
         sessionTimer.update(now);
         pollTimer.update(now);
@@ -76,9 +78,13 @@ public final class Heartbeat {
         update(now);
         return heartbeatTimer.isExpired();
     }
-    
+
     public long lastHeartbeatSend() {
         return this.lastHeartbeatSend;
+    }
+
+    public long lastHeartbeatReceive() {
+        return lastHeartbeatReceive;
     }
 
     public long timeToNextHeartbeat(long now) {

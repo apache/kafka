@@ -39,6 +39,7 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -1143,6 +1144,21 @@ public abstract class AbstractCoordinator implements Closeable {
                 this.metricGrpName,
                 "The number of seconds since the last coordinator heartbeat was sent"),
                 lastHeartbeat);
+
+            //HOTFIX - extra liveliness-related metrics
+
+            Measurable lastHeartbeatReceived =
+                new Measurable() {
+                    public double measure(MetricConfig config, long now) {
+                        return TimeUnit.SECONDS.convert(now - heartbeat.lastHeartbeatReceive(), TimeUnit.MILLISECONDS);
+                    }
+                };
+            metrics.addMetric(metrics.metricName("last-heartbeat-received-seconds-ago",
+                this.metricGrpName,
+                "The number of seconds since the last successful controller heartbeat was received"),
+                lastHeartbeatReceived);
+
+            //end HOTFIX
         }
     }
 
