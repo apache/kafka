@@ -295,6 +295,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 ensureActiveGroup();
                 now = time.milliseconds();
             }
+
+            pollHeartbeat(now);
         } else {
             // For manually assigned partitions, if there are no ready nodes, await metadata.
             // If connections to all nodes fail, wakeups triggered while attempting to send fetch
@@ -311,12 +313,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         }
 
-        pollHeartbeat(now);
         maybeAutoCommitOffsetsAsync(now);
     }
 
     /**
-     * Return the time to the next needed invocation of {@link #poll(long)}.
+     * Return the time to the next needed invocation of {@link #poll(long, long)}.
      * @param now current time in milliseconds
      * @return the maximum time in milliseconds the caller should wait before the next invocation of poll()
      */
@@ -533,7 +534,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 public void onFailure(RuntimeException e) {
                     pendingAsyncCommits.decrementAndGet();
                     completedOffsetCommits.add(new OffsetCommitCompletion(callback, offsets,
-                            RetriableCommitFailedException.withUnderlyingMessage(e.getMessage())));
+                            new RetriableCommitFailedException(e)));
                 }
             });
         }
@@ -562,7 +563,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 Exception commitException = e;
 
                 if (e instanceof RetriableException)
-                    commitException = RetriableCommitFailedException.withUnderlyingMessage(e.getMessage());
+                    commitException = new RetriableCommitFailedException(e);
 
                 completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, commitException));
             }
