@@ -101,6 +101,21 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
+    public void shouldRemoveChangelogTopicsForStateStoresDirectlyPipedToSink() {
+        final StateStoreSupplier supplier = new MockStateStoreSupplier("store-1", false);
+        builder.addStateStore(supplier);
+        builder.setApplicationId("X");
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+        builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
+        builder.connectProcessorAndStateStores("processor-1", "store-1");
+        builder.addSink("sink", "sink-topic", null, null, null, "processor-1");
+
+        Map<String, String> storeToChangelogTopic = builder.build(null).storeToChangelogTopic();
+
+        assertEquals(0, storeToChangelogTopic.size());
+    }
+
+    @Test
     public void shouldAddPatternSourceWithoutOffsetReset() {
         final Pattern expectedPattern = Pattern.compile("test-.*");
         

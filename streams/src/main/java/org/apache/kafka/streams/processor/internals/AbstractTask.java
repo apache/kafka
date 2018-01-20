@@ -89,7 +89,8 @@ public abstract class AbstractTask implements Task {
                 topology.storeToChangelogTopic(),
                 changelogReader,
                 eosEnabled,
-                logContext);
+                logContext,
+                topology.stateStoreToChangelogTopicOnlyForRestoring());
         } catch (final IOException e) {
             throw new ProcessorStateException(String.format("%sError while creating the state manager", logPrefix), e);
         }

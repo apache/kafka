@@ -75,7 +75,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     private static final String SELECT_NAME = "KTABLE-SELECT-";
 
-    private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
+    public static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
 
     private final ProcessorSupplier<?, ?> processorSupplier;
 

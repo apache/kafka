@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -101,7 +102,9 @@ public class InternalTopologyBuilder {
     // this is used in the extended KStreamBuilder.
     private final Map<String, String> storeToChangelogTopic = new HashMap<>();
 
-    // all global topics
+    private final Map<String, String> stateStoreToChangelogTopicOnlyForRestoring = new HashMap<>();
+
+        // all global topics
     private final Set<String> globalTopics = new HashSet<>();
 
     private final Set<String> earliestResetTopics = new HashSet<>();
@@ -121,6 +124,8 @@ public class InternalTopologyBuilder {
     private Pattern topicPattern = null;
 
     private Map<Integer, Set<String>> nodeGroups = null;
+
+    private ProcessorTopology processorTopology = null;
 
     interface StateStoreFactory {
         Set<String> users();
@@ -932,14 +937,59 @@ public class InternalTopologyBuilder {
                 }
             }
         }
+        processorTopology = new ProcessorTopology(new ArrayList<>(processorMap.values()),
+                topicSourceMap,
+                topicSinkMap,
+                new ArrayList<>(stateStoreMap.values()),
+                new ArrayList<>(globalStateStores.values()),
+                storeToChangelogTopic,
+                repartitionTopics,
+                stateStoreToChangelogTopicOnlyForRestoring);
+        optimizeTopology();
+        return processorTopology;
+    }
 
-        return new ProcessorTopology(new ArrayList<>(processorMap.values()),
-                                     topicSourceMap,
-                                     topicSinkMap,
-                                     new ArrayList<>(stateStoreMap.values()),
-                                     new ArrayList<>(globalStateStores.values()),
-                                     storeToChangelogTopic,
-                                     repartitionTopics);
+    /**
+     * Topology optimizer that avoids creating changelog topics for state stores that are directly piped to a sink topic
+     */
+    private void optimizeTopology() {
+        // Find processor nodes with changelog stores
+        List<ProcessorNode> nodesWithChangeLogState = new ArrayList<>();
+        for (String key : storeToChangelogTopic.keySet()) {
+            for (ProcessorNode processorNode: processorTopology.processors()) {
+                if (processorNode.stateStores != null && processorNode.stateStores.contains(key)) {
+                    nodesWithChangeLogState.add(processorNode);
+                }
+            }
+        }
+
+        // If child nodes of nodesWithChangeLogState are of SinkNode type, then we can apply the optimization.
+        for (ProcessorNode processorNode: nodesWithChangeLogState) {
+            for (ProcessorNode child: (List<ProcessorNode>) processorNode.children()) {
+                if (child instanceof SinkNode) {
+                    for (String stateStore: (Set<String>) processorNode.stateStores) {
+                        stateStoreToChangelogTopicOnlyForRestoring.put(stateStore, storeToChangelogTopic.get(stateStore));
+                    }
+                    storeToChangelogTopic.keySet().removeAll(processorNode.stateStores);
+                }
+            }
+        }
+
+        // KTable.to() uses toStream() method internally. So, we check if processorNode has child of this
+        // specific type which proceeds to Sink Node
+        for (ProcessorNode processorNode: nodesWithChangeLogState) {
+            for (ProcessorNode child: (List<ProcessorNode>) processorNode.children()) {
+                if (child.name().startsWith(KTableImpl.TOSTREAM_NAME)) {
+                    List<ProcessorNode> shouldBeSinkNode = child.children();
+                    if (shouldBeSinkNode != null && shouldBeSinkNode.size() == 1 && shouldBeSinkNode.get(0) instanceof SinkNode) {
+                        for (String stateStore: (Set<String>) processorNode.stateStores) {
+                            stateStoreToChangelogTopicOnlyForRestoring.put(stateStore, storeToChangelogTopic.get(stateStore));
+                        }
+                        storeToChangelogTopic.keySet().removeAll(processorNode.stateStores);
+                    }
+                }
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")

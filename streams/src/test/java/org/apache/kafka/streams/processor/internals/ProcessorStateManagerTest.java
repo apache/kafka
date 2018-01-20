@@ -163,7 +163,8 @@ public class ProcessorStateManagerTest {
             },
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
 
         try {
             stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
@@ -190,7 +191,8 @@ public class ProcessorStateManagerTest {
             },
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
 
         try {
             stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
@@ -239,7 +241,8 @@ public class ProcessorStateManagerTest {
             storeToChangelogTopic,
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
 
         try {
             stateMgr.register(store1, store1.stateRestoreCallback);
@@ -272,7 +275,8 @@ public class ProcessorStateManagerTest {
             Collections.<String, String>emptyMap(),
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
         try {
             stateMgr.register(mockStateStore, mockStateStore.stateRestoreCallback);
 
@@ -307,7 +311,8 @@ public class ProcessorStateManagerTest {
             },
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
         try {
             // make sure the checkpoint file isn't deleted
             assertTrue(checkpointFile.exists());
@@ -342,7 +347,8 @@ public class ProcessorStateManagerTest {
             Collections.<String, String>emptyMap(),
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
         stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
         assertNotNull(stateMgr.getStore(nonPersistentStoreName));
     }
@@ -361,7 +367,8 @@ public class ProcessorStateManagerTest {
             Collections.<String, String>emptyMap(),
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
         stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
         stateMgr.close(null);
         final Map<TopicPartition, Long> read = checkpoint.read();
@@ -378,7 +385,8 @@ public class ProcessorStateManagerTest {
             Collections.singletonMap(persistentStore.name(), persistentStoreTopicName),
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
         stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
 
         stateMgr.checkpoint(Collections.singletonMap(persistentStorePartition, 10L));
@@ -396,7 +404,8 @@ public class ProcessorStateManagerTest {
             Collections.singletonMap(persistentStore.name(), persistentStoreTopicName),
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
 
         stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
         final byte[] bytes = Serdes.Integer().serializer().serialize("", 10);
@@ -427,7 +436,8 @@ public class ProcessorStateManagerTest {
             Collections.singletonMap(nonPersistentStoreName, nonPersistentStoreTopicName),
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
 
         stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
         stateMgr.checkpoint(Collections.singletonMap(topicPartition, 876L));
@@ -446,7 +456,8 @@ public class ProcessorStateManagerTest {
             Collections.<String, String>emptyMap(),
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
 
         stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
 
@@ -467,7 +478,8 @@ public class ProcessorStateManagerTest {
             Collections.<String, String>emptyMap(),
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
 
         try {
             stateManager.register(new MockStateStore(ProcessorStateManager.CHECKPOINT_FILE_NAME, true), null);
@@ -487,7 +499,8 @@ public class ProcessorStateManagerTest {
             Collections.<String, String>emptyMap(),
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
 
         stateManager.register(mockStateStore, null);
 
@@ -511,7 +524,8 @@ public class ProcessorStateManagerTest {
             Collections.singletonMap(storeName, changelogTopic),
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
 
         final MockStateStore stateStore = new MockStateStore(storeName, true) {
             @Override
@@ -540,7 +554,8 @@ public class ProcessorStateManagerTest {
             Collections.singletonMap(storeName, changelogTopic),
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
 
         final MockStateStore stateStore = new MockStateStore(storeName, true) {
             @Override
@@ -568,7 +583,8 @@ public class ProcessorStateManagerTest {
             Collections.singletonMap(storeName, changelogTopic),
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
 
         final AtomicBoolean flushedStore = new AtomicBoolean(false);
 
@@ -603,7 +619,8 @@ public class ProcessorStateManagerTest {
             Collections.singletonMap(storeName, changelogTopic),
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
 
         final AtomicBoolean closedStore = new AtomicBoolean(false);
 
@@ -643,7 +660,8 @@ public class ProcessorStateManagerTest {
                 Collections.<String, String>emptyMap(),
                 changelogReader,
                 true,
-                logContext);
+                logContext,
+                Collections.<String, String>emptyMap());
 
             assertFalse(checkpointFile.exists());
         } finally {
@@ -674,7 +692,8 @@ public class ProcessorStateManagerTest {
                 storeToChangelog,
                 changelogReader,
                 false,
-                logContext);
+                logContext,
+                Collections.<String, String>emptyMap());
 
         final MockStateStore stateStore = new MockStateStore(storeName, true);
         final MockStateStore stateStore2 = new MockStateStore(store2Name, true);
@@ -709,7 +728,8 @@ public class ProcessorStateManagerTest {
             },
             changelogReader,
             false,
-            logContext);
+            logContext,
+            Collections.<String, String>emptyMap());
     }
 
     private MockStateStore getPersistentStore() {

@@ -33,6 +33,7 @@ public class ProcessorTopology {
     private final List<StateStore> globalStateStores;
     private final Map<String, String> storeToChangelogTopic;
     private final Set<String> repartitionTopics;
+    private final Map<String, String> stateStoreToChangelogTopicOnlyForRestoring;
 
     public static ProcessorTopology with(final List<ProcessorNode> processorNodes,
                                          final Map<String, SourceNode> sourcesByTopic,
@@ -44,7 +45,8 @@ public class ProcessorTopology {
                 stateStoresByName,
                 Collections.<StateStore>emptyList(),
                 storeToChangelogTopic,
-                Collections.<String>emptySet());
+                Collections.<String>emptySet(),
+                Collections.<String, String>emptyMap());
     }
 
     static ProcessorTopology withSources(final List<ProcessorNode> processorNodes,
@@ -55,7 +57,8 @@ public class ProcessorTopology {
                 Collections.<StateStore>emptyList(),
                 Collections.<StateStore>emptyList(),
                 Collections.<String, String>emptyMap(),
-                Collections.<String>emptySet());
+                Collections.<String>emptySet(),
+                Collections.<String, String>emptyMap());
     }
 
     static ProcessorTopology withLocalStores(final List<StateStore> stateStores,
@@ -66,7 +69,8 @@ public class ProcessorTopology {
                 stateStores,
                 Collections.<StateStore>emptyList(),
                 storeToChangelogTopic,
-                Collections.<String>emptySet());
+                Collections.<String>emptySet(),
+                Collections.<String, String>emptyMap());
     }
 
     static ProcessorTopology withGlobalStores(final List<StateStore> stateStores,
@@ -77,7 +81,8 @@ public class ProcessorTopology {
                 Collections.<StateStore>emptyList(),
                 stateStores,
                 storeToChangelogTopic,
-                Collections.<String>emptySet());
+                Collections.<String>emptySet(),
+                Collections.<String, String>emptyMap());
     }
 
     static ProcessorTopology withRepartitionTopics(final List<ProcessorNode> processorNodes,
@@ -89,7 +94,8 @@ public class ProcessorTopology {
                 Collections.<StateStore>emptyList(),
                 Collections.<StateStore>emptyList(),
                 Collections.<String, String>emptyMap(),
-                repartitionTopics);
+                repartitionTopics,
+                Collections.<String, String>emptyMap());
     }
 
     public ProcessorTopology(final List<ProcessorNode> processorNodes,
@@ -98,7 +104,8 @@ public class ProcessorTopology {
                              final List<StateStore> stateStores,
                              final List<StateStore> globalStateStores,
                              final Map<String, String> stateStoreToChangelogTopic,
-                             final Set<String> repartitionTopics) {
+                             final Set<String> repartitionTopics,
+                             final Map<String, String> stateStoreToChangelogTopicOnlyForRestoring) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourcesByTopic = Collections.unmodifiableMap(sourcesByTopic);
         this.sinksByTopic = Collections.unmodifiableMap(sinksByTopic);
@@ -106,6 +113,7 @@ public class ProcessorTopology {
         this.globalStateStores = Collections.unmodifiableList(globalStateStores);
         this.storeToChangelogTopic = Collections.unmodifiableMap(stateStoreToChangelogTopic);
         this.repartitionTopics = Collections.unmodifiableSet(repartitionTopics);
+        this.stateStoreToChangelogTopicOnlyForRestoring = stateStoreToChangelogTopicOnlyForRestoring;
     }
 
     public Set<String> sourceTopics() {
@@ -146,6 +154,10 @@ public class ProcessorTopology {
 
     public Map<String, String> storeToChangelogTopic() {
         return storeToChangelogTopic;
+    }
+
+    public Map<String, String> stateStoreToChangelogTopicOnlyForRestoring() {
+        return stateStoreToChangelogTopicOnlyForRestoring;
     }
 
     boolean isRepartitionTopic(String topic) {
