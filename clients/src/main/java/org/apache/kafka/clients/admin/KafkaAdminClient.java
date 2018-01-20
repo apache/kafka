@@ -93,10 +93,10 @@ import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
-import org.apache.kafka.common.requests.ListOffsetRequest;
-import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.OffsetFetchRequest;
+import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.Resource;
 import org.apache.kafka.common.requests.ResourceType;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -2015,19 +2015,19 @@ public class KafkaAdminClient extends AdminClient {
                 DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
                 // Handle server responses for particular groupId.
                 for (Map.Entry<String, KafkaFutureImpl<GroupDescription>> entry : consumerGroupFutures.entrySet()) {
-                    String groupId = entry.getKey();
-                    KafkaFutureImpl<GroupDescription> future = entry.getValue();
+                    final String groupId = entry.getKey();
+                    final KafkaFutureImpl<GroupDescription> future = entry.getValue();
                     final DescribeGroupsResponse.GroupMetadata groupMetadata = response.groups().get(groupId);
-                    final Errors topicError = groupMetadata.error();
-                    if (topicError != null) {
-                        future.completeExceptionally(topicError.exception());
+                    final Errors groupError = groupMetadata.error();
+                    if (groupError != Errors.NONE) {
+                        future.completeExceptionally(groupError.exception());
                         continue;
                     }
 
                     final List<DescribeGroupsResponse.GroupMember> members = groupMetadata.members();
                     final List<MemberDescription> consumers = new ArrayList<>(members.size());
-                    for (DescribeGroupsResponse.GroupMember groupMember : members) {
 
+                    for (DescribeGroupsResponse.GroupMember groupMember : members) {
                         final PartitionAssignor.Assignment assignment =
                             ConsumerProtocol.deserializeAssignment(
                                 ByteBuffer.wrap(Utils.readBytes(groupMember.memberAssignment())));
@@ -2041,8 +2041,7 @@ public class KafkaAdminClient extends AdminClient {
                         consumers.add(consumerDescription);
                     }
                     final String protocolType = groupMetadata.protocolType();
-                    final GroupDescription consumerGroupDescription =
-                        new GroupDescription(groupId, protocolType, consumers);
+                    final GroupDescription consumerGroupDescription = new GroupDescription(groupId, protocolType, consumers);
                     future.complete(consumerGroupDescription);
                 }
             }
@@ -2129,28 +2128,26 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public ListGroupOffsetsResult listGroupOffsets(final ListGroupOffsetsOptions options) {
-        final KafkaFutureImpl<Map<TopicPartition, GroupOffsetListing>> groupOffsetListingFuture = new KafkaFutureImpl<>();
+    public ListGroupOffsetsResult listGroupOffsets(final String groupId, final ListGroupOffsetsOptions options) {
+        final KafkaFutureImpl<Map<TopicPartition, Long>> groupOffsetListingFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("listGroupOffsets", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return ListOffsetRequest.Builder.forConsumer(options.shouldRequireTimestamp(), options.isolationLevel());
+                return new OffsetFetchRequest.Builder(groupId, options.topicPartitions());
             }
 
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
-                final ListOffsetResponse response = (ListOffsetResponse) abstractResponse;
-                final Map<TopicPartition, GroupOffsetListing> groupOffsetsListing = new HashMap<>();
-                for (Map.Entry<TopicPartition, ListOffsetResponse.PartitionData> entry :
+                final OffsetFetchResponse response = (OffsetFetchResponse) abstractResponse;
+                final Map<TopicPartition, Long> groupOffsetsListing = new HashMap<>();
+                for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry :
                     response.responseData().entrySet()) {
                     final TopicPartition topicPartition = entry.getKey();
                     final Long offset = entry.getValue().offset;
-                    final Long timestamp = entry.getValue().timestamp;
-                    final GroupOffsetListing groupOffsetListing = new GroupOffsetListing(offset, timestamp);
-                    groupOffsetsListing.put(topicPartition, groupOffsetListing);
+                    groupOffsetsListing.put(topicPartition, offset);
                 }
                 groupOffsetListingFuture.complete(groupOffsetsListing);
             }

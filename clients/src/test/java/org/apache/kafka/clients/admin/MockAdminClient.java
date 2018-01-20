@@ -291,7 +291,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public ListGroupOffsetsResult listGroupOffsets(ListGroupOffsetsOptions options) {
+    public ListGroupOffsetsResult listGroupOffsets(String groupId, ListGroupOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 

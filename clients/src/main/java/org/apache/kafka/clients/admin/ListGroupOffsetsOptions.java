@@ -17,35 +17,28 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.requests.IsolationLevel;
 
+import java.util.List;
+
 /**
- * Options for {@link AdminClient#listGroupOffsets()}.
+ * Options for {@link AdminClient#listGroupOffsets(String)}.
  * <p>
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
 public class ListGroupOffsetsOptions extends AbstractOptions<ListGroupOffsetsOptions> {
 
-    private boolean requireTimestamp = false;
-    private IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
+    private List<TopicPartition> topicPartitions = null;
 
-    public ListGroupOffsetsOptions requireTimestamp(boolean requireTimestamp) {
-        this.requireTimestamp = requireTimestamp;
+    public ListGroupOffsetsOptions topicPartitions(List<TopicDescription> topicDescriptions) {
+        this.topicPartitions = topicPartitions;
         return this;
     }
 
-    public ListGroupOffsetsOptions isolationLevel(IsolationLevel isolationLevel) {
-        this.isolationLevel = isolationLevel;
-        return this;
-    }
-
-    public boolean shouldRequireTimestamp() {
-        return requireTimestamp;
-    }
-
-    public IsolationLevel isolationLevel() {
-        return isolationLevel;
+    public List<TopicPartition> topicPartitions() {
+        return topicPartitions;
     }
 }

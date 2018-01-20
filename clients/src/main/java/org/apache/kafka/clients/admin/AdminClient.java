@@ -605,16 +605,16 @@ public abstract class AdminClient implements AutoCloseable {
      * @param options           The options to use when listing the group offsets.
      * @return The ListGroupOffsetsResult
      */
-    public abstract ListGroupOffsetsResult listGroupOffsets(ListGroupOffsetsOptions options);
+    public abstract ListGroupOffsetsResult listGroupOffsets(String groupId, ListGroupOffsetsOptions options);
 
     /**
      * List the group offsets available in the cluster with the default options.
      *
-     * This is a convenience method for #{@link AdminClient#listGroupOffsets(ListGroupOffsetsOptions)} with default options.
+     * This is a convenience method for #{@link AdminClient#listGroupOffsets(String, ListGroupOffsetsOptions)} with default options.
      *
      * @return The ListGroupOffsetsResult.
      */
-    public ListGroupOffsetsResult listGroupOffsets() {
-        return listGroupOffsets(new ListGroupOffsetsOptions());
+    public ListGroupOffsetsResult listGroupOffsets(String groupId) {
+        return listGroupOffsets(groupId, new ListGroupOffsetsOptions());
     }
 }
