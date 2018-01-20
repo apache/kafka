@@ -560,22 +560,61 @@ public abstract class AdminClient implements AutoCloseable {
     }
 
     /**
-     * List the consumer groups available in the cluster.
+     * List the groups available in the cluster.
      *
-     * @param options           The options to use when listing the consumer groups.
-     * @return                  The ListConsumerGroupsResult.
+     * @param options           The options to use when listing the groups.
+     * @return The ListGroupsResult.
      */
     public abstract ListGroupsResult listGroups(ListGroupsOptions options);
 
     /**
-     * List the consumer groups available in the cluster with the default options.
+     * List the groups available in the cluster with the default options.
      *
      * This is a convenience method for #{@link AdminClient#listGroups(ListGroupsOptions)} with default options.
      * See the overload for more details.
      *
-     * @return                  The ListConsumerGroupsResult.
+     * @return The ListGroupsResult.
      */
     public ListGroupsResult listGroups() {
         return listGroups(new ListGroupsOptions());
+    }
+
+    /**
+     * List the consumer groups available in the cluster.
+     *
+     * @param options           The options to use when listing the groups.
+     * @return The ListGroupsResult.
+     */
+    public abstract ListGroupsResult listConsumerGroups(ListGroupsOptions options);
+
+    /**
+     * List the consumer groups available in the cluster with the default options.
+     *
+     * This is a convenience method for #{@link AdminClient#listConsumerGroups(ListGroupsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @return The ListGroupsResult.
+     */
+    public ListGroupsResult listConsumerGroups() {
+        return listConsumerGroups(new ListGroupsOptions());
+    }
+
+    /**
+     * List the group offsets available in the cluster.
+     *
+     * @param options           The options to use when listing the group offsets.
+     * @return The ListGroupOffsetsResult
+     */
+    public abstract ListGroupOffsetsResult listGroupOffsets(ListGroupOffsetsOptions options);
+
+    /**
+     * List the group offsets available in the cluster with the default options.
+     *
+     * This is a convenience method for #{@link AdminClient#listGroupOffsets(ListGroupOffsetsOptions)} with default options.
+     *
+     * @return The ListGroupOffsetsResult.
+     */
+    public ListGroupOffsetsResult listGroupOffsets() {
+        return listGroupOffsets(new ListGroupOffsetsOptions());
     }
 }

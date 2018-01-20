@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
@@ -25,45 +26,45 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * The result of the {@link AdminClient#listGroups()} call.
+ * The result of the {@link AdminClient#listGroupOffsets()} call.
  * <p>
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class ListGroupsResult {
+public class ListGroupOffsetsResult {
 
-    final KafkaFuture<Map<String, GroupListing>> future;
+    final KafkaFuture<Map<TopicPartition, GroupOffsetListing>> future;
 
-    ListGroupsResult(KafkaFuture<Map<String, GroupListing>> future) {
+    ListGroupOffsetsResult(KafkaFuture<Map<TopicPartition, GroupOffsetListing>> future) {
         this.future = future;
     }
 
     /**
-     * Return a future which yields a map of groups to GroupListing objects.
+     * Return a future which yields a map of topic partitions to GroupOffsetListing objects.
      */
-    public KafkaFuture<Map<String, GroupListing>> namesToListings() {
+    public KafkaFuture<Map<TopicPartition, GroupOffsetListing>> namesToListings() {
         return future;
     }
 
     /**
-     * Return a future which yields a collection of GroupListing objects.
+     * Return a future which yields a collection of GroupOffsetListing objects.
      */
-    public KafkaFuture<Collection<GroupListing>> listings() {
-        return future.thenApply(new KafkaFuture.Function<Map<String, GroupListing>, Collection<GroupListing>>() {
+    public KafkaFuture<Collection<GroupOffsetListing>> listings() {
+        return future.thenApply(new KafkaFuture.Function<Map<TopicPartition, GroupOffsetListing>, Collection<GroupOffsetListing>>() {
             @Override
-            public Collection<GroupListing> apply(Map<String, GroupListing> namesToDescriptions) {
+            public Collection<GroupOffsetListing> apply(Map<TopicPartition, GroupOffsetListing> namesToDescriptions) {
                 return namesToDescriptions.values();
             }
         });
     }
 
     /**
-     * Return a future which yields a collection of groups.
+     * Return a future which yields a collection of topic partitions.
      */
-    public KafkaFuture<Set<String>> names() {
-        return future.thenApply(new KafkaFuture.Function<Map<String, GroupListing>, Set<String>>() {
+    public KafkaFuture<Set<TopicPartition>> topicPartitions() {
+        return future.thenApply(new KafkaFuture.Function<Map<TopicPartition, GroupOffsetListing>, Set<TopicPartition>>() {
             @Override
-            public Set<String> apply(Map<String, GroupListing> namesToListings) {
+            public Set<TopicPartition> apply(Map<TopicPartition, GroupOffsetListing> namesToListings) {
                 return namesToListings.keySet();
             }
         });

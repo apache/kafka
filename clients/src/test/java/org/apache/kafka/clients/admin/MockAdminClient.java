@@ -276,6 +276,26 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public DescribeGroupsResult describeGroups(Collection<String> groupIds, DescribeGroupsOptions options) {
+        return null;
+    }
+
+    @Override
+    public ListGroupsResult listGroups(ListGroupsOptions options) {
+        return null;
+    }
+
+    @Override
+    public ListGroupsResult listConsumerGroups(ListGroupsOptions options) {
+        return null;
+    }
+
+    @Override
+    public ListGroupOffsetsResult listGroupOffsets(ListGroupOffsetsOptions options) {
+        return null;
+    }
+
+    @Override
     public CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }

@@ -27,7 +27,7 @@ import java.util.concurrent.ExecutionException;
 
 
 /**
- * The result of the {@link KafkaAdminClient#describeConsumerGroups(Collection, DescribeGroupsOptions)}} call.
+ * The result of the {@link KafkaAdminClient#describeGroups(Collection, DescribeGroupsOptions)}} call.
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
@@ -41,15 +41,14 @@ public class DescribeGroupsResult {
     }
 
     /**
-     * Return a map from topic names to futures which can be used to check the status of
-     * individual topics.
+     * Return a map from group name to futures which can be used to check the description of group.
      */
     public Map<String, KafkaFuture<GroupDescription>> values() {
         return futures;
     }
 
     /**
-     * Return a future which succeeds only if all the topic descriptions succeed.
+     * Return a future which succeeds only if all the group descriptions succeed.
      */
     public KafkaFuture<Map<String, GroupDescription>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).

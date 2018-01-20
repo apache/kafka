@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.Set;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
@@ -94,6 +93,8 @@ import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
+import org.apache.kafka.common.requests.ListOffsetRequest;
+import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.Resource;
@@ -2061,7 +2062,40 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public ListGroupsResult listGroups(ListGroupsOptions options) {
-        final KafkaFutureImpl<Map<String, GroupListing>> consumerGroupListingFuture = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<Map<String, GroupListing>> groupListingFuture = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        runnable.call(new Call("listGroups", calcDeadlineMs(now, options.timeoutMs()),
+            new LeastLoadedNodeProvider()) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new ListGroupsRequest.Builder();
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                final ListGroupsResponse response = (ListGroupsResponse) abstractResponse;
+                final Map<String, GroupListing> groupsListing = new HashMap<>();
+                for (ListGroupsResponse.Group group : response.groups()) {
+                    final String groupId = group.groupId();
+                    final String protocolType = group.protocolType();
+                    final GroupListing groupListing = new GroupListing(protocolType);
+                    groupsListing.put(groupId, groupListing);
+                }
+                groupListingFuture.complete(groupsListing);
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                groupListingFuture.completeExceptionally(throwable);
+            }
+        }, now);
+        return new ListGroupsResult(groupListingFuture);
+    }
+
+    @Override
+    public ListGroupsResult listConsumerGroups(ListGroupsOptions options) {
+        final KafkaFutureImpl<Map<String, GroupListing>> groupListingFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("listConsumerGroups", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
@@ -2074,21 +2108,59 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 final ListGroupsResponse response = (ListGroupsResponse) abstractResponse;
-                final Map<String, GroupListing> consumerGroupListing = new HashMap<>();
+                final Map<String, GroupListing> groupsListing = new HashMap<>();
                 for (ListGroupsResponse.Group group : response.groups()) {
-                    final String groupId = group.groupId();
-                    final String protocolType = group.protocolType();
-                    consumerGroupListing.put(groupId, new GroupListing(groupId, protocolType));
+                    if (group.protocolType().equals(ConsumerProtocol.PROTOCOL_TYPE)) {
+                        final String groupId = group.groupId();
+                        final String protocolType = group.protocolType();
+                        final GroupListing groupListing = new GroupListing(protocolType);
+                        groupsListing.put(groupId, groupListing);
+                    }
                 }
-                consumerGroupListingFuture.complete(consumerGroupListing);
+                groupListingFuture.complete(groupsListing);
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                consumerGroupListingFuture.completeExceptionally(throwable);
+                groupListingFuture.completeExceptionally(throwable);
             }
         }, now);
-        return new ListGroupsResult(consumerGroupListingFuture);
+        return new ListGroupsResult(groupListingFuture);
+    }
+
+    @Override
+    public ListGroupOffsetsResult listGroupOffsets(final ListGroupOffsetsOptions options) {
+        final KafkaFutureImpl<Map<TopicPartition, GroupOffsetListing>> groupOffsetListingFuture = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        runnable.call(new Call("listGroupOffsets", calcDeadlineMs(now, options.timeoutMs()),
+            new LeastLoadedNodeProvider()) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return ListOffsetRequest.Builder.forConsumer(options.shouldRequireTimestamp(), options.isolationLevel());
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                final ListOffsetResponse response = (ListOffsetResponse) abstractResponse;
+                final Map<TopicPartition, GroupOffsetListing> groupOffsetsListing = new HashMap<>();
+                for (Map.Entry<TopicPartition, ListOffsetResponse.PartitionData> entry :
+                    response.responseData().entrySet()) {
+                    final TopicPartition topicPartition = entry.getKey();
+                    final Long offset = entry.getValue().offset;
+                    final Long timestamp = entry.getValue().timestamp;
+                    final GroupOffsetListing groupOffsetListing = new GroupOffsetListing(offset, timestamp);
+                    groupOffsetsListing.put(topicPartition, groupOffsetListing);
+                }
+                groupOffsetListingFuture.complete(groupOffsetsListing);
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                groupOffsetListingFuture.completeExceptionally(throwable);
+            }
+        }, now);
+        return new ListGroupOffsetsResult(groupOffsetListingFuture);
     }
 
 }

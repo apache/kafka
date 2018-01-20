@@ -18,29 +18,40 @@
 package org.apache.kafka.clients.admin;
 
 /**
- * A listing of a group in the cluster.
+ * A listing of a groups topic partition listing in the cluster.
  */
-public class GroupListing {
-    private final String protocolType;
+public class GroupOffsetListing {
+    private final Long offset;
+    private final Long timestamp;
 
     /**
      * Create an instance with the specified parameters.
      *
-     * @param protocolType The group protocol type
+     * @param offset    The topic partition offset
+     * @param timestamp The topic partition timestamp
      */
-    public GroupListing(String protocolType) {
-        this.protocolType = protocolType;
+    public GroupOffsetListing(Long offset, Long timestamp) {
+        this.offset = offset;
+        this.timestamp = timestamp;
     }
 
     /**
-     * The protocol type of the group.
+     * The offset of the groups topic partition.
      */
-    public String protocolType() {
-        return protocolType;
+    public Long offset() {
+        return offset;
+    }
+
+    /**
+     * The timestamp of the groups topic partition.
+     */
+    public Long timestamp() {
+        return timestamp;
     }
 
     @Override
     public String toString() {
-        return "(protocolType=" + protocolType + ")";
+        return "(offset=" + offset + ", " +
+            "timestamp=" + timestamp + ")";
     }
 }

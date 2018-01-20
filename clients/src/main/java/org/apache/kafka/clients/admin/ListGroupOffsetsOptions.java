@@ -18,15 +18,34 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-
-import java.util.Collection;
+import org.apache.kafka.common.requests.IsolationLevel;
 
 /**
- * Options for {@link AdminClient#describeGroups(Collection, DescribeGroupsOptions)}.
+ * Options for {@link AdminClient#listGroupOffsets()}.
  * <p>
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class DescribeGroupsOptions extends AbstractOptions<DescribeGroupsOptions> {
+public class ListGroupOffsetsOptions extends AbstractOptions<ListGroupOffsetsOptions> {
 
+    private boolean requireTimestamp = false;
+    private IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
+
+    public ListGroupOffsetsOptions requireTimestamp(boolean requireTimestamp) {
+        this.requireTimestamp = requireTimestamp;
+        return this;
+    }
+
+    public ListGroupOffsetsOptions isolationLevel(IsolationLevel isolationLevel) {
+        this.isolationLevel = isolationLevel;
+        return this;
+    }
+
+    public boolean shouldRequireTimestamp() {
+        return requireTimestamp;
+    }
+
+    public IsolationLevel isolationLevel() {
+        return isolationLevel;
+    }
 }
