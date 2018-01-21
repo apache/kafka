@@ -360,7 +360,9 @@ private[log] object LogCleanerManager extends Logging {
 
       // the first segment whose largest message timestamp is within a minimum time lag from now
       if (compactionLagMs > 0) {
-        log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset).find { s =>
+        // dirty log segments
+        val dirtyNonActiveSegments = log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset)
+        dirtyNonActiveSegments.find { s =>
           val isUncleanable = s.largestTimestamp > now - compactionLagMs
           debug(s"Checking if log segment may be cleaned: log='${log.name}' segment.baseOffset=${s.baseOffset} segment.largestTimestamp=${s.largestTimestamp}; now - compactionLag=${now - compactionLagMs}; is uncleanable=$isUncleanable")
           isUncleanable
