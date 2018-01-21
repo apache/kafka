@@ -27,6 +27,7 @@ import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
@@ -2129,7 +2130,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public ListGroupOffsetsResult listGroupOffsets(final String groupId, final ListGroupOffsetsOptions options) {
-        final KafkaFutureImpl<Map<TopicPartition, Long>> groupOffsetListingFuture = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> groupOffsetListingFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("listGroupOffsets", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
@@ -2142,12 +2143,13 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 final OffsetFetchResponse response = (OffsetFetchResponse) abstractResponse;
-                final Map<TopicPartition, Long> groupOffsetsListing = new HashMap<>();
+                final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
                 for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry :
                     response.responseData().entrySet()) {
                     final TopicPartition topicPartition = entry.getKey();
                     final Long offset = entry.getValue().offset;
-                    groupOffsetsListing.put(topicPartition, offset);
+                    final String metadata = entry.getValue().metadata;
+                    groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, metadata));
                 }
                 groupOffsetListingFuture.complete(groupOffsetsListing);
             }

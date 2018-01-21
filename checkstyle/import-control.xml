@@ -164,6 +164,7 @@
     <subpackage name="admin">
       <allow pkg="org.apache.kafka.clients.admin" />
       <allow pkg="org.apache.kafka.clients.consumer.internals" />
+      <allow pkg="org.apache.kafka.clients.consumer" />
     </subpackage>
   </subpackage>
 

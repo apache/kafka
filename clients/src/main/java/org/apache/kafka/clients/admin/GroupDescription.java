@@ -28,12 +28,12 @@ public class GroupDescription {
 
     private final String groupId;
     private final String protocolType;
-    private final List<MemberDescription> consumers;
+    private final List<MemberDescription> members;
 
-    public GroupDescription(String groupId, String protocolType, List<MemberDescription> consumers) {
+    public GroupDescription(String groupId, String protocolType, List<MemberDescription> members) {
         this.groupId = groupId;
         this.protocolType = protocolType;
-        this.consumers = consumers;
+        this.members = members;
     }
 
     public String groupId() {
@@ -44,13 +44,13 @@ public class GroupDescription {
         return protocolType;
     }
 
-    public List<MemberDescription> consumers() {
-        return consumers;
+    public List<MemberDescription> members() {
+        return members;
     }
 
     @Override
     public String toString() {
-        return "(groupId=" + groupId + ", protocolType=" + protocolType + ", consumers=" +
-            Utils.join(consumers, ",") + ")";
+        return "(groupId=" + groupId + ", protocolType=" + protocolType + ", members=" +
+            Utils.join(members, ",") + ")";
     }
 }

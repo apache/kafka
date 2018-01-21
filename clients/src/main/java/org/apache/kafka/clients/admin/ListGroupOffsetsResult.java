@@ -17,12 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -34,26 +34,26 @@ import java.util.Set;
 @InterfaceStability.Evolving
 public class ListGroupOffsetsResult {
 
-    final KafkaFuture<Map<TopicPartition, Long>> future;
+    final KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> future;
 
-    ListGroupOffsetsResult(KafkaFuture<Map<TopicPartition, Long>> future) {
+    ListGroupOffsetsResult(KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
         this.future = future;
     }
 
     /**
      * Return a future which yields a map of topic partitions to GroupOffsetListing objects.
      */
-    public KafkaFuture<Map<TopicPartition, Long>> namesToListings() {
+    public KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> namesToListings() {
         return future;
     }
 
     /**
      * Return a future which yields a collection of GroupOffsetListing objects.
      */
-    public KafkaFuture<Collection<Long>> listings() {
-        return future.thenApply(new KafkaFuture.Function<Map<TopicPartition, Long>, Collection<Long>>() {
+    public KafkaFuture<Collection<OffsetAndMetadata>> listings() {
+        return future.thenApply(new KafkaFuture.Function<Map<TopicPartition, OffsetAndMetadata>, Collection<OffsetAndMetadata>>() {
             @Override
-            public Collection<Long> apply(Map<TopicPartition, Long> namesToDescriptions) {
+            public Collection<OffsetAndMetadata> apply(Map<TopicPartition, OffsetAndMetadata> namesToDescriptions) {
                 return namesToDescriptions.values();
             }
         });
@@ -63,9 +63,9 @@ public class ListGroupOffsetsResult {
      * Return a future which yields a collection of topic partitions.
      */
     public KafkaFuture<Set<TopicPartition>> topicPartitions() {
-        return future.thenApply(new KafkaFuture.Function<Map<TopicPartition, Long>, Set<TopicPartition>>() {
+        return future.thenApply(new KafkaFuture.Function<Map<TopicPartition, OffsetAndMetadata>, Set<TopicPartition>>() {
             @Override
-            public Set<TopicPartition> apply(Map<TopicPartition, Long> namesToListings) {
+            public Set<TopicPartition> apply(Map<TopicPartition, OffsetAndMetadata> namesToListings) {
                 return namesToListings.keySet();
             }
         });
