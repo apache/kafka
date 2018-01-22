@@ -18,42 +18,33 @@ package kafka.security.auth
 
 import java.nio.charset.StandardCharsets.UTF_8
 
-import com.fasterxml.jackson.core.JsonProcessingException
 import kafka.utils.Json
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.junit.Assert.assertEquals
 import org.junit.{Assert, Test}
 import org.scalatest.junit.JUnitSuite
 
 import scala.collection.JavaConverters._
-import scala.collection.Map
 
 class AclTest extends JUnitSuite {
 
   val AclJson = "{\"version\": 1, \"acls\": [{\"host\": \"host1\",\"permissionType\": \"Deny\",\"operation\": \"READ\", \"principal\": \"User:alice\"  },  " +
     "{  \"host\":  \"*\" ,  \"permissionType\": \"Allow\",  \"operation\":  \"Read\", \"principal\": \"User:bob\"  },  " +
-    "{  \"host\": \"host1\",  \"permissionType\": \"Deny\",  \"operation\":   \"Read\" ,  \"principal\": \"User:bob\"}  ]}"
+    "{  \"host\": \"host1\",  \"permissionType\": \"Deny\",  \"operation\":   \"Read\" ,  \"principal\": \"User:bob\"},  " +
+    "{  \"host\": \"host1\",  \"permissionType\": \"Deny\",  \"operation\":   \"Read\" ,  \"principal\": \"User:\\\\bob\"}, " +
+    "{  \"host\": \"host1\",  \"permissionType\": \"Deny\",  \"operation\":   \"Read\" ,  \"principal\": \"User:bob1\\\\bob2\"}]}"
 
   @Test
   def testAclJsonConversion(): Unit = {
     val acl1 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"), Deny, "host1" , Read)
     val acl2 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Allow, "*", Read)
     val acl3 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Deny, "host1", Read)
+    val acl4 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "\\bob"), Deny, "host1", Read)
+    val acl5 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob1\\bob2"), Deny, "host1", Read)
 
-    val acls = Set[Acl](acl1, acl2, acl3)
+    val acls = Set[Acl](acl1, acl2, acl3, acl4, acl5)
     val jsonAcls = Json.encodeAsBytes(Acl.toJsonCompatibleMap(acls).asJava)
 
     Assert.assertEquals(acls, Acl.fromBytes(jsonAcls))
     Assert.assertEquals(acls, Acl.fromBytes(AclJson.getBytes(UTF_8)))
   }
-
-  @Test
-  def testJsonParseWithBackslashEscaping() = {
-    // Test with encoder that properly escapes backslash and quotes
-    val map = Map("foo1" -> """bar1\,bar2""", "foo2" -> """\bar""")
-    val encoded = Json.legacyEncodeAsString(map)
-    val decoded = Json.parseFull(encoded)
-    assertEquals(Json.parseFull("""{"foo1":"bar1\\,bar2", "foo2":"\\bar"}"""), decoded)
-  }
-
 }

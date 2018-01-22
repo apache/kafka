@@ -54,6 +54,11 @@ class JsonTest {
     Vector(1, 2, 3).map(new IntNode(_)).foreach(arrayNode.add)
     assertEquals(Json.parseFull("[1, 2, 3]"), Some(JsonValue(arrayNode)))
 
+    // Test with encoder that properly escapes backslash and quotes
+    val map = Map("foo1" -> """bar1\,bar2""", "foo2" -> """\bar""")
+    val encoded = Json.legacyEncodeAsString(map)
+    val decoded = Json.parseFull(encoded)
+    assertEquals(Json.parseFull("""{"foo1":"bar1\\,bar2", "foo2":"\\bar"}"""), decoded)
   }
 
   @Test
