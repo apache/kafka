@@ -277,7 +277,7 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public DescribeGroupsResult describeGroups(Collection<String> groupIds, DescribeGroupsOptions options) {
-         throw new UnsupportedOperationException("Not implemented yet");
+        throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
