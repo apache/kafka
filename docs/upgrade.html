@@ -67,6 +67,11 @@
         can now choose the logging back-end by including the appropriate slf4j module (slf4j-log4j12, logback, etc.). The release
         tarball still includes log4j and slf4j-log4j12.</li>
     <li><a href="https://cwiki.apache.org/confluence/x/uaBzB">KIP-225</a> changed the metric "records.lag" to use tags for topic and partition. The original version with the name format "{topic}-{partition}.records-lag" is deprecated and will be removed in 2.0.0.</li>
+    <li>Kafka Streams is more robust against broker communication errors. Instead of stopping the Kafka Streams client with a fatal exception,
+	Kafka Streams tries to self-heal and reconnect to the cluster. Using the new <code>AdminClient</code> you have better control of how often
+	Kafka Streams retries and can <a href="/{{version}}/documentation/streams/developer-guide/config-streams">configure<a/>
+	fine-grained timeouts (instead of hard coded retries as in older version).</li>
+    <li>Kafka Streams rebalance time was reduced further making Kafka Streams more responsive.</li>
 </ul>
 
 <h5><a id="upgrade_110_new_protocols" href="#upgrade_110_new_protocols">New Protocol Versions</a></h5>
