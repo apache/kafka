@@ -104,6 +104,10 @@ public class KafkaPrincipal implements Principal {
         return principalType;
     }
 
+    public void tokenAuthenticated(boolean tokenAuthenticated) {
+        this.tokenAuthenticated = tokenAuthenticated;
+    }
+
     public boolean tokenAuthenticated() {
         return tokenAuthenticated;
     }
