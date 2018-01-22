@@ -17,11 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Utils;
-
-import java.util.List;
-
 /**
  * A detailed description of a single consumer group instance in the cluster.
  */
@@ -30,9 +25,9 @@ public class MemberDescription {
     private final String consumerId;
     private final String clientId;
     private final String host;
-    private final Assignment assignment;
+    private final MemberAssignment assignment;
 
-    public MemberDescription(String consumerId, String clientId, String host, Assignment assignment) {
+    public MemberDescription(String consumerId, String clientId, String host, MemberAssignment assignment) {
         this.consumerId = consumerId;
         this.clientId = clientId;
         this.host = host;

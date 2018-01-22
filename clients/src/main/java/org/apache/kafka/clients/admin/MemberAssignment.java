@@ -24,10 +24,10 @@ import java.util.List;
 /**
  *
  */
-public class Assignment {
+public class MemberAssignment {
     private final List<TopicPartition> topicPartitions;
 
-    public Assignment(List<TopicPartition> topicPartitions) {
+    public MemberAssignment(List<TopicPartition> topicPartitions) {
         this.topicPartitions = topicPartitions;
     }
 

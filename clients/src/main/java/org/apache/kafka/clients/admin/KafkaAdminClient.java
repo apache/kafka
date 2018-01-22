@@ -2038,7 +2038,7 @@ public class KafkaAdminClient extends AdminClient {
                                 groupMember.clientId(),
                                 groupMember.memberId(),
                                 groupMember.clientHost(),
-                                new Assignment(assignment.partitions()));
+                                new MemberAssignment(assignment.partitions()));
                         consumers.add(memberDescription);
                     }
                     final String protocolType = groupMetadata.protocolType();
