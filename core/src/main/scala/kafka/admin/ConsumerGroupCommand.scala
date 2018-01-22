@@ -617,16 +617,15 @@ object ConsumerGroupCommand extends Logging {
     protected def getLogTimestampOffsets(topicPartitions: Seq[TopicPartition], timestamp: java.lang.Long): Map[TopicPartition, LogOffsetResult] = {
       val consumer = getConsumer
       consumer.assign(topicPartitions.asJava)
-      val offsetsForTimes = consumer.offsetsForTimes(topicPartitions.map(_ -> timestamp).toMap.asJava)
 
-      if (offsetsForTimes == null || offsetsForTimes.isEmpty)
-        topicPartitions.map(topicPartition => topicPartition -> getLogEndOffset(topicPartition)).toMap
-      else {
-        topicPartitions.map {
-          case topicPartition if offsetsForTimes.get(topicPartition) == null => topicPartition -> getLogEndOffset(topicPartition)
-          case topicPartition => topicPartition -> LogOffsetResult.LogOffset(offsetsForTimes.get(topicPartition).offset)
-        }.toMap
-      }
+      val (successfulOffsetsForTimes, unsuccessfulOffsetsForTimes) =
+        consumer.offsetsForTimes(topicPartitions.map(_ -> timestamp).toMap.asJava).asScala.partition(_._2 != null)
+
+      val successfulLogTimestampOffsets = successfulOffsetsForTimes.map {
+        case (topicPartition, offsetAndTimestamp) => topicPartition -> LogOffsetResult.LogOffset(offsetAndTimestamp.offset)
+      }.toMap
+
+      successfulLogTimestampOffsets ++ getLogEndOffsets(unsuccessfulOffsetsForTimes.keySet.toSeq)
     }
 
     def close() {
@@ -782,16 +781,22 @@ object ConsumerGroupCommand extends Logging {
         }
       } else if (opts.options.has(opts.resetToCurrentOpt)) {
         val currentCommittedOffsets = adminClient.listGroupOffsets(groupId)
-        partitionsToReset.map { topicPartition =>
-          currentCommittedOffsets.get(topicPartition).map { offset =>
-            (topicPartition, new OffsetAndMetadata(offset))
-          }.getOrElse(
-            getLogEndOffset(topicPartition) match {
-              case LogOffsetResult.LogOffset(offset) => (topicPartition, new OffsetAndMetadata(offset))
-              case _ => CommandLineUtils.printUsageAndDie(opts.parser, s"Error getting ending offset of topic partition: $topicPartition")
-            }
-          )
+        val (partitionsToResetWithCommittedOffset, partitionsToResetWithoutCommittedOffset) =
+          partitionsToReset.partition(currentCommittedOffsets.keySet.contains(_))
+
+        val preparedOffsetsForParititionsWithCommittedOffset = partitionsToResetWithCommittedOffset.map { topicPartition =>
+          (topicPartition, new OffsetAndMetadata(currentCommittedOffsets.get(topicPartition) match {
+            case Some(offset) => offset
+            case _ => throw new IllegalStateException(s"Expected a valid current offset for topic partition: $topicPartition")
+          }))
         }.toMap
+
+        val preparedOffsetsForPartitionsWithoutCommittedOffset = getLogEndOffsets(partitionsToResetWithoutCommittedOffset).map {
+          case (topicPartition, LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
+          case (topicPartition, _) => CommandLineUtils.printUsageAndDie(opts.parser, s"Error getting ending offset of topic partition: $topicPartition")
+        }
+
+        preparedOffsetsForParititionsWithCommittedOffset ++ preparedOffsetsForPartitionsWithoutCommittedOffset
       } else {
         CommandLineUtils.printUsageAndDie(opts.parser, "Option '%s' requires one of the following scenarios: %s".format(opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts) )
       }
@@ -815,8 +820,7 @@ object ConsumerGroupCommand extends Logging {
           }
 
           case None => // the control should not reach here
-            warn(s"Unexpected non-existing offset value for topic partition $topicPartition")
-            null.asInstanceOf[Long]
+            throw new IllegalStateException(s"Unexpected non-existing offset value for topic partition $topicPartition")
         })
       }
     }
