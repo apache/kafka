@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.TopicPartition;
@@ -23,25 +22,21 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.List;
 
 /**
- * A detailed description of a single consumer group instance in the cluster.
+ *
  */
-public class MemberDescription {
+public class Assignment {
+    private final List<TopicPartition> topicPartitions;
 
-    private final String consumerId;
-    private final String clientId;
-    private final String host;
-    private final Assignment assignment;
+    public Assignment(List<TopicPartition> topicPartitions) {
+        this.topicPartitions = topicPartitions;
+    }
 
-    public MemberDescription(String consumerId, String clientId, String host, Assignment assignment) {
-        this.consumerId = consumerId;
-        this.clientId = clientId;
-        this.host = host;
-        this.assignment = assignment;
+    public List<TopicPartition> topicPartitions() {
+        return topicPartitions;
     }
 
     @Override
     public String toString() {
-        return "(consumerId=" + consumerId + ", clientId=" + clientId + ", host=" + host + ", assignment=" +
-            assignment + ")";
+        return "(topicPartitions=" + Utils.join(topicPartitions, ",") + ")";
     }
 }

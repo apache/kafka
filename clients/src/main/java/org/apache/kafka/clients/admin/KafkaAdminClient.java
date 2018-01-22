@@ -2033,13 +2033,13 @@ public class KafkaAdminClient extends AdminClient {
                             ConsumerProtocol.deserializeAssignment(
                                 ByteBuffer.wrap(Utils.readBytes(groupMember.memberAssignment())));
 
-                        final MemberDescription consumerDescription =
+                        final MemberDescription memberDescription =
                             new MemberDescription(
                                 groupMember.clientId(),
                                 groupMember.memberId(),
                                 groupMember.clientHost(),
-                                assignment.partitions());
-                        consumers.add(consumerDescription);
+                                new Assignment(assignment.partitions()));
+                        consumers.add(memberDescription);
                     }
                     final String protocolType = groupMetadata.protocolType();
                     final GroupDescription consumerGroupDescription = new GroupDescription(groupId, protocolType, consumers);
