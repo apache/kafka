@@ -23,14 +23,14 @@ import kafka.security.auth._
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.utils.SecurityUtils
 import org.junit.Test
 
 class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
-  private val Users = Set(KafkaPrincipal.fromString("User:CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown"),
-    KafkaPrincipal.fromString("User:test2"),
-    KafkaPrincipal.fromString("""User:CN=\#User with special chars in CN : (\, \+ \" \\ \< \> \; ')"""))
+  private val Users = Set(SecurityUtils.parseKafkaPrincipal("User:CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown"),
+    SecurityUtils.parseKafkaPrincipal("User:test2"),
+    SecurityUtils.parseKafkaPrincipal("""User:CN=\#User with special chars in CN : (\, \+ \" \\ \< \> \; ')"""))
   private val Hosts = Set("host1", "host2")
   private val AllowHostCommand = Array("--allow-host", "host1", "--allow-host", "host2")
   private val DenyHostCommand = Array("--deny-host", "host1", "--deny-host", "host2")
@@ -128,6 +128,14 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   def testInvalidAuthorizerProperty() {
     val args = Array("--authorizer-properties", "zookeeper.connect " + zkConnect)
     AclCommand.withAuthorizer(new AclCommandOptions(args))(null)
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testInvalidPrincipalType() {
+    val invalidUser = Set(SecurityUtils.parseKafkaPrincipal("user:testuser"))
+    val args = Array("--authorizer-properties", "zookeeper.connect=" + zkConnect, "--allow-principal", invalidUser.toString(), "--add")
+    val opts = new AclCommandOptions(args)
+    AclCommand.addAcl(opts)
   }
 
   private def testRemove(resources: Set[Resource], resourceCmd: Array[String], args: Array[String], brokerProps: Properties) {
