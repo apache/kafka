@@ -209,22 +209,18 @@
                         </ul>
                             <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Creating a persistent key-value store:</span>
 <span class="c1">// here, we create a `KeyValueStore&lt;String, Long&gt;` named &quot;persistent-counts&quot;.</span>
-<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.processor.StateStoreSupplier</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.StoreBuilder</span><span class="o">;</span>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.Stores</span><span class="o">;</span>
 
-<span class="c1">// Note: The `Stores` factory returns a supplier for the state store,</span>
-<span class="c1">// because that&#39;s what you typically need to pass as API parameter.</span>
-<span class="n">StateStoreSupplier</span> <span class="n">countStoreSupplier</span> <span class="o">=</span>
-  <span class="n">Stores</span><span class="o">.</span><span class="na">create</span><span class="o">(</span><span class="s">&quot;persistent-counts&quot;</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">withKeys</span><span class="o">(</span><span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">())</span>
-    <span class="o">.</span><span class="na">withValues</span><span class="o">(</span><span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">())</span>
-    <span class="o">.</span><span class="na">persistent</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">build</span><span class="o">();</span>
+<span class="c1">// Using a `KeyValueStoreBuilder` to build a `KeyValueStore`.</span>
+<span class="n">StoreBuilder</span><span class="o">&lt;</span><span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;&gt;</span> <span class="n">countStoreSupplier</span> <span class="o">=</span>
+  <span class="n">Stores</span><span class="o">.</span><span class="na">keyValueStoreBuilder</span><span class="o">(</span>
+    <span class="n">Stores</span><span class="o">.</span><span class="na">persistentKeyValueStore</span><span class="o">(</span><span class="s">&quot;persistent-counts&quot;</span><span class="o">),</span>
+    <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span>
+    <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">());</span>
+<span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">countStore</span> <span class="o">=</span> <span class="n">countStoreSupplier</span><span class="o">.</span><span class="na">build</span><span class="o">();</span>
 </pre></div>
                             </div>
-                            <p class="last">See
-                                <a class="reference external" href="../javadocs/org/apache/kafka/streams/state/Stores.PersistentKeyValueFactory.html">PersistentKeyValueFactory</a> for
-                                detailed factory options.</p>
                         </td>
                     </tr>
                     <tr class="row-odd"><td>In-memory
@@ -242,22 +238,18 @@
                         </ul>
                             <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Creating an in-memory key-value store:</span>
 <span class="c1">// here, we create a `KeyValueStore&lt;String, Long&gt;` named &quot;inmemory-counts&quot;.</span>
-<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.processor.StateStoreSupplier</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.StoreBuilder</span><span class="o">;</span>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.Stores</span><span class="o">;</span>
 
-<span class="c1">// Note: The `Stores` factory returns a supplier for the state store,</span>
-<span class="c1">// because that&#39;s what you typically need to pass as API parameter.</span>
-<span class="n">StateStoreSupplier</span> <span class="n">countStoreSupplier</span> <span class="o">=</span>
-  <span class="n">Stores</span><span class="o">.</span><span class="na">create</span><span class="o">(</span><span class="s">&quot;inmemory-counts&quot;</span><span class="o">)</span>
-    <span class="o">.</span><span class="na">withKeys</span><span class="o">(</span><span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">())</span>
-    <span class="o">.</span><span class="na">withValues</span><span class="o">(</span><span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">())</span>
-    <span class="o">.</span><span class="na">inMemory</span><span class="o">()</span>
-    <span class="o">.</span><span class="na">build</span><span class="o">();</span>
+<span class="c1">// Using a `KeyValueStoreBuilder` to build a `KeyValueStore`.</span>
+<span class="n">StoreBuilder</span><span class="o">&lt;</span><span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;&gt;</span> <span class="n">countStoreSupplier</span> <span class="o">=</span>
+  <span class="n">Stores</span><span class="o">.</span><span class="na">keyValueStoreBuilder</span><span class="o">(</span>
+    <span class="n">Stores</span><span class="o">.</span><span class="na">inMemoryKeyValueStore</span><span class="o">(</span><span class="s">&quot;inmemory-counts&quot;</span><span class="o">),</span>
+    <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span>
+    <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">());</span>
+<span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">countStore</span> <span class="o">=</span> <span class="n">countStoreSupplier</span><span class="o">.</span><span class="na">build</span><span class="o">();</span>
 </pre></div>
                             </div>
-                            <p class="last">See
-                                <a class="reference external" href="../javadocs/org/apache/kafka/streams/state/Stores.InMemoryKeyValueFactory.html">InMemoryKeyValueFactory</a> for
-                                detailed factory options.</p>
                         </td>
                     </tr>
                     </tbody>
