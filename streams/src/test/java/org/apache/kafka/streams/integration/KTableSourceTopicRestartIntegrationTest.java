@@ -55,8 +55,6 @@ import java.util.concurrent.TimeUnit;
 
 @Category({IntegrationTest.class})
 public class KTableSourceTopicRestartIntegrationTest {
-
-
     private static final int NUM_BROKERS = 3;
     private static final String SOURCE_TOPIC = "source-topic";
 
@@ -72,10 +70,8 @@ public class KTableSourceTopicRestartIntegrationTest {
     private Map<String, String> expectedInitialResultsMap;
     private Map<String, String> expectedResultsWithDataWrittenDuringRestoreMap;
 
-
     @BeforeClass
     public static void setUpBeforeAllTests() throws Exception {
-
         CLUSTER.createTopic(SOURCE_TOPIC);
 
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, "ktable-restore-from-source");
@@ -97,7 +93,6 @@ public class KTableSourceTopicRestartIntegrationTest {
 
     @Before
     public void before() {
-
         final KTable<String, String> kTable = streamsBuilder.table(SOURCE_TOPIC);
         kTable.toStream().foreach(new ForeachAction<String, String>() {
             @Override
@@ -115,10 +110,8 @@ public class KTableSourceTopicRestartIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
     }
 
-
     @Test
     public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosDisabled() throws Exception {
-
         try {
             streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
             streamsOne.start();
@@ -136,7 +129,6 @@ public class KTableSourceTopicRestartIntegrationTest {
             produceKeyValues("f", "g", "h");
 
             assertNumberValuesRead(readKeyValues, expectedResultsWithDataWrittenDuringRestoreMap, "Table did not get all values after restart");
-
         } finally {
             streamsOne.close(5, TimeUnit.SECONDS);
         }
@@ -144,7 +136,6 @@ public class KTableSourceTopicRestartIntegrationTest {
 
     @Test
     public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosEnabled() throws Exception {
-
         try {
             STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
             streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
@@ -163,7 +154,6 @@ public class KTableSourceTopicRestartIntegrationTest {
             produceKeyValues("f", "g", "h");
 
             assertNumberValuesRead(readKeyValues, expectedResultsWithDataWrittenDuringRestoreMap, "Table did not get all values after restart");
-
         } finally {
             streamsOne.close(5, TimeUnit.SECONDS);
         }
@@ -171,7 +161,6 @@ public class KTableSourceTopicRestartIntegrationTest {
 
     @Test
     public void shouldRestoreAndProgressWhenTopicNotWrittenToDuringRestoration() throws Exception {
-
         try {
             streamsOne = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
             streamsOne.start();
@@ -189,7 +178,6 @@ public class KTableSourceTopicRestartIntegrationTest {
             final Map<String, String> expectedValues = createExpectedResultsMap("a", "b", "c", "f", "g", "h");
 
             assertNumberValuesRead(readKeyValues, expectedValues, "Table did not get all values after restart");
-
         } finally {
             streamsOne.close(5, TimeUnit.SECONDS);
         }
@@ -198,14 +186,15 @@ public class KTableSourceTopicRestartIntegrationTest {
     private void assertNumberValuesRead(final Map<String, String> valueMap,
                                         final Map<String, String> expectedMap,
                                         final String errorMessage) throws InterruptedException {
-
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return valueMap.equals(expectedMap);
-            }
-        }, errorMessage);
-
+        TestUtils.waitForCondition(
+            new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return valueMap.equals(expectedMap);
+                }
+            },
+            30 * 1000L,
+            errorMessage);
     }
 
     private void produceKeyValues(final String... keys) throws ExecutionException, InterruptedException {
