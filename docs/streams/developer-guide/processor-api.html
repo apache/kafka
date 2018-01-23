@@ -324,8 +324,8 @@
                     The primary interface to implement for the store is
                     <code class="docutils literal"><span class="pre">org.apache.kafka.streams.processor.StateStore</span></code>.  Kafka Streams also has a few extended interfaces such
                     as <code class="docutils literal"><span class="pre">KeyValueStore</span></code>.</p>
-                <p>You also need to provide a &#8220;factory&#8221; for the store by implementing the
-                    <code class="docutils literal"><span class="pre">org.apache.kafka.streams.processor.StateStoreSupplier</span></code> interface, which Kafka Streams uses to create instances of
+                <p>You also need to provide a &#8220;builder&#8221; for the store by implementing the
+                    <code class="docutils literal"><span class="pre">org.apache.kafka.streams.state.StoreBuilder</span></code> interface, which Kafka Streams uses to create instances of
                     your store.</p>
             </div>
         </div>
