@@ -17,7 +17,6 @@
 
 package kafka.utils
 
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import org.apache.kafka.common.internals.FatalExitError
@@ -26,7 +25,6 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
         extends Thread(name) with Logging {
   this.setDaemon(false)
   this.logIdent = "[" + name + "]: "
-  val isRunning: AtomicBoolean = new AtomicBoolean(true)
   private val shutdownInitiated = new CountDownLatch(1)
   private val shutdownComplete = new CountDownLatch(1)
 
@@ -40,14 +38,16 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
   }
 
   def initiateShutdown(): Boolean = {
-    if (isRunning.compareAndSet(true, false)) {
-      info("Shutting down")
-      shutdownInitiated.countDown()
-      if (isInterruptible)
-        interrupt()
-      true
-    } else
-      false
+    this.synchronized {
+      if (isRunning) {
+        info("Shutting down")
+        shutdownInitiated.countDown()
+        if (isInterruptible)
+          interrupt()
+        true
+      } else
+        false
+    }
   }
 
   /**
@@ -78,20 +78,24 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
   override def run(): Unit = {
     info("Starting")
     try {
-      while (isRunning.get)
+      while (isRunning)
         doWork()
     } catch {
       case e: FatalExitError =>
-        isRunning.set(false)
         shutdownInitiated.countDown()
         shutdownComplete.countDown()
         info("Stopped")
         Exit.exit(e.statusCode())
       case e: Throwable =>
-        if (isRunning.get())
+        if (isRunning)
           error("Error due to", e)
+    } finally {
+       shutdownComplete.countDown()
     }
-    shutdownComplete.countDown()
     info("Stopped")
+  }
+
+  def isRunning: Boolean = {
+    shutdownInitiated.getCount() != 0
   }
 }

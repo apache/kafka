@@ -219,7 +219,7 @@ class RequestSendThread(val controllerId: Int,
     var clientResponse: ClientResponse = null
     try {
       var isSendSuccessful = false
-      while (isRunning.get() && !isSendSuccessful) {
+      while (isRunning && !isSendSuccessful) {
         // if a broker goes down for a long time, then at some point the controller's zookeeper listener will trigger a
         // removeBroker which will invoke shutdown() on this thread. At that point, we will stop retrying.
         try {

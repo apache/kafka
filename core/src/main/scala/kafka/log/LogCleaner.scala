@@ -235,7 +235,7 @@ class LogCleaner(val config: CleanerConfig,
     @volatile var lastStats: CleanerStats = new CleanerStats()
 
     private def checkDone(topicPartition: TopicPartition) {
-      if (!isRunning.get())
+      if (!isRunning)
         throw new ThreadShutdownException
       cleanerManager.checkCleaningAborted(topicPartition)
     }
@@ -246,11 +246,6 @@ class LogCleaner(val config: CleanerConfig,
     override def doWork() {
       cleanOrSleep()
     }
-
-    override def shutdown() = {
-    	 initiateShutdown()
-    	 awaitShutdown()
-     }
 
     /**
      * Clean a log if there is a dirty log available, otherwise sleep for a bit
