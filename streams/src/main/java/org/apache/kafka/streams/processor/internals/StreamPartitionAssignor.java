@@ -511,23 +511,25 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
             final int numConsumers = consumers.size();
 
-            final int taskAssignmentLength = interleavedActive.size() % numConsumers > 0 ? (interleavedActive.size() % numConsumers) + 1 : interleavedActive.size() / numConsumers;
-            int standbyAssignmentLength =  0;
+            final int[] numberTasksPerConsumer = calculateNumAssignments(interleavedActive.size(), numConsumers);
+            int[] numberStandbyTasksPerConsumer =  new int[0];
 
             if (!interleavedStandby.isEmpty()) {
-                standbyAssignmentLength = interleavedStandby.size() % numConsumers > 0 ? (interleavedStandby.size() % numConsumers) + 1 : interleavedStandby.size() / numConsumers;
+                numberStandbyTasksPerConsumer = calculateNumAssignments(interleavedStandby.size(), numConsumers);
             }
 
             int activeStartIndex = 0;
             int activeEndIndex = 0;
             int standbyStartIndex = 0;
             int standbyEndIndex = 0;
+            int consumerTaskIndex = 0;
 
             for (String consumer : consumers) {
                 final Map<TaskId, Set<TopicPartition>> standby = new HashMap<>();
                 final ArrayList<AssignedPartition> assignedPartitions = new ArrayList<>();
+                int taskAssignmentLength = numberTasksPerConsumer[consumerTaskIndex];
 
-                activeEndIndex = (activeEndIndex + taskAssignmentLength) < interleavedActive.size() ? activeEndIndex + taskAssignmentLength : interleavedActive.size();
+                activeEndIndex = activeEndIndex + taskAssignmentLength;
 
                 final List<TaskId> assignedActiveList = interleavedActive.subList(activeStartIndex, activeEndIndex);
                 List<TaskId> assignedStandbyList;
@@ -539,8 +541,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 }
                 activeStartIndex = activeEndIndex;
 
-                if (standbyAssignmentLength > 0) {
-                    standbyEndIndex = (standbyEndIndex + standbyAssignmentLength) < interleavedStandby.size() ? standbyEndIndex + standbyAssignmentLength : interleavedStandby.size();
+                if (numberStandbyTasksPerConsumer.length > 0) {
+                    int standbyTaskAssignmentLength = numberStandbyTasksPerConsumer[consumerTaskIndex];
+                    standbyEndIndex = standbyEndIndex + standbyTaskAssignmentLength;
                     assignedStandbyList = interleavedStandby.subList(standbyStartIndex, standbyEndIndex);
                     for (TaskId taskId : assignedStandbyList) {
                         Set<TopicPartition> standbyPartitions = standby.get(taskId);
@@ -552,6 +555,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                     }
                     standbyStartIndex = standbyEndIndex;
                 }
+
+                consumerTaskIndex++;
 
                 Collections.sort(assignedPartitions);
                 final List<TaskId> active = new ArrayList<>();
@@ -567,6 +572,27 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         return assignment;
+    }
+
+    // visible for testing
+    int[] calculateNumAssignments(final int numTasks, final int numConsumers) {
+        int[] numTasksPerClient = new int[numConsumers];
+        if (numTasks % numConsumers == 0) {
+            Arrays.fill(numTasksPerClient, numTasks / numConsumers);
+        } else {
+            int startingNumTasks = numTasks / numConsumers;
+            Arrays.fill(numTasksPerClient, startingNumTasks);
+            int totalTasksLeft = numTasks - (startingNumTasks * numConsumers);
+            int index = 0;
+            while (totalTasksLeft > 0) {
+                if (index >= numTasksPerClient.length) {
+                    index = 0;
+                }
+                numTasksPerClient[index++] += 1;
+                totalTasksLeft -= 1;
+            }
+        }
+        return numTasksPerClient;
     }
 
     // visible for testing

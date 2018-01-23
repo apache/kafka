@@ -161,6 +161,21 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
+    public void shouldEvenlyDistributeTasksAsMuchAsPossible() {
+        final int[] expectedTasksPerThread = new int[]{2, 2, 2};
+        assertThat(partitionAssignor.calculateNumAssignments(6, 3), equalTo(expectedTasksPerThread));
+
+        final int[] expectedTasksPerThreadII = new int[]{2, 2, 1};
+        assertThat(partitionAssignor.calculateNumAssignments(5, 3), equalTo(expectedTasksPerThreadII));
+
+        final int[] expectedTasksPerThreadIII = new int[]{4, 3, 3, 3};
+        assertThat(partitionAssignor.calculateNumAssignments(13, 4), equalTo(expectedTasksPerThreadIII));
+
+        final int[] expectedTasksPerThreadIV = new int[]{10};
+        assertThat(partitionAssignor.calculateNumAssignments(10, 1), equalTo(expectedTasksPerThreadIV));
+    }
+
+    @Test
     public void testSubscription() throws Exception {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
