@@ -188,6 +188,8 @@
     <!-- Streams Test-Utils -->
     <suppress checks="ClassFanOutComplexity"
               files="TopologyTestDriver.java"/>
+    <suppress checks="ClassDataAbstractionCoupling"
+              files="TopologyTestDriver.java"/>
 
     <!-- Tools -->
     <suppress checks="ClassDataAbstractionCoupling"

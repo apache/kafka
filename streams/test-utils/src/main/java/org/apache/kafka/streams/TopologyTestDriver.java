@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.test;
+package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -33,12 +33,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.InternalTopologyBuilderAccessor;
-import org.apache.kafka.streams.MockTime;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -62,6 +56,8 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.test.OutputVerifier;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -75,6 +71,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -209,7 +206,7 @@ public class TopologyTestDriver {
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         mockTime = new MockTime(initialWallClockTimeMs);
 
-        internalTopologyBuilder = InternalTopologyBuilderAccessor.getInternalTopologyBuilder(topology);
+        internalTopologyBuilder = topology.internalTopologyBuilder;
         internalTopologyBuilder.setApplicationId(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG));
 
         processorTopology = internalTopologyBuilder.build(null);
@@ -503,7 +500,7 @@ public class TopologyTestDriver {
     @SuppressWarnings("unchecked")
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
         final StateStore store = getStateStore(name);
-        return store instanceof KeyValueStore ? (KeyValueStore<K, V>) getStateStore(name) : null;
+        return store instanceof KeyValueStore ? (KeyValueStore<K, V>) store : null;
     }
 
     /**
@@ -523,7 +520,7 @@ public class TopologyTestDriver {
     @SuppressWarnings("unchecked")
     public <K, V> WindowStore<K, V> getWindowStore(final String name) {
         final StateStore store = getStateStore(name);
-        return store instanceof WindowStore ? (WindowStore<K, V>) getStateStore(name) : null;
+        return store instanceof WindowStore ? (WindowStore<K, V>) store : null;
     }
 
     /**
@@ -543,7 +540,7 @@ public class TopologyTestDriver {
     @SuppressWarnings("unchecked")
     public <K, V> SessionStore<K, V> getSessionStore(final String name) {
         final StateStore store = getStateStore(name);
-        return store instanceof SessionStore ? (SessionStore<K, V>) getStateStore(name) : null;
+        return store instanceof SessionStore ? (SessionStore<K, V>) store : null;
     }
 
     /**
@@ -559,6 +556,40 @@ public class TopologyTestDriver {
             } catch (final IOException e) {
                 // ignore
             }
+        }
+    }
+
+    static class MockTime implements Time {
+        private final AtomicLong timeMs;
+        private final AtomicLong highResTimeNs;
+
+        MockTime(final long startTimestampMs) {
+            this.timeMs = new AtomicLong(startTimestampMs);
+            this.highResTimeNs = new AtomicLong(startTimestampMs * 1000L * 1000L);
+        }
+
+        @Override
+        public long milliseconds() {
+            return timeMs.get();
+        }
+
+        @Override
+        public long nanoseconds() {
+            return highResTimeNs.get();
+        }
+
+        @Override
+        public long hiResClockMs() {
+            return TimeUnit.NANOSECONDS.toMillis(nanoseconds());
+        }
+
+        @Override
+        public void sleep(final long ms) {
+            if (ms < 0) {
+                throw new IllegalArgumentException("Sleep ms cannot be negative.");
+            }
+            timeMs.addAndGet(ms);
+            highResTimeNs.addAndGet(TimeUnit.MILLISECONDS.toNanos(ms));
         }
     }
 
@@ -589,5 +620,4 @@ public class TopologyTestDriver {
         }
         return consumer;
     }
-
 }

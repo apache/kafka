@@ -14,16 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.test;
+package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -31,6 +30,8 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.test.OutputVerifier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
@@ -41,6 +42,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
@@ -282,11 +284,10 @@ public class TopologyTestDriverTest {
             final String sourceName = sourceTopicName + "-source";
             final String processorName = sourceTopicName + "-processor";
             topology.addSource(sourceName, sourceTopicName);
-            topology.addProcessor(processorName, new MockProcessorSupplier(), sourceName);
             processorNames[i++] = processorName;
+            topology.addProcessor(processorName, new MockProcessorSupplier(), sourceName);
         }
         topology.addSink("sink-topic", SINK_TOPIC_1, processorNames);
-
 
         return topology;
     }
@@ -397,6 +398,124 @@ public class TopologyTestDriverTest {
         expectedResult = new Record(consumerRecord2);
         expectedResult.offset = 0L;
         assertThat(record, equalTo(expectedResult));
+    }
+
+    @Test
+    public void shouldUseSourceSpecificDeserializers() {
+        final Topology topology = new Topology();
+
+        final String sourceName1 = "source-1";
+        final String sourceName2 = "source-2";
+        final String processor = "processor";
+
+        topology.addSource(sourceName1, Serdes.Long().deserializer(), Serdes.String().deserializer(), SOURCE_TOPIC_1);
+        topology.addSource(sourceName2, Serdes.Integer().deserializer(), Serdes.Double().deserializer(), SOURCE_TOPIC_2);
+        topology.addProcessor(processor, new MockProcessorSupplier(), sourceName1, sourceName2);
+        topology.addSink(
+            "sink",
+            SINK_TOPIC_1,
+            new Serializer() {
+                @Override
+                public byte[] serialize(String topic, Object data) {
+                    if (data instanceof Long) {
+                        return Serdes.Long().serializer().serialize(topic, (Long) data);
+                    }
+                    return Serdes.Integer().serializer().serialize(topic, (Integer) data);
+                }
+                @Override
+                public void close() {}
+                @Override
+                public void configure(Map configs, boolean isKey) {}
+            },
+            new Serializer() {
+                @Override
+                public byte[] serialize(String topic, Object data) {
+                    if (data instanceof String) {
+                        return Serdes.String().serializer().serialize(topic, (String) data);
+                    }
+                    return Serdes.Double().serializer().serialize(topic, (Double) data);
+                }
+                @Override
+                public void close() {}
+                @Override
+                public void configure(Map configs, boolean isKey) {}
+            },
+            processor);
+
+        testDriver = new TopologyTestDriver(topology, config);
+
+        final ConsumerRecordFactory<Long, String> source1Factory = new ConsumerRecordFactory<>(
+            SOURCE_TOPIC_1,
+            Serdes.Long().serializer(),
+            Serdes.String().serializer());
+        final ConsumerRecordFactory<Integer, Double> source2Factory = new ConsumerRecordFactory<>(
+            SOURCE_TOPIC_2,
+            Serdes.Integer().serializer(),
+            Serdes.Double().serializer());
+
+        final Long source1Key = 42L;
+        final String source1Value = "anyString";
+        final Integer source2Key = 73;
+        final Double source2Value = 3.14;
+
+        final ConsumerRecord<byte[], byte[]> consumerRecord1 = source1Factory.create(source1Key, source1Value);
+        final ConsumerRecord<byte[], byte[]> consumerRecord2 = source2Factory.create(source2Key, source2Value);
+
+        testDriver.pipeInput(consumerRecord1);
+        OutputVerifier.compareKeyValue(
+            testDriver.readOutput(SINK_TOPIC_1, Serdes.Long().deserializer(), Serdes.String().deserializer()),
+            source1Key,
+            source1Value);
+
+        testDriver.pipeInput(consumerRecord2);
+        OutputVerifier.compareKeyValue(
+            testDriver.readOutput(SINK_TOPIC_1, Serdes.Integer().deserializer(), Serdes.Double().deserializer()),
+            source2Key,
+            source2Value);
+    }
+
+    @Test
+    public void shouldUseSinkeSpecificSerializers() {
+        final Topology topology = new Topology();
+
+        final String sourceName1 = "source-1";
+        final String sourceName2 = "source-2";
+
+        topology.addSource(sourceName1, Serdes.Long().deserializer(), Serdes.String().deserializer(), SOURCE_TOPIC_1);
+        topology.addSource(sourceName2, Serdes.Integer().deserializer(), Serdes.Double().deserializer(), SOURCE_TOPIC_2);
+        topology.addSink("sink-1", SINK_TOPIC_1, Serdes.Long().serializer(), Serdes.String().serializer(), sourceName1);
+        topology.addSink("sink-2", SINK_TOPIC_2, Serdes.Integer().serializer(), Serdes.Double().serializer(), sourceName2);
+
+        testDriver = new TopologyTestDriver(topology, config);
+
+        final ConsumerRecordFactory<Long, String> source1Factory = new ConsumerRecordFactory<>(
+            SOURCE_TOPIC_1,
+            Serdes.Long().serializer(),
+            Serdes.String().serializer());
+        final ConsumerRecordFactory<Integer, Double> source2Factory = new ConsumerRecordFactory<>(
+            SOURCE_TOPIC_2,
+            Serdes.Integer().serializer(),
+            Serdes.Double().serializer());
+
+        final Long source1Key = 42L;
+        final String source1Value = "anyString";
+        final Integer source2Key = 73;
+        final Double source2Value = 3.14;
+
+        final ConsumerRecord<byte[], byte[]> consumerRecord1 = source1Factory.create(source1Key, source1Value);
+        final ConsumerRecord<byte[], byte[]> consumerRecord2 = source2Factory.create(source2Key, source2Value);
+
+        testDriver.pipeInput(consumerRecord1);
+        OutputVerifier.compareKeyValue(
+            testDriver.readOutput(SINK_TOPIC_1, Serdes.Long().deserializer(), Serdes.String().deserializer()),
+            source1Key,
+            source1Value);
+
+        testDriver.pipeInput(consumerRecord2);
+        OutputVerifier.compareKeyValue(
+            testDriver.readOutput(SINK_TOPIC_2, Serdes.Integer().deserializer(), Serdes.Double().deserializer()),
+            source2Key,
+            source2Value);
     }
 
     @Test

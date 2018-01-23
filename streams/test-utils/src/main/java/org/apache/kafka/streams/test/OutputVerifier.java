@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.test;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.streams.TopologyTestDriver;
 
 import java.util.Objects;
 
