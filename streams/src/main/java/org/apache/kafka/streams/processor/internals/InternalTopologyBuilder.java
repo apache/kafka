@@ -848,6 +848,10 @@ public class InternalTopologyBuilder {
         return nodeGroups;
     }
 
+    public synchronized ProcessorTopology build() {
+        return build((Integer) null);
+    }
+
     public synchronized ProcessorTopology build(final Integer topicGroupId) {
         final Set<String> nodeGroup;
         if (topicGroupId != null) {
