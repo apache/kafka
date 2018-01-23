@@ -23,7 +23,7 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 
 import scala.collection.JavaConverters._
 
@@ -81,7 +81,7 @@ object AclCommand extends Logging {
     finally CoreUtils.swallow(authZ.close(), this)
   }
 
-  private def addAcl(opts: AclCommandOptions) {
+  private[admin] def addAcl(opts: AclCommandOptions) {
     withAuthorizer(opts) { authorizer =>
       val resourceToAcl = getResourceToAcls(opts)
 
@@ -226,8 +226,20 @@ object AclCommand extends Logging {
   }
 
   private def getPrincipals(opts: AclCommandOptions, principalOptionSpec: ArgumentAcceptingOptionSpec[String]): Set[KafkaPrincipal] = {
-    if (opts.options.has(principalOptionSpec))
-      opts.options.valuesOf(principalOptionSpec).asScala.map(s => KafkaPrincipal.fromString(s.trim)).toSet
+
+    def validatePrincipalType(principals: Set[KafkaPrincipal]) = {
+      val authorizerClass = opts.options.valueOf(opts.authorizerOpt)
+      if (classOf[SimpleAclAuthorizer].getName.equals(authorizerClass)) {
+        if (!principals.filterNot(kafkaPrincipal => kafkaPrincipal.getPrincipalType.equals(KafkaPrincipal.USER_TYPE)).isEmpty)
+          throw new IllegalArgumentException(s"principalType is not Valid. Valid principalTypes are [${KafkaPrincipal.USER_TYPE}]")
+      }
+    }
+
+    if (opts.options.has(principalOptionSpec)) {
+      val principals = opts.options.valuesOf(principalOptionSpec).asScala.map(s => SecurityUtils.parseKafkaPrincipal(s.trim)).toSet
+      if (!principals.isEmpty) validatePrincipalType(principals)
+      principals
+    }
     else
       Set.empty[KafkaPrincipal]
   }
