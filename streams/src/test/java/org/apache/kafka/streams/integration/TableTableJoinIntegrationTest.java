@@ -79,7 +79,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         @Override
         public void apply(final Long key, final String value) {
             numRecordsExpected++;
-            if (value.equals(expected)) {
+            if (expected.equals(value)) {
                 boolean ret = finalResultReached.compareAndSet(false, true);
 
                 if (!ret) {
