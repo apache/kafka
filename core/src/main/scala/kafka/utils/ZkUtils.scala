@@ -66,6 +66,7 @@ object ZkUtils {
   val BrokerSequenceIdPath = s"$BrokersPath/seqid"
   val ConfigChangesPath = s"$ConfigPath/changes"
   val ConfigUsersPath = s"$ConfigPath/users"
+  val ConfigBrokersPath = s"$ConfigPath/brokers"
   val ProducerIdBlockPath = "/latest_producer_id_block"
 
   val SecureZkRootPaths = ZkData.SecureRootPaths

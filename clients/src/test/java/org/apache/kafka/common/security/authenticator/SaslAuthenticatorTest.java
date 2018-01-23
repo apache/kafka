@@ -992,7 +992,7 @@ public class SaslAuthenticatorTest {
         if (isScram)
             ScramCredentialUtils.createCache(credentialCache, Arrays.asList(saslMechanism));
         SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContext,
-                securityProtocol, listenerName, saslMechanism, true, credentialCache, null) {
+                securityProtocol, listenerName, false, saslMechanism, true, credentialCache, null) {
 
             @Override
             protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs, String id,
@@ -1034,7 +1034,7 @@ public class SaslAuthenticatorTest {
         final Map<String, ?> configs = Collections.emptyMap();
         final JaasContext jaasContext = JaasContext.load(JaasContext.Type.CLIENT, null, configs);
         SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContext,
-                securityProtocol, listenerName, saslMechanism, true, null, null) {
+                securityProtocol, listenerName, false, saslMechanism, true, null, null) {
 
             @Override
             protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs, String id,
