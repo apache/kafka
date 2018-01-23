@@ -41,16 +41,16 @@ public class ListGroupOffsetsResult {
     }
 
     /**
-     * Return a future which yields a map of topic partitions to GroupOffsetListing objects.
+     * Return a future which yields a map of topic partitions to OffsetAndMetadata objects.
      */
-    public KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> namesToListings() {
+    public KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> partitionsToOffsetAndMetadata() {
         return future;
     }
 
     /**
-     * Return a future which yields a collection of GroupOffsetListing objects.
+     * Return a future which yields a collection of OffsetAndMetadata objects.
      */
-    public KafkaFuture<Collection<OffsetAndMetadata>> listings() {
+    public KafkaFuture<Collection<OffsetAndMetadata>> offsetsAndMetadata() {
         return future.thenApply(new KafkaFuture.Function<Map<TopicPartition, OffsetAndMetadata>, Collection<OffsetAndMetadata>>() {
             @Override
             public Collection<OffsetAndMetadata> apply(Map<TopicPartition, OffsetAndMetadata> namesToDescriptions) {
@@ -62,7 +62,7 @@ public class ListGroupOffsetsResult {
     /**
      * Return a future which yields a collection of topic partitions.
      */
-    public KafkaFuture<Set<TopicPartition>> topicPartitions() {
+    public KafkaFuture<Set<TopicPartition>> partitions() {
         return future.thenApply(new KafkaFuture.Function<Map<TopicPartition, OffsetAndMetadata>, Set<TopicPartition>>() {
             @Override
             public Set<TopicPartition> apply(Map<TopicPartition, OffsetAndMetadata> namesToListings) {

@@ -28,5 +28,4 @@ import java.util.Collection;
  */
 @InterfaceStability.Evolving
 public class DescribeGroupsOptions extends AbstractOptions<DescribeGroupsOptions> {
-
 }

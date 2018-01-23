@@ -22,15 +22,38 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.List;
 
 /**
- *
+ * A description of the assignments of a specific group member.
  */
 public class MemberAssignment {
     private final List<TopicPartition> topicPartitions;
 
+    /**
+     * Creates an instance with the specified parameters.
+     *
+     * @param topicPartitions List of topic partitions
+     */
     public MemberAssignment(List<TopicPartition> topicPartitions) {
         this.topicPartitions = topicPartitions;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        MemberAssignment that = (MemberAssignment) o;
+
+        return topicPartitions != null ? topicPartitions.equals(that.topicPartitions) : that.topicPartitions == null;
+    }
+
+    @Override
+    public int hashCode() {
+        return topicPartitions != null ? topicPartitions.hashCode() : 0;
+    }
+
+    /**
+     * The topic partitions assigned to a group member.
+     */
     public List<TopicPartition> topicPartitions() {
         return topicPartitions;
     }

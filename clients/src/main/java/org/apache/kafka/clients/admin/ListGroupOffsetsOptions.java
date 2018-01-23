@@ -32,11 +32,21 @@ public class ListGroupOffsetsOptions extends AbstractOptions<ListGroupOffsetsOpt
 
     private List<TopicPartition> topicPartitions = null;
 
+    /**
+     * Set the topic partitions to list as part of the result.
+     * {@code null} includes all topic partitions.
+     *
+     * @param topicDescriptions List of topic partitions to include
+     * @return This ListGroupOffsetsOptions
+     */
     public ListGroupOffsetsOptions topicPartitions(List<TopicDescription> topicDescriptions) {
         this.topicPartitions = topicPartitions;
         return this;
     }
 
+    /**
+     * Returns a list of topic partitions to add as part of the result.
+     */
     public List<TopicPartition> topicPartitions() {
         return topicPartitions;
     }

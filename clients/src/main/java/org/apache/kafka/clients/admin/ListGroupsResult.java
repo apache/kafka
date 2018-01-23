@@ -25,13 +25,12 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * The result of the {@link AdminClient#listGroups()} call.
+ * The result of the {@link AdminClient#listGroups()} and {@link AdminClient#listConsumerGroups()} call.
  * <p>
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
 public class ListGroupsResult {
-
     final KafkaFuture<Map<String, GroupListing>> future;
 
     ListGroupsResult(KafkaFuture<Map<String, GroupListing>> future) {
