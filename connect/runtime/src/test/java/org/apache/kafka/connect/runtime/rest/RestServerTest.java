@@ -99,7 +99,7 @@ public class RestServerTest {
         configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
         config = new DistributedConfig(configMap);
         server = new RestServer(config);
-        Assert.assertArrayEquals(new String[] {"HTTP://my-hostname:8080"}, server.parseListeners().toArray());
+        Assert.assertArrayEquals(new String[] {"http://my-hostname:8080"}, server.parseListeners().toArray());
     }
 
     @Test

@@ -49,6 +49,7 @@ import javax.servlet.DispatcherType;
 import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -62,6 +63,9 @@ public class RestServer {
     private static final Logger log = LoggerFactory.getLogger(RestServer.class);
 
     private static final long GRACEFUL_SHUTDOWN_TIMEOUT_MS = 60 * 1000;
+
+    private static final String PROTOCOL_HTTP = "http";
+    private static final String PROTOCOL_HTTPS = "https";
 
     private final WorkerConfig config;
     private Server jettyServer;
@@ -79,7 +83,7 @@ public class RestServer {
         createConnectors(listeners);
     }
 
-    protected List<String> parseListeners() {
+    List<String> parseListeners() {
         List<String> listeners = config.getList(WorkerConfig.LISTENERS_CONFIG);
         if (listeners == null || listeners.size() == 0) {
             String hostname = config.getString(WorkerConfig.REST_HOST_NAME_CONFIG);
@@ -87,8 +91,7 @@ public class RestServer {
             if (hostname == null)
                 hostname = "";
 
-            listeners = new ArrayList<String>();
-            listeners.add(String.format("HTTP://%s:%d", hostname, config.getInt(WorkerConfig.REST_PORT_CONFIG)));
+            listeners = Collections.singletonList(String.format("%s://%s:%d", PROTOCOL_HTTP, hostname, config.getInt(WorkerConfig.REST_PORT_CONFIG)));
         }
 
         return listeners;
@@ -121,23 +124,23 @@ public class RestServer {
         if (!listenerMatcher.matches())
             throw new ConfigException("Listener doesn't have the right format (protocol://hostname:port).");
 
-        String protocol = listenerMatcher.group(1).toLowerCase(Locale.getDefault());
+        String protocol = listenerMatcher.group(1).toLowerCase(Locale.ENGLISH);
 
-        if (!protocol.equals("http") && !protocol.equals("https"))
-            throw new ConfigException("Listener protocol must be either \"http\" or \"https\".");
+        if (!PROTOCOL_HTTP.equals(protocol) && !PROTOCOL_HTTPS.equals(protocol))
+            throw new ConfigException(String.format("Listener protocol must be either \"%s\" or \"%s\".", PROTOCOL_HTTP, PROTOCOL_HTTPS));
 
         String hostname = listenerMatcher.group(2);
         int port = Integer.parseInt(listenerMatcher.group(3));
 
         ServerConnector connector;
 
-        if (protocol.equals("https")) {
+        if (PROTOCOL_HTTPS.equals(protocol)) {
             SslContextFactory ssl = SSLUtils.createSslContextFactory(config);
             connector = new ServerConnector(jettyServer, ssl);
-            connector.setName("https_" + hostname + port);
+            connector.setName(String.format("%s_%s%d", PROTOCOL_HTTPS, hostname, port));
         } else {
             connector = new ServerConnector(jettyServer);
-            connector.setName("http_" + hostname + port);
+            connector.setName(String.format("%s_%s%d", PROTOCOL_HTTP, hostname, port));
         }
 
         if (!hostname.isEmpty())
@@ -247,28 +250,28 @@ public class RestServer {
         return builder.build();
     }
 
-    protected String determineAdvertisedProtocol() {
+    String determineAdvertisedProtocol() {
         String advertisedSecurityProtocol = config.getString(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG);
         if (advertisedSecurityProtocol == null) {
             String listeners = (String) config.originals().get(WorkerConfig.LISTENERS_CONFIG);
 
             if (listeners == null)
-                return "http";
+                return PROTOCOL_HTTP;
             else
-                listeners = listeners.toLowerCase(Locale.getDefault());
+                listeners = listeners.toLowerCase(Locale.ENGLISH);
 
-            if (listeners.contains("http://"))
-                return "http";
-            else if (listeners.contains("https://"))
-                return "https";
+            if (listeners.contains(String.format("%s://", PROTOCOL_HTTP)))
+                return PROTOCOL_HTTP;
+            else if (listeners.contains(String.format("%s://", PROTOCOL_HTTPS)))
+                return PROTOCOL_HTTPS;
             else
-                return "http";
+                return PROTOCOL_HTTP;
         } else {
-            return advertisedSecurityProtocol.toLowerCase(Locale.getDefault());
+            return advertisedSecurityProtocol.toLowerCase(Locale.ENGLISH);
         }
     }
 
-    protected ServerConnector findConnector(String protocol) {
+    ServerConnector findConnector(String protocol) {
         for (Connector connector : jettyServer.getConnectors()) {
             if (connector.getName().startsWith(protocol))
                 return (ServerConnector) connector;

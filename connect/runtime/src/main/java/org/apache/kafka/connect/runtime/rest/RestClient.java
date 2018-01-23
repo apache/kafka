@@ -27,6 +27,7 @@ import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
 import org.eclipse.jetty.client.util.StringContentProvider;
+import org.eclipse.jetty.http.HttpField;
 import org.eclipse.jetty.http.HttpFields;
 import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
@@ -35,7 +36,6 @@ import org.slf4j.LoggerFactory;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -125,10 +125,8 @@ public class RestClient {
         if (httpFields == null || httpFields.size() == 0)
             return headers;
 
-        Enumeration<String> names = httpFields.getFieldNames();
-        while (names.hasMoreElements()) {
-            String key = names.nextElement();
-            headers.put(key, httpFields.get(key));
+        for (HttpField field : httpFields) {
+            headers.put(field.getName(), field.getValue());
         }
 
         return headers;

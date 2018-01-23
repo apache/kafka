@@ -101,7 +101,7 @@ public class WorkerConfig extends AbstractConfig {
     public static final long OFFSET_COMMIT_TIMEOUT_MS_DEFAULT = 5000L;
 
     /**
-     * @deprecated As of 1.X.0.
+     * @deprecated As of 1.1.0.
      */
     @Deprecated
     public static final String REST_HOST_NAME_CONFIG = "rest.host.name";
@@ -109,7 +109,7 @@ public class WorkerConfig extends AbstractConfig {
             = "Hostname for the REST API. If this is set, it will only bind to this interface.";
 
     /**
-     * @deprecated As of 1.X.0.
+     * @deprecated As of 1.1.0.
      */
     @Deprecated
     public static final String REST_PORT_CONFIG = "rest.port";
@@ -119,7 +119,7 @@ public class WorkerConfig extends AbstractConfig {
 
     public static final String LISTENERS_CONFIG = "listeners";
     private static final String LISTENERS_DOC
-            = "List of comma-separated URIs the REST API will listen on. The supported protocols are HTTP anf HTTPS.\n" +
+            = "List of comma-separated URIs the REST API will listen on. The supported protocols are HTTP and HTTPS.\n" +
             " Specify hostname as 0.0.0.0 to bind to all interfaces.\n" +
             " Leave hostname empty to bind to default interface.\n" +
             " Examples of legal listener lists: HTTP://myhost:8083,HTTPS://myhost:8084";
