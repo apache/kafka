@@ -26,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -159,6 +160,21 @@ public class PluginUtilsTest {
     }
 
     @Test
+    public void testOrderOfPluginUrlsWithJars() throws Exception {
+        createBasicDirectoryLayout();
+        // Here this method is just used to create the files. The result is not used.
+        createBasicExpectedUrls();
+
+        List<Path> actual = PluginUtils.pluginUrls(pluginPath);
+        // simple-transform.jar is created first. In most systems, without sorting within the
+        // PluginUtils is would be placed before another-transform.jar often though not always
+        // and this test case would be flaky.
+        int i = Arrays.toString(actual.toArray()).indexOf("another-transform.jar");
+        int j = Arrays.toString(actual.toArray()).indexOf("simple-transform.jar");
+        assert i < j;
+    }
+
+    @Test
     public void testPluginUrlsWithZips() throws Exception {
         createBasicDirectoryLayout();
 
@@ -262,9 +278,8 @@ public class PluginUtilsTest {
     }
 
     private void assertUrls(List<Path> expected, List<Path> actual) {
-        List<Path> actualCopy = new ArrayList<>(actual);
         Collections.sort(expected);
-        Collections.sort(actualCopy);
-        assertEquals(expected, actualCopy);
+        // not sorting 'actual' because it should be returned sorted from withing the PluginUtils.
+        assertEquals(expected, actual);
     }
 }
