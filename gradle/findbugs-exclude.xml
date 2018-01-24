@@ -250,13 +250,6 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
-        <!-- Suppress inconsistent synchronization warnings about KerberosLogin#login.
-             See KAFKA-4991 for details. -->
-        <Class name="org.apache.kafka.common.security.kerberos.KerberosLogin"/>
-        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
-    </Match>
-
-    <Match>
         <!-- Suppress inconsistent synchronization warnings about
              AbstractCoordinator#coordinator.  See KAFKA-4992 for details.-->
         <Class name="org.apache.kafka.clients.consumer.internals.AbstractCoordinator"/>
