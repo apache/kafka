@@ -28,7 +28,7 @@ import org.easymock.EasyMock
 class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
   @Test
-  def testListGroupWithSomeGroups() {
+  def testListOldConsumerGroups() {
     val topicFilter = Whitelist(topic)
     val props = new Properties
     props.setProperty("group.id", group)
