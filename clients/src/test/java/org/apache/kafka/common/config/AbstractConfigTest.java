@@ -51,11 +51,10 @@ public class AbstractConfigTest {
         testInvalidInputs("org.apache.kafka.common.metrics.FakeMetricsReporter,");
     }
 
-
     @Test
     public void testEmptyList() {
         AbstractConfig conf;
-        ConfigDef configDef = new ConfigDef().define("a", Type.LIST, "", ConfigDef.NON_NULL, Importance.HIGH, "doc");
+        ConfigDef configDef = new ConfigDef().define("a", Type.LIST, "", new ConfigDef.NonNullValidator(), Importance.HIGH, "doc");
 
         conf = new AbstractConfig(configDef, Collections.emptyMap());
         assertEquals(Collections.emptyList(), conf.getList("a"));

@@ -937,7 +937,7 @@ public class ConfigDef {
         }
     }
 
-    public static final Validator NON_NULL = new Validator() {
+    public static class NonNullValidator implements Validator {
         @Override
         public void ensureValid(String name, Object value) {
             if (value == null) {
@@ -945,17 +945,17 @@ public class ConfigDef {
                 throw new ConfigException(name, "null", "entry must be non null");
             }
         }
-    };
+    }
 
-    public static class Composite implements Validator {
+    public static class CompositeValidator implements Validator {
         private final List<Validator> validators;
 
-        private Composite(List<Validator> validators) {
+        private CompositeValidator(List<Validator> validators) {
             this.validators = Collections.unmodifiableList(validators);
         }
 
-        public static Composite of(Validator... validators) {
-            return new Composite(Arrays.asList(validators));
+        public static CompositeValidator of(Validator... validators) {
+            return new CompositeValidator(Arrays.asList(validators));
         }
 
         @Override
