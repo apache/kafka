@@ -170,7 +170,7 @@ class AdminClient(val time: Time,
   }
 
   def listAllGroups(): Map[Node, List[GroupOverview]] = {
-    findAllBrokers.map { broker =>
+    findAllBrokers().map { broker =>
       broker -> {
         try {
           listGroups(broker)
@@ -185,16 +185,22 @@ class AdminClient(val time: Time,
 
   def listAllConsumerGroups(): Map[Node, List[GroupOverview]] = {
     listAllGroups().mapValues { groups =>
-      groups.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
+      groups.filter(isConsumerGroup)
     }
   }
 
   def listAllGroupsFlattened(): List[GroupOverview] = {
-    listAllGroups.values.flatten.toList
+    listAllGroups().values.flatten.toList
   }
 
   def listAllConsumerGroupsFlattened(): List[GroupOverview] = {
-    listAllGroupsFlattened.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
+    listAllGroupsFlattened().filter(isConsumerGroup)
+  }
+
+  private def isConsumerGroup(group: GroupOverview): Boolean = {
+    // Consumer groups which are using group management use the "consumer" protocol type.
+    // Consumer groups which are only using offset storage will have an empty protocol type.
+    group.protocolType.isEmpty || group.protocolType == ConsumerProtocol.PROTOCOL_TYPE
   }
 
   def listGroupOffsets(groupId: String): Map[TopicPartition, Long] = {
@@ -203,12 +209,12 @@ class AdminClient(val time: Time,
     val response = responseBody.asInstanceOf[OffsetFetchResponse]
     if (response.hasError)
       throw response.error.exception
-    response.maybeThrowFirstPartitionError
+    response.maybeThrowFirstPartitionError()
     response.responseData.asScala.map { case (tp, partitionData) => (tp, partitionData.offset) }.toMap
   }
 
   def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] =
-    findAllBrokers.map { broker =>
+    findAllBrokers().map { broker =>
       broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker).asJava))
     }.toMap
 

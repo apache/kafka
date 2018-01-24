@@ -104,6 +104,19 @@ object ConsumerGroupCommand extends Logging {
     e.foreach(debug("Exception in consumer group command", _))
   }
 
+  def convertTimestamp(timeString: String): java.lang.Long = {
+    val datetime: String = timeString match {
+      case ts if ts.split("T")(1).contains("+") || ts.split("T")(1).contains("-") || ts.split("T")(1).contains("Z") => ts.toString
+      case ts => s"${ts}Z"
+    }
+    val date = try {
+      new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(datetime)
+    } catch {
+      case _: ParseException => new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(datetime)
+    }
+    date.getTime
+  }
+
   def printOffsetsToReset(groupAssignmentsToReset: Map[TopicPartition, OffsetAndMetadata]): Unit = {
     print("\n%-30s %-10s %-15s".format("TOPIC", "PARTITION", "NEW-OFFSET"))
     println()
@@ -154,7 +167,7 @@ object ConsumerGroupCommand extends Logging {
                 // the control should never reach here
                 throw new KafkaException(s"Expected a valid consumer group state, but found '${other.getOrElse("NONE")}'.")
             }
-            state != Some("Dead") && num > 0
+            !state.contains("Dead") && num > 0
           }
       }
     }
@@ -723,8 +736,8 @@ object ConsumerGroupCommand extends Logging {
           (topicPartition, new OffsetAndMetadata(newOffset))
         }.toMap
       } else if (opts.options.has(opts.resetToDatetimeOpt)) {
+        val timestamp = convertTimestamp(opts.options.valueOf(opts.resetToDatetimeOpt))
         partitionsToReset.map { topicPartition =>
-          val timestamp = getDateTime
           val logTimestampOffset = getLogTimestampOffset(topicPartition, timestamp)
           logTimestampOffset match {
             case LogOffsetResult.LogOffset(offset) => (topicPartition, new OffsetAndMetadata(offset))
@@ -783,21 +796,6 @@ object ConsumerGroupCommand extends Logging {
           case _ => offset
         }
       }
-    }
-
-    private[admin] def getDateTime: java.lang.Long = {
-      val datetime: String = opts.options.valueOf(opts.resetToDatetimeOpt) match {
-        case ts if ts.split("T")(1).contains("+") || ts.split("T")(1).contains("-") || ts.split("T")(1).contains("Z") => ts.toString
-        case ts => s"${ts}Z"
-      }
-      val date = {
-        try {
-          new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX").parse(datetime)
-        } catch {
-          case _: ParseException => new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX").parse(datetime)
-        }
-      }
-      date.getTime
     }
 
     override def exportOffsetsToReset(assignmentsToReset: Map[TopicPartition, OffsetAndMetadata]): String = {
