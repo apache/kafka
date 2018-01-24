@@ -527,22 +527,22 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             for (String consumer : consumers) {
                 final Map<TaskId, Set<TopicPartition>> standby = new HashMap<>();
                 final ArrayList<AssignedPartition> assignedPartitions = new ArrayList<>();
-                int taskAssignmentLength = numberTasksPerConsumer[consumerTaskIndex];
+                final int taskAssignmentLength = numberTasksPerConsumer[consumerTaskIndex];
 
                 activeEndIndex = activeEndIndex + taskAssignmentLength;
 
                 final List<TaskId> assignedActiveList = interleavedActive.subList(activeStartIndex, activeEndIndex);
                 List<TaskId> assignedStandbyList;
 
-                for (TaskId taskId : assignedActiveList) {
-                    for (TopicPartition partition : partitionsForTask.get(taskId)) {
+                for (final TaskId taskId : assignedActiveList) {
+                    for (final TopicPartition partition : partitionsForTask.get(taskId)) {
                         assignedPartitions.add(new AssignedPartition(taskId, partition));
                     }
                 }
                 activeStartIndex = activeEndIndex;
 
                 if (numberStandbyTasksPerConsumer.length > 0) {
-                    int standbyTaskAssignmentLength = numberStandbyTasksPerConsumer[consumerTaskIndex];
+                    final int standbyTaskAssignmentLength = numberStandbyTasksPerConsumer[consumerTaskIndex];
                     standbyEndIndex = standbyEndIndex + standbyTaskAssignmentLength;
                     assignedStandbyList = interleavedStandby.subList(standbyStartIndex, standbyEndIndex);
                     for (TaskId taskId : assignedStandbyList) {
@@ -576,11 +576,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     // visible for testing
     int[] calculateNumAssignments(final int numTasks, final int numConsumers) {
-        int[] numTasksPerClient = new int[numConsumers];
+        final int[] numTasksPerClient = new int[numConsumers];
         if (numTasks % numConsumers == 0) {
             Arrays.fill(numTasksPerClient, numTasks / numConsumers);
         } else {
-            int startingNumTasks = numTasks / numConsumers;
+            final int startingNumTasks = numTasks / numConsumers;
             Arrays.fill(numTasksPerClient, startingNumTasks);
             int totalTasksLeft = numTasks - (startingNumTasks * numConsumers);
             int index = 0;
