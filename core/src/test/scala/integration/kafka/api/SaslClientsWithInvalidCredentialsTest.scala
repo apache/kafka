@@ -151,7 +151,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
       createClientCredential()
       verifyWithRetry(describeTopic())
     } finally {
-      adminClient.close
+      adminClient.close()
     }
   }
 
