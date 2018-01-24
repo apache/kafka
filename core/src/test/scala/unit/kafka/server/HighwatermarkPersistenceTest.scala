@@ -166,8 +166,11 @@ class HighwatermarkPersistenceTest {
   }
 
   def hwmFor(replicaManager: ReplicaManager, topic: String, partition: Int): Long = {
-    replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs.head).getAbsolutePath).read.getOrElse(
-      new TopicPartition(topic, partition), 0L)
+    val logDir = new File(replicaManager.config.logDirs.head).getAbsolutePath
+    val tp = new TopicPartition(topic, partition)
+    replicaManager.highWatermarkCheckpoints(logDir).getCheckpoint(tp) match {
+      case Some(off) => off
+      case None => 0L
+    }
   }
-
 }

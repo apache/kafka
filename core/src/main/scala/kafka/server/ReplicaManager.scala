@@ -28,7 +28,7 @@ import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log.{Log, LogAppendInfo, LogManager}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
-import kafka.server.checkpoints.OffsetCheckpointFile
+import kafka.server.checkpoints.{CheckpointPersistentCache, CheckpointPersistentCacheFile, OffsetCheckpointFile}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
@@ -181,8 +181,12 @@ class ReplicaManager(val config: KafkaConfig,
   val replicaFetcherManager = createReplicaFetcherManager(metrics, time, threadNamePrefix, quotaManagers.follower)
   val replicaAlterLogDirsManager = createReplicaAlterLogDirsManager(quotaManagers.alterLogDirs, brokerTopicStats)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
-  @volatile var highWatermarkCheckpoints = logManager.liveLogDirs.map(dir =>
-    (dir.getAbsolutePath, new OffsetCheckpointFile(new File(dir, ReplicaManager.HighWatermarkFilename), logDirFailureChannel))).toMap
+  @volatile var highWatermarkCheckpoints: Map[String, CheckpointPersistentCache[TopicPartition, Long]] =
+    logManager.liveLogDirs.map(dir =>
+      (dir.getAbsolutePath, new CheckpointPersistentCacheFile[TopicPartition, Long](
+        new File(dir, ReplicaManager.HighWatermarkFilename),
+        OffsetCheckpointFile.Formatter,
+        logDirFailureChannel))).toMap
 
   private var hwThreadInitialized = false
   this.logIdent = s"[ReplicaManager broker=$localBrokerId] "
@@ -244,7 +248,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   def startHighWaterMarksCheckPointThread() = {
     if(highWatermarkCheckPointThreadStarted.compareAndSet(false, true))
-      scheduler.schedule("highwatermark-checkpoint", checkpointHighWatermarks _, period = config.replicaHighWatermarkCheckpointIntervalMs, unit = TimeUnit.MILLISECONDS)
+      scheduler.schedule("highwatermark-checkpoint", checkpointHighWatermarks, period = config.replicaHighWatermarkCheckpointIntervalMs, unit = TimeUnit.MILLISECONDS)
   }
 
   def recordIsrChange(topicPartition: TopicPartition) {
@@ -1384,7 +1388,9 @@ class ReplicaManager(val config: KafkaConfig,
     for ((dir, reps) <- replicasByDir) {
       val hwms = reps.map(r => r.topicPartition -> r.highWatermark.messageOffset).toMap
       try {
-        highWatermarkCheckpoints.get(dir).foreach(_.write(hwms))
+        val cache = highWatermarkCheckpoints(dir)
+        cache.update(hwms)
+        cache.persist()
       } catch {
         case e: KafkaStorageException =>
           error(s"Error while writing to highwatermark file in directory $dir", e)
