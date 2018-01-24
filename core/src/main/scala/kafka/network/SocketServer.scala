@@ -31,6 +31,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig
 import kafka.utils._
+import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.Meter
@@ -437,20 +438,29 @@ private[kafka] class Processor(val id: Int,
   )
 
   private val selector = createSelector(
-      ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialProvider.credentialCache, credentialProvider.tokenCache))
+    ChannelBuilders.serverChannelBuilder(listenerName,
+      listenerName == config.interBrokerListenerName,
+      securityProtocol,
+      config,
+      credentialProvider.credentialCache,
+      credentialProvider.tokenCache))
   // Visible to override for testing
-  protected[network] def createSelector(channelBuilder: ChannelBuilder): KSelector = new KSelector(
-    maxRequestSize,
-    connectionsMaxIdleMs,
-    metrics,
-    time,
-    "socket-server",
-    metricTags,
-    false,
-    true,
-    channelBuilder,
-    memoryPool,
-    logContext)
+  protected[network] def createSelector(channelBuilder: ChannelBuilder): KSelector = {
+    if (channelBuilder.isInstanceOf[Reconfigurable])
+      config.addReconfigurable(channelBuilder.asInstanceOf[Reconfigurable])
+    new KSelector(
+      maxRequestSize,
+      connectionsMaxIdleMs,
+      metrics,
+      time,
+      "socket-server",
+      metricTags,
+      false,
+      true,
+      channelBuilder,
+      memoryPool,
+      logContext)
+  }
 
   // Connection ids have the format `localAddr:localPort-remoteAddr:remotePort-index`. The index is a
   // non-negative incrementing value that ensures that even if remotePort is reused after a connection is

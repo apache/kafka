@@ -35,7 +35,7 @@ import scala.collection.{Seq, mutable}
 import scala.collection.JavaConverters._
 import org.apache.kafka.common.TopicPartition
 
-class ReassignPartitionsCommandTest  extends ZooKeeperTestHarness  with Logging {
+class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   var calls = 0
 
   @Test

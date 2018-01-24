@@ -546,7 +546,11 @@ object ZkData {
     LogDirEventNotificationZNode.path
   ) ++ ConfigType.all.map(ConfigEntityTypeZNode.path)
 
-  val SensitiveRootPaths = Seq(ConfigEntityTypeZNode.path(ConfigType.User), DelegationTokensZNode.path)
+  val SensitiveRootPaths = Seq(
+    ConfigEntityTypeZNode.path(ConfigType.User),
+    ConfigEntityTypeZNode.path(ConfigType.Broker),
+    DelegationTokensZNode.path
+  )
 
   def sensitivePath(path: String): Boolean = {
     path != null && SensitiveRootPaths.exists(path.startsWith)

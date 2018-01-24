@@ -242,10 +242,14 @@ public class RequestResponseTest {
         checkRequest(createAlterConfigsRequest());
         checkErrorResponse(createAlterConfigsRequest(), new UnknownServerException());
         checkResponse(createAlterConfigsResponse(), 0);
-        checkRequest(createDescribeConfigsRequest());
-        checkRequest(createDescribeConfigsRequestWithConfigEntries());
-        checkErrorResponse(createDescribeConfigsRequest(), new UnknownServerException());
+        checkRequest(createDescribeConfigsRequest(0));
+        checkRequest(createDescribeConfigsRequestWithConfigEntries(0));
+        checkErrorResponse(createDescribeConfigsRequest(0), new UnknownServerException());
         checkResponse(createDescribeConfigsResponse(), 0);
+        checkRequest(createDescribeConfigsRequest(1));
+        checkRequest(createDescribeConfigsRequestWithConfigEntries(1));
+        checkErrorResponse(createDescribeConfigsRequest(1), new UnknownServerException());
+        checkResponse(createDescribeConfigsResponse(), 1);
         checkRequest(createCreatePartitionsRequest());
         checkRequest(createCreatePartitionsRequestWithAssignments());
         checkErrorResponse(createCreatePartitionsRequest(), new InvalidTopicException());
@@ -1031,25 +1035,29 @@ public class RequestResponseTest {
         return new DeleteAclsResponse(0, responses);
     }
 
-    private DescribeConfigsRequest createDescribeConfigsRequest() {
+    private DescribeConfigsRequest createDescribeConfigsRequest(int version) {
         return new DescribeConfigsRequest.Builder(asList(
                 new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"),
-                new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"))).build((short) 0);
+                new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic")))
+                .build((short) version);
     }
 
-    private DescribeConfigsRequest createDescribeConfigsRequestWithConfigEntries() {
+    private DescribeConfigsRequest createDescribeConfigsRequestWithConfigEntries(int version) {
         Map<org.apache.kafka.common.requests.Resource, Collection<String>> resources = new HashMap<>();
         resources.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"), asList("foo", "bar"));
         resources.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"), null);
         resources.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic a"), Collections.<String>emptyList());
-        return new DescribeConfigsRequest.Builder(resources).build((short) 0);
+        return new DescribeConfigsRequest.Builder(resources).build((short) version);
     }
 
     private DescribeConfigsResponse createDescribeConfigsResponse() {
         Map<org.apache.kafka.common.requests.Resource, DescribeConfigsResponse.Config> configs = new HashMap<>();
+        List<DescribeConfigsResponse.ConfigSynonym> synonyms = Collections.emptyList();
         List<DescribeConfigsResponse.ConfigEntry> configEntries = asList(
-                new DescribeConfigsResponse.ConfigEntry("config_name", "config_value", false, true, false),
-                new DescribeConfigsResponse.ConfigEntry("another_name", "another value", true, false, true)
+                new DescribeConfigsResponse.ConfigEntry("config_name", "config_value",
+                        DescribeConfigsResponse.ConfigSource.DYNAMIC_BROKER_CONFIG, true, false, synonyms),
+                new DescribeConfigsResponse.ConfigEntry("another_name", "another value",
+                        DescribeConfigsResponse.ConfigSource.DEFAULT_CONFIG, false, true, synonyms)
         );
         configs.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"), new DescribeConfigsResponse.Config(
                 ApiError.NONE, configEntries));

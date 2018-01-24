@@ -105,6 +105,15 @@ public class ConfigDef {
         return Collections.unmodifiableSet(configKeys.keySet());
     }
 
+    public Map<String, Object> defaultValues() {
+        Map<String, Object> defaultValues = new HashMap<>();
+        for (ConfigKey key : configKeys.values()) {
+            if (key.defaultValue != NO_DEFAULT_VALUE)
+                defaultValues.put(key.name, key.defaultValue);
+        }
+        return defaultValues;
+    }
+
     public ConfigDef define(ConfigKey key) {
         if (configKeys.containsKey(key.name)) {
             throw new ConfigException("Configuration " + key.name + " is defined twice.");
@@ -743,6 +752,30 @@ public class ConfigDef {
             default:
                 throw new IllegalStateException("Unknown type.");
         }
+    }
+
+    /**
+     * Converts a map of config (key, value) pairs to a map of strings where each value
+     * is converted to a string. This method should be used with care since it stores
+     * actual password values to String. Values from this map should never be used in log entries.
+     */
+    public static  Map<String, String> convertToStringMapWithPasswordValues(Map<String, ?> configs) {
+        Map<String, String> result = new HashMap<>();
+        for (Map.Entry<String, ?> entry : configs.entrySet()) {
+            Object value = entry.getValue();
+            String strValue;
+            if (value instanceof Password)
+                strValue = ((Password) value).value();
+            else if (value instanceof List)
+                strValue = convertToString(value, Type.LIST);
+            else if (value instanceof Class)
+                strValue = convertToString(value, Type.CLASS);
+            else
+                strValue = convertToString(value, null);
+            if (strValue != null)
+                result.put(entry.getKey(), strValue);
+        }
+        return result;
     }
 
     /**

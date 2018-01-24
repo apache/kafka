@@ -338,7 +338,7 @@ object DumpLogSegments {
 
       val valueString = Json.encodeAsString(Map(
         "protocolType" -> protocolType,
-        "protocol" -> group.protocol,
+        "protocol" -> group.protocolOrNull,
         "generationId" -> group.generationId,
         "assignment" -> assignment
       ).asJava)

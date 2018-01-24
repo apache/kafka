@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util
 import java.util.Properties
 
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1}
@@ -28,7 +29,8 @@ import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, Message
 import kafka.utils.CoreUtils
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.common.config.ConfigDef.ValidList
+import org.apache.kafka.common.Reconfigurable
+import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
@@ -912,6 +914,8 @@ object KafkaConfig {
   }
 
   def configNames() = configDef.names().asScala.toList.sorted
+  private[server] def defaultValues: Map[String, _] = configDef.defaultValues.asScala
+  private[server] def configKeys: Map[String, ConfigKey] = configDef.configKeys.asScala
 
   def fromProps(props: Properties): KafkaConfig =
     fromProps(props, true)
@@ -933,9 +937,37 @@ object KafkaConfig {
 
 }
 
-class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends AbstractConfig(KafkaConfig.configDef, props, doLog) {
+class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigOverride: Option[DynamicBrokerConfig])
+  extends AbstractConfig(KafkaConfig.configDef, props, doLog) {
 
-  def this(props: java.util.Map[_, _]) = this(props, true)
+  def this(props: java.util.Map[_, _]) = this(props, true, None)
+  def this(props: java.util.Map[_, _], doLog: Boolean) = this(props, doLog, None)
+  private[server] val dynamicConfig = dynamicConfigOverride.getOrElse(new DynamicBrokerConfig(this))
+  // Cache the current config to avoid acquiring read lock to access from dynamicConfig
+  @volatile private var currentConfig = this
+
+  private[server] def updateCurrentConfig(newConfig: KafkaConfig): Unit = {
+    this.currentConfig = newConfig
+  }
+
+  override def originals: util.Map[String, AnyRef] =
+    if (this eq currentConfig) super.originals else currentConfig.originals
+  override def values: util.Map[String, _] =
+    if (this eq currentConfig) super.values else currentConfig.values
+  override def originalsStrings: util.Map[String, String] =
+    if (this eq currentConfig) super.originalsStrings else currentConfig.originalsStrings
+  override def originalsWithPrefix(prefix: String): util.Map[String, AnyRef] =
+    if (this eq currentConfig) super.originalsWithPrefix(prefix) else currentConfig.originalsWithPrefix(prefix)
+  override def valuesWithPrefixOverride(prefix: String): util.Map[String, AnyRef] =
+    if (this eq currentConfig) super.valuesWithPrefixOverride(prefix) else currentConfig.valuesWithPrefixOverride(prefix)
+  override def get(key: String): AnyRef =
+    if (this eq currentConfig) super.get(key) else currentConfig.get(key)
+
+  //  During dynamic update, we use the values from this config, these are only used in DynamicBrokerConfig
+  private[server] def originalsFromThisConfig: util.Map[String, AnyRef] = super.originals
+  private[server] def valuesFromThisConfig: util.Map[String, _] = super.values
+  private[server] def valuesFromThisConfigWithPrefixOverride(prefix: String): util.Map[String, AnyRef] =
+    super.valuesWithPrefixOverride(prefix)
 
   /** ********* Zookeeper Configuration ***********/
   val zkConnect: String = getString(KafkaConfig.ZkConnectProp)
@@ -1094,10 +1126,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val sslProtocol = getString(KafkaConfig.SslProtocolProp)
   val sslProvider = getString(KafkaConfig.SslProviderProp)
   val sslEnabledProtocols = getList(KafkaConfig.SslEnabledProtocolsProp)
-  val sslKeystoreType = getString(KafkaConfig.SslKeystoreTypeProp)
-  val sslKeystoreLocation = getString(KafkaConfig.SslKeystoreLocationProp)
-  val sslKeystorePassword = getPassword(KafkaConfig.SslKeystorePasswordProp)
-  val sslKeyPassword = getPassword(KafkaConfig.SslKeyPasswordProp)
+  def sslKeystoreType = getString(KafkaConfig.SslKeystoreTypeProp)
+  def sslKeystoreLocation = getString(KafkaConfig.SslKeystoreLocationProp)
+  def sslKeystorePassword = getPassword(KafkaConfig.SslKeystorePasswordProp)
+  def sslKeyPassword = getPassword(KafkaConfig.SslKeyPasswordProp)
   val sslTruststoreType = getString(KafkaConfig.SslTruststoreTypeProp)
   val sslTruststoreLocation = getString(KafkaConfig.SslTruststoreLocationProp)
   val sslTruststorePassword = getPassword(KafkaConfig.SslTruststorePasswordProp)
@@ -1142,6 +1174,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val listeners: Seq[EndPoint] = getListeners
   val advertisedListeners: Seq[EndPoint] = getAdvertisedListeners
   private[kafka] lazy val listenerSecurityProtocolMap = getListenerSecurityProtocolMap
+
+  def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
+    dynamicConfig.addReconfigurable(reconfigurable)
+  }
 
   private def getLogRetentionTimeMillis: Long = {
     val millisInMinute = 60L * 1000L
