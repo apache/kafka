@@ -61,7 +61,7 @@ public class WorkerConfig extends AbstractConfig {
                     " This controls the format of the values in messages written to or read from Kafka, and since this is" +
                     " independent of connectors it allows any connector to work with any serialization format." +
                     " Examples of common formats include JSON and Avro.";
-
+    @Deprecated
     public static final String INTERNAL_KEY_CONVERTER_CLASS_CONFIG = "internal.key.converter";
     public static final String INTERNAL_KEY_CONVERTER_CLASS_DOC =
             "Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka." +
@@ -69,8 +69,9 @@ public class WorkerConfig extends AbstractConfig {
                     " independent of connectors it allows any connector to work with any serialization format." +
                     " Examples of common formats include JSON and Avro." +
                     " This setting controls the format used for internal bookkeeping data used by the framework, such as" +
-                    " configs and offsets, so users can typically use any functioning Converter implementation.";
-
+                    " configs and offsets, so users can typically use any functioning Converter implementation." +
+                    " This config is deprecated, refer KAFKA-5540";
+    @Deprecated
     public static final String INTERNAL_VALUE_CONVERTER_CLASS_CONFIG = "internal.value.converter";
     public static final String INTERNAL_VALUE_CONVERTER_CLASS_DOC =
             "Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka." +
@@ -78,7 +79,8 @@ public class WorkerConfig extends AbstractConfig {
                     " independent of connectors it allows any connector to work with any serialization format." +
                     " Examples of common formats include JSON and Avro." +
                     " This setting controls the format used for internal bookkeeping data used by the framework, such as" +
-                    " configs and offsets, so users can typically use any functioning Converter implementation.";
+                    " configs and offsets, so users can typically use any functioning Converter implementation." +
+                    " This config is deprecated, refer KAFKA-5540";
 
     public static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG
             = "task.shutdown.graceful.timeout.ms";
