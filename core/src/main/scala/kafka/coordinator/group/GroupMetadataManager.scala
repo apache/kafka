@@ -1071,11 +1071,10 @@ object GroupMetadataManager {
                                         assignment: Map[String, Array[Byte]],
                                         version: Short = 0): Array[Byte] = {
     val value = if (version == 0) new Struct(GROUP_METADATA_VALUE_SCHEMA_V0) else new Struct(CURRENT_GROUP_VALUE_SCHEMA)
-    val protocol = groupMetadata.protocolOrNull
 
     value.set(PROTOCOL_TYPE_KEY, groupMetadata.protocolType.getOrElse(""))
     value.set(GENERATION_KEY, groupMetadata.generationId)
-    value.set(PROTOCOL_KEY, protocol)
+    value.set(PROTOCOL_KEY, groupMetadata.protocolOrNull)
     value.set(LEADER_KEY, groupMetadata.leaderOrNull)
 
     val memberArray = groupMetadata.allMemberMetadata.map { memberMetadata =>
@@ -1087,6 +1086,11 @@ object GroupMetadataManager {
 
       if (version > 0)
         memberStruct.set(REBALANCE_TIMEOUT_KEY, memberMetadata.rebalanceTimeoutMs)
+
+      // The group is non-empty, so the current protocol must be defined
+      val protocol = groupMetadata.protocolOrNull
+      if (protocol == null)
+        throw new IllegalStateException("Attempted to write non-empty group metadata with no defined protocol")
 
       val metadata = memberMetadata.metadata(protocol)
       memberStruct.set(SUBSCRIPTION_KEY, ByteBuffer.wrap(metadata))

@@ -110,7 +110,7 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
 
 object ConsumerGroupCommandTest {
 
-  abstract class AbstractConsumerThread(broker: String, groupId: String) extends Runnable {
+  abstract class AbstractConsumerRunnable(broker: String, groupId: String) extends Runnable {
     val props = new Properties
     configure(props)
     val consumer = new KafkaConsumer(props)
@@ -141,8 +141,8 @@ object ConsumerGroupCommandTest {
     }
   }
 
-  class ConsumerThread(broker: String, groupId: String, topic: String, strategy: String)
-    extends AbstractConsumerThread(broker, groupId) {
+  class ConsumerRunnable(broker: String, groupId: String, topic: String, strategy: String)
+    extends AbstractConsumerRunnable(broker, groupId) {
 
     override def configure(props: Properties): Unit = {
       super.configure(props)
@@ -154,8 +154,8 @@ object ConsumerGroupCommandTest {
     }
   }
 
-  class SimpleConsumerThread(broker: String, groupId: String, partitions: Iterable[TopicPartition])
-    extends AbstractConsumerThread(broker, groupId) {
+  class SimpleConsumerRunnable(broker: String, groupId: String, partitions: Iterable[TopicPartition])
+    extends AbstractConsumerRunnable(broker, groupId) {
 
     override def subscribe(): Unit = {
       consumer.assign(partitions.toList.asJava)
@@ -164,9 +164,9 @@ object ConsumerGroupCommandTest {
 
   class AbstractConsumerGroupExecutor(numThreads: Int) {
     private val executor: ExecutorService = Executors.newFixedThreadPool(numThreads)
-    private val consumers = new ArrayBuffer[AbstractConsumerThread]()
+    private val consumers = new ArrayBuffer[AbstractConsumerRunnable]()
 
-    def submit(consumerThread: AbstractConsumerThread) {
+    def submit(consumerThread: AbstractConsumerRunnable) {
       consumers += consumerThread
       executor.submit(consumerThread)
     }
@@ -174,12 +174,7 @@ object ConsumerGroupCommandTest {
     def shutdown() {
       consumers.foreach(_.shutdown())
       executor.shutdown()
-      try {
-        executor.awaitTermination(5000, TimeUnit.MILLISECONDS)
-      } catch {
-        case e: InterruptedException =>
-          e.printStackTrace()
-      }
+      executor.awaitTermination(5000, TimeUnit.MILLISECONDS)
     }
   }
 
@@ -187,7 +182,7 @@ object ConsumerGroupCommandTest {
     extends AbstractConsumerGroupExecutor(numConsumers) {
 
     for (_ <- 1 to numConsumers) {
-      submit(new ConsumerThread(broker, groupId, topic, strategy))
+      submit(new ConsumerRunnable(broker, groupId, topic, strategy))
     }
 
   }
@@ -195,7 +190,7 @@ object ConsumerGroupCommandTest {
   class SimpleConsumerGroupExecutor(broker: String, groupId: String, partitions: Iterable[TopicPartition])
     extends AbstractConsumerGroupExecutor(1) {
 
-    submit(new SimpleConsumerThread(broker, groupId, partitions))
+    submit(new SimpleConsumerRunnable(broker, groupId, partitions))
   }
 
 }
