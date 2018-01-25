@@ -439,7 +439,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     @volatile var sent = 0
     override def doWork(): Unit = {
         try {
-            while (isRunning.get) {
+            while (isRunning) {
                 sent += 1
                 val record = new ProducerRecord(topic, s"key$sent", s"value$sent")
                 producer.send(record).get(10, TimeUnit.SECONDS)
@@ -456,7 +456,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     var received = 0
     override def doWork(): Unit = {
       try {
-        while (isRunning.get || (received < producerThread.sent && System.currentTimeMillis < endTimeMs)) {
+        while (isRunning || (received < producerThread.sent && System.currentTimeMillis < endTimeMs)) {
           received += consumer.poll(50).count
         }
       } finally {

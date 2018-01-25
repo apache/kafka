@@ -89,21 +89,6 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
-        <!-- Add a suppression for KAFKA-4897: LogCleaner#cleanSegments should not ignore failures to delete files.
-            TODO: remove this suppression when KAFKA-4897 is fixed. -->
-        <Package name="kafka.log"/>
-        <Source name="LogCleaner.scala"/>
-        <Bug pattern="RV_RETURN_VALUE_IGNORED,RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
-    </Match>
-
-    <Match>
-        <!-- Add a suppression for ignoring the return value of CountDownLatch#await. -->
-        <Class name="kafka.log.Cleaner"/>
-        <Method name="cleanOrSleep"/>
-        <Bug pattern="RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
-    </Match>
-
-    <Match>
         <!-- Add a suppression for having the thread start in the constructor of the old, deprecated consumer. -->
         <Class name="kafka.producer.Producer"/>
         <Bug pattern="SC_START_IN_CTOR"/>

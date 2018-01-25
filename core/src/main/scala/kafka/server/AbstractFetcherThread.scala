@@ -148,7 +148,7 @@ abstract class AbstractFetcherThread(name: String,
       responseData = fetch(fetchRequest)
     } catch {
       case t: Throwable =>
-        if (isRunning.get) {
+        if (isRunning) {
           warn(s"Error in fetch to broker ${sourceBroker.id}, request $fetchRequest", t)
           inLock(partitionMapLock) {
             partitionsWithError ++= partitionStates.partitionSet.asScala
@@ -218,7 +218,7 @@ abstract class AbstractFetcherThread(name: String,
                       partitionsWithError += topicPartition
                   }
                 case _ =>
-                  if (isRunning.get) {
+                  if (isRunning) {
                     error(s"Error for partition $topicPartition from broker ${sourceBroker.id}", partitionData.exception.get)
                     partitionsWithError += topicPartition
                   }
