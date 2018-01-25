@@ -1211,7 +1211,7 @@ class Log(@volatile var dir: File,
   private def deleteRetentionMsBreachedSegments(): Int = {
     if (config.retentionMs < 0) return 0
     val startMs = time.milliseconds
-    deleteOldSegments((segment, _) => startMs - segment.largestTimestamp > config.retentionMs,
+    deleteOldSegments((segment, _) => startMs - segment.lastModified > config.retentionMs,
       reason = s"retention time ${config.retentionMs}ms breach")
   }
 
