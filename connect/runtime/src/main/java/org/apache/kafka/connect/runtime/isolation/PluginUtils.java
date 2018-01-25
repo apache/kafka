@@ -232,17 +232,26 @@ public class PluginUtils {
 
                 Path adjacent = neighbors.next();
                 if (Files.isSymbolicLink(adjacent)) {
-                    Path symlink = Files.readSymbolicLink(adjacent);
-                    // if symlink is absolute resolve() returns the absolute symlink itself
-                    Path parent = adjacent.getParent();
-                    if (parent == null) {
-                        continue;
-                    }
-                    Path absolute = parent.resolve(symlink).toRealPath();
-                    if (Files.exists(absolute)) {
-                        adjacent = absolute;
-                    } else {
-                        continue;
+                    try {
+                        Path symlink = Files.readSymbolicLink(adjacent);
+                        // if symlink is absolute resolve() returns the absolute symlink itself
+                        Path parent = adjacent.getParent();
+                        if (parent == null) {
+                            continue;
+                        }
+                        Path absolute = parent.resolve(symlink).toRealPath();
+                        if (Files.exists(absolute)) {
+                            adjacent = absolute;
+                        } else {
+                            continue;
+                        }
+                    } catch (IOException e) {
+                        // See https://issues.apache.org/jira/browse/KAFKA-6288 for a reported
+                        // failure. Such a failure at this stage is not easily reproducible and
+                        // therefore an exception is caught and ignored after issuing a
+                        // warning. This allows class scanning to continue for non-broken plugins.
+                       log.warn("Resolving symbolic link '{}' failed. Ignoring this path");
+                       continue;
                     }
                 }
 
