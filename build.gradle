@@ -1160,6 +1160,7 @@ project(':connect:runtime') {
     compile project(":connect:transforms")
     compile project(':clients')
     compile project(':tools')
+    compile project(':connect:json')
     compile libs.slf4jApi
 
     compile libs.jacksonJaxrsJsonProvider

@@ -28,6 +28,7 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -100,20 +101,14 @@ public class Worker {
         this.config = config;
         this.workerMetricsGroup = new WorkerMetricsGroup(metrics);
 
-        // Internal converters are required properties, thus getClass won't return null.
-        this.internalKeyConverter = plugins.newConverter(
-                config.getClass(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG).getName(),
-                config
-        );
+        // Internal key/value converters are currently deprecated, instead JsonConverter is used by default, refer KIP-174.
+        this.internalKeyConverter = plugins.newConverter(JsonConverter.class.getName(), config);
         this.internalKeyConverter.configure(
-                config.originalsWithPrefix("internal.key.converter."),
+                config.originalsWithPrefix("key.converter"),
                 true);
-        this.internalValueConverter = plugins.newConverter(
-                config.getClass(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG).getName(),
-                config
-        );
+        this.internalValueConverter = plugins.newConverter(JsonConverter.class.getName(), config);
         this.internalValueConverter.configure(
-                config.originalsWithPrefix("internal.value.converter."),
+                config.originalsWithPrefix("value.converter"),
                 false
         );
 
