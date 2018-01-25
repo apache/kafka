@@ -166,12 +166,13 @@ public class PluginUtilsTest {
         createBasicExpectedUrls();
 
         List<Path> actual = PluginUtils.pluginUrls(pluginPath);
-        // simple-transform.jar is created first. In most systems, without sorting within the
-        // PluginUtils is would be placed before another-transform.jar often though not always
-        // and this test case would be flaky.
+        // 'simple-transform.jar' is created first. In many cases, without sorting within the
+        // PluginUtils, this jar will be placed before 'another-transform.jar'. However this is
+        // not guaranteed because a DirectoryStream does not maintain a certain order in its
+        // results. Besides this test case, sorted order in every call to assertUrls below.
         int i = Arrays.toString(actual.toArray()).indexOf("another-transform.jar");
         int j = Arrays.toString(actual.toArray()).indexOf("simple-transform.jar");
-        assert i < j;
+        assertTrue(i < j);
     }
 
     @Test
