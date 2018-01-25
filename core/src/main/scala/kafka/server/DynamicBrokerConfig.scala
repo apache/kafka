@@ -22,7 +22,7 @@ import java.util
 import java.util.Properties
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import kafka.log.{LogConfig, LogManager}
+import kafka.log.LogCleaner
 import kafka.server.DynamicBrokerConfig._
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -78,7 +78,7 @@ object DynamicBrokerConfig {
 
   val AllDynamicConfigs = mutable.Set[String]()
   AllDynamicConfigs ++= DynamicSecurityConfigs
-  AllDynamicConfigs ++= LogManager.LogCleanerReconfigurableConfigs
+  AllDynamicConfigs ++= LogCleaner.ReconfigurableConfigs
 
   private val PerBrokerConfigs = DynamicSecurityConfigs
 
@@ -334,9 +334,14 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
             val oldValues = currentConfig.valuesWithPrefixOverride(listenerName.configPrefix)
             val newValues = newConfig.valuesFromThisConfigWithPrefixOverride(listenerName.configPrefix)
             val updatedKeys = updatedConfigs(newValues, oldValues).keySet
-            processReconfigurable(listenerReconfigurable, updatedKeys, newValues, customConfigs, validateOnly)
+            if (needsReconfiguration(listenerReconfigurable, updatedKeys))
+              processReconfigurable(listenerReconfigurable, newValues, customConfigs, validateOnly)
+          case brokerReconfigurable: BrokerReconfigurable =>
+            if (needsReconfiguration(brokerReconfigurable, updatedMap.keySet))
+              processBrokerReconfigurable(brokerReconfigurable, currentConfig, newConfig, validateOnly)
           case reconfigurable =>
-            processReconfigurable(reconfigurable, updatedMap.keySet, newConfig.valuesFromThisConfig, customConfigs, validateOnly)
+            if (needsReconfiguration(reconfigurable, updatedMap.keySet))
+              processReconfigurable(reconfigurable, newConfig.valuesFromThisConfig, customConfigs, validateOnly)
         }
         newConfig
       } catch {
@@ -350,18 +355,44 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       currentConfig
   }
 
-  private def processReconfigurable(reconfigurable: Reconfigurable, updatedKeys: Set[String],
-                                    allNewConfigs: util.Map[String, _], newCustomConfigs: util.Map[String, Object],
-                                    validateOnly: Boolean): Unit = {
-    if (reconfigurable.reconfigurableConfigs.asScala.intersect(updatedKeys).nonEmpty) {
-      val newConfigs = new util.HashMap[String, Object]
-      allNewConfigs.asScala.foreach { case (k, v) => newConfigs.put(k, v.asInstanceOf[AnyRef]) }
-      newConfigs.putAll(newCustomConfigs)
-      if (validateOnly) {
-        if (!reconfigurable.validateReconfiguration(newConfigs))
-          throw new ConfigException("Validation of dynamic config update failed")
-      } else
-        reconfigurable.reconfigure(newConfigs)
-    }
+  private def needsReconfiguration(reconfigurable: Reconfigurable, updatedKeys: Set[String]): Boolean = {
+    reconfigurable.reconfigurableConfigs.asScala.intersect(updatedKeys).nonEmpty
   }
+
+  private def processReconfigurable(reconfigurable: Reconfigurable,
+                                    allNewConfigs: util.Map[String, _],
+                                    newCustomConfigs: util.Map[String, Object],
+                                    validateOnly: Boolean): Unit = {
+    val newConfigs = new util.HashMap[String, Object]
+    allNewConfigs.asScala.foreach { case (k, v) => newConfigs.put(k, v.asInstanceOf[AnyRef]) }
+    newConfigs.putAll(newCustomConfigs)
+    if (validateOnly) {
+      if (!reconfigurable.validateReconfiguration(newConfigs))
+        throw new ConfigException("Validation of dynamic config update failed")
+    } else
+      reconfigurable.reconfigure(newConfigs)
+  }
+
+  private def processBrokerReconfigurable(reconfigurable: BrokerReconfigurable,
+                                    oldConfig: KafkaConfig,
+                                    newConfig: KafkaConfig,
+                                    validateOnly: Boolean): Unit = {
+    if (validateOnly) {
+      if (!reconfigurable.validateBrokerReconfiguration(newConfig))
+        throw new ConfigException("Validation of dynamic config update failed")
+    } else
+      reconfigurable.brokerReconfigure(oldConfig, newConfig)
+  }
+}
+
+trait BrokerReconfigurable extends Reconfigurable {
+  override def configure(configs: util.Map[String, _]): Unit = {}
+
+  override def validateReconfiguration(configs: util.Map[String, _]): Boolean = true
+
+  override def reconfigure(configs: util.Map[String, _]): Unit = {}
+
+  def validateBrokerReconfiguration(newConfig: KafkaConfig): Boolean
+
+  def brokerReconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit
 }

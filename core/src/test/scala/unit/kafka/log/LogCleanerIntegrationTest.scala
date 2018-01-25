@@ -242,6 +242,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
     val appends = writeDups(numKeys = 100, numDups = 3, log = log, codec = codec)
     val startSize = log.size
     cleaner.startup()
+    assertEquals(1, cleaner.cleanerCount)
 
     // Verify no cleaning with LogCleanerIoBufferSizeProp=1
     val firstDirty = log.activeSegment.baseOffset
@@ -249,17 +250,30 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
     cleaner.awaitCleaned(topicPartition, firstDirty, maxWaitMs = 10)
     assertTrue("Should not have cleaned", cleaner.cleanerManager.allCleanerCheckpoints.isEmpty)
 
-    // Verify cleaning done with larger LogCleanerIoBufferSizeProp
-    val props = new util.HashMap[String, Any]()
-    props.put(KafkaConfig.LogCleanerThreadsProp, 1)
-    props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, cleaner.currentConfig.dedupeBufferSize)
-    props.put(KafkaConfig.LogCleanerDedupeBufferLoadFactorProp, cleaner.currentConfig.dedupeBufferLoadFactor)
-    props.put(KafkaConfig.LogCleanerIoBufferSizeProp, 100000)
-    props.put(KafkaConfig.MessageMaxBytesProp, cleaner.currentConfig.maxMessageSize)
-    props.put(KafkaConfig.LogCleanerBackoffMsProp, cleaner.currentConfig.backOffMs)
-    props.put(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, cleaner.currentConfig.maxIoBytesPerSecond)
-    cleaner.reconfigure(props)
+    def kafkaConfigWithCleanerConfig(cleanerConfig: CleanerConfig): KafkaConfig = {
+      val props = TestUtils.createBrokerConfig(0, "localhost:2181")
+      props.put(KafkaConfig.LogCleanerThreadsProp, cleanerConfig.numThreads.toString)
+      props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, cleanerConfig.dedupeBufferSize.toString)
+      props.put(KafkaConfig.LogCleanerDedupeBufferLoadFactorProp, cleanerConfig.dedupeBufferLoadFactor.toString)
+      props.put(KafkaConfig.LogCleanerIoBufferSizeProp, cleanerConfig.ioBufferSize.toString)
+      props.put(KafkaConfig.MessageMaxBytesProp, cleanerConfig.maxMessageSize.toString)
+      props.put(KafkaConfig.LogCleanerBackoffMsProp, cleanerConfig.backOffMs.toString)
+      props.put(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, cleanerConfig.maxIoBytesPerSecond.toString)
+      KafkaConfig.fromProps(props)
+    }
 
+    // Verify cleaning done with larger LogCleanerIoBufferSizeProp
+    val oldConfig = kafkaConfigWithCleanerConfig(cleaner.currentConfig)
+    val newConfig = kafkaConfigWithCleanerConfig(CleanerConfig(numThreads = 2,
+      dedupeBufferSize = cleaner.currentConfig.dedupeBufferSize,
+      dedupeBufferLoadFactor = cleaner.currentConfig.dedupeBufferLoadFactor,
+      ioBufferSize = 100000,
+      maxMessageSize = cleaner.currentConfig.maxMessageSize,
+      maxIoBytesPerSecond = cleaner.currentConfig.maxIoBytesPerSecond,
+      backOffMs = cleaner.currentConfig.backOffMs))
+    cleaner.brokerReconfigure(oldConfig, newConfig)
+
+    assertEquals(2, cleaner.cleanerCount)
     checkLastCleaned("log", 0, firstDirty)
     val compactedSize = log.logSegments.map(_.size).sum
     assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)

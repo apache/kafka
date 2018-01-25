@@ -27,16 +27,16 @@ import java.util.concurrent.TimeUnit
 import com.yammer.metrics.core.Gauge
 import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{KafkaConfig, LogDirFailureChannel}
+import kafka.server.{BrokerReconfigurable, KafkaConfig, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.{Reconfigurable, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 
-import scala.collection.mutable
+import scala.collection.{Set, mutable}
 import scala.collection.JavaConverters._
 
 /**
@@ -93,7 +93,8 @@ class LogCleaner(initialConfig: CleanerConfig,
                  val logDirs: Seq[File],
                  val logs: Pool[TopicPartition, Log],
                  val logDirFailureChannel: LogDirFailureChannel,
-                 time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup with Reconfigurable {
+                 time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup with BrokerReconfigurable
+{
 
   /* Log cleaner configuration which may be dynamically updated */
   @volatile private var config = initialConfig
@@ -150,17 +151,16 @@ class LogCleaner(initialConfig: CleanerConfig,
   def shutdown() {
     info("Shutting down the log cleaner.")
     cleaners.foreach(_.shutdown())
+    cleaners.clear()
   }
-
-  override def configure(configs: util.Map[String, _]): Unit = {}
 
   override def reconfigurableConfigs(): util.Set[String] = {
-    LogManager.LogCleanerReconfigurableConfigs.asJava
+    LogCleaner.ReconfigurableConfigs.asJava
   }
 
-  override def validateReconfiguration(configs: util.Map[String, _]): Boolean = {
-    val newConfig = logCleanerConfig(configs)
-    val numThreads = newConfig.numThreads
+  override def validateBrokerReconfiguration(newConfig: KafkaConfig): Boolean = {
+    val newCleanerConfig = LogCleaner.cleanerConfig(newConfig)
+    val numThreads = newCleanerConfig.numThreads
     numThreads >= 1 && numThreads >= config.numThreads / 2 && numThreads <= config.numThreads * 2
   }
 
@@ -168,22 +168,10 @@ class LogCleaner(initialConfig: CleanerConfig,
     * Reconfigure log clean config. This simply stops current log cleaners and creates new ones.
     * That ensures that if any of the cleaners had failed, new cleaners are created to match the new config.
     */
-  override def reconfigure(configs: util.Map[String, _]): Unit = {
-    config = logCleanerConfig(configs)
+  override def brokerReconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
+    config = LogCleaner.cleanerConfig(newConfig)
     shutdown()
     startup()
-  }
-
-  private def logCleanerConfig(configs: util.Map[String, _]): CleanerConfig = {
-    CleanerConfig(numThreads = configs.get(KafkaConfig.LogCleanerThreadsProp).asInstanceOf[Int],
-      dedupeBufferSize = configs.get(KafkaConfig.LogCleanerDedupeBufferSizeProp).asInstanceOf[Long],
-      dedupeBufferLoadFactor = configs.get(KafkaConfig.LogCleanerDedupeBufferLoadFactorProp).asInstanceOf[Double],
-      ioBufferSize = configs.get(KafkaConfig.LogCleanerIoBufferSizeProp).asInstanceOf[Int],
-      maxMessageSize = configs.get(KafkaConfig.MessageMaxBytesProp).asInstanceOf[Int],
-      maxIoBytesPerSecond = configs.get(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp).asInstanceOf[Double],
-      backOffMs = configs.get(KafkaConfig.LogCleanerBackoffMsProp).asInstanceOf[Long],
-      enableCleaner = configs.get(KafkaConfig.LogCleanerEnableProp).asInstanceOf[Boolean],
-      hashAlgorithm = config.hashAlgorithm)
   }
 
   /**
@@ -253,7 +241,10 @@ class LogCleaner(initialConfig: CleanerConfig,
   }
 
   // Only for testing
-  private[kafka] def currentConfig = config
+  private[kafka] def currentConfig: CleanerConfig = config
+
+  // Only for testing
+  private[log] def cleanerCount: Int = cleaners.size
 
   /**
    * The cleaner threads do the actual log cleaning. Each thread processes does its cleaning repeatedly by
@@ -358,6 +349,30 @@ class LogCleaner(initialConfig: CleanerConfig,
         warn("\tFound %d invalid messages during compaction.".format(stats.invalidMessagesRead))
       }
     }
+
+  }
+}
+
+object LogCleaner {
+  val ReconfigurableConfigs = Set(
+    KafkaConfig.LogCleanerThreadsProp,
+    KafkaConfig.LogCleanerDedupeBufferSizeProp,
+    KafkaConfig.LogCleanerDedupeBufferLoadFactorProp,
+    KafkaConfig.LogCleanerIoBufferSizeProp,
+    KafkaConfig.MessageMaxBytesProp,
+    KafkaConfig.LogCleanerIoMaxBytesPerSecondProp,
+    KafkaConfig.LogCleanerBackoffMsProp
+  )
+
+  def cleanerConfig(config: KafkaConfig): CleanerConfig = {
+    CleanerConfig(numThreads = config.logCleanerThreads,
+      dedupeBufferSize = config.logCleanerDedupeBufferSize,
+      dedupeBufferLoadFactor = config.logCleanerDedupeBufferLoadFactor,
+      ioBufferSize = config.logCleanerIoBufferSize,
+      maxMessageSize = config.messageMaxBytes,
+      maxIoBytesPerSecond = config.logCleanerIoMaxBytesPerSecond,
+      backOffMs = config.logCleanerBackoffMs,
+      enableCleaner = config.logCleanerEnable)
 
   }
 }
