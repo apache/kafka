@@ -20,15 +20,15 @@ package kafka.admin
 import java.text.{ParseException, SimpleDateFormat}
 import java.util.{Date, Properties}
 import javax.xml.datatype.DatatypeFactory
-import joptsimple.{OptionParser, OptionSpec}
 
+import joptsimple.{OptionParser, OptionSpec}
 import kafka.api.{OffsetFetchRequest, OffsetFetchResponse, OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.client.ClientUtils
 import kafka.common.{OffsetMetadataAndError, TopicAndPartition}
 import kafka.consumer.SimpleConsumer
+import kafka.network.BlockingChannel
 import kafka.utils._
 import kafka.utils.Implicits._
-
 import org.I0Itec.zkclient.exception.ZkNoNodeException
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
@@ -396,13 +396,15 @@ object ConsumerGroupCommand extends Logging {
       // mapping of consumer id -> list of subscribed topics
       val topicsByConsumerId = zkUtils.getTopicsPerMemberId(group)
 
+      val channel = ClientUtils.channelToOffsetManager(group, zkUtils, channelSocketTimeoutMs, channelRetryBackoffMs)
       var assignmentRows = topicPartitions.flatMap { topicPartition =>
-        val partitionOffsets = getPartitionOffsets(group, List(topicPartition), channelSocketTimeoutMs, channelRetryBackoffMs)
+        val partitionOffsets = getPartitionOffsets(group, List(topicPartition), channelSocketTimeoutMs, channelRetryBackoffMs, channel)
         val consumerId = consumerIdByTopicPartition.get(topicPartition)
         // since consumer id is repeated in client id, leave host and client id empty
         consumerId.foreach(id => groupConsumerIds = groupConsumerIds.filterNot(_ == id))
         collectConsumerAssignment(group, None, List(topicPartition), partitionOffsets.get, consumerId, None, None)
       }
+      channel.disconnect()
 
       assignmentRows ++= groupConsumerIds.sortBy(- consumerTopicPartitions.get(_).size).flatMap { consumerId =>
         topicsByConsumerId(consumerId).flatMap { _ =>
@@ -443,9 +445,9 @@ object ConsumerGroupCommand extends Logging {
     private def getPartitionOffsets(group: String,
                                     topicPartitions: Seq[TopicPartition],
                                     channelSocketTimeoutMs: Int,
-                                    channelRetryBackoffMs: Int): Map[TopicPartition, Long] = {
+                                    channelRetryBackoffMs: Int,
+                                    channel: BlockingChannel): Map[TopicPartition, Long] = {
       val offsetMap = mutable.Map[TopicAndPartition, Long]()
-      val channel = ClientUtils.channelToOffsetManager(group, zkUtils, channelSocketTimeoutMs, channelRetryBackoffMs)
       channel.send(OffsetFetchRequest(group, topicPartitions.map(new TopicAndPartition(_))))
       val offsetFetchResponse = OffsetFetchResponse.readFrom(channel.receive().payload())
 
@@ -468,7 +470,6 @@ object ConsumerGroupCommand extends Logging {
             printError(s"Could not fetch offset from kafka for group '$group' partition '$topicAndPartition' due to ${offsetAndMetadata.error.message}.")
         }
       }
-      channel.disconnect()
       offsetMap.map { case (topicAndPartition, offset) =>
         (new TopicPartition(topicAndPartition.topic, topicAndPartition.partition), offset)
       }.toMap
