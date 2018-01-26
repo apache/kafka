@@ -93,7 +93,7 @@ class LogCleanerTest extends JUnitSuite {
 
   @Test
   def testSizeTrimmedForPreallocatedAndCompactedTopic(): Unit = {
-    val originalMaxFileSize = 1024;
+    val originalMaxFileSize = 1024
     val cleaner = makeCleaner(2)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, originalMaxFileSize: java.lang.Integer)
@@ -114,6 +114,9 @@ class LogCleanerTest extends JUnitSuite {
 
     assertTrue("Cleaned segment file should be trimmed to its real size.",
       log.logSegments.iterator.next.log.channel().size() < originalMaxFileSize)
+
+    time.sleep(log.config.fileDeleteDelayMs + 1)
+    log.close()
   }
 
   @Test
@@ -1159,6 +1162,7 @@ class LogCleanerTest extends JUnitSuite {
     time.scheduler.clear()
     cleanedKeys = keysInLog(log)
     log.close()
+    time.sleep(log.config.fileDeleteDelayMs + 1)
 
     // 4) Simulate recovery after swap is complete, but async deletion
     //    is not yet complete. Clean operation is resumed during recovery.

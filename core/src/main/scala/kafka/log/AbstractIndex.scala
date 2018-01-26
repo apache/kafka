@@ -145,9 +145,9 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * @throws java.io.IOException if rename fails
    */
   def renameTo(f: File) {
-    inLock(lock) {
-      val position = this.mmap.position
-      if(OperatingSystem.IS_WINDOWS)
+    maybeLock(lock) {
+      val position = if (this.mmap == null) 0 else this.mmap.position
+      if (OperatingSystem.IS_WINDOWS && this.mmap != null)
         forceUnmap()
       try {
         Utils.atomicMoveWithFallback(file.toPath, f.toPath)

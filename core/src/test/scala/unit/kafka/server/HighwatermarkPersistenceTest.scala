@@ -16,23 +16,23 @@
 */
 package kafka.server
 
-import kafka.log._
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
+import kafka.cluster.Replica
+import kafka.log._
+import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
+import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Utils
 import org.easymock.EasyMock
-import org.junit._
 import org.junit.Assert._
-import kafka.cluster.Replica
-import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
-import kafka.zk.KafkaZkClient
-import java.util.concurrent.atomic.AtomicBoolean
-
-import org.apache.kafka.common.TopicPartition
+import org.junit._
 
 class HighwatermarkPersistenceTest {
 
+  val time = new MockTime()
   val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps)
   val topic = "foo"
   val zkClient = EasyMock.createMock(classOf[KafkaZkClient])
@@ -46,13 +46,22 @@ class HighwatermarkPersistenceTest {
     new LogDirFailureChannel(config.logDirs.size)
   }
 
+  @Before
+  def setUp() {
+    logManagers.foreach(logManager => {
+      logManager.startup()
+    })
+  }
+
   @After
   def teardown() {
-     logManagers.foreach( logManager => {
-       logManager.shutdown()
-       logManager.allLogs.foreach(_.close())
-       logManager.liveLogDirs.foreach(Utils.delete)
-     })
+    logManagers.foreach(logManager => {
+      logManager.shutdown()
+      logManager.allLogs.foreach(_.close())
+
+      time.sleep(logManager.defaultConfig.fileDeleteDelayMs + 1)
+      logManager.liveLogDirs.foreach(Utils.delete)
+    })
   }
 
   @Test
@@ -141,7 +150,7 @@ class HighwatermarkPersistenceTest {
       // create leader log
       val topic2Log0 = logManagers.head.getOrCreateLog(t2p0, LogConfig())
       // create a local replica for topic2
-      val leaderReplicaTopic2Partition0 =  new Replica(configs.head.brokerId, t2p0, time, 0, Some(topic2Log0))
+      val leaderReplicaTopic2Partition0 = new Replica(configs.head.brokerId, t2p0, time, 0, Some(topic2Log0))
       topic2Partition0.addReplicaIfNotExists(leaderReplicaTopic2Partition0)
       replicaManager.checkpointHighWatermarks()
       var topic2Partition0Hw = hwmFor(replicaManager, topic2, 0)

@@ -54,15 +54,12 @@ class LogManagerTest {
 
   @After
   def tearDown() {
-    if (logManager != null) {
-      logManager.shutdown()
-      logManager.allLogs.foreach(_.close())
+    logManager.shutdown()
+    logManager.allLogs.foreach(_.close())
 
-    }
-
-    Utils.delete(logDir)
-    // Some tests assign a new LogManager
+    time.sleep(logManager.defaultConfig.fileDeleteDelayMs + 1)
     logManager.liveLogDirs.foreach(Utils.delete)
+    Utils.delete(logDir)
   }
 
   /**
