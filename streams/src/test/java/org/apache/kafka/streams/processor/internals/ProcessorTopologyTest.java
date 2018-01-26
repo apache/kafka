@@ -40,6 +40,7 @@ import org.apache.kafka.test.ProcessorTopologyTestDriver;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.File;
@@ -214,6 +215,25 @@ public class ProcessorTopologyTest {
 
         driver = new ProcessorTopologyTestDriver(config, topologyBuilder.internalTopologyBuilder);
         final KeyValueStore<String, String> globalStore = (KeyValueStore<String, String>) topologyBuilder.globalStateStores().get("my-store");
+        driver.process(topic, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(topic, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
+        assertEquals("value1", globalStore.get("key1"));
+        assertEquals("value2", globalStore.get("key2"));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    @Ignore
+    public void shouldDriveInMemoryLoggedGlobalStore() throws Exception {
+        final StateStoreSupplier storeSupplier = Stores.create("my-store")
+                .withStringKeys().withStringValues().inMemory().build();
+        final String global = "global";
+        final String topic = "topic";
+        final KeyValueStore<String, String> globalStore = (KeyValueStore<String, String>) storeSupplier.get();
+        final TopologyBuilder topologyBuilder = this.builder
+                .addGlobalStore(globalStore, global, STRING_DESERIALIZER, STRING_DESERIALIZER, topic, "processor", define(new StatefulProcessor("my-store")));
+
+        driver = new ProcessorTopologyTestDriver(config, topologyBuilder);
         driver.process(topic, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(topic, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
         assertEquals("value1", globalStore.get("key1"));
