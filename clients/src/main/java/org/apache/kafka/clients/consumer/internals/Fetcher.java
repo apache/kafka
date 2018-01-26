@@ -450,6 +450,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
         long startMs = time.milliseconds();
         long remaining = timeout;
+        // Add the topics to the metadata to do a single metadata fetch.
+        for (TopicPartition tp : timestampsToSearch.keySet()) {
+            metadata.add(tp.topic());
+        }
         do {
             RequestFuture<Map<TopicPartition, OffsetData>> future =
                     sendListOffsetRequests(requireTimestamps, timestampsToSearch);
