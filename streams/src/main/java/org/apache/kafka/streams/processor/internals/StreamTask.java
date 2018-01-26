@@ -161,15 +161,18 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     @Override
-    public boolean initialize() {
+    public boolean initializeStateStores() {
         log.trace("Initializing");
-        initializeStateStores();
-        initTopology();
-        processorContext.initialized();
-        taskInitialized = true;
+        initStateStores();
         return changelogPartitions().isEmpty();
     }
 
+    @Override
+    public void initializeTopology() {
+        initTopology();
+        processorContext.initialized();
+        taskInitialized = true;
+    }
 
     /**
      * <pre>
