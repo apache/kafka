@@ -57,9 +57,6 @@ object ConfigCommand extends Config {
 
     val opts = new ConfigCommandOptions(args)
 
-    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity config for a topic, client, user or broker")
-
     opts.checkArgs()
 
     val time = Time.SYSTEM
@@ -280,37 +277,57 @@ object ConfigCommand extends Config {
 
   class ConfigCommandOptions(args: Array[String]) {
     val parser = new OptionParser(false)
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
+    val zkConnectOpt = parser.accepts("zookeeper", "The connection string for the zookeeper connection in the form host:port. " +
             "Multiple URLS can be given to allow fail-over.")
             .withRequiredArg
-            .describedAs("urls")
+            .describedAs("url(s) for the zookeeper connection")
             .ofType(classOf[String])
-    val alterOpt = parser.accepts("alter", "Alter the configuration for the entity.")
-    val describeOpt = parser.accepts("describe", "List configs for the given entity.")
-    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers)")
+            .required
+    val alterOpt = parser.accepts("alter", "Alter the configuration for the entity. This is required unless the user specifies --describe option. The " +
+                                  "entity type must be specified using option --entity-type. " +
+                                  "If --entity-type is clients/users, --entity-name or --entity-default option must be specified. For all other values " +
+                                  "of --entity-type, it is required to specify --entity-name. \nAt least one of options --add-config or --delete-config " +
+                                  "must be specified.")
+    val describeOpt = parser.accepts("describe", "List configurations for the given entity. This is required unless the user specifies --alter option. " +
+                                     "The entity type must be specified using the --entity-type option.")
+    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers). In addition, it is required to specify one of " +
+                                    "the actions - describe/alter.")
             .withRequiredArg
+            .describedAs("type of entity")
             .ofType(classOf[String])
-    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id)")
+            .required
+    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id).")
             .withRequiredArg
+            .describedAs("name of entity")
             .ofType(classOf[String])
-    val entityDefault = parser.accepts("entity-default", "Default entity name for clients/users (applies to corresponding entity type in command line)")
+    val entityDefault = parser.accepts("entity-default", "Default entity name for clients/users (applies to corresponding entity type in command line).")
 
     val nl = System.getProperty("line.separator")
-    val addConfig = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
-            "For entity_type '" + ConfigType.Topic + "': " + LogConfig.configNames.map("\t" + _).mkString(nl, nl, nl) +
-            "For entity_type '" + ConfigType.Broker + "': " + DynamicConfig.Broker.names.asScala.map("\t" + _).mkString(nl, nl, nl) +
-            "For entity_type '" + ConfigType.User + "': " + DynamicConfig.User.names.asScala.map("\t" + _).mkString(nl, nl, nl) +
-            "For entity_type '" + ConfigType.Client + "': " + DynamicConfig.Client.names.asScala.map("\t" + _).mkString(nl, nl, nl) +
+    val addConfig = parser.accepts("add-config", "Key Value pairs of configs to add. This option is used with --alter option. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
+            "For entity-type '" + ConfigType.Topic + "': " + LogConfig.configNames.map("\t" + _).mkString(nl, nl, nl) +
+            "For entity-type '" + ConfigType.Broker + "': " + DynamicConfig.Broker.names.asScala.map("\t" + _).mkString(nl, nl, nl) +
+            "For entity-type '" + ConfigType.User + "': " + DynamicConfig.User.names.asScala.map("\t" + _).mkString(nl, nl, nl) +
+            "For entity-type '" + ConfigType.Client + "': " + DynamicConfig.Client.names.asScala.map("\t" + _).mkString(nl, nl, nl) +
             s"Entity types '${ConfigType.User}' and '${ConfigType.Client}' may be specified together to update config for clients of a specific user.")
             .withRequiredArg
+            .describedAs("configs to add (key-value pairs)")
             .ofType(classOf[String])
-    val deleteConfig = parser.accepts("delete-config", "config keys to remove 'k1,k2'")
+    val deleteConfig = parser.accepts("delete-config", "Config keys to remove 'k1,k2'. This option is used with --alter option.")
             .withRequiredArg
+            .describedAs("config keys to remove")
             .ofType(classOf[String])
             .withValuesSeparatedBy(',')
-    val helpOpt = parser.accepts("help", "Print usage information.")
-    val forceOpt = parser.accepts("force", "Suppress console prompts")
-    val options = parser.parse(args : _*)
+    val helpOpt = parser.accepts("help", "Print usage information.").forHelp
+    val forceOpt = parser.accepts("force", "Suppress console prompts.")
+   
+    var commandDef = "Add/Remove entity configurations for a topic, client, user or broker."
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+
+    val options = CommandLineUtils.tryParse(parser, args)
+    
+    if (options.has("help"))
+       CommandLineUtils.printUsageAndDie(parser, commandDef)
 
     val allOpts: Set[OptionSpec[_]] = Set(alterOpt, describeOpt, entityType, entityName, addConfig, deleteConfig, helpOpt)
 
@@ -318,33 +335,32 @@ object ConfigCommand extends Config {
       // should have exactly one action
       val actions = Seq(alterOpt, describeOpt).count(options.has _)
       if(actions != 1)
-        CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --describe, --alter")
+        throw new IllegalArgumentException("Command must include exactly one action: --describe, --alter.")
 
       // check required args
-      CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, entityType)
       CommandLineUtils.checkInvalidArgs(parser, options, alterOpt, Set(describeOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set(alterOpt, addConfig, deleteConfig))
       val entityTypeVals = options.valuesOf(entityType).asScala
       if(options.has(alterOpt)) {
         if (entityTypeVals.contains(ConfigType.User) || entityTypeVals.contains(ConfigType.Client)) {
           if (!options.has(entityName) && !options.has(entityDefault))
-            throw new IllegalArgumentException("--entity-name or --entity-default must be specified with --alter of users/clients")
+            throw new IllegalArgumentException("--entity-name or --entity-default must be specified with --alter of users/clients.")
         } else if (!options.has(entityName))
-            throw new IllegalArgumentException(s"--entity-name must be specified with --alter of ${entityTypeVals}")
+            throw new IllegalArgumentException(s"--entity-name must be specified with --alter of ${entityTypeVals}.")
 
         val isAddConfigPresent: Boolean = options.has(addConfig)
         val isDeleteConfigPresent: Boolean = options.has(deleteConfig)
-        if(! isAddConfigPresent && ! isDeleteConfigPresent)
-          throw new IllegalArgumentException("At least one of --add-config or --delete-config must be specified with --alter")
+        if(!isAddConfigPresent && !isDeleteConfigPresent)
+          throw new IllegalArgumentException("At least one of --add-config or --delete-config must be specified with --alter.")
       }
       entityTypeVals.foreach(entityTypeVal =>
         if (!ConfigType.all.contains(entityTypeVal))
-          throw new IllegalArgumentException(s"Invalid entity-type ${entityTypeVal}, --entity-type must be one of ${ConfigType.all}")
+          throw new IllegalArgumentException(s"Invalid entity-type ${entityTypeVal}, --entity-type must be one of ${ConfigType.all}.")
       )
       if (entityTypeVals.isEmpty)
-        throw new IllegalArgumentException("At least one --entity-type must be specified")
+        throw new IllegalArgumentException("At least one --entity-type must be specified.")
       else if (entityTypeVals.size > 1 && !entityTypeVals.toSet.equals(Set(ConfigType.User, ConfigType.Client)))
-        throw new IllegalArgumentException(s"Only '${ConfigType.User}' and '${ConfigType.Client}' entity types may be specified together")
+        throw new IllegalArgumentException(s"Only '${ConfigType.User}' and '${ConfigType.Client}' entity types may be specified together.")
     }
   }
 }

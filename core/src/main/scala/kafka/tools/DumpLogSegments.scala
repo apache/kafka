@@ -43,43 +43,48 @@ object DumpLogSegments {
     val verifyOpt = parser.accepts("verify-index-only", "if set, just verify the index log without printing its content.")
     val indexSanityOpt = parser.accepts("index-sanity-check", "if set, just checks the index sanity without printing its content. " +
       "This is the same check that is executed on broker startup to determine if an index needs rebuilding or not.")
-    val filesOpt = parser.accepts("files", "REQUIRED: The comma separated list of data and index log files to be dumped.")
+    val filesOpt = parser.accepts("files", "The comma separated list of data and index log files to be dumped.") 
                            .withRequiredArg
-                           .describedAs("file1, file2, ...")
+                           .describedAs("list of data and index log files. e.g: file1, file2, ...")
                            .ofType(classOf[String])
+                           .required
     val maxMessageSizeOpt = parser.accepts("max-message-size", "Size of largest message.")
                                   .withRequiredArg
-                                  .describedAs("size")
+                                  .describedAs("largest message size (in bytes)")
                                   .ofType(classOf[java.lang.Integer])
                                   .defaultsTo(5 * 1024 * 1024)
-    val deepIterationOpt = parser.accepts("deep-iteration", "if set, uses deep instead of shallow iteration.")
-    val valueDecoderOpt = parser.accepts("value-decoder-class", "if set, used to deserialize the messages. This class should implement kafka.serializer.Decoder trait. Custom jar should be available in kafka/libs directory.")
+    val deepIterationOpt = parser.accepts("deep-iteration", "If set, uses deep instead of shallow iteration.")
+    val valueDecoderOpt = parser.accepts("value-decoder-class", "If set, used to deserialize the messages. This class should implement kafka.serializer.Decoder trait. Custom jar should be available in kafka/libs directory.")
                                .withOptionalArg()
+                               .describedAs("class name to deserialize messages")
                                .ofType(classOf[java.lang.String])
                                .defaultsTo("kafka.serializer.StringDecoder")
-    val keyDecoderOpt = parser.accepts("key-decoder-class", "if set, used to deserialize the keys. This class should implement kafka.serializer.Decoder trait. Custom jar should be available in kafka/libs directory.")
+    val keyDecoderOpt = parser.accepts("key-decoder-class", "If set, used to deserialize the keys. This class should implement kafka.serializer.Decoder trait. Custom jar should be available in kafka/libs directory.")
                                .withOptionalArg()
+                               .describedAs("class name to deserialize keys")
                                .ofType(classOf[java.lang.String])
                                .defaultsTo("kafka.serializer.StringDecoder")
     val offsetsOpt = parser.accepts("offsets-decoder", "if set, log data will be parsed as offset data from the " +
       "__consumer_offsets topic.")
     val transactionLogOpt = parser.accepts("transaction-log-decoder", "if set, log data will be parsed as " +
       "transaction metadata from the __transaction_state topic.")
+    val helpOpt = parser.accepts("help", "Print usage information.").forHelp
+    
+    var commandDef: String = "Parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment."
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
 
-    val helpOpt = parser.accepts("help", "Print usage information.")
+    val options = CommandLineUtils.tryParse(parser, args)
 
-    val options = parser.parse(args : _*)
-
-    if(args.length == 0 || options.has(helpOpt))
-      CommandLineUtils.printUsageAndDie(parser, "Parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
-
-    CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
-
+    if (options.has("help"))
+       CommandLineUtils.printUsageAndDie(parser, commandDef)
+    
     val printDataLog = options.has(printOpt) ||
       options.has(offsetsOpt) ||
       options.has(transactionLogOpt) ||
       options.has(valueDecoderOpt) ||
       options.has(keyDecoderOpt)
+
     val verifyOnly = options.has(verifyOpt)
     val indexSanityOnly = options.has(indexSanityOpt)
 

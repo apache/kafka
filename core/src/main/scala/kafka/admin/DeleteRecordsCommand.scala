@@ -60,7 +60,6 @@ object DeleteRecordsCommand {
     val duplicatePartitions = CoreUtils.duplicates(offsetSeq.map { case (tp, _) => tp })
     if (duplicatePartitions.nonEmpty)
       throw new AdminCommandFailedException("Offset json file contains duplicate topic partitions: %s".format(duplicatePartitions.mkString(",")))
-
     out.println("Executing records delete operation")
     val deleteRecordsResult: Map[TopicPartition, DeleteRecordsResult] = adminClient.deleteRecordsBefore(offsetSeq.toMap).get()
     out.println("Records delete operation completed:")
@@ -84,8 +83,8 @@ object DeleteRecordsCommand {
   }
 
   class DeleteRecordsCommandOptions(args: Array[String]) {
-    val BootstrapServerDoc = "REQUIRED: The server to connect to."
-    val offsetJsonFileDoc = "REQUIRED: The JSON file with offset per partition. The format to use is:\n" +
+    val BootstrapServerDoc = "The server to connect to."
+    val offsetJsonFileDoc = "The JSON file with offset per partition. The format to use is:\n" +
                                  "{\"partitions\":\n  [{\"topic\": \"foo\", \"partition\": 1, \"offset\": 1}],\n \"version\":1\n}"
     val CommandConfigDoc = "A property file containing configs to be passed to Admin Client."
 
@@ -94,16 +93,24 @@ object DeleteRecordsCommand {
                                    .withRequiredArg
                                    .describedAs("server(s) to use for bootstrapping")
                                    .ofType(classOf[String])
+                                   .required
     val offsetJsonFileOpt = parser.accepts("offset-json-file", offsetJsonFileDoc)
                                    .withRequiredArg
-                                   .describedAs("Offset json file path")
+                                   .describedAs("offset json file path")
                                    .ofType(classOf[String])
+                                   .required
     val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
                                    .withRequiredArg
                                    .describedAs("command config property file path")
                                    .ofType(classOf[String])
-
-    val options = parser.parse(args : _*)
-    CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, offsetJsonFileOpt)
+    parser.accepts("help", "Print usage information.").forHelp
+   
+    var commandDef: String = "Delete records of the given partitions down to the specified offset."
+    if (args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
+      
+    val options = CommandLineUtils.tryParse(parser, args)
+    if (options.has("help")) 
+      CommandLineUtils.printUsageAndDie(parser, commandDef)
   }
 }

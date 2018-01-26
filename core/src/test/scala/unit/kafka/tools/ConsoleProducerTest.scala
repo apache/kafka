@@ -17,13 +17,24 @@
 
 package kafka.tools
 
+import kafka.utils.Exit
 import kafka.producer.ProducerConfig
 import ConsoleProducer.LineMessageReader
 import org.apache.kafka.clients.producer.KafkaProducer
-import org.junit.{Assert, Test}
+import org.junit.{After, Assert, Before, Test}
 
 class ConsoleProducerTest {
 
+  @Before
+  def setUp() {
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
+  }
+
+  @After
+  def tearDown() {
+    Exit.resetExitProcedure()
+  }
+  
   val validArgs: Array[String] = Array(
     "--broker-list",
     "localhost:1001,localhost:1002",
@@ -57,12 +68,13 @@ class ConsoleProducerTest {
   }
 
   @Test
-  def testInvalidConfigs() {
+  def testInvalidConfigs() : Unit = {
+    val msg = "t is not a recognized option"
     try {
       new ConsoleProducer.ProducerConfig(invalidArgs)
       Assert.fail("Should have thrown an UnrecognizedOptionException")
     } catch {
-      case _: joptsimple.OptionException => // expected exception
+      case e: Exception => Assert.assertTrue(s"Expected exception with message:\n[$msg]\nbut was\n[${e.getMessage}]", e.getMessage.startsWith(msg))
     }
   }
 

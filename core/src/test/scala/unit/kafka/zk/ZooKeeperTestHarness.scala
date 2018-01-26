@@ -19,7 +19,7 @@ package kafka.zk
 
 import javax.security.auth.login.Configuration
 
-import kafka.utils.{CoreUtils, Logging, TestUtils, ZkUtils}
+import kafka.utils.{CoreUtils, Exit, Logging, TestUtils, ZkUtils}
 import org.junit.{After, AfterClass, Before, BeforeClass}
 import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
@@ -71,6 +71,7 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
       CoreUtils.swallow(zookeeper.shutdown(), this)
     Configuration.setConfiguration(null)
   }
+  Exit.resetExitProcedure()
 }
 
 object ZooKeeperTestHarness {

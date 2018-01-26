@@ -22,21 +22,23 @@ import joptsimple.OptionParser
 
 class PerfConfig(args: Array[String]) {
   val parser = new OptionParser(false)
-  val numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to send or consume")
+  val numMessagesOpt = parser.accepts("messages", "The number of messages to send or consume.")
     .withRequiredArg
-    .describedAs("count")
+    .describedAs("number of messages to send/receive")
     .ofType(classOf[java.lang.Long])
+    .required
   val reportingIntervalOpt = parser.accepts("reporting-interval", "Interval in milliseconds at which to print progress info.")
     .withRequiredArg
-    .describedAs("interval_ms")
+    .describedAs("reporting interval(in ms) for printing progress info")
     .ofType(classOf[java.lang.Integer])
     .defaultsTo(5000)
   val dateFormatOpt = parser.accepts("date-format", "The date format to use for formatting the time field. " +
     "See java.text.SimpleDateFormat for options.")
     .withRequiredArg
-    .describedAs("date format")
+    .describedAs("date format to use for formatting time field")
     .ofType(classOf[String])
     .defaultsTo("yyyy-MM-dd HH:mm:ss:SSS")
-  val hideHeaderOpt = parser.accepts("hide-header", "If set, skips printing the header for the stats ")
-  val helpOpt = parser.accepts("help", "Print usage.")
+  val hideHeaderOpt = parser.accepts("hide-header", "If set, skips printing the header for the stats.")
+  val helpOpt = parser.accepts("help", "Print usage information.")
+    .forHelp
 }
