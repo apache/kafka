@@ -433,7 +433,7 @@ public final class Utils {
      */
     public static String formatBytes(long bytes) {
         if (bytes < 0) {
-            return "" + bytes;
+            return String.valueOf(bytes);
         }
         double asDouble = (double) bytes;
         int ordinal = (int) Math.floor(Math.log(asDouble) / Math.log(1024.0));
@@ -444,7 +444,7 @@ public final class Utils {
             return formatted + " " + BYTE_SCALE_SUFFIXES[ordinal];
         } catch (IndexOutOfBoundsException e) {
             //huge number?
-            return "" + asDouble;
+            return String.valueOf(asDouble);
         }
     }
 
