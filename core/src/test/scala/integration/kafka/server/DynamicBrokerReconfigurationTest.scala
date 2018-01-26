@@ -334,7 +334,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       assertEquals(s"Not reconfigured $logConfigName for existing log", expectedValue,
         log.config.originals.get(logConfigName).toString)
     }
-    consumerThread.waitForRecords(record => record.timestampType == TimestampType.LOG_APPEND_TIME)
+    consumerThread.waitForMatchingRecords(record => record.timestampType == TimestampType.LOG_APPEND_TIME)
 
     // Verify that the new config is actually used for new segments of existing logs
     TestUtils.waitUntilTrue(() => log.logSegments.exists(_.size > 9000), "Log segment size increase not applied")
@@ -350,7 +350,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     props.put(KafkaConfig.LogMessageTimestampTypeProp, TimestampType.CREATE_TIME.toString)
     props.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, "1000")
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogMessageTimestampTypeProp, TimestampType.CREATE_TIME.toString))
-    consumerThread.waitForRecords(record => record.timestampType == TimestampType.CREATE_TIME)
+    consumerThread.waitForMatchingRecords(record => record.timestampType == TimestampType.CREATE_TIME)
 
     // Verify that even though broker defaults can be defined at default cluster level for consistent
     // configuration across brokers, they can also be defined at per-broker level for testing
@@ -631,13 +631,13 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       super.initiateShutdown()
     }
 
-    def waitForRecords(f: ConsumerRecord[String, String] => Boolean): Unit = {
+    def waitForMatchingRecords(predicate: ConsumerRecord[String, String] => Boolean): Unit = {
       TestUtils.waitUntilTrue(() => {
         val records = lastBatch
         if (records == null || records.isEmpty)
           false
         else
-          records.asScala.toList.exists(f)
+          records.asScala.toList.exists(predicate)
       }, "Received records did not match")
     }
   }

@@ -440,13 +440,11 @@ class DynamicLogConfig(logManager: LogManager) extends Reconfigurable with Loggi
     logManager.reconfigureDefaultLogConfig(LogConfig(newBrokerDefaults))
 
     logManager.allLogs.foreach { log =>
-      val props = new Properties
-      newBrokerDefaults.asScala.foreach { case (k, v) => props.put(k, v) }  // add new broker defaults
-      log.config.originals.asScala.filterKeys(log.config.overriddenConfigs.contains).foreach { case (k, v) =>
-        props.put(k, v) // add topic overrides
-      }
+      val props = mutable.Map.empty[Any, Any]
+      props ++= newBrokerDefaults.asScala
+      props ++= log.config.originals.asScala.filterKeys(log.config.overriddenConfigs.contains)
 
-      val logConfig = LogConfig(props)
+      val logConfig = LogConfig(props.asJava)
       log.updateConfig(newBrokerDefaults.asScala.keySet, logConfig)
     }
   }
