@@ -29,6 +29,16 @@ import java.util.Map;
 import java.util.Set;
 
 public interface Task {
+    /**
+     * Initialize the task and return {}true if the task is ready to run, i.e, it has not state stores
+     * @return true if this task has no state stores that may need restoring.
+     * @throws IllegalStateException If store gets registered after initialized is already finished
+     * @throws StreamsException if the store's change log does not contain the partition
+     */
+    boolean initializeStateStores();
+
+    void initializeTopology();
+
     void resume();
 
     void commit();
@@ -68,14 +78,6 @@ public interface Task {
     int addRecords(TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records);
 
     boolean hasStateStores();
-
-    /**
-     * initialize the task and return true if the task is ready to run, i.e, it has not state stores
-     * @return true if this task has no state stores that may need restoring.
-     * @throws IllegalStateException If store gets registered after initialized is already finished
-     * @throws StreamsException if the store's change log does not contain the partition
-     */
-    boolean initialize();
 
     /**
      * @return any changelog partitions associated with this task

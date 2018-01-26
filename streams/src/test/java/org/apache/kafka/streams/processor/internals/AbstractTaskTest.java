@@ -86,7 +86,7 @@ public class AbstractTaskTest {
         final AbstractTask task = createTask(consumer, Collections.singletonList(store));
 
         try {
-            task.initializeStateStores();
+            task.registerStateStores();
             fail("Should have thrown LockException");
         } catch (final LockException e) {
             // ok
@@ -101,7 +101,7 @@ public class AbstractTaskTest {
 
         final AbstractTask task = createTask(consumer, Collections.<StateStore>emptyList());
 
-        task.initializeStateStores();
+        task.registerStateStores();
 
         // should fail if lock is called
         EasyMock.verify(stateDirectory);
@@ -176,10 +176,12 @@ public class AbstractTaskTest {
                 return 0;
             }
 
-            @Override
-            public boolean initialize() {
+            public boolean initializeStateStores() {
                 return false;
             }
+
+            @Override
+            public void initializeTopology() {}
         };
     }
 
