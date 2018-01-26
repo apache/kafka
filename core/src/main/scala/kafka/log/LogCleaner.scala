@@ -154,11 +154,11 @@ class LogCleaner(initialConfig: CleanerConfig,
     cleaners.clear()
   }
 
-  override def reconfigurableConfigs(): util.Set[String] = {
-    LogCleaner.ReconfigurableConfigs.asJava
+  override def reconfigurableConfigs(): Set[String] = {
+    LogCleaner.ReconfigurableConfigs
   }
 
-  override def validateBrokerReconfiguration(newConfig: KafkaConfig): Boolean = {
+  override def validateReconfiguration(newConfig: KafkaConfig): Boolean = {
     val newCleanerConfig = LogCleaner.cleanerConfig(newConfig)
     val numThreads = newCleanerConfig.numThreads
     numThreads >= 1 && numThreads >= config.numThreads / 2 && numThreads <= config.numThreads * 2
@@ -168,7 +168,7 @@ class LogCleaner(initialConfig: CleanerConfig,
     * Reconfigure log clean config. This simply stops current log cleaners and creates new ones.
     * That ensures that if any of the cleaners had failed, new cleaners are created to match the new config.
     */
-  override def brokerReconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
+  override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     config = LogCleaner.cleanerConfig(newConfig)
     shutdown()
     startup()

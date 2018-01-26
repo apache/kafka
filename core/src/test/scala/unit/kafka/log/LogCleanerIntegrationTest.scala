@@ -271,7 +271,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
       maxMessageSize = cleaner.currentConfig.maxMessageSize,
       maxIoBytesPerSecond = cleaner.currentConfig.maxIoBytesPerSecond,
       backOffMs = cleaner.currentConfig.backOffMs))
-    cleaner.brokerReconfigure(oldConfig, newConfig)
+    cleaner.reconfigure(oldConfig, newConfig)
 
     assertEquals(2, cleaner.cleanerCount)
     checkLastCleaned("log", 0, firstDirty)
