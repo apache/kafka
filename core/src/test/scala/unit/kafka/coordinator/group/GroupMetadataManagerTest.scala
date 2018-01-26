@@ -715,6 +715,28 @@ class GroupMetadataManagerTest {
   }
 
   @Test
+  def testDeleteEmptyGroup() {
+    val group = new GroupMetadata(groupId, initialState = Empty)
+    assertEquals(group, groupMetadataManager.addGroup(group))
+
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    mockGetPartition()
+    EasyMock.replay(replicaManager, partition)
+
+    val result = groupMetadataManager.deleteGroups(Seq(group.groupId))
+    assert(result.size == 1 && result.contains(group.groupId) && result.get(group.groupId).contains(Errors.NONE))
+  }
+
+  @Test
+  def testDeleteNonEmptyGroup() {
+    val group = new GroupMetadata(groupId, initialState = Stable)
+    assertEquals(group, groupMetadataManager.addGroup(group))
+
+    val result = groupMetadataManager.deleteGroups(Seq(group.groupId))
+    assert(result.size == 1 && result.contains(group.groupId) && result.get(group.groupId).contains(Errors.NON_EMPTY_GROUP))
+  }
+
+  @Test
   def testStoreEmptyGroup() {
     val generation = 27
     val protocolType = "consumer"

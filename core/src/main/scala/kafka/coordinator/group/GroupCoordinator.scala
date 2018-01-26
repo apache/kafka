@@ -338,6 +338,27 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
+  def handleDeleteGroups(groupIds: Set[String]): (Errors, Map[String, Errors]) = {
+    var groupErrors: Map[String, Errors] = Map()
+    if (!isActive.get)
+      (Errors.COORDINATOR_NOT_AVAILABLE, Map())
+
+    var eligibleGroups: Seq[String] = Seq()
+
+    groupIds.foreach { groupId =>
+      if (!validGroupId(groupId))
+        groupErrors += (groupId -> Errors.INVALID_GROUP_ID)
+      else if (!isCoordinatorForGroup(groupId)) {
+        groupErrors += (groupId -> Errors.NOT_COORDINATOR)
+      } else if (isCoordinatorLoadInProgress(groupId))
+        groupErrors += (groupId -> Errors.COORDINATOR_LOAD_IN_PROGRESS)
+      else
+        eligibleGroups ++= Seq(groupId)
+    }
+
+    (Errors.NONE, groupErrors ++ groupManager.deleteGroups(eligibleGroups))
+  }
+
   def handleHeartbeat(groupId: String,
                       memberId: String,
                       generationId: Int,

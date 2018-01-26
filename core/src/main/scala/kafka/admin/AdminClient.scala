@@ -369,6 +369,36 @@ class AdminClient(val time: Time,
     (response.error, response.tokens().asScala.toList)
   }
 
+  def deleteConsumerGroups(groups: List[String]): Map[String, Errors] = {
+    var errors: Map[String, Errors] = Map()
+    val groupsPerCoordinator = groups.map { group =>
+      try {
+        (group, findCoordinator(group))
+      } catch {
+        case e: Throwable =>
+          errors += (group -> {
+            if (e.isInstanceOf[TimeoutException])
+              Errors.COORDINATOR_NOT_AVAILABLE
+            else
+              Errors.forException(e)
+          })
+          (group, null)
+      }
+    }.groupBy(_._2).map {
+      case (coordinator, groupCoordinator) => (coordinator, groupCoordinator.unzip._1.toArray)
+    }.filter(_._1 != null)
+
+    groupsPerCoordinator.foreach { case (coordinator, groups) =>
+      val responseBody = send(coordinator, ApiKeys.DELETE_GROUPS, new DeleteGroupsRequest.Builder(groups.toSet.asJava))
+      val response = responseBody.asInstanceOf[DeleteGroupsResponse]
+      groups.foreach {
+        case group if (response.hasError(group)) => errors += (group -> response.errors.get(group))
+        case group => errors += (group -> Errors.NONE)
+      }
+    }
+
+    errors
+  }
 
   def close() {
     running = false

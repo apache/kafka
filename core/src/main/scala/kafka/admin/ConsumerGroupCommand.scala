@@ -75,12 +75,8 @@ object ConsumerGroupCommand extends Logging {
         consumerGroupService.listGroups().foreach(println(_))
       else if (opts.options.has(opts.describeOpt))
         consumerGroupService.describeGroup()
-      else if (opts.options.has(opts.deleteOpt)) {
-        consumerGroupService match {
-          case service: ZkConsumerGroupService => service.deleteGroups()
-          case _ => throw new IllegalStateException(s"delete is not supported for $consumerGroupService.")
-        }
-      }
+      else if (opts.options.has(opts.deleteOpt))
+        consumerGroupService.deleteGroups()
       else if (opts.options.has(opts.resetOffsetsOpt)) {
         val offsetsToReset = consumerGroupService.resetOffsets()
         if (opts.options.has(opts.exportOpt)) {
@@ -344,6 +340,8 @@ object ConsumerGroupCommand extends Logging {
     def resetOffsets(): Map[TopicPartition, OffsetAndMetadata] = throw new UnsupportedOperationException
 
     def exportOffsetsToReset(assignmentsToReset: Map[TopicPartition, OffsetAndMetadata]): String = throw new UnsupportedOperationException
+
+    def deleteGroups(): Map[String, Errors]
   }
 
   @deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
@@ -362,13 +360,15 @@ object ConsumerGroupCommand extends Logging {
       zkUtils.getConsumerGroups().toList
     }
 
-    def deleteGroups() {
+    def deleteGroups(): Map[String, Errors] = {
       if (opts.options.has(opts.groupOpt) && opts.options.has(opts.topicOpt))
         deleteForTopic()
       else if (opts.options.has(opts.groupOpt))
         deleteForGroup()
       else if (opts.options.has(opts.topicOpt))
         deleteAllForTopic()
+
+      Map()
     }
 
     def collectGroupOffsets(): (Option[String], Option[Seq[PartitionAssignmentState]]) = {
@@ -803,6 +803,27 @@ object ConsumerGroupCommand extends Logging {
       rows.foldRight("")(_ + "\n" + _)
     }
 
+    override def deleteGroups(): Map[String, Errors] = {
+      val groupsToDelete = opts.options.valuesOf(opts.groupOpt).asScala.toList
+      val result = adminClient.deleteConsumerGroups(groupsToDelete)
+      val successfullyDeleted = result.filter {
+        case (group, error) => error == Errors.NONE
+      }.keySet
+
+      if (successfullyDeleted.size == result.size)
+        println(s"Deletion of requested consumer groups (${successfullyDeleted.mkString("'", ", ", "'")}) was successful.")
+      else {
+        printError("Deletion of some consumer groups failed:")
+        result.foreach {
+          case (group, error) if error != Errors.NONE => println(s"* Group '$group' could not be deleted due to: ${error.toString}")
+          case _ => // no need to print successful deletions individually
+        }
+        if (successfullyDeleted.nonEmpty)
+          println(s"\nThese consumer groups were deleted successfully: ${successfullyDeleted.mkString("'", ", ", "'")}")
+      }
+
+      result
+    }
   }
 
   sealed trait LogOffsetResult
@@ -960,10 +981,9 @@ object ConsumerGroupCommand extends Logging {
             s"The new consumer is used by default if the $bootstrapServerOpt option is provided.")
         }
 
-        if (options.has(deleteOpt))
-          CommandLineUtils.printUsageAndDie(parser, s"Option $deleteOpt is only valid with $zkConnectOpt. Note that " +
-            "there is no need to delete group metadata for the new consumer as the group is deleted when the last " +
-            "committed offset for that group expires.")
+        if (options.has(deleteOpt) && options.has(topicOpt))
+          CommandLineUtils.printUsageAndDie(parser, s"When deleting a consumer group the option $topicOpt is only " +
+            s"valid with $zkConnectOpt. The new consumer does not support topic-specific offset deletion from a consumer group.")
       }
 
       if (describeOptPresent)
