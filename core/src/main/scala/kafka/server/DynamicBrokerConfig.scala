@@ -22,7 +22,7 @@ import java.util
 import java.util.Properties
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import kafka.log.{LogCleaner, LogConfig}
+import kafka.log.{LogCleaner, LogConfig, LogManager}
 import kafka.server.DynamicBrokerConfig._
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -131,7 +131,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   def addReconfigurables(kafkaServer: KafkaServer): Unit = {
     if (kafkaServer.logManager.cleaner != null)
       addBrokerReconfigurable(kafkaServer.logManager.cleaner)
-    addReconfigurable(new DynamicLogConfig(kafkaServer))
+    addReconfigurable(new DynamicLogConfig(kafkaServer.logManager))
   }
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
@@ -405,13 +405,13 @@ trait BrokerReconfigurable {
 
 object DynamicLogConfig {
   // Exclude message.format.version for now since we need to check that the version
-  //  is supported on all brokers in the cluster.
+  // is supported on all brokers in the cluster.
   val ExcludedConfigs = Set(KafkaConfig.LogMessageFormatVersionProp)
 
   val ReconfigurableConfigs = LogConfig.TopicConfigSynonyms.values.toSet -- ExcludedConfigs
   val KafkaConfigToLogConfigName = LogConfig.TopicConfigSynonyms.map { case (k, v) => (v, k) }
 }
-class DynamicLogConfig(server: KafkaServer) extends Reconfigurable with Logging {
+class DynamicLogConfig(logManager: LogManager) extends Reconfigurable with Logging {
 
   override def configure(configs: util.Map[String, _]): Unit = {}
 
@@ -427,17 +427,16 @@ class DynamicLogConfig(server: KafkaServer) extends Reconfigurable with Logging 
   }
 
   override def reconfigure(configs: util.Map[String, _]): Unit = {
-    val currentLogConfig = server.logManager.currentDefaultConfig
+    val currentLogConfig = logManager.currentDefaultConfig
     val newBrokerDefaults = new util.HashMap[String, Object](currentLogConfig.originals)
     configs.asScala.filterKeys(DynamicLogConfig.ReconfigurableConfigs.contains).foreach { case (k, v) =>
       if (v != null) {
-        DynamicLogConfig.KafkaConfigToLogConfigName.get(k.asInstanceOf[String]).foreach { configName =>
+        DynamicLogConfig.KafkaConfigToLogConfigName.get(k).foreach { configName =>
           newBrokerDefaults.put(configName, v.asInstanceOf[AnyRef])
         }
       }
     }
 
-    val logManager = server.logManager
     logManager.reconfigureDefaultLogConfig(LogConfig(newBrokerDefaults))
 
     logManager.allLogs.foreach { log =>
@@ -448,14 +447,7 @@ class DynamicLogConfig(server: KafkaServer) extends Reconfigurable with Logging 
       }
 
       val logConfig = LogConfig(props)
-
-      if ((props.containsKey(LogConfig.RetentionMsProp)
-        || props.containsKey(LogConfig.MessageTimestampDifferenceMaxMsProp))
-        && logConfig.retentionMs < logConfig.messageTimestampDifferenceMaxMs)
-        warn(s"${LogConfig.RetentionMsProp} for topic ${log.topicPartition.topic} is set to ${logConfig.retentionMs}. " +
-          s"It is smaller than ${LogConfig.MessageTimestampDifferenceMaxMsProp}'s value " +
-          s"${logConfig.messageTimestampDifferenceMaxMs}. This may result in frequent log rolling.")
-      log.config = logConfig
+      log.updateConfig(newBrokerDefaults.asScala.keySet, logConfig)
     }
   }
 }

@@ -50,7 +50,7 @@ import scala.collection.mutable.ArrayBuffer
 class LogManager(logDirs: Seq[File],
                  initialOfflineDirs: Seq[File],
                  val topicConfigs: Map[String, LogConfig], // note that this doesn't get updated after creation
-                 val defaultConfig: LogConfig, // note that these defaults may be altered
+                 val initialDefaultConfig: LogConfig, // note that these defaults may be altered
                  val cleanerConfig: CleanerConfig,
                  ioThreads: Int,
                  val flushCheckMs: Long,
@@ -78,7 +78,7 @@ class LogManager(logDirs: Seq[File],
   private val logsToBeDeleted = new LinkedBlockingQueue[Log]()
 
   private val _liveLogDirs: ConcurrentLinkedQueue[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
-  @volatile var currentDefaultConfig = defaultConfig
+  @volatile var currentDefaultConfig = initialDefaultConfig
 
   def reconfigureDefaultLogConfig(logConfig: LogConfig): Unit = {
     this.currentDefaultConfig = logConfig
@@ -391,11 +391,10 @@ class LogManager(logDirs: Seq[File],
                          delay = InitialTaskDelayMs,
                          period = flushStartOffsetCheckpointMs,
                          TimeUnit.MILLISECONDS)
-      scheduler.schedule("kafka-delete-logs",
+      scheduler.schedule("kafka-delete-logs", // will be rescheduled after each delete logs with a dynamic period
                          deleteLogs _,
                          delay = InitialTaskDelayMs,
-                         period = -1, // will be rescheduled after each delete logs with a dynamic period
-                         TimeUnit.MILLISECONDS)
+                         unit = TimeUnit.MILLISECONDS)
     }
     if (cleanerConfig.enableCleaner)
       cleaner.startup()
@@ -718,12 +717,13 @@ class LogManager(logDirs: Seq[File],
         scheduler.schedule("kafka-delete-logs",
           deleteLogs _,
           delay = currentDefaultConfig.fileDeleteDelayMs,
-          period = -1,
-          TimeUnit.MILLISECONDS)
+          unit = TimeUnit.MILLISECONDS)
       } catch {
         case e: Throwable =>
-          if (scheduler.isStarted)
+          if (scheduler.isStarted) {
+            // No errors should occur unless scheduler has been shutdown
             error(s"Failed to schedule next delete in kafka-delete-logs thread", e)
+          }
       }
     }
   }
@@ -919,7 +919,7 @@ object LogManager {
     new LogManager(logDirs = config.logDirs.map(new File(_).getAbsoluteFile),
       initialOfflineDirs = initialOfflineDirs.map(new File(_).getAbsoluteFile),
       topicConfigs = topicConfigs,
-      defaultConfig = defaultLogConfig,
+      initialDefaultConfig = defaultLogConfig,
       cleanerConfig = cleanerConfig,
       ioThreads = config.numRecoveryThreadsPerDataDir,
       flushCheckMs = config.logFlushSchedulerIntervalMs,
