@@ -61,21 +61,20 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
 
         @Override
         public void process(K key, V value) {
-            // If the key is null we don't need to proceed
-            if (key == null)
+            // If the key or value is null we don't need to proceed
+            if (key == null || value == null)
                 return;
 
             V oldAgg = store.get(key);
             V newAgg = oldAgg;
 
             // try to add the new value
-            if (value != null) {
-                if (newAgg == null) {
-                    newAgg = value;
-                } else {
-                    newAgg = reducer.apply(newAgg, value);
-                }
+            if (newAgg == null) {
+                newAgg = value;
+            } else {
+                newAgg = reducer.apply(newAgg, value);
             }
+            
             // update the store with the new value
             store.put(key, newAgg);
             tupleForwarder.maybeForward(key, newAgg, oldAgg);
