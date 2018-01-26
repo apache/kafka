@@ -34,6 +34,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Connect plugin utility methods.
@@ -208,7 +209,7 @@ public class PluginUtils {
      */
     public static List<Path> pluginUrls(Path topPath) throws IOException {
         boolean containsClassFiles = false;
-        Set<Path> archives = new HashSet<>();
+        Set<Path> archives = new TreeSet<>();
         LinkedList<DirectoryEntry> dfs = new LinkedList<>();
         Set<Path> visited = new HashSet<>();
 
