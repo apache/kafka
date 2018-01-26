@@ -147,13 +147,17 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     @Override
-    public boolean initialize() {
-        log.trace("Initializing");
-        initializeStateStores();
+    public boolean initializeStateStores() {
+        log.trace("Initializing state stores");
+        initStateStores();
+        return changelogPartitions().isEmpty();
+    }
+
+    @Override
+    public void initializeTopology() {
         initTopology();
         processorContext.initialized();
         taskInitialized = true;
-        return changelogPartitions().isEmpty();
     }
 
     /**

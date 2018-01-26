@@ -66,6 +66,21 @@ public class StandbyTask extends AbstractTask {
         processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
     }
 
+    @Override
+    public boolean initializeStateStores() {
+        log.trace("Initializing state stores");
+        initStateStores();
+        checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
+        processorContext.initialized();
+        taskInitialized = true;
+        return true;
+    }
+
+    @Override
+    public void initializeTopology() {
+        //no-op
+    }
+
     /**
      * <pre>
      * - update offset limits

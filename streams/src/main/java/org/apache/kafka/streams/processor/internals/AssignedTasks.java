@@ -86,7 +86,7 @@ class AssignedTasks<T extends AbstractTask> {
         for (final Iterator<Map.Entry<TaskId, T>> it = created.entrySet().iterator(); it.hasNext(); ) {
             final Map.Entry<TaskId, T> entry = it.next();
             try {
-                if (!entry.getValue().initialize()) {
+                if (!entry.getValue().initializeStateStores()) {
                     log.debug("{} transitioning {} {} to restoring", logPrefix, taskTypeName, entry.getKey());
                     restoring.put(entry.getKey(), entry.getValue());
                 } else {
@@ -238,6 +238,7 @@ class AssignedTasks<T extends AbstractTask> {
     private void transitionToRunning(final T task) {
         log.debug("{} transitioning {} {} to running", logPrefix, taskTypeName, task.id());
         running.put(task.id(), task);
+        task.initializeTopology();
         for (TopicPartition topicPartition : task.partitions()) {
             runningByPartition.put(topicPartition, task);
         }

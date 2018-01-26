@@ -194,7 +194,12 @@ public abstract class AbstractTask {
         stateMgr.flush();
     }
 
-    void initializeStateStores() {
+    /**
+     * @throws StreamsException if the store's change log does not contain the partition
+     *
+     * Package-private for testing only
+     */
+    void initStateStores() {
         if (topology.stateStores().isEmpty()) {
             return;
         }
@@ -248,10 +253,12 @@ public abstract class AbstractTask {
     }
 
     /**
-     * initialize the topology/state stores
+     * initialize the state stores
      * @return true if the topology is ready to run, i.e, all stores have been restored.
      */
-    public abstract boolean initialize();
+    public abstract boolean initializeStateStores();
+
+    public abstract void initializeTopology();
 
     abstract boolean process();
 
