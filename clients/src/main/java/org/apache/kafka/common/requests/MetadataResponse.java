@@ -464,6 +464,10 @@ public class MetadataResponse extends AbstractResponse {
             return partition;
         }
 
+        public int leaderId() {
+            return leader == null ? -1 : leader.id();
+        }
+
         public Node leader() {
             return leader;
         }
@@ -482,7 +486,7 @@ public class MetadataResponse extends AbstractResponse {
 
         @Override
         public String toString() {
-            return "(type=PartitionMetadata," +
+            return "(type=PartitionMetadata" +
                     ", error=" + error +
                     ", partition=" + partition +
                     ", leader=" + leader +
@@ -531,7 +535,7 @@ public class MetadataResponse extends AbstractResponse {
                 Struct partitionData = topicData.instance(PARTITION_METADATA_KEY_NAME);
                 partitionData.set(ERROR_CODE, partitionMetadata.error.code());
                 partitionData.set(PARTITION_ID, partitionMetadata.partition);
-                partitionData.set(LEADER_KEY_NAME, partitionMetadata.leader.id());
+                partitionData.set(LEADER_KEY_NAME, partitionMetadata.leaderId());
                 ArrayList<Integer> replicas = new ArrayList<>(partitionMetadata.replicas.size());
                 for (Node node : partitionMetadata.replicas)
                     replicas.add(node.id());
