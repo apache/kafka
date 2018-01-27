@@ -198,6 +198,12 @@ public class MockClient implements KafkaClient {
             if (metadataUpdate == null)
                 metadata.update(metadata.fetch(), this.unavailableTopics, time.milliseconds());
             else {
+                if (metadataUpdate.expectMatchRefreshTopics
+                    && !metadata.topics().equals(metadataUpdate.cluster.topics())) {
+                    throw new IllegalStateException("The metadata topics does not match expectation. "
+                                                        + "Expected topics: " + metadataUpdate.cluster.topics()
+                                                        + ", asked topics: " + metadata.topics());
+                }
                 this.unavailableTopics = metadataUpdate.unavailableTopics;
                 metadata.update(metadataUpdate.cluster, metadataUpdate.unavailableTopics, time.milliseconds());
             }
@@ -344,7 +350,13 @@ public class MockClient implements KafkaClient {
     }
 
     public void prepareMetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
-        metadataUpdates.add(new MetadataUpdate(cluster, unavailableTopics));
+        metadataUpdates.add(new MetadataUpdate(cluster, unavailableTopics, false));
+    }
+
+    public void prepareMetadataUpdate(Cluster cluster,
+                                      Set<String> unavailableTopics,
+                                      boolean expectMatchMetadataTopics) {
+        metadataUpdates.add(new MetadataUpdate(cluster, unavailableTopics, expectMatchMetadataTopics));
     }
 
     public void setNode(Node node) {
@@ -433,9 +445,11 @@ public class MockClient implements KafkaClient {
     private static class MetadataUpdate {
         final Cluster cluster;
         final Set<String> unavailableTopics;
-        MetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
+        final boolean expectMatchRefreshTopics;
+        MetadataUpdate(Cluster cluster, Set<String> unavailableTopics, boolean expectMatchRefreshTopics) {
             this.cluster = cluster;
             this.unavailableTopics = unavailableTopics;
+            this.expectMatchRefreshTopics = expectMatchRefreshTopics;
         }
     }
 }
