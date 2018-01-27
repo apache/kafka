@@ -513,7 +513,7 @@ for ( sv in availableScalaVersions ) {
 }
 
 def connectPkgs = ['connect:api', 'connect:runtime', 'connect:transforms', 'connect:json', 'connect:file']
-def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams', 'streams:examples'] + connectPkgs
+def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'testkit', 'streams', 'streams:examples'] + connectPkgs
 
 /** Create one task per default Scala version */
 def withDefScalaVersions(taskName) {
@@ -852,6 +852,48 @@ project(':clients') {
     include "**/org/apache/kafka/common/config/*"
     include "**/org/apache/kafka/common/security/auth/*"
     include "**/org/apache/kafka/server/policy/*"
+  }
+}
+
+project(':testkit') {
+  archivesBaseName = "kafka-testkit"
+
+  dependencies {
+    compile project(':core')
+    compile project(':clients')
+    compile project(':log4j-appender')
+    compile libs.slf4jApi
+
+    testCompile project(':clients')
+    testCompile libs.junit
+    testCompile project(':clients').sourceSets.test.output
+    testCompile libs.easymock
+    testCompile libs.powermockJunit4
+    testCompile libs.powermockEasymock
+
+    testRuntime libs.slf4jlog4j
+
+    compile(libs.zkclient) {
+      exclude module: 'zookeeper'
+    }
+    compile(libs.zookeeper) {
+      exclude module: 'slf4j-log4j12'
+      exclude module: 'log4j'
+      exclude module: 'netty'
+    }
+  }
+
+  tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+      include('log4j*jar')
+    }
+    into "$buildDir/dependant-libs"
+    duplicatesStrategy 'exclude'
+  }
+
+  jar {
+    dependsOn 'copyDependantLibs'
   }
 }
 

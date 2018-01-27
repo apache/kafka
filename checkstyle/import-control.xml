@@ -172,6 +172,14 @@
     <allow pkg="org.apache.kafka.test" />
   </subpackage>
 
+  <subpackage name="testkit">
+    <allow pkg="kafka.metrics" />
+    <allow pkg="kafka.server" />
+    <allow pkg="org.apache.kafka.common" />
+    <allow pkg="org.apache.zookeeper" />
+    <allow pkg="scala" />
+  </subpackage>
+
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.clients.admin" />
