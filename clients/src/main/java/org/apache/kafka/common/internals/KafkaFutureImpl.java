@@ -146,6 +146,41 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         return future;
     }
 
+    private static class WhenCompleteBiConsumer<T> extends BiConsumer<T, Throwable> {
+        private final KafkaFutureImpl<T> future;
+        private final BiConsumer<T, Throwable> biConsumer;
+
+        WhenCompleteBiConsumer(KafkaFutureImpl<T> future, BiConsumer<T, Throwable> biConsumer) {
+            this.future = future;
+            this.biConsumer = biConsumer;
+        }
+
+        @Override
+        public void accept(T val, Throwable exception) {
+            try {
+                if (exception != null) {
+                    biConsumer.accept(null, exception);
+                } else {
+                    biConsumer.accept(val, null);
+                }
+            } catch (Throwable e) {
+                exception = e;
+            }
+            if (exception != null) {
+                future.completeExceptionally(exception);
+            } else {
+                future.complete(val);
+            }
+        }
+    }
+
+    @Override
+    public <T> KafkaFuture<T> whenComplete(final BiConsumer<? super T, ? super Throwable> biConsumer) {
+        final KafkaFutureImpl<T> future = new KafkaFutureImpl<T>();
+        addWaiter(new WhenCompleteBiConsumer(future, biConsumer));
+        return future;
+    }
+
     @Override
     protected synchronized void addWaiter(BiConsumer<? super T, ? super Throwable> action) {
         if (exception != null) {
