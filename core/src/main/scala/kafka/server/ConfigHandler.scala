@@ -56,18 +56,11 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     if (logs.nonEmpty) {
       /* combine the default properties with the overrides in zk to create the new LogConfig */
       val props = new Properties()
-      props ++= logManager.defaultConfig.originals.asScala
       topicConfig.asScala.foreach { case (key, value) =>
         if (!configNamesToExclude.contains(key)) props.put(key, value)
       }
-      val logConfig = LogConfig(props)
-      if ((topicConfig.containsKey(LogConfig.RetentionMsProp)
-        || topicConfig.containsKey(LogConfig.MessageTimestampDifferenceMaxMsProp))
-        && logConfig.retentionMs < logConfig.messageTimestampDifferenceMaxMs)
-        warn(s"${LogConfig.RetentionMsProp} for topic $topic is set to ${logConfig.retentionMs}. It is smaller than " +
-          s"${LogConfig.MessageTimestampDifferenceMaxMsProp}'s value ${logConfig.messageTimestampDifferenceMaxMs}. " +
-          s"This may result in frequent log rolling.")
-      logs.foreach(_.config = logConfig)
+      val logConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
+      logs.foreach(_.updateConfig(topicConfig.asScala.keySet, logConfig))
     }
 
     def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager) = {

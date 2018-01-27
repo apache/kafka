@@ -22,7 +22,7 @@ import java.util
 import java.util.Properties
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import kafka.log.LogCleaner
+import kafka.log.{LogCleaner, LogConfig, LogManager}
 import kafka.server.DynamicBrokerConfig._
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -79,6 +79,7 @@ object DynamicBrokerConfig {
   val AllDynamicConfigs = mutable.Set[String]()
   AllDynamicConfigs ++= DynamicSecurityConfigs
   AllDynamicConfigs ++= LogCleaner.ReconfigurableConfigs
+  AllDynamicConfigs ++= DynamicLogConfig.ReconfigurableConfigs
 
   private val PerBrokerConfigs = DynamicSecurityConfigs
 
@@ -130,6 +131,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   def addReconfigurables(kafkaServer: KafkaServer): Unit = {
     if (kafkaServer.logManager.cleaner != null)
       addBrokerReconfigurable(kafkaServer.logManager.cleaner)
+    addReconfigurable(new DynamicLogConfig(kafkaServer.logManager))
   }
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
@@ -399,4 +401,51 @@ trait BrokerReconfigurable {
   def validateReconfiguration(newConfig: KafkaConfig): Boolean
 
   def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit
+}
+
+object DynamicLogConfig {
+  // Exclude message.format.version for now since we need to check that the version
+  // is supported on all brokers in the cluster.
+  val ExcludedConfigs = Set(KafkaConfig.LogMessageFormatVersionProp)
+
+  val ReconfigurableConfigs = LogConfig.TopicConfigSynonyms.values.toSet -- ExcludedConfigs
+  val KafkaConfigToLogConfigName = LogConfig.TopicConfigSynonyms.map { case (k, v) => (v, k) }
+}
+class DynamicLogConfig(logManager: LogManager) extends Reconfigurable with Logging {
+
+  override def configure(configs: util.Map[String, _]): Unit = {}
+
+  override def reconfigurableConfigs(): util.Set[String] = {
+    DynamicLogConfig.ReconfigurableConfigs.asJava
+  }
+
+  override def validateReconfiguration(configs: util.Map[String, _]): Boolean = {
+    // For update of topic config overrides, only config names and types are validated
+    // Names and types have already been validated. For consistency with topic config
+    // validation, no additional validation is performed.
+    true
+  }
+
+  override def reconfigure(configs: util.Map[String, _]): Unit = {
+    val currentLogConfig = logManager.currentDefaultConfig
+    val newBrokerDefaults = new util.HashMap[String, Object](currentLogConfig.originals)
+    configs.asScala.filterKeys(DynamicLogConfig.ReconfigurableConfigs.contains).foreach { case (k, v) =>
+      if (v != null) {
+        DynamicLogConfig.KafkaConfigToLogConfigName.get(k).foreach { configName =>
+          newBrokerDefaults.put(configName, v.asInstanceOf[AnyRef])
+        }
+      }
+    }
+
+    logManager.reconfigureDefaultLogConfig(LogConfig(newBrokerDefaults))
+
+    logManager.allLogs.foreach { log =>
+      val props = mutable.Map.empty[Any, Any]
+      props ++= newBrokerDefaults.asScala
+      props ++= log.config.originals.asScala.filterKeys(log.config.overriddenConfigs.contains)
+
+      val logConfig = LogConfig(props.asJava)
+      log.updateConfig(newBrokerDefaults.asScala.keySet, logConfig)
+    }
+  }
 }
