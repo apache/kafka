@@ -290,6 +290,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         Mx4jLoader.maybeLoad()
 
+        /* Add all reconfigurables for config change notification before starting config handlers */
+        config.dynamicConfig.addReconfigurables(this)
+
         /* start dynamic config manager */
         dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers),
                                                            ConfigType.Client -> new ClientIdConfigHandler(quotaManagers),

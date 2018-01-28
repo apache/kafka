@@ -1022,7 +1022,7 @@ object TestUtils extends Logging {
     new LogManager(logDirs = logDirs,
                    initialOfflineDirs = Array.empty[File],
                    topicConfigs = Map(),
-                   defaultConfig = defaultConfig,
+                   initialDefaultConfig = defaultConfig,
                    cleanerConfig = cleanerConfig,
                    ioThreads = 4,
                    flushCheckMs = 1000L,

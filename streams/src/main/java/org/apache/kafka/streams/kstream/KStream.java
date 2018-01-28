@@ -2365,9 +2365,9 @@ public interface KStream<K, V> {
      *
      * @param table    the {@link KTable} to be joined with this stream
      * @param joiner   a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param keySerde key serdes for materializing this stream.
+     * @param keySerde key serdes for materializing this ({@link KStream} input) stream
      *                 If not specified the default serdes defined in the configs will be used
-     * @param valSerde value serdes for materializing this stream,
+     * @param valSerde value serdes for materializing this ({@link KStream} input) stream,
      *                 if not specified the default serdes defined in the configs will be used
      * @param <VT>     the value type of the table
      * @param <VR>     the value type of the result stream
@@ -2604,9 +2604,9 @@ public interface KStream<K, V> {
      *
      * @param table    the {@link KTable} to be joined with this stream
      * @param joiner   a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param keySerde key serdes for materializing this stream.
+     * @param keySerde key serdes for materializing this ({@link KStream} input) stream
      *                 If not specified the default serdes defined in the configs will be used
-     * @param valSerde value serdes for materializing this stream,
+     * @param valSerde value serdes for materializing this ({@link KStream} input) stream,
      *                 if not specified the default serdes defined in the configs will be used
      * @param <VT>     the value type of the table
      * @param <VR>     the value type of the result stream

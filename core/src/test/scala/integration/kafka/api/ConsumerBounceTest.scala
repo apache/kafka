@@ -104,7 +104,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     val scheduler = new BounceBrokerScheduler(numIters)
     scheduler.start()
 
-    while (scheduler.isRunning.get()) {
+    while (scheduler.isRunning) {
       val records = consumer.poll(100).asScala
       assertEquals(Set(tp), consumer.assignment.asScala)
 
@@ -146,7 +146,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     val scheduler = new BounceBrokerScheduler(numIters)
     scheduler.start()
 
-    while(scheduler.isRunning.get()) {
+    while(scheduler.isRunning) {
       val coin = TestUtils.random.nextInt(3)
       if (coin == 0) {
         info("Seeking to end of log")

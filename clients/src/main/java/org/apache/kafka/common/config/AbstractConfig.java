@@ -289,9 +289,7 @@ public class AbstractConfig {
      */
     public <T> List<T> getConfiguredInstances(String key, Class<T> t, Map<String, Object> configOverrides) {
         List<String> klasses = getList(key);
-        List<T> objects = new ArrayList<T>();
-        if (klasses == null)
-            return objects;
+        List<T> objects = new ArrayList<>();
         Map<String, Object> configPairs = originals();
         configPairs.putAll(configOverrides);
         for (Object klass : klasses) {

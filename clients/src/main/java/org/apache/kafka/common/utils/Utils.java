@@ -54,6 +54,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -432,7 +433,7 @@ public final class Utils {
      */
     public static String formatBytes(long bytes) {
         if (bytes < 0) {
-            return "" + bytes;
+            return String.valueOf(bytes);
         }
         double asDouble = (double) bytes;
         int ordinal = (int) Math.floor(Math.log(asDouble) / Math.log(1024.0));
@@ -443,7 +444,7 @@ public final class Utils {
             return formatted + " " + BYTE_SCALE_SUFFIXES[ordinal];
         } catch (IndexOutOfBoundsException e) {
             //huge number?
-            return "" + asDouble;
+            return String.valueOf(asDouble);
         }
     }
 
@@ -464,6 +465,7 @@ public final class Utils {
      * @return The string representation.
      */
     public static <T> String join(Collection<T> list, String separator) {
+        Objects.requireNonNull(list);
         StringBuilder sb = new StringBuilder();
         Iterator<T> iter = list.iterator();
         while (iter.hasNext()) {

@@ -65,7 +65,8 @@ object Defaults {
   val MaxIdMapSnapshots = kafka.server.Defaults.MaxIdMapSnapshots
 }
 
-case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
+case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] = Set.empty)
+  extends AbstractConfig(LogConfig.configDef, props, false) {
   /**
    * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
    * should also go in [[kafka.server.KafkaServer.copyKafkaConfigToLog]].
@@ -276,7 +277,8 @@ object LogConfig {
     val props = new Properties()
     defaults.asScala.foreach { case (k, v) => props.put(k, v) }
     props ++= overrides
-    LogConfig(props)
+    val overriddenKeys = overrides.keySet.asScala.map(_.asInstanceOf[String]).toSet
+    new LogConfig(props, overriddenKeys)
   }
 
   /**
