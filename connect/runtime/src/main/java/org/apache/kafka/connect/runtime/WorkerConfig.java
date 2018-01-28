@@ -70,7 +70,8 @@ public class WorkerConfig extends AbstractConfig {
                     " Examples of common formats include JSON and Avro." +
                     " This setting controls the format used for internal bookkeeping data used by the framework, such as" +
                     " configs and offsets, so users can typically use any functioning Converter implementation." +
-                    " This config is deprecated, refer KAFKA-5540";
+                    " The JSON converter should always be used with schemas disabled, and this is now the default. This property" +
+                    " is currently deprecated and it will be removed in a future version, refer KAFKA-5540";
     @Deprecated
     public static final String INTERNAL_VALUE_CONVERTER_CLASS_CONFIG = "internal.value.converter";
     public static final String INTERNAL_VALUE_CONVERTER_CLASS_DOC =
@@ -80,7 +81,8 @@ public class WorkerConfig extends AbstractConfig {
                     " Examples of common formats include JSON and Avro." +
                     " This setting controls the format used for internal bookkeeping data used by the framework, such as" +
                     " configs and offsets, so users can typically use any functioning Converter implementation." +
-                    " This config is deprecated, refer KAFKA-5540";
+                    " The JSON converter should always be used with schemas disabled, and this is now the default. This property" +
+                    " is currently deprecated and it will be removed in a future version, refer KAFKA-5540";
 
     public static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG
             = "task.shutdown.graceful.timeout.ms";

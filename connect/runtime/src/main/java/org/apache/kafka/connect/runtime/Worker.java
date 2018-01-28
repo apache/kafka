@@ -32,6 +32,7 @@ import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -102,13 +103,38 @@ public class Worker {
         this.workerMetricsGroup = new WorkerMetricsGroup(metrics);
 
         // Internal key/value converters are currently deprecated, instead JsonConverter is used by default, refer KIP-174.
-        this.internalKeyConverter = plugins.newConverter(JsonConverter.class.getName(), config);
+        // Currently Internal converters are required properties, thus getClass won't return null.
+
+        boolean isJsonConverterKeyClassUsed = config.getClass(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG).getName().equals("org.apache.kafka.connect.json.JsonConverter");
+        boolean isJsonConverterValueClassUsed = config.getClass(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG).getName().equals("org.apache.kafka.connect.json.JsonConverter");
+
+        if (!isJsonConverterKeyClassUsed && !isJsonConverterValueClassUsed) {
+            this.internalKeyConverter =
+                    plugins.newConverter(config.getClass(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG).getName(), config);
+            this.internalValueConverter =
+                    plugins.newConverter(config.getClass(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG).getName(), config);
+        } else {
+            this.internalKeyConverter = plugins.newConverter(JsonConverter.class.getName(), config);
+            this.internalValueConverter = plugins.newConverter(JsonConverter.class.getName(), config);
+        }
+
+        boolean isInternalConverterSchemaConfigured = config.originals().containsKey("internal.key.converter.schemas.enable") && config.originals().containsKey("internal.value.converter.schemas.enable");
+
+        Map<String, String> userConfigs = config.originalsStrings();
+
+        if (!isInternalConverterSchemaConfigured) {
+            userConfigs.put("internal.key.converter.schemas.enable", "false");
+            userConfigs.put("internal.value.converter.schemas.enable", "false");
+        }
+
+        WorkerConfig overriddenWorkerConfig = new StandaloneConfig(userConfigs);
+
         this.internalKeyConverter.configure(
-                config.originalsWithPrefix("key.converter"),
+                overriddenWorkerConfig.originalsWithPrefix("internal.key.converter."),
                 true);
-        this.internalValueConverter = plugins.newConverter(JsonConverter.class.getName(), config);
+
         this.internalValueConverter.configure(
-                config.originalsWithPrefix("value.converter"),
+                overriddenWorkerConfig.originalsWithPrefix("internal.value.converter."),
                 false
         );
 
