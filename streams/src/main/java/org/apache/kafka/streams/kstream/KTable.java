@@ -78,7 +78,7 @@ public interface KTable<K, V> {
      * result {@code KTable}.
      * This is a stateless record-by-record operation.
      * <p>
-     * Note that {@code filter} for a <i>changelog stream</i> works different to {@link KStream#filter(Predicate)
+     * Note that {@code filter} for a <i>changelog stream</i> works differently than {@link KStream#filter(Predicate)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
      * have delete semantics.
      * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
@@ -100,7 +100,7 @@ public interface KTable<K, V> {
      * result {@code KTable}.
      * This is a stateless record-by-record operation.
      * <p>
-     * Note that {@code filter} for a <i>changelog stream</i> works different to {@link KStream#filter(Predicate)
+     * Note that {@code filter} for a <i>changelog stream</i> works differently than {@link KStream#filter(Predicate)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
      * have delete semantics.
      * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
@@ -138,7 +138,7 @@ public interface KTable<K, V> {
      * result {@code KTable}.
      * This is a stateless record-by-record operation.
      * <p>
-     * Note that {@code filter} for a <i>changelog stream</i> works different to {@link KStream#filter(Predicate)
+     * Note that {@code filter} for a <i>changelog stream</i> works differently than {@link KStream#filter(Predicate)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
      * have delete semantics.
      * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
@@ -178,7 +178,7 @@ public interface KTable<K, V> {
      * result {@code KTable}.
      * This is a stateless record-by-record operation.
      * <p>
-     * Note that {@code filter} for a <i>changelog stream</i> works different to {@link KStream#filter(Predicate)
+     * Note that {@code filter} for a <i>changelog stream</i> works differently than {@link KStream#filter(Predicate)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
      * have delete semantics.
      * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
@@ -216,7 +216,7 @@ public interface KTable<K, V> {
      * result {@code KTable}.
      * This is a stateless record-by-record operation.
      * <p>
-     * Note that {@code filterNot} for a <i>changelog stream</i> works different to {@link KStream#filterNot(Predicate)
+     * Note that {@code filterNot} for a <i>changelog stream</i> works differently than {@link KStream#filterNot(Predicate)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
      * have delete semantics.
      * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
@@ -238,7 +238,7 @@ public interface KTable<K, V> {
      * result {@code KTable}.
      * This is a stateless record-by-record operation.
      * <p>
-     * Note that {@code filterNot} for a <i>changelog stream</i> works different to {@link KStream#filterNot(Predicate)
+     * Note that {@code filterNot} for a <i>changelog stream</i> works differently than {@link KStream#filterNot(Predicate)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
      * have delete semantics.
      * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
@@ -274,7 +274,7 @@ public interface KTable<K, V> {
      * result {@code KTable}.
      * This is a stateless record-by-record operation.
      * <p>
-     * Note that {@code filterNot} for a <i>changelog stream</i> works different to {@link KStream#filterNot(Predicate)
+     * Note that {@code filterNot} for a <i>changelog stream</i> works differently than {@link KStream#filterNot(Predicate)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
      * have delete semantics.
      * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
@@ -311,7 +311,7 @@ public interface KTable<K, V> {
      * result {@code KTable}.
      * This is a stateless record-by-record operation.
      * <p>
-     * Note that {@code filterNot} for a <i>changelog stream</i> works different to {@link KStream#filterNot(Predicate)
+     * Note that {@code filterNot} for a <i>changelog stream</i> works differently than {@link KStream#filterNot(Predicate)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
      * have delete semantics.
      * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
@@ -365,7 +365,7 @@ public interface KTable<K, V> {
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like a join) is applied to
      * the result {@code KTable}.
      * <p>
-     * Note that {@code mapValues} for a <i>changelog stream</i> works different to {@link KStream#mapValues(ValueMapper)
+     * Note that {@code mapValues} for a <i>changelog stream</i> works differently than {@link KStream#mapValues(ValueMapper)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
      * have delete semantics.
      * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
@@ -400,7 +400,7 @@ public interface KTable<K, V> {
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like a join) is applied to
      * the result {@code KTable}.
      * <p>
-     * Note that {@code mapValues} for a <i>changelog stream</i> works different to {@link KStream#mapValues(ValueMapperWithKey)
+     * Note that {@code mapValues} for a <i>changelog stream</i> works differently than {@link KStream#mapValues(ValueMapperWithKey)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
      * have delete semantics.
      * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
@@ -440,7 +440,7 @@ public interface KTable<K, V> {
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like a join) is applied to
      * the result {@code KTable}.
      * <p>
-     * Note that {@code mapValues} for a <i>changelog stream</i> works different to {@link KStream#mapValues(ValueMapper)
+     * Note that {@code mapValues} for a <i>changelog stream</i> works differently than {@link KStream#mapValues(ValueMapper)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
      * have delete semantics.
      * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
@@ -485,7 +485,7 @@ public interface KTable<K, V> {
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like a join) is applied to
      * the result {@code KTable}.
      * <p>
-     * Note that {@code mapValues} for a <i>changelog stream</i> works different to {@link KStream#mapValues(ValueMapper)
+     * Note that {@code mapValues} for a <i>changelog stream</i> works differently than {@link KStream#mapValues(ValueMapper)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
      * have delete semantics.
      * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
@@ -529,7 +529,7 @@ public interface KTable<K, V> {
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like a join) is applied to
      * the result {@code KTable}.
      * <p>
-     * Note that {@code mapValues} for a <i>changelog stream</i> works different to {@link KStream#mapValues(ValueMapper)
+     * Note that {@code mapValues} for a <i>changelog stream</i> works differently than {@link KStream#mapValues(ValueMapper)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
      * have delete semantics.
      * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
@@ -577,7 +577,7 @@ public interface KTable<K, V> {
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like a join) is applied to
      * the result {@code KTable}.
      * <p>
-     * Note that {@code mapValues} for a <i>changelog stream</i> works different to {@link KStream#mapValues(ValueMapper)
+     * Note that {@code mapValues} for a <i>changelog stream</i> works differently than {@link KStream#mapValues(ValueMapper)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
      * have delete semantics.
      * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
