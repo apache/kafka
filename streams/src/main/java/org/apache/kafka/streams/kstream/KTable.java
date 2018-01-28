@@ -74,7 +74,7 @@ public interface KTable<K, V> {
      * Create a new {@code KTable} that consists of all records of this {@code KTable} which satisfy the given
      * predicate.
      * All records that do not satisfy the predicate are dropped.
-     * For each {@code KTable} update the filter is evaluated on the update record to produce an update record for the
+     * For each {@code KTable} update the filter is evaluated on the updated record to produce an updated record for the
      * result {@code KTable}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -96,7 +96,7 @@ public interface KTable<K, V> {
      * Create a new {@code KTable} that consists of all records of this {@code KTable} which satisfy the given
      * predicate.
      * All records that do not satisfy the predicate are dropped.
-     * For each {@code KTable} update the filter is evaluated on the update record to produce an update record for the
+     * For each {@code KTable} update the filter is evaluated on the updated record to produce an updated record for the
      * result {@code KTable}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -134,7 +134,7 @@ public interface KTable<K, V> {
      * Create a new {@code KTable} that consists of all records of this {@code KTable} which satisfy the given
      * predicate.
      * All records that do not satisfy the predicate are dropped.
-     * For each {@code KTable} update the filter is evaluated on the update record to produce an update record for the
+     * For each {@code KTable} update the filter is evaluated on the updated record to produce an updated record for the
      * result {@code KTable}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -174,7 +174,7 @@ public interface KTable<K, V> {
      * Create a new {@code KTable} that consists of all records of this {@code KTable} which satisfy the given
      * predicate.
      * All records that do not satisfy the predicate are dropped.
-     * For each {@code KTable} update the filter is evaluated on the update record to produce an update record for the
+     * For each {@code KTable} update the filter is evaluated on the updated record to produce an updated record for the
      * result {@code KTable}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -212,7 +212,7 @@ public interface KTable<K, V> {
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
      * given predicate.
      * All records that <em>do</em> satisfy the predicate are dropped.
-     * For each {@code KTable} update the filter is evaluated on the update record to produce an update record for the
+     * For each {@code KTable} update the filter is evaluated on the updated record to produce an updated record for the
      * result {@code KTable}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -234,7 +234,7 @@ public interface KTable<K, V> {
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
      * given predicate.
      * All records that <em>do</em> satisfy the predicate are dropped.
-     * For each {@code KTable} update the filter is evaluated on the update record to produce an update record for the
+     * For each {@code KTable} update the filter is evaluated on the updated record to produce an updated record for the
      * result {@code KTable}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -270,7 +270,7 @@ public interface KTable<K, V> {
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
      * given predicate.
      * All records that <em>do</em> satisfy the predicate are dropped.
-     * For each {@code KTable} update the filter is evaluated on the update record to produce an update record for the
+     * For each {@code KTable} update the filter is evaluated on the updated record to produce an updated record for the
      * result {@code KTable}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -307,7 +307,7 @@ public interface KTable<K, V> {
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
      * given predicate.
      * All records that <em>do</em> satisfy the predicate are dropped.
-     * For each {@code KTable} update the filter is evaluated on the update record to produce an update record for the
+     * For each {@code KTable} update the filter is evaluated on the updated record to produce an updated record for the
      * result {@code KTable}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -346,8 +346,8 @@ public interface KTable<K, V> {
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
      * (with possible new type) in the new {@code KTable}.
-     * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the update record and
-     * computes a new value for it, resulting in an update record for the result {@code KTable}.
+     * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the updated record and
+     * computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -381,7 +381,7 @@ public interface KTable<K, V> {
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
      * (with possible new type) in the new {@code KTable}.
      * For each {@code KTable} update the provided {@link ValueMapperWithKey} is applied to the value of the update
-     * record and computes a new value for it, resulting in an update record for the result {@code KTable}.
+     * record and computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -415,8 +415,8 @@ public interface KTable<K, V> {
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
      * (with possible new type) in the new {@code KTable}.
-     * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the update record and
-     * computes a new value for it, resulting in an update record for the result {@code KTable}.
+     * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the updated record and
+     * computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -460,7 +460,7 @@ public interface KTable<K, V> {
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
      * (with possible new type) in the new {@code KTable}.
      * For each {@code KTable} update the provided {@link ValueMapperWithKey} is applied to the value of the update
-     * record and computes a new value for it, resulting in an update record for the result {@code KTable}.
+     * record and computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -504,8 +504,8 @@ public interface KTable<K, V> {
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
      * (with possible new type) in the new {@code KTable}.
-     * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the update record and
-     * computes a new value for it, resulting in an update record for the result {@code KTable}.
+     * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the updated record and
+     * computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -552,8 +552,8 @@ public interface KTable<K, V> {
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
      * (with possible new type) in the new {@code KTable}.
-     * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the update record and
-     * computes a new value for it, resulting in an update record for the result {@code KTable}.
+     * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the updated record and
+     * computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -597,7 +597,7 @@ public interface KTable<K, V> {
 
 
     /**
-     * Print the update records of this {@code KTable} to {@code System.out}.
+     * Print the updated records of this {@code KTable} to {@code System.out}.
      * This function will use the generated name of the parent processor node to label the key/value pairs printed to
      * the console.
      * <p>
@@ -608,7 +608,7 @@ public interface KTable<K, V> {
      * {@link Integer} etc. to get meaningful information.
      * <p>
      * Note that {@code print()} is not applied to the internal state store and only called for each new {@code KTable}
-     * update record.
+     * updated record.
      * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
      * followed by {@link ReadOnlyKeyValueStore#all()}) to iterate over the keys of a KTable. Alternatively
      * convert to a {@link KStream} using {@link #toStream()} and then use
@@ -618,7 +618,7 @@ public interface KTable<K, V> {
     void print();
 
     /**
-     * Print the update records of this {@code KTable} to {@code System.out}.
+     * Print the updated records of this {@code KTable} to {@code System.out}.
      * This function will use the given name to label the key/value pairs printed to the console.
      * <p>
      * The provided serde will be used to deserialize the key or value in case the type is {@code byte[]} before calling
@@ -628,7 +628,7 @@ public interface KTable<K, V> {
      * {@link Integer} etc. to get meaningful information.
      * <p>
      * Note that {@code print()} is not applied to the internal state store and only called for each new {@code KTable}
-     * update record.
+     * updated record.
      *
      * @param label the name used to label the key/value pairs printed to the console
      * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
@@ -640,7 +640,7 @@ public interface KTable<K, V> {
     void print(final String label);
 
     /**
-     * Print the update records of this {@code KTable} to {@code System.out}.
+     * Print the updated records of this {@code KTable} to {@code System.out}.
      * This function will use the generated name of the parent processor node to label the key/value pairs printed to
      * the console.
      * <p>
@@ -651,7 +651,7 @@ public interface KTable<K, V> {
      * {@link Integer} etc. to get meaningful information.
      * <p>
      * Note that {@code print()} is not applied to the internal state store and only called for each new {@code KTable}
-     * update record.
+     * updated record.
      *
      * @param keySerde key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde value serde used to deserialize value if type is {@code byte[]}
@@ -665,7 +665,7 @@ public interface KTable<K, V> {
                final Serde<V> valSerde);
 
     /**
-     * Print the update records of this {@code KTable} to {@code System.out}.
+     * Print the updated records of this {@code KTable} to {@code System.out}.
      * This function will use the given name to label the key/value pairs printed to the console.
      * <p>
      * The provided serde will be used to deserialize the key or value in case the type is {@code byte[]} before calling
@@ -675,7 +675,7 @@ public interface KTable<K, V> {
      * {@link Integer} etc. to get meaningful information.
      * <p>
      * Note that {@code print()} is not applied to the internal state store and only called for each new {@code KTable}
-     * update record.
+     * updated record.
      *
      * @param keySerde   key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde   value serde used to deserialize value if type is {@code byte[]},
@@ -691,7 +691,7 @@ public interface KTable<K, V> {
                final String label);
 
     /**
-     * Write the update records of this {@code KTable} to a file at the given path.
+     * Write the updated records of this {@code KTable} to a file at the given path.
      * This function will use the generated name of the parent processor node to label the key/value pairs printed to
      * the file.
      * <p>
@@ -702,7 +702,7 @@ public interface KTable<K, V> {
      * {@link Integer} etc. to get meaningful information.
      * <p>
      * Note that {@code writeAsText()} is not applied to the internal state store and only called for each new
-     * {@code KTable} update record.
+     * {@code KTable} updated record.
      *
      * @param filePath name of file to write to
      * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
@@ -714,7 +714,7 @@ public interface KTable<K, V> {
     void writeAsText(final String filePath);
 
     /**
-     * Write the update records of this {@code KTable} to a file at the given path.
+     * Write the updated records of this {@code KTable} to a file at the given path.
      * This function will use the given name to label the key/value printed to the file.
      * <p>
      * The default serde will be used to deserialize the key or value in case the type is {@code byte[]} before calling
@@ -724,7 +724,7 @@ public interface KTable<K, V> {
      * {@link Integer} etc. to get meaningful information.
      * <p>
      * Note that {@code writeAsText()} is not applied to the internal state store and only called for each new
-     * {@code KTable} update record.
+     * {@code KTable} updated record.
      *
      * @param filePath   name of file to write to
      * @param label the name used to label the key/value pairs printed out to the console
@@ -738,7 +738,7 @@ public interface KTable<K, V> {
                      final String label);
 
     /**
-     * Write the update records of this {@code KTable} to a file at the given path.
+     * Write the updated records of this {@code KTable} to a file at the given path.
      * This function will use the generated name of the parent processor node to label the key/value pairs printed to
      * the file.
      * <p>
@@ -749,7 +749,7 @@ public interface KTable<K, V> {
      * {@link Integer} etc. to get meaningful information.
      * <p>
      * Note that {@code writeAsText()} is not applied to the internal state store and only called for each new
-     * {@code KTable} update record.
+     * {@code KTable} updated record.
      *
      * @param filePath name of file to write to
      * @param keySerde key serde used to deserialize key if type is {@code byte[]},
@@ -765,7 +765,7 @@ public interface KTable<K, V> {
                       final Serde<V> valSerde);
 
     /**
-     * Write the update records of this {@code KTable} to a file at the given path.
+     * Write the updated records of this {@code KTable} to a file at the given path.
      * This function will use the given name to label the key/value printed to the file.
      * <p>
      * The default serde will be used to deserialize the key or value in case the type is {@code byte[]} before calling
@@ -775,7 +775,7 @@ public interface KTable<K, V> {
      * {@link Integer} etc. to get meaningful information.
      * <p>
      * Note that {@code writeAsText()} is not applied to the internal state store and only called for each new
-     * {@code KTable} update record.
+     * {@code KTable} updated record.
      *
      * @param filePath name of file to write to
      * @param label the name used to label the key/value pairs printed to the console
@@ -793,11 +793,11 @@ public interface KTable<K, V> {
                      final Serde<V> valSerde);
 
     /**
-     * Perform an action on each update record of this {@code KTable}.
+     * Perform an action on each updated record of this {@code KTable}.
      * Note that this is a terminal operation that returns void.
      * <p>
      * Note that {@code foreach()} is not applied to the internal state store and only called for each new
-     * {@code KTable} update record.
+     * {@code KTable} updated record.
      *
      * @param action an action to perform on each record
      * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
@@ -812,7 +812,7 @@ public interface KTable<K, V> {
      * Convert this changelog stream to a {@link KStream}.
      * <p>
      * Note that this is a logical operation and only changes the "interpretation" of the stream, i.e., each record of
-     * this changelog stream is no longer treated as an update record (cf. {@link KStream} vs {@code KTable}).
+     * this changelog stream is no longer treated as an updated record (cf. {@link KStream} vs {@code KTable}).
      *
      * @return a {@link KStream} that contains the same records as this {@code KTable}
      */
@@ -837,7 +837,7 @@ public interface KTable<K, V> {
      * {@code table.}{@link #toStream() toStream}{@code ().}{@link KStream#selectKey(KeyValueMapper) selectKey(KeyValueMapper)}.
      * <p>
      * Note that {@link #toStream()} is a logical operation and only changes the "interpretation" of the stream, i.e.,
-     * each record of this changelog stream is no longer treated as an update record (cf. {@link KStream} vs {@code KTable}).
+     * each record of this changelog stream is no longer treated as an updated record (cf. {@link KStream} vs {@code KTable}).
      *
      * @param mapper a {@link KeyValueMapper} that computes a new key for each record
      * @param <KR> the new key type of the result stream
@@ -1286,7 +1286,7 @@ public interface KTable<K, V> {
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
      * All data of this {@code KTable} will be redistributed through the repartitioning topic by writing all update
-     * records to and rereading all update records from it, such that the resulting {@link KGroupedTable} is partitioned
+     * records to and rereading all updated records from it, such that the resulting {@link KGroupedTable} is partitioned
      * on the new key.
      * <p>
      * If the key or value type is changed, it is recommended to use {@link #groupBy(KeyValueMapper, Serialized)}
@@ -1316,7 +1316,7 @@ public interface KTable<K, V> {
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
      * All data of this {@code KTable} will be redistributed through the repartitioning topic by writing all update
-     * records to and rereading all update records from it, such that the resulting {@link KGroupedTable} is partitioned
+     * records to and rereading all updated records from it, such that the resulting {@link KGroupedTable} is partitioned
      * on the new key.
      *
      * @param selector      a {@link KeyValueMapper} that computes a new grouping key and value to be aggregated
@@ -1344,7 +1344,7 @@ public interface KTable<K, V> {
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
      * All data of this {@code KTable} will be redistributed through the repartitioning topic by writing all update
-     * records to and rereading all update records from it, such that the resulting {@link KGroupedTable} is partitioned
+     * records to and rereading all updated records from it, such that the resulting {@link KGroupedTable} is partitioned
      * on the new key.
      *
      * @param selector   a {@link KeyValueMapper} that computes a new grouping key and value to be aggregated
@@ -1390,7 +1390,7 @@ public interface KTable<K, V> {
      * <th>thisState</th>
      * <th>otherKTable</th>
      * <th>otherState</th>
-     * <th>result update record</th>
+     * <th>result updated record</th>
      * </tr>
      * <tr>
      * <td>&lt;K1:A&gt;</td>
@@ -1464,7 +1464,7 @@ public interface KTable<K, V> {
      * <th>thisState</th>
      * <th>otherKTable</th>
      * <th>otherState</th>
-     * <th>result update record</th>
+     * <th>result updated record</th>
      * </tr>
      * <tr>
      * <td>&lt;K1:A&gt;</td>
@@ -1540,7 +1540,7 @@ public interface KTable<K, V> {
      * <th>thisState</th>
      * <th>otherKTable</th>
      * <th>otherState</th>
-     * <th>result update record</th>
+     * <th>result updated record</th>
      * </tr>
      * <tr>
      * <td>&lt;K1:A&gt;</td>
@@ -1623,7 +1623,7 @@ public interface KTable<K, V> {
      * <th>thisState</th>
      * <th>otherKTable</th>
      * <th>otherState</th>
-     * <th>result update record</th>
+     * <th>result updated record</th>
      * </tr>
      * <tr>
      * <td>&lt;K1:A&gt;</td>
@@ -1709,7 +1709,7 @@ public interface KTable<K, V> {
      * <th>thisState</th>
      * <th>otherKTable</th>
      * <th>otherState</th>
-     * <th>result update record</th>
+     * <th>result updated record</th>
      * </tr>
      * <tr>
      * <td>&lt;K1:A&gt;</td>
@@ -1791,7 +1791,7 @@ public interface KTable<K, V> {
      * <th>thisState</th>
      * <th>otherKTable</th>
      * <th>otherState</th>
-     * <th>result update record</th>
+     * <th>result updated record</th>
      * </tr>
      * <tr>
      * <td>&lt;K1:A&gt;</td>
@@ -1875,7 +1875,7 @@ public interface KTable<K, V> {
      * <th>thisState</th>
      * <th>otherKTable</th>
      * <th>otherState</th>
-     * <th>result update record</th>
+     * <th>result updated record</th>
      * </tr>
      * <tr>
      * <td>&lt;K1:A&gt;</td>
@@ -1966,7 +1966,7 @@ public interface KTable<K, V> {
      * <th>thisState</th>
      * <th>otherKTable</th>
      * <th>otherState</th>
-     * <th>result update record</th>
+     * <th>result updated record</th>
      * </tr>
      * <tr>
      * <td>&lt;K1:A&gt;</td>
@@ -2052,7 +2052,7 @@ public interface KTable<K, V> {
      * <th>thisState</th>
      * <th>otherKTable</th>
      * <th>otherState</th>
-     * <th>result update record</th>
+     * <th>result updated record</th>
      * </tr>
      * <tr>
      * <td>&lt;K1:A&gt;</td>
@@ -2133,7 +2133,7 @@ public interface KTable<K, V> {
      * <th>thisState</th>
      * <th>otherKTable</th>
      * <th>otherState</th>
-     * <th>result update record</th>
+     * <th>result updated record</th>
      * </tr>
      * <tr>
      * <td>&lt;K1:A&gt;</td>
@@ -2217,7 +2217,7 @@ public interface KTable<K, V> {
      * <th>thisState</th>
      * <th>otherKTable</th>
      * <th>otherState</th>
-     * <th>result update record</th>
+     * <th>result updated record</th>
      * </tr>
      * <tr>
      * <td>&lt;K1:A&gt;</td>
@@ -2307,7 +2307,7 @@ public interface KTable<K, V> {
      * <th>thisState</th>
      * <th>otherKTable</th>
      * <th>otherState</th>
-     * <th>result update record</th>
+     * <th>result updated record</th>
      * </tr>
      * <tr>
      * <td>&lt;K1:A&gt;</td>
