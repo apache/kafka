@@ -368,7 +368,9 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     )
     invalidProps.foreach { case (k, v) =>
       val newProps = new Properties
-      newProps.putAll(props)
+      props.asScala.foreach { case (k,v) => 
+        newProps.put(k, v)
+      }
       props.put(k, v)
       reconfigureServers(props, perBrokerConfig = false, (k, props.getProperty(k)), expectFailure = true)
     }
