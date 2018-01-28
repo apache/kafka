@@ -83,7 +83,7 @@ public interface KTable<K, V> {
      * have delete semantics.
      * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
      * directly if required (i.e., if there is anything to be deleted).
-     * Furthermore, for each record that gets dropped (i.e., dot not satisfy the given predicate) a tombstone record
+     * Furthermore, for each record that gets dropped (i.e., does not satisfy the given predicate) a tombstone record
      * is forwarded.
      *
      * @param predicate a filter {@link Predicate} that is applied to each record
@@ -105,7 +105,7 @@ public interface KTable<K, V> {
      * have delete semantics.
      * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
      * directly if required (i.e., if there is anything to be deleted).
-     * Furthermore, for each record that gets dropped (i.e., dot not satisfy the given predicate) a tombstone record
+     * Furthermore, for each record that gets dropped (i.e., does not satisfy the given predicate) a tombstone record
      * is forwarded.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
@@ -143,7 +143,7 @@ public interface KTable<K, V> {
      * have delete semantics.
      * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
      * directly if required (i.e., if there is anything to be deleted).
-     * Furthermore, for each record that gets dropped (i.e., dot not satisfy the given predicate) a tombstone record
+     * Furthermore, for each record that gets dropped (i.e., does not satisfy the given predicate) a tombstone record
      * is forwarded.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
@@ -183,7 +183,7 @@ public interface KTable<K, V> {
      * have delete semantics.
      * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
      * directly if required (i.e., if there is anything to be deleted).
-     * Furthermore, for each record that gets dropped (i.e., dot not satisfy the given predicate) a tombstone record
+     * Furthermore, for each record that gets dropped (i.e., does not satisfy the given predicate) a tombstone record
      * is forwarded.
      * <p>
      * To query the local {@link KeyValueStore} it must be obtained via
