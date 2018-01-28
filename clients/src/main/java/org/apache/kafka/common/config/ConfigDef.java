@@ -937,6 +937,35 @@ public class ConfigDef {
         }
     }
 
+    public static class NonNullValidator implements Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                // Pass in the string null to avoid the findbugs warning
+                throw new ConfigException(name, "null", "entry must be non null");
+            }
+        }
+    }
+
+    public static class CompositeValidator implements Validator {
+        private final List<Validator> validators;
+
+        private CompositeValidator(List<Validator> validators) {
+            this.validators = Collections.unmodifiableList(validators);
+        }
+
+        public static CompositeValidator of(Validator... validators) {
+            return new CompositeValidator(Arrays.asList(validators));
+        }
+
+        @Override
+        public void ensureValid(String name, Object value) {
+            for (Validator validator: validators) {
+                validator.ensureValid(name, value);
+            }
+        }
+    }
+
     public static class NonEmptyString implements Validator {
 
         @Override

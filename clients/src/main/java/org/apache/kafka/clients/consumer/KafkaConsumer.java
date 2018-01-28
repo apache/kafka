@@ -63,6 +63,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -683,7 +684,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             userProvidedConfigs.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
             List<ConsumerInterceptor<K, V>> interceptorList = (List) (new ConsumerConfig(userProvidedConfigs, false)).getConfiguredInstances(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ConsumerInterceptor.class);
-            this.interceptors = interceptorList.isEmpty() ? null : new ConsumerInterceptors<>(interceptorList);
+            this.interceptors = new ConsumerInterceptors<>(interceptorList);
             if (keyDeserializer == null) {
                 this.keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
                         Deserializer.class);
@@ -815,7 +816,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.keyDeserializer = keyDeserializer;
         this.valueDeserializer = valueDeserializer;
         this.fetcher = fetcher;
-        this.interceptors = interceptors;
+        this.interceptors = Objects.requireNonNull(interceptors);
         this.time = time;
         this.client = client;
         this.metrics = metrics;
@@ -1122,10 +1123,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     if (fetcher.sendFetches() > 0 || client.hasPendingRequests())
                         client.pollNoWakeup();
 
-                    if (this.interceptors == null)
-                        return new ConsumerRecords<>(records);
-                    else
-                        return this.interceptors.onConsume(new ConsumerRecords<>(records));
+                    return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
 
                 long elapsed = time.milliseconds() - start;
@@ -1645,8 +1643,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Get the last offset for the given partitions. The last offset of a partition is the offset of the upcoming
-     * message, i.e. the offset of the last available message + 1.
+     * Get the last offset for the given partitions.  The last offset of a partition is the offset of the upcoming
+     * message, i.e. the offset of the last available message + 1.  If messages have never been written
+     * to the the partition, the offset returned will be 0.
+     *
      * <p>
      * Notice that this method may block indefinitely if the partition does not exist.
      * This method does not change the current consumer position of the partitions.

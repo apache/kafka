@@ -442,7 +442,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(KafkaConfig.CompressionTypeProp, compressionType.name)
     assertTrue(compressionType.isDefault)
     assertFalse(compressionType.isSensitive)
-    assertTrue(compressionType.isReadOnly)
+    assertFalse(compressionType.isReadOnly)
 
     assertEquals(servers(2).config.values.size, configs.get(brokerResource2).entries.size)
     assertEquals(servers(2).config.brokerId.toString, configs.get(brokerResource2).get(KafkaConfig.BrokerIdProp).value)
@@ -1024,7 +1024,7 @@ object AdminClientIntegrationTest {
     var topicConfigEntries2 = Seq(new ConfigEntry(LogConfig.CompressionTypeProp, "snappy")).asJava
 
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, servers.head.config.brokerId.toString)
-    val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.CompressionTypeProp, "gzip")).asJava
+    val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.ZkConnectProp, "localhost:2181")).asJava
 
     // Alter configs: first and third are invalid, second is valid
     var alterResult = client.alterConfigs(Map(

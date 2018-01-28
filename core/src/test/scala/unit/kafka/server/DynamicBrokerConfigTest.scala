@@ -104,23 +104,24 @@ class DynamicBrokerConfigTest {
     verifyConfigUpdateWithInvalidConfig(validProps, securityPropsWithoutListenerPrefix)
     val nonDynamicProps = Map(KafkaConfig.ZkConnectProp -> "somehost:2181")
     verifyConfigUpdateWithInvalidConfig(validProps, nonDynamicProps)
+
+    val invalidProps = Map(KafkaConfig.LogCleanerThreadsProp -> "invalid")
+    verifyConfigUpdateWithInvalidConfig(validProps, invalidProps)
   }
 
   @Test
   def testSecurityConfigs(): Unit = {
-    def verifyUpdate(name: String, value: Object, invalidValue: Boolean): Unit = {
+    def verifyUpdate(name: String, value: Object): Unit = {
       verifyConfigUpdate(name, value, perBrokerConfig = true, expectFailure = true)
-      verifyConfigUpdate(s"listener.name.external.$name", value, perBrokerConfig = true, expectFailure = invalidValue)
+      verifyConfigUpdate(s"listener.name.external.$name", value, perBrokerConfig = true, expectFailure = false)
       verifyConfigUpdate(name, value, perBrokerConfig = false, expectFailure = true)
       verifyConfigUpdate(s"listener.name.external.$name", value, perBrokerConfig = false, expectFailure = true)
     }
 
-    verifyUpdate(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "ks.jks", invalidValue = false)
-    verifyUpdate(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS", invalidValue = false)
-    verifyUpdate(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "password", invalidValue = false)
-    verifyUpdate(SslConfigs.SSL_KEY_PASSWORD_CONFIG, "password", invalidValue = false)
-    verifyUpdate(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, 1.asInstanceOf[Integer], invalidValue = true)
-    verifyUpdate(SslConfigs.SSL_KEY_PASSWORD_CONFIG, 1.asInstanceOf[Integer], invalidValue = true)
+    verifyUpdate(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "ks.jks")
+    verifyUpdate(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS")
+    verifyUpdate(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "password")
+    verifyUpdate(SslConfigs.SSL_KEY_PASSWORD_CONFIG, "password")
   }
 
   private def verifyConfigUpdate(name: String, value: Object, perBrokerConfig: Boolean, expectFailure: Boolean) {

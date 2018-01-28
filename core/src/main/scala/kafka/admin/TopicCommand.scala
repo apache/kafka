@@ -300,9 +300,9 @@ object TopicCommand extends Logging {
   class TopicCommandOptions(args: Array[String]) {
     val parser = new OptionParser(false)
     val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
-                                      "Multiple URLS can be given to allow fail-over.")
+                                      "Multiple hosts can be given to allow fail-over.")
                            .withRequiredArg
-                           .describedAs("urls")
+                           .describedAs("hosts")
                            .ofType(classOf[String])
     val listOpt = parser.accepts("list", "List all available topics.")
     val createOpt = parser.accepts("create", "Create a new topic.")
