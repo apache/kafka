@@ -18,7 +18,6 @@
 package kafka.log
 
 import java.io.File
-import java.util
 import java.util.Properties
 
 import kafka.api.KAFKA_0_11_0_IV0
