@@ -37,7 +37,7 @@ public class Base64Test {
     }
 
     private static void confirmInversesForAllThreePaddingCases(Encoder encoder, Decoder decoder) {
-        for (String text : new String[] {"a", "ab", "abc"}) {
+        for (String text : new String[] {"", "a", "ab", "abc"}) {
             assertEquals(text, new String(decoder.decode(encoder.encodeToString(text.getBytes(StandardCharsets.UTF_8))),
                     StandardCharsets.UTF_8));
         }

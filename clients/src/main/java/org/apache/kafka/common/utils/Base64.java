@@ -240,16 +240,15 @@ public final class Base64 {
 
             @Override
             public String encodeToString(byte[] bytes) {
+                if (bytes.length == 0)
+                    return "";
                 String base64EncodedUUID = Java7Factory.encodeToString(bytes);
-                //Convert to URL safe variant by replacing + and / with - and _ respectively.
-                String urlSafeBase64EncodedUUID = base64EncodedUUID.replace("+", "-")
-                        .replace("/", "_");
+                // Convert to URL safe variant by replacing + and / with - and _ respectively.
+                String urlSafeBase64EncodedUUID = base64EncodedUUID.replace("+", "-").replace("/", "_");
                 // Remove any "=" or "==" padding at the end.
-                return urlSafeBase64EncodedUUID.endsWith("==")
-                        ? urlSafeBase64EncodedUUID.substring(0, urlSafeBase64EncodedUUID.length() - 2)
-                        : urlSafeBase64EncodedUUID.endsWith("=")
-                                ? urlSafeBase64EncodedUUID.substring(0, urlSafeBase64EncodedUUID.length() - 1)
-                                : urlSafeBase64EncodedUUID;
+                // Note that length will be at least 4 here.
+                int index = urlSafeBase64EncodedUUID.indexOf('=', urlSafeBase64EncodedUUID.length() - 2);
+                return index > 0 ? urlSafeBase64EncodedUUID.substring(0, index) : urlSafeBase64EncodedUUID;
             }
 
         };
