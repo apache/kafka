@@ -379,13 +379,33 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   @Test
   def testThreadPoolResize(): Unit = {
+    val requestHandlerPrefix = "kafka-request-handler-"
+    val networkThreadPrefix = "kafka-network-thread-"
+    val fetcherThreadPrefix = "ReplicaFetcherThread-"
+    // Executor threads and recovery threads are not verified since threads may not be running
+    // For others, thread count should be configuredCount * threadMultiplier * numBrokers
+    val threadMultiplier = Map(
+      requestHandlerPrefix -> 1,
+      networkThreadPrefix ->  2, // 2 endpoints
+      fetcherThreadPrefix -> (servers.size - 1)
+    )
+
+    // Tolerate threads left over from previous tests
+    def leftOverThreadCount(prefix: String, perBrokerCount: Int) : Int = {
+      val count = matchingThreads(prefix).size - perBrokerCount * servers.size * threadMultiplier(prefix)
+      if (count > 0) count else 0
+    }
+    val leftOverThreads = Map(
+      requestHandlerPrefix -> leftOverThreadCount(requestHandlerPrefix, servers.head.config.numIoThreads),
+      networkThreadPrefix ->  leftOverThreadCount(networkThreadPrefix, servers.head.config.numNetworkThreads),
+      fetcherThreadPrefix ->  leftOverThreadCount(fetcherThreadPrefix, servers.head.config.numReplicaFetchers)
+    )
+
     def maybeVerifyThreadPoolSize(propName: String, size: Int, threadPrefix: String): Unit = {
-      propName match {
-        case KafkaConfig.NumIoThreadsProp => verifyThreads(threadPrefix, size)
-        case KafkaConfig.NumNetworkThreadsProp => verifyThreads(threadPrefix, size * 2) // 2 endpoints
-        case KafkaConfig.NumReplicaFetchersProp => verifyThreads(threadPrefix, size * (numServers - 1))
-        case _ => // Executor threads may not have been created, so not verifying
-      }
+      val ignoreCount = leftOverThreads.getOrElse(threadPrefix, 0)
+      val expectedCountPerBroker = threadMultiplier.getOrElse(threadPrefix, 0) * size
+      if (expectedCountPerBroker > 0)
+        verifyThreads(threadPrefix, expectedCountPerBroker, ignoreCount)
     }
     def reducePoolSize(propName: String, currentSize: => Int, threadPrefix: String): Int = {
       val newSize = if (currentSize / 2 == 0) 1 else currentSize / 2
@@ -418,11 +438,11 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
     val config = servers.head.config
     verifyThreadPoolResize(KafkaConfig.NumIoThreadsProp, config.numIoThreads,
-      "kafka-request-handler-", mayFailRequests = false)
+      requestHandlerPrefix, mayFailRequests = false)
     verifyThreadPoolResize(KafkaConfig.NumNetworkThreadsProp, config.numNetworkThreads,
-      "kafka-network-thread-", mayFailRequests = true)
+      networkThreadPrefix, mayFailRequests = true)
     verifyThreadPoolResize(KafkaConfig.NumReplicaFetchersProp, config.numReplicaFetchers,
-      "ReplicaFetcherThread-", mayFailRequests = false)
+      fetcherThreadPrefix, mayFailRequests = false)
     verifyThreadPoolResize(KafkaConfig.BackgroundThreadsProp, config.backgroundThreads,
       "kafka-scheduler-", mayFailRequests = false)
     verifyThreadPoolResize(KafkaConfig.NumRecoveryThreadsPerDataDirProp, config.numRecoveryThreadsPerDataDir,
@@ -612,10 +632,14 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     Thread.getAllStackTraces.keySet.asScala.toList.map(_.getName)
   }
 
-  private def verifyThreads(threadPrefix: String, countPerBroker: Int): Unit = {
+  private def matchingThreads(threadPrefix: String): List[String] = {
+    currentThreads.filter(_.startsWith(threadPrefix))
+  }
+
+  private def verifyThreads(threadPrefix: String, countPerBroker: Int, leftOverThreads: Int = 0): Unit = {
     val expectedCount = countPerBroker * servers.size
-    val (threads, resized) = TestUtils.computeUntilTrue(currentThreads.filter(_.startsWith(threadPrefix))) {
-      _.size == expectedCount
+    val (threads, resized) = TestUtils.computeUntilTrue(matchingThreads(threadPrefix)) { matching =>
+      matching.size >= expectedCount &&  matching.size <= expectedCount + leftOverThreads
     }
     assertTrue(s"Invalid threads: expected $expectedCount, got ${threads.size}: $threads", resized)
   }
