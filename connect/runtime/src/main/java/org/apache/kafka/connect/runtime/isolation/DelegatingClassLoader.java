@@ -52,6 +52,7 @@ import java.util.TreeSet;
 
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
+    private static final String classpathName = "classpath";
 
     private final Map<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
     private final Map<String, String> aliases;
@@ -143,13 +144,13 @@ public class DelegatingClassLoader extends URLClassLoader {
             initPluginLoader(configPath);
         }
         // Finally add parent/system loader.
-        initPluginLoader("classpath");
+        initPluginLoader(classpathName);
         addAllAliases();
     }
 
     private void initPluginLoader(String path) {
         try {
-            if ("classpath".equals(path)) {
+            if (classpathName.equals(path)) {
                 scanUrlsAndAddPlugins(
                         getParent(),
                         ClasspathHelper.forJavaClassPath().toArray(new URL[0]),
