@@ -300,7 +300,8 @@ public class TopologyTestDriver {
                 cache,
                 mockTime,
                 producer);
-            task.initialize();
+            task.initializeStateStores();
+            task.initializeTopology();
         }
     }
 
