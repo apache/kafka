@@ -135,7 +135,7 @@ public class StateConsumerTest {
         private boolean flushed;
         private boolean closed;
 
-        public StateMaintainerStub(final Map<TopicPartition, Long> partitionOffsets) {
+        StateMaintainerStub(final Map<TopicPartition, Long> partitionOffsets) {
             this.partitionOffsets = partitionOffsets;
         }
 

@@ -30,10 +30,10 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.Cancellable;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
@@ -97,6 +97,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @param config                the {@link StreamsConfig} specified by the user
      * @param metrics               the {@link StreamsMetrics} created by the thread
      * @param stateDirectory        the {@link StateDirectory} created by the thread
+     * @param cache                 the {@link ThreadCache} created by the thread
+     * @param time                  the system {@link Time} of the thread
      * @param producer              the instance of {@link Producer} used to produce records
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
@@ -117,7 +119,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         this.producer = producer;
         this.metrics = new TaskMetrics(metrics);
 
-        recordCollector = createRecordCollector(logContext);
+        final ProductionExceptionHandler productionExceptionHandler = config.defaultProductionExceptionHandler();
+
+        recordCollector = createRecordCollector(logContext, productionExceptionHandler);
         streamTimePunctuationQueue = new PunctuationQueue();
         systemTimePunctuationQueue = new PunctuationQueue();
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
@@ -157,15 +161,18 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     @Override
-    public boolean initialize() {
-        log.trace("Initializing");
-        initializeStateStores();
-        initTopology();
-        processorContext.initialized();
-        taskInitialized = true;
+    public boolean initializeStateStores() {
+        log.trace("Initializing state stores");
+        registerStateStores();
         return changelogPartitions().isEmpty();
     }
 
+    @Override
+    public void initializeTopology() {
+        initTopology();
+        processorContext.initialized();
+        taskInitialized = true;
+    }
 
     /**
      * <pre>
@@ -639,17 +646,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     // visible for testing only
-    ProcessorContext processorContext() {
-        return processorContext;
-    }
-
-    // visible for testing only
     RecordCollector recordCollector() {
         return recordCollector;
     }
 
     // visible for testing only
-    RecordCollector createRecordCollector(final LogContext logContext) {
-        return new RecordCollectorImpl(producer, id.toString(), logContext);
+    RecordCollector createRecordCollector(final LogContext logContext,
+                                          final ProductionExceptionHandler productionExceptionHandler) {
+        return new RecordCollectorImpl(producer, id.toString(), logContext, productionExceptionHandler);
     }
 }

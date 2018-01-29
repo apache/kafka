@@ -51,7 +51,7 @@ import java.util.regex.Pattern;
  *
  * This class also maintains a cache of the latest commit position for each of the assigned
  * partitions. This is updated through {@link #committed(TopicPartition, OffsetAndMetadata)} and can be used
- * to set the initial fetch position (e.g. {@link Fetcher#resetOffset(TopicPartition)}.
+ * to set the initial fetch position (e.g. {@link Fetcher#resetOffsets(Set)}.
  */
 public class SubscriptionState {
     private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =

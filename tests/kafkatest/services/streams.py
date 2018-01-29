@@ -207,3 +207,10 @@ class StreamsBrokerCompatibilityService(StreamsTestBaseService):
                                                                 kafka,
                                                                 "org.apache.kafka.streams.tests.BrokerCompatibilityTest",
                                                                 eosEnabled)
+
+class StreamsBrokerDownResilienceService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka, configs):
+        super(StreamsBrokerDownResilienceService, self).__init__(test_context,
+                                                                 kafka,
+                                                                 "org.apache.kafka.streams.tests.StreamsBrokerDownResilienceTest",
+                                                                 configs)

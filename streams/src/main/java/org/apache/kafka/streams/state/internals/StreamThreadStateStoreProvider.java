@@ -45,14 +45,16 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
             return Collections.emptyList();
         }
         if (!streamThread.isRunningAndNotRebalancing()) {
-            throw new InvalidStateStoreException("the state store, " + storeName + ", may have migrated to another instance.");
+            throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the stream thread is " +
+                    streamThread.state() + ", not RUNNING");
         }
         final List<T> stores = new ArrayList<>();
         for (Task streamTask : streamThread.tasks().values()) {
             final StateStore store = streamTask.getStore(storeName);
             if (store != null && queryableStoreType.accepts(store)) {
                 if (!store.isOpen()) {
-                    throw new InvalidStateStoreException("the state store, " + storeName + ", may have migrated to another instance.");
+                    throw new InvalidStateStoreException("Cannot get state store " + storeName + " for task " + streamTask +
+                            " because the store is not open. The state store may have migrated to another instances.");
                 }
                 stores.add((T) store);
             }

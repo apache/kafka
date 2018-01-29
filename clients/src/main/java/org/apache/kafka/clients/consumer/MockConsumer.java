@@ -108,6 +108,14 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         }
         ensureNotClosed();
         this.subscriptions.subscribeFromPattern(topicsToSubscribe);
+        final Set<TopicPartition> assignedPartitions = new HashSet<>();
+        for (final String topic : topicsToSubscribe) {
+            for (final PartitionInfo info : this.partitions.get(topic)) {
+                assignedPartitions.add(new TopicPartition(topic, info.partition()));
+            }
+
+        }
+        subscriptions.assignFromSubscribed(assignedPartitions);
     }
 
     @Override
@@ -189,7 +197,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             throw new IllegalStateException("Cannot add records for a partition that is not assigned to the consumer");
         List<ConsumerRecord<K, V>> recs = this.records.get(tp);
         if (recs == null) {
-            recs = new ArrayList<ConsumerRecord<K, V>>();
+            recs = new ArrayList<>();
             this.records.put(tp, recs);
         }
         recs.add(record);

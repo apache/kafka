@@ -187,12 +187,12 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
   }
 
   override def sanityCheck() {
-    require(_entries == 0 || _lastOffset > baseOffset,
-            s"Corrupt index found, index file (${file.getAbsolutePath}) has non-zero size but the last offset " +
-                s"is ${_lastOffset} which is no larger than the base offset $baseOffset.")
-    require(length % entrySize == 0,
-            "Index file " + file.getAbsolutePath + " is corrupt, found " + length +
-            " bytes which is not positive or not a multiple of 8.")
+    if (_entries != 0 && _lastOffset <= baseOffset)
+      throw new CorruptIndexException(s"Corrupt index found, index file (${file.getAbsolutePath}) has non-zero size " +
+        s"but the last offset is ${_lastOffset} which is no greater than the base offset $baseOffset.")
+    if (length % entrySize != 0)
+      throw new CorruptIndexException(s"Index file ${file.getAbsolutePath} is corrupt, found $length bytes which is " +
+        s"neither positive nor a multiple of $entrySize.")
   }
 
 }

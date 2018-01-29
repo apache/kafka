@@ -54,12 +54,15 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class Utils {
+public final class Utils {
+
+    private Utils() {}
 
     // This matches URIs of formats: host:port and protocol:\\host:port
     // IPv6 is supported with [ip] pattern
@@ -430,7 +433,7 @@ public class Utils {
      */
     public static String formatBytes(long bytes) {
         if (bytes < 0) {
-            return "" + bytes;
+            return String.valueOf(bytes);
         }
         double asDouble = (double) bytes;
         int ordinal = (int) Math.floor(Math.log(asDouble) / Math.log(1024.0));
@@ -441,7 +444,7 @@ public class Utils {
             return formatted + " " + BYTE_SCALE_SUFFIXES[ordinal];
         } catch (IndexOutOfBoundsException e) {
             //huge number?
-            return "" + asDouble;
+            return String.valueOf(asDouble);
         }
     }
 
@@ -462,6 +465,7 @@ public class Utils {
      * @return The string representation.
      */
     public static <T> String join(Collection<T> list, String separator) {
+        Objects.requireNonNull(list);
         StringBuilder sb = new StringBuilder();
         Iterator<T> iter = list.iterator();
         while (iter.hasNext()) {

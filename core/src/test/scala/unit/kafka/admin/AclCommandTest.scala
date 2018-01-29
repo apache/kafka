@@ -28,7 +28,9 @@ import org.junit.Test
 
 class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
-  private val Users = Set(KafkaPrincipal.fromString("User:CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown"), KafkaPrincipal.fromString("User:test2"))
+  private val Users = Set(KafkaPrincipal.fromString("User:CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown"),
+    KafkaPrincipal.fromString("User:test2"),
+    KafkaPrincipal.fromString("""User:CN=\#User with special chars in CN : (\, \+ \" \\ \< \> \; ')"""))
   private val Hosts = Set("host1", "host2")
   private val AllowHostCommand = Array("--allow-host", "host1", "--allow-host", "host2")
   private val DenyHostCommand = Array("--deny-host", "host1", "--deny-host", "host2")
@@ -36,12 +38,14 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   private val TopicResources = Set(new Resource(Topic, "test-1"), new Resource(Topic, "test-2"))
   private val GroupResources = Set(new Resource(Group, "testGroup-1"), new Resource(Group, "testGroup-2"))
   private val TransactionalIdResources = Set(new Resource(TransactionalId, "t0"), new Resource(TransactionalId, "t1"))
+  private val TokenResources = Set(new Resource(DelegationToken, "token1"), new Resource(DelegationToken, "token2"))
 
   private val ResourceToCommand = Map[Set[Resource], Array[String]](
     TopicResources -> Array("--topic", "test-1", "--topic", "test-2"),
     Set(Resource.ClusterResource) -> Array("--cluster"),
     GroupResources -> Array("--group", "testGroup-1", "--group", "testGroup-2"),
-    TransactionalIdResources -> Array("--transactional-id", "t0", "--transactional-id", "t1")
+    TransactionalIdResources -> Array("--transactional-id", "t0", "--transactional-id", "t1"),
+    TokenResources -> Array("--delegation-token", "token1", "--delegation-token", "token2")
   )
 
   private val ResourceToOperations = Map[Set[Resource], (Set[Operation], Array[String])](
@@ -52,7 +56,8 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
       Array("--operation", "Create", "--operation", "ClusterAction", "--operation", "DescribeConfigs",
         "--operation", "AlterConfigs", "--operation", "IdempotentWrite")),
     GroupResources -> (Set(Read, Describe), Array("--operation", "Read", "--operation", "Describe")),
-    TransactionalIdResources -> (Set(Describe, Write), Array("--operation", "Describe", "--operation", "Write"))
+    TransactionalIdResources -> (Set(Describe, Write), Array("--operation", "Describe", "--operation", "Write")),
+    TokenResources -> (Set(Describe), Array("--operation", "Describe"))
   )
 
   private def ProducerResourceToAcls(enableIdempotence: Boolean = false) = Map[Set[Resource], Set[Acl]](

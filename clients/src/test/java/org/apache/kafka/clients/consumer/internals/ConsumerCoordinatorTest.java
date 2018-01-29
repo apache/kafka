@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.CommitFailedException;
@@ -74,6 +75,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
@@ -194,6 +196,62 @@ public class ConsumerCoordinatorTest {
         assertTrue(future.failed());
         assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.exception(), future.exception());
         assertTrue(coordinator.coordinatorUnknown());
+    }
+
+    @Test
+    public void testManyInFlightAsyncCommitsWithCoordinatorDisconnect() throws Exception {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady();
+
+        int numRequests = 1000;
+        TopicPartition tp = new TopicPartition("foo", 0);
+        final AtomicInteger responses = new AtomicInteger(0);
+
+        for (int i = 0; i < numRequests; i++) {
+            Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(tp, new OffsetAndMetadata(i));
+            coordinator.commitOffsetsAsync(offsets, new OffsetCommitCallback() {
+                @Override
+                public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+                    responses.incrementAndGet();
+                    Throwable cause = exception.getCause();
+                    assertTrue("Unexpected exception cause type: " + (cause == null ? null : cause.getClass()),
+                            cause instanceof DisconnectException);
+                }
+            });
+        }
+
+        coordinator.coordinatorDead();
+        coordinator.invokeCompletedOffsetCommitCallbacks();
+        assertEquals(numRequests, responses.get());
+    }
+
+    @Test
+    public void testCoordinatorUnknownInUnsentCallbacksAfterCoordinatorDead() throws Exception {
+        // When the coordinator is marked dead, all unsent or in-flight requests are cancelled
+        // with a disconnect error. This test case ensures that the corresponding callbacks see
+        // the coordinator as unknown which prevents additional retries to the same coordinator.
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady();
+
+        final AtomicBoolean asyncCallbackInvoked = new AtomicBoolean(false);
+        Map<TopicPartition, OffsetCommitRequest.PartitionData> offsets = Collections.singletonMap(
+                new TopicPartition("foo", 0), new OffsetCommitRequest.PartitionData(13L, ""));
+        consumerClient.send(coordinator.coordinator(), new OffsetCommitRequest.Builder(groupId, offsets))
+                .compose(new RequestFutureAdapter<ClientResponse, Object>() {
+                    @Override
+                    public void onSuccess(ClientResponse value, RequestFuture<Object> future) {}
+
+                    @Override
+                    public void onFailure(RuntimeException e, RequestFuture<Object> future) {
+                        assertTrue("Unexpected exception type: " + e.getClass(), e instanceof DisconnectException);
+                        assertTrue(coordinator.coordinatorUnknown());
+                        asyncCallbackInvoked.set(true);
+                    }
+                });
+
+        coordinator.coordinatorDead();
+        assertTrue(asyncCallbackInvoked.get());
     }
 
     @Test

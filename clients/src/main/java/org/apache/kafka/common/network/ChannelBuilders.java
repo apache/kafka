@@ -26,6 +26,7 @@ import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuild
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
+import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Map;
@@ -58,8 +59,8 @@ public class ChannelBuilders {
             if (clientSaslMechanism == null)
                 throw new IllegalArgumentException("`clientSaslMechanism` must be non-null in client mode if `securityProtocol` is `" + securityProtocol + "`");
         }
-        return create(securityProtocol, Mode.CLIENT, contextType, config, listenerName, clientSaslMechanism,
-                saslHandshakeRequestEnable, null);
+        return create(securityProtocol, Mode.CLIENT, contextType, config, listenerName, false, clientSaslMechanism,
+                saslHandshakeRequestEnable, null, null);
     }
 
     /**
@@ -70,11 +71,13 @@ public class ChannelBuilders {
      * @return the configured `ChannelBuilder`
      */
     public static ChannelBuilder serverChannelBuilder(ListenerName listenerName,
+                                                      boolean isInterBrokerListener,
                                                       SecurityProtocol securityProtocol,
                                                       AbstractConfig config,
-                                                      CredentialCache credentialCache) {
-        return create(securityProtocol, Mode.SERVER, JaasContext.Type.SERVER, config, listenerName, null,
-                true, credentialCache);
+                                                      CredentialCache credentialCache,
+                                                      DelegationTokenCache tokenCache) {
+        return create(securityProtocol, Mode.SERVER, JaasContext.Type.SERVER, config, listenerName,
+                isInterBrokerListener, null, true, credentialCache, tokenCache);
     }
 
     private static ChannelBuilder create(SecurityProtocol securityProtocol,
@@ -82,9 +85,11 @@ public class ChannelBuilders {
                                          JaasContext.Type contextType,
                                          AbstractConfig config,
                                          ListenerName listenerName,
+                                         boolean isInterBrokerListener,
                                          String clientSaslMechanism,
                                          boolean saslHandshakeRequestEnable,
-                                         CredentialCache credentialCache) {
+                                         CredentialCache credentialCache,
+                                         DelegationTokenCache tokenCache) {
         Map<String, ?> configs;
         if (listenerName == null)
             configs = config.values();
@@ -95,14 +100,21 @@ public class ChannelBuilders {
         switch (securityProtocol) {
             case SSL:
                 requireNonNullMode(mode, securityProtocol);
-                channelBuilder = new SslChannelBuilder(mode);
+                channelBuilder = new SslChannelBuilder(mode, listenerName, isInterBrokerListener);
                 break;
             case SASL_SSL:
             case SASL_PLAINTEXT:
                 requireNonNullMode(mode, securityProtocol);
                 JaasContext jaasContext = JaasContext.load(contextType, listenerName, configs);
-                channelBuilder = new SaslChannelBuilder(mode, jaasContext, securityProtocol, listenerName,
-                        clientSaslMechanism, saslHandshakeRequestEnable, credentialCache);
+                channelBuilder = new SaslChannelBuilder(mode,
+                        jaasContext,
+                        securityProtocol,
+                        listenerName,
+                        isInterBrokerListener,
+                        clientSaslMechanism,
+                        saslHandshakeRequestEnable,
+                        credentialCache,
+                        tokenCache);
                 break;
             case PLAINTEXT:
                 channelBuilder = new PlaintextChannelBuilder();

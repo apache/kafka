@@ -62,12 +62,18 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
-    public boolean initialize() {
-        initializeStateStores();
+    public boolean initializeStateStores() {
+        log.trace("Initializing state stores");
+        registerStateStores();
         checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
         processorContext.initialized();
         taskInitialized = true;
         return true;
+    }
+
+    @Override
+    public void initializeTopology() {
+        //no-op
     }
 
     /**
@@ -131,8 +137,10 @@ public class StandbyTask extends AbstractTask {
         log.debug("Closing");
         boolean committedSuccessfully = false;
         try {
-            commit();
-            committedSuccessfully = true;
+            if (clean) {
+                commit();
+                committedSuccessfully = true;
+            }
         } finally {
             closeStateManager(committedSuccessfully);
         }

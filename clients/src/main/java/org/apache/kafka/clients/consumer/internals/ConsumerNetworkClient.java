@@ -387,8 +387,9 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     public void disconnect(Node node) {
+        failUnsentRequests(node, DisconnectException.INSTANCE);
+
         synchronized (this) {
-            failUnsentRequests(node, DisconnectException.INSTANCE);
             client.disconnect(node.idString());
         }
 

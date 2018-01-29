@@ -26,7 +26,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
@@ -56,7 +55,6 @@ import static org.apache.kafka.common.utils.Utils.getPort;
 
 public class StreamPartitionAssignor implements PartitionAssignor, Configurable {
 
-    private Time time = Time.SYSTEM;
     private final static int UNKNOWN = -1;
     public final static int NOT_AVAILABLE = -2;
 
@@ -179,21 +177,13 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private CopartitionedTopicsValidator copartitionedTopicsValidator;
 
     /**
-     * Package-private method to set the time. Used for tests.
-     * @param time Time to be used.
-     */
-    void time(final Time time) {
-        this.time = time;
-    }
-
-    /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible
      * since the former needs later's cached metadata while sending subscriptions,
      * and the latter needs former's returned assignment when adding tasks.
      * @throws KafkaException if the stream thread is not specified
      */
     @Override
-    public void configure(Map<String, ?> configs) {
+    public void configure(final Map<String, ?> configs) {
         final StreamsConfig streamsConfig = new StreamsConfig(configs);
 
         // Setting the logger with the passed in client thread name
@@ -238,11 +228,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             this.userEndPoint = userEndPoint;
         }
 
-        internalTopicManager = new InternalTopicManager(
-                taskManager.streamsKafkaClient,
-                streamsConfig.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG),
-                streamsConfig.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG),
-                time);
+        internalTopicManager = new InternalTopicManager(taskManager.adminClient, streamsConfig);
 
         copartitionedTopicsValidator = new CopartitionedTopicsValidator(logPrefix);
     }
@@ -375,6 +361,16 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         } while (numPartitionsNeeded);
 
+
+        // ensure the co-partitioning topics within the group have the same number of partitions,
+        // and enforce the number of partitions for those repartition topics to be the same if they
+        // are co-partitioned as well.
+        ensureCopartitioning(taskManager.builder().copartitionGroups(), repartitionTopicMetadata, metadata);
+
+        // make sure the repartition source topics exist with the right number of partitions,
+        // create these topics if necessary
+        prepareTopic(repartitionTopicMetadata);
+
         // augment the metadata with the newly computed number of partitions for all the
         // repartition source topics
         final Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions = new HashMap<>();
@@ -387,15 +383,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         new PartitionInfo(topic, partition, null, new Node[0], new Node[0]));
             }
         }
-
-        // ensure the co-partitioning topics within the group have the same number of partitions,
-        // and enforce the number of partitions for those repartition topics to be the same if they
-        // are co-partitioned as well.
-        ensureCopartitioning(taskManager.builder().copartitionGroups(), repartitionTopicMetadata, metadata);
-
-        // make sure the repartition source topics exist with the right number of partitions,
-        // create these topics if necessary
-        prepareTopic(repartitionTopicMetadata);
 
         final Cluster fullMetadata = metadata.withPartitions(allRepartitionTopicPartitions);
         taskManager.setClusterMetadata(fullMetadata);
@@ -626,12 +613,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         log.debug("Starting to validate internal topics in partition assignor.");
 
         // first construct the topics to make ready
-        Map<InternalTopicConfig, Integer> topicsToMakeReady = new HashMap<>();
-        Set<String> topicNamesToMakeReady = new HashSet<>();
+        final Map<String, InternalTopicConfig> topicsToMakeReady = new HashMap<>();
 
-        for (InternalTopicMetadata metadata : topicPartitions.values()) {
-            InternalTopicConfig topic = metadata.config;
-            Integer numPartitions = metadata.numPartitions;
+        for (final InternalTopicMetadata metadata : topicPartitions.values()) {
+            final InternalTopicConfig topic = metadata.config;
+            final Integer numPartitions = metadata.numPartitions;
 
             if (numPartitions == NOT_AVAILABLE) {
                 continue;
@@ -640,35 +626,15 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 throw new org.apache.kafka.streams.errors.TopologyBuilderException(String.format("%sTopic [%s] number of partitions not defined", logPrefix, topic.name()));
             }
 
-            topicsToMakeReady.put(topic, numPartitions);
-            topicNamesToMakeReady.add(topic.name());
+            topic.setNumberOfPartitions(numPartitions);
+            topicsToMakeReady.put(topic.name(), topic);
         }
 
         if (!topicsToMakeReady.isEmpty()) {
             internalTopicManager.makeReady(topicsToMakeReady);
-
-            // wait until each one of the topic metadata has been propagated to at least one broker
-            while (!allTopicsCreated(topicNamesToMakeReady, topicsToMakeReady)) {
-                try {
-                    Thread.sleep(50L);
-                } catch (InterruptedException e) {
-                    // ignore
-                }
-            }
         }
 
         log.debug("Completed validating internal topics in partition assignor.");
-    }
-
-    private boolean allTopicsCreated(final Set<String> topicNamesToMakeReady, final Map<InternalTopicConfig, Integer> topicsToMakeReady) {
-        final Map<String, Integer> partitions = internalTopicManager.getNumPartitions(topicNamesToMakeReady);
-        for (Map.Entry<InternalTopicConfig, Integer> entry : topicsToMakeReady.entrySet()) {
-            final Integer numPartitions = partitions.get(entry.getKey().name());
-            if (numPartitions == null || !numPartitions.equals(entry.getValue())) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups,

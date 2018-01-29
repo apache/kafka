@@ -27,7 +27,6 @@ import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
 import kafka.utils.CommandLineUtils
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram._
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
@@ -64,8 +63,8 @@ object ConfigCommand extends Config {
     opts.checkArgs()
 
     val time = Time.SYSTEM
-    val zooKeeperClient = new ZooKeeperClient(opts.options.valueOf(opts.zkConnectOpt), 30000, 30000, Int.MaxValue, time)
-    val zkClient = new KafkaZkClient(zooKeeperClient, JaasUtils.isZkSecurityEnabled, time)
+    val zkClient = KafkaZkClient(opts.options.valueOf(opts.zkConnectOpt), JaasUtils.isZkSecurityEnabled, 30000, 30000,
+      Int.MaxValue, time)
     val adminZkClient = new AdminZkClient(zkClient)
 
     try {
