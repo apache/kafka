@@ -621,6 +621,7 @@ public class KGroupedStreamImplTest {
         driver.process(TOPIC, "1", "D");
         driver.process(TOPIC, "3", "E");
         driver.process(TOPIC, "3", "F");
+        driver.process(TOPIC, "3", null);
         driver.flushState();
     }
 

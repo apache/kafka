@@ -62,8 +62,9 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
         @Override
         public void process(K key, V value) {
             // If the key or value is null we don't need to proceed
-            if (key == null || value == null)
+            if (key == null || value == null) {
                 return;
+            }
 
             V oldAgg = store.get(key);
             V newAgg = oldAgg;
