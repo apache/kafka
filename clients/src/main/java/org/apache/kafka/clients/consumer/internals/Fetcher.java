@@ -945,8 +945,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
     @Override
     public void onAssignment(Set<TopicPartition> assignment) {
-        sensors.updatePartitionLagSensors(assignment);
-        sensors.updatePartitionLeadSensors();
+        sensors.updatePartitionLagAndLeadSensors(assignment);
     }
 
     public static Sensor throttleTimeSensor(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
@@ -1329,35 +1328,33 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             recordsFetched.record(records);
         }
 
-        private void updatePartitionLagSensors(Set<TopicPartition> assignedPartitions) {
+        private void updatePartitionLagAndLeadSensors(Set<TopicPartition> assignedPartitions) {
             if (this.assignedPartitions != null) {
                 for (TopicPartition tp : this.assignedPartitions) {
                     if (!assignedPartitions.contains(tp)) {
                         metrics.removeSensor(partitionLagMetricName(tp));
+                        metrics.removeSensor(partitionLeadMetricName(tp));
                     }
                 }
             }
             this.assignedPartitions = assignedPartitions;
         }
 
-        private void updatePartitionLeadSensors() {
-            metrics.removeSensor(partitionLeadSensorName());
-            this.leadMetricAddedPartitions.clear();
-        }
-
         private void recordPartitionLead(TopicPartition tp, long lead) {
             this.recordsFetchLead.record(lead);
 
-            Sensor recordsLead = this.metrics.sensor(partitionLeadSensorName(), this.recordsFetchLead);
-            if (!this.leadMetricAddedPartitions.contains(tp)) {
-                this.leadMetricAddedPartitions.add(tp);
-                Map<String, String> tags = new HashMap<>(2);
-                tags.put("topic", tp.topic().replace('.', '_'));
-                tags.put("partition", String.valueOf(tp.partition()));
+            String name = partitionLeadMetricName(tp);
+            Sensor recordsLead = this.metrics.getSensor(name);
+            if (recordsLead == null) {
+                Map<String, String> metricTags = new HashMap<>(2);
+                metricTags.put("topic", tp.topic().replace('.', '_'));
+                metricTags.put("partition", String.valueOf(tp.partition()));
 
-                recordsLead.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLead, tags), new Value());
-                recordsLead.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLeadMin, tags), new Min());
-                recordsLead.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLeadAvg, tags), new Avg());
+                recordsLead = this.metrics.sensor(name);
+
+                recordsLead.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLead, metricTags), new Value());
+                recordsLead.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLeadMin, metricTags), new Min());
+                recordsLead.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLeadAvg, metricTags), new Avg());
             }
             recordsLead.record(lead);
         }
@@ -1395,8 +1392,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             return tp + ".records-lag";
         }
 
-        private static String partitionLeadSensorName() {
-            return "records-lead-per-partition";
+        private static String partitionLeadMetricName(TopicPartition tp) {
+            return tp + ".records-lead";
         }
 
     }
