@@ -250,8 +250,12 @@ public class PluginUtils {
                         // failure. Such a failure at this stage is not easily reproducible and
                         // therefore an exception is caught and ignored after issuing a
                         // warning. This allows class scanning to continue for non-broken plugins.
-                       log.warn("Resolving symbolic link '{}' failed. Ignoring this path");
-                       continue;
+                        log.warn(
+                                "Resolving symbolic link '{}' failed. Ignoring this path.",
+                                adjacent,
+                                e
+                        );
+                        continue;
                     }
                 }
 
