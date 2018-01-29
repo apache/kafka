@@ -32,11 +32,14 @@ public class ClientUtilsTest {
         check("mydomain.com:8080");
         check("[::1]:8000");
         check("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:1234", "mydomain.com:10000");
-        List<InetSocketAddress> validatedAddresses = check("some.invalid.hostname.foo.bar.local:9999", "mydomain.com:10000");
+        List<InetSocketAddress> validatedAddresses = check("mydomain.com:10000");
         assertEquals(1, validatedAddresses.size());
         InetSocketAddress onlyAddress = validatedAddresses.get(0);
-        assertEquals("mydomain.com", onlyAddress.getHostName());
+        assertEquals("65-254-242-180.yourhostingaccount.com", onlyAddress.getHostName());
         assertEquals(10000, onlyAddress.getPort());
+
+        validatedAddresses = check("mydomain.com:10000","testdomain.com:10000");
+        assertEquals(2, validatedAddresses.size());
     }
 
     @Test(expected = ConfigException.class)

@@ -27,7 +27,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -38,7 +40,8 @@ import static org.apache.kafka.common.utils.Utils.getPort;
 public final class ClientUtils {
     private static final Logger log = LoggerFactory.getLogger(ClientUtils.class);
 
-    private ClientUtils() {}
+    private ClientUtils() {
+    }
 
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls) {
         List<InetSocketAddress> addresses = new ArrayList<>();
@@ -50,15 +53,21 @@ public final class ClientUtils {
                     if (host == null || port == null)
                         throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
 
-                    InetSocketAddress address = new InetSocketAddress(host, port);
+                    InetAddress[] inetAddresses = InetAddress.getAllByName(host);
 
-                    if (address.isUnresolved()) {
-                        log.warn("Removing server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
-                    } else {
-                        addresses.add(address);
+                    for (InetAddress inetAddress : inetAddresses) {
+                        String resolvedCanonicalName = inetAddress.getCanonicalHostName();
+                        InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
+                        if (address.isUnresolved()) {
+                            log.warn("Removing server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
+                        } else {
+                            addresses.add(address);
+                        }
                     }
                 } catch (IllegalArgumentException e) {
                     throw new ConfigException("Invalid port in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+                } catch (UnknownHostException e) {
+                    throw new ConfigException("Unknown host in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
                 }
             }
         }
