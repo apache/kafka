@@ -120,7 +120,7 @@
             </ul>
             <p>You can also <a class="reference internal" href="#streams-developer-guide-interactive-queries-custom-stores"><span class="std std-ref">implement your own QueryableStoreType</span></a> as described in section <a class="reference internal" href="#streams-developer-guide-interactive-queries-custom-stores"><span class="std std-ref">Querying local custom state stores</span></a>.</p>
             <div class="admonition note">
-                <p class="first admonition-title">Note</p>
+                <p><b>Note</b></p>
                 <p class="last">Kafka Streams materializes one state store per stream partition. This means your application will potentially manage
                     many underlying state stores.  The API enables you to query all of the underlying stores without having to know which
                     partition the data is in.</p>
@@ -227,7 +227,7 @@
             <div class="section" id="querying-local-custom-state-stores">
                 <span id="streams-developer-guide-interactive-queries-custom-stores"></span><h3><a class="toc-backref" href="#id6">Querying local custom state stores</a><a class="headerlink" href="#querying-local-custom-state-stores" title="Permalink to this headline"></a></h3>
                 <div class="admonition note">
-                    <p class="first admonition-title">Note</p>
+                    <p><b>Note</b></p>
                     <p class="last">Only the <a class="reference internal" href="processor-api.html#streams-developer-guide-processor-api"><span class="std std-ref">Processor API</span></a> supports custom state stores.</p>
                 </div>
                 <p>Before querying the custom state stores you must implement these interfaces:</p>
