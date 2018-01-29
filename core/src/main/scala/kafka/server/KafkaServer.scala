@@ -218,19 +218,17 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         this.logIdent = logContext.logPrefix
 
         /* create and configure metrics */
-        val brokerMetricsReporters = new DynamicMetricsReporters(brokerId, config.dynamicConfig)
         val reporters = new util.ArrayList[MetricsReporter]
-        reporters.addAll(brokerMetricsReporters.currentMetricsReporters.asJava)
         reporters.add(new JmxReporter(jmxPrefix))
         val metricConfig = KafkaServer.metricConfig(config)
         metrics = new Metrics(metricConfig, reporters, time, true)
-        brokerMetricsReporters.initMetrics(metrics)
+        new DynamicMetricsReporters(brokerId, config.dynamicConfig, metrics)
 
         /* register broker metrics */
         _brokerTopicStats = new BrokerTopicStats
 
         quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
-        notifyClusterListeners(kafkaMetricsReporters ++ reporters.asScala)
+        notifyClusterListeners(kafkaMetricsReporters ++ metrics.reporters.asScala)
 
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 

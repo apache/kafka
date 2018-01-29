@@ -32,6 +32,7 @@ import kafka.utils._
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
@@ -154,14 +155,22 @@ class LogCleaner(initialConfig: CleanerConfig,
     cleaners.clear()
   }
 
-  override def reconfigurableConfigs(): Set[String] = {
+  override def reconfigurableConfigs: Set[String] = {
     LogCleaner.ReconfigurableConfigs
   }
 
-  override def validateReconfiguration(newConfig: KafkaConfig): Boolean = {
+  override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     val newCleanerConfig = LogCleaner.cleanerConfig(newConfig)
     val numThreads = newCleanerConfig.numThreads
     numThreads >= 1 && numThreads >= config.numThreads / 2 && numThreads <= config.numThreads * 2
+    val currentThreads = config.numThreads
+    if (numThreads <= 0)
+      throw new ConfigException(s"Log cleaner threads should be at least 1")
+    if (numThreads < currentThreads / 2)
+      throw new ConfigException(s"Log cleaner threads cannot be reduced to less than half the current value $currentThreads")
+    if (numThreads > currentThreads * 2)
+      throw new ConfigException(s"Log cleaner threads cannot be increased to more than double the current value $currentThreads")
+
   }
 
   /**

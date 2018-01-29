@@ -119,6 +119,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
     TestUtils.createTopic(zkClient, topic, numPartitions = 10, replicationFactor = numServers, servers)
     createAdminClient(SecurityProtocol.SSL, SecureInternal)
+
+    TestMetricsReporter.testReporters.clear()
   }
 
   @After
@@ -462,15 +464,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     newProps.put(TestMetricsReporter.PollingIntervalProp, "100")
     configureMetricsReporters(Seq(classOf[TestMetricsReporter]), newProps)
 
-    def waitForReporters(): List[TestMetricsReporter] = {
-      TestUtils.waitUntilTrue(() => TestMetricsReporter.testReporters.size == servers.size,
-        msg = "Metrics reporters not created")
-
-      val reporters = TestMetricsReporter.testReporters.asScala.toList
-      TestUtils.waitUntilTrue(() => reporters.forall(_.configureCount == 1), msg = "Metrics reporters not configured")
-      reporters
-    }
-    val reporters = waitForReporters()
+    val reporters = TestMetricsReporter.waitForReporters(servers.size)
     reporters.foreach { reporter =>
       reporter.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 100)
       assertFalse("No metrics found", reporter.kafkaMetrics.isEmpty)
@@ -504,7 +498,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     // Verify recreation of metrics reporter
     newProps.put(TestMetricsReporter.PollingIntervalProp, "2000")
     configureMetricsReporters(Seq(classOf[TestMetricsReporter]), newProps)
-    val newReporters = waitForReporters()
+    val newReporters = TestMetricsReporter.waitForReporters(servers.size)
     newReporters.foreach(_.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 2000))
 
     // Verify that validation failure of metrics reporter fails reconfiguration and leaves config unchanged
@@ -530,7 +524,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     newProps.put(TestMetricsReporter.PollingIntervalProp, "4000")
     alterConfigsOnServer(servers.head, newProps)
     TestUtils.waitUntilTrue(() => !TestMetricsReporter.testReporters.isEmpty, "Metrics reporter not created")
-    val perBrokerReporter = TestMetricsReporter.testReporters.peek()
+    val perBrokerReporter = TestMetricsReporter.waitForReporters(1).head
     perBrokerReporter.verifyState(reconfigureCount = 1, deleteCount = 0, pollingInterval = 4000)
     servers.tail.foreach { server => assertEquals("", server.config.originals.get(KafkaConfig.MetricReporterClassesProp)) }
 
@@ -819,6 +813,14 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 object TestMetricsReporter {
   val PollingIntervalProp = "polling.interval"
   val testReporters = new ConcurrentLinkedQueue[TestMetricsReporter]()
+
+  def waitForReporters(count: Int): List[TestMetricsReporter] = {
+    TestUtils.waitUntilTrue(() => testReporters.size == count, msg = "Metrics reporters not created")
+
+    val reporters = testReporters.asScala.toList
+    TestUtils.waitUntilTrue(() => reporters.forall(_.configureCount == 1), msg = "Metrics reporters not configured")
+    reporters
+  }
 }
 
 class TestMetricsReporter extends MetricsReporter with Reconfigurable with Closeable {
