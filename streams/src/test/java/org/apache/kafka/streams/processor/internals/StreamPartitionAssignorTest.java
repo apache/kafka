@@ -153,26 +153,14 @@ public class StreamPartitionAssignorTest {
         final TaskId taskIdC0 = new TaskId(2, 0);
         final TaskId taskIdC1 = new TaskId(2, 1);
 
-        final List<TaskId> expectedInterLeavedTaskIds = Arrays.asList(taskIdA0, taskIdB0, taskIdC0, taskIdA1, taskIdB1, taskIdC1, taskIdA2, taskIdB2, taskIdA3);
+        final List<TaskId> expectedSubList1 = Arrays.asList(taskIdA0, taskIdA3, taskIdB2);
+        final List<TaskId> expectedSubList2 = Arrays.asList(taskIdA1, taskIdB0, taskIdC0);
+        final List<TaskId> expectedSubList3 = Arrays.asList(taskIdA2, taskIdB1, taskIdC1);
+        final List<List<TaskId>> embeddedList = Arrays.asList(expectedSubList1, expectedSubList2, expectedSubList3);
 
-        final List<TaskId> interleavedTaskIds = partitionAssignor.interleaveTasksByGroupId(Arrays.asList(taskIdC0, taskIdC1, taskIdB0, taskIdB1, taskIdB2, taskIdA0, taskIdA1, taskIdA2, taskIdA3));
+        final List<List<TaskId>> interleavedTaskIds = partitionAssignor.interleaveTasksByGroupId(Arrays.asList(taskIdC0, taskIdC1, taskIdB0, taskIdB1, taskIdB2, taskIdA0, taskIdA1, taskIdA2, taskIdA3), 3);
 
-        assertThat(interleavedTaskIds, equalTo(expectedInterLeavedTaskIds));
-    }
-
-    @Test
-    public void shouldEvenlyDistributeTasksAsMuchAsPossible() {
-        final int[] expectedTasksPerThread = new int[]{2, 2, 2};
-        assertThat(partitionAssignor.calculateNumAssignments(6, 3), equalTo(expectedTasksPerThread));
-
-        final int[] expectedTasksPerThreadII = new int[]{2, 2, 1};
-        assertThat(partitionAssignor.calculateNumAssignments(5, 3), equalTo(expectedTasksPerThreadII));
-
-        final int[] expectedTasksPerThreadIII = new int[]{4, 3, 3, 3};
-        assertThat(partitionAssignor.calculateNumAssignments(13, 4), equalTo(expectedTasksPerThreadIII));
-
-        final int[] expectedTasksPerThreadIV = new int[]{10};
-        assertThat(partitionAssignor.calculateNumAssignments(10, 1), equalTo(expectedTasksPerThreadIV));
+        assertThat(interleavedTaskIds, equalTo(embeddedList));
     }
 
     @Test
@@ -319,18 +307,18 @@ public class StreamPartitionAssignorTest {
         final Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(localMetadata, subscriptions);
 
         // check assigned partitions
-        assertEquals(Utils.mkSet(Utils.mkSet(t1p0, t2p0, t1p1, t2p1), Utils.mkSet(t1p2, t2p2, t1p3, t2p3)),
+        assertEquals(Utils.mkSet(Utils.mkSet(t2p2, t1p0, t1p2, t2p0), Utils.mkSet(t1p1, t2p1, t1p3, t2p3)),
                      Utils.mkSet(new HashSet<>(assignments.get("consumer10").partitions()), new HashSet<>(assignments.get("consumer11").partitions())));
 
         // the first consumer
         final AssignmentInfo info10 = AssignmentInfo.decode(assignments.get("consumer10").userData());
 
-        final List<TaskId> expectedInfo10TaskIds = Arrays.asList(taskIdA2, taskIdA3, taskIdB2, taskIdB3);
+        final List<TaskId> expectedInfo10TaskIds = Arrays.asList(taskIdA1, taskIdA3, taskIdB1, taskIdB3);
         assertEquals(expectedInfo10TaskIds, info10.activeTasks);
 
         // the second consumer
         final AssignmentInfo info11 = AssignmentInfo.decode(assignments.get("consumer11").userData());
-        final List<TaskId> expectedInfo11TaskIds = Arrays.asList(taskIdA0, taskIdA1, taskIdB0, taskIdB1);
+        final List<TaskId> expectedInfo11TaskIds = Arrays.asList(taskIdA0, taskIdA2, taskIdB0, taskIdB2);
 
         assertEquals(expectedInfo11TaskIds, info11.activeTasks);
     }

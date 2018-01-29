@@ -506,32 +506,16 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             final Set<String> consumers = entry.getValue().consumers;
             final ClientState state = entry.getValue().state;
 
-            final List<TaskId> interleavedActive = interleaveTasksByGroupId(state.activeTasks());
-            final List<TaskId> interleavedStandby = interleaveTasksByGroupId(state.standbyTasks());
+            final List<List<TaskId>> interleavedActive = interleaveTasksByGroupId(state.activeTasks(), consumers.size());
+            final List<List<TaskId>> interleavedStandby = interleaveTasksByGroupId(state.standbyTasks(), consumers.size());
 
-            final int numConsumers = consumers.size();
-
-            final int[] numberTasksPerConsumer = calculateNumAssignments(interleavedActive.size(), numConsumers);
-            int[] numberStandbyTasksPerConsumer =  new int[0];
-
-            if (!interleavedStandby.isEmpty()) {
-                numberStandbyTasksPerConsumer = calculateNumAssignments(interleavedStandby.size(), numConsumers);
-            }
-
-            int activeStartIndex = 0;
-            int activeEndIndex = 0;
-            int standbyStartIndex = 0;
-            int standbyEndIndex = 0;
             int consumerTaskIndex = 0;
 
             for (String consumer : consumers) {
                 final Map<TaskId, Set<TopicPartition>> standby = new HashMap<>();
                 final ArrayList<AssignedPartition> assignedPartitions = new ArrayList<>();
-                final int taskAssignmentLength = numberTasksPerConsumer[consumerTaskIndex];
 
-                activeEndIndex = activeEndIndex + taskAssignmentLength;
-
-                final List<TaskId> assignedActiveList = interleavedActive.subList(activeStartIndex, activeEndIndex);
+                final List<TaskId> assignedActiveList = interleavedActive.get(consumerTaskIndex);
                 List<TaskId> assignedStandbyList;
 
                 for (final TaskId taskId : assignedActiveList) {
@@ -539,12 +523,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         assignedPartitions.add(new AssignedPartition(taskId, partition));
                     }
                 }
-                activeStartIndex = activeEndIndex;
 
-                if (numberStandbyTasksPerConsumer.length > 0) {
-                    final int standbyTaskAssignmentLength = numberStandbyTasksPerConsumer[consumerTaskIndex];
-                    standbyEndIndex = standbyEndIndex + standbyTaskAssignmentLength;
-                    assignedStandbyList = interleavedStandby.subList(standbyStartIndex, standbyEndIndex);
+                if (!state.standbyTasks().isEmpty()) {
+                    assignedStandbyList = interleavedStandby.get(consumerTaskIndex);
                     for (TaskId taskId : assignedStandbyList) {
                         Set<TopicPartition> standbyPartitions = standby.get(taskId);
                         if (standbyPartitions == null) {
@@ -553,7 +534,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         }
                         standbyPartitions.addAll(partitionsForTask.get(taskId));
                     }
-                    standbyStartIndex = standbyEndIndex;
                 }
 
                 consumerTaskIndex++;
@@ -575,50 +555,24 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     }
 
     // visible for testing
-    int[] calculateNumAssignments(final int numTasks, final int numConsumers) {
-        final int[] numTasksPerClient = new int[numConsumers];
-        if (numTasks % numConsumers == 0) {
-            Arrays.fill(numTasksPerClient, numTasks / numConsumers);
-        } else {
-            final int startingNumTasks = numTasks / numConsumers;
-            Arrays.fill(numTasksPerClient, startingNumTasks);
-            int totalTasksLeft = numTasks - (startingNumTasks * numConsumers);
-            int index = 0;
-            while (totalTasksLeft > 0) {
-                if (index >= numTasksPerClient.length) {
-                    index = 0;
+    List<List<TaskId>> interleaveTasksByGroupId(Collection<TaskId> taskIds, int numberThreads) {
+        final List<TaskId> sortedTasks = new ArrayList<>(taskIds);
+        Collections.sort(sortedTasks);
+        List<List<TaskId>> taskIdsForConsumerAssignment = new ArrayList<>(numberThreads);
+        for (int i = 0; i < numberThreads; i++) {
+            taskIdsForConsumerAssignment.add(new ArrayList<TaskId>());
+        }
+        LinkedList<TaskId> taskIdLinkedList = new LinkedList<>(sortedTasks);
+        while (!taskIdLinkedList.isEmpty()) {
+            for (List<TaskId> taskIdList : taskIdsForConsumerAssignment) {
+                TaskId taskId = taskIdLinkedList.poll();
+                if (taskId != null) {
+                    taskIdList.add(taskId);
                 }
-                numTasksPerClient[index++] += 1;
-                totalTasksLeft -= 1;
             }
-        }
-        return numTasksPerClient;
-    }
 
-    // visible for testing
-    List<TaskId> interleaveTasksByGroupId(Collection<TaskId> taskIds) {
-        final Map<Integer, LinkedList<TaskId>> taskIdMap = new HashMap<>();
-        for (final TaskId taskId : taskIds) {
-            LinkedList<TaskId> taskIdList = taskIdMap.get(taskId.topicGroupId);
-            if (taskIdList == null) {
-                taskIdList = new LinkedList<>();
-            }
-            taskIdList.add(taskId);
-            taskIdMap.put(taskId.topicGroupId, taskIdList);
         }
-
-        final LinkedList<LinkedList<TaskId>> taskIdDeque = new LinkedList<>();
-        taskIdDeque.addAll(taskIdMap.values());
-
-        final List<TaskId> interleaved = new ArrayList<>();
-        while (!taskIdDeque.isEmpty()) {
-            final LinkedList<TaskId> taskIdList = taskIdDeque.poll();
-            interleaved.add(taskIdList.poll());
-            if (!taskIdList.isEmpty()) {
-                taskIdDeque.offer(taskIdList);
-            }
-        }
-        return interleaved;
+        return taskIdsForConsumerAssignment;
     }
 
     /**
