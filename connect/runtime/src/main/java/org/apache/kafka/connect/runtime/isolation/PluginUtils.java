@@ -118,8 +118,7 @@ public class PluginUtils {
             + "|org\\.omg\\.stub\\.java\\.rmi"
             + "|org\\.w3c\\.dom"
             + "|org\\.xml\\.sax"
-            + "|org\\.apache\\.kafka\\.common"
-            + "|org\\.apache\\.kafka\\.connect"
+            + "|org\\.apache\\.kafka"
             + "|org\\.slf4j"
             + ")\\..*$";
 
