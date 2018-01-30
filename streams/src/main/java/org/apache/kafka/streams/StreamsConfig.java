@@ -644,6 +644,7 @@ public class StreamsConfig extends AbstractConfig {
         checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
         
         final Map<String, Object> consumerProps = new HashMap<>(eosEnabled ? CONSUMER_EOS_OVERRIDES : CONSUMER_DEFAULT_OVERRIDES);
+        consumerProps.putAll(getClientCustomProps());
         consumerProps.putAll(clientProvidedProps);
 
         // bootstrap.servers should be from StreamsConfig
@@ -758,6 +759,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // generate producer configs from original properties and overridden maps
         final Map<String, Object> props = new HashMap<>(eosEnabled ? PRODUCER_EOS_OVERRIDES : PRODUCER_DEFAULT_OVERRIDES);
+        props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
 
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
@@ -771,6 +773,24 @@ public class StreamsConfig extends AbstractConfig {
                                                          final Set<String> configNames) {
         final Map<String, Object> props = clientProps(configNames, originals());
         props.putAll(originalsWithPrefix(prefix));
+        return props;
+    }
+
+    /**
+     * Get a map of custom configs by removing from the originals all the Streams, Consumer, Producer, and AdminClient configs.
+     * Prefixed properties are also removed because they are already added by {@link #getClientPropsWithPrefix(String, Set)}.
+     * This allows to set a custom property for a specific client alone if specified using a prefix, or for all
+     * when no prefix is used.
+     *
+     * @return a map with the custom properties
+     */
+    private Map<String, Object> getClientCustomProps() {
+        final Map<String, Object> props = originals();
+        props.keySet().removeAll(CONFIG.names());
+        props.keySet().removeAll(ConsumerConfig.configNames());
+        props.keySet().removeAll(ProducerConfig.configNames());
+        props.keySet().removeAll(originalsWithPrefix(CONSUMER_PREFIX, false).keySet());
+        props.keySet().removeAll(originalsWithPrefix(PRODUCER_PREFIX, false).keySet());
         return props;
     }
 
