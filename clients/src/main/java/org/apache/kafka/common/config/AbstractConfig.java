@@ -288,11 +288,26 @@ public class AbstractConfig {
      * @return The list of configured instances
      */
     public <T> List<T> getConfiguredInstances(String key, Class<T> t, Map<String, Object> configOverrides) {
-        List<String> klasses = getList(key);
-        List<T> objects = new ArrayList<>();
+        return getConfiguredInstances(getList(key), t, configOverrides);
+    }
+
+
+    /**
+     * Get a list of configured instances of the given class specified by the given configuration key. The configuration
+     * may specify either null or an empty string to indicate no configured instances. In both cases, this method
+     * returns an empty list to indicate no configured instances.
+     * @param classNames The list of class names of the instances to create
+     * @param t The interface the class should implement
+     * @param configOverrides Configuration overrides to use.
+     * @return The list of configured instances
+     */
+    public <T> List<T> getConfiguredInstances(List<String> classNames, Class<T> t, Map<String, Object> configOverrides) {
+        List<T> objects = new ArrayList<T>();
+        if (classNames == null)
+            return objects;
         Map<String, Object> configPairs = originals();
         configPairs.putAll(configOverrides);
-        for (Object klass : klasses) {
+        for (Object klass : classNames) {
             Object o;
             if (klass instanceof String) {
                 try {

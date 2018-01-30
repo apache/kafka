@@ -186,10 +186,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     try {
       info("starting")
 
-      if(isShuttingDown.get)
+      if (isShuttingDown.get)
         throw new IllegalStateException("Kafka server is still shutting down, cannot re-start!")
 
-      if(startupComplete.get)
+      if (startupComplete.get)
         return
 
       val canStartup = isStartingUp.compareAndSet(false, true)
@@ -218,8 +218,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         this.logIdent = logContext.logPrefix
 
         /* create and configure metrics */
-        val reporters = config.getConfiguredInstances(KafkaConfig.MetricReporterClassesProp, classOf[MetricsReporter],
-            Map[String, AnyRef](KafkaConfig.BrokerIdProp -> (config.brokerId.toString)).asJava)
+        val reporters = new util.ArrayList[MetricsReporter]
         reporters.add(new JmxReporter(jmxPrefix))
         val metricConfig = KafkaServer.metricConfig(config)
         metrics = new Metrics(metricConfig, reporters, time, true)
@@ -228,7 +227,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         _brokerTopicStats = new BrokerTopicStats
 
         quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
-        notifyClusterListeners(kafkaMetricsReporters ++ reporters.asScala)
+        notifyClusterListeners(kafkaMetricsReporters ++ metrics.reporters.asScala)
 
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
@@ -321,7 +320,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     }
   }
 
-  private def notifyClusterListeners(clusterListeners: Seq[AnyRef]): Unit = {
+  private[server] def notifyClusterListeners(clusterListeners: Seq[AnyRef]): Unit = {
     val clusterResourceListeners = new ClusterResourceListeners
     clusterResourceListeners.maybeAddAll(clusterListeners.asJava)
     clusterResourceListeners.onUpdate(new ClusterResource(clusterId))
@@ -387,7 +386,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   }
 
   /**
-   *  Performs controlled shutdown
+   * Performs controlled shutdown
    */
   private def controlledShutdown() {
 
@@ -637,7 +636,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     *
     * @return A 2-tuple containing the brokerId and a sequence of offline log directories.
     */
-  private def getBrokerIdAndOfflineDirs: (Int, Seq[String]) =  {
+  private def getBrokerIdAndOfflineDirs: (Int, Seq[String]) = {
     var brokerId = config.brokerId
     val brokerIdSet = mutable.HashSet[Int]()
     val offlineDirs = mutable.ArrayBuffer.empty[String]
@@ -649,24 +648,24 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           brokerIdSet.add(brokerMetadata.brokerId)
         }
       } catch {
-        case e : IOException =>
+        case e: IOException =>
           offlineDirs += logDir
           error(s"Fail to read $brokerMetaPropsFile under log directory $logDir", e)
       }
     }
 
-    if(brokerIdSet.size > 1)
+    if (brokerIdSet.size > 1)
       throw new InconsistentBrokerIdException(
         s"Failed to match broker.id across log.dirs. This could happen if multiple brokers shared a log directory (log.dirs) " +
         s"or partial data was manually copied from another broker. Found $brokerIdSet")
-    else if(brokerId >= 0 && brokerIdSet.size == 1 && brokerIdSet.last != brokerId)
+    else if (brokerId >= 0 && brokerIdSet.size == 1 && brokerIdSet.last != brokerId)
       throw new InconsistentBrokerIdException(
         s"Configured broker.id $brokerId doesn't match stored broker.id ${brokerIdSet.last} in meta.properties. " +
         s"If you moved your data, make sure your configured broker.id matches. " +
         s"If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
-    else if(brokerIdSet.isEmpty && brokerId < 0 && config.brokerIdGenerationEnable)  // generate a new brokerId from Zookeeper
+    else if (brokerIdSet.isEmpty && brokerId < 0 && config.brokerIdGenerationEnable) // generate a new brokerId from Zookeeper
       brokerId = generateBrokerId
-    else if(brokerIdSet.size == 1) // pick broker.id from meta.properties
+    else if (brokerIdSet.size == 1) // pick broker.id from meta.properties
       brokerId = brokerIdSet.last
 
 
@@ -678,11 +677,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
     for (logDir <- config.logDirs if logManager.isLogDirOnline(new File(logDir).getAbsolutePath)) {
       val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
-      if(brokerMetadataOpt.isEmpty)
+      if (brokerMetadataOpt.isEmpty)
         logDirsWithoutMetaProps ++= List(logDir)
     }
 
-    for(logDir <- logDirsWithoutMetaProps) {
+    for (logDir <- logDirsWithoutMetaProps) {
       val checkpoint = brokerMetadataCheckpoints(logDir)
       checkpoint.write(BrokerMetadata(brokerId))
     }
