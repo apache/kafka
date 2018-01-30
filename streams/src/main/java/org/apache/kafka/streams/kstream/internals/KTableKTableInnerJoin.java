@@ -109,26 +109,26 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         }
 
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             valueGetter1.init(context);
             valueGetter2.init(context);
         }
 
         @Override
-        public R get(K key) {
-            R newValue = null;
-            V1 value1 = valueGetter1.get(key);
+        public R get(final K key) {
+            final V1 value1 = valueGetter1.get(key);
 
             if (value1 != null) {
                 V2 value2 = valueGetter2.get(keyValueMapper.apply(key, value1));
 
                 if (value2 != null) {
-                    newValue = joiner.apply(value1, value2);
+                    return joiner.apply(value1, value2);
+                } else {
+                    return null;
                 }
+            } else {
+                return null;
             }
-
-            return newValue;
         }
-
     }
 }
