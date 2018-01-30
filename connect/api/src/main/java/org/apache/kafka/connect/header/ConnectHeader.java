@@ -29,11 +29,6 @@ class ConnectHeader implements Header {
 
     private static final SchemaAndValue NULL_SCHEMA_AND_VALUE = new SchemaAndValue(null, null);
 
-    private static final String TRUE_WORD_LITERAL = "true";
-    private static final String TRUE_LETTER_LITERAL = "t";
-    private static final String FALSE_WORD_LITERAL = "false";
-    private static final String FALSE_LETTER_LITERAL = "f";
-
     private final String key;
     private final SchemaAndValue schemaAndValue;
 
@@ -66,6 +61,9 @@ class ConnectHeader implements Header {
     @Override
     public Header rename(String key) {
         Objects.requireNonNull(key, "Null header keys are not permitted");
+        if (this.key.equals(key)) {
+            return this;
+        }
         return new ConnectHeader(key, schemaAndValue);
     }
 
@@ -83,10 +81,6 @@ class ConnectHeader implements Header {
     public boolean equals(Object obj) {
         if (obj == this) {
             return true;
-        }
-        if (obj instanceof ConnectHeader) {
-            ConnectHeader that = (ConnectHeader) obj;
-            return Objects.equals(this.key, that.key()) && Objects.equals(this.schemaAndValue, that.schemaAndValue);
         }
         if (obj instanceof Header) {
             Header that = (Header) obj;

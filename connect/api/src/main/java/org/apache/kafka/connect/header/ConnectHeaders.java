@@ -111,9 +111,7 @@ public class ConnectHeaders implements Headers {
 
     @Override
     public Headers add(Header header) {
-        if (header == null) {
-            throw new IllegalArgumentException("header cannot be null.");
-        }
+        Objects.requireNonNull(header, "Unable to add a null header.");
         if (this.headers == null) {
             synchronized (this) {
                 if (this.headers == null) {
