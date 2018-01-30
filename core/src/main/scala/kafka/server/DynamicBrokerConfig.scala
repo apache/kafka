@@ -29,7 +29,7 @@ import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.{ConfigDef, ConfigException, SslConfigs}
 import org.apache.kafka.common.network.ListenerReconfigurable
-import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
+import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.utils.{Base64, Utils}
 
 import scala.collection._
@@ -136,7 +136,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     if (kafkaServer.logManager.cleaner != null)
       addBrokerReconfigurable(kafkaServer.logManager.cleaner)
     addReconfigurable(new DynamicLogConfig(kafkaServer.logManager))
-    addReconfigurable(new DynamicMetricsReporters(brokerId, this, kafkaServer.metrics))
+    addReconfigurable(new DynamicMetricsReporters(brokerId, kafkaServer))
   }
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
@@ -515,8 +515,10 @@ class DynamicThreadPool(server: KafkaServer) extends BrokerReconfigurable {
   }
 }
 
-class DynamicMetricsReporters(brokerId: Int, dynamicConfig: DynamicBrokerConfig, metrics: Metrics) extends Reconfigurable {
+class DynamicMetricsReporters(brokerId: Int, server: KafkaServer) extends Reconfigurable {
 
+  private val dynamicConfig = server.config.dynamicConfig
+  private val metrics = server.metrics
   private val propsOverride = Map[String, AnyRef](KafkaConfig.BrokerIdProp -> brokerId.toString)
   private val currentReporters = mutable.Map[String, MetricsReporter]()
 
@@ -576,6 +578,7 @@ class DynamicMetricsReporters(brokerId: Int, dynamicConfig: DynamicBrokerConfig,
       metrics.addReporter(reporter)
       currentReporters += reporter.getClass.getName -> reporter
     }
+    server.notifyClusterListeners(reporters.asScala)
   }
 
   private def removeReporter(className: String): Unit = {

@@ -38,9 +38,8 @@ import org.apache.kafka.clients.admin.ConfigEntry.{ConfigSource, ConfigSynonym}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{ConsumerRecord, ConsumerRecords, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, Reconfigurable, TopicPartition}
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.SslConfigs._
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestException}
@@ -823,13 +822,14 @@ object TestMetricsReporter {
   }
 }
 
-class TestMetricsReporter extends MetricsReporter with Reconfigurable with Closeable {
+class TestMetricsReporter extends MetricsReporter with Reconfigurable with Closeable with ClusterResourceListener {
   import TestMetricsReporter._
   val kafkaMetrics = ArrayBuffer[KafkaMetric]()
   @volatile var initializeCount = 0
   @volatile var configureCount = 0
   @volatile var reconfigureCount = 0
   @volatile var closeCount = 0
+  @volatile var clusterUpdateCount = 0
   @volatile var pollingInterval: Int = -1
   testReporters.add(this)
 
@@ -848,6 +848,11 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
 
   override def metricRemoval(metric: KafkaMetric): Unit = {
     kafkaMetrics -= metric
+  }
+
+  override def onUpdate(clusterResource: ClusterResource): Unit = {
+    assertNotNull("Cluster id not set", clusterResource.clusterId)
+    clusterUpdateCount += 1
   }
 
   override def reconfigurableConfigs(): util.Set[String] = {
@@ -872,6 +877,7 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
     assertEquals(1, configureCount)
     assertEquals(reconfigureCount, reconfigureCount)
     assertEquals(deleteCount, closeCount)
+    assertEquals(1, clusterUpdateCount)
     assertEquals(pollingInterval, this.pollingInterval)
   }
 
