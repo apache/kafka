@@ -21,6 +21,10 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+
 class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private final KTableImpl<K, ?, V> parent1;
@@ -56,21 +60,12 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
 
                 @Override
                 public String[] storeNames() {
-                    // we need to allow the downstream processor to be able to access both ends of the joining table's value getters
                     final String[] storeNames1 = parent1.valueGetterSupplier().storeNames();
                     final String[] storeNames2 = parent2.valueGetterSupplier().storeNames();
-
-                    final String[] stores = new String[storeNames1.length + storeNames2.length];
-                    int i = 0;
-                    for (final String storeName : storeNames1) {
-                        stores[i] = storeName;
-                        i++;
-                    }
-                    for (final String storeName : storeNames2) {
-                        stores[i] = storeName;
-                        i++;
-                    }
-                    return stores;
+                    final Set<String> stores = new HashSet<>(storeNames1.length + storeNames2.length);
+                    Collections.addAll(stores, storeNames1);
+                    Collections.addAll(stores, storeNames2);
+                    return stores.toArray(new String[stores.size()]);
                 }
             };
         }

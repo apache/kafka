@@ -42,7 +42,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-public class KTableKTableJoinTest {
+public class KTableKTableInnerJoinTest {
 
     final private String topic1 = "topic1";
     final private String topic2 = "topic2";
