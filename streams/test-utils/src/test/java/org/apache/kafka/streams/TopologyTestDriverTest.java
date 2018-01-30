@@ -636,20 +636,22 @@ public class TopologyTestDriverTest {
 
         final List<Long> expectedPunctuations = new LinkedList<>();
 
-        expectedPunctuations.add(5L);
         testDriver.advanceWallClockTime(5L);
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
+        expectedPunctuations.add(14L);
         testDriver.advanceWallClockTime(9L);
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
-        expectedPunctuations.add(15L);
         testDriver.advanceWallClockTime(1L);
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         expectedPunctuations.add(35L);
-        expectedPunctuations.add(35L);
         testDriver.advanceWallClockTime(20L);
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
+
+        expectedPunctuations.add(40L);
+        testDriver.advanceWallClockTime(5L);
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
     }
 
