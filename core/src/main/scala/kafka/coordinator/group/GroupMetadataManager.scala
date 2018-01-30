@@ -184,37 +184,6 @@ class GroupMetadataManager(brokerId: Int,
     }
   }
 
-  /**
-    * Delete groups
-    */
-  def deleteGroups(groupIds: Seq[String]): Map[String, Errors] = {
-    var eligibleGroups: Seq[GroupMetadata] = Seq()
-    var result: Map[String, Errors] = Map()
-
-    groupIds.foreach { groupId =>
-      getGroup(groupId) match {
-        case None =>
-          result += (groupId -> Errors.GROUP_ID_NOT_FOUND)
-        case Some(group) =>
-          group.inLock {
-            if (!group.is(Empty))
-              result += (groupId -> Errors.NON_EMPTY_GROUP)
-            else {
-              eligibleGroups :+= group
-              cleanupGroupMetadata(None, Seq(group), Long.MaxValue)
-            }
-          }
-      }
-    }
-
-    if (eligibleGroups.nonEmpty) {
-      result ++= eligibleGroups.map(_.groupId -> Errors.NONE).toMap
-      info(s"The following groups were deleted: ${eligibleGroups.map(_.groupId).mkString(", ")}")
-    }
-
-    result
-  }
-
   def storeGroup(group: GroupMetadata,
                  groupAssignment: Map[String, Array[Byte]],
                  responseCallback: Errors => Unit): Unit = {

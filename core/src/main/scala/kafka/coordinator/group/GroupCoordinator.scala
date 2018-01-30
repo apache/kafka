@@ -340,23 +340,48 @@ class GroupCoordinator(val brokerId: Int,
 
   def handleDeleteGroups(groupIds: Set[String]): Map[String, Errors] = {
     if (!isActive.get) {
-      groupIds.map((_ -> Errors.COORDINATOR_NOT_AVAILABLE)).toMap
+      groupIds.map(_ -> Errors.COORDINATOR_NOT_AVAILABLE).toMap
     } else {
       var groupErrors: Map[String, Errors] = Map()
-      var eligibleGroups: Seq[String] = Seq()
+      var eligibleGroups: Seq[GroupMetadata] = Seq()
 
       groupIds.foreach { groupId =>
         if (!validGroupId(groupId))
-          groupErrors += (groupId -> Errors.INVALID_GROUP_ID)
-        else if (!isCoordinatorForGroup(groupId)) {
-          groupErrors += (groupId -> Errors.NOT_COORDINATOR)
-        } else if (isCoordinatorLoadInProgress(groupId))
-          groupErrors += (groupId -> Errors.COORDINATOR_LOAD_IN_PROGRESS)
-        else
-          eligibleGroups ++= Seq(groupId)
+          groupErrors += groupId -> Errors.INVALID_GROUP_ID
+        else if (!isCoordinatorForGroup(groupId))
+          groupErrors += groupId -> Errors.NOT_COORDINATOR
+        else if (isCoordinatorLoadInProgress(groupId))
+          groupErrors += groupId -> Errors.COORDINATOR_LOAD_IN_PROGRESS
+        else {
+          groupManager.getGroup(groupId) match {
+            case None =>
+              groupErrors += groupId -> Errors.GROUP_ID_NOT_FOUND
+            case Some(group) =>
+              group.inLock {
+                group.currentState match {
+                  case Dead =>
+                    if (!isCoordinatorForGroup(groupId))
+                      groupErrors += groupId -> Errors.NOT_COORDINATOR
+                    else
+                      groupErrors += groupId -> Errors.GROUP_ID_NOT_FOUND
+                  case Empty =>
+                    group.transitionTo(Dead)
+                    eligibleGroups :+= group
+                  case _ =>
+                    groupErrors += groupId -> Errors.NON_EMPTY_GROUP
+                }
+              }
+          }
+        }
       }
 
-      groupErrors ++ groupManager.deleteGroups(eligibleGroups)
+      if (eligibleGroups.nonEmpty) {
+        groupManager.cleanupGroupMetadata(None, eligibleGroups, Long.MaxValue)
+        groupErrors ++= eligibleGroups.map(_.groupId -> Errors.NONE).toMap
+        info(s"The following groups were deleted: ${eligibleGroups.map(_.groupId).mkString(", ")}")
+      }
+
+      groupErrors
     }
   }
 

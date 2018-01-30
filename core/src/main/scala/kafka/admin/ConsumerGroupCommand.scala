@@ -480,17 +480,17 @@ object ConsumerGroupCommand extends Logging {
         try {
           if (AdminUtils.deleteConsumerGroupInZK(zkUtils, group)) {
             println(s"Deleted all consumer group information for group '$group' in zookeeper.")
-            (group -> Errors.NONE)
+            group -> Errors.NONE
           }
           else {
             printError(s"Delete for group '$group' failed because its consumers are still active.")
-            (group -> Errors.NON_EMPTY_GROUP)
+            group -> Errors.NON_EMPTY_GROUP
           }
         }
         catch {
           case e: ZkNoNodeException =>
             printError(s"Delete for group '$group' failed because group does not exist.", Some(e))
-            (group -> Errors.forException(e))
+            group -> Errors.forException(e)
         }
       }.toMap
     }
@@ -503,17 +503,17 @@ object ConsumerGroupCommand extends Logging {
         try {
           if (AdminUtils.deleteConsumerGroupInfoForTopicInZK(zkUtils, group, topic)) {
             println(s"Deleted consumer group information for group '$group' topic '$topic' in zookeeper.")
-            (group -> Errors.NONE)
+            group -> Errors.NONE
           }
           else {
             printError(s"Delete for group '$group' topic '$topic' failed because its consumers are still active.")
-            (group -> Errors.NON_EMPTY_GROUP)
+            group -> Errors.NON_EMPTY_GROUP
           }
         }
         catch {
           case e: ZkNoNodeException =>
             printError(s"Delete for group '$group' topic '$topic' failed because group does not exist.", Some(e))
-            (group -> Errors.forException(e))
+            group -> Errors.forException(e)
         }
       }.toMap
     }
@@ -523,7 +523,7 @@ object ConsumerGroupCommand extends Logging {
       Topic.validate(topic)
       val deletedGroups = AdminUtils.deleteAllConsumerGroupInfoForTopicInZK(zkUtils, topic)
       println(s"Deleted consumer group information for all inactive consumer groups for topic '$topic' in zookeeper.")
-      deletedGroups.map((_, Errors.NONE)).toMap
+      deletedGroups.map(_ -> Errors.NONE).toMap
 
     }
 

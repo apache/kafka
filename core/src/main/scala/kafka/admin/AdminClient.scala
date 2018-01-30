@@ -383,22 +383,20 @@ class AdminClient(val time: Time,
       }
     }
 
-    val groupCoordinator = groups.map(group => (group -> coordinatorLookup(group)))
-
     var errors: Map[String, Errors] = Map()
     var groupsPerCoordinator: Map[Node, List[String]] = Map()
 
     groups.foreach { group =>
       coordinatorLookup(group) match {
         case Right(error) =>
-          errors += (group -> error)
+          errors += group -> error
         case Left(coordinator) =>
           groupsPerCoordinator.get(coordinator) match {
-            case Some(gList: List[String]) =>
+            case Some(gList) =>
               val gListNew = group :: gList
-              groupsPerCoordinator += (coordinator -> gListNew)
+              groupsPerCoordinator += coordinator -> gListNew
             case None =>
-              groupsPerCoordinator += (coordinator -> List(group))
+              groupsPerCoordinator += coordinator -> List(group)
           }
       }
     }
@@ -407,8 +405,8 @@ class AdminClient(val time: Time,
       val responseBody = send(coordinator, ApiKeys.DELETE_GROUPS, new DeleteGroupsRequest.Builder(groups.toSet.asJava))
       val response = responseBody.asInstanceOf[DeleteGroupsResponse]
       groups.foreach {
-        case group if (response.hasError(group)) => errors += (group -> response.errors.get(group))
-        case group => errors += (group -> Errors.NONE)
+        case group if response.hasError(group) => errors += group -> response.errors.get(group)
+        case group => errors += group -> Errors.NONE
       }
     }
 

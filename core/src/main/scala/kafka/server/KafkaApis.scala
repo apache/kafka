@@ -1230,7 +1230,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val groupDeletionResult = groupCoordinator.handleDeleteGroups(authorizedGroups) ++
-      unauthorizedGroups.map((_ -> Errors.GROUP_AUTHORIZATION_FAILED))
+      unauthorizedGroups.map(_ -> Errors.GROUP_AUTHORIZATION_FAILED)
 
     sendResponseMaybeThrottle(request, requestThrottleMs =>
       new DeleteGroupsResponse(requestThrottleMs, groupDeletionResult.asJava))
