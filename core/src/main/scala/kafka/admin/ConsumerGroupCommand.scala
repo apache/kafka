@@ -362,11 +362,11 @@ object ConsumerGroupCommand extends Logging {
 
     def deleteGroups(): Map[String, Errors] = {
       if (opts.options.has(opts.groupOpt) && opts.options.has(opts.topicOpt))
-        deleteForTopic()
+        deleteGroupsInfoForTopic()
       else if (opts.options.has(opts.groupOpt))
-        deleteForGroup()
+        deleteGroupsInfo()
       else if (opts.options.has(opts.topicOpt))
-        deleteAllForTopic()
+        deleteAllGroupsInfoForTopic()
 
       Map()
     }
@@ -474,45 +474,57 @@ object ConsumerGroupCommand extends Logging {
       }.toMap
     }
 
-    private def deleteForGroup() {
+    private def deleteGroupsInfo(): Map[String, Errors] = {
       val groups = opts.options.valuesOf(opts.groupOpt)
-      groups.asScala.foreach { group =>
+      groups.asScala.map { group =>
         try {
-          if (AdminUtils.deleteConsumerGroupInZK(zkUtils, group))
+          if (AdminUtils.deleteConsumerGroupInZK(zkUtils, group)) {
             println(s"Deleted all consumer group information for group '$group' in zookeeper.")
-          else
+            (group -> Errors.NONE)
+          }
+          else {
             printError(s"Delete for group '$group' failed because its consumers are still active.")
+            (group -> Errors.NON_EMPTY_GROUP)
+          }
         }
         catch {
           case e: ZkNoNodeException =>
             printError(s"Delete for group '$group' failed because group does not exist.", Some(e))
+            (group -> Errors.forException(e))
         }
-      }
+      }.toMap
     }
 
-    private def deleteForTopic() {
+    private def deleteGroupsInfoForTopic(): Map[String, Errors] = {
       val groups = opts.options.valuesOf(opts.groupOpt)
       val topic = opts.options.valueOf(opts.topicOpt)
       Topic.validate(topic)
-      groups.asScala.foreach { group =>
+      groups.asScala.map { group =>
         try {
-          if (AdminUtils.deleteConsumerGroupInfoForTopicInZK(zkUtils, group, topic))
+          if (AdminUtils.deleteConsumerGroupInfoForTopicInZK(zkUtils, group, topic)) {
             println(s"Deleted consumer group information for group '$group' topic '$topic' in zookeeper.")
-          else
+            (group -> Errors.NONE)
+          }
+          else {
             printError(s"Delete for group '$group' topic '$topic' failed because its consumers are still active.")
+            (group -> Errors.NON_EMPTY_GROUP)
+          }
         }
         catch {
           case e: ZkNoNodeException =>
             printError(s"Delete for group '$group' topic '$topic' failed because group does not exist.", Some(e))
+            (group -> Errors.forException(e))
         }
-      }
+      }.toMap
     }
 
-    private def deleteAllForTopic() {
+    private def deleteAllGroupsInfoForTopic(): Map[String, Errors] = {
       val topic = opts.options.valueOf(opts.topicOpt)
       Topic.validate(topic)
-      AdminUtils.deleteAllConsumerGroupInfoForTopicInZK(zkUtils, topic)
+      val deletedGroups = AdminUtils.deleteAllConsumerGroupInfoForTopicInZK(zkUtils, topic)
       println(s"Deleted consumer group information for all inactive consumer groups for topic '$topic' in zookeeper.")
+      deletedGroups.map((_, Errors.NONE)).toMap
+
     }
 
     private def getZkConsumer(brokerId: Int): Option[SimpleConsumer] = {
@@ -807,7 +819,7 @@ object ConsumerGroupCommand extends Logging {
       val groupsToDelete = opts.options.valuesOf(opts.groupOpt).asScala.toList
       val result = adminClient.deleteConsumerGroups(groupsToDelete)
       val successfullyDeleted = result.filter {
-        case (group, error) => error == Errors.NONE
+        case (_, error) => error == Errors.NONE
       }.keySet
 
       if (successfullyDeleted.size == result.size)

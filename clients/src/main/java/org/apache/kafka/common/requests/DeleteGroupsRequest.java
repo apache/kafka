@@ -93,7 +93,7 @@ public class DeleteGroupsRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
-        Map<String, Errors> groupErrors = new HashMap<>();
+        Map<String, Errors> groupErrors = new HashMap<>(groups.size());
         for (String group : groups)
             groupErrors.put(group, error);
 
@@ -102,7 +102,7 @@ public class DeleteGroupsRequest extends AbstractRequest {
                 return new DeleteGroupsResponse(throttleTimeMs, groupErrors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    version(), this.getClass().getSimpleName(), ApiKeys.DELETE_GROUPS.latestVersion()));
+                    version(), ApiKeys.DELETE_GROUPS.name, ApiKeys.DELETE_GROUPS.latestVersion()));
         }
     }
 

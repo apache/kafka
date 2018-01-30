@@ -1320,6 +1320,50 @@ class GroupCoordinatorTest extends JUnitSuite {
   }
 
   @Test
+  def testDeleteEmptyGroupWithStoredOffsets() {
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+
+    val joinGroupResult = joinGroup(groupId, memberId, protocolType, protocols)
+    val assignedMemberId = joinGroupResult.memberId
+    val joinGroupError = joinGroupResult.error
+    assertEquals(Errors.NONE, joinGroupError)
+
+    EasyMock.reset(replicaManager)
+    val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
+    val syncGroupError = syncGroupResult._2
+    assertEquals(Errors.NONE, syncGroupError)
+
+    EasyMock.reset(replicaManager)
+    val tp = new TopicPartition("topic", 0)
+    val offset = OffsetAndMetadata(0)
+    val commitOffsetResult = commitOffsets(groupId, assignedMemberId, joinGroupResult.generationId, immutable.Map(tp -> offset))
+    assertEquals(Errors.NONE, commitOffsetResult(tp))
+
+    val describeGroupResult = groupCoordinator.handleDescribeGroup(groupId)
+    assertEquals(Stable.toString, describeGroupResult._2.state)
+    assertEquals(assignedMemberId, describeGroupResult._2.members.head.memberId)
+
+    EasyMock.reset(replicaManager)
+    val leaveGroupResult = leaveGroup(groupId, assignedMemberId)
+    assertEquals(Errors.NONE, leaveGroupResult)
+
+    val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
+    val partition = EasyMock.niceMock(classOf[Partition])
+
+    EasyMock.reset(replicaManager)
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    EasyMock.expect(replicaManager.getPartition(groupTopicPartition)).andStubReturn(Some(partition))
+    EasyMock.expect(replicaManager.nonOfflinePartition(groupTopicPartition)).andStubReturn(Some(partition))
+    EasyMock.replay(replicaManager, partition)
+
+    val (error, result) = groupCoordinator.handleDeleteGroups(Set(groupId).toSet)
+    assertEquals(Errors.NONE, error)
+    assert(result.size == 1 && result.contains(groupId) && result.get(groupId).contains(Errors.NONE))
+
+    assertEquals(Dead.toString, groupCoordinator.handleDescribeGroup(groupId)._2.state)
+  }
+
+  @Test
   def shouldDelayInitialRebalanceByGroupInitialRebalanceDelayOnEmptyGroup() {
     val firstJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
     timer.advanceClock(GroupInitialRebalanceDelay / 2)

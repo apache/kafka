@@ -543,7 +543,7 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def handleDeletedPartitions(topicPartitions: Seq[TopicPartition]) {
-    groupManager.cleanupGroupMetadata(Some(topicPartitions))
+    groupManager.cleanupGroupMetadata(Some(topicPartitions), groupManager.currentGroups, time.milliseconds())
   }
 
   private def validateGroup(groupId: String): Option[Errors] = {

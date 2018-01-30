@@ -1224,17 +1224,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDeleteGroupsRequest(request: RequestChannel.Request): Unit = {
     val deleteGroupsRequest = request.body[DeleteGroupsRequest]
     var groups = deleteGroupsRequest.groups.asScala.toSet
-    var unauthorizedGroupsDeletionResult: Map[String, Errors] = Map()
 
-    groups.foreach { group =>
-      if (!authorize(request.session, Delete, new Resource(Group, group))) {
-        unauthorizedGroupsDeletionResult += (group -> Errors.GROUP_AUTHORIZATION_FAILED)
-        groups -= group
-      }
+    val (authorizedGroups, unauthorizedGroups) = groups.partition { group =>
+      authorize(request.session, Delete, new Resource(Group, group))
     }
 
-    val authorizedGroupsDeletionResult = groupCoordinator.handleDeleteGroups(groups)
-    val groupDeletionResult = authorizedGroupsDeletionResult._2 ++ unauthorizedGroupsDeletionResult
+    val groupDeletionResult = groupCoordinator.handleDeleteGroups(authorizedGroups)._2 ++
+      unauthorizedGroups.map((_ -> Errors.GROUP_AUTHORIZATION_FAILED))
+
     sendResponseMaybeThrottle(request, requestThrottleMs =>
       new DeleteGroupsResponse(requestThrottleMs, groupDeletionResult.asJava))
   }

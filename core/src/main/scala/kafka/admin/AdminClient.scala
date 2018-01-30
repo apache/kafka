@@ -370,23 +370,38 @@ class AdminClient(val time: Time,
   }
 
   def deleteConsumerGroups(groups: List[String]): Map[String, Errors] = {
-    var errors: Map[String, Errors] = Map()
-    val groupsPerCoordinator = groups.map { group =>
+
+    def coordinatorLookup(group: String): Either[Node, Errors] = {
       try {
-        (group, findCoordinator(group))
+        Left(findCoordinator(group))
       } catch {
         case e: Throwable =>
-          errors += (group -> {
-            if (e.isInstanceOf[TimeoutException])
-              Errors.COORDINATOR_NOT_AVAILABLE
-            else
-              Errors.forException(e)
-          })
-          (group, null)
+          if (e.isInstanceOf[TimeoutException])
+            Right(Errors.COORDINATOR_NOT_AVAILABLE)
+          else
+            Right(Errors.forException(e))
       }
-    }.groupBy(_._2).map {
-      case (coordinator, groupCoordinator) => (coordinator, groupCoordinator.unzip._1.toArray)
-    }.filter(_._1 != null)
+    }
+
+    val groupCoordinator = groups.map(group => (group -> coordinatorLookup(group)))
+
+    var errors: Map[String, Errors] = Map()
+    var groupsPerCoordinator: Map[Node, List[String]] = Map()
+
+    groups.foreach { group =>
+      coordinatorLookup(group) match {
+        case Right(error) =>
+          errors += (group -> error)
+        case Left(coordinator) =>
+          groupsPerCoordinator.get(coordinator) match {
+            case Some(gList: List[String]) =>
+              val gListNew = group :: gList
+              groupsPerCoordinator += (coordinator -> gListNew)
+            case None =>
+              groupsPerCoordinator += (coordinator -> List(group))
+          }
+      }
+    }
 
     groupsPerCoordinator.foreach { case (coordinator, groups) =>
       val responseBody = send(coordinator, ApiKeys.DELETE_GROUPS, new DeleteGroupsRequest.Builder(groups.toSet.asJava))

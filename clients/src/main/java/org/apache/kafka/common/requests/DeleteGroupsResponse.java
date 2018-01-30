@@ -52,7 +52,9 @@ public class DeleteGroupsResponse extends AbstractResponse {
     /**
      * Possible error codes:
      *
+     * COORDINATOR_LOAD_IN_PROGRESS (14)
      * COORDINATOR_NOT_AVAILABLE(15)
+     * NOT_COORDINATOR (16)
      * INVALID_GROUP_ID(24)
      * GROUP_AUTHORIZATION_FAILED(30)
      * NON_EMPTY_GROUP(68)

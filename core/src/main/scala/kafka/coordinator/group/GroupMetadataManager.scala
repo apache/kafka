@@ -192,19 +192,22 @@ class GroupMetadataManager(brokerId: Int,
     var result: Map[String, Errors] = Map()
 
     groupIds.foreach { groupId =>
-      if (!groupMetadataCache.contains(groupId))
-        result += (groupId -> Errors.GROUP_ID_NOT_FOUND)
-      else {
-        val group = groupMetadataCache.get(groupId)
-        if (!group.is(Empty))
-          result += (groupId -> Errors.NON_EMPTY_GROUP)
-        else
-          eligibleGroups ++= Seq(group)
+      getGroup(groupId) match {
+        case None =>
+          result += (groupId -> Errors.GROUP_ID_NOT_FOUND)
+        case Some(group) =>
+          group.inLock {
+            if (!group.is(Empty))
+              result += (groupId -> Errors.NON_EMPTY_GROUP)
+            else {
+              eligibleGroups :+= group
+              cleanupGroupMetadata(None, Seq(group), Long.MaxValue)
+            }
+          }
       }
     }
 
     if (eligibleGroups.nonEmpty) {
-      cleanupGroupMetadata(None, eligibleGroups, Long.MaxValue)
       result ++= eligibleGroups.map(_.groupId -> Errors.NONE).toMap
       info(s"The following groups were deleted: ${eligibleGroups.map(_.groupId).mkString(", ")}")
     }
@@ -734,12 +737,12 @@ class GroupMetadataManager(brokerId: Int,
 
   // visible for testing
   private[group] def cleanupGroupMetadata(): Unit = {
-    cleanupGroupMetadata(None)
+    cleanupGroupMetadata(None, groupMetadataCache.values, time.milliseconds())
   }
 
   def cleanupGroupMetadata(deletedTopicPartitions: Option[Seq[TopicPartition]],
-                           groups: Iterable[GroupMetadata] = groupMetadataCache.values,
-                           startMs: Long = time.milliseconds()) {
+                           groups: Iterable[GroupMetadata],
+                           startMs: Long) {
     var offsetsRemoved = 0
 
     groups.foreach { group =>
