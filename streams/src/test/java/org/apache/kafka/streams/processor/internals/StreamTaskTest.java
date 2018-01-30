@@ -409,7 +409,8 @@ public class StreamTaskTest {
     @Test
     public void shouldPunctuateOnceStreamTimeAfterGap() {
         task = createStatelessTask(false);
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
 
         task.addRecords(partition1, records(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
@@ -558,7 +559,8 @@ public class StreamTaskTest {
     @Test
     public void shouldPunctuateOnceSystemTimeAfterGap() {
         task = createStatelessTask(false);
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
         long now = time.milliseconds();
         time.sleep(100);
         assertTrue(task.maybePunctuateSystemTime());
