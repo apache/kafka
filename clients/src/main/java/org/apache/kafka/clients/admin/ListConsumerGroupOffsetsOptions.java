@@ -23,12 +23,12 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.List;
 
 /**
- * Options for {@link AdminClient#listGroupOffsets(String)}.
+ * Options for {@link AdminClient#listConsumerGroupOffsets(String)}.
  * <p>
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class ListGroupOffsetsOptions extends AbstractOptions<ListGroupOffsetsOptions> {
+public class ListConsumerGroupOffsetsOptions extends AbstractOptions<ListConsumerGroupOffsetsOptions> {
 
     private List<TopicPartition> topicPartitions = null;
 
@@ -39,7 +39,7 @@ public class ListGroupOffsetsOptions extends AbstractOptions<ListGroupOffsetsOpt
      * @param topicPartitions List of topic partitions to include
      * @return This ListGroupOffsetsOptions
      */
-    public ListGroupOffsetsOptions topicPartitions(List<TopicPartition> topicPartitions) {
+    public ListConsumerGroupOffsetsOptions topicPartitions(List<TopicPartition> topicPartitions) {
         this.topicPartitions = topicPartitions;
         return this;
     }

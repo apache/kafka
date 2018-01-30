@@ -22,25 +22,28 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.List;
 
 /**
- * A detailed description of a single group in the cluster.
+ * A detailed description of a single consumer group in the cluster.
  */
-public class GroupDescription {
+public class ConsumerGroupDescription {
 
     private final String groupId;
-    private final String protocolType;
+    private final boolean isSimpleConsumerGroup;
     private final List<MemberDescription> members;
+    private final String protocol;
 
     /**
      * Creates an instance with the specified parameters.
      *
-     * @param groupId      The group id
-     * @param protocolType The protocol type
-     * @param members      The group members
+     * @param groupId               The consumer group id
+     * @param isSimpleConsumerGroup if Consumer Group is simple
+     * @param members               The consumer group members
+     * @param protocol              The consumer group protocol
      */
-    public GroupDescription(String groupId, String protocolType, List<MemberDescription> members) {
+    public ConsumerGroupDescription(String groupId, boolean isSimpleConsumerGroup, List<MemberDescription> members, String protocol) {
         this.groupId = groupId;
-        this.protocolType = protocolType;
+        this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.members = members;
+        this.protocol = protocol;
     }
 
     @Override
@@ -48,45 +51,54 @@ public class GroupDescription {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        GroupDescription that = (GroupDescription) o;
+        ConsumerGroupDescription that = (ConsumerGroupDescription) o;
 
+        if (isSimpleConsumerGroup != that.isSimpleConsumerGroup) return false;
         if (groupId != null ? !groupId.equals(that.groupId) : that.groupId != null) return false;
-        if (protocolType != null ? !protocolType.equals(that.protocolType) : that.protocolType != null) return false;
-        return members != null ? members.equals(that.members) : that.members == null;
+        if (members != null ? !members.equals(that.members) : that.members != null) return false;
+        return protocol != null ? protocol.equals(that.protocol) : that.protocol == null;
     }
 
     @Override
     public int hashCode() {
         int result = groupId != null ? groupId.hashCode() : 0;
-        result = 31 * result + (protocolType != null ? protocolType.hashCode() : 0);
+        result = 31 * result + (isSimpleConsumerGroup ? 1 : 0);
         result = 31 * result + (members != null ? members.hashCode() : 0);
+        result = 31 * result + (protocol != null ? protocol.hashCode() : 0);
         return result;
     }
 
     /**
-     * The id of the group.
+     * The id of the consumer group.
      */
     public String groupId() {
         return groupId;
     }
 
     /**
-     * The protocol type of the group.
+     * If consumer group is simple or not.
      */
-    public String protocolType() {
-        return protocolType;
+    public boolean isSimpleConsumerGroup() {
+        return isSimpleConsumerGroup;
     }
 
     /**
-     * A list of the members of the group.
+     * A list of the members of the consumer group.
      */
     public List<MemberDescription> members() {
         return members;
     }
 
+    /**
+     * The consumer group protocol.
+     */
+    public String protocol() {
+        return protocol;
+    }
+
     @Override
     public String toString() {
-        return "(groupId=" + groupId + ", protocolType=" + protocolType + ", members=" +
-            Utils.join(members, ",") + ")";
+        return "(groupId=" + groupId + ", isSimpleConsumerGroup=" + isSimpleConsumerGroup + ", members=" +
+            Utils.join(members, ",") + ", protocol=" + protocol + ")";
     }
 }

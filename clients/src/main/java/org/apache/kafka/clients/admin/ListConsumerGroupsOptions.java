@@ -17,30 +17,13 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
- * A listing of a group in the cluster.
+ * Options for {@link AdminClient#listConsumerGroups()}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
  */
-public class GroupListing {
-    private final String protocolType;
-
-    /**
-     * Create an instance with the specified parameters.
-     *
-     * @param protocolType The group protocol type
-     */
-    public GroupListing(String protocolType) {
-        this.protocolType = protocolType;
-    }
-
-    /**
-     * The protocol type of the group.
-     */
-    public String protocolType() {
-        return protocolType;
-    }
-
-    @Override
-    public String toString() {
-        return "(protocolType=" + protocolType + ")";
-    }
+@InterfaceStability.Evolving
+public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroupsOptions> {
 }

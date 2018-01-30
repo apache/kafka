@@ -27,36 +27,36 @@ import java.util.concurrent.ExecutionException;
 
 
 /**
- * The result of the {@link KafkaAdminClient#describeGroups(Collection, DescribeGroupsOptions)}} call.
+ * The result of the {@link KafkaAdminClient#describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)}} call.
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class DescribeGroupsResult {
+public class DescribeConsumerGroupsResult {
 
-    private final Map<String, KafkaFuture<GroupDescription>> futures;
+    private final Map<String, KafkaFuture<ConsumerGroupDescription>> futures;
 
-    public DescribeGroupsResult(Map<String, KafkaFuture<GroupDescription>> futures) {
+    public DescribeConsumerGroupsResult(Map<String, KafkaFuture<ConsumerGroupDescription>> futures) {
         this.futures = futures;
     }
 
     /**
-     * Return a map from group name to futures which can be used to check the description of group.
+     * Return a map from group name to futures which can be used to check the description of a consumer group.
      */
-    public Map<String, KafkaFuture<GroupDescription>> values() {
+    public Map<String, KafkaFuture<ConsumerGroupDescription>> values() {
         return futures;
     }
 
     /**
-     * Return a future which succeeds only if all the group descriptions succeed.
+     * Return a future which succeeds only if all the consumer group descriptions succeed.
      */
-    public KafkaFuture<Map<String, GroupDescription>> all() {
+    public KafkaFuture<Map<String, ConsumerGroupDescription>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
-            thenApply(new KafkaFuture.Function<Void, Map<String, GroupDescription>>() {
+            thenApply(new KafkaFuture.Function<Void, Map<String, ConsumerGroupDescription>>() {
                 @Override
-                public Map<String, GroupDescription> apply(Void v) {
-                    Map<String, GroupDescription> descriptions = new HashMap<>(futures.size());
-                    for (Map.Entry<String, KafkaFuture<GroupDescription>> entry : futures.entrySet()) {
+                public Map<String, ConsumerGroupDescription> apply(Void v) {
+                    Map<String, ConsumerGroupDescription> descriptions = new HashMap<>(futures.size());
+                    for (Map.Entry<String, KafkaFuture<ConsumerGroupDescription>> entry : futures.entrySet()) {
                         try {
                             descriptions.put(entry.getKey(), entry.getValue().get());
                         } catch (InterruptedException | ExecutionException e) {

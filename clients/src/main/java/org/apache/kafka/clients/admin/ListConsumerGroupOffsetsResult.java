@@ -27,16 +27,16 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * The result of the {@link AdminClient#listGroupOffsets(String)} call.
+ * The result of the {@link AdminClient#listConsumerGroupOffsets(String)} call.
  * <p>
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class ListGroupOffsetsResult {
+public class ListConsumerGroupOffsetsResult {
 
     final KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> future;
 
-    ListGroupOffsetsResult(KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
+    ListConsumerGroupOffsetsResult(KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
         this.future = future;
     }
 

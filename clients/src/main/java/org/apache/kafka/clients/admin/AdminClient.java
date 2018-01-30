@@ -542,41 +542,21 @@ public abstract class AdminClient implements AutoCloseable {
      * @param options  The options to use when describing the groups.
      * @return The DescribeConsumerGroupResult.
      */
-    public abstract DescribeGroupsResult describeGroups(Collection<String> groupIds,
-                                                        DescribeGroupsOptions options);
+    public abstract DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds,
+                                                                        DescribeConsumerGroupsOptions options);
 
     /**
      * Describe some group IDs in the cluster, with the default options.
      * <p>
      * This is a convenience method for
-     * #{@link AdminClient#describeGroups(Collection, DescribeGroupsOptions)} with
+     * #{@link AdminClient#describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)} with
      * default options. See the overload for more details.
      *
      * @param groupIds The IDs of the groups to describe.
      * @return The DescribeConsumerGroupResult.
      */
-    public DescribeGroupsResult describeGroups(Collection<String> groupIds) {
-        return describeGroups(groupIds, new DescribeGroupsOptions());
-    }
-
-    /**
-     * List the groups available in the cluster.
-     *
-     * @param options           The options to use when listing the groups.
-     * @return The ListGroupsResult.
-     */
-    public abstract ListGroupsResult listGroups(ListGroupsOptions options);
-
-    /**
-     * List the groups available in the cluster with the default options.
-     *
-     * This is a convenience method for #{@link AdminClient#listGroups(ListGroupsOptions)} with default options.
-     * See the overload for more details.
-     *
-     * @return The ListGroupsResult.
-     */
-    public ListGroupsResult listGroups() {
-        return listGroups(new ListGroupsOptions());
+    public DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds) {
+        return describeConsumerGroups(groupIds, new DescribeConsumerGroupsOptions());
     }
 
     /**
@@ -585,18 +565,18 @@ public abstract class AdminClient implements AutoCloseable {
      * @param options           The options to use when listing the groups.
      * @return The ListGroupsResult.
      */
-    public abstract ListGroupsResult listConsumerGroups(ListGroupsOptions options);
+    public abstract ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options);
 
     /**
      * List the consumer groups available in the cluster with the default options.
      *
-     * This is a convenience method for #{@link AdminClient#listConsumerGroups(ListGroupsOptions)} with default options.
+     * This is a convenience method for #{@link AdminClient#listConsumerGroups(ListConsumerGroupsOptions)} with default options.
      * See the overload for more details.
      *
      * @return The ListGroupsResult.
      */
-    public ListGroupsResult listConsumerGroups() {
-        return listConsumerGroups(new ListGroupsOptions());
+    public ListConsumerGroupsResult listConsumerGroups() {
+        return listConsumerGroups(new ListConsumerGroupsOptions());
     }
 
     /**
@@ -605,16 +585,16 @@ public abstract class AdminClient implements AutoCloseable {
      * @param options           The options to use when listing the group offsets.
      * @return The ListGroupOffsetsResult
      */
-    public abstract ListGroupOffsetsResult listGroupOffsets(String groupId, ListGroupOffsetsOptions options);
+    public abstract ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options);
 
     /**
      * List the group offsets available in the cluster with the default options.
      *
-     * This is a convenience method for #{@link AdminClient#listGroupOffsets(String, ListGroupOffsetsOptions)} with default options.
+     * This is a convenience method for #{@link AdminClient#listConsumerGroupOffsets(String, ListConsumerGroupOffsetsOptions)} with default options.
      *
      * @return The ListGroupOffsetsResult.
      */
-    public ListGroupOffsetsResult listGroupOffsets(String groupId) {
-        return listGroupOffsets(groupId, new ListGroupOffsetsOptions());
+    public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId) {
+        return listConsumerGroupOffsets(groupId, new ListConsumerGroupOffsetsOptions());
     }
 }

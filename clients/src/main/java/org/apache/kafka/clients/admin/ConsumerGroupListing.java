@@ -17,15 +17,30 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
-import java.util.Collection;
-
 /**
- * Options for {@link AdminClient#describeGroups(Collection, DescribeGroupsOptions)}.
- * <p>
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * A listing of a consumer group in the cluster.
  */
-@InterfaceStability.Evolving
-public class DescribeGroupsOptions extends AbstractOptions<DescribeGroupsOptions> {
+public class ConsumerGroupListing {
+    private final boolean isSimpleConsumerGroup;
+
+    /**
+     * Create an instance with the specified parameters.
+     *
+     * @param isSimpleConsumerGroup If consumer group is simple or not.
+     */
+    public ConsumerGroupListing(boolean isSimpleConsumerGroup) {
+        this.isSimpleConsumerGroup = isSimpleConsumerGroup;
+    }
+
+    /**
+     * If Consumer Group is simple or not.
+     */
+    public boolean isSimpleConsumerGroup() {
+        return isSimpleConsumerGroup;
+    }
+
+    @Override
+    public String toString() {
+        return "(isSimpleConsumerGroup=" + isSimpleConsumerGroup + ")";
+    }
 }

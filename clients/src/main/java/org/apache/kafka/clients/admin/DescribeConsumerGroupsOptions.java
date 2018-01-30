@@ -19,11 +19,13 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Collection;
+
 /**
- * Options for {@link AdminClient#listGroups()} and {@link AdminClient#listConsumerGroups()}.
- *
+ * Options for {@link AdminClient#describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)}.
+ * <p>
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
+public class DescribeConsumerGroupsOptions extends AbstractOptions<DescribeConsumerGroupsOptions> {
 }
