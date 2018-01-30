@@ -73,9 +73,11 @@ public class StreamPartitionAssignorTest {
     private final TopicPartition t1p0 = new TopicPartition("topic1", 0);
     private final TopicPartition t1p1 = new TopicPartition("topic1", 1);
     private final TopicPartition t1p2 = new TopicPartition("topic1", 2);
+    private final TopicPartition t1p3 = new TopicPartition("topic1", 3);
     private final TopicPartition t2p0 = new TopicPartition("topic2", 0);
     private final TopicPartition t2p1 = new TopicPartition("topic2", 1);
     private final TopicPartition t2p2 = new TopicPartition("topic2", 2);
+    private final TopicPartition t2p3 = new TopicPartition("topic2", 3);
     private final TopicPartition t3p0 = new TopicPartition("topic3", 0);
     private final TopicPartition t3p1 = new TopicPartition("topic3", 1);
     private final TopicPartition t3p2 = new TopicPartition("topic3", 2);
@@ -149,6 +151,33 @@ public class StreamPartitionAssignorTest {
         EasyMock.replay(threadDataProvider);
     }
 
+
+    @Test
+    public void shouldInterleaveTasksByGroupId() {
+        final TaskId taskIdA0 = new TaskId(0, 0);
+        final TaskId taskIdA1 = new TaskId(0, 1);
+        final TaskId taskIdA2 = new TaskId(0, 2);
+        final TaskId taskIdA3 = new TaskId(0, 3);
+
+        final TaskId taskIdB0 = new TaskId(1, 0);
+        final TaskId taskIdB1 = new TaskId(1, 1);
+        final TaskId taskIdB2 = new TaskId(1, 2);
+
+        final TaskId taskIdC0 = new TaskId(2, 0);
+        final TaskId taskIdC1 = new TaskId(2, 1);
+
+        final List<TaskId> expectedSubList1 = Arrays.asList(taskIdA0, taskIdA3, taskIdB2);
+        final List<TaskId> expectedSubList2 = Arrays.asList(taskIdA1, taskIdB0, taskIdC0);
+        final List<TaskId> expectedSubList3 = Arrays.asList(taskIdA2, taskIdB1, taskIdC1);
+        final List<List<TaskId>> embeddedList = Arrays.asList(expectedSubList1, expectedSubList2, expectedSubList3);
+
+        List<TaskId> tasks = Arrays.asList(taskIdC0, taskIdC1, taskIdB0, taskIdB1, taskIdB2, taskIdA0, taskIdA1, taskIdA2, taskIdA3);
+        Collections.shuffle(tasks);
+
+        final List<List<TaskId>> interleavedTaskIds = partitionAssignor.interleaveTasksByGroupId(tasks, 3);
+
+        assertThat(interleavedTaskIds, equalTo(embeddedList));
+    }
 
     @Test
     public void testSubscription() throws Exception {
@@ -241,6 +270,74 @@ public class StreamPartitionAssignorTest {
 
         assertEquals(3, allActiveTasks.size());
         assertEquals(allTasks, allActiveTasks);
+    }
+
+    @Test
+    public void shouldAssignEvenlyAcrossConsumersOneClientMultipleThreads() throws Exception {
+        builder.addSource(null, "source1", null, null, null, "topic1");
+        builder.addSource(null, "source2", null, null, null, "topic2");
+        builder.addProcessor("processor", new MockProcessorSupplier(), "source1");
+        builder.addProcessor("processorII", new MockProcessorSupplier(),  "source2");
+
+        final List<PartitionInfo> localInfos = Arrays.asList(
+            new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic1", 1, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic1", 2, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic1", 3, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic2", 0, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic2", 1, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic2", 2, Node.noNode(), new Node[0], new Node[0]),
+            new PartitionInfo("topic2", 3, Node.noNode(), new Node[0], new Node[0])
+        );
+
+        final Cluster localMetadata = new Cluster(
+            "cluster",
+            Collections.singletonList(Node.noNode()),
+            localInfos, Collections.<String>emptySet(),
+            Collections.<String>emptySet());
+
+        final List<String> topics = Utils.mkList("topic1", "topic2");
+
+        final TaskId taskIdA0 = new TaskId(0, 0);
+        final TaskId taskIdA1 = new TaskId(0, 1);
+        final TaskId taskIdA2 = new TaskId(0, 2);
+        final TaskId taskIdA3 = new TaskId(0, 3);
+
+        final TaskId taskIdB0 = new TaskId(1, 0);
+        final TaskId taskIdB1 = new TaskId(1, 1);
+        final TaskId taskIdB2 = new TaskId(1, 2);
+        final TaskId taskIdB3 = new TaskId(1, 3);
+
+        final UUID uuid1 = UUID.randomUUID();
+
+        mockTaskManager(new HashSet<TaskId>(), new HashSet<TaskId>(), uuid1, builder);
+        configurePartitionAssignor(Collections.<String, Object>emptyMap());
+
+        partitionAssignor.setInternalTopicManager(new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer));
+
+        final Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
+        subscriptions.put("consumer10",
+                          new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, new HashSet<TaskId>(), new HashSet<TaskId>(), userEndPoint).encode()));
+        subscriptions.put("consumer11",
+                          new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, new HashSet<TaskId>(), new HashSet<TaskId>(), userEndPoint).encode()));
+
+        final Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(localMetadata, subscriptions);
+
+        // check assigned partitions
+        assertEquals(Utils.mkSet(Utils.mkSet(t2p2, t1p0, t1p2, t2p0), Utils.mkSet(t1p1, t2p1, t1p3, t2p3)),
+                     Utils.mkSet(new HashSet<>(assignments.get("consumer10").partitions()), new HashSet<>(assignments.get("consumer11").partitions())));
+
+        // the first consumer
+        final AssignmentInfo info10 = AssignmentInfo.decode(assignments.get("consumer10").userData());
+
+        final List<TaskId> expectedInfo10TaskIds = Arrays.asList(taskIdA1, taskIdA3, taskIdB1, taskIdB3);
+        assertEquals(expectedInfo10TaskIds, info10.activeTasks);
+
+        // the second consumer
+        final AssignmentInfo info11 = AssignmentInfo.decode(assignments.get("consumer11").userData());
+        final List<TaskId> expectedInfo11TaskIds = Arrays.asList(taskIdA0, taskIdA2, taskIdB0, taskIdB2);
+
+        assertEquals(expectedInfo11TaskIds, info11.activeTasks);
     }
 
     @Test

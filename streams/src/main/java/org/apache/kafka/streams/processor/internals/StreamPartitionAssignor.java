@@ -45,6 +45,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -531,27 +532,26 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
             final Set<String> consumers = entry.getValue().consumers;
             final ClientState state = entry.getValue().state;
 
-            final ArrayList<TaskId> taskIds = new ArrayList<>(state.assignedTaskCount());
-            final int numActiveTasks = state.activeTaskCount();
+            final List<List<TaskId>> interleavedActive = interleaveTasksByGroupId(state.activeTasks(), consumers.size());
+            final List<List<TaskId>> interleavedStandby = interleaveTasksByGroupId(state.standbyTasks(), consumers.size());
 
-            taskIds.addAll(state.activeTasks());
-            taskIds.addAll(state.standbyTasks());
+            int consumerTaskIndex = 0;
 
-            final int numConsumers = consumers.size();
-
-            int i = 0;
             for (String consumer : consumers) {
                 Map<TaskId, Set<TopicPartition>> standby = new HashMap<>();
                 ArrayList<AssignedPartition> assignedPartitions = new ArrayList<>();
 
-                final int numTaskIds = taskIds.size();
-                for (int j = i; j < numTaskIds; j += numConsumers) {
-                    TaskId taskId = taskIds.get(j);
-                    if (j < numActiveTasks) {
-                        for (TopicPartition partition : partitionsForTask.get(taskId)) {
-                            assignedPartitions.add(new AssignedPartition(taskId, partition));
-                        }
-                    } else {
+                final List<TaskId> assignedActiveList = interleavedActive.get(consumerTaskIndex);
+
+                for (final TaskId taskId : assignedActiveList) {
+                    for (final TopicPartition partition : partitionsForTask.get(taskId)) {
+                        assignedPartitions.add(new AssignedPartition(taskId, partition));
+                    }
+                }
+
+                if (!state.standbyTasks().isEmpty()) {
+                    final List<TaskId> assignedStandbyList = interleavedStandby.get(consumerTaskIndex);
+                    for (final TaskId taskId : assignedStandbyList) {
                         Set<TopicPartition> standbyPartitions = standby.get(taskId);
                         if (standbyPartitions == null) {
                             standbyPartitions = new HashSet<>();
@@ -560,6 +560,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
                         standbyPartitions.addAll(partitionsForTask.get(taskId));
                     }
                 }
+
+                consumerTaskIndex++;
 
                 Collections.sort(assignedPartitions);
                 List<TaskId> active = new ArrayList<>();
@@ -571,11 +573,30 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
 
                 // finally, encode the assignment before sending back to coordinator
                 assignment.put(consumer, new Assignment(activePartitions, new AssignmentInfo(active, standby, partitionsByHostState).encode()));
-                i++;
             }
         }
 
         return assignment;
+    }
+
+    // visible for testing
+    List<List<TaskId>> interleaveTasksByGroupId(final Collection<TaskId> taskIds, final int numberThreads) {
+        final LinkedList<TaskId> sortedTasks = new LinkedList<>(taskIds);
+        Collections.sort(sortedTasks);
+        final List<List<TaskId>> taskIdsForConsumerAssignment = new ArrayList<>(numberThreads);
+        for (int i = 0; i < numberThreads; i++) {
+            taskIdsForConsumerAssignment.add(new ArrayList<TaskId>());
+        }
+        while (!sortedTasks.isEmpty()) {
+            for (final List<TaskId> taskIdList : taskIdsForConsumerAssignment) {
+                final TaskId taskId = sortedTasks.poll();
+                if (taskId == null) {
+                    break;
+                }
+                taskIdList.add(taskId);
+            }
+        }
+        return taskIdsForConsumerAssignment;
     }
 
     /**
