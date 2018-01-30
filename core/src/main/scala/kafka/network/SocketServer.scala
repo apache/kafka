@@ -161,13 +161,12 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     info("Stopped socket server request processors")
   }
 
-  def resizeThreadPool(newNumNetworkThreads: Int): Unit = {
-    val numNetworkThreads = config.numNetworkThreads.toInt
-    if (newNumNetworkThreads > numNetworkThreads)
-      createProcessors(newNumNetworkThreads - numNetworkThreads)
-    else if (newNumNetworkThreads < numNetworkThreads)
-      acceptors.values.foreach(_.removeProcessors(numNetworkThreads - newNumNetworkThreads, requestChannel))
-    info(s"Resized network thread pool size for each listener to $newNumNetworkThreads")
+  def resizeThreadPool(oldNumNetworkThreads: Int, newNumNetworkThreads: Int): Unit = {
+    info(s"Resizing network thread pool size for each listener from $oldNumNetworkThreads to $newNumNetworkThreads")
+    if (newNumNetworkThreads > oldNumNetworkThreads)
+      createProcessors(newNumNetworkThreads - oldNumNetworkThreads)
+    else if (newNumNetworkThreads < oldNumNetworkThreads)
+      acceptors.values.foreach(_.removeProcessors(oldNumNetworkThreads - newNumNetworkThreads, requestChannel))
   }
 
   /**

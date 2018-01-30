@@ -81,18 +81,15 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
     }
     lock synchronized {
       val currentSize = numFetchersPerBroker
+      info(s"Resizing fetcher thread pool size from $currentSize to $newSize")
       numFetchersPerBroker = newSize
-      if (newSize > currentSize) {
-        // We could just migrate (newSize - currentSize)/newSize partitions explicitly to new threads
-        // But this is currently reassigning all partitions using the new thread size so that hash-based
-        // allocation works with partition add/delete as it did before.
-        migratePartitions(newSize)
-      } else if (newSize < currentSize) {
-        // Same as above, reassigning all partitions, Threads with id >= `newSize` are terminated.
+      if (newSize != currentSize) {
+        // We could just migrate some partitions explicitly to new threads. But this is currently
+        // reassigning all partitions using the new thread size so that hash-based allocation
+        // works with partition add/delete as it did before.
         migratePartitions(newSize)
       }
       shutdownIdleFetcherThreads()
-      info(s"Resized fetcher thread pool size to $newSize")
     }
   }
 

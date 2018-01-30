@@ -488,7 +488,7 @@ class DynamicThreadPool(server: KafkaServer) extends BrokerReconfigurable {
     if (newConfig.numIoThreads != oldConfig.numIoThreads)
       server.requestHandlerPool.resizeThreadPool(newConfig.numIoThreads)
     if (newConfig.numNetworkThreads != oldConfig.numNetworkThreads)
-      server.socketServer.resizeThreadPool(newConfig.numNetworkThreads)
+      server.socketServer.resizeThreadPool(oldConfig.numNetworkThreads, newConfig.numNetworkThreads)
     if (newConfig.numReplicaFetchers != oldConfig.numReplicaFetchers)
       server.replicaManager.replicaFetcherManager.resizeThreadPool(newConfig.numReplicaFetchers)
     if (newConfig.numRecoveryThreadsPerDataDir != oldConfig.numRecoveryThreadsPerDataDir)

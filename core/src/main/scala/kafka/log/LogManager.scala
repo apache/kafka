@@ -174,7 +174,7 @@ class LogManager(logDirs: Seq[File],
   }
 
   def resizeRecoveryThreadPool(newSize: Int): Unit = {
-    info(s"Resize recovery thread pool size for each data dir to $newSize")
+    info(s"Resizing recovery thread pool size for each data dir from $numRecoveryThreadsPerDataDir to $newSize")
     numRecoveryThreadsPerDataDir = newSize
   }
 

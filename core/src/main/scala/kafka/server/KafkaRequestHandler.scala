@@ -115,6 +115,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
 
   def resizeThreadPool(newSize: Int): Unit = synchronized {
     val currentSize = threadPoolSize.get
+    info(s"Resizing request handler thread pool size from $currentSize to $newSize")
     if (newSize > currentSize) {
       for (i <- currentSize until newSize) {
         createHandler(i)
@@ -125,7 +126,6 @@ class KafkaRequestHandlerPool(val brokerId: Int,
       }
     }
     threadPoolSize.set(newSize)
-    info(s"Resized request handler thread pool size to $newSize")
   }
 
   def shutdown(): Unit = synchronized {
