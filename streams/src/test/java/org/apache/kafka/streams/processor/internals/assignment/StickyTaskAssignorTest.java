@@ -44,6 +44,16 @@ public class StickyTaskAssignorTest {
     private final TaskId task03 = new TaskId(0, 3);
     private final TaskId task04 = new TaskId(0, 4);
     private final TaskId task05 = new TaskId(0, 5);
+
+    private final TaskId task10 = new TaskId(1, 0);
+    private final TaskId task11 = new TaskId(1, 1);
+    private final TaskId task12 = new TaskId(1, 2);
+    private final TaskId task20 = new TaskId(2, 0);
+    private final TaskId task21 = new TaskId(2, 1);
+    private final TaskId task22 = new TaskId(2, 2);
+
+    private final List<Integer> expectedTopicGroupIds = Arrays.asList(1, 2);
+
     private final Map<Integer, ClientState> clients = new TreeMap<>();
     private final Integer p1 = 1;
     private final Integer p2 = 2;
@@ -62,6 +72,28 @@ public class StickyTaskAssignorTest {
         for (final Integer processId : clients.keySet()) {
             assertThat(clients.get(processId).activeTaskCount(), equalTo(1));
         }
+    }
+
+    @Test
+    public void shouldAssignTopicGroupIdEvenlyAcrossClientsWithNoStandByTasks() {
+        createClient(p1, 2);
+        createClient(p2, 2);
+        createClient(p3, 2);
+
+        final StickyTaskAssignor taskAssignor = createTaskAssignor(task10, task11, task22, task20, task21, task12);
+        taskAssignor.assign(0);
+        assertActiveTaskTopicGroupIdsEvenlyDistributed();
+    }
+
+    @Test
+    public void shouldAssignTopicGroupIdEvenlyAcrossClientsWithStandByTasks() {
+        createClient(p1, 2);
+        createClient(p2, 2);
+        createClient(p3, 2);
+
+        final StickyTaskAssignor taskAssignor = createTaskAssignor(task20, task11, task12, task10, task21, task22);
+        taskAssignor.assign(1);
+        assertActiveTaskTopicGroupIdsEvenlyDistributed();
     }
 
     @Test
@@ -619,6 +651,18 @@ public class StickyTaskAssignorTest {
         clientState.addPreviousActiveTasks(Utils.mkSet(taskIds));
         clients.put(processId, clientState);
         return clientState;
+    }
+
+    private void assertActiveTaskTopicGroupIdsEvenlyDistributed() {
+        for (final Map.Entry<Integer, ClientState> clientStateEntry : clients.entrySet()) {
+            final List<Integer> topicGroupIds = new ArrayList<>();
+            final Set<TaskId> activeTasks = clientStateEntry.getValue().activeTasks();
+            for (final TaskId activeTask : activeTasks) {
+                topicGroupIds.add(activeTask.topicGroupId);
+            }
+            Collections.sort(topicGroupIds);
+            assertThat(topicGroupIds, equalTo(expectedTopicGroupIds));
+        }
     }
 
 }
