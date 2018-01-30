@@ -326,6 +326,7 @@ public class ConnectHeaders implements Headers {
 
     @Override
     public Headers apply(String key, HeaderTransform transform) {
+        checkKey(key);
         if (!headers.isEmpty()) {
             ListIterator<Header> iter = headers.listIterator();
             while (iter.hasNext()) {
@@ -370,13 +371,6 @@ public class ConnectHeaders implements Headers {
         if (obj == this) {
             return true;
         }
-        if (obj instanceof ConnectHeaders) {
-            ConnectHeaders that = (ConnectHeaders) obj;
-            if (this.isEmpty() && that.isEmpty()) {
-                return true;
-            }
-            return Objects.equals(this.headers, that.headers);
-        }
         if (obj instanceof Headers) {
             Headers that = (Headers) obj;
             Iterator<Header> thisIter = this.iterator();
@@ -404,12 +398,10 @@ public class ConnectHeaders implements Headers {
      * Check that the key is not null
      *
      * @param key the key; may not be null
-     * @throws IllegalArgumentException if the supplied key is null
+     * @throws NullPointerException if the supplied key is null
      */
     private void checkKey(String key) {
-        if (key == null) {
-            throw new IllegalArgumentException("key cannot be null.");
-        }
+        Objects.requireNonNull(key, "Header key cannot be null");
     }
 
     /**
@@ -421,7 +413,7 @@ public class ConnectHeaders implements Headers {
      */
     private void checkSchemaType(Schema schema, Type type) {
         if (schema.type() != type) {
-            throw new DataException("The schema for a list must be of type " + type);
+            throw new DataException("Expecting " + type + " but instead found " + schema.type());
         }
     }
 
