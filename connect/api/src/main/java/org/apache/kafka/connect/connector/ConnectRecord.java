@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.connect.connector;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.connect.data.Schema;
 
 /**
@@ -34,11 +37,19 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
     private final Schema valueSchema;
     private final Object value;
     private final Long timestamp;
+    private final Headers headers;
 
     public ConnectRecord(String topic, Integer kafkaPartition,
                          Schema keySchema, Object key,
                          Schema valueSchema, Object value,
                          Long timestamp) {
+        this(topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp, null);
+    }
+
+    public ConnectRecord(String topic, Integer kafkaPartition,
+                         Schema keySchema, Object key,
+                         Schema valueSchema, Object value,
+                         Long timestamp, Iterable<Header> headers) {
         this.topic = topic;
         this.kafkaPartition = kafkaPartition;
         this.keySchema = keySchema;
@@ -46,6 +57,13 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
         this.valueSchema = valueSchema;
         this.value = value;
         this.timestamp = timestamp;
+        if (headers == null) {
+            this.headers = null;
+        } else if (headers instanceof RecordHeaders) {
+            this.headers = (RecordHeaders) headers;
+        } else {
+            this.headers = new RecordHeaders(headers);
+        }
     }
 
     public String topic() {
@@ -76,8 +94,19 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
         return timestamp;
     }
 
+    /**
+     * Get the headers associated with this record.
+     * @return the headers; may be null if there are no headers
+     */
+    public Headers headers() { return headers; }
+
     /** Generate a new record of the same type as itself, with the specified parameter values. **/
-    public abstract R newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp);
+    public R newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp) {
+        return newRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp, null);
+    }
+
+    /** Generate a new record of the same type as itself, with the specified parameter values. **/
+    public abstract R newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp, Headers headers);
 
     @Override
     public String toString() {
@@ -87,6 +116,7 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
                 ", key=" + key +
                 ", value=" + value +
                 ", timestamp=" + timestamp +
+                ", headers=" + headers +
                 '}';
     }
 
@@ -113,6 +143,8 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
             return false;
         if (timestamp != null ? !timestamp.equals(that.timestamp) : that.timestamp != null)
             return false;
+        if (headers != null ? !headers.equals(that.headers) : that.headers != null)
+            return false;
 
         return true;
     }
@@ -126,6 +158,7 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
         result = 31 * result + (valueSchema != null ? valueSchema.hashCode() : 0);
         result = 31 * result + (value != null ? value.hashCode() : 0);
         result = 31 * result + (timestamp != null ? timestamp.hashCode() : 0);
+        result = 31 * result + (headers != null ? headers.hashCode() : 0);
         return result;
     }
 }
