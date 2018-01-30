@@ -1276,23 +1276,20 @@ class GroupCoordinatorTest extends JUnitSuite {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val joinGroupResult = joinGroup(groupId, memberId, protocolType, protocols)
 
-    val (error, result) = groupCoordinator.handleDeleteGroups(Set(groupId).toSet)
-    assertEquals(Errors.NONE, error)
+    val result = groupCoordinator.handleDeleteGroups(Set(groupId).toSet)
     assert(result.size == 1 && result.contains(groupId) && result.get(groupId).contains(Errors.NON_EMPTY_GROUP))
   }
 
   @Test
   def testDeleteGroupWithInvalidGroupId() {
     val invalidGroupId = ""
-    val (error, result) = groupCoordinator.handleDeleteGroups(Set(invalidGroupId).toSet)
-    assertEquals(Errors.NONE, error)
+    val result = groupCoordinator.handleDeleteGroups(Set(invalidGroupId).toSet)
     assert(result.size == 1 && result.contains(invalidGroupId) && result.get(invalidGroupId).contains(Errors.INVALID_GROUP_ID))
   }
 
   @Test
   def testDeleteGroupWithWrongCoordinator() {
-    val (error, result) = groupCoordinator.handleDeleteGroups(Set(otherGroupId).toSet)
-    assertEquals(Errors.NONE, error)
+    val result = groupCoordinator.handleDeleteGroups(Set(otherGroupId).toSet)
     assert(result.size == 1 && result.contains(otherGroupId) && result.get(otherGroupId).contains(Errors.NOT_COORDINATOR))
   }
 
@@ -1314,8 +1311,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     EasyMock.expect(replicaManager.nonOfflinePartition(groupTopicPartition)).andStubReturn(Some(partition))
     EasyMock.replay(replicaManager, partition)
 
-    val (error, result) = groupCoordinator.handleDeleteGroups(Set(groupId).toSet)
-    assertEquals(Errors.NONE, error)
+    val result = groupCoordinator.handleDeleteGroups(Set(groupId).toSet)
     assert(result.size == 1 && result.contains(groupId) && result.get(groupId).contains(Errors.NONE))
   }
 
@@ -1356,8 +1352,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     EasyMock.expect(replicaManager.nonOfflinePartition(groupTopicPartition)).andStubReturn(Some(partition))
     EasyMock.replay(replicaManager, partition)
 
-    val (error, result) = groupCoordinator.handleDeleteGroups(Set(groupId).toSet)
-    assertEquals(Errors.NONE, error)
+    val result = groupCoordinator.handleDeleteGroups(Set(groupId).toSet)
     assert(result.size == 1 && result.contains(groupId) && result.get(groupId).contains(Errors.NONE))
 
     assertEquals(Dead.toString, groupCoordinator.handleDescribeGroup(groupId)._2.state)

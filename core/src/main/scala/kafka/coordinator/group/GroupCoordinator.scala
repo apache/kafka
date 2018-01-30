@@ -338,25 +338,26 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def handleDeleteGroups(groupIds: Set[String]): (Errors, Map[String, Errors]) = {
-    var groupErrors: Map[String, Errors] = Map()
-    if (!isActive.get)
-      (Errors.COORDINATOR_NOT_AVAILABLE, Map())
+  def handleDeleteGroups(groupIds: Set[String]): Map[String, Errors] = {
+    if (!isActive.get) {
+      groupIds.map((_ -> Errors.COORDINATOR_NOT_AVAILABLE)).toMap
+    } else {
+      var groupErrors: Map[String, Errors] = Map()
+      var eligibleGroups: Seq[String] = Seq()
 
-    var eligibleGroups: Seq[String] = Seq()
+      groupIds.foreach { groupId =>
+        if (!validGroupId(groupId))
+          groupErrors += (groupId -> Errors.INVALID_GROUP_ID)
+        else if (!isCoordinatorForGroup(groupId)) {
+          groupErrors += (groupId -> Errors.NOT_COORDINATOR)
+        } else if (isCoordinatorLoadInProgress(groupId))
+          groupErrors += (groupId -> Errors.COORDINATOR_LOAD_IN_PROGRESS)
+        else
+          eligibleGroups ++= Seq(groupId)
+      }
 
-    groupIds.foreach { groupId =>
-      if (!validGroupId(groupId))
-        groupErrors += (groupId -> Errors.INVALID_GROUP_ID)
-      else if (!isCoordinatorForGroup(groupId)) {
-        groupErrors += (groupId -> Errors.NOT_COORDINATOR)
-      } else if (isCoordinatorLoadInProgress(groupId))
-        groupErrors += (groupId -> Errors.COORDINATOR_LOAD_IN_PROGRESS)
-      else
-        eligibleGroups ++= Seq(groupId)
+      groupErrors ++ groupManager.deleteGroups(eligibleGroups)
     }
-
-    (Errors.NONE, groupErrors ++ groupManager.deleteGroups(eligibleGroups))
   }
 
   def handleHeartbeat(groupId: String,
