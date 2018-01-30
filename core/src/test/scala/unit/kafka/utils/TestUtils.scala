@@ -1024,7 +1024,7 @@ object TestUtils extends Logging {
                    topicConfigs = Map(),
                    initialDefaultConfig = defaultConfig,
                    cleanerConfig = cleanerConfig,
-                   ioThreads = 4,
+                   recoveryThreadsPerDataDir = 4,
                    flushCheckMs = 1000L,
                    flushRecoveryOffsetCheckpointMs = 10000L,
                    flushStartOffsetCheckpointMs = 10000L,
