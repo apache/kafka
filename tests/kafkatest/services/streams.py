@@ -110,9 +110,9 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
         node.account.kill_process("streams", clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf " + self.PERSISTENT_ROOT, allow_fail=False)
 
-    def start_cmd(self, node):
+    def start_cmd(self, node, validate=True):
         args = self.args.copy()
-        args['kafka'] = self.kafka.bootstrap_servers()
+        args['kafka'] = self.kafka.bootstrap_servers(validate)
         args['state_dir'] = self.PERSISTENT_ROOT
         args['stdout'] = self.STDOUT_FILE
         args['stderr'] = self.STDERR_FILE
