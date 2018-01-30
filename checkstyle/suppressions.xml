@@ -153,7 +153,7 @@
     <suppress checks="NPathComplexity"
               files="StreamThread.java"/>
 
-    <!-- streams tests -->
+    <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
               files="(StreamThreadTest|StreamTaskTest|ProcessorTopologyTestDriver).java"/>
 
@@ -184,6 +184,12 @@
               files="KStreamKStreamJoinTest.java"/>
     <suppress checks="NPathComplexity"
               files="KStreamKStreamLeftJoinTest.java"/>
+
+    <!-- Streams Test-Utils -->
+    <suppress checks="ClassFanOutComplexity"
+              files="TopologyTestDriver.java"/>
+    <suppress checks="ClassDataAbstractionCoupling"
+              files="TopologyTestDriver.java"/>
 
     <!-- Tools -->
     <suppress checks="ClassDataAbstractionCoupling"
