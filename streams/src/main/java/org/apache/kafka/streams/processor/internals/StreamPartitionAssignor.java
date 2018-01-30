@@ -516,7 +516,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 final ArrayList<AssignedPartition> assignedPartitions = new ArrayList<>();
 
                 final List<TaskId> assignedActiveList = interleavedActive.get(consumerTaskIndex);
-                List<TaskId> assignedStandbyList;
 
                 for (final TaskId taskId : assignedActiveList) {
                     for (final TopicPartition partition : partitionsForTask.get(taskId)) {
@@ -525,8 +524,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 }
 
                 if (!state.standbyTasks().isEmpty()) {
-                    assignedStandbyList = interleavedStandby.get(consumerTaskIndex);
-                    for (TaskId taskId : assignedStandbyList) {
+                    final List<TaskId> assignedStandbyList = interleavedStandby.get(consumerTaskIndex);
+                    for (final TaskId taskId : assignedStandbyList) {
                         Set<TopicPartition> standbyPartitions = standby.get(taskId);
                         if (standbyPartitions == null) {
                             standbyPartitions = new HashSet<>();
@@ -555,22 +554,21 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     }
 
     // visible for testing
-    List<List<TaskId>> interleaveTasksByGroupId(Collection<TaskId> taskIds, int numberThreads) {
-        final List<TaskId> sortedTasks = new ArrayList<>(taskIds);
+    List<List<TaskId>> interleaveTasksByGroupId(final Collection<TaskId> taskIds, final int numberThreads) {
+        final LinkedList<TaskId> sortedTasks = new LinkedList<>(taskIds);
         Collections.sort(sortedTasks);
-        List<List<TaskId>> taskIdsForConsumerAssignment = new ArrayList<>(numberThreads);
+        final List<List<TaskId>> taskIdsForConsumerAssignment = new ArrayList<>(numberThreads);
         for (int i = 0; i < numberThreads; i++) {
             taskIdsForConsumerAssignment.add(new ArrayList<TaskId>());
         }
-        LinkedList<TaskId> taskIdLinkedList = new LinkedList<>(sortedTasks);
-        while (!taskIdLinkedList.isEmpty()) {
-            for (List<TaskId> taskIdList : taskIdsForConsumerAssignment) {
-                TaskId taskId = taskIdLinkedList.poll();
-                if (taskId != null) {
-                    taskIdList.add(taskId);
+        while (!sortedTasks.isEmpty()) {
+            for (final List<TaskId> taskIdList : taskIdsForConsumerAssignment) {
+                final TaskId taskId = sortedTasks.poll();
+                if (taskId == null) {
+                    break;
                 }
+                taskIdList.add(taskId);
             }
-
         }
         return taskIdsForConsumerAssignment;
     }
