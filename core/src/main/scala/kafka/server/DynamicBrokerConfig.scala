@@ -136,6 +136,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     if (kafkaServer.logManager.cleaner != null)
       addBrokerReconfigurable(kafkaServer.logManager.cleaner)
     addReconfigurable(new DynamicLogConfig(kafkaServer.logManager))
+    addReconfigurable(new DynamicMetricsReporters(brokerId, this, kafkaServer.metrics))
   }
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
@@ -518,13 +519,9 @@ class DynamicMetricsReporters(brokerId: Int, dynamicConfig: DynamicBrokerConfig,
 
   private val propsOverride = Map[String, AnyRef](KafkaConfig.BrokerIdProp -> brokerId.toString)
   private val currentReporters = mutable.Map[String, MetricsReporter]()
-  initialize()
 
-  private def initialize() {
-    dynamicConfig.addReconfigurable(this)
-    val reporters = dynamicConfig.currentKafkaConfig.getList(KafkaConfig.MetricReporterClassesProp)
-    createReporters(reporters, Collections.emptyMap[String, Object])
-  }
+  createReporters(dynamicConfig.currentKafkaConfig.getList(KafkaConfig.MetricReporterClassesProp),
+    Collections.emptyMap[String, Object])
 
   private[server] def currentMetricsReporters: List[MetricsReporter] = currentReporters.values.toList
 
@@ -552,10 +549,7 @@ class DynamicMetricsReporters(brokerId: Int, dynamicConfig: DynamicBrokerConfig,
     // Validate the new configuration using every reconfigurable reporter instance that is not being deleted
     currentReporters.values.forall {
       case reporter: Reconfigurable =>
-        if (updatedMetricsReporters.contains(reporter.getClass.getName))
-          reporter.asInstanceOf[Reconfigurable].validateReconfiguration(configs)
-        else
-          true
+        !updatedMetricsReporters.contains(reporter.getClass.getName) || reporter.validateReconfiguration(configs)
       case _ => true
     }
   }

@@ -222,7 +222,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         reporters.add(new JmxReporter(jmxPrefix))
         val metricConfig = KafkaServer.metricConfig(config)
         metrics = new Metrics(metricConfig, reporters, time, true)
-        new DynamicMetricsReporters(brokerId, config.dynamicConfig, metrics)
 
         /* register broker metrics */
         _brokerTopicStats = new BrokerTopicStats
