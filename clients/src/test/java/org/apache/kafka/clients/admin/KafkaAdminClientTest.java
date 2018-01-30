@@ -64,6 +64,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -212,6 +213,38 @@ public class KafkaAdminClientTest {
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(Integer.valueOf(0), asList(new Integer[]{0, 1, 2})))),
                     new CreateTopicsOptions().timeoutMs(10000)).all();
             future.get();
+        }
+    }
+
+    @Test
+    public void testInvalidTopicNames() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+
+            List<String> sillyTopicNames = Arrays.asList(new String[] {"", null});
+            Map<String, KafkaFuture<Void>> deleteFutures =
+                env.adminClient().deleteTopics(sillyTopicNames).values();
+            for (String sillyTopicName : sillyTopicNames) {
+                assertFutureError(deleteFutures.get(sillyTopicName), InvalidTopicException.class);
+            }
+
+            Map<String, KafkaFuture<TopicDescription>> describeFutures =
+                    env.adminClient().describeTopics(sillyTopicNames).values();
+            for (String sillyTopicName : sillyTopicNames) {
+                assertFutureError(describeFutures.get(sillyTopicName), InvalidTopicException.class);
+            }
+
+            List<NewTopic> newTopics = new ArrayList<>();
+            for (String sillyTopicName : sillyTopicNames) {
+                newTopics.add(new NewTopic(sillyTopicName, 1, (short) 1));
+            }
+            Map<String, KafkaFuture<Void>> createFutures =
+                env.adminClient().createTopics(newTopics).values();
+            for (String sillyTopicName : sillyTopicNames) {
+                assertFutureError(createFutures .get(sillyTopicName), InvalidTopicException.class);
+            }
         }
     }
 
