@@ -89,7 +89,7 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
  * // sets "my.custom.config" to "bar" for producer only
  * streamsProperties.put(StreamsConfig.producerPrefix("my.custom.config"), "bar");
  * // sets "my.custom.config2" to "boom" for all clients universally
- * streamsProperties.put("my.custom.config", "boom");
+ * streamsProperties.put("my.custom.config2", "boom");
  *
  * // as a result, inside producer's serde class configure(..) function,
  * // users can now read both key-value pairs "my.custom.config" -> "foo"
