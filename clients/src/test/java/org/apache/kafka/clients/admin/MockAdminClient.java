@@ -281,11 +281,6 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public ListConsumerGroupsResult listGroups(ListConsumerGroupsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
-    }
-
-    @Override
     public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
