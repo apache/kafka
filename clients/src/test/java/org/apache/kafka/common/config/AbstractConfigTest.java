@@ -140,6 +140,34 @@ public class AbstractConfigTest {
     }
 
     @Test
+    public void testValuesWithPrefixAllOrNothing() {
+        String prefix1 = "prefix1.";
+        String prefix2 = "prefix2.";
+        Properties props = new Properties();
+        props.put("sasl.mechanism", "PLAIN");
+        props.put("prefix1.sasl.mechanism", "GSSAPI");
+        props.put("prefix1.sasl.kerberos.kinit.cmd", "/usr/bin/kinit2");
+        props.put("prefix1.ssl.truststore.location", "my location");
+        props.put("sasl.kerberos.service.name", "service name");
+        props.put("ssl.keymanager.algorithm", "algorithm");
+        TestSecurityConfig config = new TestSecurityConfig(props);
+        Map<String, Object> valuesWithPrefixAllOrNothing1 = config.valuesWithPrefixAllOrNothing(prefix1);
+
+        // All prefixed values are there
+        assertEquals("GSSAPI", valuesWithPrefixAllOrNothing1.get("sasl.mechanism"));
+        assertEquals("/usr/bin/kinit2", valuesWithPrefixAllOrNothing1.get("sasl.kerberos.kinit.cmd"));
+        assertEquals("my location", valuesWithPrefixAllOrNothing1.get("ssl.truststore.location"));
+
+        // Non-prefixed values are missing
+        assertFalse(valuesWithPrefixAllOrNothing1.containsKey("sasl.kerberos.service.name"));
+        assertFalse(valuesWithPrefixAllOrNothing1.containsKey("ssl.keymanager.algorithm"));
+
+        Map<String, Object> valuesWithPrefixAllOrNothing2 = config.valuesWithPrefixAllOrNothing(prefix2);
+        assertTrue(valuesWithPrefixAllOrNothing2.containsKey("sasl.kerberos.service.name"));
+        assertTrue(valuesWithPrefixAllOrNothing2.containsKey("ssl.keymanager.algorithm"));
+    }
+
+    @Test
     public void testUnused() {
         Properties props = new Properties();
         String configValue = "org.apache.kafka.common.config.AbstractConfigTest$ConfiguredFakeMetricsReporter";
