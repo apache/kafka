@@ -104,7 +104,7 @@ public class MetricNameTemplate {
      *
      * @return the ordered set of tag names; never null but possibly empty
      */
-    public LinkedHashSet<String> tags() {
+    public Set<String> tags() {
         return tags;
     }
 
