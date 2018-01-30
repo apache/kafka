@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -56,9 +57,9 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
 
 /**
  * Configuration for a {@link KafkaStreams} instance.
- * Can also be used to configure the Kafka Streams internal {@link KafkaConsumer} and {@link KafkaProducer}.
- * To avoid consumer/producer property conflicts, you should prefix those properties using
- * {@link #consumerPrefix(String)} and {@link #producerPrefix(String)}, respectively.
+ * Can also be used to configure the Kafka Streams internal {@link KafkaConsumer}, {@link KafkaProducer} and {@link AdminClient}.
+ * To avoid consumer/producer/admin property conflicts, you should prefix those properties using
+ * {@link #consumerPrefix(String)}, {@link #producerPrefix(String)} and {@link #adminClientPrefix(String)}, respectively.
  * <p>
  * Example:
  * <pre>{@code
@@ -78,8 +79,26 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
  * StreamsConfig streamsConfig = new StreamsConfig(streamsProperties);
  * }</pre>
  *
+ * This instance can also be used to pass in custom configurations to different modules (e.g. passing a special config in your customized serde class).
+ * The consumer/producer/admin prefix can also be used to distinguish these custom config values passed to different clients with the same config name.
+ * * Example:
+ * <pre>{@code
+ * Properties streamsProperties = new Properties();
+ * // sets "my.custom.config" to "foo" for consumer only
+ * streamsProperties.put(StreamsConfig.consumerPrefix("my.custom.config"), "foo");
+ * // sets "my.custom.config" to "bar" for producer only
+ * streamsProperties.put(StreamsConfig.producerPrefix("my.custom.config"), "bar");
+ * // sets "my.custom.config2" to "boom" for all clients universally
+ * streamsProperties.put("my.custom.config2", "boom");
+ *
+ * // as a result, inside producer's serde class configure(..) function,
+ * // users can now read both key-value pairs "my.custom.config" -> "foo"
+ * // and "my.custom.config2" -> "boom" from the config map
+ * StreamsConfig streamsConfig = new StreamsConfig(streamsProperties);
+ * }</pre>
+ *
  * When increasing both {@link ProducerConfig#RETRIES_CONFIG} and {@link ProducerConfig#MAX_BLOCK_MS_CONFIG} to be more resilient to non-available brokers you should also
- * consider increasing {@link ConsumerConfig#MAX_POLL_INTERVAL_MS_CONFIG}  using the following guidance:
+ * consider increasing {@link ConsumerConfig#MAX_POLL_INTERVAL_MS_CONFIG} using the following guidance:
  * <pre>
  *     max.poll.interval.ms > min ( max.block.ms, (retries +1) * request.timeout.ms )
  * </pre>
