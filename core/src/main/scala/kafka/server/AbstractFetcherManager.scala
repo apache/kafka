@@ -33,7 +33,7 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   // map of (source broker_id, fetcher_id per source broker) => fetcher.
   // package private for test
   private[server] val fetcherThreadMap = new mutable.HashMap[BrokerIdAndFetcherId, AbstractFetcherThread]
-  private val mapLock = new Object
+  private val lock = new Object
   private var numFetchersPerBroker = numFetchers
   this.logIdent = "[" + name + "] "
 
@@ -68,41 +68,43 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   )
 
   def resizeThreadPool(newSize: Int): Unit = {
-    def migratePartitions(fromThreads: Map[BrokerIdAndFetcherId, AbstractFetcherThread], shutdown: Boolean): Unit = {
-      fromThreads.foreach { case (id, thread) =>
+    def migratePartitions(newSize: Int): Unit = {
+      fetcherThreadMap.foreach { case (id, thread) =>
         val removedPartitions = thread.partitionStates.partitionStates.asScala.map { case state =>
           state.topicPartition -> new BrokerAndInitialOffset(thread.sourceBroker, state.value.fetchOffset)
         }.toMap
         removeFetcherForPartitions(removedPartitions.keySet)
-        if (shutdown)
+        if (id.fetcherId >= newSize)
           thread.shutdown()
         addFetcherForPartitions(removedPartitions)
       }
     }
-    mapLock synchronized {
+    lock synchronized {
       val currentSize = numFetchersPerBroker
       numFetchersPerBroker = newSize
       if (newSize > currentSize) {
         // We could just migrate (newSize - currentSize)/newSize partitions explicitly to new threads
         // But this is currently reassigning all partitions using the new thread size so that hash-based
         // allocation works with partition add/delete as it did before.
-        migratePartitions(fetcherThreadMap, shutdown = false)
+        migratePartitions(newSize)
       } else if (newSize < currentSize) {
-        migratePartitions(fetcherThreadMap.filterKeys(_.fetcherId >= newSize), shutdown = true)
+        // Same as above, reassigning all partitions, Threads with id >= `newSize` are terminated.
+        migratePartitions(newSize)
       }
       shutdownIdleFetcherThreads()
+      info(s"Resized fetcher thread pool size to $newSize")
     }
   }
 
   private def getFetcherId(topic: String, partitionId: Int) : Int = {
-    mapLock synchronized {
+    lock synchronized {
       Utils.abs(31 * topic.hashCode() + partitionId) % numFetchersPerBroker
     }
   }
 
   // This method is only needed by ReplicaAlterDirManager
   def markPartitionsForTruncation(brokerId: Int, topicPartition: TopicPartition, truncationOffset: Long) {
-    mapLock synchronized {
+    lock synchronized {
       val fetcherId = getFetcherId(topicPartition.topic, topicPartition.partition)
       val brokerIdAndFetcherId = BrokerIdAndFetcherId(brokerId, fetcherId)
       fetcherThreadMap.get(brokerIdAndFetcherId).foreach { thread =>
@@ -115,7 +117,7 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread
 
   def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, BrokerAndInitialOffset]) {
-    mapLock synchronized {
+    lock synchronized {
       val partitionsPerFetcher = partitionAndOffsets.groupBy { case(topicPartition, brokerAndInitialFetchOffset) =>
         BrokerAndFetcherId(brokerAndInitialFetchOffset.broker, getFetcherId(topicPartition.topic, topicPartition.partition))}
 
@@ -148,7 +150,7 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   }
 
   def removeFetcherForPartitions(partitions: Set[TopicPartition]) {
-    mapLock synchronized {
+    lock synchronized {
       for (fetcher <- fetcherThreadMap.values)
         fetcher.removePartitions(partitions)
     }
@@ -156,7 +158,7 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   }
 
   def shutdownIdleFetcherThreads() {
-    mapLock synchronized {
+    lock synchronized {
       val keysToBeRemoved = new mutable.HashSet[BrokerIdAndFetcherId]
       for ((key, fetcher) <- fetcherThreadMap) {
         if (fetcher.partitionCount <= 0) {
@@ -169,7 +171,7 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   }
 
   def closeAllFetchers() {
-    mapLock synchronized {
+    lock synchronized {
       for ( (_, fetcher) <- fetcherThreadMap) {
         fetcher.initiateShutdown()
       }

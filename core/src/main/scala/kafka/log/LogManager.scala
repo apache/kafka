@@ -52,7 +52,7 @@ class LogManager(logDirs: Seq[File],
                  val topicConfigs: Map[String, LogConfig], // note that this doesn't get updated after creation
                  val initialDefaultConfig: LogConfig,
                  val cleanerConfig: CleanerConfig,
-                 ioThreads: Int,
+                 recoveryThreadsPerDataDir: Int,
                  val flushCheckMs: Long,
                  val flushRecoveryOffsetCheckpointMs: Long,
                  val flushStartOffsetCheckpointMs: Long,
@@ -79,7 +79,7 @@ class LogManager(logDirs: Seq[File],
 
   private val _liveLogDirs: ConcurrentLinkedQueue[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
   @volatile var currentDefaultConfig = initialDefaultConfig
-  @volatile private var numRecoveryThreadsPerDataDir = ioThreads
+  @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
 
   def reconfigureDefaultLogConfig(logConfig: LogConfig): Unit = {
     this.currentDefaultConfig = logConfig
@@ -173,7 +173,8 @@ class LogManager(logDirs: Seq[File],
     liveLogDirs
   }
 
-  def resizeThreadPool(newSize: Int): Unit = {
+  def resizeRecoveryThreadPool(newSize: Int): Unit = {
+    info(s"Resize recovery thread pool size for each data dir to $newSize")
     numRecoveryThreadsPerDataDir = newSize
   }
 
@@ -926,7 +927,7 @@ object LogManager {
       topicConfigs = topicConfigs,
       initialDefaultConfig = defaultLogConfig,
       cleanerConfig = cleanerConfig,
-      ioThreads = config.numRecoveryThreadsPerDataDir,
+      recoveryThreadsPerDataDir = config.numRecoveryThreadsPerDataDir,
       flushCheckMs = config.logFlushSchedulerIntervalMs,
       flushRecoveryOffsetCheckpointMs = config.logFlushOffsetCheckpointIntervalMs,
       flushStartOffsetCheckpointMs = config.logFlushStartOffsetCheckpointIntervalMs,

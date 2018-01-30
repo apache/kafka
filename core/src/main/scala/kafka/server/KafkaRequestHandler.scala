@@ -40,7 +40,7 @@ class KafkaRequestHandler(id: Int,
                           apis: KafkaApis,
                           time: Time) extends Runnable with Logging {
   this.logIdent = "[Kafka Request Handler " + id + " on Broker " + brokerId + "], "
-  private val latch = new CountDownLatch(1)
+  private val shutdownComplete = new CountDownLatch(1)
   @volatile private var stopped = false
 
   def run() {
@@ -59,7 +59,7 @@ class KafkaRequestHandler(id: Int,
       req match {
         case RequestChannel.ShutdownRequest =>
           debug(s"Kafka request handler $id on broker $brokerId received shut down command")
-          latch.countDown()
+          shutdownComplete.countDown()
           return
 
         case request: RequestChannel.Request =>
@@ -69,7 +69,7 @@ class KafkaRequestHandler(id: Int,
             apis.handle(request)
           } catch {
             case e: FatalExitError =>
-              latch.countDown()
+              shutdownComplete.countDown()
               Exit.exit(e.statusCode)
             case e: Throwable => error("Exception when handling request", e)
           } finally {
@@ -79,8 +79,7 @@ class KafkaRequestHandler(id: Int,
         case null => // continue
       }
     }
-    if (stopped)
-        latch.countDown()
+    shutdownComplete.countDown()
   }
 
   def stop(): Unit = {
@@ -89,7 +88,7 @@ class KafkaRequestHandler(id: Int,
 
   def initiateShutdown(): Unit = requestChannel.sendShutdownRequest()
 
-  def awaitShutdown(): Unit = latch.await()
+  def awaitShutdown(): Unit = shutdownComplete.await()
 
 }
 
@@ -105,16 +104,16 @@ class KafkaRequestHandlerPool(val brokerId: Int,
 
   this.logIdent = "[Kafka Request Handler on Broker " + brokerId + "], "
   val runnables = new mutable.ArrayBuffer[KafkaRequestHandler](numThreads)
-  for(i <- 0 until numThreads) {
+  for (i <- 0 until numThreads) {
     createHandler(i)
   }
 
-  def createHandler(id: Int): Unit = {
+  def createHandler(id: Int): Unit = synchronized {
     runnables += new KafkaRequestHandler(id, brokerId, aggregateIdleMeter, threadPoolSize, requestChannel, apis, time)
     KafkaThread.daemon("kafka-request-handler-" + id, runnables(id)).start()
   }
 
-  def resizeThreadPool(newSize: Int): Unit = {
+  def resizeThreadPool(newSize: Int): Unit = synchronized {
     val currentSize = threadPoolSize.get
     if (newSize > currentSize) {
       for (i <- currentSize until newSize) {
@@ -126,9 +125,10 @@ class KafkaRequestHandlerPool(val brokerId: Int,
       }
     }
     threadPoolSize.set(newSize)
+    info(s"Resized request handler thread pool size to $newSize")
   }
 
-  def shutdown() {
+  def shutdown(): Unit = synchronized {
     info("shutting down")
     for (handler <- runnables)
       handler.initiateShutdown()

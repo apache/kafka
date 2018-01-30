@@ -259,7 +259,8 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
 
   def addProcessor(processorId: Int): Unit = {
     val responseQueue = new LinkedBlockingQueue[RequestChannel.Response]()
-    responseQueues.put(processorId, responseQueue)
+    if (responseQueues.putIfAbsent(processorId, responseQueue) != null)
+      warn(s"Unexpected processor with processorId $processorId")
     newGauge("ResponseQueueSize",
       new Gauge[Int] {
         def value = responseQueue.size()
@@ -294,6 +295,8 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
     }
 
     val responseQueue = responseQueues.get(response.processor)
+    // `responseQueue` may be null if the processor was shutdown. In this case, the connections
+    // are closed, so the response is dropped.
     if (responseQueue != null) {
       responseQueue.put(response)
       for (onResponse <- responseListeners)

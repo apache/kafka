@@ -130,10 +130,10 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   def addReconfigurables(kafkaServer: KafkaServer): Unit = {
+    addBrokerReconfigurable(new DynamicThreadPool(kafkaServer))
     if (kafkaServer.logManager.cleaner != null)
       addBrokerReconfigurable(kafkaServer.logManager.cleaner)
     addReconfigurable(new DynamicLogConfig(kafkaServer.logManager))
-    addReconfigurable(new DynamicThreadPool(kafkaServer))
   }
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
@@ -461,16 +461,14 @@ object DynamicThreadPool {
     KafkaConfig.BackgroundThreadsProp)
 }
 
-class DynamicThreadPool(server: KafkaServer) extends Reconfigurable {
+class DynamicThreadPool(server: KafkaServer) extends BrokerReconfigurable {
 
-  override def configure(configs: util.Map[String, _]): Unit = {}
-
-  override def reconfigurableConfigs(): util.Set[String] = {
-    DynamicThreadPool.ReconfigurableConfigs.asJava
+  override def reconfigurableConfigs(): Set[String] = {
+    DynamicThreadPool.ReconfigurableConfigs
   }
 
-  override def validateReconfiguration(configs: util.Map[String, _]): Boolean = {
-    configs.asScala.filterKeys(DynamicThreadPool.ReconfigurableConfigs.contains).forall { case (k, v) =>
+  override def validateReconfiguration(newConfig: KafkaConfig): Boolean = {
+    newConfig.values.asScala.filterKeys(DynamicThreadPool.ReconfigurableConfigs.contains).forall { case (k, v) =>
       val newValue = v.asInstanceOf[Int]
       val oldValue = currentValue(k)
       if (newValue != oldValue) {
@@ -486,18 +484,17 @@ class DynamicThreadPool(server: KafkaServer) extends Reconfigurable {
     }
   }
 
-  override def reconfigure(configs: util.Map[String, _]): Unit = {
-    val updatedConfigs = configs.asScala.filterKeys(DynamicThreadPool.ReconfigurableConfigs.contains).filter {
-      case (k, v) => v.asInstanceOf[Int] != currentValue(k)
-    }.map { case (k, v) => (k, v.asInstanceOf[Int]) }
-    updatedConfigs.foreach {
-      case (KafkaConfig.NumIoThreadsProp, v) => server.requestHandlerPool.resizeThreadPool(v)
-      case (KafkaConfig.NumNetworkThreadsProp, v) => server.socketServer.resizeThreadPool(v)
-      case (KafkaConfig.NumReplicaFetchersProp, v) => server.replicaManager.replicaFetcherManager.resizeThreadPool(v)
-      case (KafkaConfig.NumRecoveryThreadsPerDataDirProp, v) => server.getLogManager.resizeThreadPool(v)
-      case (KafkaConfig.BackgroundThreadsProp, v) => server.kafkaScheduler.resizeThreadPool(v)
-      case (k, v) => throw new IllegalStateException(s"Unexpected key value pair ($k, $v)")
-    }
+  override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
+    if (newConfig.numIoThreads != oldConfig.numIoThreads)
+      server.requestHandlerPool.resizeThreadPool(newConfig.numIoThreads)
+    if (newConfig.numNetworkThreads != oldConfig.numNetworkThreads)
+      server.socketServer.resizeThreadPool(newConfig.numNetworkThreads)
+    if (newConfig.numReplicaFetchers != oldConfig.numReplicaFetchers)
+      server.replicaManager.replicaFetcherManager.resizeThreadPool(newConfig.numReplicaFetchers)
+    if (newConfig.numRecoveryThreadsPerDataDir != oldConfig.numRecoveryThreadsPerDataDir)
+      server.getLogManager.resizeRecoveryThreadPool(newConfig.numRecoveryThreadsPerDataDir)
+    if (newConfig.backgroundThreads != oldConfig.backgroundThreads)
+      server.kafkaScheduler.resizeThreadPool(newConfig.backgroundThreads)
   }
 
   private def currentValue(name: String): Int = {

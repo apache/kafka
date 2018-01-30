@@ -69,7 +69,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   memoryPoolSensor.add(new Meter(TimeUnit.MILLISECONDS, memoryPoolDepletedPercentMetricName, memoryPoolDepletedTimeMetricName))
   private val memoryPool = if (config.queuedMaxBytes > 0) new SimpleMemoryPool(config.queuedMaxBytes, config.socketRequestMaxBytes, false, memoryPoolSensor) else MemoryPool.NONE
   val requestChannel = new RequestChannel(maxQueuedRequests)
-  private val processors = mutable.Map[Int, Processor]()
+  private val processors = new ConcurrentHashMap[Int, Processor]()
   private var nextProcessorId = 0
 
   private[network] val acceptors = mutable.Map[EndPoint, Acceptor]()
@@ -89,7 +89,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       new Gauge[Double] {
 
         def value = SocketServer.this.synchronized {
-          val ioWaitRatioMetricNames = processors.values.map { p =>
+          val ioWaitRatioMetricNames = processors.values.asScala.map { p =>
             metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
           }
           ioWaitRatioMetricNames.map { metricName =>
@@ -141,7 +141,11 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   }
 
   // register the processor threads for notification of responses
-  requestChannel.addResponseListener(id => processors.get(id).foreach(_.wakeup()))
+  requestChannel.addResponseListener(id => {
+    val processor = processors.get(id)
+    if (processor != null)
+      processor.wakeup()
+  })
 
   /**
     * Stop processing requests and new connections.
@@ -150,7 +154,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     info("Stopping socket server request processors")
     this.synchronized {
       acceptors.values.foreach(_.shutdown)
-      processors.values.foreach(_.shutdown)
+      processors.asScala.values.foreach(_.shutdown)
       requestChannel.clear()
       stoppedProcessingRequests = true
     }
@@ -163,6 +167,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       createProcessors(newNumNetworkThreads - numNetworkThreads)
     else if (newNumNetworkThreads < numNetworkThreads)
       acceptors.values.foreach(_.removeProcessors(numNetworkThreads - newNumNetworkThreads, requestChannel))
+    info(s"Resized network thread pool size for each listener to $newNumNetworkThreads")
   }
 
   /**
@@ -211,7 +216,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     Option(connectionQuotas).fold(0)(_.get(address))
 
   /* For test usage */
-  private[network] def processor(index: Int): Processor = processors(index)
+  private[network] def processor(index: Int): Processor = processors.get(index)
 
 }
 
@@ -299,6 +304,9 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
   }
 
   private[network] def removeProcessors(removeCount: Int, requestChannel: RequestChannel): Unit = synchronized {
+    // Shutdown `removeCount` processors. Remove them from the processor list first so that no more
+    // connections are assigned. Shutdown the removed processors, closing the selector and its connections.
+    // The processors are then removed from `requestChannel` and any pending responses to these processors are dropped.
     val toRemove = processors.takeRight(removeCount)
     processors.remove(processors.size - removeCount, removeCount)
     toRemove.foreach(_.shutdown())
