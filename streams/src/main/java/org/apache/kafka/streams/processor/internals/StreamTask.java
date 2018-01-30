@@ -607,7 +607,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * Note, this is only called in the presence of new records
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    boolean maybePunctuateStreamTime() {
+    public boolean maybePunctuateStreamTime() {
         final long timestamp = partitionGroup.timestamp();
 
         // if the timestamp is not known yet, meaning there is not enough data accumulated
@@ -625,7 +625,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * Note, this is called irrespective of the presence of new records
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    boolean maybePunctuateSystemTime() {
+    public boolean maybePunctuateSystemTime() {
         final long timestamp = time.milliseconds();
 
         return systemTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.WALL_CLOCK_TIME, this);

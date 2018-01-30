@@ -26,7 +26,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
  */
 public class InternalTopologyAccessor {
 
-    public static InternalTopologyBuilder getInternalTopologyBuilder(Topology topology) {
+    public static InternalTopologyBuilder getInternalTopologyBuilder(final Topology topology) {
         return topology.internalTopologyBuilder;
     }
 }

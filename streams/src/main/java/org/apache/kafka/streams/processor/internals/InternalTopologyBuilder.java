@@ -1019,6 +1019,12 @@ public class InternalTopologyBuilder {
         return Collections.unmodifiableMap(globalStateStores);
     }
 
+    public Set<String> allStateStoreName() {
+        final Set<String> allNames = new HashSet<>(stateFactories.keySet());
+        allNames.addAll(globalStateStores.keySet());
+        return Collections.unmodifiableSet(allNames);
+    }
+
     /**
      * Returns the map of topic groups keyed by the group id.
      * A topic group is a group of topics in the same task.
