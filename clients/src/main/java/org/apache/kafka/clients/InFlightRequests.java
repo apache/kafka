@@ -69,7 +69,8 @@ final class InFlightRequests {
      */
     public NetworkClient.InFlightRequest completeNext(String node) {
         NetworkClient.InFlightRequest inFlightRequest = requestQueue(node).pollLast();
-        inFlightRequestCount.decrementAndGet();
+        if (inFlightRequest != null)
+            inFlightRequestCount.decrementAndGet();
         return inFlightRequest;
     }
 
@@ -88,7 +89,8 @@ final class InFlightRequests {
      */
     public NetworkClient.InFlightRequest completeLastSent(String node) {
         NetworkClient.InFlightRequest inFlightRequest = requestQueue(node).pollFirst();
-        inFlightRequestCount.decrementAndGet();
+        if (inFlightRequestCount != null)
+            inFlightRequestCount.decrementAndGet();
         return inFlightRequest;
     }
 
@@ -152,7 +154,8 @@ final class InFlightRequests {
             return Collections.emptyList();
         } else {
             Deque<NetworkClient.InFlightRequest> clearedRequests = requests.remove(node);
-            inFlightRequestCount.getAndAdd(-clearedRequests.size());
+            if (clearedRequests != null)
+                inFlightRequestCount.getAndAdd(-clearedRequests.size());
             return clearedRequests;
         }
     }
