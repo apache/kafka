@@ -36,7 +36,7 @@ import java.util.NoSuchElementException;
  */
 public class SimpleHeaderConverter implements HeaderConverter {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(SimpleHeaderConverter.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SimpleHeaderConverter.class);
     private static final ConfigDef CONFIG_DEF = new ConfigDef();
     private static final SchemaAndValue NULL_SCHEMA_AND_VALUE = new SchemaAndValue(null, null);
     private static final Charset UTF_8 = StandardCharsets.UTF_8;
@@ -65,7 +65,7 @@ public class SimpleHeaderConverter implements HeaderConverter {
         } catch (NoSuchElementException e) {
             throw new DataException("Failed to deserialize value for header '" + headerKey + "' on topic '" + topic + "'", e);
         } catch (Throwable t) {
-            LOGGER.warn("Failed to deserialize value for header '{}' on topic '{}', so using byte array", headerKey, topic, t);
+            LOG.warn("Failed to deserialize value for header '{}' on topic '{}', so using byte array", headerKey, topic, t);
             return new SchemaAndValue(Schema.BYTES_SCHEMA, value);
         }
     }

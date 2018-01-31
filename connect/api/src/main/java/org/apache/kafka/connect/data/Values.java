@@ -25,8 +25,6 @@ import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.text.CharacterIterator;
 import java.text.DateFormat;
 import java.text.ParseException;
@@ -42,11 +40,23 @@ import java.util.NoSuchElementException;
 import java.util.TimeZone;
 
 /**
- * Utility for converting values into a different form.
+ * Utility for converting from one Connect value to a different form. This is useful when the caller expects a value of a particular type
+ * but is uncertain whether the actual value is one that isn't directly that type but can be converted into that type.
+ *
+ * <p>For example, a caller might expects a particular {@link org.apache.kafka.connect.header.Header} to contain an {@link Type#INT64}
+ * value, when in fact that header contains a string representation of a 32-bit integer. Here, the caller can use the methods in this
+ * class to convert the value to the desired type:
+ * <pre>
+ *     Header header = ...
+ *     long value = Values.convertToLong(header.schema(), header.value());
+ * </pre>
+ *
+ * <p>This class is able to convert any value to a string representation as well as parse those string representations back into most of
+ * the types. The only exception is {@link Struct} values that require a schema and thus cannot be parsed from a simple string.
  */
 public class Values {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(Values.class);
+    private static final Logger LOG = LoggerFactory.getLogger(Values.class);
 
     private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
     private static final SchemaAndValue NULL_SCHEMA_AND_VALUE = new SchemaAndValue(null, null);
@@ -57,7 +67,6 @@ public class Values {
     private static final Schema STRUCT_SELECTOR_SCHEMA = SchemaBuilder.struct().build();
     private static final String TRUE_LITERAL = Boolean.TRUE.toString();
     private static final String FALSE_LITERAL = Boolean.TRUE.toString();
-    private static final Charset UTF_8 = StandardCharsets.UTF_8;
     private static final long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
     private static final String NULL_VALUE = "null";
     private static final String ISO_8601_DATE_FORMAT_PATTERN = "YYYY-MM-DD";
@@ -788,7 +797,7 @@ public class Values {
                 throw new DataException("Malformed array: missing terminating ']'");
             }
         } catch (DataException e) {
-            LOGGER.debug("Unable to parse the value as a map; reverting to string", e);
+            LOG.debug("Unable to parse the value as a map; reverting to string", e);
             parser.rewindTo(startPosition);
         }
         String token = parser.next().trim();

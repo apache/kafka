@@ -70,7 +70,7 @@ public class ConnectHeaders implements Headers {
 
 
     // This field is set lazily, but once set to a list it is never set back to null
-    private volatile LinkedList<Header> headers;
+    private LinkedList<Header> headers;
 
     public ConnectHeaders() {
     }
@@ -78,14 +78,14 @@ public class ConnectHeaders implements Headers {
     public ConnectHeaders(Iterable<Header> original) {
         if (original != null) {
             if (original instanceof ConnectHeaders) {
-                ConnectHeaders headers = (ConnectHeaders) original;
-                if (!headers.isEmpty()) {
-                    this.headers = new LinkedList<>(((ConnectHeaders) original).headers);
+                ConnectHeaders originalHeaders = (ConnectHeaders) original;
+                if (!originalHeaders.isEmpty()) {
+                    headers = new LinkedList<>(originalHeaders.headers);
                 }
             } else {
-                this.headers = new LinkedList<>();
+                headers = new LinkedList<>();
                 for (Header header : original) {
-                    this.headers.add(header);
+                    headers.add(header);
                 }
             }
         }
@@ -93,12 +93,12 @@ public class ConnectHeaders implements Headers {
 
     @Override
     public int size() {
-        return this.headers == null ? 0 : headers.size();
+        return headers == null ? 0 : headers.size();
     }
 
     @Override
     public boolean isEmpty() {
-        return this.headers == null ? true : headers.isEmpty();
+        return headers == null ? true : headers.isEmpty();
     }
 
     @Override
@@ -112,12 +112,8 @@ public class ConnectHeaders implements Headers {
     @Override
     public Headers add(Header header) {
         Objects.requireNonNull(header, "Unable to add a null header.");
-        if (this.headers == null) {
-            synchronized (this) {
-                if (this.headers == null) {
-                    this.headers = new LinkedList<>();
-                }
-            }
+        if (headers == null) {
+            headers = new LinkedList<>();
         }
         headers.add(header);
         return this;
@@ -423,6 +419,7 @@ public class ConnectHeaders implements Headers {
      * @param schemaAndValue the schema and value pair
      * @throws DataException if the schema is not compatible with the value
      */
+    // visible for testing
     void checkSchemaMatches(SchemaAndValue schemaAndValue) {
         if (schemaAndValue != null) {
             Schema schema = schemaAndValue.schema();
@@ -508,17 +505,14 @@ public class ConnectHeaders implements Headers {
         }
 
         protected Header makeNext() {
-            while (true) {
-                if (original.hasNext()) {
-                    Header header = original.next();
-                    if (!header.key().equals(key)) {
-                        continue;
-                    }
-
-                    return header;
+            while (original.hasNext()) {
+                Header header = original.next();
+                if (!header.key().equals(key)) {
+                    continue;
                 }
-                return this.allDone();
+                return header;
             }
+            return this.allDone();
         }
     }
 }

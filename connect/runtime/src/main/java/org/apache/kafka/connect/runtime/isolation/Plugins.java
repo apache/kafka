@@ -201,7 +201,7 @@ public class Plugins {
             throw new ConnectException(
                     "Failed to find any class that implements Converter and which name matches "
                             + converterClassOrAlias
-                            + ", available connectors are: "
+                            + ", available converters are: "
                             + pluginNames(delegatingLoader.converters())
             );
         }
@@ -220,7 +220,7 @@ public class Plugins {
             throw new ConnectException(
                     "Failed to find any class that implements HeaderConverter and which name matches "
                             + converterClassOrAlias
-                            + ", available connectors are: "
+                            + ", available header converters are: "
                             + pluginNames(delegatingLoader.converters())
             );
         }
