@@ -194,6 +194,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                processorName,
                                                stateUpdateSupplier);
     }
+    
     public synchronized void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,
                                             final String topic,
                                             final ConsumedInternal consumed,

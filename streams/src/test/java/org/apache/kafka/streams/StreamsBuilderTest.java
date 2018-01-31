@@ -204,6 +204,4 @@ public class StreamsBuilderTest {
     public static Collection<Set<String>> getCopartitionedGroups(final StreamsBuilder builder) {
         return builder.internalTopologyBuilder.copartitionGroups();
     }
-
-
 }
