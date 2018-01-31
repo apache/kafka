@@ -22,6 +22,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -158,7 +159,11 @@ public abstract class AbstractResetIntegrationTest {
     private class ConsumerGroupInactiveCondition implements TestCondition {
         @Override
         public boolean conditionMet() {
-            return adminClient.describeConsumerGroup(appID, 0).consumers().get().isEmpty();
+            try {
+                return adminClient.describeConsumerGroup(appID, 0).consumers().get().isEmpty();
+            } catch (final TimeoutException e) {
+                return false;
+            }
         }
     }
 
