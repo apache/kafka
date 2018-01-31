@@ -123,7 +123,7 @@ class StreamsBrokerDownResilience(Test):
 
         # start streams with broker down initially
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, self.get_configs())
-        processor.start(validate=False)
+        processor.start()
 
         time.sleep(broker_down_initially_in_seconds)
 
