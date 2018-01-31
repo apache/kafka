@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import time
+from ducktape.mark import ignore
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService
@@ -91,6 +92,7 @@ class StreamsBrokerDownResilience(Test):
     def setUp(self):
         self.zk.start()
 
+    @ignore
     def test_streams_resilient_to_broker_down(self):
         self.kafka.start()
 
