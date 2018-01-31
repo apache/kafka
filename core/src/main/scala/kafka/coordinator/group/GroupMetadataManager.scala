@@ -160,7 +160,11 @@ class GroupMetadataManager(brokerId: Int,
 
   // return true iff group is owned and the group doesn't exist
   def groupNotExists(groupId: String) = inLock(partitionLock) {
-    isGroupLocal(groupId) && (!groupMetadataCache.contains(groupId) || groupMetadataCache.get(groupId).is(Dead))
+    isGroupLocal(groupId) && (!groupMetadataCache.contains(groupId) || {
+          groupMetadataCache.get(groupId) match {
+            case group => group != null && group.inLock(group.is(Dead))
+          }
+    })
   }
 
   // visible for testing
