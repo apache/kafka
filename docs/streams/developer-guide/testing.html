@@ -34,19 +34,23 @@
   <div class="section" id="testing">
     <span id="streams-developer-guide-testing"></span><h1>Testing a Streams Application<a class="headerlink" href="#testing" title="Permalink to this headline"></a></h1>
     <p>
-      To test a Kafka Streams application, Kafka provides a test-utils artifact that can be added as regular dependency to your test code base.
+      To test a Kafka Streams application, Kafka provides a test-utils artifact since 1.1.0 release that can be added as regular dependency to your test code base.
       Example <code>pom.xml</code> snippet when using Maven:
     </p>
     <pre>
 &lt;dependency&gt;
     &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
     &lt;artifactId&gt;kafka-streams-test-utils&lt;/artifactId&gt;
-    &lt;version&gt;1.1.0&lt;/version&gt;
+    &lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
+    &lt;scope&gt;test&lt;/scope&gt;
 &lt;/dependency&gt;
     </pre>
     <p>
     The test-utils package provides a <code>TopologyTestDriver</code> that can be used pipe data through a <code>Topology</code> that is either assembled manually
     using Processor API or via the DSL using <code>StreamsBuilder</code>.
+    The test driver is simulating the library runtime that continuously fetches records from input topics and processes them by traversing the topology,
+    and hence it can be used to test if your specified processor topology is behaving correctly with the manually piped in data records by checking
+    its outputs as well as querying its embedded state stores.
     <pre>
 // Processor API
 Topology topology = new Topology();
@@ -90,8 +94,8 @@ OutputVerifier.compareKeyValue(outputRecord, "key", 42L); // throws AssertionErr
     </pre>
     <p>
     <code>TopologyTestDriver</code> supports punctuations, too.
-    Event-time punctuations are triggered automatically based on the timestamps of the records that are processed.
-    Wall-clock-time punctuations can also be tested by manually advancing wall-clock-time of the test driver (the driver mocks wall-clock-time internally to give users control over it).
+    Event-time punctuations are triggered automatically based on the processed records' timestamps.
+    Wall-clock-time punctuations can also be triggered by advancing the test driver's wall-clock-time (the driver mocks wall-clock-time internally to give users control over it).
     </p>
     <pre>
 testDriver.advanceWallClockTime(20L);
