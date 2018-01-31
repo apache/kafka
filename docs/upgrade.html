@@ -74,6 +74,7 @@
 	Kafka Streams retries and can <a href="/{{version}}/documentation/streams/developer-guide/config-streams">configure<a/>
 	fine-grained timeouts (instead of hard coded retries as in older version).</li>
     <li>Kafka Streams rebalance time was reduced further making Kafka Streams more responsive.</li>
+    <li>Kafka Connect now supports message headers in both sink and source connectors, and to manipulate them via simple message transforms. Connectors must be changed to explicitly use them. A new <code>HeaderConverter</code> is introduced to control how headers are (de)serialized, and the new "SimpleHeaderConverter" is used by default to use string representations of values.</li>
 </ul>
 
 <h5><a id="upgrade_110_new_protocols" href="#upgrade_110_new_protocols">New Protocol Versions</a></h5>

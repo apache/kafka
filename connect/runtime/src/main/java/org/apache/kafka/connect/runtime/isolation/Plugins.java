@@ -25,6 +25,7 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -200,7 +201,26 @@ public class Plugins {
             throw new ConnectException(
                     "Failed to find any class that implements Converter and which name matches "
                             + converterClassOrAlias
-                            + ", available connectors are: "
+                            + ", available converters are: "
+                            + pluginNames(delegatingLoader.converters())
+            );
+        }
+        return config != null ? newConfiguredPlugin(config, klass) : newPlugin(klass);
+    }
+
+    public HeaderConverter newHeaderConverter(String converterClassOrAlias, AbstractConfig config) {
+        Class<? extends HeaderConverter> klass;
+        try {
+            klass = pluginClass(
+                    delegatingLoader,
+                    converterClassOrAlias,
+                    HeaderConverter.class
+            );
+        } catch (ClassNotFoundException e) {
+            throw new ConnectException(
+                    "Failed to find any class that implements HeaderConverter and which name matches "
+                            + converterClassOrAlias
+                            + ", available header converters are: "
                             + pluginNames(delegatingLoader.converters())
             );
         }
