@@ -346,14 +346,16 @@ class LogSegment private[log] (val log: FileRecords,
   @nonthreadsafe
   def truncateTo(offset: Long): Int = {
     val mapping = translateOffset(offset)
-    if (mapping == null)
-      return 0
     offsetIndex.truncateTo(offset)
     timeIndex.truncateTo(offset)
     txnIndex.truncateTo(offset)
     // after truncation, reset and allocate more space for the (new currently  active) index
     offsetIndex.resize(offsetIndex.maxIndexSize)
     timeIndex.resize(timeIndex.maxIndexSize)
+
+    if (mapping == null)
+      return 0
+
     val bytesTruncated = log.truncateTo(mapping.position)
     if(log.sizeInBytes == 0) {
       created = time.milliseconds
@@ -519,10 +521,10 @@ class LogSegment private[log] (val log: FileRecords,
     }
 
     CoreUtils.tryAll(Seq(
-      () => delete(log.deleteIfExists _, "log", log.file, logIfMissing = true),
-      () => delete(offsetIndex.deleteIfExists _, "offset index", offsetIndex.file, logIfMissing = true),
-      () => delete(timeIndex.deleteIfExists _, "time index", timeIndex.file, logIfMissing = true),
-      () => delete(txnIndex.deleteIfExists _, "transaction index", txnIndex.file, logIfMissing = false)
+      () => delete(log.deleteIfExists, "log", log.file, logIfMissing = true),
+      () => delete(offsetIndex.deleteIfExists, "offset index", offsetIndex.file, logIfMissing = true),
+      () => delete(timeIndex.deleteIfExists, "time index", timeIndex.file, logIfMissing = true),
+      () => delete(txnIndex.deleteIfExists, "transaction index", txnIndex.file, logIfMissing = false)
     ))
   }
 

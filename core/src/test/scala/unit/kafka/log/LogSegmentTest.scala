@@ -22,7 +22,7 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils.checkEquals
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{MockTime, Time, Utils}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -36,13 +36,16 @@ class LogSegmentTest {
   var logDir: File = _
 
   /* create a segment with the given base offset */
-  def createSegment(offset: Long, indexIntervalBytes: Int = 10): LogSegment = {
+  def createSegment(offset: Long,
+                    indexIntervalBytes: Int = 10,
+                    maxSegmentMs: Int = Int.MaxValue,
+                    time: Time = Time.SYSTEM): LogSegment = {
     val ms = FileRecords.open(Log.logFile(logDir, offset))
     val idx = new OffsetIndex(Log.offsetIndexFile(logDir, offset), offset, maxIndexSize = 1000)
     val timeIdx = new TimeIndex(Log.timeIndexFile(logDir, offset), offset, maxIndexSize = 1500)
     val txnIndex = new TransactionIndex(offset, Log.transactionIndexFile(logDir, offset))
-    val seg = new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, maxSegmentMs = Int.MaxValue,
-      maxSegmentBytes = Int.MaxValue, Time.SYSTEM)
+    val seg = new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, maxSegmentMs = maxSegmentMs,
+      maxSegmentBytes = Int.MaxValue, time)
     segments += seg
     seg
   }
@@ -155,6 +158,45 @@ class LogSegmentTest {
       checkEquals(ms1.records.iterator, read2.records.records.iterator)
       offset += 1
     }
+  }
+
+  @Test
+  def testTruncateEmptySegment() {
+    // This tests the scenario in which the follower truncates to an empty segment. In this
+    // case we must ensure that the index is resized so that the log segment is not mistakenly
+    // rolled due to a full index
+
+    val maxSegmentMs = 300000
+    val time = new MockTime
+
+    val seg = createSegment(0, maxSegmentMs = maxSegmentMs, time = time)
+    seg.close()
+
+    val reopened = createSegment(0, maxSegmentMs = maxSegmentMs, time = time)
+    assertEquals(0, seg.timeIndex.sizeInBytes)
+    assertEquals(0, seg.offsetIndex.sizeInBytes)
+
+    reopened.truncateTo(57)
+    assertFalse(reopened.timeIndex.isFull)
+    assertFalse(reopened.offsetIndex.isFull)
+
+    assertFalse(reopened.shouldRoll(messagesSize = 1024,
+      maxTimestampInMessages = RecordBatch.NO_TIMESTAMP,
+      maxOffsetInMessages = 100L,
+      now = time.milliseconds()))
+
+    // The segment should not be rolled even if maxSegmentMs has been exceeded
+    time.sleep(maxSegmentMs + 1)
+    assertFalse(reopened.shouldRoll(messagesSize = 1024,
+      maxTimestampInMessages = RecordBatch.NO_TIMESTAMP,
+      maxOffsetInMessages = 100L,
+      now = time.milliseconds()))
+
+    // But we should still roll the segment if we cannot fit the next offset
+    assertTrue(reopened.shouldRoll(messagesSize = 1024,
+      maxTimestampInMessages = RecordBatch.NO_TIMESTAMP,
+      maxOffsetInMessages = Int.MaxValue.toLong + 200,
+      now = time.milliseconds()))
   }
 
   @Test
