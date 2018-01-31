@@ -135,6 +135,12 @@ public class ConnectorsResourceTest {
         return result;
     }
 
+    private static final Map<String, String> getConnectorConfig(Map<String, String> mapToClone) {
+        Map<String, String> result = new HashMap<>();
+        result.putAll(mapToClone);
+        return result;
+    }
+
     @Test
     public void testListConnectors() throws Throwable {
         final Capture<Callback<Collection<String>>> cb = Capture.newInstance();
