@@ -118,20 +118,24 @@ class StreamsBrokerDownResilience(Test):
         self.kafka.stop()
 
     def test_streams_runs_with_broker_down_initially(self):
+        self.kafka.start()
+        node = self.kafka.leader(self.inputTopic)
+        self.kafka.stop_node(node)
 
         broker_down_initially_in_seconds = 60
 
+        configs = self.get_configs + "," + "application.id=starting_wo_broker_id"
+
         # start streams with broker down initially
-        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, self.get_configs())
+        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor.start()
 
         time.sleep(broker_down_initially_in_seconds)
 
         # now start broker
-        self.kafka.start()
-
+        self.kafka.start_node(node)
         # give broker time to start up
-        time.sleep(30)
+        time.sleep(10)
 
         # assert streams can process when starting with broker down
         self.assert_produce_consume("running_with_broker_down_initially")
