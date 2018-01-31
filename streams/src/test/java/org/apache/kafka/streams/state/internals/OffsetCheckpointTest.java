@@ -35,8 +35,8 @@ public class OffsetCheckpointTest {
 
     @Test
     public void testReadWrite() throws IOException {
-        File f = TestUtils.tempFile();
-        OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
+        final File f = TestUtils.tempFile();
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
 
         try {
             Map<TopicPartition, Long> offsets = new HashMap<>();
@@ -59,10 +59,10 @@ public class OffsetCheckpointTest {
     }
 
     @Test
-    public void testNotWriteEmptyMap() throws IOException {
+    public void shouldNotWriteCheckpointWhenNoOffsets() throws IOException {
         // we do not need to worry about file name unqiueness since this file should not be created
-        File f = new File(TestUtils.tempDirectory().getAbsolutePath(), "kafka.tmp");
-        OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
+        final File f = new File(TestUtils.tempDirectory().getAbsolutePath(), "kafka.tmp");
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
 
         checkpoint.write(Collections.<TopicPartition, Long>emptyMap());
 
