@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Sensor;
 
 import java.util.ArrayList;
@@ -99,14 +100,29 @@ public class WorkerConfig extends AbstractConfig {
             + "data to be committed in a future attempt.";
     public static final long OFFSET_COMMIT_TIMEOUT_MS_DEFAULT = 5000L;
 
+    /**
+     * @deprecated As of 1.1.0.
+     */
+    @Deprecated
     public static final String REST_HOST_NAME_CONFIG = "rest.host.name";
     private static final String REST_HOST_NAME_DOC
             = "Hostname for the REST API. If this is set, it will only bind to this interface.";
 
+    /**
+     * @deprecated As of 1.1.0.
+     */
+    @Deprecated
     public static final String REST_PORT_CONFIG = "rest.port";
     private static final String REST_PORT_DOC
             = "Port for the REST API to listen on.";
     public static final int REST_PORT_DEFAULT = 8083;
+
+    public static final String LISTENERS_CONFIG = "listeners";
+    private static final String LISTENERS_DOC
+            = "List of comma-separated URIs the REST API will listen on. The supported protocols are HTTP and HTTPS.\n" +
+            " Specify hostname as 0.0.0.0 to bind to all interfaces.\n" +
+            " Leave hostname empty to bind to default interface.\n" +
+            " Examples of legal listener lists: HTTP://myhost:8083,HTTPS://myhost:8084";
 
     public static final String REST_ADVERTISED_HOST_NAME_CONFIG = "rest.advertised.host.name";
     private static final String REST_ADVERTISED_HOST_NAME_DOC
@@ -115,6 +131,10 @@ public class WorkerConfig extends AbstractConfig {
     public static final String REST_ADVERTISED_PORT_CONFIG = "rest.advertised.port";
     private static final String REST_ADVERTISED_PORT_DOC
             = "If this is set, this is the port that will be given out to other workers to connect to.";
+
+    public static final String REST_ADVERTISED_LISTENER_CONFIG = "rest.advertised.listener";
+    private static final String REST_ADVERTISED_LISTENER_DOC
+            = "Sets the advertised listener (HTTP or HTTPS) which will be given to other workers to use.";
 
     public static final String ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG = "access.control.allow.origin";
     protected static final String ACCESS_CONTROL_ALLOW_ORIGIN_DOC =
@@ -173,8 +193,10 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.LOW, OFFSET_COMMIT_TIMEOUT_MS_DOC)
                 .define(REST_HOST_NAME_CONFIG, Type.STRING, null, Importance.LOW, REST_HOST_NAME_DOC)
                 .define(REST_PORT_CONFIG, Type.INT, REST_PORT_DEFAULT, Importance.LOW, REST_PORT_DOC)
+                .define(LISTENERS_CONFIG, Type.LIST, null, Importance.LOW, LISTENERS_DOC)
                 .define(REST_ADVERTISED_HOST_NAME_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_HOST_NAME_DOC)
                 .define(REST_ADVERTISED_PORT_CONFIG, Type.INT,  null, Importance.LOW, REST_ADVERTISED_PORT_DOC)
+                .define(REST_ADVERTISED_LISTENER_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_LISTENER_DOC)
                 .define(ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, Type.STRING,
                         ACCESS_CONTROL_ALLOW_ORIGIN_DEFAULT, Importance.LOW,
                         ACCESS_CONTROL_ALLOW_ORIGIN_DOC)
@@ -199,7 +221,8 @@ public class WorkerConfig extends AbstractConfig {
                         CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
                 .define(METRIC_REPORTER_CLASSES_CONFIG, Type.LIST,
                         "", Importance.LOW,
-                        CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC);
+                        CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
+                .define(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, ConfigDef.Type.STRING, "none", ConfigDef.Importance.LOW, BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC);
     }
 
     @Override
