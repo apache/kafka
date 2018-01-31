@@ -355,15 +355,14 @@ class GroupCoordinator(val brokerId: Int,
         else {
           groupManager.getGroup(groupId) match {
             case None =>
-              groupErrors += groupId -> Errors.GROUP_ID_NOT_FOUND
+              groupErrors += groupId ->
+                (if (groupManager.groupNotExists(groupId)) Errors.GROUP_ID_NOT_FOUND else Errors.NOT_COORDINATOR)
             case Some(group) =>
               group.inLock {
                 group.currentState match {
                   case Dead =>
-                    if (!isCoordinatorForGroup(groupId))
-                      groupErrors += groupId -> Errors.NOT_COORDINATOR
-                    else
-                      groupErrors += groupId -> Errors.GROUP_ID_NOT_FOUND
+                    groupErrors += groupId ->
+                      (if (groupManager.groupNotExists(groupId)) Errors.GROUP_ID_NOT_FOUND else Errors.NOT_COORDINATOR)
                   case Empty =>
                     group.transitionTo(Dead)
                     eligibleGroups :+= group

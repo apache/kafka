@@ -158,6 +158,11 @@ class GroupMetadataManager(brokerId: Int,
 
   def isLoading(): Boolean = inLock(partitionLock) { loadingPartitions.nonEmpty }
 
+  // return true iff group is owned and the group doesn't exist
+  def groupNotExists(groupId: String) = inLock(partitionLock) {
+    isGroupLocal(groupId) && (!groupMetadataCache.contains(groupId) || groupMetadataCache.get(groupId).is(Dead))
+  }
+
   // visible for testing
   private[group] def isGroupOpenForProducer(producerId: Long, groupId: String) = openGroupsForProducer.get(producerId) match {
     case Some(groups) =>
