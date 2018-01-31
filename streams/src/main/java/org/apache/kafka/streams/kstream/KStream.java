@@ -2635,8 +2635,10 @@ public interface KStream<K, V> {
      * For each {@code KStream} record that finds a corresponding record in {@link GlobalKTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as the key of this {@code KStream}.
-     * If an {@code KStream} input record key or value is {@code null} the record will not be included in the join
+     * If a {@code KStream} input record key or value is {@code null} the record will not be included in the join
      * operation and thus no output record will be added to the resulting {@code KStream}.
+     * If {@code keyValueMapper} returns {@code null} implying no match exists, no output record will be added to the
+     * resulting {@code KStream}.
      *
      * @param globalKTable   the {@link GlobalKTable} to be joined with this stream
      * @param keyValueMapper instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
@@ -2667,11 +2669,13 @@ public interface KStream<K, V> {
      * <p>
      * For each {@code KStream} record whether or not it finds a corresponding record in {@link GlobalKTable} the
      * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
+     * The key of the result record is the same as this {@code KStream}.
+     * If a {@code KStream} input record key or value is {@code null} the record will not be included in the join
+     * operation and thus no output record will be added to the resulting {@code KStream}.
+     * If {@code keyValueMapper} returns {@code null} implying no match exists, a {@code null} value will be
+     * provided to {@link ValueJoiner}.
      * If no {@link GlobalKTable} record was found during lookup, a {@code null} value will be provided to
      * {@link ValueJoiner}.
-     * The key of the result record is the same as this {@code KStream}.
-     * If an {@code KStream} input record key or value is {@code null} the record will not be included in the join
-     * operation and thus no output record will be added to the resulting {@code KStream}.
      *
      * @param globalKTable   the {@link GlobalKTable} to be joined with this stream
      * @param keyValueMapper instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
