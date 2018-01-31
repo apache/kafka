@@ -940,12 +940,9 @@ public class Values {
             return input;
         }
         Schema valueSchema = schema.valueSchema();
-        if (!isProjectable(valueSchema)) {
-            return input;
-        }
         List<Object> result = new ArrayList<>();
         for (Object value : input) {
-            Object newValue = project(valueSchema, value);
+            Object newValue = convertTo(valueSchema, null, value);
             result.add(newValue);
         }
         return result;
@@ -957,91 +954,13 @@ public class Values {
         }
         Schema keySchema = mapSchema.keySchema();
         Schema valueSchema = mapSchema.valueSchema();
-        if (!isProjectable(keySchema) && !isProjectable(valueSchema)) {
-            return input;
-        }
         Map<Object, Object> result = new LinkedHashMap<>();
         for (Map.Entry<?, ?> entry : input.entrySet()) {
-            Object newKey = project(keySchema, entry.getKey());
-            Object newValue = project(valueSchema, entry.getValue());
+            Object newKey = convertTo(keySchema, null, entry.getKey());
+            Object newValue = convertTo(valueSchema, null, entry.getValue());
             result.put(newKey, newValue);
         }
         return result;
-    }
-
-    protected static boolean isProjectable(Schema schema) {
-        switch (schema.type()) {
-            case BYTES:
-                if (Decimal.LOGICAL_NAME.equals(schema.name())) {
-                    return true;
-                }
-                return false;
-            case INT8:
-            case INT16:
-            case INT32:
-            case INT64:
-            case FLOAT32:
-            case FLOAT64:
-                return true;
-            default:
-                return false;
-        }
-    }
-
-    protected static Object project(Schema desiredSchema, Object value) {
-        if (value instanceof Number) {
-            Number number = (Number) value;
-            switch (desiredSchema.type()) {
-                case BYTES:
-                    if (Decimal.LOGICAL_NAME.equals(desiredSchema.name())) {
-                        if (number instanceof BigDecimal) {
-                            return number;
-                        }
-                        if (number instanceof Double || number instanceof Float) {
-                            return new BigDecimal(number.doubleValue());
-                        }
-                        return new BigDecimal(number.longValue());
-                    }
-                    return value;
-                case INT8:
-                    return number.byteValue();
-                case INT16:
-                    return number.shortValue();
-                case INT32:
-                    if (Date.SCHEMA.equals(desiredSchema) || Time.SCHEMA.equals(desiredSchema)) {
-                        return new java.util.Date(number.longValue());
-                    }
-                    return number.intValue();
-                case INT64:
-                    if (Timestamp.SCHEMA.equals(desiredSchema)) {
-                        return new java.util.Date(number.longValue());
-                    }
-                    return number.longValue();
-                case FLOAT32:
-                    return number.floatValue();
-                case FLOAT64:
-                    return number.doubleValue();
-                default:
-                    break;
-            }
-        }
-        if (value instanceof java.util.Date) {
-            java.util.Date date = (java.util.Date) value;
-            switch (desiredSchema.type()) {
-                case BYTES:
-                    if (Decimal.LOGICAL_NAME.equals(desiredSchema.name())) {
-                        return new BigDecimal(date.getTime());
-                    }
-                    return value;
-                case INT64:
-                    return date.getTime();
-                case FLOAT64:
-                    return (double) date.getTime();
-                default:
-                    break;
-            }
-        }
-        return value;
     }
 
     protected static class SchemaDetector {
