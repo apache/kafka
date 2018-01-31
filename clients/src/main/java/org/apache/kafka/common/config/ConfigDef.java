@@ -982,6 +982,40 @@ public class ConfigDef {
         }
     }
 
+    public static class NonEmptyStringWithoutControlChars implements Validator {
+
+        public static NonEmptyStringWithoutControlChars nonEmptyStringWithoutControlChars() {
+            return new NonEmptyStringWithoutControlChars();
+        }
+
+        @Override
+        public void ensureValid(String name, Object value) {
+            String s = (String) value;
+
+            if (s == null) {
+                // This can happen during creation of the config object due to no default value being defined for the
+                // name configuration - a missing name parameter is caught when checking for mandatory parameters,
+                // thus we can ok a null value here
+                return;
+            } else if (s.isEmpty()) {
+                throw new ConfigException(name, value, "String may not be empty");
+            }
+
+            // Check name string for illegal characters
+            ArrayList<Integer> foundIllegalCharacters = new ArrayList<>();
+
+            for (int i = 0; i < s.length(); i++) {
+                if (Character.isISOControl(s.codePointAt(i))) {
+                    foundIllegalCharacters.add(s.codePointAt(i));
+                }
+            }
+
+            if (!foundIllegalCharacters.isEmpty()) {
+                throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " + Utils.join(foundIllegalCharacters, ", "));
+            }
+        }
+    }
+
     public static class ConfigKey {
         public final String name;
         public final Type type;

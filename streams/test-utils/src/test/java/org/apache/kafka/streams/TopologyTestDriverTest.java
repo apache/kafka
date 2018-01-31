@@ -593,36 +593,35 @@ public class TopologyTestDriverTest {
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 42L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
+        expectedPunctuations.add(51L);
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 51L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
-        expectedPunctuations.add(52L);
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 52L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
+        expectedPunctuations.add(61L);
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 61L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
-        expectedPunctuations.add(65L);
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 65L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
+        expectedPunctuations.add(71L);
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 71L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
-        expectedPunctuations.add(72L);
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 72L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         expectedPunctuations.add(95L);
-        expectedPunctuations.add(95L);
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 95L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
+        expectedPunctuations.add(101L);
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 101L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
-        expectedPunctuations.add(102L);
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 102L));
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
     }
@@ -637,20 +636,22 @@ public class TopologyTestDriverTest {
 
         final List<Long> expectedPunctuations = new LinkedList<>();
 
-        expectedPunctuations.add(5L);
         testDriver.advanceWallClockTime(5L);
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
+        expectedPunctuations.add(14L);
         testDriver.advanceWallClockTime(9L);
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
-        expectedPunctuations.add(15L);
         testDriver.advanceWallClockTime(1L);
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         expectedPunctuations.add(35L);
-        expectedPunctuations.add(35L);
         testDriver.advanceWallClockTime(20L);
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
+
+        expectedPunctuations.add(40L);
+        testDriver.advanceWallClockTime(5L);
         assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
     }
 
