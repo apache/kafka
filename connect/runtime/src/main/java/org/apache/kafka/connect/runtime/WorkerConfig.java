@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -62,6 +63,15 @@ public class WorkerConfig extends AbstractConfig {
                     " This controls the format of the values in messages written to or read from Kafka, and since this is" +
                     " independent of connectors it allows any connector to work with any serialization format." +
                     " Examples of common formats include JSON and Avro.";
+
+    public static final String HEADER_CONVERTER_CLASS_CONFIG = "header.converter";
+    public static final String HEADER_CONVERTER_CLASS_DOC =
+            "HeaderConverter class used to convert between Kafka Connect format and the serialized form that is written to Kafka." +
+                    " This controls the format of the header values in messages written to or read from Kafka, and since this is" +
+                    " independent of connectors it allows any connector to work with any serialization format." +
+                    " Examples of common formats include JSON and Avro. By default, the SimpleHeaderConverter is used to serialize" +
+                    " header values to strings and deserialize them by inferring the schemas.";
+    public static final String HEADER_CONVERTER_CLASS_DEFAULT = SimpleHeaderConverter.class.getName();
 
     public static final String INTERNAL_KEY_CONVERTER_CLASS_CONFIG = "internal.key.converter";
     public static final String INTERNAL_KEY_CONVERTER_CLASS_DOC =
@@ -222,7 +232,11 @@ public class WorkerConfig extends AbstractConfig {
                 .define(METRIC_REPORTER_CLASSES_CONFIG, Type.LIST,
                         "", Importance.LOW,
                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
-                .define(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, ConfigDef.Type.STRING, "none", ConfigDef.Importance.LOW, BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC);
+                .define(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
+                        ConfigDef.Type.STRING, "none", ConfigDef.Importance.LOW, BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC)
+                .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS,
+                        HEADER_CONVERTER_CLASS_DEFAULT,
+                        Importance.LOW, HEADER_CONVERTER_CLASS_DOC);
     }
 
     @Override
