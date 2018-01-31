@@ -131,7 +131,7 @@ class StreamsBrokerDownResilience(Test):
         self.kafka.start()
 
         # give broker time to start up
-        time.sleep(10)
+        time.sleep(30)
 
         # assert streams can process when starting with broker down
         self.assert_produce_consume("running_with_broker_down_initially")
