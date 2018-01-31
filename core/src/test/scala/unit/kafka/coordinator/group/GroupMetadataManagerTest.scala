@@ -497,6 +497,26 @@ class GroupMetadataManagerTest {
     }
   }
 
+  @Test
+  def testGroupNotExists() {
+    // group is not owned
+    assertFalse(groupMetadataManager.groupNotExists(groupId))
+
+    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    // group is owned but does not exist yet
+    assertTrue(groupMetadataManager.groupNotExists(groupId))
+
+    val group = new GroupMetadata(groupId, initialState = Empty)
+    groupMetadataManager.addGroup(group)
+
+    // group is owned but not Dead
+    assertFalse(groupMetadataManager.groupNotExists(groupId))
+
+    group.transitionTo(Dead)
+    // group is owned and Dead
+    assertTrue(groupMetadataManager.groupNotExists(groupId))
+  }
+
   private def appendConsumerOffsetCommit(buffer: ByteBuffer, baseOffset: Long, offsets: Map[TopicPartition, Long]) = {
     val builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, baseOffset)
     val commitRecords = createCommittedOffsetRecords(offsets)

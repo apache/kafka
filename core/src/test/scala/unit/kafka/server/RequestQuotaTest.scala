@@ -312,11 +312,14 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.EXPIRE_DELEGATION_TOKEN =>
           new ExpireDelegationTokenRequest.Builder(ByteBuffer.allocate(10), 1000)
 
-        case ApiKeys.DESCRIBE_DELEGATION_TOKEN=>
+        case ApiKeys.DESCRIBE_DELEGATION_TOKEN =>
           new DescribeDelegationTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")))
 
-        case ApiKeys.RENEW_DELEGATION_TOKEN=>
+        case ApiKeys.RENEW_DELEGATION_TOKEN =>
           new RenewDelegationTokenRequest.Builder(ByteBuffer.allocate(10), 1000)
+
+        case ApiKeys.DELETE_GROUPS =>
+          new DeleteGroupsRequest.Builder(Collections.singleton("test-group"))
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
@@ -416,6 +419,7 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.DESCRIBE_DELEGATION_TOKEN=> new DescribeDelegationTokenResponse(response).throttleTimeMs
       case ApiKeys.EXPIRE_DELEGATION_TOKEN => new ExpireDelegationTokenResponse(response).throttleTimeMs
       case ApiKeys.RENEW_DELEGATION_TOKEN => new RenewDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.DELETE_GROUPS => new DeleteGroupsResponse(response).throttleTimeMs
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
     }
   }
