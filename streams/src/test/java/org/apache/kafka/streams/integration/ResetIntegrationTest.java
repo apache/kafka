@@ -23,6 +23,7 @@ import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -32,6 +33,7 @@ import java.util.Properties;
 /**
  * Tests local state store and global application cleanup.
  */
+@Ignore
 @Category({IntegrationTest.class})
 public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
