@@ -177,5 +177,4 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     public void shouldReturnNullOnGetWhenDoesntExist() {
         assertThat(store.get(hello), is(nullValue()));
     }
-
 }
