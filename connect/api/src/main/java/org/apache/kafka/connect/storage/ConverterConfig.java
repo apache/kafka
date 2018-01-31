@@ -31,7 +31,6 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 public abstract class ConverterConfig extends AbstractConfig {
 
     public static final String TYPE_CONFIG = "converter.type";
-    public static final String TYPE_DEFAULT = ConverterType.HEADER.getName();
     private static final String TYPE_DOC = "How this converter will be used.";
 
     /**
@@ -40,7 +39,7 @@ public abstract class ConverterConfig extends AbstractConfig {
      * @return the ConfigDef; never null
      */
     public static ConfigDef newConfigDef() {
-        return new ConfigDef().define(TYPE_CONFIG, Type.STRING, TYPE_DEFAULT,
+        return new ConfigDef().define(TYPE_CONFIG, Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
                                       in(ConverterType.KEY.getName(), ConverterType.VALUE.getName(), ConverterType.HEADER.getName()),
                                       Importance.LOW, TYPE_DOC);
     }

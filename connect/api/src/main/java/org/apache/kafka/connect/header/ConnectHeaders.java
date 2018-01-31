@@ -28,6 +28,7 @@ import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -44,9 +45,6 @@ import java.util.Set;
 public class ConnectHeaders implements Headers {
 
     private static final int EMPTY_HASH = Objects.hash(new LinkedList<>());
-
-    // Shared, immutable instance with a null schema and null value
-    private static final SchemaAndValue NULL_SCHEMA_AND_VALUE = new SchemaAndValue(null, null);
 
     /**
      * An immutable and therefore sharable empty iterator.
@@ -76,17 +74,18 @@ public class ConnectHeaders implements Headers {
     }
 
     public ConnectHeaders(Iterable<Header> original) {
-        if (original != null) {
-            if (original instanceof ConnectHeaders) {
-                ConnectHeaders originalHeaders = (ConnectHeaders) original;
-                if (!originalHeaders.isEmpty()) {
-                    headers = new LinkedList<>(originalHeaders.headers);
-                }
-            } else {
-                headers = new LinkedList<>();
-                for (Header header : original) {
-                    headers.add(header);
-                }
+        if (original == null) {
+            return;
+        }
+        if (original instanceof ConnectHeaders) {
+            ConnectHeaders originalHeaders = (ConnectHeaders) original;
+            if (!originalHeaders.isEmpty()) {
+                headers = new LinkedList<>(originalHeaders.headers);
+            }
+        } else {
+            headers = new LinkedList<>();
+            for (Header header : original) {
+                headers.add(header);
             }
         }
     }
@@ -126,12 +125,12 @@ public class ConnectHeaders implements Headers {
     @Override
     public Headers add(String key, SchemaAndValue schemaAndValue) {
         checkSchemaMatches(schemaAndValue);
-        return add(new ConnectHeader(key, schemaAndValue != null ? schemaAndValue : NULL_SCHEMA_AND_VALUE));
+        return add(new ConnectHeader(key, schemaAndValue != null ? schemaAndValue : SchemaAndValue.NULL));
     }
 
     @Override
     public Headers add(String key, Object value, Schema schema) {
-        return add(key, value != null || schema != null ? new SchemaAndValue(schema, value) : NULL_SCHEMA_AND_VALUE);
+        return add(key, value != null || schema != null ? new SchemaAndValue(schema, value) : SchemaAndValue.NULL);
     }
 
     @Override
@@ -211,7 +210,7 @@ public class ConnectHeaders implements Headers {
         if (value == null) {
             return add(key, null, null);
         }
-        // Check that this is a date ...
+        // Check that this is a decimal ...
         Schema schema = Decimal.schema(value.scale());
         Decimal.fromLogical(schema, value);
         return addWithoutValidating(key, value, schema);
@@ -229,7 +228,7 @@ public class ConnectHeaders implements Headers {
     @Override
     public Headers addTime(String key, java.util.Date value) {
         if (value != null) {
-            // Check that this is a date ...
+            // Check that this is a time ...
             Time.fromLogical(Time.SCHEMA, value);
         }
         return addWithoutValidating(key, value, Time.SCHEMA);
@@ -238,7 +237,7 @@ public class ConnectHeaders implements Headers {
     @Override
     public Headers addTimestamp(String key, java.util.Date value) {
         if (value != null) {
-            // Check that this is a date ...
+            // Check that this is a timestamp ...
             Timestamp.fromLogical(Timestamp.SCHEMA, value);
         }
         return addWithoutValidating(key, value, Timestamp.SCHEMA);
@@ -382,7 +381,7 @@ public class ConnectHeaders implements Headers {
 
     @Override
     public String toString() {
-        return "ConnectHeader(headers=" + (headers != null ? headers : "") + ")";
+        return "ConnectHeaders(headers=" + (headers != null ? headers : "") + ")";
     }
 
     @Override
@@ -433,6 +432,8 @@ public class ConnectHeaders implements Headers {
             if (value != null) {
                 switch (schema.type()) {
                     case BYTES:
+                        if (value instanceof ByteBuffer)
+                            return;
                         if (value instanceof byte[])
                             return;
                         if (value instanceof BigDecimal && Decimal.LOGICAL_NAME.equals(schema.name()))
