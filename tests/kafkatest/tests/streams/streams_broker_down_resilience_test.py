@@ -76,7 +76,7 @@ class StreamsBrokerDownResilience(Test):
                    err_msg="At %s streams did not process messages in 60 seconds " % test_state)
 
     @staticmethod
-    def get_configs():
+    def get_configs(extra_configs=""):
         # Consumer max.poll.interval > min(max.block.ms, ((retries + 1) * request.timeout)
         consumer_poll_ms = "consumer.max.poll.interval.ms=50000"
         retries_config = "producer.retries=2"
@@ -84,7 +84,7 @@ class StreamsBrokerDownResilience(Test):
         max_block_ms = "producer.max.block.ms=30000"
 
         # java code expects configs in key=value,key=value format
-        updated_configs = consumer_poll_ms + "," + retries_config + "," + request_timeout + "," + max_block_ms
+        updated_configs = consumer_poll_ms + "," + retries_config + "," + request_timeout + "," + max_block_ms + extra_configs
 
         return updated_configs
 
@@ -118,13 +118,10 @@ class StreamsBrokerDownResilience(Test):
         self.kafka.stop()
 
     def test_streams_runs_with_broker_down_initially(self):
-        self.kafka.start()
-        node = self.kafka.leader(self.inputTopic)
-        self.kafka.stop_node(node)
 
         broker_down_initially_in_seconds = 60
 
-        configs = str(self.get_configs) + "," + "application.id=starting_wo_broker_id"
+        configs = self.get_configs(extra_configs=",application.id=starting_wo_broker_id")
 
         # start streams with broker down initially
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
@@ -133,7 +130,7 @@ class StreamsBrokerDownResilience(Test):
         time.sleep(broker_down_initially_in_seconds)
 
         # now start broker
-        self.kafka.start_node(node)
+        self.kafka.start()
         # give broker time to start up
         time.sleep(10)
 
