@@ -503,6 +503,9 @@ class GroupMetadataManagerTest {
     assertFalse(groupMetadataManager.groupNotExists(groupId))
 
     groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    // group is owned but does not exist yet
+    assertTrue(groupMetadataManager.groupNotExists(groupId))
+
     val group = new GroupMetadata(groupId, initialState = Empty)
     groupMetadataManager.addGroup(group)
 
