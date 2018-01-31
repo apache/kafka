@@ -309,63 +309,169 @@ public class StreamTaskTest {
     @Test
     public void testMaybePunctuateStreamTime() {
         task.addRecords(partition1, records(
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 30, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 40, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 32, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 40, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 60, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
         ));
 
         task.addRecords(partition2, records(
                 new ConsumerRecord<>(partition2.topic(), partition2.partition(), 25, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
                 new ConsumerRecord<>(partition2.topic(), partition2.partition(), 35, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 45, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 45, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 61, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
         ));
 
         assertTrue(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
+        assertEquals(8, task.numBuffered());
+        assertEquals(1, source1.numReceived);
+        assertEquals(0, source2.numReceived);
+
+        assertTrue(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(7, task.numBuffered());
+        assertEquals(2, source1.numReceived);
+        assertEquals(0, source2.numReceived);
+
+        assertFalse(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(6, task.numBuffered());
+        assertEquals(2, source1.numReceived);
+        assertEquals(1, source2.numReceived);
+
+        assertTrue(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
         assertEquals(5, task.numBuffered());
+        assertEquals(3, source1.numReceived);
+        assertEquals(1, source2.numReceived);
+
+        assertFalse(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(4, task.numBuffered());
+        assertEquals(3, source1.numReceived);
+        assertEquals(2, source2.numReceived);
+
+        assertTrue(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(3, task.numBuffered());
+        assertEquals(4, source1.numReceived);
+        assertEquals(2, source2.numReceived);
+
+        assertFalse(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(2, task.numBuffered());
+        assertEquals(4, source1.numReceived);
+        assertEquals(3, source2.numReceived);
+
+        assertTrue(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(1, task.numBuffered());
+        assertEquals(5, source1.numReceived);
+        assertEquals(3, source2.numReceived);
+
+        assertFalse(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(0, task.numBuffered());
+        assertEquals(5, source1.numReceived);
+        assertEquals(4, source2.numReceived);
+
+        assertFalse(task.process());
+        assertFalse(task.maybePunctuateStreamTime());
+
+        processorStreamTime.supplier.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 0L, 20L, 32L, 40L, 60L);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldPunctuateOnceStreamTimeAfterGap() {
+        task.addRecords(partition1, records(
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 142, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 155, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 160, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+        ));
+
+        task.addRecords(partition2, records(
+                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 25, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 145, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 159, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 161, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+        ));
+
+        assertTrue(task.maybePunctuateStreamTime()); // punctuate at 20
+
+        assertTrue(task.process());
+        assertEquals(7, task.numBuffered());
         assertEquals(1, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
         assertFalse(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
-        assertEquals(4, task.numBuffered());
+        assertEquals(6, task.numBuffered());
         assertEquals(1, source1.numReceived);
         assertEquals(1, source2.numReceived);
 
-        assertTrue(task.maybePunctuateStreamTime());
+        assertTrue(task.maybePunctuateStreamTime()); // punctuate at 142
+
+        // only one punctuation after 100ms gap
+        assertFalse(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(5, task.numBuffered());
+        assertEquals(2, source1.numReceived);
+        assertEquals(1, source2.numReceived);
+
+        assertFalse(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(4, task.numBuffered());
+        assertEquals(2, source1.numReceived);
+        assertEquals(2, source2.numReceived);
+
+        assertTrue(task.maybePunctuateStreamTime()); // punctuate at 155
 
         assertTrue(task.process());
         assertEquals(3, task.numBuffered());
-        assertEquals(2, source1.numReceived);
-        assertEquals(1, source2.numReceived);
+        assertEquals(3, source1.numReceived);
+        assertEquals(2, source2.numReceived);
 
         assertFalse(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
         assertEquals(2, task.numBuffered());
-        assertEquals(2, source1.numReceived);
-        assertEquals(2, source2.numReceived);
+        assertEquals(3, source1.numReceived);
+        assertEquals(3, source2.numReceived);
 
-        assertTrue(task.maybePunctuateStreamTime());
+        assertTrue(task.maybePunctuateStreamTime()); // punctuate at 160, still aligned on the initial punctuation
 
         assertTrue(task.process());
         assertEquals(1, task.numBuffered());
-        assertEquals(3, source1.numReceived);
-        assertEquals(2, source2.numReceived);
+        assertEquals(4, source1.numReceived);
+        assertEquals(3, source2.numReceived);
 
         assertFalse(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
         assertEquals(0, task.numBuffered());
-        assertEquals(3, source1.numReceived);
-        assertEquals(3, source2.numReceived);
+        assertEquals(4, source1.numReceived);
+        assertEquals(4, source2.numReceived);
 
         assertFalse(task.process());
         assertFalse(task.maybePunctuateStreamTime());
 
-        processorStreamTime.supplier.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 20L, 30L, 40L);
+        processorStreamTime.supplier.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 20L, 142L, 155L, 160L);
     }
 
     @SuppressWarnings("unchecked")
@@ -405,18 +511,45 @@ public class StreamTaskTest {
         assertTrue(task.maybePunctuateSystemTime());
         time.sleep(10);
         assertTrue(task.maybePunctuateSystemTime());
-        time.sleep(10);
+        time.sleep(9);
+        assertFalse(task.maybePunctuateSystemTime());
+        time.sleep(1);
         assertTrue(task.maybePunctuateSystemTime());
-        processorSystemTime.supplier.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 10, now + 20, now + 30);
+        time.sleep(20);
+        assertTrue(task.maybePunctuateSystemTime());
+        assertFalse(task.maybePunctuateSystemTime());
+        processorSystemTime.supplier.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 10, now + 20, now + 30, now + 50);
     }
 
     @Test
     public void shouldNotPunctuateSystemTimeWhenIntervalNotElapsed() {
-        long now = time.milliseconds();
-        assertTrue(task.maybePunctuateSystemTime()); // first time we always punctuate
+        assertFalse(task.maybePunctuateSystemTime());
         time.sleep(9);
         assertFalse(task.maybePunctuateSystemTime());
-        processorSystemTime.supplier.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now);
+        processorSystemTime.supplier.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME);
+    }
+
+    @Test
+    public void shouldPunctuateOnceSystemTimeAfterGap() {
+        long now = time.milliseconds();
+        time.sleep(100);
+        assertTrue(task.maybePunctuateSystemTime());
+        assertFalse(task.maybePunctuateSystemTime());
+        time.sleep(10);
+        assertTrue(task.maybePunctuateSystemTime());
+        time.sleep(12);
+        assertTrue(task.maybePunctuateSystemTime());
+        time.sleep(7);
+        assertFalse(task.maybePunctuateSystemTime());
+        time.sleep(1); // punctuate at now + 130
+        assertTrue(task.maybePunctuateSystemTime());
+        time.sleep(105); // punctuate at now + 235
+        assertTrue(task.maybePunctuateSystemTime());
+        assertFalse(task.maybePunctuateSystemTime());
+        time.sleep(5); // punctuate at now + 240, still aligned on the initial punctuation
+        assertTrue(task.maybePunctuateSystemTime());
+        assertFalse(task.maybePunctuateSystemTime());
+        processorSystemTime.supplier.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 100, now + 110, now + 122, now + 130, now + 235, now + 240);
     }
 
     @Test
