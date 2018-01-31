@@ -45,7 +45,7 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
                          Schema keySchema, Object key,
                          Schema valueSchema, Object value,
                          Long timestamp) {
-        this(topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp, null);
+        this(topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp, new ConnectHeaders());
     }
 
     public ConnectRecord(String topic, Integer kafkaPartition,
@@ -59,9 +59,7 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
         this.valueSchema = valueSchema;
         this.value = value;
         this.timestamp = timestamp;
-        if (headers == null) {
-            this.headers = new ConnectHeaders();
-        } else if (headers instanceof ConnectHeaders) {
+        if (headers instanceof ConnectHeaders) {
             this.headers = (ConnectHeaders) headers;
         } else {
             this.headers = new ConnectHeaders(headers);

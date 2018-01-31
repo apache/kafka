@@ -121,8 +121,6 @@
     <suppress checks="NPathComplexity"
               files="DistributedHerder.java"/>
     <suppress checks="NPathComplexity"
-              files="ConnectHeader.java"/>
-    <suppress checks="NPathComplexity"
               files="ConnectHeaders.java"/>
     <suppress checks="MethodLength"
               files="Values.java"/>

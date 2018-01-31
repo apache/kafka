@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.common.utils.Base64;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.errors.DataException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.text.CharacterIterator;
@@ -68,13 +71,13 @@ public class Values {
     private static final String ARRAY_END_DELIMITER = "]";
     private static final String MAP_BEGIN_DELIMITER = "{";
     private static final String MAP_END_DELIMITER = "}";
-    private static final int IS_8601_DATE_LENGTH = ISO_8601_DATE_FORMAT_PATTERN.length();
-    private static final int IS_8601_TIME_LENGTH = ISO_8601_TIME_FORMAT_PATTERN.length() - 2; // subtract single quotes
-    private static final int IS_8601_TIMESTAMP_LENGTH = ISO_8601_TIMESTAMP_FORMAT_PATTERN.length() - 4; // subtract single quotes
+    private static final int ISO_8601_DATE_LENGTH = ISO_8601_DATE_FORMAT_PATTERN.length();
+    private static final int ISO_8601_TIME_LENGTH = ISO_8601_TIME_FORMAT_PATTERN.length() - 2; // subtract single quotes
+    private static final int ISO_8601_TIMESTAMP_LENGTH = ISO_8601_TIMESTAMP_FORMAT_PATTERN.length() - 4; // subtract single quotes
 
     /**
-     * Convert the specified value to an {@link Type#BOOLEAN} value.
-     * Not supplying a schema may limit the ability to convert to the desired type.
+     * Convert the specified value to an {@link Type#BOOLEAN} value. The supplied schema is required if the value is a logical
+     * type when the schema contains critical information that might be necessary for converting to a boolean.
      *
      * @param schema the schema for the value; may be null
      * @param value  the value to be converted; may be null
@@ -86,8 +89,8 @@ public class Values {
     }
 
     /**
-     * Convert the specified value to an {@link Type#INT8} byte value.
-     * Not supplying a schema may limit the ability to convert to the desired type.
+     * Convert the specified value to an {@link Type#INT8} byte value. The supplied schema is required if the value is a logical
+     * type when the schema contains critical information that might be necessary for converting to a byte.
      *
      * @param schema the schema for the value; may be null
      * @param value  the value to be converted; may be null
@@ -99,8 +102,8 @@ public class Values {
     }
 
     /**
-     * Convert the specified value to an {@link Type#INT16} short value.
-     * Not supplying a schema may limit the ability to convert to the desired type.
+     * Convert the specified value to an {@link Type#INT16} short value. The supplied schema is required if the value is a logical
+     * type when the schema contains critical information that might be necessary for converting to a short.
      *
      * @param schema the schema for the value; may be null
      * @param value  the value to be converted; may be null
@@ -112,8 +115,8 @@ public class Values {
     }
 
     /**
-     * Convert the specified value to an {@link Type#INT32} int value.
-     * Not supplying a schema may limit the ability to convert to the desired type.
+     * Convert the specified value to an {@link Type#INT32} int value. The supplied schema is required if the value is a logical
+     * type when the schema contains critical information that might be necessary for converting to an integer.
      *
      * @param schema the schema for the value; may be null
      * @param value  the value to be converted; may be null
@@ -125,8 +128,8 @@ public class Values {
     }
 
     /**
-     * Convert the specified value to an {@link Type#INT64} long value.
-     * Not supplying a schema may limit the ability to convert to the desired type.
+     * Convert the specified value to an {@link Type#INT64} long value. The supplied schema is required if the value is a logical
+     * type when the schema contains critical information that might be necessary for converting to a long.
      *
      * @param schema the schema for the value; may be null
      * @param value  the value to be converted; may be null
@@ -138,8 +141,8 @@ public class Values {
     }
 
     /**
-     * Convert the specified value to an {@link Type#FLOAT32} float value.
-     * Not supplying a schema may limit the ability to convert to the desired type.
+     * Convert the specified value to an {@link Type#FLOAT32} float value. The supplied schema is required if the value is a logical
+     * type when the schema contains critical information that might be necessary for converting to a floating point number.
      *
      * @param schema the schema for the value; may be null
      * @param value  the value to be converted; may be null
@@ -151,8 +154,8 @@ public class Values {
     }
 
     /**
-     * Convert the specified value to an {@link Type#FLOAT64} double value.
-     * Not supplying a schema may limit the ability to convert to the desired type.
+     * Convert the specified value to an {@link Type#FLOAT64} double value. The supplied schema is required if the value is a logical
+     * type when the schema contains critical information that might be necessary for converting to a floating point number.
      *
      * @param schema the schema for the value; may be null
      * @param value  the value to be converted; may be null
@@ -176,8 +179,12 @@ public class Values {
     }
 
     /**
-     * Convert the specified value to an {@link Type#ARRAY} value.
-     * Not supplying a schema may limit the ability to convert to the desired type.
+     * Convert the specified value to an {@link Type#ARRAY} value. If the value is a string representation of an array, this method
+     * will parse the string and its elements to infer the schemas for those elements. Thus, this method supports
+     * arrays of other primitives and structured types. If the value is already an array (or list), this method simply casts and
+     * returns it.
+     *
+     * <p>This method currently does not use the schema, though it may be used in the future.</p>
      *
      * @param schema the schema for the value; may be null
      * @param value  the value to be converted; may be null
@@ -189,8 +196,11 @@ public class Values {
     }
 
     /**
-     * Convert the specified value to an {@link Type#MAP} value.
-     * Not supplying a schema may limit the ability to convert to the desired type.
+     * Convert the specified value to an {@link Type#MAP} value. If the value is a string representation of a map, this method
+     * will parse the string and its entries to infer the schemas for those entries. Thus, this method supports
+     * maps with primitives and structured keys and values. If the value is already a map, this method simply casts and returns it.
+     *
+     * <p>This method currently does not use the schema, though it may be used in the future.</p>
      *
      * @param schema the schema for the value; may be null
      * @param value  the value to be converted; may be null
@@ -202,13 +212,15 @@ public class Values {
     }
 
     /**
-     * Convert the specified value to an {@link Type#STRUCT} value.
-     * Not supplying a schema may limit the ability to convert to the desired type.
+     * Convert the specified value to an {@link Type#STRUCT} value. Structs cannot be converted from other types, so this method returns
+     * a struct only if the supplied value is a struct. If not a struct, this method throws an exception.
+     *
+     * <p>This method currently does not use the schema, though it may be used in the future.</p>
      *
      * @param schema the schema for the value; may be null
      * @param value  the value to be converted; may be null
      * @return the representation as a struct, or null if the supplied value was null
-     * @throws DataException if the value cannot be converted to a struct
+     * @throws DataException if the value is not a struct
      */
     public static Struct convertToStruct(Schema schema, Object value) {
         return (Struct) convertTo(STRUCT_SELECTOR_SCHEMA, schema, value);
@@ -297,7 +309,7 @@ public class Values {
         if (value instanceof Double) {
             return Schema.FLOAT64_SCHEMA;
         }
-        if (value instanceof byte[]) {
+        if (value instanceof byte[] || value instanceof ByteBuffer) {
             return Schema.BYTES_SCHEMA;
         }
         if (value instanceof List) {
@@ -365,11 +377,14 @@ public class Values {
             if (toSchema.isOptional()) {
                 return null;
             }
-            throw new DataException("Unable to convert a null value to a non-null value");
+            throw new DataException("Unable to convert a null value to a schema that requires a value");
         }
         switch (toSchema.type()) {
             case BYTES:
                 if (Decimal.LOGICAL_NAME.equals(toSchema.name())) {
+                    if (value instanceof ByteBuffer) {
+                        value = Utils.toArray((ByteBuffer) value);
+                    }
                     if (value instanceof byte[]) {
                         return Decimal.toLogical(toSchema, (byte[]) value);
                     }
@@ -384,6 +399,9 @@ public class Values {
                     if (value instanceof String) {
                         return new BigDecimal(value.toString()).doubleValue();
                     }
+                }
+                if (value instanceof ByteBuffer) {
+                    return Utils.toArray((ByteBuffer) value);
                 }
                 if (value instanceof byte[]) {
                     return value;
@@ -406,7 +424,7 @@ public class Values {
                         return parsed.value();
                     }
                 }
-                return asLong(value, fromSchema, null) == 1L ? Boolean.TRUE : Boolean.FALSE;
+                return asLong(value, fromSchema, null) == 0L ? Boolean.FALSE : Boolean.TRUE;
             case INT8:
                 if (value instanceof Byte) {
                     return value;
@@ -617,12 +635,15 @@ public class Values {
                 sb.append(value);
             }
         } else if (value instanceof byte[]) {
-            value = new String((byte[]) value, UTF_8);
+            value = Base64.encoder().encodeToString((byte[]) value);
             if (embedded) {
                 sb.append('"').append(value).append('"');
             } else {
                 sb.append(value);
             }
+        } else if (value instanceof ByteBuffer) {
+            byte[] bytes = Utils.readBytes((ByteBuffer) value);
+            append(sb, bytes, embedded);
         } else if (value instanceof List) {
             List<?> list = (List<?>) value;
             sb.append('[');
@@ -811,19 +832,19 @@ public class Values {
         if (firstCharIsDigit) {
             // Check for a date, time, or timestamp ...
             int tokenLength = token.length();
-            if (tokenLength == IS_8601_DATE_LENGTH) {
+            if (tokenLength == ISO_8601_DATE_LENGTH) {
                 try {
                     return new SchemaAndValue(Date.SCHEMA, new SimpleDateFormat(ISO_8601_DATE_FORMAT_PATTERN).parse(token));
                 } catch (ParseException e) {
                     // not a valid date
                 }
-            } else if (tokenLength == IS_8601_TIME_LENGTH) {
+            } else if (tokenLength == ISO_8601_TIME_LENGTH) {
                 try {
                     return new SchemaAndValue(Time.SCHEMA, new SimpleDateFormat(ISO_8601_TIME_FORMAT_PATTERN).parse(token));
                 } catch (ParseException e) {
                     // not a valid date
                 }
-            } else if (tokenLength == IS_8601_TIMESTAMP_LENGTH) {
+            } else if (tokenLength == ISO_8601_TIMESTAMP_LENGTH) {
                 try {
                     return new SchemaAndValue(Time.SCHEMA, new SimpleDateFormat(ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(token));
                 } catch (ParseException e) {
