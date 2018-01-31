@@ -162,9 +162,8 @@
 
   <h4><a id="basic_ops_consumer_group" href="#basic_ops_consumer_group">Managing Consumer Groups</a></h4>
 
-  With the ConsumerGroupCommand tool, we can list, describe, or delete consumer groups. Note that deletion is only available when the group metadata is stored in
-  ZooKeeper. When using the <a href="http://kafka.apache.org/documentation.html#newconsumerapi">new consumer API</a> (where
-  the broker handles coordination of partition handling and rebalance), the group is deleted when the last committed offset for that group expires.
+  With the ConsumerGroupCommand tool, we can list, describe, or delete consumer groups. When using the <a href="http://kafka.apache.org/documentation.html#newconsumerapi">new consumer API</a> (where
+  the broker handles coordination of partition handling and rebalance), the group can be deleted manually, or automatically when the last committed offset for that group expires.
 
   For example, to list all consumer groups across all topics:
 
@@ -222,6 +221,15 @@
       </pre>
     </li>
   </ul>
+
+  To manually delete one or multiple consumer groups, the "--delete" option can be used:
+  <pre class="brush: bash;">
+  &gt; bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --delete --group my-group --group my-other-group
+
+  Note: This will not show information about old Zookeeper-based consumers.
+  Deletion of requested consumer groups ('my-group', 'my-other-group') was successful.
+  </pre>
+  Note that a consumer group can be manually deleted only if it does not have any active members.
 
   If you are using the old high-level consumer and storing the group metadata in ZooKeeper (i.e. <code>offsets.storage=zookeeper</code>), pass
   <code>--zookeeper</code> instead of <code>bootstrap-server</code>:
