@@ -151,7 +151,6 @@ public class StreamPartitionAssignorTest {
         EasyMock.replay(threadDataProvider);
     }
 
-
     @Test
     public void shouldInterleaveTasksByGroupId() {
         final TaskId taskIdA0 = new TaskId(0, 0);
@@ -310,10 +309,10 @@ public class StreamPartitionAssignorTest {
 
         final UUID uuid1 = UUID.randomUUID();
 
-        mockTaskManager(new HashSet<TaskId>(), new HashSet<TaskId>(), uuid1, builder);
-        configurePartitionAssignor(Collections.<String, Object>emptyMap());
+        mockThreadDataProvider(new HashSet<TaskId>(), new HashSet<TaskId>(), uuid1, defaultPartitionGrouper, builder);
+        configurePartitionAssignor(0, null);
 
-        partitionAssignor.setInternalTopicManager(new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer));
+        partitionAssignor.setInternalTopicManager(new MockInternalTopicManager(config, mockClientSupplier.restoreConsumer));
 
         final Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
         subscriptions.put("consumer10",
