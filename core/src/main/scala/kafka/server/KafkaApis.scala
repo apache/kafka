@@ -141,7 +141,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.CREATE_DELEGATION_TOKEN => handleCreateTokenRequest(request)
         case ApiKeys.RENEW_DELEGATION_TOKEN => handleRenewTokenRequest(request)
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireTokenRequest(request)
-        case ApiKeys.DESCRIBE_DELEGATION_TOKEN=> handleDescribeTokensRequest(request)
+        case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
+        case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -488,7 +489,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val nonExistingTopicResponseData = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData)]()
     val authorizedRequestInfo = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
 
-    if (fetchRequest.isFromFollower() && !authorize(request.session, ClusterAction, Resource.ClusterResource))    
+    if (fetchRequest.isFromFollower() && !authorize(request.session, ClusterAction, Resource.ClusterResource))
       for (topicPartition <- fetchRequest.fetchData.asScala.keys)
         unauthorizedTopicResponseData += topicPartition -> new FetchResponse.PartitionData(Errors.CLUSTER_AUTHORIZATION_FAILED,
           FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
@@ -1219,6 +1220,21 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendResponseCallback
       )
     }
+  }
+
+  def handleDeleteGroupsRequest(request: RequestChannel.Request): Unit = {
+    val deleteGroupsRequest = request.body[DeleteGroupsRequest]
+    var groups = deleteGroupsRequest.groups.asScala.toSet
+
+    val (authorizedGroups, unauthorizedGroups) = groups.partition { group =>
+      authorize(request.session, Delete, new Resource(Group, group))
+    }
+
+    val groupDeletionResult = groupCoordinator.handleDeleteGroups(authorizedGroups) ++
+      unauthorizedGroups.map(_ -> Errors.GROUP_AUTHORIZATION_FAILED)
+
+    sendResponseMaybeThrottle(request, requestThrottleMs =>
+      new DeleteGroupsResponse(requestThrottleMs, groupDeletionResult.asJava))
   }
 
   def handleHeartbeatRequest(request: RequestChannel.Request) {

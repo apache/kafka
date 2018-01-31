@@ -158,6 +158,13 @@ class GroupMetadataManager(brokerId: Int,
 
   def isLoading(): Boolean = inLock(partitionLock) { loadingPartitions.nonEmpty }
 
+  // return true iff group is owned and the group doesn't exist
+  def groupNotExists(groupId: String) = inLock(partitionLock) {
+    isGroupLocal(groupId) && getGroup(groupId).forall { group =>
+      group.inLock(group.is(Dead))
+    }
+  }
+
   // visible for testing
   private[group] def isGroupOpenForProducer(producerId: Long, groupId: String) = openGroupsForProducer.get(producerId) match {
     case Some(groups) =>
@@ -706,14 +713,16 @@ class GroupMetadataManager(brokerId: Int,
 
   // visible for testing
   private[group] def cleanupGroupMetadata(): Unit = {
-    cleanupGroupMetadata(None)
+    cleanupGroupMetadata(None, groupMetadataCache.values, time.milliseconds())
   }
 
-  def cleanupGroupMetadata(deletedTopicPartitions: Option[Seq[TopicPartition]]) {
-    val startMs = time.milliseconds()
+  def cleanupGroupMetadata(deletedTopicPartitions: Option[Seq[TopicPartition]],
+                           groups: Iterable[GroupMetadata],
+                           startMs: Long) {
     var offsetsRemoved = 0
 
-    groupMetadataCache.foreach { case (groupId, group) =>
+    groups.foreach { group =>
+      val groupId = group.groupId
       val (removedOffsets, groupIsDead, generation) = group.inLock {
         val removedOffsets = deletedTopicPartitions match {
           case Some(topicPartitions) => group.removeOffsets(topicPartitions)

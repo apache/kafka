@@ -25,6 +25,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -33,6 +34,7 @@ import java.util.Properties;
 /**
  * Tests command line SSL setup for reset tool.
  */
+@Ignore
 @Category({IntegrationTest.class})
 public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
 

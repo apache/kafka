@@ -72,7 +72,9 @@ object ApiVersion {
     "0.11.0" -> KAFKA_0_11_0_IV2,
     // Introduced LeaderAndIsrRequest V1, UpdateMetadataRequest V4 and FetchRequest V6 via KIP-112
     "1.0-IV0" -> KAFKA_1_0_IV0,
-    "1.0" -> KAFKA_1_0_IV0
+    "1.0" -> KAFKA_1_0_IV0,
+    // Introduced DeleteGroupsRequest V0 via KIP-229
+    "1.1-IV0" -> KAFKA_1_1_IV0
   )
 
   private val versionPattern = "\\.".r
@@ -182,5 +184,11 @@ case object KAFKA_1_0_IV0 extends ApiVersion {
   val version: String = "1.0-IV0"
   val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
   val id: Int = 13
+}
+
+case object KAFKA_1_1_IV0 extends ApiVersion {
+  val version: String = "1.1-IV0"
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
+  val id: Int = 14
 }
 
