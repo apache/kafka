@@ -60,7 +60,7 @@ public class OffsetCheckpointTest {
 
     @Test
     public void shouldNotWriteCheckpointWhenNoOffsets() throws IOException {
-        // we do not need to worry about file name unqiueness since this file should not be created
+        // we do not need to worry about file name uniqueness since this file should not be created
         final File f = new File(TestUtils.tempDirectory().getAbsolutePath(), "kafka.tmp");
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
 
@@ -70,7 +70,7 @@ public class OffsetCheckpointTest {
 
         assertEquals(Collections.<TopicPartition, Long>emptyMap(), checkpoint.read());
 
+        // deleting a non-exist checkpoint file should be fine
         checkpoint.delete();
-        assertFalse(f.exists());
     }
 }
