@@ -1952,8 +1952,8 @@ public class FetcherTest {
         client.reset();
         String topicName2 = "topic2";
         TopicPartition t2p0 = new TopicPartition(topicName2, 0);
-        // Ensure metadata has both partition.
-        metadata.update(Cluster.bootstrap(ClientUtils.parseAndValidateAddresses(Arrays.asList("1.1.1.1:1111"))),
+        // Expect a metadata refresh.
+        metadata.update(Cluster.bootstrap(ClientUtils.parseAndValidateAddresses(Collections.singletonList("1.1.1.1:1111"))),
                         Collections.<String>emptySet(),
                         time.milliseconds());
 
