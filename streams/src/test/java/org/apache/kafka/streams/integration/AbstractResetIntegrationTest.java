@@ -90,7 +90,7 @@ public abstract class AbstractResetIntegrationTest {
         }
     }
 
-    private String appID;
+    private String appID = "abstract-reset-integration-test";
     private Properties commonClientConfig;
 
     private void prepareEnvironment() {
