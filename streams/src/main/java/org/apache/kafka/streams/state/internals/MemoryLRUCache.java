@@ -114,7 +114,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
                 restoring = true;
                 // check value for null, to avoid  deserialization error.
                 if (value == null) {
-                    put(serdes.keyFrom(key), null);
+                    delete(serdes.keyFrom(key));
                 } else {
                     put(serdes.keyFrom(key), serdes.valueFrom(value));
                 }

@@ -113,7 +113,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
             try {
                 final V oldValue = sendOldValues ? fetchPrevious(key, windowedKey.window().start()) : null;
                 flushListener.apply(windowedKey,
-                                    serdes.valueFrom(entry.newValue()), oldValue);
+                                    entry.newValue() == null ? null : serdes.valueFrom(entry.newValue()), oldValue);
             } finally {
                 context.setRecordContext(current);
             }
@@ -212,7 +212,8 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
             if (!iter.hasNext()) {
                 return null;
             } else {
-                return serdes.valueFrom(iter.next().value);
+                final byte[] valueBytes = iter.next().value;
+                return valueBytes == null ? null : serdes.valueFrom(valueBytes);
             }
         }
     }

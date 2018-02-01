@@ -93,7 +93,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     public void put(final K key, final V value, final long timestamp) {
         long startNs = time.nanoseconds();
         try {
-            inner.put(keyBytes(key), serdes.rawValue(value), timestamp);
+            inner.put(keyBytes(key), value == null ? null : serdes.rawValue(value), timestamp);
         } finally {
             metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }

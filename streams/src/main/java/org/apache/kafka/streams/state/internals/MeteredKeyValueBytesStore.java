@@ -72,7 +72,7 @@ public class MeteredKeyValueBytesStore<K, V> extends WrappedStateStore.AbstractS
             public List<KeyValue<Bytes, byte[]>> innerEntries(final List<KeyValue<K, V>> from) {
                 final List<KeyValue<Bytes, byte[]>> byteEntries = new ArrayList<>();
                 for (KeyValue<K, V> entry : from) {
-                    byteEntries.add(KeyValue.pair(innerKey(entry.key), serdes.rawValue(entry.value)));
+                    byteEntries.add(KeyValue.pair(innerKey(entry.key), entry.value == null ? null : serdes.rawValue(entry.value)));
 
                 }
                 return byteEntries;
@@ -80,12 +80,12 @@ public class MeteredKeyValueBytesStore<K, V> extends WrappedStateStore.AbstractS
 
             @Override
             public V outerValue(final byte[] value) {
-                return serdes.valueFrom(value);
+                return value == null ? null : serdes.valueFrom(value);
             }
 
             @Override
             public KeyValue<K, V> outerKeyValue(final KeyValue<Bytes, byte[]> from) {
-                return KeyValue.pair(serdes.keyFrom(from.key.get()), serdes.valueFrom(from.value));
+                return KeyValue.pair(serdes.keyFrom(from.key.get()), from.value == null ? null : serdes.valueFrom(from.value));
             }
 
             @Override

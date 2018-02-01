@@ -55,7 +55,7 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
     @Override
     public KeyValue<Windowed<K>, V> next() {
         final KeyValue<Windowed<Bytes>, byte[]> next = iter.next();
-        return KeyValue.pair(windowedKey(next.key), serdes.valueFrom(next.value));
+        return KeyValue.pair(windowedKey(next.key), next.value == null ? null : serdes.valueFrom(next.value));
     }
 
     private Windowed<K> windowedKey(final Windowed<Bytes> bytesKey) {

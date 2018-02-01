@@ -229,11 +229,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public synchronized V get(K key) {
         validateStoreOpen();
         byte[] byteValue = getInternal(serdes.rawKey(key));
-        if (byteValue == null) {
-            return null;
-        } else {
-            return serdes.valueFrom(byteValue);
-        }
+        return byteValue  == null ? null : serdes.valueFrom(byteValue);
     }
 
     private void validateStoreOpen() {

@@ -139,7 +139,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         long startNs = time.nanoseconds();
         try {
             final Bytes key = Bytes.wrap(serdes.rawKey(sessionKey.key()));
-            this.inner.put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));
+            this.inner.put(new Windowed<>(key, sessionKey.window()), aggregate == null ? null : serdes.rawValue(aggregate));
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }

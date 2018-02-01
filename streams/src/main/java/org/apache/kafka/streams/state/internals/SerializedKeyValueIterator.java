@@ -60,7 +60,7 @@ class SerializedKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
             throw new NoSuchElementException();
         }
         final KeyValue<Bytes, byte[]> next = bytesIterator.next();
-        return KeyValue.pair(serdes.keyFrom(next.key.get()), serdes.valueFrom(next.value));
+        return KeyValue.pair(serdes.keyFrom(next.key.get()), next.value == null ? null : serdes.valueFrom(next.value));
     }
 
     @Override

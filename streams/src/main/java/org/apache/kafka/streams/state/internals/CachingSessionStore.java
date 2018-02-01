@@ -170,7 +170,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
             final Windowed<K> key = SessionKeySerde.from(binaryKey.get(), serdes.keyDeserializer(), topic);
             final Bytes rawKey = Bytes.wrap(serdes.rawKey(key.key()));
             if (flushListener != null) {
-                final AGG newValue = serdes.valueFrom(entry.newValue());
+                final AGG newValue = entry.newValue() == null ? null : serdes.valueFrom(entry.newValue());
                 final AGG oldValue = newValue == null || sendOldValues ? fetchPrevious(rawKey, key.window()) : null;
                 if (!(newValue == null && oldValue == null)) {
                     flushListener.apply(key, newValue, oldValue);
@@ -188,7 +188,8 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
             if (!iterator.hasNext()) {
                 return null;
             }
-            return serdes.valueFrom(iterator.next().value);
+            final byte[] valueBytes = iterator.next().value;
+            return valueBytes == null ? null : serdes.valueFrom(valueBytes);
         }
     }
 
