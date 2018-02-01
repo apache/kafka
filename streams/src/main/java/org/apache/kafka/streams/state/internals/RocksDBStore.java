@@ -288,7 +288,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         byte[] rawKey = serdes.rawKey(key);
-        byte[] rawValue = serdes.rawValue(value);
+        byte[] rawValue = value == null ? null : serdes.rawValue(value);
         putInternal(rawKey, rawValue);
     }
 
