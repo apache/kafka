@@ -29,7 +29,6 @@ import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.test.TestUtils;
 
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -99,13 +98,13 @@ public class StreamsBrokerDownResilienceTest {
                 streams.close(30, TimeUnit.SECONDS);
             }
         });
-        System.out.println("Start Kafka Streams " + new Date());
+        System.out.println("Start Kafka Streams");
         streams.start();
 
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
             @Override
             public void run() {
-                System.out.println("Shutting down streams now " + new Date());
+                System.out.println("Shutting down streams resilience test app now");
                 streams.close(10, TimeUnit.SECONDS);
             }
         }));

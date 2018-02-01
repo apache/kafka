@@ -40,38 +40,38 @@ class StreamsBrokerDownResilience(Test):
                                   num_nodes=1,
                                   zk=self.zk,
                                   topics={
-                                      self.inputTopic: {'partitions': 1, 'replication-factor': 1},
+                                      self.inputTopic: {'partitions': 3, 'replication-factor': 1},
                                       self.outputTopic: {'partitions': 1, 'replication-factor': 1}
                                   })
 
-    def get_consumer(self):
+    def get_consumer(self, num_messages):
         return VerifiableConsumer(self.test_context,
                                   1,
                                   self.kafka,
                                   self.outputTopic,
                                   "stream-broker-resilience-verify-consumer",
-                                  max_messages=self.num_messages)
+                                  max_messages=num_messages)
 
-    def get_producer(self):
+    def get_producer(self, num_messages):
         return VerifiableProducer(self.test_context,
                                   1,
                                   self.kafka,
                                   self.inputTopic,
-                                  max_messages=self.num_messages,
+                                  max_messages=num_messages,
                                   acks=1)
 
-    def assert_produce_consume(self, test_state):
-        producer = self.get_producer()
+    def assert_produce_consume(self, test_state, num_messages=5):
+        producer = self.get_producer(num_messages)
         producer.start()
 
-        wait_until(lambda: producer.num_acked > 0,
+        wait_until(lambda: producer.num_acked >= num_messages,
                    timeout_sec=30,
                    err_msg="At %s failed to send messages " % test_state)
 
-        consumer = self.get_consumer()
+        consumer = self.get_consumer(num_messages)
         consumer.start()
 
-        wait_until(lambda: consumer.total_consumed() > 0,
+        wait_until(lambda: consumer.total_consumed() >= num_messages,
                    timeout_sec=60,
                    err_msg="At %s streams did not process messages in 60 seconds " % test_state)
 
@@ -90,7 +90,6 @@ class StreamsBrokerDownResilience(Test):
 
     def setUp(self):
         self.zk.start()
-
 
     def test_streams_resilient_to_broker_down(self):
         self.kafka.start()
@@ -131,6 +130,12 @@ class StreamsBrokerDownResilience(Test):
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor.start()
 
+        processor_2 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor_2.start()
+
+        processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor_3.start()
+
         time.sleep(broker_down_initially_in_seconds)
 
         # now start broker
@@ -139,6 +144,46 @@ class StreamsBrokerDownResilience(Test):
         time.sleep(20)
 
         # assert streams can process when starting with broker down
-        self.assert_produce_consume("running_with_broker_down_initially")
+        self.assert_produce_consume("running_with_broker_down_initially", num_messages=9)
 
         self.kafka.stop()
+
+    def test_streams_shuts_down_clean_with_broker_down(self):
+        self.kafka.start()
+
+        configs = self.get_configs(extra_configs=",application.id=shutdown_with_broker_down")
+
+        # start streams with broker down initially
+        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor.start()
+
+        processor_2 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor_2.start()
+
+        processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor_3.start()
+
+        # give time for rebalance to finish
+        time.sleep(30)
+
+        node = self.kafka.leader(self.inputTopic)
+        self.kafka.stop_node(node)
+
+        time.sleep(30)
+
+        processor.stop()
+        self.wait_for(processor)
+
+        processor_2.stop()
+        self.wait_for(processor_2)
+
+        processor_3.stop()
+        self.wait_for(processor_3)
+
+        self.kafka.stop()
+
+    def wait_for(self, processor, output="Shutting down streams resilience test app now"):
+        with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
+            monitor.wait_until(output,
+                               timeout_sec=60,
+                               err_msg=("Never saw output '%s' on " % output) + str(processor.node.account))
