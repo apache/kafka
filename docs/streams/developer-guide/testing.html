@@ -115,6 +115,137 @@ KeyValueStore store = testDriver.getKeyValueStore("store-name");
     <pre>
 testDriver.close();
     </pre>
+
+    <h2>Example</h2>
+    <p>
+    Below, we show a complex example how to use the test driver and helper classes.
+    We create a topology that computed the maximum per key using a key-value-store.
+    While processing, no output is generated, but only the store is updated.
+    Output is only sent downstream based on event-time and wall-clock punctuations.
+    </p>
+    <pre>
+    @Test
+    public void processorShouldAggregateAndEmitOnPunctuation() {
+        // specify topology to be tested (usually not part of test code)
+        Topology topology = new Topology();
+        topology.addSource("sourceProcessor", "input-topic");
+        topology.addProcessor("aggregator", new CustomMaxAggregatorSupplier(), "sourceProcessor");
+        topology.addStateStore(Stores.keyValueStoreBuilder(
+            Stores.inMemoryKeyValueStore("aggStore"),
+            Serdes.String(),
+            Serdes.Long()).withLoggingDisabled(),
+            "aggregator");
+        topology.addSink("sinkProcessor", "result-topic", "aggregator");
+
+        // setup test driver
+        Properties config = new Properties();
+        config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "maxAggregation");
+        config.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
+        TopologyTestDriver testDriver = new TopologyTestDriver(topology, config);
+
+        // pre-populate store
+        KeyValueStore&lg;String, Long&gt; store = testDriver.getKeyValueStore("aggStore");
+        store.put("a", 21L);
+
+        // prepare test
+        ConsumerRecordFactory&lg;String, Long&gt; recordFactory = new ConsumerRecordFactory&lg;&gt;(new StringSerializer(), new LongSerializer());
+        StringDeserializer stringDeserializer = new StringDeserializer();
+        LongDeserializer longDeserializer = new LongDeserializer();
+
+        // should not update store but trigger punctuation
+        testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 1000L));
+        Assert.assertThat(store.get("a"), equalTo(21L));
+        Assert.assertNull(store.get("b"));
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
+
+        // should update store for b (not for a) and not trigger punctuation
+        testDriver.pipeInput(recordFactory.create("input-topic", "a", 2L, 2000L));
+        testDriver.pipeInput(recordFactory.create("input-topic", "b", 21L, 9999L));
+        Assert.assertThat(store.get("a"), equalTo(21L));
+        Assert.assertThat(store.get("b"), equalTo(21L));
+        Assert.assertNull(testDriver.readOutput("outputTopic"));
+
+        // should update store and trigger punctuation
+        testDriver.pipeInput(recordFactory.create("input-topic", "b", 3L, 10000L));
+        Assert.assertThat(store.get("a"), equalTo(21L));
+        Assert.assertThat(store.get("b"), equalTo(21L));
+        Assert.assertNull(testDriver.readOutput("outputTopic"));
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "b", 21L);
+
+        // should update store but not trigger punctuation
+        testDriver.pipeInput(recordFactory.create("input-topic", "a", 42L, 12000));
+        Assert.assertThat(store.get("a"), equalTo(42L));
+        Assert.assertThat(store.get("b"), equalTo(21L));
+        Assert.assertNull(testDriver.readOutput("result-topic"));
+
+        // should trigger punctuation
+        testDriver.advanceWallClockTime(60000);
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 42L);
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "b", 21L);
+
+        // close test driver; should trigger Processor#close() and thus flush store
+        testDriver.close();
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 42L);
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "b", 21L);
+    }
+
+    public class CustomMaxAggregatorSupplier implements ProcessorSupplier&lg;String, Long&gt; {
+        @Override
+        public Processor&lg;String, Long&gt; get() {
+            return new CustomMaxAggregator();
+        }
+    }
+
+    public class CustomMaxAggregator implements Processor&lg;String, Long&gt; {
+        ProcessorContext context;
+        private KeyValueStore&lg;String, Long&gt; store;
+
+        @Override
+        public void init(ProcessorContext context) {
+            this.context = context;
+            context.schedule(60000, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
+                @Override
+                public void punctuate(long timestamp) {
+                    flushStore();
+                }
+            });
+            context.schedule(10000, PunctuationType.STREAM_TIME, new Punctuator() {
+                @Override
+                public void punctuate(long timestamp) {
+                    flushStore();
+                }
+            });
+            store = (KeyValueStore&lg;String, Long&gt;) context.getStateStore("aggStore");
+        }
+
+        @Override
+        public void process(String key, Long value) {
+            Long oldValue = store.get(key);
+            if (oldValue == null || value &gt; oldValue) {
+                store.put(key, value);
+            }
+        }
+
+        private void flushStore() {
+            KeyValueIterator&lg;String, Long&gt; it = store.all();
+            while (it.hasNext()) {
+                KeyValue&lg;String, Long&gt; next = it.next();
+                context.forward(next.key, next.value);
+            }
+        }
+
+        @Override
+        public void punctuate(long timestamp) {} // deprecated; not used
+
+        @Override
+        public void close() {
+            flushStore();
+        }
+    }
+    </pre>
   <div class="pagination">
   <div class="pagination">
     <a href="/{{version}}/documentation/streams/developer-guide/datatypes" class="pagination__btn pagination__btn__prev">Previous</a>
