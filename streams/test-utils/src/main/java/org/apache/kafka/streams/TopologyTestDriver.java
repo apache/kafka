@@ -359,7 +359,7 @@ public class TopologyTestDriver {
 
     private void captureOutputRecords() {
         // Capture all the records sent to the producer ...
-        List<ProducerRecord<byte[], byte[]>> output = producer.history();
+        final List<ProducerRecord<byte[], byte[]>> output = producer.history();
         producer.clear();
         for (final ProducerRecord<byte[], byte[]> record : output) {
             Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(record.topic());
