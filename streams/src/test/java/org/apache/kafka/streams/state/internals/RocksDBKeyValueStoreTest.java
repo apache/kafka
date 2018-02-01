@@ -38,23 +38,13 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @Override
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context,
                                                              final Class<K> keyClass,
-                                                             final Class<V> valueClass,
-                                                             final boolean useContextSerdes) {
+                                                             final Class<V> valueClass) {
         final Stores.PersistentKeyValueFactory<?, ?> factory;
-        if (useContextSerdes) {
-            factory = Stores
-                    .create("my-store")
-                    .withKeys(context.keySerde())
-                    .withValues(context.valueSerde())
-                    .persistent();
-
-        } else {
-            factory = Stores
-                    .create("my-store")
-                    .withKeys(keyClass)
-                    .withValues(valueClass)
-                    .persistent();
-        }
+        factory = Stores
+                .create("my-store")
+                .withKeys(context.keySerde())
+                .withValues(context.valueSerde())
+                .persistent();
 
         final KeyValueStore<K, V> store = (KeyValueStore<K, V>) factory.build().get();
         store.init(context, store);

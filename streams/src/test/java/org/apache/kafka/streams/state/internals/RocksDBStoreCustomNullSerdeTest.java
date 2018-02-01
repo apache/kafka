@@ -38,6 +38,7 @@ import org.junit.Test;
  * serializes null value into non-null byte array.
  */
 public class RocksDBStoreCustomNullSerdeTest {
+    /*
     private RocksDBStore<String, String> subject;
     private MockProcessorContext context;
 
@@ -81,4 +82,5 @@ public class RocksDBStoreCustomNullSerdeTest {
             }
         }
     }
+    */
 }

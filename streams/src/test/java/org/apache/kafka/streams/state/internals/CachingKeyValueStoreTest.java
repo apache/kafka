@@ -86,15 +86,14 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @Override
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context,
                                                              final Class<K> keyClass,
-                                                             final Class<V> valueClass,
-                                                             final boolean useContextSerdes) {
+                                                             final Class<V> valueClass) {
         final String storeName = "cache-store";
 
 
-        final Stores.PersistentKeyValueFactory<K, V> factory = Stores
+        final Stores.PersistentKeyValueFactory<?, ?> factory = Stores
                 .create(storeName)
-                .withKeys(Serdes.serdeFrom(keyClass))
-                .withValues(Serdes.serdeFrom(valueClass))
+                .withKeys(context.keySerde())
+                .withValues(context.valueSerde())
                 .persistent()
                 .enableCaching();
 

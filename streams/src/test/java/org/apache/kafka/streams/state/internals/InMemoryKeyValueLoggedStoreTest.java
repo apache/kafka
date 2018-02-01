@@ -36,17 +36,11 @@ public class InMemoryKeyValueLoggedStoreTest extends AbstractKeyValueStoreTest {
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(
             ProcessorContext context,
             Class<K> keyClass,
-            Class<V> valueClass,
-            boolean useContextSerdes) {
+            Class<V> valueClass) {
 
         StateStoreSupplier supplier;
-        if (useContextSerdes) {
-            supplier = Stores.create("my-store").withKeys(context.keySerde()).withValues(context.valueSerde())
+        supplier = Stores.create("my-store").withKeys(context.keySerde()).withValues(context.valueSerde())
                 .inMemory().enableLogging(Collections.singletonMap("retention.ms", "1000")).build();
-        } else {
-            supplier = Stores.create("my-store").withKeys(keyClass).withValues(valueClass)
-                .inMemory().enableLogging(Collections.singletonMap("retention.ms", "1000")).build();
-        }
 
         KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
         store.init(context, store);

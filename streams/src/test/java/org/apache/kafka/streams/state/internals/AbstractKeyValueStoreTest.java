@@ -36,8 +36,8 @@ public abstract class AbstractKeyValueStoreTest {
 
 
     protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(ProcessorContext context,
-                                                                      Class<K> keyClass, Class<V> valueClass,
-                                                                      boolean useContextSerdes);
+                                                                      Class<K> keyClass,
+                                                                      Class<V> valueClass);
 
     protected MockProcessorContext context;
     protected KeyValueStore<Integer, String> store;
@@ -48,7 +48,7 @@ public abstract class AbstractKeyValueStoreTest {
         driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
         context = (MockProcessorContext) driver.context();
         context.setTime(10);
-        store = createKeyValueStore(context, Integer.class, String.class, false);
+        store = createKeyValueStore(context, Integer.class, String.class);
     }
 
     @After
@@ -56,6 +56,27 @@ public abstract class AbstractKeyValueStoreTest {
         store.close();
         context.close();
         driver.clear();
+    }
+
+    @Test
+    public void testDelete() {
+        store.close();
+        store = createKeyValueStore(driver.context(), Integer.class, String.class);
+
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(2, "two");
+        store.delete(0);
+        store.put(1, null);
+        final KeyValueIterator<Integer, String> it = store.all();
+
+        while (it.hasNext()) {
+            final KeyValue<Integer, String> next = it.next();
+            // should not return deleted records in iterator
+            if (!next.key.equals(2)) {
+                fail("Got deleted key from iterator");
+            }
+        }
     }
 
     @Test
@@ -160,7 +181,7 @@ public abstract class AbstractKeyValueStoreTest {
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
-        store = createKeyValueStore(driver.context(), Integer.class, String.class, false);
+        store = createKeyValueStore(driver.context(), Integer.class, String.class);
         context.restore(store.name(), driver.restoredEntries());
 
         // Verify that the store's contents were properly restored ...
@@ -182,7 +203,7 @@ public abstract class AbstractKeyValueStoreTest {
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
-        store = createKeyValueStore(driver.context(), Integer.class, String.class, true);
+        store = createKeyValueStore(driver.context(), Integer.class, String.class);
         context.restore(store.name(), driver.restoredEntries());
         // Verify that the store's contents were properly restored ...
         assertEquals(0, driver.checkForRestoredEntries(store));

@@ -33,15 +33,10 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(
             ProcessorContext context,
             Class<K> keyClass,
-            Class<V> valueClass,
-            boolean useContextSerdes) {
+            Class<V> valueClass) {
 
         StateStoreSupplier supplier;
-        if (useContextSerdes) {
-            supplier = Stores.create("my-store").withKeys(context.keySerde()).withValues(context.valueSerde()).inMemory().build();
-        } else {
-            supplier = Stores.create("my-store").withKeys(keyClass).withValues(valueClass).inMemory().build();
-        }
+        supplier = Stores.create("my-store").withKeys(context.keySerde()).withValues(context.valueSerde()).inMemory().build();
 
         KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
         store.init(context, store);
@@ -59,7 +54,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         driver.addEntryToRestoreLog(3, "three");
         driver.addEntryToRestoreLog(0, null);
 
-        store = createKeyValueStore(driver.context(), Integer.class, String.class, true);
+        store = createKeyValueStore(driver.context(), Integer.class, String.class);
         context.restore(store.name(), driver.restoredEntries());
 
         assertEquals(3, driver.sizeOf(store));

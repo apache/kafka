@@ -39,15 +39,10 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(
             ProcessorContext context,
             Class<K> keyClass,
-            Class<V> valueClass,
-            boolean useContextSerdes) {
+            Class<V> valueClass) {
 
         StateStoreSupplier supplier;
-        if (useContextSerdes) {
-            supplier = Stores.create("my-store").withKeys(context.keySerde()).withValues(context.valueSerde()).inMemory().maxEntries(10).build();
-        } else {
-            supplier = Stores.create("my-store").withKeys(keyClass).withValues(valueClass).inMemory().maxEntries(10).build();
-        }
+        supplier = Stores.create("my-store").withKeys(context.keySerde()).withValues(context.valueSerde()).inMemory().maxEntries(10).build();
 
         KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
         store.init(context, store);
@@ -157,7 +152,7 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
-        store = createKeyValueStore(driver.context(), Integer.class, String.class, false);
+        store = createKeyValueStore(driver.context(), Integer.class, String.class);
         context.restore(store.name(), driver.restoredEntries());
         // Verify that the store's changelog does not get more appends ...
         assertEquals(0, driver.numFlushedEntryStored());
