@@ -58,8 +58,8 @@ public abstract class AbstractKeyValueStoreTest {
         driver.clear();
     }
 
-    private static Map<Integer, String> getContents(KeyValueIterator<Integer, String> iter) {
-        HashMap<Integer, String> result = new HashMap<>();
+    private static Map<Integer, String> getContents(final KeyValueIterator<Integer, String> iter) {
+        final HashMap<Integer, String> result = new HashMap<>();
         while (iter.hasNext()) {
             KeyValue<Integer, String> entry = iter.next();
             result.put(entry.key, entry.value);
@@ -99,7 +99,7 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals(false, driver.flushedEntryRemoved(4));
         assertEquals(true, driver.flushedEntryRemoved(5));
 
-        HashMap<Integer, String> expectedContents = new HashMap<>();
+        final HashMap<Integer, String> expectedContents = new HashMap<>();
         expectedContents.put(2, "two");
         expectedContents.put(4, "four");
 
