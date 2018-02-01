@@ -180,10 +180,10 @@ class StreamsBrokerDownResilience(Test):
 
         self.wait_for(processor)
 
-        self.assert_produce_consume("sending_message_after_stopping_streams_instance_bouncing_broker", num_messages=8)
+        self.assert_produce_consume("sending_message_after_stopping_streams_instance_bouncing_broker", num_messages=9)
 
-        wait_until(processor_2, output="processed4messages")
-        wait_until(processor_3, output="processed4messages")
+        wait_until(processor_2, output="processed(6|3)messages")
+        wait_until(processor_3, output="processed(6|3)messages")
 
         self.kafka.stop()
 
