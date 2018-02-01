@@ -19,8 +19,12 @@ package org.apache.kafka.streams;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.processor.Processor;
@@ -28,12 +32,15 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.streams.test.OutputVerifier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -223,7 +230,9 @@ public class TopologyTestDriverTest {
 
     @After
     public void tearDown() {
-        testDriver.close();
+        if (testDriver != null) {
+            testDriver.close();
+        }
     }
 
     private Topology setupSourceSinkTopology() {
@@ -690,5 +699,128 @@ public class TopologyTestDriverTest {
         expectedStoreNames.add("store");
         expectedStoreNames.add("globalStore");
         assertThat(testDriver.getAllStateStores().keySet(), equalTo(expectedStoreNames));
+    }
+
+    @Test
+    public void processorShouldAggregateAndEmitOnPunctuation() {
+        // specify topology to be tested (usually not part of test code)
+        Topology topology = new Topology();
+        topology.addSource("sourceProcessor", "input-topic");
+        topology.addProcessor("aggregator", new CustomMaxAggregatorSupplier(), "sourceProcessor");
+        topology.addStateStore(Stores.keyValueStoreBuilder(
+            Stores.inMemoryKeyValueStore("aggStore"),
+            Serdes.String(),
+            Serdes.Long()).withLoggingDisabled(),
+            "aggregator");
+        topology.addSink("sinkProcessor", "result-topic", "aggregator");
+
+        // setup test driver
+        Properties config = new Properties();
+        config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "maxAggregation");
+        config.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
+        TopologyTestDriver testDriver = new TopologyTestDriver(topology, config);
+
+        // pre-populate store
+        KeyValueStore<String, Long> store = testDriver.getKeyValueStore("aggStore");
+        store.put("a", 21L);
+
+        // prepare test
+        ConsumerRecordFactory<String, Long> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new LongSerializer());
+        StringDeserializer stringDeserializer = new StringDeserializer();
+        LongDeserializer longDeserializer = new LongDeserializer();
+
+        // should not update store but trigger punctuation
+        testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 1000L));
+        Assert.assertThat(store.get("a"), equalTo(21L));
+        Assert.assertNull(store.get("b"));
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
+
+        // should update store for b (not for a) and not trigger punctuation
+        testDriver.pipeInput(recordFactory.create("input-topic", "a", 2L, 2000L));
+        testDriver.pipeInput(recordFactory.create("input-topic", "b", 21L, 9999L));
+        Assert.assertThat(store.get("a"), equalTo(21L));
+        Assert.assertThat(store.get("b"), equalTo(21L));
+        Assert.assertNull(testDriver.readOutput("outputTopic"));
+
+        // should update store and trigger punctuation
+        testDriver.pipeInput(recordFactory.create("input-topic", "b", 3L, 10000L));
+        Assert.assertThat(store.get("a"), equalTo(21L));
+        Assert.assertThat(store.get("b"), equalTo(21L));
+        Assert.assertNull(testDriver.readOutput("outputTopic"));
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "b", 21L);
+
+        // should update store but not trigger punctuation
+        testDriver.pipeInput(recordFactory.create("input-topic", "a", 42L, 12000));
+        Assert.assertThat(store.get("a"), equalTo(42L));
+        Assert.assertThat(store.get("b"), equalTo(21L));
+        Assert.assertNull(testDriver.readOutput("result-topic"));
+
+        // should trigger punctuation
+        testDriver.advanceWallClockTime(60000);
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 42L);
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "b", 21L);
+
+        // close test driver; should trigger Processor#close() and thus flush store
+        testDriver.close();
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 42L);
+        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "b", 21L);
+    }
+
+    public class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long> {
+        @Override
+        public Processor<String, Long> get() {
+            return new CustomMaxAggregator();
+        }
+    }
+
+    public class CustomMaxAggregator implements Processor<String, Long> {
+        ProcessorContext context;
+        private KeyValueStore<String, Long> store;
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void init(ProcessorContext context) {
+            this.context = context;
+            context.schedule(60000, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
+                @Override
+                public void punctuate(long timestamp) {
+                    flushStore();
+                }
+            });
+            context.schedule(10000, PunctuationType.STREAM_TIME, new Punctuator() {
+                @Override
+                public void punctuate(long timestamp) {
+                    flushStore();
+                }
+            });
+            store = (KeyValueStore<String, Long>) context.getStateStore("aggStore");
+        }
+
+        @Override
+        public void process(String key, Long value) {
+            Long oldValue = store.get(key);
+            if (oldValue == null || value > oldValue) {
+                store.put(key, value);
+            }
+        }
+
+        private void flushStore() {
+            KeyValueIterator<String, Long> it = store.all();
+            while (it.hasNext()) {
+                KeyValue<String, Long> next = it.next();
+                context.forward(next.key, next.value);
+            }
+        }
+
+        @Override
+        public void punctuate(long timestamp) {} // deprecated; not used
+
+        @Override
+        public void close() {
+            flushStore();
+        }
     }
 }
