@@ -78,13 +78,16 @@ public class StreamsBrokerDownResilienceTest {
 
             System.exit(1);
         }
-
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(Collections.singletonList(SOURCE_TOPIC_1), Consumed.with(stringSerde, stringSerde))
             .peek(new ForeachAction<String, String>() {
+                int messagesProcessed = 0;
                 @Override
                 public void apply(String key, String value) {
                     System.out.println("received key " + key + " and value " + value);
+                    messagesProcessed++;
+                    System.out.println("processed" + messagesProcessed + "messages");
+                    System.out.flush();
                 }
             }).to(SINK_TOPIC);
 
@@ -95,7 +98,7 @@ public class StreamsBrokerDownResilienceTest {
             public void uncaughtException(final Thread t, final Throwable e) {
                 System.err.println("FATAL: An unexpected exception " + e);
                 System.err.flush();
-                streams.close(90, TimeUnit.SECONDS);
+                streams.close(30, TimeUnit.SECONDS);
             }
         });
         System.out.println("Start Kafka Streams");
@@ -104,8 +107,9 @@ public class StreamsBrokerDownResilienceTest {
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
             @Override
             public void run() {
+                streams.close(30, TimeUnit.SECONDS);
                 System.out.println("Shutting down streams resilience test app now");
-                streams.close(90, TimeUnit.SECONDS);
+                System.out.flush();
             }
         }));
 

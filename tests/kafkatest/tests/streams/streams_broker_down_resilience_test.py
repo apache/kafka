@@ -146,6 +146,10 @@ class StreamsBrokerDownResilience(Test):
         # assert streams can process when starting with broker down
         self.assert_produce_consume("running_with_broker_down_initially", num_messages=9)
 
+        wait_until(processor, output="processed3messages")
+        wait_until(processor_2, output="processed3messages")
+        wait_until(processor_3, output="processed3messages")
+
         self.kafka.stop()
 
     def test_streams_shuts_down_clean_with_broker_down(self):
@@ -168,26 +172,23 @@ class StreamsBrokerDownResilience(Test):
 
         node = self.kafka.leader(self.inputTopic)
         self.kafka.stop_node(node)
-        self.logger.info("Stopped Kafka broker")
 
         processor.stop()
-        self.logger.info("Called stop on processor one, will wait for 10 seconds")
+
         time.sleep(10)
-        self.logger.info("Starting kafka leader node again")
         self.kafka.start_node(node)
-        self.logger.info("Kafka node started, waiting for graceful shutdown of streams app")
+
         self.wait_for(processor)
-        self.logger("Called wait for processor")
 
         self.assert_produce_consume("sending_message_after_stopping_streams_instance_bouncing_broker", num_messages=8)
-        self.logger("Just asserted other streaming nodes still working")
 
-        processor_2.stop()
-        processor_3.stop()
+        wait_until(processor_2, output="processed4messages")
+        wait_until(processor_3, output="processed4messages")
 
         self.kafka.stop()
 
     def wait_for(self, processor, output="Shutting down streams resilience test app now"):
+        processor.node.account.ssh(processor.start_cmd(processor.node))
         with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
             monitor.wait_until(output,
                                timeout_sec=60,
