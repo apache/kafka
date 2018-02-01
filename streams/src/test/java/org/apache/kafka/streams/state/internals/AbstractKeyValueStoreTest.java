@@ -27,13 +27,13 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
 
 public abstract class AbstractKeyValueStoreTest {
-
 
     protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(ProcessorContext context,
                                                                       Class<K> keyClass, Class<V> valueClass,
@@ -58,6 +58,15 @@ public abstract class AbstractKeyValueStoreTest {
         driver.clear();
     }
 
+    private static Map<Integer, String> getContents(KeyValueIterator<Integer, String> iter) {
+        HashMap<Integer, String> result = new HashMap<>();
+        while (iter.hasNext()) {
+            KeyValue<Integer, String> entry = iter.next();
+            result.put(entry.key, entry.value);
+        }
+        return result;
+    }
+
     @Test
     public void testPutGetRange() {
         // Verify that the store reads and writes correctly ...
@@ -74,6 +83,7 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals("four", store.get(4));
         assertEquals("five", store.get(5));
         store.delete(5);
+        assertEquals(4, driver.sizeOf(store));
 
         // Flush the store and verify all current entries were properly flushed ...
         store.flush();
@@ -89,31 +99,18 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals(false, driver.flushedEntryRemoved(4));
         assertEquals(true, driver.flushedEntryRemoved(5));
 
-        // Check range iteration ...
-        try (KeyValueIterator<Integer, String> iter = store.range(2, 4)) {
-            while (iter.hasNext()) {
-                KeyValue<Integer, String> entry = iter.next();
-                if (entry.key.equals(2))
-                    assertEquals("two", entry.value);
-                else if (entry.key.equals(4))
-                    assertEquals("four", entry.value);
-                else
-                    fail("Unexpected entry: " + entry);
-            }
-        }
+        HashMap<Integer, String> expectedContents = new HashMap<>();
+        expectedContents.put(2, "two");
+        expectedContents.put(4, "four");
 
         // Check range iteration ...
-        try (KeyValueIterator<Integer, String> iter = store.range(2, 6)) {
-            while (iter.hasNext()) {
-                KeyValue<Integer, String> entry = iter.next();
-                if (entry.key.equals(2))
-                    assertEquals("two", entry.value);
-                else if (entry.key.equals(4))
-                    assertEquals("four", entry.value);
-                else
-                    fail("Unexpected entry: " + entry);
-            }
-        }
+        assertEquals(expectedContents, getContents(store.range(2, 4)));
+        assertEquals(expectedContents, getContents(store.range(2, 6)));
+
+        // Check all iteration ...
+        expectedContents.put(0, "zero");
+        expectedContents.put(1, "one");
+        assertEquals(expectedContents, getContents(store.all()));
     }
 
     @Test
