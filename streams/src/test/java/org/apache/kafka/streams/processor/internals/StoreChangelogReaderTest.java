@@ -234,13 +234,13 @@ public class StoreChangelogReaderTest {
         assertThat(callbackTwo.restored.size(), equalTo(3));
 
         assertAllCallbackStatesExecuted(callback, "storeName1");
-        assertCorrectOffsetsReportedByListener(callback, 0L, 10L, 10L);
+        assertCorrectOffsetsReportedByListener(callback, 0L, 9L, 10L);
 
         assertAllCallbackStatesExecuted(callbackOne, "storeName2");
-        assertCorrectOffsetsReportedByListener(callbackOne, 0L, 5L, 5L);
+        assertCorrectOffsetsReportedByListener(callbackOne, 0L, 4L, 5L);
 
         assertAllCallbackStatesExecuted(callbackTwo, "storeName3");
-        assertCorrectOffsetsReportedByListener(callbackTwo, 0L, 3L, 3L);
+        assertCorrectOffsetsReportedByListener(callbackTwo, 0L, 2L, 3L);
     }
 
     private void assertAllCallbackStatesExecuted(final MockStateRestoreListener restoreListener,
