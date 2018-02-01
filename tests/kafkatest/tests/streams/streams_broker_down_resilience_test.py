@@ -146,9 +146,9 @@ class StreamsBrokerDownResilience(Test):
         # assert streams can process when starting with broker down
         self.assert_produce_consume("running_with_broker_down_initially", num_messages=9)
 
-        wait_until(processor, output="processed3messages")
-        wait_until(processor_2, output="processed3messages")
-        wait_until(processor_3, output="processed3messages")
+        self.wait_for(processor, output="processed3messages")
+        self.wait_for(processor_2, output="processed3messages")
+        self.wait_for(processor_3, output="processed3messages")
 
         self.kafka.stop()
 
@@ -182,8 +182,8 @@ class StreamsBrokerDownResilience(Test):
 
         self.assert_produce_consume("sending_message_after_stopping_streams_instance_bouncing_broker", num_messages=9)
 
-        wait_until(processor_2, output="processed(6|3)messages")
-        wait_until(processor_3, output="processed(6|3)messages")
+        self.wait_for(processor_2, output="processed(6|3)messages")
+        self.wait_for(processor_3, output="processed(6|3)messages")
 
         self.kafka.stop()
 
@@ -191,5 +191,5 @@ class StreamsBrokerDownResilience(Test):
         processor.node.account.ssh(processor.start_cmd(processor.node))
         with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
             monitor.wait_until(output,
-                               timeout_sec=60,
+                               timeout_sec=180,
                                err_msg=("Never saw output '%s' on " % output) + str(processor.node.account))
