@@ -208,9 +208,27 @@ class StreamsBrokerCompatibilityService(StreamsTestBaseService):
                                                                 "org.apache.kafka.streams.tests.BrokerCompatibilityTest",
                                                                 eosEnabled)
 
+
 class StreamsBrokerDownResilienceService(StreamsTestBaseService):
     def __init__(self, test_context, kafka, configs):
         super(StreamsBrokerDownResilienceService, self).__init__(test_context,
                                                                  kafka,
                                                                  "org.apache.kafka.streams.tests.StreamsBrokerDownResilienceTest",
                                                                  configs)
+
+    def start_cmd(self, node):
+        args = self.args.copy()
+        args['kafka'] = self.kafka.bootstrap_servers(validate=False)
+        args['state_dir'] = self.PERSISTENT_ROOT
+        args['stdout'] = self.STDOUT_FILE
+        args['stderr'] = self.STDERR_FILE
+        args['pidfile'] = self.PID_FILE
+        args['log4j'] = self.LOG4J_CONFIG_FILE
+        args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
+
+        cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
+              "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
+              " %(kafka)s %(state_dir)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
+              " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+
+        return cmd
