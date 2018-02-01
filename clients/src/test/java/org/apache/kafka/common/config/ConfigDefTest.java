@@ -54,7 +54,10 @@ public class ConfigDefTest {
                                        .define("g", Type.BOOLEAN, Importance.HIGH, "docs")
                                        .define("h", Type.BOOLEAN, Importance.HIGH, "docs")
                                        .define("i", Type.BOOLEAN, Importance.HIGH, "docs")
-                                       .define("j", Type.PASSWORD, Importance.HIGH, "docs");
+                                        .configBuilder("j", Type.PASSWORD, Importance.HIGH).
+                                            documentation("docs").
+                                            deprecatedNames(Collections.singletonList("k")).
+                                            build();
 
         Properties props = new Properties();
         props.put("a", "1   ");
@@ -65,7 +68,7 @@ public class ConfigDefTest {
         props.put("g", "true");
         props.put("h", "FalSE");
         props.put("i", "TRUE");
-        props.put("j", "password");
+        props.put("k", "password");
 
         Map<String, Object> vals = def.parse(props);
         assertEquals(1, vals.get("a"));
@@ -78,6 +81,7 @@ public class ConfigDefTest {
         assertEquals(false, vals.get("h"));
         assertEquals(true, vals.get("i"));
         assertEquals(new Password("password"), vals.get("j"));
+        assertEquals(null, vals.get("k"));
         assertEquals(Password.HIDDEN, vals.get("j").toString());
     }
 
@@ -108,6 +112,12 @@ public class ConfigDefTest {
     @Test(expected = ConfigException.class)
     public void testDefinedTwice() {
         new ConfigDef().define("a", Type.STRING, Importance.HIGH, "docs").define("a", Type.INT, Importance.HIGH, "docs");
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testDefinedTwiceInDeprecated() {
+        new ConfigDef().configBuilder("a", Type.STRING, Importance.HIGH).
+                deprecatedNames(Collections.singleton("a")).build();
     }
 
     @Test

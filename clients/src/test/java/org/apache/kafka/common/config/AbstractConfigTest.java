@@ -139,6 +139,33 @@ public class AbstractConfigTest {
         assertFalse(config.unused().contains("ssl.key.password"));
     }
 
+    public static class TestAbstractConfig extends AbstractConfig {
+        private static final ConfigDef CONFIG = new ConfigDef().
+            configBuilder("foo.bar", Type.STRING, Importance.LOW).
+                defaultValue("").
+                deprecatedNames(Collections.singleton("foobar")).
+                build().
+            configBuilder("baz", Type.INT, Importance.HIGH).
+                defaultValue(0).
+                build();
+
+        public TestAbstractConfig(Map<?, ?> originals) {
+            super(CONFIG, originals, false);
+        }
+    }
+
+    @Test
+    public void testValuesWithPrefixOverrideWithDefaults() {
+        Properties props = new Properties();
+        props.put("myprefix.foo.bar", "blah");
+        props.put("myprefix.baz", 123);
+        props.put("foo.bar", "blah2");
+        TestAbstractConfig config = new TestAbstractConfig(props);
+        Map<String, Object> map = config.valuesWithPrefixOverride("myprefix.");
+        assertEquals("blah", map.get("foo.bar"));
+        assertEquals(123, map.get("baz"));
+    }
+
     @Test
     public void testValuesWithPrefixAllOrNothing() {
         String prefix1 = "prefix1.";
