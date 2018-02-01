@@ -168,7 +168,6 @@ class LogSegmentTest {
 
     val maxSegmentMs = 300000
     val time = new MockTime
-
     val seg = createSegment(0, maxSegmentMs = maxSegmentMs, time = time)
     seg.close()
 
@@ -176,7 +175,9 @@ class LogSegmentTest {
     assertEquals(0, seg.timeIndex.sizeInBytes)
     assertEquals(0, seg.offsetIndex.sizeInBytes)
 
+    time.sleep(500)
     reopened.truncateTo(57)
+    assertEquals(0, reopened.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
     assertFalse(reopened.timeIndex.isFull)
     assertFalse(reopened.offsetIndex.isFull)
 
@@ -187,6 +188,7 @@ class LogSegmentTest {
 
     // The segment should not be rolled even if maxSegmentMs has been exceeded
     time.sleep(maxSegmentMs + 1)
+    assertEquals(maxSegmentMs + 1, reopened.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
     assertFalse(reopened.shouldRoll(messagesSize = 1024,
       maxTimestampInMessages = RecordBatch.NO_TIMESTAMP,
       maxOffsetInMessages = 100L,
@@ -225,10 +227,20 @@ class LogSegmentTest {
   @Test
   def testTruncateFull() {
     // test the case where we fully truncate the log
-    val seg = createSegment(40)
+    val time = new MockTime
+    val seg = createSegment(40, time = time)
     seg.append(40, 41, RecordBatch.NO_TIMESTAMP, -1L, records(40, "hello", "there"))
+
+    // If the segment is empty after truncation, the create time should be reset
+    time.sleep(500)
+    assertEquals(500, seg.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
+
     seg.truncateTo(0)
+    assertEquals(0, seg.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
+    assertFalse(seg.timeIndex.isFull)
+    assertFalse(seg.offsetIndex.isFull)
     assertNull("Segment should be empty.", seg.read(0, None, 1024))
+
     seg.append(40, 41, RecordBatch.NO_TIMESTAMP, -1L, records(40, "hello", "there"))
   }
 
