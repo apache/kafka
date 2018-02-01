@@ -199,14 +199,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         /* setup zookeeper */
         initZkClient(time)
 
-        // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
-        // applied after DynamicConfigManager starts.
-        config.dynamicConfig.initialize(zkClient)
-
-        /* start scheduler */
-        kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
-        kafkaScheduler.startup()
-
         /* Get or create cluster_id */
         _clusterId = getOrGenerateClusterId(zkClient)
         info(s"Cluster ID = $clusterId")
@@ -216,6 +208,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         config.brokerId = brokerId
         logContext = new LogContext(s"[KafkaServer id=${config.brokerId}] ")
         this.logIdent = logContext.logPrefix
+
+        // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
+        // applied after DynamicConfigManager starts.
+        config.dynamicConfig.initialize(zkClient)
+
+        /* start scheduler */
+        kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
+        kafkaScheduler.startup()
 
         /* create and configure metrics */
         val reporters = new util.ArrayList[MetricsReporter]
