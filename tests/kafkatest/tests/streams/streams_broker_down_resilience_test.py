@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import time
-from ducktape.mark import ignore
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService
@@ -92,7 +91,7 @@ class StreamsBrokerDownResilience(Test):
     def setUp(self):
         self.zk.start()
 
-    @ignore
+
     def test_streams_resilient_to_broker_down(self):
         self.kafka.start()
 
@@ -120,6 +119,9 @@ class StreamsBrokerDownResilience(Test):
         self.kafka.stop()
 
     def test_streams_runs_with_broker_down_initially(self):
+        self.kafka.start()
+        node = self.kafka.leader(self.inputTopic)
+        self.kafka.stop_node(node)
 
         broker_down_initially_in_seconds = 60
 
@@ -132,9 +134,9 @@ class StreamsBrokerDownResilience(Test):
         time.sleep(broker_down_initially_in_seconds)
 
         # now start broker
-        self.kafka.start()
+        self.kafka.start_node(node)
         # give broker time to start up
-        time.sleep(60)
+        time.sleep(20)
 
         # assert streams can process when starting with broker down
         self.assert_produce_consume("running_with_broker_down_initially")
