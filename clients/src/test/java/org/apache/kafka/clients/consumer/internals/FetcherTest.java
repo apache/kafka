@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
@@ -1942,41 +1943,51 @@ public class FetcherTest {
         return 1;
     }
 
-    private void testGetOffsetsForTimesWithError(Errors errorForTp0,
-                                                 Errors errorForTp1,
-                                                 long offsetForTp0,
-                                                 long offsetForTp1,
-                                                 Long expectedOffsetForTp0,
-                                                 Long expectedOffsetForTp1) {
+    private void testGetOffsetsForTimesWithError(Errors errorForP0,
+                                                 Errors errorForP1,
+                                                 long offsetForP0,
+                                                 long offsetForP1,
+                                                 Long expectedOffsetForP0,
+                                                 Long expectedOffsetForP1) {
         client.reset();
-        // Ensure metadata has both partition.
-        Cluster cluster = TestUtils.clusterWith(2, topicName, 2);
-        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+        String topicName2 = "topic2";
+        TopicPartition t2p0 = new TopicPartition(topicName2, 0);
+        // Expect a metadata refresh.
+        metadata.update(Cluster.bootstrap(ClientUtils.parseAndValidateAddresses(Collections.singletonList("1.1.1.1:1111"))),
+                        Collections.<String>emptySet(),
+                        time.milliseconds());
+
+        Map<String, Integer> partitionNumByTopic = new HashMap<>();
+        partitionNumByTopic.put(topicName, 2);
+        partitionNumByTopic.put(topicName2, 1);
+        cluster = TestUtils.clusterWith(2, partitionNumByTopic);
+        // The metadata refresh should contain all the topics.
+        client.prepareMetadataUpdate(cluster, Collections.<String>emptySet(), true);
 
         // First try should fail due to metadata error.
-        client.prepareResponseFrom(listOffsetResponse(tp0, errorForTp0, offsetForTp0, offsetForTp0), cluster.leaderFor(tp0));
-        client.prepareResponseFrom(listOffsetResponse(tp1, errorForTp1, offsetForTp1, offsetForTp1), cluster.leaderFor(tp1));
+        client.prepareResponseFrom(listOffsetResponse(t2p0, errorForP0, offsetForP0, offsetForP0), cluster.leaderFor(t2p0));
+        client.prepareResponseFrom(listOffsetResponse(tp1, errorForP1, offsetForP1, offsetForP1), cluster.leaderFor(tp1));
         // Second try should succeed.
-        client.prepareResponseFrom(listOffsetResponse(tp0, Errors.NONE, offsetForTp0, offsetForTp0), cluster.leaderFor(tp0));
-        client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NONE, offsetForTp1, offsetForTp1), cluster.leaderFor(tp1));
+        client.prepareResponseFrom(listOffsetResponse(t2p0, Errors.NONE, offsetForP0, offsetForP0), cluster.leaderFor(t2p0));
+        client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NONE, offsetForP1, offsetForP1), cluster.leaderFor(tp1));
 
         Map<TopicPartition, Long> timestampToSearch = new HashMap<>();
-        timestampToSearch.put(tp0, 0L);
+        timestampToSearch.put(t2p0, 0L);
         timestampToSearch.put(tp1, 0L);
         Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = fetcher.getOffsetsByTimes(timestampToSearch, Long.MAX_VALUE);
 
-        if (expectedOffsetForTp0 == null)
-            assertNull(offsetAndTimestampMap.get(tp0));
+        if (expectedOffsetForP0 == null)
+            assertNull(offsetAndTimestampMap.get(t2p0));
         else {
-            assertEquals(expectedOffsetForTp0.longValue(), offsetAndTimestampMap.get(tp0).timestamp());
-            assertEquals(expectedOffsetForTp0.longValue(), offsetAndTimestampMap.get(tp0).offset());
+            assertEquals(expectedOffsetForP0.longValue(), offsetAndTimestampMap.get(t2p0).timestamp());
+            assertEquals(expectedOffsetForP0.longValue(), offsetAndTimestampMap.get(t2p0).offset());
         }
 
-        if (expectedOffsetForTp1 == null)
+        if (expectedOffsetForP1 == null)
             assertNull(offsetAndTimestampMap.get(tp1));
         else {
-            assertEquals(expectedOffsetForTp1.longValue(), offsetAndTimestampMap.get(tp1).timestamp());
-            assertEquals(expectedOffsetForTp1.longValue(), offsetAndTimestampMap.get(tp1).offset());
+            assertEquals(expectedOffsetForP1.longValue(), offsetAndTimestampMap.get(tp1).timestamp());
+            assertEquals(expectedOffsetForP1.longValue(), offsetAndTimestampMap.get(tp1).offset());
         }
     }
 
