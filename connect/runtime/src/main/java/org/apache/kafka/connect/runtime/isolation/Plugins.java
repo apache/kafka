@@ -25,6 +25,8 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.ConverterConfig;
+import org.apache.kafka.connect.storage.ConverterType;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.slf4j.Logger;
@@ -69,14 +71,6 @@ public class Plugins {
         } catch (Throwable t) {
             throw new ConnectException("Instantiation error", t);
         }
-    }
-
-    protected static <T> T newConfiguredPlugin(AbstractConfig config, Class<T> klass) {
-        T plugin = Utils.newInstance(klass);
-        if (plugin instanceof Configurable) {
-            ((Configurable) plugin).configure(config.originals());
-        }
-        return plugin;
     }
 
     @SuppressWarnings("unchecked")
@@ -185,11 +179,8 @@ public class Plugins {
         return newPlugin(taskClass);
     }
 
-    public Converter newConverter(String converterClassOrAlias) {
-        return newConverter(converterClassOrAlias, null);
-    }
-
-    public Converter newConverter(String converterClassOrAlias, AbstractConfig config) {
+    public Converter newConverter(String converterClassOrAlias, AbstractConfig config,
+                                  boolean keyConverter, String configPrefix) {
         Class<? extends Converter> klass;
         try {
             klass = pluginClass(
@@ -205,10 +196,23 @@ public class Plugins {
                             + pluginNames(delegatingLoader.converters())
             );
         }
-        return config != null ? newConfiguredPlugin(config, klass) : newPlugin(klass);
+        Converter plugin = newPlugin(klass);
+        if (config != null && plugin instanceof Configurable) {
+            Map<String, Object> converterConfig;
+            if (configPrefix != null) {
+                converterConfig = config.originalsWithPrefix(configPrefix);
+            } else {
+                converterConfig = config.originals();
+            }
+            ConverterType type = keyConverter ? ConverterType.KEY : ConverterType.VALUE;
+            converterConfig.put(ConverterConfig.TYPE_CONFIG, type.getName());
+            ((Configurable) plugin).configure(converterConfig);
+        }
+        return plugin;
     }
 
-    public HeaderConverter newHeaderConverter(String converterClassOrAlias, AbstractConfig config) {
+    public HeaderConverter newHeaderConverter(String converterClassOrAlias, AbstractConfig config,
+                                              String configPrefix) {
         Class<? extends HeaderConverter> klass;
         try {
             klass = pluginClass(
@@ -221,10 +225,22 @@ public class Plugins {
                     "Failed to find any class that implements HeaderConverter and which name matches "
                             + converterClassOrAlias
                             + ", available header converters are: "
-                            + pluginNames(delegatingLoader.converters())
+                            + pluginNames(delegatingLoader.headerConverters())
             );
         }
-        return config != null ? newConfiguredPlugin(config, klass) : newPlugin(klass);
+        HeaderConverter plugin = newPlugin(klass);
+        if (config != null) {
+            Map<String, Object> converterConfig;
+            if (configPrefix != null) {
+                converterConfig = config.originalsWithPrefix(configPrefix);
+            } else {
+                converterConfig = config.originals();
+            }
+            ConverterType type = ConverterType.HEADER;
+            converterConfig.put(ConverterConfig.TYPE_CONFIG, type.getName());
+            plugin.configure(converterConfig);
+        }
+        return plugin;
     }
 
     public <R extends ConnectRecord<R>> Transformation<R> newTranformations(

@@ -765,6 +765,7 @@ public class WorkerTest extends ThreadedTest {
         worker.stop();
         assertStatistics(worker, 0, 0);
 
+        // We've mocked the Plugin.newConverter method, so we don't currently configure the converters
         // Validate extra configs got passed through to overridden converters
         assertEquals("foo", keyConverter.getValue().configs.get("extra.config"));
         assertEquals("bar", valueConverter.getValue().configs.get("extra.config"));
@@ -832,19 +833,16 @@ public class WorkerTest extends ThreadedTest {
         if (expectDefaultConverters) {
 
             // Instantiate and configure default
-            EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(), config))
+            EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(),
+                                                 config,
+                                                 true,
+                                                 "key.converter."))
                     .andReturn(keyConverter);
-            keyConverter.configure(
-                    EasyMock.<Map<String, ?>>anyObject(),
-                    EasyMock.anyBoolean()
-            );
-            EasyMock.expectLastCall();
-            EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(), config))
+            EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(),
+                                                 config,
+                                                 false,
+                                                 "value.converter."))
                     .andReturn(valueConverter);
-            valueConverter.configure(
-                    EasyMock.<Map<String, ?>>anyObject(),
-                    EasyMock.anyBoolean()
-            );
             EasyMock.expectLastCall();
         }
 
@@ -853,19 +851,16 @@ public class WorkerTest extends ThreadedTest {
         Converter internalValueConverter = PowerMock.createMock(converterClass);
 
         // Instantiate and configure internal
-        EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(), config))
+        EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(),
+                                             config,
+                                             true,
+                                             "internal.key.converter."))
                 .andReturn(internalKeyConverter);
-        internalKeyConverter.configure(
-                EasyMock.<Map<String, ?>>anyObject(),
-                EasyMock.anyBoolean()
-        );
-        EasyMock.expectLastCall();
-        EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(), config))
+        EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(),
+                                             config,
+                                             false,
+                                             "internal.value.converter."))
                 .andReturn(internalValueConverter);
-        internalValueConverter.configure(
-                EasyMock.<Map<String, ?>>anyObject(),
-                EasyMock.anyBoolean()
-        );
         EasyMock.expectLastCall();
     }
 
