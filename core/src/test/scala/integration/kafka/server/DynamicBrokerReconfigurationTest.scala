@@ -469,6 +469,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       assertFalse("No metrics found", reporter.kafkaMetrics.isEmpty)
       reporter.verifyMetricValue("request-total", "socket-server-metrics")
     }
+    assertEquals(servers.map(_.config.brokerId).toSet, TestMetricsReporter.configuredBrokers.toSet)
 
     val clientId = "test-client-1"
     val (producerThread, consumerThread) = startProduceConsume(retries = 0, clientId)
@@ -812,6 +813,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 object TestMetricsReporter {
   val PollingIntervalProp = "polling.interval"
   val testReporters = new ConcurrentLinkedQueue[TestMetricsReporter]()
+  val configuredBrokers = mutable.Set[Int]()
 
   def waitForReporters(count: Int): List[TestMetricsReporter] = {
     TestUtils.waitUntilTrue(() => testReporters.size == count, msg = "Metrics reporters not created")
@@ -839,6 +841,7 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
   }
 
   override def configure(configs: util.Map[String, _]): Unit = {
+    configuredBrokers += configs.get(KafkaConfig.BrokerIdProp).toString.toInt
     configureCount += 1
     pollingInterval = configs.get(PollingIntervalProp).toString.toInt
   }
