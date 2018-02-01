@@ -168,17 +168,22 @@ class StreamsBrokerDownResilience(Test):
 
         node = self.kafka.leader(self.inputTopic)
         self.kafka.stop_node(node)
-
-        time.sleep(30)
+        self.logger.info("Stopped Kafka broker")
 
         processor.stop()
+        self.logger.info("Called stop on processor one, will wait for 10 seconds")
+        time.sleep(10)
+        self.logger.info("Starting kafka leader node again")
+        self.kafka.start_node(node)
+        self.logger.info("Kafka node started, waiting for graceful shutdown of streams app")
         self.wait_for(processor)
+        self.logger("Called wait for processor")
+
+        self.assert_produce_consume("sending_message_after_stopping_streams_instance_bouncing_broker", num_messages=8)
+        self.logger("Just asserted other streaming nodes still working")
 
         processor_2.stop()
-        self.wait_for(processor_2)
-
         processor_3.stop()
-        self.wait_for(processor_3)
 
         self.kafka.stop()
 

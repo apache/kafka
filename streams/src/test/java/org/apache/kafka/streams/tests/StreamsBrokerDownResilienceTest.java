@@ -95,7 +95,7 @@ public class StreamsBrokerDownResilienceTest {
             public void uncaughtException(final Thread t, final Throwable e) {
                 System.err.println("FATAL: An unexpected exception " + e);
                 System.err.flush();
-                streams.close(30, TimeUnit.SECONDS);
+                streams.close(90, TimeUnit.SECONDS);
             }
         });
         System.out.println("Start Kafka Streams");
@@ -105,7 +105,7 @@ public class StreamsBrokerDownResilienceTest {
             @Override
             public void run() {
                 System.out.println("Shutting down streams resilience test app now");
-                streams.close(10, TimeUnit.SECONDS);
+                streams.close(90, TimeUnit.SECONDS);
             }
         }));
 
