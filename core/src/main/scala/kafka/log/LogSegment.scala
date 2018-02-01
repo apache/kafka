@@ -345,15 +345,17 @@ class LogSegment private[log] (val log: FileRecords,
    */
   @nonthreadsafe
   def truncateTo(offset: Long): Int = {
+    // Do offset translation before truncating the index to avoid needless scanning
+    // in case we truncate the full index
+    val mapping = translateOffset(offset)
     offsetIndex.truncateTo(offset)
     timeIndex.truncateTo(offset)
     txnIndex.truncateTo(offset)
 
-    // after truncation, reset and allocate more space for the (new currently active) index
+    // After truncation, reset and allocate more space for the (new currently active) index
     offsetIndex.resize(offsetIndex.maxIndexSize)
     timeIndex.resize(timeIndex.maxIndexSize)
 
-    val mapping = translateOffset(offset)
     val bytesTruncated = if (mapping == null) 0 else log.truncateTo(mapping.position)
     if (log.sizeInBytes == 0) {
       created = time.milliseconds
