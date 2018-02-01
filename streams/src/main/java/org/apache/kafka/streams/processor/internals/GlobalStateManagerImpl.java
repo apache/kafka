@@ -339,7 +339,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
             try {
                 checkpoint.write(checkpointableOffsets);
             } catch (IOException e) {
-                log.warn("Failed to write offsets checkpoint for global globalStores", e);
+                log.warn("Failed to write offset checkpoint file to {} for global stores: {}", checkpoint, e);
             }
         }
     }
