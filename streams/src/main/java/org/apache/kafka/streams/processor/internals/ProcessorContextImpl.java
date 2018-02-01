@@ -18,7 +18,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -37,7 +39,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                          final ProcessorStateManager stateMgr,
                          final StreamsMetrics metrics,
                          final ThreadCache cache) {
-        super(id, task.applicationId(), config, metrics, stateMgr, cache);
+        super(id, config, metrics, stateMgr, cache);
         this.task = task;
         this.collector = collector;
     }
@@ -52,12 +54,13 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     /**
-     * @throws TopologyBuilderException if an attempt is made to access this state store from an unknown node
+     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if an attempt is made to access this state store from an unknown node
      */
+    @SuppressWarnings("deprecation")
     @Override
     public StateStore getStateStore(final String name) {
         if (currentNode() == null) {
-            throw new TopologyBuilderException("Accessing from an unknown node");
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException("Accessing from an unknown node");
         }
 
         final StateStore global = stateManager.getGlobalStore(name);
@@ -66,24 +69,10 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         if (!currentNode().stateStores.contains(name)) {
-            throw new TopologyBuilderException("Processor " + currentNode().name() + " has no access to StateStore " + name);
+            throw new org.apache.kafka.streams.errors.TopologyBuilderException("Processor " + currentNode().name() + " has no access to StateStore " + name);
         }
 
         return stateManager.getStore(name);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public <K, V> void forward(final K key, final V value) {
-        final ProcessorNode previousNode = currentNode();
-        try {
-            for (ProcessorNode child : (List<ProcessorNode>) currentNode().children()) {
-                setCurrentNode(child);
-                child.process(key, value);
-            }
-        } finally {
-            setCurrentNode(previousNode);
-        }
     }
 
     @SuppressWarnings("unchecked")
@@ -122,8 +111,19 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     @Override
+    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
+        return task.schedule(interval, type, callback);
+    }
+
+    @Override
+    @Deprecated
     public void schedule(final long interval) {
-        task.schedule(interval);
+        schedule(interval, PunctuationType.STREAM_TIME, new Punctuator() {
+            @Override
+            public void punctuate(final long timestamp) {
+                currentNode().processor().punctuate(timestamp);
+            }
+        });
     }
 
 }

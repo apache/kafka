@@ -16,11 +16,14 @@
  */
 package kafka.server
 
+import java.io.File
+
 import kafka.api._
 import kafka.utils._
 import kafka.cluster.Replica
 import kafka.log.Log
 import kafka.server.QuotaFactory.UnboundedQuota
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.junit.{After, Before, Test}
@@ -67,8 +70,8 @@ class SimpleFetchTest {
   @Before
   def setUp() {
     // create nice mock since we don't particularly care about zkclient calls
-    val zkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
-    EasyMock.replay(zkUtils)
+    val kafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    EasyMock.replay(kafkaZkClient)
 
     // create nice mock since we don't particularly care about scheduler calls
     val scheduler = EasyMock.createNiceMock(classOf[KafkaScheduler])
@@ -104,24 +107,25 @@ class SimpleFetchTest {
 
     // create the log manager that is aware of this mock log
     val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
-    EasyMock.expect(logManager.getLog(topicPartition)).andReturn(Some(log)).anyTimes()
+    EasyMock.expect(logManager.getLog(topicPartition, false)).andReturn(Some(log)).anyTimes()
+    EasyMock.expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
     EasyMock.replay(logManager)
 
     // create the replica manager
-    replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils, scheduler, logManager,
-      new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower, new BrokerTopicStats,
-      new MetadataCache(configs.head.brokerId))
+    replicaManager = new ReplicaManager(configs.head, metrics, time, kafkaZkClient, scheduler, logManager,
+      new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""), new BrokerTopicStats,
+      new MetadataCache(configs.head.brokerId), new LogDirFailureChannel(configs.head.logDirs.size))
 
     // add the partition with two replicas, both in ISR
     val partition = replicaManager.getOrCreatePartition(new TopicPartition(topic, partitionId))
 
     // create the leader replica with the local log
-    val leaderReplica = new Replica(configs.head.brokerId, partition, time, 0, Some(log))
+    val leaderReplica = new Replica(configs.head.brokerId, partition.topicPartition, time, 0, Some(log))
     leaderReplica.highWatermark = new LogOffsetMetadata(partitionHW)
     partition.leaderReplicaIdOpt = Some(leaderReplica.brokerId)
 
     // create the follower replica with defined log end offset
-    val followerReplica= new Replica(configs(1).brokerId, partition, time)
+    val followerReplica= new Replica(configs(1).brokerId, partition.topicPartition, time)
     val leo = new LogOffsetMetadata(followerLEO, 0L, followerLEO.toInt)
     followerReplica.updateLogReadResult(new LogReadResult(info = FetchDataInfo(leo, MemoryRecords.EMPTY),
                                                           highWatermark = leo.messageOffset,

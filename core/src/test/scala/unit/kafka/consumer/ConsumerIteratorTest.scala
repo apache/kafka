@@ -27,7 +27,6 @@ import scala.collection._
 import org.junit.Assert._
 import kafka.message._
 import kafka.server._
-import kafka.utils.TestUtils._
 import kafka.utils._
 import org.junit.{Before, Test}
 import kafka.serializer._
@@ -38,7 +37,7 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
 
   val numNodes = 1
 
-  def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)
+  def generateConfigs = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)
 
   val messages = new mutable.HashMap[Int, Seq[Message]]
   val topic = "topic"
@@ -60,7 +59,7 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
       new AtomicLong(0),
       new AtomicInteger(0),
       ""))
-    createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)), servers = servers)
+    createTopic(topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)))
   }
 
   @Test

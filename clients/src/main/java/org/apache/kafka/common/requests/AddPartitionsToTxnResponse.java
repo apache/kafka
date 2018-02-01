@@ -19,6 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 
@@ -28,12 +31,26 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
+import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+
 public class AddPartitionsToTxnResponse extends AbstractResponse {
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
     private static final String ERRORS_KEY_NAME = "errors";
-    private static final String TOPIC_NAME = "topic";
-    private static final String PARTITION = "partition";
     private static final String PARTITION_ERRORS = "partition_errors";
+
+    private static final Schema ADD_PARTITIONS_TO_TXN_RESPONSE_V0 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(ERRORS_KEY_NAME, new ArrayOf(new Schema(
+                    TOPIC_NAME,
+                    new Field(PARTITION_ERRORS, new ArrayOf(new Schema(
+                            PARTITION_ID,
+                            ERROR_CODE)))))));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{ADD_PARTITIONS_TO_TXN_RESPONSE_V0};
+    }
 
     private final int throttleTimeMs;
 
@@ -56,15 +73,15 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
     }
 
     public AddPartitionsToTxnResponse(Struct struct) {
-        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
+        this.throttleTimeMs = struct.get(THROTTLE_TIME_MS);
         errors = new HashMap<>();
         for (Object topic : struct.getArray(ERRORS_KEY_NAME)) {
             Struct topicStruct = (Struct) topic;
-            final String topicName = topicStruct.getString(TOPIC_NAME);
+            final String topicName = topicStruct.get(TOPIC_NAME);
             for (Object partition : topicStruct.getArray(PARTITION_ERRORS)) {
                 Struct partitionStruct = (Struct) partition;
-                TopicPartition topicPartition = new TopicPartition(topicName, partitionStruct.getInt(PARTITION));
-                errors.put(topicPartition, Errors.forCode(partitionStruct.getShort(ERROR_CODE_KEY_NAME)));
+                TopicPartition topicPartition = new TopicPartition(topicName, partitionStruct.get(PARTITION_ID));
+                errors.put(topicPartition, Errors.forCode(partitionStruct.get(ERROR_CODE)));
             }
         }
     }
@@ -78,9 +95,14 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
     }
 
     @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(errors);
+    }
+
+    @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.ADD_PARTITIONS_TO_TXN.responseSchema(version));
-        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
+        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
 
         Map<String, Map<Integer, Errors>> errorsByTopic = CollectionUtils.groupDataByTopic(errors);
         List<Struct> topics = new ArrayList<>(errorsByTopic.size());
@@ -90,8 +112,8 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
             List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, Errors> partitionErrors : entry.getValue().entrySet()) {
                 final Struct partitionData = topicErrorCodes.instance(PARTITION_ERRORS)
-                        .set(PARTITION, partitionErrors.getKey())
-                        .set(ERROR_CODE_KEY_NAME, partitionErrors.getValue().code());
+                        .set(PARTITION_ID, partitionErrors.getKey())
+                        .set(ERROR_CODE, partitionErrors.getValue().code());
                 partitionArray.add(partitionData);
 
             }

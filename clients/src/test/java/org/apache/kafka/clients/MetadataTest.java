@@ -135,7 +135,7 @@ public class MetadataTest {
         long now = 10000;
 
         // lastRefreshMs updated to now.
-        metadata.failedUpdate(now);
+        metadata.failedUpdate(now, null);
 
         // Backing off. Remaining time until next try should be returned.
         assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now));
@@ -186,7 +186,7 @@ public class MetadataTest {
      * wait forever with a max timeout value of 0
      *
      * @throws Exception
-     * @see https://issues.apache.org/jira/browse/KAFKA-1836
+     * @see <a href=https://issues.apache.org/jira/browse/KAFKA-1836>KAFKA-1836</a>
      */
     @Test
     public void testMetadataUpdateWaitTime() throws Exception {
@@ -216,7 +216,7 @@ public class MetadataTest {
         metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
 
         assertEquals(100, metadata.timeToNextUpdate(1000));
-        metadata.failedUpdate(1100);
+        metadata.failedUpdate(1100, null);
 
         assertEquals(100, metadata.timeToNextUpdate(1100));
         assertEquals(100, metadata.lastSuccessfulUpdate());

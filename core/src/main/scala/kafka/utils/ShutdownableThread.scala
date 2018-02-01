@@ -17,8 +17,7 @@
 
 package kafka.utils
 
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import org.apache.kafka.common.internals.FatalExitError
 
@@ -26,30 +25,49 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
         extends Thread(name) with Logging {
   this.setDaemon(false)
   this.logIdent = "[" + name + "]: "
-  val isRunning: AtomicBoolean = new AtomicBoolean(true)
-  private val shutdownLatch = new CountDownLatch(1)
+  private val shutdownInitiated = new CountDownLatch(1)
+  private val shutdownComplete = new CountDownLatch(1)
 
   def shutdown(): Unit = {
     initiateShutdown()
     awaitShutdown()
   }
 
-  def initiateShutdown(): Boolean = {
-    if (isRunning.compareAndSet(true, false)) {
-      info("Shutting down")
-      if (isInterruptible)
-        interrupt()
-      true
-    } else
-      false
+  def isShutdownComplete: Boolean = {
+    shutdownComplete.getCount == 0
   }
 
-    /**
+  def initiateShutdown(): Boolean = {
+    this.synchronized {
+      if (isRunning) {
+        info("Shutting down")
+        shutdownInitiated.countDown()
+        if (isInterruptible)
+          interrupt()
+        true
+      } else
+        false
+    }
+  }
+
+  /**
    * After calling initiateShutdown(), use this API to wait until the shutdown is complete
    */
   def awaitShutdown(): Unit = {
-    shutdownLatch.await()
+    shutdownComplete.await()
     info("Shutdown completed")
+  }
+
+  /**
+   *  Causes the current thread to wait until the shutdown is initiated,
+   *  or the specified waiting time elapses.
+   *
+   * @param timeout
+   * @param unit
+   */
+  def pause(timeout: Long, unit: TimeUnit): Unit = {
+    if (shutdownInitiated.await(timeout, unit))
+      trace("shutdownInitiated latch count reached zero. Shutdown called.")
   }
 
   /**
@@ -60,19 +78,24 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
   override def run(): Unit = {
     info("Starting")
     try {
-      while (isRunning.get)
+      while (isRunning)
         doWork()
     } catch {
       case e: FatalExitError =>
-        isRunning.set(false)
-        shutdownLatch.countDown()
+        shutdownInitiated.countDown()
+        shutdownComplete.countDown()
         info("Stopped")
         Exit.exit(e.statusCode())
       case e: Throwable =>
-        if (isRunning.get())
+        if (isRunning)
           error("Error due to", e)
+    } finally {
+       shutdownComplete.countDown()
     }
-    shutdownLatch.countDown()
     info("Stopped")
+  }
+
+  def isRunning: Boolean = {
+    shutdownInitiated.getCount() != 0
   }
 }

@@ -71,8 +71,8 @@ object GetOffsetShell {
     ToolsUtils.validatePortOrDie(parser, brokerList)
     val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
     val topic = options.valueOf(topicOpt)
-    var partitionList = options.valueOf(partitionOpt)
-    var time = options.valueOf(timeOpt).longValue
+    val partitionList = options.valueOf(partitionOpt)
+    val time = options.valueOf(timeOpt).longValue
     val nOffsets = options.valueOf(nOffsetsOpt).intValue
     val maxWaitMs = options.valueOf(maxWaitMsOpt).intValue()
 

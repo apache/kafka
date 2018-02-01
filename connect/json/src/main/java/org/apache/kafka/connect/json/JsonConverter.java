@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Schema;
@@ -36,26 +37,30 @@ import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.ConverterType;
+import org.apache.kafka.connect.storage.HeaderConverter;
+import org.apache.kafka.connect.storage.StringConverterConfig;
 
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
 /**
- * Implementation of Converter that uses JSON to store schemas and objects.
+ * Implementation of Converter that uses JSON to store schemas and objects. By default this converter will serialize Connect keys, values,
+ * and headers with schemas, although this can be disabled with {@link JsonConverterConfig#SCHEMAS_ENABLE_CONFIG schemas.enable}
+ * configuration option.
+ *
+ * This implementation currently does nothing with the topic names or header names.
  */
-public class JsonConverter implements Converter {
-    private static final String SCHEMAS_ENABLE_CONFIG = "schemas.enable";
-    private static final boolean SCHEMAS_ENABLE_DEFAULT = true;
-    private static final String SCHEMAS_CACHE_SIZE_CONFIG = "schemas.cache.size";
-    private static final int SCHEMAS_CACHE_SIZE_DEFAULT = 1000;
+public class JsonConverter implements Converter, HeaderConverter {
 
-    private static final HashMap<Schema.Type, JsonToConnectTypeConverter> TO_CONNECT_CONVERTERS = new HashMap<>();
+    private static final Map<Schema.Type, JsonToConnectTypeConverter> TO_CONNECT_CONVERTERS = new EnumMap<>(Schema.Type.class);
 
     static {
         TO_CONNECT_CONVERTERS.put(Schema.Type.BOOLEAN, new JsonToConnectTypeConverter() {
@@ -261,8 +266,8 @@ public class JsonConverter implements Converter {
     }
 
 
-    private boolean enableSchemas = SCHEMAS_ENABLE_DEFAULT;
-    private int cacheSize = SCHEMAS_CACHE_SIZE_DEFAULT;
+    private boolean enableSchemas = JsonConverterConfig.SCHEMAS_ENABLE_DEFAULT;
+    private int cacheSize = JsonConverterConfig.SCHEMAS_CACHE_SIZE_DEFAULT;
     private Cache<Schema, ObjectNode> fromConnectSchemaCache;
     private Cache<JsonNode, Schema> toConnectSchemaCache;
 
@@ -270,19 +275,44 @@ public class JsonConverter implements Converter {
     private final JsonDeserializer deserializer = new JsonDeserializer();
 
     @Override
-    public void configure(Map<String, ?> configs, boolean isKey) {
-        Object enableConfigsVal = configs.get(SCHEMAS_ENABLE_CONFIG);
-        if (enableConfigsVal != null)
-            enableSchemas = enableConfigsVal.toString().equals("true");
+    public ConfigDef config() {
+        return JsonConverterConfig.configDef();
+    }
 
+    @Override
+    public void configure(Map<String, ?> configs) {
+        JsonConverterConfig config = new JsonConverterConfig(configs);
+        enableSchemas = config.schemasEnabled();
+        cacheSize = config.schemaCacheSize();
+
+        boolean isKey = config.type() == ConverterType.KEY;
         serializer.configure(configs, isKey);
         deserializer.configure(configs, isKey);
 
-        Object cacheSizeVal = configs.get(SCHEMAS_CACHE_SIZE_CONFIG);
-        if (cacheSizeVal != null)
-            cacheSize = Integer.parseInt((String) cacheSizeVal);
         fromConnectSchemaCache = new SynchronizedCache<>(new LRUCache<Schema, ObjectNode>(cacheSize));
         toConnectSchemaCache = new SynchronizedCache<>(new LRUCache<JsonNode, Schema>(cacheSize));
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
+        Map<String, Object> conf = new HashMap<>(configs);
+        conf.put(StringConverterConfig.TYPE_CONFIG, isKey ? ConverterType.KEY.getName() : ConverterType.VALUE.getName());
+        configure(conf);
+    }
+
+    @Override
+    public void close() {
+        // do nothing
+    }
+
+    @Override
+    public byte[] fromConnectHeader(String topic, String headerKey, Schema schema, Object value) {
+        return fromConnectData(topic, schema, value);
+    }
+
+    @Override
+    public SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value) {
+        return toConnectData(topic, value);
     }
 
     @Override
@@ -455,7 +485,7 @@ public class JsonConverter implements Converter {
                 break;
             case JsonSchema.ARRAY_TYPE_NAME:
                 JsonNode elemSchema = jsonSchema.get(JsonSchema.ARRAY_ITEMS_FIELD_NAME);
-                if (elemSchema == null)
+                if (elemSchema == null || elemSchema.isNull())
                     throw new DataException("Array schema did not specify the element type");
                 builder = SchemaBuilder.array(asConnectSchema(elemSchema));
                 break;

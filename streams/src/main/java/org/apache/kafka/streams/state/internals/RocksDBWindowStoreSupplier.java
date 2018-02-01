@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.WindowStore;
 
@@ -31,44 +30,41 @@ import java.util.Map;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-
+@Deprecated
 public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, WindowStore> implements WindowStoreSupplier<WindowStore> {
-
+    public static final int MIN_SEGMENTS = 2;
     private final long retentionPeriod;
-    private final boolean retainDuplicates;
-    private final int numSegments;
-    private final long segmentInterval;
-    private final long windowSize;
-    private final boolean enableCaching;
+    private WindowStoreBuilder<K, V> builder;
 
     public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, long windowSize, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
-        this(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, null, windowSize, logged, logConfig, enableCaching);
+        this(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, Time.SYSTEM, windowSize, logged, logConfig, enableCaching);
     }
 
     public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, Time time, long windowSize, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
         super(name, keySerde, valueSerde, time, logged, logConfig);
+        if (numSegments < MIN_SEGMENTS) {
+            throw new IllegalArgumentException("numSegments must be >= " + MIN_SEGMENTS);
+        }
         this.retentionPeriod = retentionPeriod;
-        this.retainDuplicates = retainDuplicates;
-        this.numSegments = numSegments;
-        this.windowSize = windowSize;
-        this.enableCaching = enableCaching;
-        this.segmentInterval = Segments.segmentInterval(retentionPeriod, numSegments);
+        builder = new WindowStoreBuilder<>(new RocksDbWindowBytesStoreSupplier(name,
+                                                                               retentionPeriod,
+                                                                               numSegments,
+                                                                               windowSize,
+                                                                               retainDuplicates),
+                                           keySerde,
+                                           valueSerde,
+                                           time);
+        if (enableCaching) {
+            builder.withCachingEnabled();
+        }
+        // logged by default so we only need to worry about when it is disabled.
+        if (!logged) {
+            builder.withLoggingDisabled();
+        }
     }
 
-    public String name() {
-        return name;
-    }
-
-    public WindowStore get() {
-        return maybeWrapCaching(
-                maybeWrapLogged(
-                        new RocksDBSegmentedBytesStore(
-                                name,
-                                retentionPeriod,
-                                numSegments,
-                                new WindowKeySchema()
-                        )));
-
+    public WindowStore<K, V> get() {
+        return builder.build();
     }
 
     @Override
@@ -76,19 +72,4 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
         return retentionPeriod;
     }
 
-    private SegmentedBytesStore maybeWrapLogged(final SegmentedBytesStore inner) {
-        if (!logged) {
-            return inner;
-        }
-        return new ChangeLoggingSegmentedBytesStore(inner);
-    }
-
-    private WindowStore<K, V> maybeWrapCaching(final SegmentedBytesStore inner) {
-        final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(inner, "rocksdb-window", time);
-        if (!enableCaching) {
-            return new RocksDBWindowStore<>(metered, keySerde, valueSerde, retainDuplicates, windowSize);
-        }
-        final RocksDBWindowStore<Bytes, byte[]> windowed = RocksDBWindowStore.bytesStore(metered, retainDuplicates, windowSize);
-        return new CachingWindowStore<>(windowed, keySerde, valueSerde, windowSize, segmentInterval);
-    }
 }

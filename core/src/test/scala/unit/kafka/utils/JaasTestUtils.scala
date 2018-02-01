@@ -31,13 +31,13 @@ object JaasTestUtils {
                              serviceName: Option[String]) extends JaasModule {
 
     def name =
-      if (Java.isIBMJdk)
+      if (Java.isIbmJdk)
         "com.ibm.security.auth.module.Krb5LoginModule"
       else
         "com.sun.security.auth.module.Krb5LoginModule"
 
     def entries: Map[String, String] =
-      if (Java.isIBMJdk)
+      if (Java.isIbmJdk)
         Map(
           "principal" -> principal,
           "credsType" -> "both"
@@ -72,14 +72,15 @@ object JaasTestUtils {
 
   case class ScramLoginModule(username: String,
                               password: String,
-                              debug: Boolean = false) extends JaasModule {
+                              debug: Boolean = false,
+                              tokenProps: Map[String, String] = Map.empty) extends JaasModule {
 
     def name = "org.apache.kafka.common.security.scram.ScramLoginModule"
 
     def entries: Map[String, String] = Map(
       "username" -> username,
       "password" -> password
-    )
+    ) ++ tokenProps.map { case (name, value) => name -> value }
   }
 
   sealed trait JaasModule {
@@ -142,7 +143,7 @@ object JaasTestUtils {
     }
     // IBM Kerberos module doesn't support the serviceName JAAS property, hence it needs to be
     // passed as a Kafka property
-    if (Java.isIBMJdk && !result.contains(KafkaConfig.SaslKerberosServiceNameProp))
+    if (Java.isIbmJdk && !result.contains(KafkaConfig.SaslKerberosServiceNameProp))
       result.put(KafkaConfig.SaslKerberosServiceNameProp, serviceName)
     result
   }
@@ -157,10 +158,20 @@ object JaasTestUtils {
   def clientLoginModule(mechanism: String, keytabLocation: Option[File]): String =
     kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword, KafkaScramUser, KafkaScramPassword).toString
 
+  def tokenClientLoginModule(tokenId: String, password: String): String = {
+    ScramLoginModule(
+      tokenId,
+      password,
+      debug = false,
+      Map(
+        "tokenauth" -> "true"
+      )).toString
+  }
+
   def zkSections: Seq[JaasSection] = Seq(
-    new JaasSection(ZkServerContextName, Seq(ZkDigestModule(debug = false,
+    JaasSection(ZkServerContextName, Seq(ZkDigestModule(debug = false,
       Map("user_super" -> ZkUserSuperPasswd, s"user_$ZkUser" -> ZkUserPassword)))),
-    new JaasSection(ZkClientContextName, Seq(ZkDigestModule(debug = false,
+    JaasSection(ZkClientContextName, Seq(ZkDigestModule(debug = false,
       Map("username" -> ZkUser, "password" -> ZkUserPassword))))
   )
 
@@ -191,7 +202,7 @@ object JaasTestUtils {
           debug = false)
       case mechanism => throw new IllegalArgumentException("Unsupported server mechanism " + mechanism)
     }
-    new JaasSection(contextName, modules)
+    JaasSection(contextName, modules)
   }
 
   // consider refactoring if more mechanisms are added
@@ -227,7 +238,7 @@ object JaasTestUtils {
    * Used for the static JAAS configuration and it uses the credentials for client#2
    */
   def kafkaClientSection(mechanism: Option[String], keytabLocation: Option[File]): JaasSection = {
-    new JaasSection(KafkaClientContextName, mechanism.map(m =>
+    JaasSection(KafkaClientContextName, mechanism.map(m =>
       kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2, KafkaScramUser2, KafkaScramPassword2)).toSeq)
   }
 

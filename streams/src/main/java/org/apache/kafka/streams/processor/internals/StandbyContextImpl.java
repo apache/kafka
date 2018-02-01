@@ -18,8 +18,12 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
@@ -63,11 +67,17 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
     };
 
     StandbyContextImpl(final TaskId id,
-                       final String applicationId,
                        final StreamsConfig config,
                        final ProcessorStateManager stateMgr,
                        final StreamsMetrics metrics) {
-        super(id, applicationId, config, metrics, stateMgr, new ThreadCache("zeroCache", 0, metrics));
+        super(id,
+              config,
+              metrics,
+              stateMgr,
+              new ThreadCache(
+                  new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName())),
+                  0,
+                  metrics));
     }
 
 
@@ -156,6 +166,15 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
+    public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+        throw new UnsupportedOperationException("this should not happen: schedule() not supported in standby tasks.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
+    @Override
+    @Deprecated
     public void schedule(final long interval) {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in standby tasks.");
     }

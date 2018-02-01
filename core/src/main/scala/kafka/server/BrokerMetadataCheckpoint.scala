@@ -30,7 +30,6 @@ case class BrokerMetadata(brokerId: Int)
   */
 class BrokerMetadataCheckpoint(val file: File) extends Logging {
   private val lock = new Object()
-  Files.deleteIfExists(new File(file + ".tmp").toPath()) // try to delete any existing temp files for cleanliness
 
   def write(brokerMetadata: BrokerMetadata) = {
     lock synchronized {
@@ -57,6 +56,8 @@ class BrokerMetadataCheckpoint(val file: File) extends Logging {
   }
 
   def read(): Option[BrokerMetadata] = {
+    Files.deleteIfExists(new File(file + ".tmp").toPath()) // try to delete any existing temp files for cleanliness
+
     lock synchronized {
       try {
         val brokerMetaProps = new VerifiableProperties(Utils.loadProps(file.getAbsolutePath()))

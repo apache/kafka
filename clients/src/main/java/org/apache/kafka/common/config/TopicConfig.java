@@ -53,7 +53,7 @@ public class TopicConfig {
         "we would fsync after every message; if it were 5 we would fsync after every five messages. " +
         "In general we recommend you not set this and use replication for durability and allow the " +
         "operating system's background flush capabilities as it is more efficient. This setting can " +
-        "be overridden on a per-topic basis (see <a href=\"#topic-config\">the per-topic configuration section</a>).";
+        "be overridden on a per-topic basis (see <a href=\"#topicconfigs\">the per-topic configuration section</a>).";
 
     public static final String FLUSH_MS_CONFIG = "flush.ms";
     public static final String FLUSH_MS_DOC = "This setting allows specifying a time interval at which we will " +
@@ -63,9 +63,11 @@ public class TopicConfig {
         "flush capabilities as it is more efficient.";
 
     public static final String RETENTION_BYTES_CONFIG = "retention.bytes";
-    public static final String RETENTION_BYTES_DOC = "This configuration controls the maximum size a log can grow " +
-        "to before we will discard old log segments to free up space if we are using the " +
-        "\"delete\" retention policy. By default there is no size limit only a time limit.";
+    public static final String RETENTION_BYTES_DOC = "This configuration controls the maximum size a partition " +
+        "(which consists of log segments) can grow to before we will discard old log segments to free up space if we " +
+        "are using the \"delete\" retention policy. By default there is no size limit only a time limit. " +
+        "Since this limit is enforced at the partition level, multiply it by the number of partitions to compute " +
+        "the topic retention in bytes.";
 
     public static final String RETENTION_MS_CONFIG = "retention.ms";
     public static final String RETENTION_MS_DOC = "This configuration controls the maximum time we will retain a " +
@@ -74,9 +76,12 @@ public class TopicConfig {
         "their data.";
 
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
-    public static final String MAX_MESSAGE_BYTES_DOC = "This is largest message size Kafka will allow to be " +
-        "appended. Note that if you increase this size you must also increase your consumer's fetch size so " +
-        "they can fetch messages this large.";
+    public static final String MAX_MESSAGE_BYTES_DOC = "<p>The largest record batch size allowed by Kafka. If this " +
+        "is increased and there are consumers older than 0.10.2, the consumers' fetch size must also be increased so that " +
+        "the they can fetch record batches this large.</p>" +
+        "<p>In the latest message format version, records are always grouped into batches for efficiency. In previous " +
+        "message format versions, uncompressed records are not grouped into batches and this limit only applies to a " +
+        "single record in that case.</p>";
 
     public static final String INDEX_INTERVAL_BYTES_CONFIG = "index.interval.bytes";
     public static final String INDEX_INTERVAL_BYTES_DOCS = "This setting controls how frequently " +

@@ -18,6 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
 
@@ -27,9 +30,25 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.common.protocol.types.Type.INT32;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
+
 public class DeleteTopicsRequest extends AbstractRequest {
     private static final String TOPICS_KEY_NAME = "topics";
     private static final String TIMEOUT_KEY_NAME = "timeout";
+
+    /* DeleteTopic api */
+    private static final Schema DELETE_TOPICS_REQUEST_V0 = new Schema(
+            new Field(TOPICS_KEY_NAME, new ArrayOf(STRING), "An array of topics to be deleted."),
+            new Field(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for a topic to be completely deleted on the " +
+                    "controller node. Values <= 0 will trigger topic deletion and return immediately"));
+
+    /* v1 request is the same as v0. Throttle time has been added to the response */
+    private static final Schema DELETE_TOPICS_REQUEST_V1 = DELETE_TOPICS_REQUEST_V0;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{DELETE_TOPICS_REQUEST_V0, DELETE_TOPICS_REQUEST_V1};
+    }
 
     private final Set<String> topics;
     private final Integer timeout;

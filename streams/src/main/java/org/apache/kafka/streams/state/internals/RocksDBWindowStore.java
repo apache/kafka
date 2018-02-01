@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateStore implements WindowStore<K, V> {
+public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateStore implements WindowStore<K, V> {
 
     // this is optimizing the case when this store is already a bytes store, in which we can avoid Bytes.wrap() costs
     private static class RocksDBWindowBytesStore extends RocksDBWindowStore<Bytes, byte[]> {
@@ -116,6 +116,18 @@ class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to)), timeFrom, timeTo);
+        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
+    }
+    
+    @Override
+    public KeyValueIterator<Windowed<K>, V> all() {
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.all();
+        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
+    }
+    
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo) {
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetchAll(timeFrom, timeTo);
         return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
     }
 

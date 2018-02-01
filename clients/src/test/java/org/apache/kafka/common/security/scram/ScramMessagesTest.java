@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.common.security.scram;
 
+import org.apache.kafka.common.utils.Base64;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
 
 import javax.security.sasl.SaslException;
-import javax.xml.bind.DatatypeConverter;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -70,7 +70,7 @@ public class ScramMessagesTest {
     @Test
     public void validClientFirstMessage() throws SaslException {
         String nonce = formatter.secureRandomString();
-        ClientFirstMessage m = new ClientFirstMessage("someuser", nonce);
+        ClientFirstMessage m = new ClientFirstMessage("someuser", nonce, "");
         checkClientFirstMessage(m, "someuser", nonce, "");
 
         // Default format used by Kafka client: only user and nonce are specified
@@ -107,6 +107,11 @@ public class ScramMessagesTest {
             str = String.format("n,,n=testuser,r=%s,%s", nonce, extension);
             checkClientFirstMessage(createScramMessage(ClientFirstMessage.class, str), "testuser", nonce, "");
         }
+
+        //optional tokenauth specified as extensions
+        str = String.format("n,,n=testuser,r=%s,%s", nonce, "tokenauth=true");
+        m = createScramMessage(ClientFirstMessage.class, str);
+        assertEquals("tokenauth=true", m.extensions());
     }
 
     @Test
@@ -288,11 +293,11 @@ public class ScramMessagesTest {
     }
 
     private String randomBytesAsString() {
-        return DatatypeConverter.printBase64Binary(formatter.secureRandomBytes());
+        return Base64.encoder().encodeToString(formatter.secureRandomBytes());
     }
 
     private byte[] toBytes(String base64Str) {
-        return DatatypeConverter.parseBase64Binary(base64Str);
+        return Base64.decoder().decode(base64Str);
     };
 
     private void checkClientFirstMessage(ClientFirstMessage message, String saslName, String nonce, String authzid) {
@@ -303,14 +308,14 @@ public class ScramMessagesTest {
 
     private void checkServerFirstMessage(ServerFirstMessage message, String nonce, String salt, int iterations) {
         assertEquals(nonce, message.nonce());
-        assertArrayEquals(DatatypeConverter.parseBase64Binary(salt), message.salt());
+        assertArrayEquals(Base64.decoder().decode(salt), message.salt());
         assertEquals(iterations, message.iterations());
     }
 
     private void checkClientFinalMessage(ClientFinalMessage message, String channelBinding, String nonce, String proof) {
-        assertArrayEquals(DatatypeConverter.parseBase64Binary(channelBinding), message.channelBinding());
+        assertArrayEquals(Base64.decoder().decode(channelBinding), message.channelBinding());
         assertEquals(nonce, message.nonce());
-        assertArrayEquals(DatatypeConverter.parseBase64Binary(proof), message.proof());
+        assertArrayEquals(Base64.decoder().decode(proof), message.proof());
     }
 
     private void checkServerFinalMessage(ServerFinalMessage message, String error, String serverSignature) {
@@ -318,7 +323,7 @@ public class ScramMessagesTest {
         if (serverSignature == null)
             assertNull("Unexpected server signature", message.serverSignature());
         else
-            assertArrayEquals(DatatypeConverter.parseBase64Binary(serverSignature), message.serverSignature());
+            assertArrayEquals(Base64.decoder().decode(serverSignature), message.serverSignature());
     }
 
     @SuppressWarnings("unchecked")

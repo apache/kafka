@@ -18,10 +18,16 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.test.GlobalStateManagerStub;
 import org.apache.kafka.test.MockProcessorNode;
@@ -30,10 +36,9 @@ import org.apache.kafka.test.NoOpProcessorContext;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -41,114 +46,175 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class GlobalStateTaskTest {
 
-    private Map<TopicPartition, Long> offsets;
-    private GlobalStateUpdateTask globalStateTask;
+    private final LogContext logContext = new LogContext();
+
+    private final String topic1 = "t1";
+    private final String topic2 = "t2";
+    private final TopicPartition t1 = new TopicPartition(topic1, 1);
+    private final TopicPartition t2 = new TopicPartition(topic2, 1);
+    private final MockSourceNode sourceOne = new MockSourceNode<>(new String[]{topic1},
+                                                            new StringDeserializer(),
+                                                            new StringDeserializer());;
+    private final MockSourceNode sourceTwo = new MockSourceNode<>(new String[]{topic2},
+                                                            new IntegerDeserializer(),
+                                                            new IntegerDeserializer());
+    private final MockProcessorNode processorOne = new MockProcessorNode<>(-1);
+    private final MockProcessorNode processorTwo = new MockProcessorNode<>(-1);
+
+    private final Map<TopicPartition, Long> offsets = new HashMap<>();
+    private final NoOpProcessorContext context = new NoOpProcessorContext();
+
+    private ProcessorTopology topology;
     private GlobalStateManagerStub stateMgr;
-    private List<ProcessorNode> processorNodes;
-    private NoOpProcessorContext context;
-    private TopicPartition t1;
-    private TopicPartition t2;
-    private MockSourceNode sourceOne;
-    private MockSourceNode sourceTwo;
+    private GlobalStateUpdateTask globalStateTask;
 
     @Before
     public void before() {
-        sourceOne = new MockSourceNode<>(new String[]{"t1"},
-                                         new StringDeserializer(),
-                                         new StringDeserializer());
-        sourceTwo = new MockSourceNode<>(new String[]{"t2"},
-                                         new IntegerDeserializer(),
-                                         new IntegerDeserializer());
-        processorNodes = Arrays.asList(sourceOne, sourceTwo, new MockProcessorNode<>(-1), new MockProcessorNode<>(-1));
         final Set<String> storeNames = Utils.mkSet("t1-store", "t2-store");
         final Map<String, SourceNode> sourceByTopics = new HashMap<>();
-        sourceByTopics.put("t1", sourceOne);
-        sourceByTopics.put("t2", sourceTwo);
+        sourceByTopics.put(topic1, sourceOne);
+        sourceByTopics.put(topic2, sourceTwo);
         final Map<String, String> storeToTopic = new HashMap<>();
-        storeToTopic.put("t1-store", "t1");
-        storeToTopic.put("t2-store", "t2");
-        final ProcessorTopology topology = new ProcessorTopology(processorNodes,
-                                                                 sourceByTopics,
-                                                                 Collections.<String, SinkNode>emptyMap(),
-                                                                 Collections.<StateStore>emptyList(),
-                                                                 storeToTopic,
-                                                                 Collections.<StateStore>emptyList());
-        context = new NoOpProcessorContext();
+        storeToTopic.put("t1-store", topic1);
+        storeToTopic.put("t2-store", topic2);
+        topology = ProcessorTopology.with(Utils.mkList(sourceOne, sourceTwo, processorOne, processorTwo),
+                                          sourceByTopics,
+                                          Collections.<StateStore>emptyList(),
+                                          storeToTopic);
 
-        t1 = new TopicPartition("t1", 1);
-        t2 = new TopicPartition("t2", 1);
-        offsets = new HashMap<>();
         offsets.put(t1, 50L);
         offsets.put(t2, 100L);
         stateMgr = new GlobalStateManagerStub(storeNames, offsets);
-        globalStateTask = new GlobalStateUpdateTask(topology, context, stateMgr);
+        globalStateTask = new GlobalStateUpdateTask(topology, context, stateMgr, new LogAndFailExceptionHandler(), logContext);
     }
 
     @Test
-    public void shouldInitializeStateManager() throws Exception {
+    public void shouldInitializeStateManager() {
         final Map<TopicPartition, Long> startingOffsets = globalStateTask.initialize();
         assertTrue(stateMgr.initialized);
         assertEquals(offsets, startingOffsets);
     }
 
     @Test
-    public void shouldInitializeContext() throws Exception {
+    public void shouldInitializeContext() {
         globalStateTask.initialize();
         assertTrue(context.initialized);
     }
 
     @Test
-    public void shouldInitializeProcessorTopology() throws Exception {
+    public void shouldInitializeProcessorTopology() {
         globalStateTask.initialize();
-        for (ProcessorNode processorNode : processorNodes) {
-            if (processorNode instanceof  MockProcessorNode) {
-                assertTrue(((MockProcessorNode) processorNode).initialized);
-            } else {
-                assertTrue(((MockSourceNode) processorNode).initialized);
-            }
-        }
+        assertTrue(sourceOne.initialized);
+        assertTrue(sourceTwo.initialized);
+        assertTrue(processorOne.initialized);
+        assertTrue(processorTwo.initialized);
     }
 
     @Test
-    public void shouldProcessRecordsForTopic() throws Exception {
+    public void shouldProcessRecordsForTopic() {
         globalStateTask.initialize();
-        globalStateTask.update(new ConsumerRecord<>("t1", 1, 1, "foo".getBytes(), "bar".getBytes()));
+        globalStateTask.update(new ConsumerRecord<>(topic1, 1, 1, "foo".getBytes(), "bar".getBytes()));
         assertEquals(1, sourceOne.numReceived);
         assertEquals(0, sourceTwo.numReceived);
     }
 
     @Test
-    public void shouldProcessRecordsForOtherTopic() throws Exception {
+    public void shouldProcessRecordsForOtherTopic() {
         final byte[] integerBytes = new IntegerSerializer().serialize("foo", 1);
         globalStateTask.initialize();
-        globalStateTask.update(new ConsumerRecord<>("t2", 1, 1, integerBytes, integerBytes));
+        globalStateTask.update(new ConsumerRecord<>(topic2, 1, 1, integerBytes, integerBytes));
         assertEquals(1, sourceTwo.numReceived);
         assertEquals(0, sourceOne.numReceived);
     }
 
+    private void maybeDeserialize(final GlobalStateUpdateTask globalStateTask,
+                                  final byte[] key,
+                                  final byte[] recordValue,
+                                  boolean failExpected) {
+        final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(topic2, 1, 1,
+                0L, TimestampType.CREATE_TIME, 0L, 0, 0,
+                key, recordValue);
+        globalStateTask.initialize();
+        try {
+            globalStateTask.update(record);
+            if (failExpected) {
+                fail("Should have failed to deserialize.");
+            }
+        } catch (StreamsException e) {
+            if (!failExpected) {
+                fail("Shouldn't have failed to deserialize.");
+            }
+        }
+    }
+
 
     @Test
-    public void shouldCloseStateManagerWithOffsets() throws Exception {
+    public void shouldThrowStreamsExceptionWhenKeyDeserializationFails() throws Exception {
+        final byte[] key = new LongSerializer().serialize(topic2, 1L);
+        final byte[] recordValue = new IntegerSerializer().serialize(topic2, 10);
+        maybeDeserialize(globalStateTask, key, recordValue, true);
+    }
+
+
+    @Test
+    public void shouldThrowStreamsExceptionWhenValueDeserializationFails() throws Exception {
+        final byte[] key = new IntegerSerializer().serialize(topic2, 1);
+        final byte[] recordValue = new LongSerializer().serialize(topic2, 10L);
+        maybeDeserialize(globalStateTask, key, recordValue, true);
+    }
+
+    @Test
+    public void shouldNotThrowStreamsExceptionWhenKeyDeserializationFailsWithSkipHandler() throws Exception {
+        final GlobalStateUpdateTask globalStateTask2 = new GlobalStateUpdateTask(
+            topology,
+            context,
+            stateMgr,
+            new LogAndContinueExceptionHandler(),
+            logContext);
+        final byte[] key = new LongSerializer().serialize(topic2, 1L);
+        final byte[] recordValue = new IntegerSerializer().serialize(topic2, 10);
+
+        maybeDeserialize(globalStateTask2, key, recordValue, false);
+    }
+
+    @Test
+    public void shouldNotThrowStreamsExceptionWhenValueDeserializationFails() throws Exception {
+        final GlobalStateUpdateTask globalStateTask2 = new GlobalStateUpdateTask(
+            topology,
+            context,
+            stateMgr,
+            new LogAndContinueExceptionHandler(),
+            logContext);
+        final byte[] key = new IntegerSerializer().serialize(topic2, 1);
+        final byte[] recordValue = new LongSerializer().serialize(topic2, 10L);
+
+        maybeDeserialize(globalStateTask2, key, recordValue, false);
+    }
+
+
+    @Test
+    public void shouldCloseStateManagerWithOffsets() throws IOException {
         final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
         expectedOffsets.put(t1, 52L);
         expectedOffsets.put(t2, 100L);
         globalStateTask.initialize();
-        globalStateTask.update(new ConsumerRecord<>("t1", 1, 51, "foo".getBytes(), "foo".getBytes()));
+        globalStateTask.update(new ConsumerRecord<>(topic1, 1, 51, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.close();
         assertEquals(expectedOffsets, stateMgr.checkpointed());
         assertTrue(stateMgr.closed);
     }
 
     @Test
-    public void shouldCheckpointOffsetsWhenStateIsFlushed() throws Exception {
+    public void shouldCheckpointOffsetsWhenStateIsFlushed() {
         final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
         expectedOffsets.put(t1, 102L);
         expectedOffsets.put(t2, 100L);
         globalStateTask.initialize();
-        globalStateTask.update(new ConsumerRecord<>("t1", 1, 101, "foo".getBytes(), "foo".getBytes()));
+        globalStateTask.update(new ConsumerRecord<>(topic1, 1, 101, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.flushState();
         assertThat(stateMgr.checkpointed(), equalTo(expectedOffsets));
     }

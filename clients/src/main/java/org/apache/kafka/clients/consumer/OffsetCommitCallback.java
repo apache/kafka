@@ -42,7 +42,7 @@ public interface OffsetCommitCallback {
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
      *             this function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
-     *             configured groupId
+     *             configured groupId. See the exception for more details
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
      *             is too large or if the committed offset is invalid).
      */

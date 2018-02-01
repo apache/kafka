@@ -20,8 +20,9 @@ import java.io.File
 import java.nio.file.Files
 import java.util.Properties
 
-import kafka.server.BrokerTopicStats
+import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.{MockTime, Pool, TestUtils}
+import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 import org.junit.After
@@ -66,7 +67,7 @@ abstract class AbstractLogCleanerIntegrationTest {
     props.put(LogConfig.MinCleanableDirtyRatioProp, minCleanableDirtyRatio: java.lang.Float)
     props.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
     props.put(LogConfig.MinCompactionLagMsProp, compactionLag: java.lang.Long)
-    props.putAll(propertyOverrides)
+    props ++= propertyOverrides
     props
   }
 
@@ -78,6 +79,7 @@ abstract class AbstractLogCleanerIntegrationTest {
                   compactionLag: Long = defaultCompactionLag,
                   deleteDelay: Int = defaultDeleteDelay,
                   segmentSize: Int = defaultSegmentSize,
+                  cleanerIoBufferSize: Option[Int] = None,
                   propertyOverrides: Properties = new Properties()): LogCleaner = {
 
     val logMap = new Pool[TopicPartition, Log]()
@@ -97,19 +99,23 @@ abstract class AbstractLogCleanerIntegrationTest {
         recoveryPoint = 0L,
         scheduler = time.scheduler,
         time = time,
-        brokerTopicStats = new BrokerTopicStats)
+        brokerTopicStats = new BrokerTopicStats,
+        maxProducerIdExpirationMs = 60 * 60 * 1000,
+        producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+        logDirFailureChannel = new LogDirFailureChannel(10))
       logMap.put(partition, log)
       this.logs += log
     }
 
     val cleanerConfig = CleanerConfig(
       numThreads = numThreads,
-      ioBufferSize = maxMessageSize / 2,
+      ioBufferSize = cleanerIoBufferSize.getOrElse(maxMessageSize / 2),
       maxMessageSize = maxMessageSize,
       backOffMs = backOffMs)
     new LogCleaner(cleanerConfig,
       logDirs = Array(logDir),
       logs = logMap,
+      logDirFailureChannel = new LogDirFailureChannel(1),
       time = time)
   }
 }

@@ -18,18 +18,27 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Frequencies;
+import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
+import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.ConverterConfig;
+import org.apache.kafka.connect.storage.ConverterType;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
@@ -67,9 +76,9 @@ public class Worker {
     private final Time time;
     private final String workerId;
     private final Plugins plugins;
+    private final ConnectMetrics metrics;
+    private final WorkerMetricsGroup workerMetricsGroup;
     private final WorkerConfig config;
-    private final Converter defaultKeyConverter;
-    private final Converter defaultValueConverter;
     private final Converter internalKeyConverter;
     private final Converter internalValueConverter;
     private final OffsetBackingStore offsetBackingStore;
@@ -86,23 +95,15 @@ public class Worker {
             WorkerConfig config,
             OffsetBackingStore offsetBackingStore
     ) {
+        this.metrics = new ConnectMetrics(workerId, config, time);
         this.executor = Executors.newCachedThreadPool();
         this.workerId = workerId;
         this.time = time;
         this.plugins = plugins;
         this.config = config;
-        // Converters are required properties, thus getClass won't return null.
-        this.defaultKeyConverter = plugins.newConverter(
-                config.getClass(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG).getName(),
-                config
-        );
-        this.defaultKeyConverter.configure(config.originalsWithPrefix("key.converter."), true);
-        this.defaultValueConverter = plugins.newConverter(
-                config.getClass(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG).getName(),
-                config
-        );
-        this.defaultValueConverter.configure(config.originalsWithPrefix("value.converter."), false);
-        // Same, internal converters are required properties, thus getClass won't return null.
+        this.workerMetricsGroup = new WorkerMetricsGroup(metrics);
+
+        // Internal converters are required properties, thus getClass won't return null.
         this.internalKeyConverter = plugins.newConverter(
                 config.getClass(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG).getName(),
                 config
@@ -172,8 +173,11 @@ public class Worker {
         sourceTaskOffsetCommitter.close(timeoutMs);
 
         offsetBackingStore.stop();
+        metrics.stop();
 
         log.info("Worker stopped");
+
+        workerMetricsGroup.close();
     }
 
     /**
@@ -203,7 +207,7 @@ public class Worker {
             final String connClass = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
             log.info("Creating connector {} of type {}", connName, connClass);
             final Connector connector = plugins.newConnector(connClass);
-            workerConnector = new WorkerConnector(connName, connector, ctx, statusListener);
+            workerConnector = new WorkerConnector(connName, connector, ctx, metrics,  statusListener);
             log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
             savedLoader = plugins.compareAndSwapLoaders(connector);
             workerConnector.initialize(connConfig);
@@ -214,6 +218,7 @@ public class Worker {
             // Can't be put in a finally block because it needs to be swapped before the call on
             // statusListener
             Plugins.compareAndSwapLoaders(savedLoader);
+            workerMetricsGroup.recordConnectorStartupFailure();
             statusListener.onFailure(connName, t);
             return false;
         }
@@ -223,6 +228,7 @@ public class Worker {
             throw new ConnectException("Connector with name " + connName + " already exists");
 
         log.info("Finished creating connector {}", connName);
+        workerMetricsGroup.recordConnectorStartupSuccess();
         return true;
     }
 
@@ -251,16 +257,17 @@ public class Worker {
      * Get a list of updated task properties for the tasks of this connector.
      *
      * @param connName the connector name.
-     * @param maxTasks the maxinum number of tasks.
-     * @param sinkTopics a list of sink topics.
      * @return a list of updated tasks properties.
      */
-    public List<Map<String, String>> connectorTaskConfigs(String connName, int maxTasks, List<String> sinkTopics) {
+    public List<Map<String, String>> connectorTaskConfigs(String connName, ConnectorConfig connConfig) {
         log.trace("Reconfiguring connector tasks for {}", connName);
 
         WorkerConnector workerConnector = connectors.get(connName);
         if (workerConnector == null)
             throw new ConnectException("Connector " + connName + " not found in this worker.");
+
+        int maxTasks = connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG);
+        Map<String, String> connOriginals = connConfig.originalsStrings();
 
         Connector connector = workerConnector.connector();
         List<Map<String, String>> result = new ArrayList<>();
@@ -272,8 +279,11 @@ public class Worker {
                 // Ensure we don't modify the connector's copy of the config
                 Map<String, String> taskConfig = new HashMap<>(taskProps);
                 taskConfig.put(TaskConfig.TASK_CLASS_CONFIG, taskClassName);
-                if (sinkTopics != null) {
-                    taskConfig.put(SinkTask.TOPICS_CONFIG, Utils.join(sinkTopics, ","));
+                if (connOriginals.containsKey(SinkTask.TOPICS_CONFIG)) {
+                    taskConfig.put(SinkTask.TOPICS_CONFIG, connOriginals.get(SinkTask.TOPICS_CONFIG));
+                }
+                if (connOriginals.containsKey(SinkTask.TOPICS_REGEX_CONFIG)) {
+                    taskConfig.put(SinkTask.TOPICS_REGEX_CONFIG, connOriginals.get(SinkTask.TOPICS_REGEX_CONFIG));
                 }
                 result.add(taskConfig);
             }
@@ -376,17 +386,29 @@ public class Worker {
             // search for converters within the connector dependencies, and if not found the
             // plugin class loader delegates loading to the delegating classloader.
             Converter keyConverter = connConfig.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
-            if (keyConverter != null)
-                keyConverter.configure(connConfig.originalsWithPrefix("key.converter."), true);
-            else
-                keyConverter = defaultKeyConverter;
-            Converter valueConverter = connConfig.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
-            if (valueConverter != null)
-                valueConverter.configure(connConfig.originalsWithPrefix("value.converter."), false);
-            else
-                valueConverter = defaultValueConverter;
+            if (keyConverter == null) {
+                String className = config.getClass(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG).getName();
+                keyConverter = plugins.newConverter(className, config);
+            }
+            keyConverter.configure(connConfig.originalsWithPrefix("key.converter."), true);
 
-            workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, connectorLoader);
+            Converter valueConverter = connConfig.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
+            if (valueConverter == null) {
+                String className = config.getClass(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG).getName();
+                valueConverter = plugins.newConverter(className, config);
+            }
+            valueConverter.configure(connConfig.originalsWithPrefix("value.converter."), false);
+
+            HeaderConverter headerConverter = connConfig.getConfiguredInstance(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, HeaderConverter.class);
+            if (headerConverter == null) {
+                String className = config.getClass(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG).getName();
+                headerConverter = plugins.newHeaderConverter(className, config);
+            }
+            Map<String, Object> converterConfig = connConfig.originalsWithPrefix("header.converter.");
+            converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName());
+            headerConverter.configure(converterConfig);
+
+            workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, connectorLoader);
             workerTask.initialize(taskConfig);
             Plugins.compareAndSwapLoaders(savedLoader);
         } catch (Throwable t) {
@@ -394,6 +416,7 @@ public class Worker {
             // Can't be put in a finally block because it needs to be swapped before the call on
             // statusListener
             Plugins.compareAndSwapLoaders(savedLoader);
+            workerMetricsGroup.recordTaskFailure();
             statusListener.onFailure(id, t);
             return false;
         }
@@ -406,6 +429,7 @@ public class Worker {
         if (workerTask instanceof WorkerSourceTask) {
             sourceTaskOffsetCommitter.schedule(id, (WorkerSourceTask) workerTask);
         }
+        workerMetricsGroup.recordTaskSuccess();
         return true;
     }
 
@@ -416,6 +440,7 @@ public class Worker {
                                        TargetState initialState,
                                        Converter keyConverter,
                                        Converter valueConverter,
+                                       HeaderConverter headerConverter,
                                        ClassLoader loader) {
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
@@ -425,12 +450,12 @@ public class Worker {
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
-            return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter,
-                    valueConverter, transformationChain, producer, offsetReader, offsetWriter, config, loader, time);
+            return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
+                    headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, metrics, loader, time);
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations());
-            return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, keyConverter,
-                    valueConverter, transformationChain, loader, time);
+            return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, metrics, keyConverter,
+                    valueConverter, headerConverter, transformationChain, loader, time);
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
@@ -537,6 +562,14 @@ public class Worker {
         return workerId;
     }
 
+    /**
+     * Get the {@link ConnectMetrics} that uses Kafka Metrics and manages the JMX reporter.
+     * @return the Connect-specific metrics; never null
+     */
+    public ConnectMetrics metrics() {
+        return metrics;
+    }
+
     public void setTargetState(String connName, TargetState state) {
         log.info("Setting connector {} state to {}", connName, state);
 
@@ -571,6 +604,102 @@ public class Worker {
             }
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
+        }
+    }
+
+    WorkerMetricsGroup workerMetricsGroup() {
+        return workerMetricsGroup;
+    }
+
+    class WorkerMetricsGroup {
+        private final MetricGroup metricGroup;
+        private final Sensor connectorStartupAttempts;
+        private final Sensor connectorStartupSuccesses;
+        private final Sensor connectorStartupFailures;
+        private final Sensor connectorStartupResults;
+        private final Sensor taskStartupAttempts;
+        private final Sensor taskStartupSuccesses;
+        private final Sensor taskStartupFailures;
+        private final Sensor taskStartupResults;
+
+        public WorkerMetricsGroup(ConnectMetrics connectMetrics) {
+            ConnectMetricsRegistry registry = connectMetrics.registry();
+            metricGroup = connectMetrics.group(registry.workerGroupName());
+
+            metricGroup.addValueMetric(registry.connectorCount, new LiteralSupplier<Double>() {
+                @Override
+                public Double metricValue(long now) {
+                    return (double) connectors.size();
+                }
+            });
+            metricGroup.addValueMetric(registry.taskCount, new LiteralSupplier<Double>() {
+                @Override
+                public Double metricValue(long now) {
+                    return (double) tasks.size();
+                }
+            });
+
+            MetricName connectorFailurePct = metricGroup.metricName(registry.connectorStartupFailurePercentage);
+            MetricName connectorSuccessPct = metricGroup.metricName(registry.connectorStartupSuccessPercentage);
+            Frequencies connectorStartupResultFrequencies = Frequencies.forBooleanValues(connectorFailurePct, connectorSuccessPct);
+            connectorStartupResults = metricGroup.sensor("connector-startup-results");
+            connectorStartupResults.add(connectorStartupResultFrequencies);
+
+            connectorStartupAttempts = metricGroup.sensor("connector-startup-attempts");
+            connectorStartupAttempts.add(metricGroup.metricName(registry.connectorStartupAttemptsTotal), new Total());
+
+            connectorStartupSuccesses = metricGroup.sensor("connector-startup-successes");
+            connectorStartupSuccesses.add(metricGroup.metricName(registry.connectorStartupSuccessTotal), new Total());
+
+            connectorStartupFailures = metricGroup.sensor("connector-startup-failures");
+            connectorStartupFailures.add(metricGroup.metricName(registry.connectorStartupFailureTotal), new Total());
+
+            MetricName taskFailurePct = metricGroup.metricName(registry.taskStartupFailurePercentage);
+            MetricName taskSuccessPct = metricGroup.metricName(registry.taskStartupSuccessPercentage);
+            Frequencies taskStartupResultFrequencies = Frequencies.forBooleanValues(taskFailurePct, taskSuccessPct);
+            taskStartupResults = metricGroup.sensor("task-startup-results");
+            taskStartupResults.add(taskStartupResultFrequencies);
+
+            taskStartupAttempts = metricGroup.sensor("task-startup-attempts");
+            taskStartupAttempts.add(metricGroup.metricName(registry.taskStartupAttemptsTotal), new Total());
+
+            taskStartupSuccesses = metricGroup.sensor("task-startup-successes");
+            taskStartupSuccesses.add(metricGroup.metricName(registry.taskStartupSuccessTotal), new Total());
+
+            taskStartupFailures = metricGroup.sensor("task-startup-failures");
+            taskStartupFailures.add(metricGroup.metricName(registry.taskStartupFailureTotal), new Total());
+        }
+
+        void close() {
+            metricGroup.close();
+        }
+
+        void recordConnectorStartupFailure() {
+            connectorStartupAttempts.record(1.0);
+            connectorStartupFailures.record(1.0);
+            connectorStartupResults.record(0.0);
+        }
+
+        void recordConnectorStartupSuccess() {
+            connectorStartupAttempts.record(1.0);
+            connectorStartupSuccesses.record(1.0);
+            connectorStartupResults.record(1.0);
+        }
+
+        void recordTaskFailure() {
+            taskStartupAttempts.record(1.0);
+            taskStartupFailures.record(1.0);
+            taskStartupResults.record(0.0);
+        }
+
+        void recordTaskSuccess() {
+            taskStartupAttempts.record(1.0);
+            taskStartupSuccesses.record(1.0);
+            taskStartupResults.record(1.0);
+        }
+
+        protected MetricGroup metricGroup() {
+            return metricGroup;
         }
     }
 }

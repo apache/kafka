@@ -23,12 +23,13 @@ import scala.collection.JavaConverters._
 import kafka.api.ApiVersion
 import kafka.message.{BrokerCompressionCodec, Message}
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
+import kafka.utils.Implicits._
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, TopicConfig}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.mutable
+import scala.collection.{Map, mutable}
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList, Validator}
 
 object Defaults {
@@ -46,7 +47,12 @@ object Defaults {
   val DeleteRetentionMs = kafka.server.Defaults.LogCleanerDeleteRetentionMs
   val MinCompactionLagMs = kafka.server.Defaults.LogCleanerMinCompactionLagMs
   val MinCleanableDirtyRatio = kafka.server.Defaults.LogCleanerMinCleanRatio
+
+  @deprecated(message = "This is a misleading variable name as it actually refers to the 'delete' cleanup policy. Use " +
+                        "`CleanupPolicy` instead.", since = "1.0.0")
   val Compact = kafka.server.Defaults.LogCleanupPolicy
+
+  val CleanupPolicy = kafka.server.Defaults.LogCleanupPolicy
   val UncleanLeaderElectionEnable = kafka.server.Defaults.UncleanLeaderElectionEnable
   val MinInSyncReplicas = kafka.server.Defaults.MinInSyncReplicas
   val CompressionType = kafka.server.Defaults.CompressionType
@@ -59,7 +65,8 @@ object Defaults {
   val MaxIdMapSnapshots = kafka.server.Defaults.MaxIdMapSnapshots
 }
 
-case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
+case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] = Set.empty)
+  extends AbstractConfig(LogConfig.configDef, props, false) {
   /**
    * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
    * should also go in [[kafka.server.KafkaServer.copyKafkaConfigToLog]].
@@ -235,7 +242,7 @@ object LogConfig {
         KafkaConfig.LogDeleteDelayMsProp)
       .define(MinCleanableDirtyRatioProp, DOUBLE, Defaults.MinCleanableDirtyRatio, between(0, 1), MEDIUM,
         MinCleanableRatioDoc, KafkaConfig.LogCleanerMinCleanRatioProp)
-      .define(CleanupPolicyProp, LIST, Defaults.Compact, ValidList.in(LogConfig.Compact, LogConfig.Delete), MEDIUM, CompactDoc,
+      .define(CleanupPolicyProp, LIST, Defaults.CleanupPolicy, ValidList.in(LogConfig.Compact, LogConfig.Delete), MEDIUM, CompactDoc,
         KafkaConfig.LogCleanupPolicyProp)
       .define(UncleanLeaderElectionEnableProp, BOOLEAN, Defaults.UncleanLeaderElectionEnable,
         MEDIUM, UncleanLeaderElectionEnableDoc, KafkaConfig.UncleanLeaderElectionEnableProp)
@@ -268,9 +275,10 @@ object LogConfig {
    */
   def fromProps(defaults: java.util.Map[_ <: Object, _ <: Object], overrides: Properties): LogConfig = {
     val props = new Properties()
-    props.putAll(defaults)
-    props.putAll(overrides)
-    LogConfig(props)
+    defaults.asScala.foreach { case (k, v) => props.put(k, v) }
+    props ++= overrides
+    val overriddenKeys = overrides.keySet.asScala.map(_.asInstanceOf[String]).toSet
+    new LogConfig(props, overriddenKeys)
   }
 
   /**
@@ -290,5 +298,34 @@ object LogConfig {
     validateNames(props)
     configDef.parse(props)
   }
+
+  /**
+   * Map topic config to the broker config with highest priority. Some of these have additional synonyms
+   * that can be obtained using [[kafka.server.DynamicBrokerConfig#brokerConfigSynonyms]]
+   */
+  val TopicConfigSynonyms = Map(
+    SegmentBytesProp -> KafkaConfig.LogSegmentBytesProp,
+    SegmentMsProp -> KafkaConfig.LogRollTimeMillisProp,
+    SegmentJitterMsProp -> KafkaConfig.LogRollTimeJitterMillisProp,
+    SegmentIndexBytesProp -> KafkaConfig.LogIndexSizeMaxBytesProp,
+    FlushMessagesProp -> KafkaConfig.LogFlushIntervalMessagesProp,
+    FlushMsProp -> KafkaConfig.LogFlushIntervalMsProp,
+    RetentionBytesProp -> KafkaConfig.LogRetentionBytesProp,
+    RetentionMsProp -> KafkaConfig.LogRetentionTimeMillisProp,
+    MaxMessageBytesProp -> KafkaConfig.MessageMaxBytesProp,
+    IndexIntervalBytesProp -> KafkaConfig.LogIndexIntervalBytesProp,
+    DeleteRetentionMsProp -> KafkaConfig.LogCleanerDeleteRetentionMsProp,
+    MinCompactionLagMsProp -> KafkaConfig.LogCleanerMinCompactionLagMsProp,
+    FileDeleteDelayMsProp -> KafkaConfig.LogDeleteDelayMsProp,
+    MinCleanableDirtyRatioProp -> KafkaConfig.LogCleanerMinCleanRatioProp,
+    CleanupPolicyProp -> KafkaConfig.LogCleanupPolicyProp,
+    UncleanLeaderElectionEnableProp -> KafkaConfig.UncleanLeaderElectionEnableProp,
+    MinInSyncReplicasProp -> KafkaConfig.MinInSyncReplicasProp,
+    CompressionTypeProp -> KafkaConfig.CompressionTypeProp,
+    PreAllocateEnableProp -> KafkaConfig.LogPreAllocateProp,
+    MessageFormatVersionProp -> KafkaConfig.LogMessageFormatVersionProp,
+    MessageTimestampTypeProp -> KafkaConfig.LogMessageTimestampTypeProp,
+    MessageTimestampDifferenceMaxMsProp -> KafkaConfig.LogMessageTimestampDifferenceMaxMsProp
+  )
 
 }

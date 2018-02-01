@@ -34,7 +34,11 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.TreeSet;
 
+/**
+ * Connect plugin utility methods.
+ */
 public class PluginUtils {
     private static final Logger log = LoggerFactory.getLogger(PluginUtils.class);
 
@@ -114,8 +118,7 @@ public class PluginUtils {
             + "|org\\.omg\\.stub\\.java\\.rmi"
             + "|org\\.w3c\\.dom"
             + "|org\\.xml\\.sax"
-            + "|org\\.apache\\.kafka\\.common"
-            + "|org\\.apache\\.kafka\\.connect"
+            + "|org\\.apache\\.kafka"
             + "|org\\.slf4j"
             + ")\\..*$";
 
@@ -135,19 +138,45 @@ public class PluginUtils {
         }
     };
 
+    /**
+     * Return whether the class with the given name should be loaded in isolation using a plugin
+     * classloader.
+     *
+     * @param name the fully qualified name of the class.
+     * @return true if this class should be loaded in isolation, false otherwise.
+     */
     public static boolean shouldLoadInIsolation(String name) {
         return !(name.matches(BLACKLIST) && !name.matches(WHITELIST));
     }
 
+    /**
+     * Verify the given class corresponds to a concrete class and not to an abstract class or
+     * interface.
+     * @param klass the class object.
+     * @return true if the argument is a concrete class, false if it's abstract or interface.
+     */
     public static boolean isConcrete(Class<?> klass) {
         int mod = klass.getModifiers();
         return !Modifier.isAbstract(mod) && !Modifier.isInterface(mod);
     }
 
+    /**
+     * Return whether a path corresponds to a JAR or ZIP archive.
+     *
+     * @param path the path to validate.
+     * @return true if the path is a JAR or ZIP archive file, otherwise false.
+     */
     public static boolean isArchive(Path path) {
-        return path.toString().toLowerCase(Locale.ROOT).endsWith(".jar");
+        String archivePath = path.toString().toLowerCase(Locale.ROOT);
+        return archivePath.endsWith(".jar") || archivePath.endsWith(".zip");
     }
 
+    /**
+     * Return whether a path corresponds java class file.
+     *
+     * @param path the path to validate.
+     * @return true if the path is a java class file, otherwise false.
+     */
     public static boolean isClassFile(Path path) {
         return path.toString().toLowerCase(Locale.ROOT).endsWith(".class");
     }
@@ -167,9 +196,19 @@ public class PluginUtils {
         return locations;
     }
 
+    /**
+     * Given a top path in the filesystem, return a list of paths to archives (JAR or ZIP
+     * files) contained under this top path. If the top path contains only java class files,
+     * return the top path itself. This method follows symbolic links to discover archives and
+     * returns the such archives as absolute paths.
+     *
+     * @param topPath the path to use as root of plugin search.
+     * @return a list of potential plugin paths, or empty list if no such paths exist.
+     * @throws IOException
+     */
     public static List<Path> pluginUrls(Path topPath) throws IOException {
         boolean containsClassFiles = false;
-        Set<Path> archives = new HashSet<>();
+        Set<Path> archives = new TreeSet<>();
         LinkedList<DirectoryEntry> dfs = new LinkedList<>();
         Set<Path> visited = new HashSet<>();
 
@@ -193,7 +232,13 @@ public class PluginUtils {
 
                 Path adjacent = neighbors.next();
                 if (Files.isSymbolicLink(adjacent)) {
-                    Path absolute = Files.readSymbolicLink(adjacent).toRealPath();
+                    Path symlink = Files.readSymbolicLink(adjacent);
+                    // if symlink is absolute resolve() returns the absolute symlink itself
+                    Path parent = adjacent.getParent();
+                    if (parent == null) {
+                        continue;
+                    }
+                    Path absolute = parent.resolve(symlink).toRealPath();
                     if (Files.exists(absolute)) {
                         adjacent = absolute;
                     } else {
@@ -232,10 +277,23 @@ public class PluginUtils {
         return Arrays.asList(archives.toArray(new Path[0]));
     }
 
+    /**
+     * Return the simple class name of a plugin as {@code String}.
+     *
+     * @param plugin the plugin descriptor.
+     * @return the plugin's simple class name.
+     */
     public static String simpleName(PluginDesc<?> plugin) {
         return plugin.pluginClass().getSimpleName();
     }
 
+    /**
+     * Remove the plugin type name at the end of a plugin class name, if such suffix is present.
+     * This method is meant to be used to extract plugin aliases.
+     *
+     * @param plugin the plugin descriptor.
+     * @return the pruned simple class name of the plugin.
+     */
     public static String prunedName(PluginDesc<?> plugin) {
         // It's currently simpler to switch on type than do pattern matching.
         switch (plugin.type()) {
@@ -248,6 +306,14 @@ public class PluginUtils {
         }
     }
 
+    /**
+     * Verify whether a given plugin's alias matches another alias in a collection of plugins.
+     *
+     * @param alias the plugin descriptor to test for alias matching.
+     * @param plugins the collection of plugins to test against.
+     * @param <U> the plugin type.
+     * @return false if a match was found in the collection, otherwise true.
+     */
     public static <U> boolean isAliasUnique(
             PluginDesc<U> alias,
             Collection<PluginDesc<U>> plugins

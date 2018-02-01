@@ -17,7 +17,7 @@
 
 package kafka.tools
 
-import java.io.{FileOutputStream, FileWriter, OutputStreamWriter}
+import java.io.{FileOutputStream, OutputStreamWriter}
 import java.nio.charset.StandardCharsets
 
 import joptsimple._

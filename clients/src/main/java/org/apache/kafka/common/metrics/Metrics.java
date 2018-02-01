@@ -449,6 +449,10 @@ public class Metrics implements Closeable {
     /**
      * Add a metric to monitor an object that implements measurable. This metric won't be associated with any sensor.
      * This is a way to expose existing values as metrics.
+     *
+     * This method is kept for binary compatibility purposes, it has the same behaviour as
+     * {@link #addMetric(MetricName, MetricValue)}.
+     *
      * @param metricName The name of the metric
      * @param measurable The measurable that will be measured by this metric
      */
@@ -457,19 +461,45 @@ public class Metrics implements Closeable {
     }
 
     /**
-     * Add a metric to monitor an object that implements measurable. This metric won't be associated with any sensor.
+     * Add a metric to monitor an object that implements Measurable. This metric won't be associated with any sensor.
      * This is a way to expose existing values as metrics.
+     *
+     * This method is kept for binary compatibility purposes, it has the same behaviour as
+     * {@link #addMetric(MetricName, MetricConfig, MetricValueProvider)}.
+     *
      * @param metricName The name of the metric
      * @param config The configuration to use when measuring this measurable
      * @param measurable The measurable that will be measured by this metric
      */
-    public synchronized void addMetric(MetricName metricName, MetricConfig config, Measurable measurable) {
+    public void addMetric(MetricName metricName, MetricConfig config, Measurable measurable) {
+        addMetric(metricName, config, (MetricValueProvider<?>) measurable);
+    }
+
+    /**
+     * Add a metric to monitor an object that implements MetricValueProvider. This metric won't be associated with any
+     * sensor. This is a way to expose existing values as metrics.
+     *
+     * @param metricName The name of the metric
+     * @param metricValueProvider The metric value provider associated with this metric
+     */
+    public void addMetric(MetricName metricName, MetricConfig config, MetricValueProvider<?> metricValueProvider) {
         KafkaMetric m = new KafkaMetric(new Object(),
                                         Utils.notNull(metricName),
-                                        Utils.notNull(measurable),
+                                        Utils.notNull(metricValueProvider),
                                         config == null ? this.config : config,
                                         time);
         registerMetric(m);
+    }
+
+    /**
+     * Add a metric to monitor an object that implements MetricValueProvider. This metric won't be associated with any
+     * sensor. This is a way to expose existing values as metrics.
+     *
+     * @param metricName The name of the metric
+     * @param metricValueProvider The metric value provider associated with this metric
+     */
+    public void addMetric(MetricName metricName, MetricValueProvider<?> metricValueProvider) {
+        addMetric(metricName, null, metricValueProvider);
     }
 
     /**
@@ -494,6 +524,15 @@ public class Metrics implements Closeable {
     public synchronized void addReporter(MetricsReporter reporter) {
         Utils.notNull(reporter).init(new ArrayList<>(metrics.values()));
         this.reporters.add(reporter);
+    }
+
+    /**
+     * Remove a MetricReporter
+     */
+    public synchronized void removeReporter(MetricsReporter reporter) {
+        if (this.reporters.remove(reporter)) {
+            reporter.close();
+        }
     }
 
     synchronized void registerMetric(KafkaMetric metric) {
@@ -561,7 +600,7 @@ public class Metrics implements Closeable {
         Set<String> templateTagKeys = template.tags();
         
         if (!runtimeTagKeys.equals(templateTagKeys)) {
-            throw new IllegalArgumentException("For '" + template.name() + "', runtime-defined metric tags do not match the tags in the template. " + ""
+            throw new IllegalArgumentException("For '" + template.name() + "', runtime-defined metric tags do not match the tags in the template. "
                     + "Runtime = " + runtimeTagKeys.toString() + " Template = " + templateTagKeys.toString());
         }
                 

@@ -18,9 +18,12 @@ package org.apache.kafka.streams.errors;
 
 
 /**
- * Indicates a pre-run time error incurred while parsing the {@link org.apache.kafka.streams.processor.TopologyBuilder
+ * Indicates a pre-run time error occurred while parsing the {@link org.apache.kafka.streams.processor.TopologyBuilder
  * builder} to construct the {@link org.apache.kafka.streams.processor.internals.ProcessorTopology processor topology}.
+ *
+ * @deprecated use {@link org.apache.kafka.streams.Topology} instead of {@link org.apache.kafka.streams.processor.TopologyBuilder}
  */
+@Deprecated
 public class TopologyBuilderException extends StreamsException {
 
     private static final long serialVersionUID = 1L;

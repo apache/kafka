@@ -120,6 +120,10 @@ class KafkaScheduler(val threads: Int,
         executor.schedule(runnable, delay, unit)
     }
   }
+
+  def resizeThreadPool(newSize: Int): Unit = {
+    executor.setCorePoolSize(newSize)
+  }
   
   def isStarted: Boolean = {
     this synchronized {
@@ -127,8 +131,8 @@ class KafkaScheduler(val threads: Int,
     }
   }
   
-  private def ensureRunning = {
-    if(!isStarted)
+  private def ensureRunning(): Unit = {
+    if (!isStarted)
       throw new IllegalStateException("Kafka scheduler is not running.")
   }
 }

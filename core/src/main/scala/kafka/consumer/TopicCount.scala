@@ -65,14 +65,14 @@ private[kafka] object TopicCount extends Logging {
     var topMap: Map[String, Int] = null
     try {
       Json.parseFull(topicCountString) match {
-        case Some(m) =>
-          val consumerRegistrationMap = m.asInstanceOf[Map[String, Any]]
+        case Some(js) =>
+          val consumerRegistrationMap = js.asJsonObject
           consumerRegistrationMap.get("pattern") match {
-            case Some(pattern) => subscriptionPattern = pattern.asInstanceOf[String]
+            case Some(pattern) => subscriptionPattern = pattern.to[String]
             case None => throw new KafkaException("error constructing TopicCount : " + topicCountString)
           }
           consumerRegistrationMap.get("subscription") match {
-            case Some(sub) => topMap = sub.asInstanceOf[Map[String, Int]]
+            case Some(sub) => topMap = sub.to[Map[String, Int]]
             case None => throw new KafkaException("error constructing TopicCount : " + topicCountString)
           }
         case None => throw new KafkaException("error constructing TopicCount : " + topicCountString)

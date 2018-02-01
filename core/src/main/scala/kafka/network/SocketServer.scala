@@ -31,17 +31,20 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig
 import kafka.utils._
-import org.apache.kafka.common.errors.InvalidRequestException
+import org.apache.kafka.common.Reconfigurable
+import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{ChannelBuilders, KafkaChannel, ListenerName, Selectable, Send, Selector => KSelector}
-import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.protocol.types.SchemaException
-import org.apache.kafka.common.utils.{KafkaThread, Time}
+import org.apache.kafka.common.metrics.stats.Meter
+import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaChannel, ListenerName, Selectable, Send, Selector => KSelector}
+import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
+import org.slf4j.event.Level
 
 import scala.collection._
 import JavaConverters._
-import scala.util.control.{ControlThrowable, NonFatal}
+import scala.collection.mutable.{ArrayBuffer, Buffer}
+import scala.util.control.ControlThrowable
 
 /**
  * An NIO socket server. The threading model is
@@ -52,78 +55,130 @@ import scala.util.control.{ControlThrowable, NonFatal}
 class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time, val credentialProvider: CredentialProvider) extends Logging with KafkaMetricsGroup {
 
   private val endpoints = config.listeners.map(l => l.listenerName -> l).toMap
-  private val numProcessorThreads = config.numNetworkThreads
   private val maxQueuedRequests = config.queuedMaxRequests
-  private val totalProcessorThreads = numProcessorThreads * endpoints.size
 
   private val maxConnectionsPerIp = config.maxConnectionsPerIp
   private val maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides
 
-  this.logIdent = "[Socket Server on Broker " + config.brokerId + "], "
+  private val logContext = new LogContext(s"[SocketServer brokerId=${config.brokerId}] ")
+  this.logIdent = logContext.logPrefix
 
-  val requestChannel = new RequestChannel(totalProcessorThreads, maxQueuedRequests)
-  private val processors = new Array[Processor](totalProcessorThreads)
+  private val memoryPoolSensor = metrics.sensor("MemoryPoolUtilization")
+  private val memoryPoolDepletedPercentMetricName = metrics.metricName("MemoryPoolAvgDepletedPercent", "socket-server-metrics")
+  private val memoryPoolDepletedTimeMetricName = metrics.metricName("MemoryPoolDepletedTimeTotal", "socket-server-metrics")
+  memoryPoolSensor.add(new Meter(TimeUnit.MILLISECONDS, memoryPoolDepletedPercentMetricName, memoryPoolDepletedTimeMetricName))
+  private val memoryPool = if (config.queuedMaxBytes > 0) new SimpleMemoryPool(config.queuedMaxBytes, config.socketRequestMaxBytes, false, memoryPoolSensor) else MemoryPool.NONE
+  val requestChannel = new RequestChannel(maxQueuedRequests)
+  private val processors = new ConcurrentHashMap[Int, Processor]()
+  private var nextProcessorId = 0
 
   private[network] val acceptors = mutable.Map[EndPoint, Acceptor]()
   private var connectionQuotas: ConnectionQuotas = _
+  private var stoppedProcessingRequests = false
 
   /**
    * Start the socket server
    */
   def startup() {
     this.synchronized {
-
       connectionQuotas = new ConnectionQuotas(maxConnectionsPerIp, maxConnectionsPerIpOverrides)
-
-      val sendBufferSize = config.socketSendBufferBytes
-      val recvBufferSize = config.socketReceiveBufferBytes
-      val brokerId = config.brokerId
-
-      var processorBeginIndex = 0
-      config.listeners.foreach { endpoint =>
-        val listenerName = endpoint.listenerName
-        val securityProtocol = endpoint.securityProtocol
-        val processorEndIndex = processorBeginIndex + numProcessorThreads
-
-        for (i <- processorBeginIndex until processorEndIndex)
-          processors(i) = newProcessor(i, connectionQuotas, listenerName, securityProtocol)
-
-        val acceptor = new Acceptor(endpoint, sendBufferSize, recvBufferSize, brokerId,
-          processors.slice(processorBeginIndex, processorEndIndex), connectionQuotas)
-        acceptors.put(endpoint, acceptor)
-        KafkaThread.nonDaemon(s"kafka-socket-acceptor-$listenerName-$securityProtocol-${endpoint.port}", acceptor).start()
-        acceptor.awaitStartup()
-
-        processorBeginIndex = processorEndIndex
-      }
+      createProcessors(config.numNetworkThreads)
     }
 
     newGauge("NetworkProcessorAvgIdlePercent",
       new Gauge[Double] {
-        private val ioWaitRatioMetricNames = processors.map { p =>
-          metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
-        }
 
-        def value = ioWaitRatioMetricNames.map { metricName =>
-          Option(metrics.metric(metricName)).fold(0.0)(_.value)
-        }.sum / totalProcessorThreads
+        def value = SocketServer.this.synchronized {
+          val ioWaitRatioMetricNames = processors.values.asScala.map { p =>
+            metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
+          }
+          ioWaitRatioMetricNames.map { metricName =>
+            Option(metrics.metric(metricName)).fold(0.0)(_.value)
+          }.sum / processors.size
+        }
       }
     )
-
+    newGauge("MemoryPoolAvailable",
+      new Gauge[Long] {
+        def value = memoryPool.availableMemory()
+      }
+    )
+    newGauge("MemoryPoolUsed",
+      new Gauge[Long] {
+        def value = memoryPool.size() - memoryPool.availableMemory()
+      }
+    )
     info("Started " + acceptors.size + " acceptor threads")
   }
 
+  private def createProcessors(newProcessorsPerListener: Int): Unit = synchronized {
+
+    val sendBufferSize = config.socketSendBufferBytes
+    val recvBufferSize = config.socketReceiveBufferBytes
+    val brokerId = config.brokerId
+
+    val numProcessorThreads = config.numNetworkThreads
+    config.listeners.foreach { endpoint =>
+      val listenerName = endpoint.listenerName
+      val securityProtocol = endpoint.securityProtocol
+      val listenerProcessors = new ArrayBuffer[Processor]()
+
+      for (i <- 0 until newProcessorsPerListener) {
+        listenerProcessors += newProcessor(nextProcessorId, connectionQuotas, listenerName, securityProtocol, memoryPool)
+        requestChannel.addProcessor(nextProcessorId)
+        nextProcessorId += 1
+      }
+      listenerProcessors.foreach(p => processors.put(p.id, p))
+
+      val acceptor = acceptors.getOrElseUpdate(endpoint, {
+        val acceptor = new Acceptor(endpoint, sendBufferSize, recvBufferSize, brokerId, connectionQuotas)
+        KafkaThread.nonDaemon(s"kafka-socket-acceptor-$listenerName-$securityProtocol-${endpoint.port}", acceptor).start()
+        acceptor.awaitStartup()
+        acceptor
+      })
+      acceptor.addProcessors(listenerProcessors)
+    }
+  }
+
   // register the processor threads for notification of responses
-  requestChannel.addResponseListener(id => processors(id).wakeup())
+  requestChannel.addResponseListener(id => {
+    val processor = processors.get(id)
+    if (processor != null)
+      processor.wakeup()
+  })
 
   /**
-   * Shutdown the socket server
-   */
-  def shutdown() = {
-    info("Shutting down")
+    * Stop processing requests and new connections.
+    */
+  def stopProcessingRequests() = {
+    info("Stopping socket server request processors")
     this.synchronized {
       acceptors.values.foreach(_.shutdown)
-      processors.foreach(_.shutdown)
+      processors.asScala.values.foreach(_.shutdown)
+      requestChannel.clear()
+      stoppedProcessingRequests = true
+    }
+    info("Stopped socket server request processors")
+  }
+
+  def resizeThreadPool(oldNumNetworkThreads: Int, newNumNetworkThreads: Int): Unit = {
+    info(s"Resizing network thread pool size for each listener from $oldNumNetworkThreads to $newNumNetworkThreads")
+    if (newNumNetworkThreads > oldNumNetworkThreads)
+      createProcessors(newNumNetworkThreads - oldNumNetworkThreads)
+    else if (newNumNetworkThreads < oldNumNetworkThreads)
+      acceptors.values.foreach(_.removeProcessors(oldNumNetworkThreads - newNumNetworkThreads, requestChannel))
+  }
+
+  /**
+    * Shutdown the socket server. If still processing requests, shutdown
+    * acceptors and processors first.
+    */
+  def shutdown() = {
+    info("Shutting down socket server")
+    this.synchronized {
+      if (!stoppedProcessingRequests)
+        stopProcessingRequests()
+      requestChannel.shutdown()
     }
     info("Shutdown completed")
   }
@@ -138,7 +193,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
   /* `protected` for test usage */
   protected[network] def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
-                                      securityProtocol: SecurityProtocol): Processor = {
+                                      securityProtocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
     new Processor(id,
       time,
       config.socketRequestMaxBytes,
@@ -149,7 +204,9 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       securityProtocol,
       config,
       metrics,
-      credentialProvider
+      credentialProvider,
+      memoryPool,
+      logContext
     )
   }
 
@@ -158,7 +215,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     Option(connectionQuotas).fold(0)(_.get(address))
 
   /* For test usage */
-  private[network] def processor(index: Int): Processor = processors(index)
+  private[network] def processor(index: Int): Processor = processors.get(index)
 
 }
 
@@ -212,28 +269,14 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
   protected def isRunning: Boolean = alive.get
 
   /**
-   * Close the connection identified by `connectionId` and decrement the connection count.
-   */
-  def close(selector: KSelector, connectionId: String): Unit = {
-    val channel = selector.channel(connectionId)
-    if (channel != null) {
-      debug(s"Closing selector connection $connectionId")
-      val address = channel.socketAddress
-      if (address != null)
-        connectionQuotas.dec(address)
-      selector.close(connectionId)
-    }
-  }
-
-  /**
    * Close `channel` and decrement the connection count.
    */
   def close(channel: SocketChannel): Unit = {
     if (channel != null) {
       debug("Closing connection from " + channel.socket.getRemoteSocketAddress())
       connectionQuotas.dec(channel.socket.getInetAddress)
-      swallowError(channel.socket().close())
-      swallowError(channel.close())
+      CoreUtils.swallow(channel.socket().close(), this, Level.ERROR)
+      CoreUtils.swallow(channel.close(), this, Level.ERROR)
     }
   }
 }
@@ -245,17 +288,28 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
                               val sendBufferSize: Int,
                               val recvBufferSize: Int,
                               brokerId: Int,
-                              processors: Array[Processor],
                               connectionQuotas: ConnectionQuotas) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
   private val nioSelector = NSelector.open()
   val serverChannel = openServerSocket(endPoint.host, endPoint.port)
+  private val processors = new ArrayBuffer[Processor]()
 
-  this.synchronized {
-    processors.foreach { processor =>
+  private[network] def addProcessors(newProcessors: Buffer[Processor]): Unit = synchronized {
+    newProcessors.foreach { processor =>
       KafkaThread.nonDaemon(s"kafka-network-thread-$brokerId-${endPoint.listenerName}-${endPoint.securityProtocol}-${processor.id}",
         processor).start()
     }
+    processors ++= newProcessors
+  }
+
+  private[network] def removeProcessors(removeCount: Int, requestChannel: RequestChannel): Unit = synchronized {
+    // Shutdown `removeCount` processors. Remove them from the processor list first so that no more
+    // connections are assigned. Shutdown the removed processors, closing the selector and its connections.
+    // The processors are then removed from `requestChannel` and any pending responses to these processors are dropped.
+    val toRemove = processors.takeRight(removeCount)
+    processors.remove(processors.size - removeCount, removeCount)
+    toRemove.foreach(_.shutdown())
+    toRemove.foreach(processor => requestChannel.removeProcessor(processor.id))
   }
 
   /**
@@ -276,13 +330,17 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
               try {
                 val key = iter.next
                 iter.remove()
-                if (key.isAcceptable)
-                  accept(key, processors(currentProcessor))
-                else
+                if (key.isAcceptable) {
+                  val processor = synchronized {
+                    currentProcessor = currentProcessor % processors.size
+                    processors(currentProcessor)
+                  }
+                  accept(key, processor)
+                } else
                   throw new IllegalStateException("Unrecognized key state for acceptor thread.")
 
-                // round robin to the next processor thread
-                currentProcessor = (currentProcessor + 1) % processors.length
+                // round robin to the next processor thread, mod(numProcessors) will be done later
+                currentProcessor = currentProcessor + 1
               } catch {
                 case e: Throwable => error("Error while accepting connection", e)
               }
@@ -299,8 +357,8 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
       }
     } finally {
       debug("Closing server socket and selector.")
-      swallowError(serverChannel.close())
-      swallowError(nioSelector.close())
+      CoreUtils.swallow(serverChannel.close(), this, Level.ERROR)
+      CoreUtils.swallow(nioSelector.close(), this, Level.ERROR)
       shutdownComplete()
     }
   }
@@ -378,21 +436,23 @@ private[kafka] class Processor(val id: Int,
                                securityProtocol: SecurityProtocol,
                                config: KafkaConfig,
                                metrics: Metrics,
-                               credentialProvider: CredentialProvider) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
+                               credentialProvider: CredentialProvider,
+                               memoryPool: MemoryPool,
+                               logContext: LogContext) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
   private object ConnectionId {
     def fromString(s: String): Option[ConnectionId] = s.split("-") match {
-      case Array(local, remote) => BrokerEndPoint.parseHostPort(local).flatMap { case (localHost, localPort) =>
+      case Array(local, remote, index) => BrokerEndPoint.parseHostPort(local).flatMap { case (localHost, localPort) =>
         BrokerEndPoint.parseHostPort(remote).map { case (remoteHost, remotePort) =>
-          ConnectionId(localHost, localPort, remoteHost, remotePort)
+          ConnectionId(localHost, localPort, remoteHost, remotePort, Integer.parseInt(index))
         }
       }
       case _ => None
     }
   }
 
-  private case class ConnectionId(localHost: String, localPort: Int, remoteHost: String, remotePort: Int) {
-    override def toString: String = s"$localHost:$localPort-$remoteHost:$remotePort"
+  private[network] case class ConnectionId(localHost: String, localPort: Int, remoteHost: String, remotePort: Int, index: Int) {
+    override def toString: String = s"$localHost:$localPort-$remoteHost:$remotePort-$index"
   }
 
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
@@ -413,85 +473,126 @@ private[kafka] class Processor(val id: Int,
     Map("networkProcessor" -> id.toString)
   )
 
-  private val selector = new KSelector(
-    maxRequestSize,
-    connectionsMaxIdleMs,
-    metrics,
-    time,
-    "socket-server",
-    metricTags,
-    false,
-    true,
-    ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialProvider.credentialCache))
+  private val selector = createSelector(
+    ChannelBuilders.serverChannelBuilder(listenerName,
+      listenerName == config.interBrokerListenerName,
+      securityProtocol,
+      config,
+      credentialProvider.credentialCache,
+      credentialProvider.tokenCache))
+  // Visible to override for testing
+  protected[network] def createSelector(channelBuilder: ChannelBuilder): KSelector = {
+    channelBuilder match {
+      case reconfigurable: Reconfigurable => config.addReconfigurable(reconfigurable)
+      case _ =>
+    }
+    new KSelector(
+      maxRequestSize,
+      connectionsMaxIdleMs,
+      metrics,
+      time,
+      "socket-server",
+      metricTags,
+      false,
+      true,
+      channelBuilder,
+      memoryPool,
+      logContext)
+  }
+
+  // Connection ids have the format `localAddr:localPort-remoteAddr:remotePort-index`. The index is a
+  // non-negative incrementing value that ensures that even if remotePort is reused after a connection is
+  // closed, connection ids are not reused while requests from the closed connection are being processed.
+  private var nextConnectionIndex = 0
 
   override def run() {
     startupComplete()
-    while (isRunning) {
-      try {
-        // setup any new connections that have been queued up
-        configureNewConnections()
-        // register any new responses for writing
-        processNewResponses()
-        poll()
-        processCompletedReceives()
-        processCompletedSends()
-        processDisconnected()
-      } catch {
-        // We catch all the throwables here to prevent the processor thread from exiting. We do this because
-        // letting a processor exit might cause a bigger impact on the broker. Usually the exceptions thrown would
-        // be either associated with a specific socket channel or a bad request. We just ignore the bad socket channel
-        // or request. This behavior might need to be reviewed if we see an exception that need the entire broker to stop.
-        case e: ControlThrowable => throw e
-        case e: Throwable =>
-          error("Processor got uncaught exception.", e)
+    try {
+      while (isRunning) {
+        try {
+          // setup any new connections that have been queued up
+          configureNewConnections()
+          // register any new responses for writing
+          processNewResponses()
+          poll()
+          processCompletedReceives()
+          processCompletedSends()
+          processDisconnected()
+        } catch {
+          // We catch all the throwables here to prevent the processor thread from exiting. We do this because
+          // letting a processor exit might cause a bigger impact on the broker. This behavior might need to be
+          // reviewed if we see an exception that needs the entire broker to stop. Usually the exceptions thrown would
+          // be either associated with a specific socket channel or a bad request. These exceptions are caught and
+          // processed by the individual methods above which close the failing channel and continue processing other
+          // channels. So this catch block should only ever see ControlThrowables.
+          case e: Throwable => processException("Processor got uncaught exception.", e)
+        }
       }
+    } finally {
+      debug("Closing selector - processor " + id)
+      CoreUtils.swallow(closeAll(), this, Level.ERROR)
+      shutdownComplete()
     }
+  }
 
-    debug("Closing selector - processor " + id)
-    swallowError(closeAll())
-    shutdownComplete()
+  private def processException(errorMessage: String, throwable: Throwable) {
+    throwable match {
+      case e: ControlThrowable => throw e
+      case e => error(errorMessage, e)
+    }
+  }
+
+  private def processChannelException(channelId: String, errorMessage: String, throwable: Throwable) {
+    if (openOrClosingChannel(channelId).isDefined) {
+      error(s"Closing socket for ${channelId} because of error", throwable)
+      close(channelId)
+    }
+    processException(errorMessage, throwable)
   }
 
   private def processNewResponses() {
-    var curr = requestChannel.receiveResponse(id)
-    while (curr != null) {
+    var curr: RequestChannel.Response = null
+    while ({curr = requestChannel.receiveResponse(id); curr != null}) {
+      val channelId = curr.request.context.connectionId
       try {
         curr.responseAction match {
           case RequestChannel.NoOpAction =>
             // There is no response to send to the client, we need to read more pipelined requests
             // that are sitting in the server's socket buffer
-            updateRequestMetrics(curr.request)
+            updateRequestMetrics(curr)
             trace("Socket server received empty response to send, registering for read: " + curr)
-            val channelId = curr.request.connectionId
-            if (selector.channel(channelId) != null || selector.closingChannel(channelId) != null)
-                selector.unmute(channelId)
+            openOrClosingChannel(channelId).foreach(c => selector.unmute(c.id))
           case RequestChannel.SendAction =>
             val responseSend = curr.responseSend.getOrElse(
               throw new IllegalStateException(s"responseSend must be defined for SendAction, response: $curr"))
             sendResponse(curr, responseSend)
           case RequestChannel.CloseConnectionAction =>
-            updateRequestMetrics(curr.request)
+            updateRequestMetrics(curr)
             trace("Closing socket connection actively according to the response code.")
-            close(selector, curr.request.connectionId)
+            close(channelId)
         }
-      } finally {
-        curr = requestChannel.receiveResponse(id)
+      } catch {
+        case e: Throwable =>
+          processChannelException(channelId, s"Exception while processing response for $channelId", e)
       }
     }
   }
 
   /* `protected` for test usage */
   protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send) {
-    trace(s"Socket server received response to send, registering for write and sending data: $response")
-    val channel = selector.channel(responseSend.destination)
-    // `channel` can be null if the selector closed the connection because it was idle for too long
-    if (channel == null) {
-      warn(s"Attempting to send response via channel for which there is no open connection, connection id $id")
-      response.request.updateRequestMetrics(0L)
+    val connectionId = response.request.context.connectionId
+    trace(s"Socket server received response to send to $connectionId, registering for write and sending data: $response")
+    // `channel` can be None if the connection was closed remotely or if selector closed it for being idle for too long
+    if (channel(connectionId).isEmpty) {
+      warn(s"Attempting to send response via channel for which there is no open connection, connection id $connectionId")
+      response.request.updateRequestMetrics(0L, response)
     }
-    else {
+    // Invoke send for closingChannel as well so that the send is failed and the channel closed properly and
+    // removed from the Selector after discarding any pending staged receives.
+    // `openOrClosingChannel` can be None if the selector closed the connection because it was idle for too long
+    if (openOrClosingChannel(connectionId).isDefined) {
       selector.send(responseSend)
-      inflightResponses += (response.request.connectionId -> response)
+      inflightResponses += (connectionId -> response)
     }
   }
 
@@ -499,60 +600,89 @@ private[kafka] class Processor(val id: Int,
     try selector.poll(300)
     catch {
       case e @ (_: IllegalStateException | _: IOException) =>
-        error(s"Closing processor $id due to illegal state or IO exception")
-        swallow(closeAll())
-        shutdownComplete()
-        throw e
+        // The exception is not re-thrown and any completed sends/receives/connections/disconnections
+        // from this poll will be processed.
+        error(s"Processor $id poll failed due to illegal state or IO exception")
     }
   }
 
   private def processCompletedReceives() {
     selector.completedReceives.asScala.foreach { receive =>
       try {
-        val openChannel = selector.channel(receive.source)
-        // Only methods that are safe to call on a disconnected channel should be invoked on 'openOrClosingChannel'.
-        val openOrClosingChannel = if (openChannel != null) openChannel else selector.closingChannel(receive.source)
-        val session = RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, openOrClosingChannel.principal.getName), openOrClosingChannel.socketAddress)
-
-        val req = RequestChannel.Request(processor = id, connectionId = receive.source, session = session,
-          buffer = receive.payload, startTimeNanos = time.nanoseconds,
-          listenerName = listenerName, securityProtocol = securityProtocol)
-        requestChannel.sendRequest(req)
-        selector.mute(receive.source)
+        openOrClosingChannel(receive.source) match {
+          case Some(channel) =>
+            val header = RequestHeader.parse(receive.payload)
+            val context = new RequestContext(header, receive.source, channel.socketAddress,
+              channel.principal, listenerName, securityProtocol)
+            val req = new RequestChannel.Request(processor = id, context = context,
+              startTimeNanos = time.nanoseconds, memoryPool, receive.payload, requestChannel.metrics)
+            requestChannel.sendRequest(req)
+            selector.mute(receive.source)
+          case None =>
+            // This should never happen since completed receives are processed immediately after `poll()`
+            throw new IllegalStateException(s"Channel ${receive.source} removed from selector before processing completed receive")
+        }
       } catch {
-        case e @ (_: InvalidRequestException | _: SchemaException) =>
-          // note that even though we got an exception, we can assume that receive.source is valid. Issues with constructing a valid receive object were handled earlier
-          error(s"Closing socket for ${receive.source} because of error", e)
-          close(selector, receive.source)
+        // note that even though we got an exception, we can assume that receive.source is valid.
+        // Issues with constructing a valid receive object were handled earlier
+        case e: Throwable =>
+          processChannelException(receive.source, s"Exception while processing request from ${receive.source}", e)
       }
     }
   }
 
   private def processCompletedSends() {
     selector.completedSends.asScala.foreach { send =>
-      val resp = inflightResponses.remove(send.destination).getOrElse {
-        throw new IllegalStateException(s"Send for ${send.destination} completed, but not in `inflightResponses`")
+      try {
+        val resp = inflightResponses.remove(send.destination).getOrElse {
+          throw new IllegalStateException(s"Send for ${send.destination} completed, but not in `inflightResponses`")
+        }
+        updateRequestMetrics(resp)
+        selector.unmute(send.destination)
+      } catch {
+        case e: Throwable => processChannelException(send.destination,
+            s"Exception while processing completed send to ${send.destination}", e)
       }
-      updateRequestMetrics(resp.request)
-      selector.unmute(send.destination)
     }
   }
 
-  private def updateRequestMetrics(request: RequestChannel.Request) {
-    val channel = selector.channel(request.connectionId)
-    val openOrClosingChannel = if (channel != null) channel else selector.closingChannel(request.connectionId)
-    val networkThreadTimeNanos = if (openOrClosingChannel != null) openOrClosingChannel.getAndResetNetworkThreadTimeNanos() else 0L
-    request.updateRequestMetrics(networkThreadTimeNanos)
+  private def updateRequestMetrics(response: RequestChannel.Response) {
+    val request = response.request
+    val networkThreadTimeNanos = openOrClosingChannel(request.context.connectionId).fold(0L)(_.getAndResetNetworkThreadTimeNanos())
+    request.updateRequestMetrics(networkThreadTimeNanos, response)
   }
 
   private def processDisconnected() {
     selector.disconnected.keySet.asScala.foreach { connectionId =>
-      val remoteHost = ConnectionId.fromString(connectionId).getOrElse {
-        throw new IllegalStateException(s"connectionId has unexpected format: $connectionId")
-      }.remoteHost
-      inflightResponses.remove(connectionId).foreach(response => updateRequestMetrics(response.request))
-      // the channel has been closed by the selector but the quotas still need to be updated
-      connectionQuotas.dec(InetAddress.getByName(remoteHost))
+      try {
+        val remoteHost = ConnectionId.fromString(connectionId).getOrElse {
+          throw new IllegalStateException(s"connectionId has unexpected format: $connectionId")
+        }.remoteHost
+        inflightResponses.remove(connectionId).foreach(updateRequestMetrics)
+        // the channel has been closed by the selector but the quotas still need to be updated
+        connectionQuotas.dec(InetAddress.getByName(remoteHost))
+      } catch {
+        case e: Throwable => processException(s"Exception while processing disconnection of $connectionId", e)
+      }
+    }
+  }
+
+  /**
+   * Close the connection identified by `connectionId` and decrement the connection count.
+   * The channel will be immediately removed from the selector's `channels` or `closingChannels`
+   * and no further disconnect notifications will be sent for this channel by the selector.
+   * If responses are pending for the channel, they are dropped and metrics is updated.
+   * If the channel has already been removed from selector, no action is taken.
+   */
+  private def close(connectionId: String): Unit = {
+    openOrClosingChannel(connectionId).foreach { channel =>
+      debug(s"Closing selector connection $connectionId")
+      val address = channel.socketAddress
+      if (address != null)
+        connectionQuotas.dec(address)
+      selector.close(connectionId)
+
+      inflightResponses.remove(connectionId).foreach(response => updateRequestMetrics(response))
     }
   }
 
@@ -572,20 +702,14 @@ private[kafka] class Processor(val id: Int,
       val channel = newConnections.poll()
       try {
         debug(s"Processor $id listening to new connection from ${channel.socket.getRemoteSocketAddress}")
-        val localHost = channel.socket().getLocalAddress.getHostAddress
-        val localPort = channel.socket().getLocalPort
-        val remoteHost = channel.socket().getInetAddress.getHostAddress
-        val remotePort = channel.socket().getPort
-        val connectionId = ConnectionId(localHost, localPort, remoteHost, remotePort).toString
-        selector.register(connectionId, channel)
+        selector.register(connectionId(channel.socket), channel)
       } catch {
-        // We explicitly catch all non fatal exceptions and close the socket to avoid a socket leak. The other
-        // throwables will be caught in processor and logged as uncaught exceptions.
-        case NonFatal(e) =>
-          val remoteAddress = channel.getRemoteAddress
+        // We explicitly catch all exceptions and close the socket to avoid a socket leak.
+        case e: Throwable =>
+          val remoteAddress = channel.socket.getRemoteSocketAddress
           // need to close the channel here to avoid a socket leak.
           close(channel)
-          error(s"Processor $id closed connection from $remoteAddress", e)
+          processException(s"Processor $id closed connection from $remoteAddress", e)
       }
     }
   }
@@ -595,14 +719,37 @@ private[kafka] class Processor(val id: Int,
    */
   private def closeAll() {
     selector.channels.asScala.foreach { channel =>
-      close(selector, channel.id)
+      close(channel.id)
     }
     selector.close()
   }
 
+  // 'protected` to allow override for testing
+  protected[network] def connectionId(socket: Socket): String = {
+    val localHost = socket.getLocalAddress.getHostAddress
+    val localPort = socket.getLocalPort
+    val remoteHost = socket.getInetAddress.getHostAddress
+    val remotePort = socket.getPort
+    val connId = ConnectionId(localHost, localPort, remoteHost, remotePort, nextConnectionIndex).toString
+    nextConnectionIndex = if (nextConnectionIndex == Int.MaxValue) 0 else nextConnectionIndex + 1
+    connId
+  }
+
+  // Only for testing
+  private[network] def inflightResponseCount: Int = inflightResponses.size
+
+  // Visible for testing
+  // Only methods that are safe to call on a disconnected channel should be invoked on 'openOrClosingChannel'.
+  private[network] def openOrClosingChannel(connectionId: String): Option[KafkaChannel] =
+     Option(selector.channel(connectionId)).orElse(Option(selector.closingChannel(connectionId)))
+
   /* For test usage */
   private[network] def channel(connectionId: String): Option[KafkaChannel] =
     Option(selector.channel(connectionId))
+
+  // Visible for testing
+  private[network] def numStagedReceives(connectionId: String): Int =
+    openOrClosingChannel(connectionId).map(c => selector.numStagedReceives(c)).getOrElse(0)
 
   /**
    * Wakeup the thread for selection.

@@ -58,7 +58,8 @@ public class ProducerRecord<K, V> {
      * 
      * @param topic The topic the record will be appended to
      * @param partition The partition to which the record should be sent
-     * @param timestamp The timestamp of the record
+     * @param timestamp The timestamp of the record, in milliseconds since epoch. If null, the producer will assign
+     *                  the timestamp using System.currentTimeMillis().
      * @param key The key that will be included in the record
      * @param value The record contents
      * @param headers the headers that will be included in the record
@@ -85,7 +86,8 @@ public class ProducerRecord<K, V> {
      *
      * @param topic The topic the record will be appended to
      * @param partition The partition to which the record should be sent
-     * @param timestamp The timestamp of the record
+     * @param timestamp The timestamp of the record, in milliseconds since epoch. If null, the producer will assign the
+     *                  timestamp using System.currentTimeMillis().
      * @param key The key that will be included in the record
      * @param value The record contents
      */
@@ -102,7 +104,7 @@ public class ProducerRecord<K, V> {
      * @param value The record contents
      * @param headers The headers that will be included in the record
      */
-    public ProducerRecord(String topic, Integer partition, K key, V value,  Iterable<Header> headers) {
+    public ProducerRecord(String topic, Integer partition, K key, V value, Iterable<Header> headers) {
         this(topic, partition, null, key, value, headers);
     }
     
@@ -168,7 +170,7 @@ public class ProducerRecord<K, V> {
     }
 
     /**
-     * @return The timestamp
+     * @return The timestamp, which is in milliseconds since epoch.
      */
     public Long timestamp() {
         return timestamp;

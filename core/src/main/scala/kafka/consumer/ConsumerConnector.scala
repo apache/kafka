@@ -79,7 +79,7 @@ trait ConsumerConnector {
   /**
    * KAFKA-1743: This method added for backward compatibility.
    */
-  def commitOffsets
+  def commitOffsets()
 
   /**
    * Commit offsets from an external offsets map.

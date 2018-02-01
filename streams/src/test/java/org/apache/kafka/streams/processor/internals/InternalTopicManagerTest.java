@@ -16,102 +16,179 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.test.MockTimestampExtractor;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
-import static org.apache.kafka.streams.processor.internals.InternalTopicManager.WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 
 public class InternalTopicManagerTest {
 
+    private final Node broker1 = new Node(0, "dummyHost-1", 1234);
+    private final Node broker2 = new Node(1, "dummyHost-2", 1234);
+    private final List<Node> cluster = new ArrayList<Node>(2) {
+        {
+            add(broker1);
+            add(broker2);
+        }
+    };
     private final String topic = "test_topic";
-    private final String userEndPoint = "localhost:2171";
-    private MockStreamKafkaClient streamsKafkaClient;
-    private final Time time = new MockTime();
+    private final String topic2 = "test_topic_2";
+    private final String topic3 = "test_topic_3";
+    private final List<Node> singleReplica = Collections.singletonList(broker1);
+
+    private MockAdminClient mockAdminClient;
+    private InternalTopicManager internalTopicManager;
+
+    private final Map<String, Object> config = new HashMap<String, Object>() {
+        {
+            put(StreamsConfig.APPLICATION_ID_CONFIG, "app-id");
+            put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker1.host() + ":" + broker1.port());
+            put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 1);
+            put(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG), 1);
+            put(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), 16384);
+        }
+    };
+
     @Before
     public void init() {
-        final StreamsConfig config = new StreamsConfig(configProps());
-        streamsKafkaClient = new MockStreamKafkaClient(config);
+        mockAdminClient = new MockAdminClient(cluster, broker1);
+        internalTopicManager = new InternalTopicManager(
+            mockAdminClient,
+            new StreamsConfig(config));
     }
 
     @After
-    public void shutdown() throws IOException {
-        streamsKafkaClient.close();
+    public void shutdown() {
+        mockAdminClient.close();
     }
 
     @Test
-    public void shouldReturnCorrectPartitionCounts() throws Exception {
-        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
-            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
-        Assert.assertEquals(Collections.singletonMap(topic, 1), internalTopicManager.getNumPartitions(Collections.singleton(topic)));
+    public void shouldReturnCorrectPartitionCounts() {
+        mockAdminClient.addTopic(
+            false,
+            topic,
+            Collections.singletonList(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList())),
+            null);
+        assertEquals(Collections.singletonMap(topic, 1), internalTopicManager.getNumPartitions(Collections.singleton(topic)));
     }
 
     @Test
     public void shouldCreateRequiredTopics() throws Exception {
-        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
-            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
-        internalTopicManager.makeReady(Collections.singletonMap(new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 1));
+        final InternalTopicConfig topicConfig = new RepartitionTopicConfig(topic, Collections.<String, String>emptyMap());
+        topicConfig.setNumberOfPartitions(1);
+        final InternalTopicConfig topicConfig2 = new UnwindowedChangelogTopicConfig(topic2, Collections.<String, String>emptyMap());
+        topicConfig2.setNumberOfPartitions(1);
+        final InternalTopicConfig topicConfig3 = new WindowedChangelogTopicConfig(topic3, Collections.<String, String>emptyMap());
+        topicConfig3.setNumberOfPartitions(1);
+
+        internalTopicManager.makeReady(Collections.singletonMap(topic, topicConfig));
+        internalTopicManager.makeReady(Collections.singletonMap(topic2, topicConfig2));
+        internalTopicManager.makeReady(Collections.singletonMap(topic3, topicConfig3));
+
+        assertEquals(Utils.mkSet(topic, topic2, topic3), mockAdminClient.listTopics().names().get());
+        assertEquals(new TopicDescription(topic, false, new ArrayList<TopicPartitionInfo>() {
+            {
+                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()));
+            }
+        }), mockAdminClient.describeTopics(Collections.singleton(topic)).values().get(topic).get());
+        assertEquals(new TopicDescription(topic2, false, new ArrayList<TopicPartitionInfo>() {
+            {
+                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()));
+            }
+        }), mockAdminClient.describeTopics(Collections.singleton(topic2)).values().get(topic2).get());
+        assertEquals(new TopicDescription(topic3, false, new ArrayList<TopicPartitionInfo>() {
+            {
+                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()));
+            }
+        }), mockAdminClient.describeTopics(Collections.singleton(topic3)).values().get(topic3).get());
+
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+        ConfigResource resource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2);
+        ConfigResource resource3 = new ConfigResource(ConfigResource.Type.TOPIC, topic3);
+
+        assertEquals(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE), mockAdminClient.describeConfigs(Collections.singleton(resource)).values().get(resource).get().get(TopicConfig.CLEANUP_POLICY_CONFIG));
+        assertEquals(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT), mockAdminClient.describeConfigs(Collections.singleton(resource2)).values().get(resource2).get().get(TopicConfig.CLEANUP_POLICY_CONFIG));
+        assertEquals(new ConfigEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE), mockAdminClient.describeConfigs(Collections.singleton(resource3)).values().get(resource3).get().get(TopicConfig.CLEANUP_POLICY_CONFIG));
+
     }
 
     @Test
-    public void shouldNotCreateTopicIfExistsWithDifferentPartitions() throws Exception {
-        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
-            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
-        boolean exceptionWasThrown = false;
+    public void shouldNotCreateTopicIfExistsWithDifferentPartitions() {
+        mockAdminClient.addTopic(
+            false,
+            topic,
+            new ArrayList<TopicPartitionInfo>() {
+                {
+                    add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()));
+                    add(new TopicPartitionInfo(1, broker1, singleReplica, Collections.<Node>emptyList()));
+                }
+            },
+            null);
+
         try {
-            internalTopicManager.makeReady(Collections.singletonMap(new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 2));
-        } catch (StreamsException e) {
-            exceptionWasThrown = true;
-        }
-        Assert.assertTrue(exceptionWasThrown);
+            final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.<String, String>emptyMap());
+            internalTopicConfig.setNumberOfPartitions(1);
+            internalTopicManager.makeReady(Collections.singletonMap(topic, internalTopicConfig));
+            fail("Should have thrown StreamsException");
+        } catch (StreamsException expected) { /* pass */ }
     }
 
-    private Properties configProps() {
-        return new Properties() {
-            {
-                setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "Internal-Topic-ManagerTest");
-                setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, userEndPoint);
-                setProperty(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
-                setProperty(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName());
-            }
-        };
+    @Test
+    public void shouldNotThrowExceptionIfExistsWithDifferentReplication() {
+        mockAdminClient.addTopic(
+            false,
+            topic,
+            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.<Node>emptyList())),
+            null);
+
+        // attempt to create it again with replication 1
+        final InternalTopicManager internalTopicManager2 = new InternalTopicManager(
+            mockAdminClient,
+            new StreamsConfig(config));
+
+        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.<String, String>emptyMap());
+        internalTopicConfig.setNumberOfPartitions(1);
+        internalTopicManager2.makeReady(Collections.singletonMap(topic, internalTopicConfig));
     }
 
-    private class MockStreamKafkaClient extends StreamsKafkaClient {
+    @Test
+    public void shouldNotThrowExceptionForEmptyTopicMap() {
+        internalTopicManager.makeReady(Collections.<String, InternalTopicConfig>emptyMap());
+    }
 
-        MockStreamKafkaClient(final StreamsConfig streamsConfig) {
-            super(streamsConfig);
-        }
+    @Test
+    public void shouldExhaustRetriesOnTimeoutExceptionForMakeReady() {
+        mockAdminClient.timeoutNextRequest(4);
 
-        @Override
-        public void createTopics(final Map<InternalTopicConfig, Integer> topicsMap, final int replicationFactor,
-                                 final long windowChangeLogAdditionalRetention, final MetadataResponse metadata) {
-            // do nothing
-        }
-
-        @Override
-        public MetadataResponse fetchMetadata() {
-            Node node = new Node(1, "host1", 1001);
-            MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node, new ArrayList<Node>(), new ArrayList<Node>());
-            MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(Errors.NONE, topic, true, Collections.singletonList(partitionMetadata));
-            MetadataResponse response = new MetadataResponse(Collections.<Node>singletonList(node), null, MetadataResponse.NO_CONTROLLER_ID,
-                Collections.singletonList(topicMetadata));
-            return response;
+        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.<String, String>emptyMap());
+        internalTopicConfig.setNumberOfPartitions(1);
+        try {
+            internalTopicManager.makeReady(Collections.singletonMap(topic, internalTopicConfig));
+            fail("Should have thrown StreamsException.");
+        } catch (final StreamsException expected) {
+            assertNull(expected.getCause());
+            assertEquals("Could not create topics. This can happen if the Kafka cluster is temporary not available. You can increase admin client config `retries` to be resilient against this error.", expected.getMessage());
         }
     }
+
 }

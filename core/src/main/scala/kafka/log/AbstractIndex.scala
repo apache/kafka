@@ -17,16 +17,16 @@
 
 package kafka.log
 
-import java.io.{File, IOException, RandomAccessFile}
+import java.io.{File, RandomAccessFile}
 import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.nio.channels.FileChannel
+import java.nio.file.Files
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 
 import kafka.log.IndexSearchType.IndexSearchEntity
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.common.utils.{OperatingSystem, Utils}
-import sun.nio.ch.DirectBuffer
+import org.apache.kafka.common.utils.{MappedByteBuffers, OperatingSystem, Utils}
 
 import scala.math.ceil
 
@@ -37,8 +37,12 @@ import scala.math.ceil
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
-abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long, val maxIndexSize: Int = -1, val writable: Boolean)
-    extends Logging {
+abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long,
+                                   val maxIndexSize: Int = -1, val writable: Boolean) extends Logging {
+
+  // Length of the index file
+  @volatile
+  private var _length: Long = _
 
   protected def entrySize: Int
 
@@ -57,22 +61,22 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       }
 
       /* memory-map the file */
-      val len = raf.length()
+      _length = raf.length()
       val idx = {
         if (writable)
-          raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
+          raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, _length)
         else
-          raf.getChannel.map(FileChannel.MapMode.READ_ONLY, 0, len)
+          raf.getChannel.map(FileChannel.MapMode.READ_ONLY, 0, _length)
       }
       /* set the position in the index for the next entry */
       if(newlyCreated)
         idx.position(0)
       else
         // if this is a pre-existing index, assume it is valid and set position to last entry
-        idx.position(roundDownToExactMultiple(idx.limit, entrySize))
+        idx.position(roundDownToExactMultiple(idx.limit(), entrySize))
       idx
     } finally {
-      CoreUtils.swallow(raf.close())
+      CoreUtils.swallow(raf.close(), this)
     }
   }
 
@@ -80,11 +84,11 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * The maximum number of entries this index can hold
    */
   @volatile
-  private[this] var _maxEntries = mmap.limit / entrySize
+  private[this] var _maxEntries = mmap.limit() / entrySize
 
   /** The number of entries in this index */
   @volatile
-  protected var _entries = mmap.position / entrySize
+  protected var _entries = mmap.position() / entrySize
 
   /**
    * True iff there are no more slots available in this index
@@ -95,28 +99,40 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
 
   def entries: Int = _entries
 
+  def length: Long = _length
+
   /**
    * Reset the size of the memory map and the underneath file. This is used in two kinds of cases: (1) in
    * trimToValidSize() which is called at closing the segment or new segment being rolled; (2) at
    * loading segments from disk or truncating back to an old segment where a new log segment became active;
    * we want to reset the index size to maximum index size to avoid rolling new segment.
+   *
+   * @param newSize new size of the index file
+   * @return a boolean indicating whether the size of the memory map and the underneath file is changed or not.
    */
-  def resize(newSize: Int) {
+  def resize(newSize: Int): Boolean = {
     inLock(lock) {
-      val raf = new RandomAccessFile(file, "rw")
       val roundedNewSize = roundDownToExactMultiple(newSize, entrySize)
-      val position = mmap.position
 
-      /* Windows won't let us modify the file length while the file is mmapped :-( */
-      if (OperatingSystem.IS_WINDOWS)
-        forceUnmap(mmap);
-      try {
-        raf.setLength(roundedNewSize)
-        mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
-        _maxEntries = mmap.limit / entrySize
-        mmap.position(position)
-      } finally {
-        CoreUtils.swallow(raf.close())
+      if (_length == roundedNewSize) {
+        false
+      } else {
+        val raf = new RandomAccessFile(file, "rw")
+        try {
+          val position = mmap.position()
+
+          /* Windows won't let us modify the file length while the file is mmapped :-( */
+          if (OperatingSystem.IS_WINDOWS)
+            safeForceUnmap()
+          raf.setLength(roundedNewSize)
+          _length = roundedNewSize
+          mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
+          _maxEntries = mmap.limit() / entrySize
+          mmap.position(position)
+          true
+        } finally {
+          CoreUtils.swallow(raf.close(), this)
+        }
       }
     }
   }
@@ -141,21 +157,21 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   }
 
   /**
-   * Delete this index file
+   * Delete this index file.
+   *
+   * @throws IOException if deletion fails due to an I/O error
+   * @return `true` if the file was deleted by this method; `false` if the file could not be deleted because it did
+   *         not exist
    */
-  def delete(): Boolean = {
-    info(s"Deleting index ${file.getAbsolutePath}")
+  def deleteIfExists(): Boolean = {
     inLock(lock) {
       // On JVM, a memory mapping is typically unmapped by garbage collector.
       // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
       // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
       // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
-      CoreUtils.swallow(forceUnmap(mmap))
-      // Accessing unmapped mmap crashes JVM by SEGV.
-      // Accessing it after this method called sounds like a bug but for safety, assign null and do not allow later access.
-      mmap = null
+      safeForceUnmap()
     }
-    file.delete()
+    Files.deleteIfExists(file.toPath)
   }
 
   /**
@@ -178,17 +194,23 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
     trimToValidSize()
   }
 
+  def closeHandler(): Unit = {
+    inLock(lock) {
+      safeForceUnmap()
+    }
+  }
+
   /**
    * Do a basic sanity check on this index to detect obvious problems
    *
-   * @throws IllegalArgumentException if any problems are found
+   * @throws CorruptIndexException if any problems are found
    */
   def sanityCheck(): Unit
 
   /**
    * Remove all the entries from the index.
    */
-  def truncate(): Unit
+  protected def truncate(): Unit
 
   /**
    * Remove all entries from the index which have an offset greater than or equal to the given offset.
@@ -197,21 +219,26 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   def truncateTo(offset: Long): Unit
 
   /**
+   * Remove all the entries from the index and resize the index to the max index size.
+   */
+  def reset(): Unit = {
+    truncate()
+    resize(maxIndexSize)
+  }
+
+  protected def safeForceUnmap(): Unit = {
+    try forceUnmap()
+    catch {
+      case t: Throwable => error(s"Error unmapping index $file", t)
+    }
+  }
+
+  /**
    * Forcefully free the buffer's mmap.
    */
-  protected def forceUnmap(m: MappedByteBuffer) {
-    try {
-      m match {
-        case buffer: DirectBuffer =>
-          val bufferCleaner = buffer.cleaner()
-          /* cleaner can be null if the mapped region has size 0 */
-          if (bufferCleaner != null)
-            bufferCleaner.clean()
-        case _ =>
-      }
-    } catch {
-      case t: Throwable => error("Error when freeing index buffer", t)
-    }
+  protected[log] def forceUnmap() {
+    try MappedByteBuffers.unmap(file.getAbsolutePath, mmap)
+    finally mmap = null // Accessing unmapped mmap crashes JVM by SEGV so we null it out to be safe
   }
 
   /**

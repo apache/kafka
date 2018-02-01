@@ -31,7 +31,7 @@ import org.junit.Assert._
 @deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
 class AutoOffsetResetTest extends KafkaServerTestHarness with Logging {
 
-  def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
+  def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
   val topic = "test_topic"
   val group = "default_group"
@@ -77,7 +77,7 @@ class AutoOffsetResetTest extends KafkaServerTestHarness with Logging {
    * Returns the count of messages received.
    */
   def resetAndConsume(numMessages: Int, resetTo: String, offset: Long): Int = {
-    TestUtils.createTopic(zkUtils, topic, 1, 1, servers)
+    createTopic(topic, 1, 1)
 
     val producer: Producer[String, Array[Byte]] = TestUtils.createProducer(
       TestUtils.getBrokerListStrFromServers(servers),
@@ -86,7 +86,7 @@ class AutoOffsetResetTest extends KafkaServerTestHarness with Logging {
     for(_ <- 0 until numMessages)
       producer.send(new KeyedMessage[String, Array[Byte]](topic, topic, "test".getBytes))
 
-    // update offset in zookeeper for consumer to jump "forward" in time
+    // update offset in ZooKeeper for consumer to jump "forward" in time
     val dirs = new ZKGroupTopicDirs(group, topic)
     val consumerProps = TestUtils.createConsumerProperties(zkConnect, group, testConsumer)
     consumerProps.put("auto.offset.reset", resetTo)

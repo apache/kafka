@@ -62,17 +62,17 @@ public class ByteBufferOutputStream extends OutputStream {
     }
 
     public void write(int b) {
-        maybeExpandBuffer(1);
+        ensureRemaining(1);
         buffer.put((byte) b);
     }
 
     public void write(byte[] bytes, int off, int len) {
-        maybeExpandBuffer(len);
+        ensureRemaining(len);
         buffer.put(bytes, off, len);
     }
 
     public void write(ByteBuffer sourceBuffer) {
-        maybeExpandBuffer(sourceBuffer.remaining());
+        ensureRemaining(sourceBuffer.remaining());
         buffer.put(sourceBuffer);
     }
 
@@ -93,7 +93,7 @@ public class ByteBufferOutputStream extends OutputStream {
     }
 
     public void position(int position) {
-        maybeExpandBuffer(position - buffer.position());
+        ensureRemaining(position - buffer.position());
         buffer.position(position);
     }
 
@@ -105,9 +105,16 @@ public class ByteBufferOutputStream extends OutputStream {
         return initialCapacity;
     }
 
-    private void maybeExpandBuffer(int remainingRequired) {
-        if (remainingRequired > buffer.remaining())
-            expandBuffer(remainingRequired);
+    /**
+     * Ensure there is enough space to write some number of bytes, expanding the underlying buffer if necessary.
+     * This can be used to avoid incremental expansions through calls to {@link #write(int)} when you know how
+     * many total bytes are needed.
+     *
+     * @param remainingBytesRequired The number of bytes required
+     */
+    public void ensureRemaining(int remainingBytesRequired) {
+        if (remainingBytesRequired > buffer.remaining())
+            expandBuffer(remainingBytesRequired);
     }
 
     private void expandBuffer(int remainingRequired) {

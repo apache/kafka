@@ -18,6 +18,9 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -33,7 +36,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     public Map forwardedValues = new HashMap();
 
     public NoOpProcessorContext() {
-        super(new TaskId(1, 1), "appId", streamsConfig(), new MockStreamsMetrics(new Metrics()), null, null);
+        super(new TaskId(1, 1), streamsConfig(), new MockStreamsMetrics(new Metrics()), null, null);
     }
 
     static StreamsConfig streamsConfig() {
@@ -48,9 +51,12 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
         return null;
     }
 
+    @Override public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+        return null;
+    }
+
     @Override
     public void schedule(final long interval) {
-
     }
 
     @Override
@@ -78,7 +84,9 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback stateRestoreCallback) {
+    public void register(final StateStore store,
+                         final boolean deprecatedAndIgnoredLoggingEnabled,
+                         final StateRestoreCallback stateRestoreCallback) {
         // no-op
     }
 }

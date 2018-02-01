@@ -19,7 +19,7 @@ package kafka.log
 import java.io.{File, IOException}
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
-import java.nio.file.StandardOpenOption
+import java.nio.file.{Files, StandardOpenOption}
 
 import kafka.utils.{Logging, nonthreadsafe}
 import org.apache.kafka.common.KafkaException
@@ -61,12 +61,16 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
 
   def flush(): Unit = maybeChannel.foreach(_.force(true))
 
-  def delete(): Boolean = {
-    maybeChannel.forall { channel =>
-      channel.force(true)
-      close()
-      file.delete()
-    }
+  /**
+   * Delete this index.
+   *
+   * @throws IOException if deletion fails due to an I/O error
+   * @return `true` if the file was deleted by this method; `false` if the file could not be deleted because it did
+   *         not exist
+   */
+  def deleteIfExists(): Boolean = {
+    close()
+    Files.deleteIfExists(file.toPath)
   }
 
   private def channel: FileChannel = {
@@ -84,7 +88,10 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     channel
   }
 
-  def truncate() = {
+  /**
+   * Remove all the entries from the index. Unlike `AbstractIndex`, this index is not resized ahead of time.
+   */
+  def reset(): Unit = {
     maybeChannel.foreach(_.truncate(0))
     lastOffset = None
   }
@@ -171,10 +178,17 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     TxnIndexSearchResult(abortedTransactions.toList, isComplete = false)
   }
 
+  /**
+   * Do a basic sanity check on this index to detect obvious problems.
+   *
+   * @throws CorruptIndexException if any problems are found.
+   */
   def sanityCheck(): Unit = {
     val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)
     for ((abortedTxn, _) <- iterator(() => buffer)) {
-      require(abortedTxn.lastOffset >= startOffset)
+      if (abortedTxn.lastOffset < startOffset)
+        throw new CorruptIndexException(s"Last offset of aborted transaction $abortedTxn is less than start offset " +
+          s"$startOffset")
     }
   }
 

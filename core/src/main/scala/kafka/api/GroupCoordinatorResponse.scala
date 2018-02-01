@@ -21,6 +21,7 @@ import java.nio.ByteBuffer
 import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.common.protocol.Errors
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object GroupCoordinatorResponse {
   val CurrentVersion = 0
 
@@ -40,6 +41,7 @@ object GroupCoordinatorResponse {
 
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 case class GroupCoordinatorResponse (coordinatorOpt: Option[BrokerEndPoint], error: Errors, correlationId: Int)
   extends RequestOrResponse() {
 

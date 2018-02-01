@@ -24,13 +24,14 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.Map;
 
-import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
-import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
+import static org.apache.kafka.connect.transforms.util.Requirements.requireMapOrNull;
+import static org.apache.kafka.connect.transforms.util.Requirements.requireStructOrNull;
 
 public abstract class ExtractField<R extends ConnectRecord<R>> implements Transformation<R> {
 
     public static final String OVERVIEW_DOC =
-            "Extract the specified field from a Struct when schema present, or a Map in the case of schemaless data."
+            "Extract the specified field from a Struct when schema present, or a Map in the case of schemaless data. "
+                    + "Any null values are passed through unmodified."
                     + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
                     + "or value (<code>" + Value.class.getName() + "</code>).";
 
@@ -53,11 +54,11 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
     public R apply(R record) {
         final Schema schema = operatingSchema(record);
         if (schema == null) {
-            final Map<String, Object> value = requireMap(operatingValue(record), PURPOSE);
-            return newRecord(record, null, value.get(fieldName));
+            final Map<String, Object> value = requireMapOrNull(operatingValue(record), PURPOSE);
+            return newRecord(record, null, value == null ? null : value.get(fieldName));
         } else {
-            final Struct value = requireStruct(operatingValue(record), PURPOSE);
-            return newRecord(record, schema.field(fieldName).schema(), value.get(fieldName));
+            final Struct value = requireStructOrNull(operatingValue(record), PURPOSE);
+            return newRecord(record, schema.field(fieldName).schema(), value == null ? null : value.get(fieldName));
         }
     }
 

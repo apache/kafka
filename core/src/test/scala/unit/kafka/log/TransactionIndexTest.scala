@@ -30,13 +30,13 @@ class TransactionIndexTest extends JUnitSuite {
   val offset = 0L
 
   @Before
-  def setup: Unit = {
+  def setup(): Unit = {
     file = TestUtils.tempFile()
     index = new TransactionIndex(offset, file)
   }
 
   @After
-  def teardown: Unit = {
+  def teardown(): Unit = {
     index.close()
   }
 
@@ -56,7 +56,7 @@ class TransactionIndexTest extends JUnitSuite {
     assertEquals(abortedTxns ++ List(anotherAbortedTxn), reopenedIndex.allAbortedTxns)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test(expected = classOf[CorruptIndexException])
   def testSanityCheck(): Unit = {
     val abortedTxns = List(
       new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 10, lastStableOffset = 11),
@@ -134,7 +134,7 @@ class TransactionIndexTest extends JUnitSuite {
     index.truncateTo(50)
     assertEquals(abortedTransactions.take(3), index.collectAbortedTxns(0L, 100L).abortedTransactions)
 
-    index.truncate()
+    index.reset()
     assertEquals(List.empty[AbortedTransaction], index.collectAbortedTxns(0L, 100L).abortedTransactions)
   }
 

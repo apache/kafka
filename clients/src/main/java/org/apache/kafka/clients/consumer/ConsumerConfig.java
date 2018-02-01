@@ -124,9 +124,9 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String FETCH_MAX_BYTES_CONFIG = "fetch.max.bytes";
     private static final String FETCH_MAX_BYTES_DOC = "The maximum amount of data the server should return for a fetch request. " +
-            "This is not an absolute maximum, if the first message in the first non-empty partition of the fetch is larger than " +
-            "this value, the message will still be returned to ensure that the consumer can make progress. " +
-            "The maximum message size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
+            "Records are fetched in batches by the consumer, and if the first record batch in the first non-empty partition of the fetch is larger than " +
+            "this value, the record batch will still be returned to ensure that the consumer can make progress. As such, this is not a absolute maximum. " +
+            "The maximum record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
             "<code>max.message.bytes</code> (topic config). Note that the consumer performs multiple fetches in parallel.";
     public static final int DEFAULT_FETCH_MAX_BYTES = 50 * 1024 * 1024;
 
@@ -144,8 +144,9 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String MAX_PARTITION_FETCH_BYTES_CONFIG = "max.partition.fetch.bytes";
     private static final String MAX_PARTITION_FETCH_BYTES_DOC = "The maximum amount of data per-partition the server " +
-            "will return. If the first message in the first non-empty partition of the fetch is larger than this limit, the " +
-            "message will still be returned to ensure that the consumer can make progress. The maximum message size " +
+            "will return. Records are fetched in batches by the consumer. If the first record batch in the first non-empty " +
+            "partition of the fetch is larger than this limit, the " +
+            "batch will still be returned to ensure that the consumer can make progress. The maximum record batch size " +
             "accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
             "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size.";
     public static final int DEFAULT_MAX_PARTITION_FETCH_BYTES = 1 * 1024 * 1024;
@@ -204,11 +205,11 @@ public class ConsumerConfig extends AbstractConfig {
 
     /** <code>key.deserializer</code> */
     public static final String KEY_DESERIALIZER_CLASS_CONFIG = "key.deserializer";
-    public static final String KEY_DESERIALIZER_CLASS_DOC = "Deserializer class for key that implements the <code>Deserializer</code> interface.";
+    public static final String KEY_DESERIALIZER_CLASS_DOC = "Deserializer class for key that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface.";
 
     /** <code>value.deserializer</code> */
     public static final String VALUE_DESERIALIZER_CLASS_CONFIG = "value.deserializer";
-    public static final String VALUE_DESERIALIZER_CLASS_DOC = "Deserializer class for value that implements the <code>Deserializer</code> interface.";
+    public static final String VALUE_DESERIALIZER_CLASS_DOC = "Deserializer class for value that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface.";
 
     /** <code>connections.max.idle.ms</code> */
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
@@ -220,7 +221,7 @@ public class ConsumerConfig extends AbstractConfig {
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
     public static final String INTERCEPTOR_CLASSES_DOC = "A list of classes to use as interceptors. "
-                                                        + "Implementing the <code>ConsumerInterceptor</code> interface allows you to intercept (and possibly mutate) records "
+                                                        + "Implementing the <code>org.apache.kafka.clients.consumer.ConsumerInterceptor</code> interface allows you to intercept (and possibly mutate) records "
                                                         + "received by the consumer. By default, there are no interceptors.";
 
 
@@ -256,6 +257,8 @@ public class ConsumerConfig extends AbstractConfig {
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
+                                        Collections.emptyList(),
+                                        new ConfigDef.NonNullValidator(),
                                         Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(GROUP_ID_CONFIG, Type.STRING, "", Importance.HIGH, GROUP_ID_DOC)
@@ -272,6 +275,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                                         Type.LIST,
                                         Collections.singletonList(RangeAssignor.class),
+                                        new ConfigDef.NonNullValidator(),
                                         Importance.MEDIUM,
                                         PARTITION_ASSIGNMENT_STRATEGY_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG,
@@ -381,7 +385,8 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
-                                        "",
+                                        Collections.emptyList(),
+                                        new ConfigDef.NonNullValidator(),
                                         Importance.LOW,
                                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                                 .define(KEY_DESERIALIZER_CLASS_CONFIG,
@@ -406,7 +411,8 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
                                 .define(INTERCEPTOR_CLASSES_CONFIG,
                                         Type.LIST,
-                                        null,
+                                        Collections.emptyList(),
+                                        new ConfigDef.NonNullValidator(),
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
                                 .define(MAX_POLL_RECORDS_CONFIG,
@@ -455,8 +461,7 @@ public class ConsumerConfig extends AbstractConfig {
     public static Map<String, Object> addDeserializerToConfig(Map<String, Object> configs,
                                                               Deserializer<?> keyDeserializer,
                                                               Deserializer<?> valueDeserializer) {
-        Map<String, Object> newConfigs = new HashMap<String, Object>();
-        newConfigs.putAll(configs);
+        Map<String, Object> newConfigs = new HashMap<>(configs);
         if (keyDeserializer != null)
             newConfigs.put(KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass());
         if (valueDeserializer != null)
@@ -476,7 +481,11 @@ public class ConsumerConfig extends AbstractConfig {
         return newProperties;
     }
 
-    ConsumerConfig(Map<?, ?> props) {
+    public ConsumerConfig(Properties props) {
+        super(CONFIG, props);
+    }
+
+    public ConsumerConfig(Map<String, Object> props) {
         super(CONFIG, props);
     }
 

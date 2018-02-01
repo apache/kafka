@@ -16,112 +16,45 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 public class InternalTopicConfigTest {
 
-    @Test
-    public void shouldHaveCompactionPropSetIfSupplied() throws Exception {
-        final Properties properties = new InternalTopicConfig("name",
-                                                              Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                                                              Collections.<String, String>emptyMap()).toProperties(0);
-        assertEquals("compact", properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP));
-    }
-
-
     @Test(expected = NullPointerException.class)
-    public void shouldThrowIfNameIsNull() throws Exception {
-        new InternalTopicConfig(null, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), Collections.<String, String>emptyMap());
+    public void shouldThrowIfNameIsNull() {
+        new RepartitionTopicConfig(null, Collections.<String, String>emptyMap());
     }
 
     @Test(expected = InvalidTopicException.class)
-    public void shouldThrowIfNameIsInvalid() throws Exception {
-        new InternalTopicConfig("foo bar baz", Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), Collections.<String, String>emptyMap());
+    public void shouldThrowIfNameIsInvalid() {
+        new RepartitionTopicConfig("foo bar baz", Collections.<String, String>emptyMap());
     }
 
     @Test
-    public void shouldConfigureRetentionMsWithAdditionalRetentionWhenCompactAndDelete() throws Exception {
-        final InternalTopicConfig topicConfig = new InternalTopicConfig("name",
-                                                                        Utils.mkSet(InternalTopicConfig.CleanupPolicy.compact, InternalTopicConfig.CleanupPolicy.delete),
-                                                                        Collections.<String, String>emptyMap());
-        final int additionalRetentionMs = 20;
+    public void shouldAugmentRetentionMsWithWindowedChangelog() {
+        final WindowedChangelogTopicConfig topicConfig = new WindowedChangelogTopicConfig("name", Collections.<String, String>emptyMap());
         topicConfig.setRetentionMs(10);
-        final Properties properties = topicConfig.toProperties(additionalRetentionMs);
-        assertEquals("30", properties.getProperty(InternalTopicManager.RETENTION_MS));
+        assertEquals("30", topicConfig.getProperties(Collections.<String, String>emptyMap(), 20).get(TopicConfig.RETENTION_MS_CONFIG));
     }
 
     @Test
-    public void shouldNotConfigureRetentionMsWhenCompact() throws Exception {
-        final InternalTopicConfig topicConfig = new InternalTopicConfig("name",
-                                                                        Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                                                                        Collections.<String, String>emptyMap());
-        topicConfig.setRetentionMs(10);
-        final Properties properties = topicConfig.toProperties(0);
-        assertNull(null, properties.getProperty(InternalTopicManager.RETENTION_MS));
-    }
-
-    @Test
-    public void shouldNotConfigureRetentionMsWhenDelete() throws Exception {
-        final InternalTopicConfig topicConfig = new InternalTopicConfig("name",
-                                                                        Collections.singleton(InternalTopicConfig.CleanupPolicy.delete),
-                                                                        Collections.<String, String>emptyMap());
-        topicConfig.setRetentionMs(10);
-        final Properties properties = topicConfig.toProperties(0);
-        assertNull(null, properties.getProperty(InternalTopicManager.RETENTION_MS));
-    }
-
-
-    @Test
-    public void shouldBeCompactedIfCleanupPolicyCompactOrCompactAndDelete() throws Exception {
-        assertTrue(new InternalTopicConfig("name",
-                                           Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                                           Collections.<String, String>emptyMap()).isCompacted());
-        assertTrue(new InternalTopicConfig("name", Utils.mkSet(InternalTopicConfig.CleanupPolicy.compact,
-                                                               InternalTopicConfig.CleanupPolicy.delete),
-                                           Collections.<String, String>emptyMap()).isCompacted());
-    }
-
-    @Test
-    public void shouldNotBeCompactedWhenCleanupPolicyIsDelete() throws Exception {
-        assertFalse(new InternalTopicConfig("name",
-                                            Collections.singleton(InternalTopicConfig.CleanupPolicy.delete),
-                                            Collections.<String, String>emptyMap()).isCompacted());
-    }
-
-    @Test
-    public void shouldUseCleanupPolicyFromConfigIfSupplied() throws Exception {
-        final InternalTopicConfig config = new InternalTopicConfig("name",
-                                                                   Collections.singleton(InternalTopicConfig.CleanupPolicy.delete),
-                                                                   Collections.singletonMap("cleanup.policy", "compact"));
-
-        final Properties properties = config.toProperties(0);
-        assertEquals("compact", properties.getProperty("cleanup.policy"));
-    }
-
-    @Test
-    public void shouldHavePropertiesSuppliedByUser() throws Exception {
+    public void shouldUseSuppliedConfigs() {
         final Map<String, String> configs = new HashMap<>();
         configs.put("retention.ms", "1000");
         configs.put("retention.bytes", "10000");
 
-        final InternalTopicConfig topicConfig = new InternalTopicConfig("name",
-                                                                 Collections.singleton(InternalTopicConfig.CleanupPolicy.delete),
-                                                                 configs);
+        final UnwindowedChangelogTopicConfig topicConfig = new UnwindowedChangelogTopicConfig("name", configs);
 
-        final Properties properties = topicConfig.toProperties(0);
-        assertEquals("1000", properties.getProperty("retention.ms"));
-        assertEquals("10000", properties.getProperty("retention.bytes"));
+        final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 0);
+        assertEquals("1000", properties.get("retention.ms"));
+        assertEquals("10000", properties.get("retention.bytes"));
     }
 }
