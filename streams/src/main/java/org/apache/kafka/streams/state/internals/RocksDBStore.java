@@ -580,6 +580,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             this.rocksDBStore = rocksDBStore;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
         public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
             rocksDBStore.restoreAllInternal(records);

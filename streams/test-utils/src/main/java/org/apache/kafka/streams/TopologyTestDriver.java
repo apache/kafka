@@ -311,6 +311,7 @@ public class TopologyTestDriver {
      *
      * @param consumerRecord the record to be processed
      */
+    @SuppressWarnings("deprecation")
     public void pipeInput(final ConsumerRecord<byte[], byte[]> consumerRecord) {
         final String topicName = consumerRecord.topic();
 
