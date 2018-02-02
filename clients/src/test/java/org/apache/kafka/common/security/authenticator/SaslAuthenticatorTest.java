@@ -1017,7 +1017,7 @@ public class SaslAuthenticatorTest {
             throws Exception {
         final ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         final Map<String, ?> configs = Collections.emptyMap();
-        final JaasContext jaasContext = JaasContext.load(JaasContext.Type.SERVER, listenerName, configs, saslMechanism);
+        final JaasContext jaasContext = JaasContext.loadServerContext(listenerName, saslMechanism, configs);
         final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
 
         boolean isScram = ScramMechanism.isScram(saslMechanism);
@@ -1064,7 +1064,7 @@ public class SaslAuthenticatorTest {
 
         final ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         final Map<String, ?> configs = Collections.emptyMap();
-        final JaasContext jaasContext = JaasContext.load(JaasContext.Type.CLIENT, null, configs, saslMechanism);
+        final JaasContext jaasContext = JaasContext.loadClientContext(configs);
         final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
 
         SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContexts,

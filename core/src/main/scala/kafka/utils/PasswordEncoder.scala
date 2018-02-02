@@ -40,6 +40,19 @@ object PasswordEncoder {
   val PasswordLengthProp = "passwordLength"
 }
 
+/**
+  * Password encoder and decoder implementation.
+  * @param secret The secret used for encoding and decoding
+  * @param keyFactoryAlgorithm  Key factory algorithm if configured. By default, PBKDF2WithHmacSHA512 is
+  *                             used if available, PBKDF2WithHmacSHA1 otherwise.
+  * @param cipherAlgorithm Cipher algorithm used for encoding.
+  * @param keyLength Key length used for encoding. This should be valid for the specified algorithms.
+  * @param iterations Iteration count used for encoding.
+  *
+  * The provided `keyFactoryAlgorithm`, 'cipherAlgorithm`, `keyLength` and `iterations` are used for encoding passwords.
+  * The values used for encoding are stored along with the encoded password and the stored values are used for decoding.
+  *
+  */
 class PasswordEncoder(secret: Password,
                       keyFactoryAlgorithm: Option[String],
                       cipherAlgorithm: String,

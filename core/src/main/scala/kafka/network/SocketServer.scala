@@ -71,7 +71,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   private val processors = new ConcurrentHashMap[Int, Processor]()
   private var nextProcessorId = 0
 
-  private[network] val acceptors = mutable.Map[EndPoint, Acceptor]()
+  private[network] val acceptors = new ConcurrentHashMap[EndPoint, Acceptor]()
   private var connectionQuotas: ConnectionQuotas = _
   private var stoppedProcessingRequests = false
 
@@ -132,12 +132,10 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       }
       listenerProcessors.foreach(p => processors.put(p.id, p))
 
-      val acceptor = acceptors.getOrElseUpdate(endpoint, {
-        val acceptor = new Acceptor(endpoint, sendBufferSize, recvBufferSize, brokerId, connectionQuotas)
-        KafkaThread.nonDaemon(s"kafka-socket-acceptor-$listenerName-$securityProtocol-${endpoint.port}", acceptor).start()
-        acceptor.awaitStartup()
-        acceptor
-      })
+      val acceptor = new Acceptor(endpoint, sendBufferSize, recvBufferSize, brokerId, connectionQuotas)
+      KafkaThread.nonDaemon(s"kafka-socket-acceptor-$listenerName-$securityProtocol-${endpoint.port}", acceptor).start()
+      acceptor.awaitStartup()
+      acceptors.put(endpoint, acceptor)
       acceptor.addProcessors(listenerProcessors)
     }
   }
@@ -155,7 +153,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   def stopProcessingRequests() = {
     info("Stopping socket server request processors")
     this.synchronized {
-      acceptors.values.foreach(_.shutdown)
+      acceptors.asScala.values.foreach(_.shutdown)
       processors.asScala.values.foreach(_.shutdown)
       requestChannel.clear()
       stoppedProcessingRequests = true
@@ -168,7 +166,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     if (newNumNetworkThreads > oldNumNetworkThreads)
       createProcessors(newNumNetworkThreads - oldNumNetworkThreads, config.listeners)
     else if (newNumNetworkThreads < oldNumNetworkThreads)
-      acceptors.values.foreach(_.removeProcessors(oldNumNetworkThreads - newNumNetworkThreads, requestChannel))
+      acceptors.asScala.values.foreach(_.removeProcessors(oldNumNetworkThreads - newNumNetworkThreads, requestChannel))
   }
 
   /**
@@ -187,20 +185,20 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
   def boundPort(listenerName: ListenerName): Int = {
     try {
-      acceptors(endpoints(listenerName)).serverChannel.socket.getLocalPort
+      acceptors.get(endpoints(listenerName)).serverChannel.socket.getLocalPort
     } catch {
       case e: Exception =>
         throw new KafkaException("Tried to check server's port before server was started or checked for port of non-existing protocol", e)
     }
   }
 
-  def addListeners(listenersAdded: Seq[EndPoint]): Unit = {
+  def addListeners(listenersAdded: Seq[EndPoint]): Unit = synchronized {
     createProcessors(config.numNetworkThreads, listenersAdded)
   }
 
-  def removeListeners(listenersRemoved: Seq[EndPoint]): Unit = {
+  def removeListeners(listenersRemoved: Seq[EndPoint]): Unit = synchronized {
     listenersRemoved.foreach { endpoint =>
-      acceptors.remove(endpoint).foreach(_.shutdown())
+      acceptors.asScala.remove(endpoint).foreach(_.shutdown())
     }
   }
 

@@ -188,8 +188,8 @@ public class JaasContextTest {
                 "KafkaServer { test.LoginModuleDefault required; };",
                 "plaintext.KafkaServer { test.LoginModuleOverride requisite; };"
         ));
-        JaasContext context = JaasContext.load(JaasContext.Type.SERVER, new ListenerName("plaintext"),
-                Collections.<String, Object>emptyMap(), "SOME-MECHANISM");
+        JaasContext context = JaasContext.loadServerContext(new ListenerName("plaintext"),
+                "SOME-MECHANISM", Collections.<String, Object>emptyMap());
         assertEquals("plaintext.KafkaServer", context.name());
         assertEquals(JaasContext.Type.SERVER, context.type());
         assertEquals(1, context.configurationEntries().size());
@@ -203,8 +203,8 @@ public class JaasContextTest {
                 "KafkaServer { test.LoginModule required; };",
                 "other.KafkaServer { test.LoginModuleOther requisite; };"
         ));
-        JaasContext context = JaasContext.load(JaasContext.Type.SERVER, new ListenerName("plaintext"),
-                Collections.<String, Object>emptyMap(), "SOME-MECHANISM");
+        JaasContext context = JaasContext.loadServerContext(new ListenerName("plaintext"),
+                "SOME-MECHANISM", Collections.<String, Object>emptyMap());
         assertEquals("KafkaServer", context.name());
         assertEquals(JaasContext.Type.SERVER, context.type());
         assertEquals(1, context.configurationEntries().size());
@@ -215,17 +215,8 @@ public class JaasContextTest {
     @Test(expected = IllegalArgumentException.class)
     public void testLoadForServerWithWrongListenerName() throws IOException {
         writeConfiguration("Server", "test.LoginModule required;");
-        JaasContext.load(JaasContext.Type.SERVER, new ListenerName("plaintext"),
-                Collections.<String, Object>emptyMap(), "SOME-MECHANISM");
-    }
-
-    /**
-     * ListenerName can only be used with Type.SERVER.
-     */
-    @Test(expected = IllegalArgumentException.class)
-    public void testLoadForClientWithListenerName() {
-        JaasContext.load(JaasContext.Type.CLIENT, new ListenerName("foo"),
-                Collections.<String, Object>emptyMap(), "SOME-MECHANISM");
+        JaasContext.loadServerContext(new ListenerName("plaintext"), "SOME-MECHANISM",
+                Collections.<String, Object>emptyMap());
     }
 
     private AppConfigurationEntry configurationEntry(JaasContext.Type contextType, String jaasConfigProp) {

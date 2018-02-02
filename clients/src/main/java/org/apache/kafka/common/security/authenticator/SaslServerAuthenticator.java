@@ -153,9 +153,9 @@ public class SaslServerAuthenticator implements Authenticator {
             throw new IllegalArgumentException("No SASL mechanisms are enabled");
         this.enabledMechanisms = new HashSet<>(enabledMechanisms);
         for (String mechanism : enabledMechanisms) {
-            if (jaasContexts.get(mechanism) == null)
+            if (!jaasContexts.containsKey(mechanism))
                 throw new IllegalArgumentException("Jaas context not specified for SASL mechanism " + mechanism);
-            if (subjects.get(mechanism) == null)
+            if (!subjects.containsKey(mechanism))
                 throw new IllegalArgumentException("Subject cannot be null for SASL mechanism " + mechanism);
         }
 

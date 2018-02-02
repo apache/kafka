@@ -209,8 +209,9 @@ public class AbstractConfig {
      * <ul>
      *     <li>listener.name.{listenerName}.some.prop: If the provided prefix is `listener.name.{listenerName}.`,
      *         the key `some.prop` with the value parsed using the definition of `some.prop` is returned.</li>
-     *     <li>listener.name.{listenerName}.anotherprefix.some.prop: If the provided prefix is `listener.name.{listenerName}.`,
-     *         the key `anotherprefix.some.prop` with the value parsed using the definition of `some.prop` is returned.</li>
+     *     <li>listener.name.{listenerName}.{mechanism}.some.prop: If the provided prefix is `listener.name.{listenerName}.`,
+     *         the key `{mechanism}.some.prop` with the value parsed using the definition of `some.prop` is returned.
+     *          This is used to provide per-mechanism configs for a broker listener (e.g sasl.jaas.config)</li>
      * </ul>
      * </p>
      */

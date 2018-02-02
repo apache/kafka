@@ -1227,8 +1227,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  case class BrokerModifications(brokerId: Int) extends ControllerEvent {
-    override def state: ControllerState = ControllerState.TopicChange
+  case class BrokerModifications() extends ControllerEvent {
+    override def state: ControllerState = ControllerState.BrokerChange
 
     override def process(): Unit = {
       if (!isActive) return
@@ -1508,7 +1508,7 @@ class BrokerModificationsHandler(controller: KafkaController, eventManager: Cont
   override val path: String = BrokerIdZNode.path(brokerId)
 
   override def handleDataChange(): Unit = {
-    eventManager.put(controller.BrokerModifications(brokerId))
+    eventManager.put(controller.BrokerModifications())
   }
 }
 

@@ -412,10 +412,10 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
             val newValues = newConfig.valuesFromThisConfigWithPrefixOverride(listenerName.configPrefix)
             val updatedKeys = updatedConfigs(newValues, oldValues).keySet
             if (needsReconfiguration(listenerReconfigurable.reconfigurableConfigs, updatedKeys))
-              processReconfigurable(listenerReconfigurable, newValues, customConfigs, validateOnly)
+              processReconfigurable(listenerReconfigurable, updatedKeys, newValues, customConfigs, validateOnly)
           case reconfigurable =>
             if (needsReconfiguration(reconfigurable.reconfigurableConfigs, updatedMap.keySet))
-              processReconfigurable(reconfigurable, newConfig.valuesFromThisConfig, customConfigs, validateOnly)
+              processReconfigurable(reconfigurable, updatedMap.keySet, newConfig.valuesFromThisConfig, customConfigs, validateOnly)
         }
 
         // BrokerReconfigurable updates are processed after config is updated. Only do the validation here.
@@ -445,31 +445,25 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   private def processReconfigurable(reconfigurable: Reconfigurable,
+                                    updatedConfigNames: Set[String],
                                     allNewConfigs: util.Map[String, _],
                                     newCustomConfigs: util.Map[String, Object],
                                     validateOnly: Boolean): Unit = {
     val newConfigs = new util.HashMap[String, Object]
     allNewConfigs.asScala.foreach { case (k, v) => newConfigs.put(k, v.asInstanceOf[AnyRef]) }
     newConfigs.putAll(newCustomConfigs)
-    if (validateOnly) {
-      try {
-        reconfigurable.validateReconfiguration(newConfigs)
-      } catch {
-        case e: ConfigException => throw e
-        case _: Exception => throw new ConfigException("Validation of dynamic config update failed with class " + reconfigurable.getClass)
-      }
-    } else
-      reconfigurable.reconfigure(newConfigs)
-  }
+    try {
+      reconfigurable.validateReconfiguration(newConfigs)
+    } catch {
+      case e: ConfigException => throw e
+      case _: Exception =>
+        throw new ConfigException(s"Validation of dynamic config update of $updatedConfigNames failed with class ${reconfigurable.getClass}")
+    }
 
-  private def processBrokerReconfigurable(reconfigurable: BrokerReconfigurable,
-                                          oldConfig: KafkaConfig,
-                                          newConfig: KafkaConfig,
-                                          validateOnly: Boolean): Unit = {
-    if (validateOnly)
-      reconfigurable.validateReconfiguration(newConfig)
-    else
-      reconfigurable.reconfigure(oldConfig, newConfig)
+    if (!validateOnly) {
+      info(s"Reconfiguring $reconfigurable, updated configs: $updatedConfigNames custom configs: $newCustomConfigs")
+      reconfigurable.reconfigure(newConfigs)
+    }
   }
 }
 
@@ -622,7 +616,7 @@ class DynamicMetricsReporters(brokerId: Int, server: KafkaServer) extends Reconf
       case reporter: Reconfigurable =>
         if (updatedMetricsReporters.contains(reporter.getClass.getName))
           reporter.validateReconfiguration(configs)
-      case _ => true
+      case _ =>
     }
   }
 
@@ -717,7 +711,8 @@ class DynamicListenerConfig(server: KafkaServer) extends BrokerReconfigurable wi
     val newListeners = listenersToMap(newConfig.listeners)
     val newAdvertisedListeners = listenersToMap(newConfig.advertisedListeners)
     val oldListeners = listenersToMap(oldConfig.listeners)
-    if (newListeners.keySet != newAdvertisedListeners.keySet)
+    val oldAdvertisedListeners = listenersToMap(oldConfig.advertisedListeners)
+    if (!newAdvertisedListeners.keySet.subsetOf(newListeners.keySet))
       throw new ConfigException(s"Listeners '$newListeners' and advertisedListeners '$newAdvertisedListeners' don't match")
     if (newListeners.keySet != newConfig.listenerSecurityProtocolMap.keySet)
       throw new ConfigException(s"Listeners '$newListeners' and listener map '${newConfig.listenerSecurityProtocolMap}' don't match")
@@ -725,14 +720,16 @@ class DynamicListenerConfig(server: KafkaServer) extends BrokerReconfigurable wi
       val prefix = listenerName.configPrefix
       val newListenerProps = immutableListenerConfigs(newConfig, prefix)
       val oldListenerProps = immutableListenerConfigs(oldConfig, prefix)
-      val changed = newListenerProps.size != oldListenerProps.size || newListenerProps.exists { case (k, v) =>
-          !oldListenerProps.contains(k) || oldListenerProps(k) != v
-      }
-      if (changed)
-        throw new ConfigException(s"Existing listener configs cannot be updated dynamically, restart broker or create a new listener for update")
+      if (newListenerProps != oldListenerProps)
+        throw new ConfigException(s"Configs cannot be updated dynamically for existing listener $listenerName, " +
+          "restart broker or create a new listener for update")
     }
     if (!newListeners.contains(newConfig.interBrokerListenerName))
       throw new ConfigException(s"Cannot delete inter-broker listener ${newConfig.interBrokerListenerName}")
+    if (!newAdvertisedListeners.contains(newConfig.interBrokerListenerName))
+      throw new ConfigException(s"Advertised listener must be specified for inter-broker listener ${newConfig.interBrokerListenerName}")
+    else if (!oldAdvertisedListeners.contains(newConfig.interBrokerListenerName))
+      throw new ConfigException(s"Advertised listener cannot be updated to a new listener ${newConfig.interBrokerListenerName}")
   }
 
   def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {

@@ -113,9 +113,12 @@ public class ChannelBuilders {
                     List<String> enabledMechanisms = (List<String>) configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
                     jaasContexts = new HashMap<>(enabledMechanisms.size());
                     for (String mechanism : enabledMechanisms)
-                        jaasContexts.put(mechanism, JaasContext.load(contextType, listenerName, configs, mechanism));
+                        jaasContexts.put(mechanism, JaasContext.loadServerContext(listenerName, mechanism, configs));
                 } else {
-                    jaasContexts = Collections.singletonMap(clientSaslMechanism, JaasContext.load(contextType, listenerName, configs, clientSaslMechanism));
+                    // Use server context for inter-broker client connections and client context for other clients
+                    JaasContext jaasContext = contextType == JaasContext.Type.CLIENT ? JaasContext.loadClientContext(configs) :
+                            JaasContext.loadServerContext(listenerName, clientSaslMechanism, configs);
+                    jaasContexts = Collections.singletonMap(clientSaslMechanism, jaasContext);
                 }
                 channelBuilder = new SaslChannelBuilder(mode,
                         jaasContexts,

@@ -93,14 +93,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
             this.configs = configs;
-            boolean hasKerberos;
-            if (mode == Mode.SERVER) {
-                @SuppressWarnings("unchecked")
-                List<String> enabledMechanisms = (List<String>) this.configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
-                hasKerberos = enabledMechanisms == null || enabledMechanisms.contains(SaslConfigs.GSSAPI_MECHANISM);
-            } else {
-                hasKerberos = clientSaslMechanism.equals(SaslConfigs.GSSAPI_MECHANISM);
-            }
+            boolean hasKerberos = jaasContexts.containsKey(SaslConfigs.GSSAPI_MECHANISM);
 
             if (hasKerberos) {
                 String defaultRealm;
