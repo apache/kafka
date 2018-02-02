@@ -273,7 +273,7 @@ public class StoreChangelogReader implements ChangelogReader {
         long nextPosition = -1;
         int numberRecords = records.size();
         int numberRestored = 0;
-        long lastRestoredOffset = 0;
+        long lastRestoredOffset = -1;
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             final long offset = record.offset();
             if (restorer.hasCompleted(offset, endOffset)) {
