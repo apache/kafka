@@ -313,7 +313,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         }
 
-        maybeAutoCommitOffsetsAsync(now);
+        maybeAutoCommitOffsetsAsync(now, subscriptions.allConsumed());
     }
 
     /**
@@ -623,22 +623,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return false;
     }
 
-    private void maybeAutoCommitOffsetsAsync(long now) {
+    public void maybeAutoCommitOffsetsAsync(long now, Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {
         if (autoCommitEnabled) {
             if (now >= nextAutoCommitDeadline) {
-                this.nextAutoCommitDeadline = now + (coordinatorUnknown() ? retryBackoffMs : autoCommitIntervalMs);
-                doAutoCommitOffsetsAsync();
+                doAutoCommitOffsetsAsync(allConsumedOffsets);
             }
         }
     }
 
-    public void maybeAutoCommitOffsetsNow() {
-        if (autoCommitEnabled && !coordinatorUnknown())
-            doAutoCommitOffsetsAsync();
-    }
-
-    private void doAutoCommitOffsetsAsync() {
-        Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
+    private void doAutoCommitOffsetsAsync(Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {
         log.debug("Sending asynchronous auto-commit of offsets {}", allConsumedOffsets);
 
         commitOffsetsAsync(allConsumedOffsets, new OffsetCommitCallback() {
@@ -650,6 +643,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         nextAutoCommitDeadline = Math.min(time.milliseconds() + retryBackoffMs, nextAutoCommitDeadline);
                 } else {
                     log.debug("Completed asynchronous auto-commit of offsets {}", offsets);
+                    nextAutoCommitDeadline = time.milliseconds() + autoCommitIntervalMs;
                 }
             }
         });
