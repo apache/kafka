@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.List;
@@ -77,31 +78,39 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     @SuppressWarnings("unchecked")
     @Override
+    public <K, V> void forward(final K key, final V value) {
+        forward(key, value, To.all());
+    }
+
+    @SuppressWarnings({"unchecked", "deprecation"})
+    @Override
     public <K, V> void forward(final K key, final V value, final int childIndex) {
-        final ProcessorNode previousNode = currentNode();
-        final ProcessorNode child = (ProcessorNode<K, V>) currentNode().children().get(childIndex);
-        setCurrentNode(child);
-        try {
-            child.process(key, value);
-        } finally {
-            setCurrentNode(previousNode);
-        }
+        forward(key, value, To.child(childIndex));
+    }
+
+    @SuppressWarnings({"unchecked", "deprecation"})
+    @Override
+    public <K, V> void forward(final K key, final V value, final String childName) {
+        forward(key, value, To.child(childName));
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final K key, final V value, final String childName) {
-        for (ProcessorNode child : (List<ProcessorNode<K, V>>) currentNode().children()) {
-            if (child.name().equals(childName)) {
-                ProcessorNode previousNode = currentNode();
-                setCurrentNode(child);
-                try {
+    public <K, V> void forward(final K key, final V value, final To to) {
+        ToInternal toInternal = new ToInternal(to, (List<ProcessorNode>) currentNode().children());
+        if (toInternal.hasTimestamp()) {
+            recordContext.setTimestamp(toInternal.timestamp());
+        }
+        ProcessorNode previousNode = currentNode();
+        try {
+            for (ProcessorNode child : (List<ProcessorNode<K, V>>) currentNode().children()) {
+                if (toInternal.hasChild(child.name())) {
+                    setCurrentNode(child);
                     child.process(key, value);
-                    return;
-                } finally {
-                    setCurrentNode(previousNode);
                 }
             }
+        } finally {
+            setCurrentNode(previousNode);
         }
     }
 

@@ -20,6 +20,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.processor.To;
 
 class KStreamBranch<K, V> implements ProcessorSupplier<K, V> {
 
@@ -42,7 +43,7 @@ class KStreamBranch<K, V> implements ProcessorSupplier<K, V> {
                 if (predicates[i].test(key, value)) {
                     // use forward with childIndex here and then break the loop
                     // so that no record is going to be piped to multiple streams
-                    context().forward(key, value, i);
+                    context().forward(key, value, To.child(i));
                     break;
                 }
             }

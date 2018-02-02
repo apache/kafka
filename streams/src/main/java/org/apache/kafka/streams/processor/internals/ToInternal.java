@@ -16,35 +16,33 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.To;
 
-/**
- * The context associated with the current record being processed by
- * an {@link Processor}
- */
-public interface RecordContext {
-    /**
-     * @return The offset of the original record received from Kafka
-     */
-    long offset();
+import java.util.List;
 
-    /**
-     * @return The timestamp extracted from the record received from Kafka
-     */
-    long timestamp();
+class ToInternal extends To {
+    private final String childName;
 
-    /**
-     * Sets a new timestamp for the output record.
-     */
-    void setTimestamp(final long timestamp);
+    ToInternal(final To to, List<ProcessorNode> children) {
+        super(to);
+        if (super.childName != null) {
+            childName = super.childName;
+        } else if (super.childIndex != -1) {
+            childName = children.get(super.childIndex).name();
+        } else {
+            childName = null;
+        }
+    }
 
-    /**
-     * @return The topic the record was received on
-     */
-    String topic();
+    boolean hasTimestamp() {
+        return timestamp != -1;
+    }
 
-    /**
-     * @return The partition the record was received on
-     */
-    int partition();
+    long timestamp() {
+        return timestamp;
+    }
+
+    boolean hasChild(final String childName) {
+        return this.childName == null || this.childName.equals(childName);
+    }
 }

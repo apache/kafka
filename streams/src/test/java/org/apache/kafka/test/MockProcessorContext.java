@@ -28,12 +28,14 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.CompositeRestoreListener;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.TestToInternal;
 import org.apache.kafka.streams.processor.internals.WrappedBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -179,44 +181,38 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(final K key, final V value) {
-        final ProcessorNode thisNode = currentNode;
-        for (final ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-            currentNode = childNode;
-            try {
-                childNode.process(key, value);
-            } finally {
-                currentNode = thisNode;
-            }
-        }
+        forward(key, value, To.all());
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(final K key, final V value, final int childIndex) {
-        final ProcessorNode thisNode = currentNode;
-        final ProcessorNode childNode = (ProcessorNode<K, V>) thisNode.children().get(childIndex);
-        currentNode = childNode;
-        try {
-            childNode.process(key, value);
-        } finally {
-            currentNode = thisNode;
-        }
+        forward(key, value, To.child(childIndex));
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(final K key, final V value, final String childName) {
+        forward(key, value, To.child(childName));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <K, V> void forward(final K key, final V value, final To to) {
+        TestToInternal testToInternal = new TestToInternal(to, (List<ProcessorNode>) currentNode.children());
+        if (testToInternal.hasTimestamp()) {
+            setTime(testToInternal.timestamp());
+        }
         final ProcessorNode thisNode = currentNode;
-        for (final ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-            if (childNode.name().equals(childName)) {
-                currentNode = childNode;
-                try {
+        try {
+            for (final ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+                if (testToInternal.hasChild(childNode.name())) {
+                    currentNode = childNode;
                     childNode.process(key, value);
-                } finally {
-                    currentNode = thisNode;
                 }
-                break;
             }
+        } finally {
+            currentNode = thisNode;
         }
     }
 

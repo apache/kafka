@@ -31,6 +31,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -326,6 +327,17 @@ public class ProcessorTopologyTest {
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", partition, 30L);
     }
 
+    @Test
+    public void shouldConsiderModifiedTimeStamps() throws Exception {
+        final int partition = 10;
+        driver = new ProcessorTopologyTestDriver(config, createTimestampTopology(partition).internalTopologyBuilder);
+        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER, 10L);
+        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER, 20L);
+        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER, 30L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition, 20L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", partition, 30L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", partition, 40L);
+    }
 
     private void assertNextOutputRecord(final String topic,
                                         final String key,
@@ -370,6 +382,12 @@ public class ProcessorTopologyTest {
         return builder.addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
                                     .addProcessor("processor", define(new ForwardingProcessor()), "source")
                                     .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
+    }
+
+    private TopologyBuilder createTimestampTopology(int partition) {
+        return builder.addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+            .addProcessor("processor", define(new TimestampProcessor()), "source")
+            .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
     }
 
     private TopologyBuilder createMultiplexingTopology() {
@@ -443,6 +461,17 @@ public class ProcessorTopologyTest {
         @Override
         public void punctuate(long streamTime) {
             context().forward(Long.toString(streamTime), "punctuate");
+        }
+    }
+
+    /**
+     * A processor that simply forwards all messages to all children.
+     */
+    protected static class TimestampProcessor extends AbstractProcessor<String, String> {
+
+        @Override
+        public void process(String key, String value) {
+            context().forward(key, value, To.all().withTimestamp(context().timestamp() + 10));
         }
     }
 
