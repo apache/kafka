@@ -18,9 +18,9 @@
 <script id="connect-template" type="text/x-handlebars-template">
     <h3><a id="connect_overview" href="#connect_overview">8.1 Overview</a></h3>
 
-    Kafka Connect is a tool for scalably and reliably streaming data between Apache Kafka and other systems. It makes it simple to quickly define <i>connectors</i> that move large collections of data into and out of Kafka. Kafka Connect can ingest entire databases or collect metrics from all your application servers into Kafka topics, making the data available for stream processing with low latency. An export job can deliver data from Kafka topics into secondary storage and query systems or into batch systems for offline analysis.
+    <p>Kafka Connect is a tool for scalably and reliably streaming data between Apache Kafka and other systems. It makes it simple to quickly define <i>connectors</i> that move large collections of data into and out of Kafka. Kafka Connect can ingest entire databases or collect metrics from all your application servers into Kafka topics, making the data available for stream processing with low latency. An export job can deliver data from Kafka topics into secondary storage and query systems or into batch systems for offline analysis.</p>
 
-    Kafka Connect features include:
+    <p>Kafka Connect features include:</p>
     <ul>
         <li><b>A common framework for Kafka connectors</b> - Kafka Connect standardizes integration of other data systems with Kafka, simplifying connector development, deployment, and management</li>
         <li><b>Distributed and standalone modes</b> - scale up to a large, centrally managed service supporting an entire organization or scale down to development, testing, and small production deployments</li>
@@ -32,43 +32,43 @@
 
     <h3><a id="connect_user" href="#connect_user">8.2 User Guide</a></h3>
 
-    The quickstart provides a brief example of how to run a standalone version of Kafka Connect. This section describes how to configure, run, and manage Kafka Connect in more detail.
+    <p>The quickstart provides a brief example of how to run a standalone version of Kafka Connect. This section describes how to configure, run, and manage Kafka Connect in more detail.</p>
 
     <h4><a id="connect_running" href="#connect_running">Running Kafka Connect</a></h4>
 
-    Kafka Connect currently supports two modes of execution: standalone (single process) and distributed.
+    <p>Kafka Connect currently supports two modes of execution: standalone (single process) and distributed.</p>
 
-    In standalone mode all work is performed in a single process. This configuration is simpler to setup and get started with and may be useful in situations where only one worker makes sense (e.g. collecting log files), but it does not benefit from some of the features of Kafka Connect such as fault tolerance. You can start a standalone process with the following command:
+    <p>In standalone mode all work is performed in a single process. This configuration is simpler to setup and get started with and may be useful in situations where only one worker makes sense (e.g. collecting log files), but it does not benefit from some of the features of Kafka Connect such as fault tolerance. You can start a standalone process with the following command:</p>
 
     <pre class="brush: bash;">
     &gt; bin/connect-standalone.sh config/connect-standalone.properties connector1.properties [connector2.properties ...]
     </pre>
 
-    The first parameter is the configuration for the worker. This includes settings such as the Kafka connection parameters, serialization format, and how frequently to commit offsets. The provided example should work well with a local cluster running with the default configuration provided by <code>config/server.properties</code>. It will require tweaking to use with a different configuration or production deployment. All workers (both standalone and distributed) require a few configs:
+    <p>The first parameter is the configuration for the worker. This includes settings such as the Kafka connection parameters, serialization format, and how frequently to commit offsets. The provided example should work well with a local cluster running with the default configuration provided by <code>config/server.properties</code>. It will require tweaking to use with a different configuration or production deployment. All workers (both standalone and distributed) require a few configs:</p>
     <ul>
         <li><code>bootstrap.servers</code> - List of Kafka servers used to bootstrap connections to Kafka</li>
         <li><code>key.converter</code> - Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the keys in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro.</li>
         <li><code>value.converter</code> - Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the values in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro.</li>
     </ul>
 
-    The important configuration options specific to standalone mode are:
+    <p>The important configuration options specific to standalone mode are:</p>
     <ul>
         <li><code>offset.storage.file.filename</code> - File to store offset data in</li>
     </ul>
 
-    The parameters that are configured here are intended for producers and consumers used by Kafka Connect to access the configuration, offset and status topics. For configuration of Kafka source and Kafka sink tasks, the same parameters can be used but need to be prefixed with <code>consumer.</code> and <code>producer.</code> respectively. The only parameter that is inherited from the worker configuration is <code>bootstrap.servers</code>, which in most cases will be sufficient, since the same cluster is often used for all purposes. A notable exeption is a secured cluster, which requires extra parameters to allow connections. These parameters will need to be set up to three times in the worker configuration, once for management access, once for Kafka sinks and once for Kafka sources.
+    <p>The parameters that are configured here are intended for producers and consumers used by Kafka Connect to access the configuration, offset and status topics. For configuration of Kafka source and Kafka sink tasks, the same parameters can be used but need to be prefixed with <code>consumer.</code> and <code>producer.</code> respectively. The only parameter that is inherited from the worker configuration is <code>bootstrap.servers</code>, which in most cases will be sufficient, since the same cluster is often used for all purposes. A notable exeption is a secured cluster, which requires extra parameters to allow connections. These parameters will need to be set up to three times in the worker configuration, once for management access, once for Kafka sinks and once for Kafka sources.</p>
 
-    The remaining parameters are connector configuration files. You may include as many as you want, but all will execute within the same process (on different threads).
+    <p>The remaining parameters are connector configuration files. You may include as many as you want, but all will execute within the same process (on different threads).</p>
 
-    Distributed mode handles automatic balancing of work, allows you to scale up (or down) dynamically, and offers fault tolerance both in the active tasks and for configuration and offset commit data. Execution is very similar to standalone mode:
+    <p>Distributed mode handles automatic balancing of work, allows you to scale up (or down) dynamically, and offers fault tolerance both in the active tasks and for configuration and offset commit data. Execution is very similar to standalone mode:</p>
 
     <pre class="brush: bash;">
     &gt; bin/connect-distributed.sh config/connect-distributed.properties
     </pre>
 
-    The difference is in the class which is started and the configuration parameters which change how the Kafka Connect process decides where to store configurations, how to assign work, and where to store offsets and task statues. In the distributed mode, Kafka Connect stores the offsets, configs and task statuses in Kafka topics. It is recommended to manually create the topics for offset, configs and statuses in order to achieve the desired the number of partitions and replication factors. If the topics are not yet created when starting Kafka Connect, the topics will be auto created with default number of partitions and replication factor, which may not be best suited for its usage.
+    <p>The difference is in the class which is started and the configuration parameters which change how the Kafka Connect process decides where to store configurations, how to assign work, and where to store offsets and task statues. In the distributed mode, Kafka Connect stores the offsets, configs and task statuses in Kafka topics. It is recommended to manually create the topics for offset, configs and statuses in order to achieve the desired the number of partitions and replication factors. If the topics are not yet created when starting Kafka Connect, the topics will be auto created with default number of partitions and replication factor, which may not be best suited for its usage.</p>
 
-    In particular, the following configuration parameters, in addition to the common settings mentioned above, are critical to set before starting your cluster:
+    <p>In particular, the following configuration parameters, in addition to the common settings mentioned above, are critical to set before starting your cluster:</p>
     <ul>
         <li><code>group.id</code> (default <code>connect-cluster</code>) - unique name for the cluster, used in forming the Connect cluster group; note that this <b>must not conflict</b> with consumer group IDs</li>
         <li><code>config.storage.topic</code> (default <code>connect-configs</code>) - topic to use for storing connector and task configurations; note that this should be a single partition, highly replicated, compacted topic. You may need to manually create the topic to ensure the correct configuration as auto created topics may have multiple partitions or be automatically configured for deletion rather than compaction</li>
@@ -76,14 +76,14 @@
         <li><code>status.storage.topic</code> (default <code>connect-status</code>) - topic to use for storing statuses; this topic can have multiple partitions, and should be replicated and configured for compaction</li>
     </ul>
 
-    Note that in distributed mode the connector configurations are not passed on the command line. Instead, use the REST API described below to create, modify, and destroy connectors. 
+    <p>Note that in distributed mode the connector configurations are not passed on the command line. Instead, use the REST API described below to create, modify, and destroy connectors.</p>
 
 
     <h4><a id="connect_configuring" href="#connect_configuring">Configuring Connectors</a></h4>
 
-    Connector configurations are simple key-value mappings. For standalone mode these are defined in a properties file and passed to the Connect process on the command line. In distributed mode, they will be included in the JSON payload for the request that creates (or modifies) the connector.
+    <p>Connector configurations are simple key-value mappings. For standalone mode these are defined in a properties file and passed to the Connect process on the command line. In distributed mode, they will be included in the JSON payload for the request that creates (or modifies) the connector.</p>
 
-    Most configurations are connector dependent, so they can't be outlined here. However, there are a few common options:
+    <p>Most configurations are connector dependent, so they can't be outlined here. However, there are a few common options:</p>
 
     <ul>
         <li><code>name</code> - Unique name for the connector. Attempting to register again with the same name will fail.</li>
@@ -93,20 +93,21 @@
         <li><code>value.converter</code> - (optional) Override the default value converter set by the worker.</li>
     </ul>
 
-    The <code>connector.class</code> config supports several formats: the full name or alias of the class for this connector. If the connector is org.apache.kafka.connect.file.FileStreamSinkConnector, you can either specify this full name or use FileStreamSink or FileStreamSinkConnector to make the configuration a bit shorter.
+    <p>The <code>connector.class</code> config supports several formats: the full name or alias of the class for this connector. If the connector is org.apache.kafka.connect.file.FileStreamSinkConnector, you can either specify this full name or use FileStreamSink or FileStreamSinkConnector to make the configuration a bit shorter.</p>
 
-    Sink connectors also have one additional option to control their input:
+    <p>Sink connectors also have a few additional options to control their input. Each sink connector must set one of the following:</p>
     <ul>
-        <li><code>topics</code> - A list of topics to use as input for this connector</li>
+        <li><code>topics</code> - A comma-separated list of topics to use as input for this connector</li>
+        <li><code>topics.regex</code> - A Java regular expression of topics to use as input for this connector</li>
     </ul>
 
-    For any other options, you should consult the documentation for the connector.
+    <p>For any other options, you should consult the documentation for the connector.</p>
 
     <h4><a id="connect_transforms" href="#connect_transforms">Transformations</a></h4>
 
-    Connectors can be configured with transformations to make lightweight message-at-a-time modifications. They can be convenient for data massaging and event routing.
+    <p>Connectors can be configured with transformations to make lightweight message-at-a-time modifications. They can be convenient for data massaging and event routing.</p>
 
-    A transformation chain can be specified in the connector configuration.
+    <p>A transformation chain can be specified in the connector configuration.</p>
 
     <ul>
         <li><code>transforms</code> - List of aliases for the transformation, specifying the order in which the transformations will be applied.</li>
@@ -123,13 +124,13 @@
         value.converter.schemas.enable
     </pre>
 
-    The file source connector reads each line as a String. We will wrap each line in a Map and then add a second field to identify the origin of the event. To do this, we use two transformations:
+    <p>The file source connector reads each line as a String. We will wrap each line in a Map and then add a second field to identify the origin of the event. To do this, we use two transformations:</p>
     <ul>
         <li><b>HoistField</b> to place the input line inside a Map</li>
         <li><b>InsertField</b> to add the static field. In this example we'll indicate that the record came from a file connector</li>
     </ul>
 
-    After adding the transformations, <code>connect-file-source.properties</code> file looks as following:
+    <p>After adding the transformations, <code>connect-file-source.properties</code> file looks as following:</p>
 
     <pre class="brush: text;">
         name=local-file-source
@@ -147,7 +148,7 @@
 
     <p>All the lines starting with <code>transforms</code> were added for the transformations. You can see the two transformations we created: "InsertSource" and "MakeMap" are aliases that we chose to give the transformations. The transformation types are based on the list of built-in transformations you can see below. Each transformation type has additional configuration: HoistField requires a configuration called "field", which is the name of the field in the map that will include the original String from the file. InsertField transformation lets us specify the field name and the value that we are adding.</p>
 
-    When we ran the file source connector on my sample file without the transformations, and then read them using <code>kafka-console-consumer.sh</code>, the results were:
+    <p>When we ran the file source connector on my sample file without the transformations, and then read them using <code>kafka-console-consumer.sh</code>, the results were:</p>
 
     <pre class="brush: text;">
         "foo"
@@ -155,7 +156,7 @@
         "hello world"
    </pre>
 
-    We then create a new file connector, this time after adding the transformations to the configuration file. This time, the results will be:
+    <p>We then create a new file connector, this time after adding the transformations to the configuration file. This time, the results will be:</p>
 
     <pre class="brush: json;">
         {"line":"foo","data_source":"test-file-source"}
@@ -163,9 +164,9 @@
         {"line":"hello world","data_source":"test-file-source"}
     </pre>
 
-    You can see that the lines we've read are now part of a JSON map, and there is an extra field with the static value we specified. This is just one example of what you can do with transformations.
+    <p>You can see that the lines we've read are now part of a JSON map, and there is an extra field with the static value we specified. This is just one example of what you can do with transformations.</p>
 
-    Several widely-applicable data and routing transformations are included with Kafka Connect:
+    <p>Several widely-applicable data and routing transformations are included with Kafka Connect:</p>
 
     <ul>
         <li>InsertField - Add a field using either static data or record metadata</li>
@@ -179,14 +180,50 @@
         <li>RegexRouter - modify the topic of a record based on original topic, replacement string and a regular expression</li>
     </ul>
 
-    Details on how to configure each transformation are listed below:
+    <p>Details on how to configure each transformation are listed below:</p>
 
 
     <!--#include virtual="generated/connect_transforms.html" -->
 
     <h4><a id="connect_rest" href="#connect_rest">REST API</a></h4>
 
-    Since Kafka Connect is intended to be run as a service, it also provides a REST API for managing connectors. By default, this service runs on port 8083. The following are the currently supported endpoints:
+    <p>Since Kafka Connect is intended to be run as a service, it also provides a REST API for managing connectors. The REST API server can be configured using the <code>listeners</code> configuration option.
+        This field should contain a list of listeners in the following format: <code>protocol://host:port,protocol2://host2:port2</code>. Currently supported protocols are <code>http</code> and <code>https</code>.
+        For example:</p>
+
+    <pre class="brush: text;">
+        listeners=http://localhost:8080,https://localhost:8443
+    </pre>
+
+    <p>By default, if no <code>listeners</code> are specified, the REST server runs on port 8083 using the HTTP protocol. When using HTTPS, the configuration has to include the SSL configuration.
+    By default, it will use the <code>ssl.*</code> settings. In case it is needed to use different configuration for the REST API than for connecting to Kafka brokers, the fields can be prefixed with <code>listeners.https</code>.
+        When using the prefix, only the prefixed options will be used and the <code>ssl.*</code> options without the prefix will be ignored. Following fields can be used to configure HTTPS for the REST API:</p>
+
+    <ul>
+        <li><code>ssl.keystore.location</code></li>
+        <li><code>ssl.keystore.password</code></li>
+        <li><code>ssl.keystore.type</code></li>
+        <li><code>ssl.key.password</code></li>
+        <li><code>ssl.truststore.location</code></li>
+        <li><code>ssl.truststore.password</code></li>
+        <li><code>ssl.truststore.type</code></li>
+        <li><code>ssl.enabled.protocols</code></li>
+        <li><code>ssl.provider</code></li>
+        <li><code>ssl.protocol</code></li>
+        <li><code>ssl.cipher.suites</code></li>
+        <li><code>ssl.keymanager.algorithm</code></li>
+        <li><code>ssl.secure.random.implementation</code></li>
+        <li><code>ssl.trustmanager.algorithm</code></li>
+        <li><code>ssl.endpoint.identification.algorithm</code></li>
+        <li><code>ssl.client.auth</code></li>
+    </ul>
+
+    <p>The REST API is used not only by users to monitor / manage Kafka Connect. It is also used for the Kafka Connect cross-cluster communication. Requests received on the follower nodes REST API will be forwarded to the leader node REST API.
+    In case the URI under which is given host reachable is different from the URI which it listens on, the configuration options <code>rest.advertised.host.name</code>, <code>rest.advertised.port</code> and <code>rest.advertised.listener</code>
+    can be used to change the URI which will be used by the follower nodes to connect with the leader. When using both HTTP and HTTPS listeners, the <code>rest.advertised.listener</code> option can be also used to define which listener
+        will be used for the cross-cluster communication. When using HTTPS for communication between nodes, the same <code>ssl.*</code> or <code>listeners.https</code> options will be used to configure the HTTPS client.</p>
+
+    <p>The following are the currently supported REST API endpoints:</p>
 
     <ul>
         <li><code>GET /connectors</code> - return a list of active connectors</li>
@@ -204,7 +241,7 @@
         <li><code>DELETE /connectors/{name}</code> - delete a connector, halting all tasks and deleting its configuration</li>
     </ul>
 
-    Kafka Connect also provides a REST API for getting information about connector plugins:
+    <p>Kafka Connect also provides a REST API for getting information about connector plugins:</p>
 
     <ul>
         <li><code>GET /connector-plugins</code>- return a list of connector plugins installed in the Kafka Connect cluster. Note that the API only checks for connectors on the worker that handles the request, which means you may see inconsistent results, especially during a rolling upgrade if you add new connector jars</li>
@@ -213,39 +250,39 @@
 
     <h3><a id="connect_development" href="#connect_development">8.3 Connector Development Guide</a></h3>
 
-    This guide describes how developers can write new connectors for Kafka Connect to move data between Kafka and other systems. It briefly reviews a few key concepts and then describes how to create a simple connector.
+    <p>This guide describes how developers can write new connectors for Kafka Connect to move data between Kafka and other systems. It briefly reviews a few key concepts and then describes how to create a simple connector.</p>
 
     <h4><a id="connect_concepts" href="#connect_concepts">Core Concepts and APIs</a></h4>
 
     <h5><a id="connect_connectorsandtasks" href="#connect_connectorsandtasks">Connectors and Tasks</a></h5>
 
-    To copy data between Kafka and another system, users create a <code>Connector</code> for the system they want to pull data from or push data to. Connectors come in two flavors: <code>SourceConnectors</code> import data from another system (e.g. <code>JDBCSourceConnector</code> would import a relational database into Kafka) and <code>SinkConnectors</code> export data (e.g. <code>HDFSSinkConnector</code> would export the contents of a Kafka topic to an HDFS file).
+    <p>To copy data between Kafka and another system, users create a <code>Connector</code> for the system they want to pull data from or push data to. Connectors come in two flavors: <code>SourceConnectors</code> import data from another system (e.g. <code>JDBCSourceConnector</code> would import a relational database into Kafka) and <code>SinkConnectors</code> export data (e.g. <code>HDFSSinkConnector</code> would export the contents of a Kafka topic to an HDFS file).</p>
 
-    <code>Connectors</code> do not perform any data copying themselves: their configuration describes the data to be copied, and the <code>Connector</code> is responsible for breaking that job into a set of <code>Tasks</code> that can be distributed to workers. These <code>Tasks</code> also come in two corresponding flavors: <code>SourceTask</code> and <code>SinkTask</code>.
+    <p><code>Connectors</code> do not perform any data copying themselves: their configuration describes the data to be copied, and the <code>Connector</code> is responsible for breaking that job into a set of <code>Tasks</code> that can be distributed to workers. These <code>Tasks</code> also come in two corresponding flavors: <code>SourceTask</code> and <code>SinkTask</code>.</p>
 
-    With an assignment in hand, each <code>Task</code> must copy its subset of the data to or from Kafka. In Kafka Connect, it should always be possible to frame these assignments as a set of input and output streams consisting of records with consistent schemas. Sometimes this mapping is obvious: each file in a set of log files can be considered a stream with each parsed line forming a record using the same schema and offsets stored as byte offsets in the file. In other cases it may require more effort to map to this model: a JDBC connector can map each table to a stream, but the offset is less clear. One possible mapping uses a timestamp column to generate queries incrementally returning new data, and the last queried timestamp can be used as the offset.
+    <p>With an assignment in hand, each <code>Task</code> must copy its subset of the data to or from Kafka. In Kafka Connect, it should always be possible to frame these assignments as a set of input and output streams consisting of records with consistent schemas. Sometimes this mapping is obvious: each file in a set of log files can be considered a stream with each parsed line forming a record using the same schema and offsets stored as byte offsets in the file. In other cases it may require more effort to map to this model: a JDBC connector can map each table to a stream, but the offset is less clear. One possible mapping uses a timestamp column to generate queries incrementally returning new data, and the last queried timestamp can be used as the offset.</p>
 
 
     <h5><a id="connect_streamsandrecords" href="#connect_streamsandrecords">Streams and Records</a></h5>
 
-    Each stream should be a sequence of key-value records. Both the keys and values can have complex structure -- many primitive types are provided, but arrays, objects, and nested data structures can be represented as well. The runtime data format does not assume any particular serialization format; this conversion is handled internally by the framework.
+    <p>Each stream should be a sequence of key-value records. Both the keys and values can have complex structure -- many primitive types are provided, but arrays, objects, and nested data structures can be represented as well. The runtime data format does not assume any particular serialization format; this conversion is handled internally by the framework.</p>
 
-    In addition to the key and value, records (both those generated by sources and those delivered to sinks) have associated stream IDs and offsets. These are used by the framework to periodically commit the offsets of data that have been processed so that in the event of failures, processing can resume from the last committed offsets, avoiding unnecessary reprocessing and duplication of events.
+    <p>In addition to the key and value, records (both those generated by sources and those delivered to sinks) have associated stream IDs and offsets. These are used by the framework to periodically commit the offsets of data that have been processed so that in the event of failures, processing can resume from the last committed offsets, avoiding unnecessary reprocessing and duplication of events.</p>
 
     <h5><a id="connect_dynamicconnectors" href="#connect_dynamicconnectors">Dynamic Connectors</a></h5>
 
-    Not all jobs are static, so <code>Connector</code> implementations are also responsible for monitoring the external system for any changes that might require reconfiguration. For example, in the <code>JDBCSourceConnector</code> example, the <code>Connector</code> might assign a set of tables to each <code>Task</code>. When a new table is created, it must discover this so it can assign the new table to one of the <code>Tasks</code> by updating its configuration. When it notices a change that requires reconfiguration (or a change in the number of <code>Tasks</code>), it notifies the framework and the framework updates any corresponding <code>Tasks</code>.
+    <p>Not all jobs are static, so <code>Connector</code> implementations are also responsible for monitoring the external system for any changes that might require reconfiguration. For example, in the <code>JDBCSourceConnector</code> example, the <code>Connector</code> might assign a set of tables to each <code>Task</code>. When a new table is created, it must discover this so it can assign the new table to one of the <code>Tasks</code> by updating its configuration. When it notices a change that requires reconfiguration (or a change in the number of <code>Tasks</code>), it notifies the framework and the framework updates any corresponding <code>Tasks</code>.</p>
 
 
     <h4><a id="connect_developing" href="#connect_developing">Developing a Simple Connector</a></h4>
 
-    Developing a connector only requires implementing two interfaces, the <code>Connector</code> and <code>Task</code>. A simple example is included with the source code for Kafka in the <code>file</code> package. This connector is meant for use in standalone mode and has implementations of a <code>SourceConnector</code>/<code>SourceTask</code> to read each line of a file and emit it as a record and a <code>SinkConnector</code>/<code>SinkTask</code> that writes each record to a file.
+    <p>Developing a connector only requires implementing two interfaces, the <code>Connector</code> and <code>Task</code>. A simple example is included with the source code for Kafka in the <code>file</code> package. This connector is meant for use in standalone mode and has implementations of a <code>SourceConnector</code>/<code>SourceTask</code> to read each line of a file and emit it as a record and a <code>SinkConnector</code>/<code>SinkTask</code> that writes each record to a file.</p>
 
-    The rest of this section will walk through some code to demonstrate the key steps in creating a connector, but developers should also refer to the full example source code as many details are omitted for brevity.
+    <p>The rest of this section will walk through some code to demonstrate the key steps in creating a connector, but developers should also refer to the full example source code as many details are omitted for brevity.</p>
 
     <h5><a id="connect_connectorexample" href="#connect_connectorexample">Connector Example</a></h5>
 
-    We'll cover the <code>SourceConnector</code> as a simple example. <code>SinkConnector</code> implementations are very similar. Start by creating the class that inherits from <code>SourceConnector</code> and add a couple of fields that will store parsed configuration information (the filename to read from and the topic to send data to):
+    <p>We'll cover the <code>SourceConnector</code> as a simple example. <code>SinkConnector</code> implementations are very similar. Start by creating the class that inherits from <code>SourceConnector</code> and add a couple of fields that will store parsed configuration information (the filename to read from and the topic to send data to):</p>
 
     <pre class="brush: java;">
     public class FileStreamSourceConnector extends SourceConnector {
@@ -253,7 +290,7 @@
         private String topic;
     </pre>
 
-    The easiest method to fill in is <code>taskClass()</code>, which defines the class that should be instantiated in worker processes to actually read the data:
+    <p>The easiest method to fill in is <code>taskClass()</code>, which defines the class that should be instantiated in worker processes to actually read the data:</p>
 
     <pre class="brush: java;">
     @Override
@@ -262,7 +299,7 @@
     }
     </pre>
 
-    We will define the <code>FileStreamSourceTask</code> class below. Next, we add some standard lifecycle methods, <code>start()</code> and <code>stop()</code>:
+    <p>We will define the <code>FileStreamSourceTask</code> class below. Next, we add some standard lifecycle methods, <code>start()</code> and <code>stop()</code></p>:
 
     <pre class="brush: java;">
     @Override
@@ -278,9 +315,9 @@
     }
     </pre>
 
-    Finally, the real core of the implementation is in <code>taskConfigs()</code>. In this case we are only
+    <p>Finally, the real core of the implementation is in <code>taskConfigs()</code>. In this case we are only
     handling a single file, so even though we may be permitted to generate more tasks as per the
-    <code>maxTasks</code> argument, we return a list with only one entry:
+    <code>maxTasks</code> argument, we return a list with only one entry:</p>
 
     <pre class="brush: java;">
     @Override
@@ -296,18 +333,18 @@
     }
     </pre>
 
-    Although not used in the example, <code>SourceTask</code> also provides two APIs to commit offsets in the source system: <code>commit</code> and <code>commitRecord</code>. The APIs are provided for source systems which have an acknowledgement mechanism for messages. Overriding these methods allows the source connector to acknowledge messages in the source system, either in bulk or individually, once they have been written to Kafka.
-    The <code>commit</code> API stores the offsets in the source system, up to the offsets that have been returned by <code>poll</code>. The implementation of this API should block until the commit is complete. The <code>commitRecord</code> API saves the offset in the source system for each <code>SourceRecord</code> after it is written to Kafka. As Kafka Connect will record offsets automatically, <code>SourceTask</code>s are not required to implement them. In cases where a connector does need to acknowledge messages in the source system, only one of the APIs is typically required.
+    <p>Although not used in the example, <code>SourceTask</code> also provides two APIs to commit offsets in the source system: <code>commit</code> and <code>commitRecord</code>. The APIs are provided for source systems which have an acknowledgement mechanism for messages. Overriding these methods allows the source connector to acknowledge messages in the source system, either in bulk or individually, once they have been written to Kafka.
+    The <code>commit</code> API stores the offsets in the source system, up to the offsets that have been returned by <code>poll</code>. The implementation of this API should block until the commit is complete. The <code>commitRecord</code> API saves the offset in the source system for each <code>SourceRecord</code> after it is written to Kafka. As Kafka Connect will record offsets automatically, <code>SourceTask</code>s are not required to implement them. In cases where a connector does need to acknowledge messages in the source system, only one of the APIs is typically required.</p>
 
-    Even with multiple tasks, this method implementation is usually pretty simple. It just has to determine the number of input tasks, which may require contacting the remote service it is pulling data from, and then divvy them up. Because some patterns for splitting work among tasks are so common, some utilities are provided in <code>ConnectorUtils</code> to simplify these cases.
+    <p>Even with multiple tasks, this method implementation is usually pretty simple. It just has to determine the number of input tasks, which may require contacting the remote service it is pulling data from, and then divvy them up. Because some patterns for splitting work among tasks are so common, some utilities are provided in <code>ConnectorUtils</code> to simplify these cases.</p>
 
-    Note that this simple example does not include dynamic input. See the discussion in the next section for how to trigger updates to task configs.
+    <p>Note that this simple example does not include dynamic input. See the discussion in the next section for how to trigger updates to task configs.</p>
 
     <h5><a id="connect_taskexample" href="#connect_taskexample">Task Example - Source Task</a></h5>
 
-    Next we'll describe the implementation of the corresponding <code>SourceTask</code>. The implementation is short, but too long to cover completely in this guide. We'll use pseudo-code to describe most of the implementation, but you can refer to the source code for the full example.
+    <p>Next we'll describe the implementation of the corresponding <code>SourceTask</code>. The implementation is short, but too long to cover completely in this guide. We'll use pseudo-code to describe most of the implementation, but you can refer to the source code for the full example.</p>
 
-    Just as with the connector, we need to create a class inheriting from the appropriate base <code>Task</code> class. It also has some standard lifecycle methods:
+    <p>Just as with the connector, we need to create a class inheriting from the appropriate base <code>Task</code> class. It also has some standard lifecycle methods:</p>
 
 
     <pre class="brush: java;">
@@ -329,9 +366,9 @@
         }
     </pre>
 
-    These are slightly simplified versions, but show that that these methods should be relatively simple and the only work they should perform is allocating or freeing resources. There are two points to note about this implementation. First, the <code>start()</code> method does not yet handle resuming from a previous offset, which will be addressed in a later section. Second, the <code>stop()</code> method is synchronized. This will be necessary because <code>SourceTasks</code> are given a dedicated thread which they can block indefinitely, so they need to be stopped with a call from a different thread in the Worker.
+    <p>These are slightly simplified versions, but show that these methods should be relatively simple and the only work they should perform is allocating or freeing resources. There are two points to note about this implementation. First, the <code>start()</code> method does not yet handle resuming from a previous offset, which will be addressed in a later section. Second, the <code>stop()</code> method is synchronized. This will be necessary because <code>SourceTasks</code> are given a dedicated thread which they can block indefinitely, so they need to be stopped with a call from a different thread in the Worker.</p>
 
-    Next, we implement the main functionality of the task, the <code>poll()</code> method which gets events from the input system and returns a <code>List&lt;SourceRecord&gt;</code>:
+    <p>Next, we implement the main functionality of the task, the <code>poll()</code> method which gets events from the input system and returns a <code>List&lt;SourceRecord&gt;</code>:</p>
 
     <pre class="brush: java;">
     @Override
@@ -357,13 +394,13 @@
     }
     </pre>
 
-    Again, we've omitted some details, but we can see the important steps: the <code>poll()</code> method is going to be called repeatedly, and for each call it will loop trying to read records from the file. For each line it reads, it also tracks the file offset. It uses this information to create an output <code>SourceRecord</code> with four pieces of information: the source partition (there is only one, the single file being read), source offset (byte offset in the file), output topic name, and output value (the line, and we include a schema indicating this value will always be a string). Other variants of the <code>SourceRecord</code> constructor can also include a specific output partition and a key.
+    <p>Again, we've omitted some details, but we can see the important steps: the <code>poll()</code> method is going to be called repeatedly, and for each call it will loop trying to read records from the file. For each line it reads, it also tracks the file offset. It uses this information to create an output <code>SourceRecord</code> with four pieces of information: the source partition (there is only one, the single file being read), source offset (byte offset in the file), output topic name, and output value (the line, and we include a schema indicating this value will always be a string). Other variants of the <code>SourceRecord</code> constructor can also include a specific output partition, a key, and headers.</p>
 
-    Note that this implementation uses the normal Java <code>InputStream</code> interface and may sleep if data is not available. This is acceptable because Kafka Connect provides each task with a dedicated thread. While task implementations have to conform to the basic <code>poll()</code> interface, they have a lot of flexibility in how they are implemented. In this case, an NIO-based implementation would be more efficient, but this simple approach works, is quick to implement, and is compatible with older versions of Java.
+    <p>Note that this implementation uses the normal Java <code>InputStream</code> interface and may sleep if data is not available. This is acceptable because Kafka Connect provides each task with a dedicated thread. While task implementations have to conform to the basic <code>poll()</code> interface, they have a lot of flexibility in how they are implemented. In this case, an NIO-based implementation would be more efficient, but this simple approach works, is quick to implement, and is compatible with older versions of Java.</p>
 
     <h5><a id="connect_sinktasks" href="#connect_sinktasks">Sink Tasks</a></h5>
 
-    The previous section described how to implement a simple <code>SourceTask</code>. Unlike <code>SourceConnector</code> and <code>SinkConnector</code>, <code>SourceTask</code> and <code>SinkTask</code> have very different interfaces because <code>SourceTask</code> uses a pull interface and <code>SinkTask</code> uses a push interface. Both share the common lifecycle methods, but the <code>SinkTask</code> interface is quite different:
+    <p>The previous section described how to implement a simple <code>SourceTask</code>. Unlike <code>SourceConnector</code> and <code>SinkConnector</code>, <code>SourceTask</code> and <code>SinkTask</code> have very different interfaces because <code>SourceTask</code> uses a pull interface and <code>SinkTask</code> uses a push interface. Both share the common lifecycle methods, but the <code>SinkTask</code> interface is quite different:</p>
 
     <pre class="brush: java;">
     public abstract class SinkTask implements Task {
@@ -377,17 +414,17 @@
         }
     </pre>
 
-    The <code>SinkTask</code> documentation contains full details, but this interface is nearly as simple as the <code>SourceTask</code>. The <code>put()</code> method should contain most of the implementation, accepting sets of <code>SinkRecords</code>, performing any required translation, and storing them in the destination system. This method does not need to ensure the data has been fully written to the destination system before returning. In fact, in many cases internal buffering will be useful so an entire batch of records can be sent at once, reducing the overhead of inserting events into the downstream data store. The <code>SinkRecords</code> contain essentially the same information as <code>SourceRecords</code>: Kafka topic, partition, offset and the event key and value.
+    <p>The <code>SinkTask</code> documentation contains full details, but this interface is nearly as simple as the <code>SourceTask</code>. The <code>put()</code> method should contain most of the implementation, accepting sets of <code>SinkRecords</code>, performing any required translation, and storing them in the destination system. This method does not need to ensure the data has been fully written to the destination system before returning. In fact, in many cases internal buffering will be useful so an entire batch of records can be sent at once, reducing the overhead of inserting events into the downstream data store. The <code>SinkRecords</code> contain essentially the same information as <code>SourceRecords</code>: Kafka topic, partition, offset, the event key and value, and optional headers.</p>
 
-    The <code>flush()</code> method is used during the offset commit process, which allows tasks to recover from failures and resume from a safe point such that no events will be missed. The method should push any outstanding data to the destination system and then block until the write has been acknowledged. The <code>offsets</code> parameter can often be ignored, but is useful in some cases where implementations want to store offset information in the destination store to provide exactly-once
-    delivery. For example, an HDFS connector could do this and use atomic move operations to make sure the <code>flush()</code> operation atomically commits the data and offsets to a final location in HDFS.
+    <p>The <code>flush()</code> method is used during the offset commit process, which allows tasks to recover from failures and resume from a safe point such that no events will be missed. The method should push any outstanding data to the destination system and then block until the write has been acknowledged. The <code>offsets</code> parameter can often be ignored, but is useful in some cases where implementations want to store offset information in the destination store to provide exactly-once
+    delivery. For example, an HDFS connector could do this and use atomic move operations to make sure the <code>flush()</code> operation atomically commits the data and offsets to a final location in HDFS.</p>
 
 
     <h5><a id="connect_resuming" href="#connect_resuming">Resuming from Previous Offsets</a></h5>
 
-    The <code>SourceTask</code> implementation included a stream ID (the input filename) and offset (position in the file) with each record. The framework uses this to commit offsets periodically so that in the case of a failure, the task can recover and minimize the number of events that are reprocessed and possibly duplicated (or to resume from the most recent offset if Kafka Connect was stopped gracefully, e.g. in standalone mode or due to a job reconfiguration). This commit process is completely automated by the framework, but only the connector knows how to seek back to the right position in the input stream to resume from that location.
+    <p>The <code>SourceTask</code> implementation included a stream ID (the input filename) and offset (position in the file) with each record. The framework uses this to commit offsets periodically so that in the case of a failure, the task can recover and minimize the number of events that are reprocessed and possibly duplicated (or to resume from the most recent offset if Kafka Connect was stopped gracefully, e.g. in standalone mode or due to a job reconfiguration). This commit process is completely automated by the framework, but only the connector knows how to seek back to the right position in the input stream to resume from that location.</p>
 
-    To correctly resume upon startup, the task can use the <code>SourceContext</code> passed into its <code>initialize()</code> method to access the offset data. In <code>initialize()</code>, we would add a bit more code to read the offset (if it exists) and seek to that position:
+    <p>To correctly resume upon startup, the task can use the <code>SourceContext</code> passed into its <code>initialize()</code> method to access the offset data. In <code>initialize()</code>, we would add a bit more code to read the offset (if it exists) and seek to that position:</p>
 
     <pre class="brush: java;">
         stream = new FileInputStream(filename);
@@ -399,30 +436,30 @@
         }
     </pre>
 
-    Of course, you might need to read many keys for each of the input streams. The <code>OffsetStorageReader</code> interface also allows you to issue bulk reads to efficiently load all offsets, then apply them by seeking each input stream to the appropriate position.
+    <p>Of course, you might need to read many keys for each of the input streams. The <code>OffsetStorageReader</code> interface also allows you to issue bulk reads to efficiently load all offsets, then apply them by seeking each input stream to the appropriate position.</p>
 
     <h4><a id="connect_dynamicio" href="#connect_dynamicio">Dynamic Input/Output Streams</a></h4>
 
-    Kafka Connect is intended to define bulk data copying jobs, such as copying an entire database rather than creating many jobs to copy each table individually. One consequence of this design is that the set of input or output streams for a connector can vary over time.
+    <p>Kafka Connect is intended to define bulk data copying jobs, such as copying an entire database rather than creating many jobs to copy each table individually. One consequence of this design is that the set of input or output streams for a connector can vary over time.</p>
 
-    Source connectors need to monitor the source system for changes, e.g. table additions/deletions in a database. When they pick up changes, they should notify the framework via the <code>ConnectorContext</code> object that reconfiguration is necessary. For example, in a <code>SourceConnector</code>:
+    <p>Source connectors need to monitor the source system for changes, e.g. table additions/deletions in a database. When they pick up changes, they should notify the framework via the <code>ConnectorContext</code> object that reconfiguration is necessary. For example, in a <code>SourceConnector</code>:</p>
 
     <pre class="brush: java;">
         if (inputsChanged())
             this.context.requestTaskReconfiguration();
     </pre>
 
-    The framework will promptly request new configuration information and update the tasks, allowing them to gracefully commit their progress before reconfiguring them. Note that in the <code>SourceConnector</code> this monitoring is currently left up to the connector implementation. If an extra thread is required to perform this monitoring, the connector must allocate it itself.
+    <p>The framework will promptly request new configuration information and update the tasks, allowing them to gracefully commit their progress before reconfiguring them. Note that in the <code>SourceConnector</code> this monitoring is currently left up to the connector implementation. If an extra thread is required to perform this monitoring, the connector must allocate it itself.</p>
 
-    Ideally this code for monitoring changes would be isolated to the <code>Connector</code> and tasks would not need to worry about them. However, changes can also affect tasks, most commonly when one of their input streams is destroyed in the input system, e.g. if a table is dropped from a database. If the <code>Task</code> encounters the issue before the <code>Connector</code>, which will be common if the <code>Connector</code> needs to poll for changes, the <code>Task</code> will need to handle the subsequent error. Thankfully, this can usually be handled simply by catching and handling the appropriate exception.
+    <p>Ideally this code for monitoring changes would be isolated to the <code>Connector</code> and tasks would not need to worry about them. However, changes can also affect tasks, most commonly when one of their input streams is destroyed in the input system, e.g. if a table is dropped from a database. If the <code>Task</code> encounters the issue before the <code>Connector</code>, which will be common if the <code>Connector</code> needs to poll for changes, the <code>Task</code> will need to handle the subsequent error. Thankfully, this can usually be handled simply by catching and handling the appropriate exception.</p>
 
-    <code>SinkConnectors</code> usually only have to handle the addition of streams, which may translate to new entries in their outputs (e.g., a new database table). The framework manages any changes to the Kafka input, such as when the set of input topics changes because of a regex subscription. <code>SinkTasks</code> should expect new input streams, which may require creating new resources in the downstream system, such as a new table in a database. The trickiest situation to handle in these cases may be conflicts between multiple <code>SinkTasks</code> seeing a new input stream for the first time and simultaneously trying to create the new resource. <code>SinkConnectors</code>, on the other hand, will generally require no special code for handling a dynamic set of streams.
+    <p><code>SinkConnectors</code> usually only have to handle the addition of streams, which may translate to new entries in their outputs (e.g., a new database table). The framework manages any changes to the Kafka input, such as when the set of input topics changes because of a regex subscription. <code>SinkTasks</code> should expect new input streams, which may require creating new resources in the downstream system, such as a new table in a database. The trickiest situation to handle in these cases may be conflicts between multiple <code>SinkTasks</code> seeing a new input stream for the first time and simultaneously trying to create the new resource. <code>SinkConnectors</code>, on the other hand, will generally require no special code for handling a dynamic set of streams.</p>
 
     <h4><a id="connect_configs" href="#connect_configs">Connect Configuration Validation</a></h4>
 
-    Kafka Connect allows you to validate connector configurations before submitting a connector to be executed and can provide feedback about errors and recommended values. To take advantage of this, connector developers need to provide an implementation of <code>config()</code> to expose the configuration definition to the framework.
+    <p>Kafka Connect allows you to validate connector configurations before submitting a connector to be executed and can provide feedback about errors and recommended values. To take advantage of this, connector developers need to provide an implementation of <code>config()</code> to expose the configuration definition to the framework.</p>
 
-    The following code in <code>FileStreamSourceConnector</code> defines the configuration and exposes it to the framework.
+    <p>The following code in <code>FileStreamSourceConnector</code> defines the configuration and exposes it to the framework.</p>
 
     <pre class="brush: java;">
         private static final ConfigDef CONFIG_DEF = new ConfigDef()
@@ -434,17 +471,17 @@
         }
     </pre>
 
-    <code>ConfigDef</code> class is used for specifying the set of expected configurations. For each configuration, you can specify the name, the type, the default value, the documentation, the group information, the order in the group, the width of the configuration value and the name suitable for display in the UI. Plus, you can provide special validation logic used for single configuration validation by overriding the <code>Validator</code> class. Moreover, as there may be dependencies between configurations, for example, the valid values and visibility of a configuration may change according to the values of other configurations. To handle this, <code>ConfigDef</code> allows you to specify the dependents of a configuration and to provide an implementation of <code>Recommender</code> to get valid values and set visibility of a configuration given the current configuration values.
+    <p><code>ConfigDef</code> class is used for specifying the set of expected configurations. For each configuration, you can specify the name, the type, the default value, the documentation, the group information, the order in the group, the width of the configuration value and the name suitable for display in the UI. Plus, you can provide special validation logic used for single configuration validation by overriding the <code>Validator</code> class. Moreover, as there may be dependencies between configurations, for example, the valid values and visibility of a configuration may change according to the values of other configurations. To handle this, <code>ConfigDef</code> allows you to specify the dependents of a configuration and to provide an implementation of <code>Recommender</code> to get valid values and set visibility of a configuration given the current configuration values.</p>
 
-    Also, the <code>validate()</code> method in <code>Connector</code> provides a default validation implementation which returns a list of allowed configurations together with configuration errors and recommended values for each configuration. However, it does not use the recommended values for configuration validation. You may provide an override of the default implementation for customized configuration validation, which may use the recommended values.
+    <p>Also, the <code>validate()</code> method in <code>Connector</code> provides a default validation implementation which returns a list of allowed configurations together with configuration errors and recommended values for each configuration. However, it does not use the recommended values for configuration validation. You may provide an override of the default implementation for customized configuration validation, which may use the recommended values.</p>
 
     <h4><a id="connect_schemas" href="#connect_schemas">Working with Schemas</a></h4>
 
-    The FileStream connectors are good examples because they are simple, but they also have trivially structured data -- each line is just a string. Almost all practical connectors will need schemas with more complex data formats.
+    <p>The FileStream connectors are good examples because they are simple, but they also have trivially structured data -- each line is just a string. Almost all practical connectors will need schemas with more complex data formats.</p>
 
-    To create more complex data, you'll need to work with the Kafka Connect <code>data</code> API. Most structured records will need to interact with two classes in addition to primitive types: <code>Schema</code> and <code>Struct</code>.
+    <p>To create more complex data, you'll need to work with the Kafka Connect <code>data</code> API. Most structured records will need to interact with two classes in addition to primitive types: <code>Schema</code> and <code>Struct</code>.</p>
 
-    The API documentation provides a complete reference, but here is a simple example creating a <code>Schema</code> and <code>Struct</code>:
+    <p>The API documentation provides a complete reference, but here is a simple example creating a <code>Schema</code> and <code>Struct</code>:</p>
 
     <pre class="brush: java;">
     Schema schema = SchemaBuilder.struct().name(NAME)
@@ -458,11 +495,11 @@
         .put("age", 75);
     </pre>
 
-    If you are implementing a source connector, you'll need to decide when and how to create schemas. Where possible, you should avoid recomputing them as much as possible. For example, if your connector is guaranteed to have a fixed schema, create it statically and reuse a single instance.
+    <p>If you are implementing a source connector, you'll need to decide when and how to create schemas. Where possible, you should avoid recomputing them as much as possible. For example, if your connector is guaranteed to have a fixed schema, create it statically and reuse a single instance.</p>
 
-    However, many connectors will have dynamic schemas. One simple example of this is a database connector. Considering even just a single table, the schema will not be predefined for the entire connector (as it varies from table to table). But it also may not be fixed for a single table over the lifetime of the connector since the user may execute an <code>ALTER TABLE</code> command. The connector must be able to detect these changes and react appropriately.
+    <p>However, many connectors will have dynamic schemas. One simple example of this is a database connector. Considering even just a single table, the schema will not be predefined for the entire connector (as it varies from table to table). But it also may not be fixed for a single table over the lifetime of the connector since the user may execute an <code>ALTER TABLE</code> command. The connector must be able to detect these changes and react appropriately.</p>
 
-    Sink connectors are usually simpler because they are consuming data and therefore do not need to create schemas. However, they should take just as much care to validate that the schemas they receive have the expected format. When the schema does not match -- usually indicating the upstream producer is generating invalid data that cannot be correctly translated to the destination system -- sink connectors should throw an exception to indicate this error to the system.
+    <p>Sink connectors are usually simpler because they are consuming data and therefore do not need to create schemas. However, they should take just as much care to validate that the schemas they receive have the expected format. When the schema does not match -- usually indicating the upstream producer is generating invalid data that cannot be correctly translated to the destination system -- sink connectors should throw an exception to indicate this error to the system.</p>
 
     <h4><a id="connect_administration" href="#connect_administration">Kafka Connect Administration</a></h4>
 

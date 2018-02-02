@@ -19,6 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 
@@ -28,12 +31,28 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+import static org.apache.kafka.common.protocol.types.Type.INT32;
+
 public class OffsetsForLeaderEpochRequest extends AbstractRequest {
-    public static final String TOPICS = "topics";
-    public static final String TOPIC = "topic";
-    public static final String PARTITIONS = "partitions";
-    public static final String PARTITION_ID = "partition_id";
-    public static final String LEADER_EPOCH = "leader_epoch";
+    private static final String TOPICS_KEY_NAME = "topics";
+    private static final String PARTITIONS_KEY_NAME = "partitions";
+    private static final String LEADER_EPOCH = "leader_epoch";
+
+    /* Offsets for Leader Epoch api */
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_PARTITION_V0 = new Schema(
+            PARTITION_ID,
+            new Field(LEADER_EPOCH, INT32, "The epoch"));
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_TOPIC_V0 = new Schema(
+            TOPIC_NAME,
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_REQUEST_PARTITION_V0)));
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_V0 = new Schema(
+            new Field(TOPICS_KEY_NAME, new ArrayOf(OFFSET_FOR_LEADER_EPOCH_REQUEST_TOPIC_V0), "An array of topics to get epochs for"));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{OFFSET_FOR_LEADER_EPOCH_REQUEST_V0};
+    }
 
     private Map<TopicPartition, Integer> epochsByPartition;
 
@@ -85,12 +104,12 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     public OffsetsForLeaderEpochRequest(Struct struct, short version) {
         super(version);
         epochsByPartition = new HashMap<>();
-        for (Object topicAndEpochsObj : struct.getArray(TOPICS)) {
+        for (Object topicAndEpochsObj : struct.getArray(TOPICS_KEY_NAME)) {
             Struct topicAndEpochs = (Struct) topicAndEpochsObj;
-            String topic = topicAndEpochs.getString(TOPIC);
-            for (Object partitionAndEpochObj : topicAndEpochs.getArray(PARTITIONS)) {
+            String topic = topicAndEpochs.get(TOPIC_NAME);
+            for (Object partitionAndEpochObj : topicAndEpochs.getArray(PARTITIONS_KEY_NAME)) {
                 Struct partitionAndEpoch = (Struct) partitionAndEpochObj;
-                int partitionId = partitionAndEpoch.getInt(PARTITION_ID);
+                int partitionId = partitionAndEpoch.get(PARTITION_ID);
                 int epoch = partitionAndEpoch.getInt(LEADER_EPOCH);
                 TopicPartition tp = new TopicPartition(topic, partitionId);
                 epochsByPartition.put(tp, epoch);
@@ -110,19 +129,19 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
 
         List<Struct> topics = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, Integer>> topicToEpochs : topicsToPartitionEpochs.entrySet()) {
-            Struct topicsStruct = requestStruct.instance(TOPICS);
-            topicsStruct.set(TOPIC, topicToEpochs.getKey());
+            Struct topicsStruct = requestStruct.instance(TOPICS_KEY_NAME);
+            topicsStruct.set(TOPIC_NAME, topicToEpochs.getKey());
             List<Struct> partitions = new ArrayList<>();
             for (Map.Entry<Integer, Integer> partitionEpoch : topicToEpochs.getValue().entrySet()) {
-                Struct partitionStruct = topicsStruct.instance(PARTITIONS);
+                Struct partitionStruct = topicsStruct.instance(PARTITIONS_KEY_NAME);
                 partitionStruct.set(PARTITION_ID, partitionEpoch.getKey());
                 partitionStruct.set(LEADER_EPOCH, partitionEpoch.getValue());
                 partitions.add(partitionStruct);
             }
-            topicsStruct.set(PARTITIONS, partitions.toArray());
+            topicsStruct.set(PARTITIONS_KEY_NAME, partitions.toArray());
             topics.add(topicsStruct);
         }
-        requestStruct.set(TOPICS, topics.toArray());
+        requestStruct.set(TOPICS_KEY_NAME, topics.toArray());
         return requestStruct;
     }
 

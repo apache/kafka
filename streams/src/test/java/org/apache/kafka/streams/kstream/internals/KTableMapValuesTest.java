@@ -18,11 +18,15 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
@@ -40,6 +44,7 @@ import static org.junit.Assert.assertTrue;
 public class KTableMapValuesTest {
 
     final private Serde<String> stringSerde = Serdes.String();
+    private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
     @Rule
     public final KStreamTestDriver driver = new KStreamTestDriver();
     private File stateDir = null;
@@ -66,7 +71,7 @@ public class KTableMapValuesTest {
 
         String topic1 = "topic1";
 
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
+        KTable<String, String> table1 = builder.table(topic1, consumed);
         KTable<String, Integer> table2 = table1.mapValues(new ValueMapper<CharSequence, Integer>() {
             @Override
             public Integer apply(CharSequence value) {
@@ -86,13 +91,13 @@ public class KTableMapValuesTest {
 
         String topic1 = "topic1";
 
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
+        KTable<String, String> table1 = builder.table(topic1, consumed);
         KTable<String, Integer> table2 = table1.mapValues(new ValueMapper<CharSequence, Integer>() {
             @Override
             public Integer apply(CharSequence value) {
                 return value.charAt(0) - 48;
             }
-        }, Serdes.Integer(), "anyName");
+        }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyName").withValueSerde(Serdes.Integer()));
 
         MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
         table2.toStream().process(proc2);
@@ -207,11 +212,10 @@ public class KTableMapValuesTest {
 
         String topic1 = "topic1";
         String topic2 = "topic2";
-        String storeName1 = "storeName1";
         String storeName2 = "storeName2";
 
         KTableImpl<String, String, String> table1 =
-                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, storeName1);
+                (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override
@@ -238,25 +242,24 @@ public class KTableMapValuesTest {
 
         String topic1 = "topic1";
         String topic2 = "topic2";
-        String storeName1 = "storeName1";
         String storeName2 = "storeName2";
 
         KTableImpl<String, String, String> table1 =
-            (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, storeName1);
+            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
             new ValueMapper<String, Integer>() {
                 @Override
                 public Integer apply(String value) {
                     return new Integer(value);
                 }
-            }, Serdes.Integer(), "anyMapName");
+            }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyMapName").withValueSerde(Serdes.Integer()));
         KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table2.filter(
             new Predicate<String, Integer>() {
                 @Override
                 public boolean test(String key, Integer value) {
                     return (value % 2) == 0;
                 }
-            }, "anyFilterName");
+            }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyFilterName").withValueSerde(Serdes.Integer()));
         KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>)
             table1.through(stringSerde, stringSerde, topic2, storeName2);
 
@@ -270,7 +273,7 @@ public class KTableMapValuesTest {
         String topic1 = "topic1";
 
         KTableImpl<String, String, String> table1 =
-                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
+                (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override
@@ -318,7 +321,7 @@ public class KTableMapValuesTest {
         String topic1 = "topic1";
 
         KTableImpl<String, String, String> table1 =
-                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
+                (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override

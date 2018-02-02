@@ -26,6 +26,7 @@ import kafka.api.SaslSetup
 import kafka.coordinator.group.OffsetConfig
 import kafka.utils.JaasTestUtils.JaasSection
 import kafka.utils.TestUtils
+import kafka.utils.Implicits._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -84,7 +85,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
       props.put(KafkaConfig.SaslEnabledMechanismsProp, kafkaServerSaslMechanisms.mkString(","))
       props.put(KafkaConfig.SaslKerberosServiceNameProp, "kafka")
 
-      props.putAll(TestUtils.sslConfigs(Mode.SERVER, false, Some(trustStoreFile), s"server$brokerId"))
+      props ++= TestUtils.sslConfigs(Mode.SERVER, false, Some(trustStoreFile), s"server$brokerId")
 
       // set listener-specific configs and set an invalid path for the global config to verify that the overrides work
       Seq(SecureInternal, SecureExternal).foreach { listenerName =>
@@ -103,13 +104,13 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
         Internal, config.interBrokerListenerName.value)
     }
 
-    TestUtils.createTopic(zkUtils, Topic.GROUP_METADATA_TOPIC_NAME, OffsetConfig.DefaultOffsetsTopicNumPartitions,
+    TestUtils.createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, OffsetConfig.DefaultOffsetsTopicNumPartitions,
       replicationFactor = 2, servers, servers.head.groupCoordinator.offsetsTopicConfigs)
 
     servers.head.config.listeners.foreach { endPoint =>
       val listenerName = endPoint.listenerName
 
-      TestUtils.createTopic(zkUtils, listenerName.value, 2, 2, servers)
+      TestUtils.createTopic(zkClient, listenerName.value, 2, 2, servers)
 
       val trustStoreFile =
         if (TestUtils.usesSslTransportLayer(endPoint.securityProtocol)) Some(this.trustStoreFile)

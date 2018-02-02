@@ -20,6 +20,9 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
 
@@ -31,6 +34,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
+import static org.apache.kafka.common.protocol.types.Type.INT32;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
+
 public class LeaderAndIsrRequest extends AbstractRequest {
     private static final String CONTROLLER_ID_KEY_NAME = "controller_id";
     private static final String CONTROLLER_EPOCH_KEY_NAME = "controller_epoch";
@@ -38,8 +47,6 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     private static final String LIVE_LEADERS_KEY_NAME = "live_leaders";
 
     // partition_states key names
-    private static final String TOPIC_KEY_NAME = "topic";
-    private static final String PARTITION_KEY_NAME = "partition";
     private static final String LEADER_KEY_NAME = "leader";
     private static final String LEADER_EPOCH_KEY_NAME = "leader_epoch";
     private static final String ISR_KEY_NAME = "isr";
@@ -51,6 +58,52 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     private static final String END_POINT_ID_KEY_NAME = "id";
     private static final String HOST_KEY_NAME = "host";
     private static final String PORT_KEY_NAME = "port";
+
+    private static final Schema LEADER_AND_ISR_REQUEST_PARTITION_STATE_V0 = new Schema(
+            TOPIC_NAME,
+            PARTITION_ID,
+            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new Field(LEADER_KEY_NAME, INT32, "The broker id for the leader."),
+            new Field(LEADER_EPOCH_KEY_NAME, INT32, "The leader epoch."),
+            new Field(ISR_KEY_NAME, new ArrayOf(INT32), "The in sync replica ids."),
+            new Field(ZK_VERSION_KEY_NAME, INT32, "The ZK version."),
+            new Field(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The replica ids."));
+
+    // LEADER_AND_ISR_REQUEST_PARTITION_STATE_V1 added a per-partition is_new Field.
+    // This field specifies whether the replica should have existed on the broker or not.
+    private static final Schema LEADER_AND_ISR_REQUEST_PARTITION_STATE_V1 = new Schema(
+            TOPIC_NAME,
+            PARTITION_ID,
+            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new Field(LEADER_KEY_NAME, INT32, "The broker id for the leader."),
+            new Field(LEADER_EPOCH_KEY_NAME, INT32, "The leader epoch."),
+            new Field(ISR_KEY_NAME, new ArrayOf(INT32), "The in sync replica ids."),
+            new Field(ZK_VERSION_KEY_NAME, INT32, "The ZK version."),
+            new Field(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The replica ids."),
+            new Field(IS_NEW_KEY_NAME, BOOLEAN, "Whether the replica should have existed on the broker or not"));
+
+    private static final Schema LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0 = new Schema(
+            new Field(END_POINT_ID_KEY_NAME, INT32, "The broker id."),
+            new Field(HOST_KEY_NAME, STRING, "The hostname of the broker."),
+            new Field(PORT_KEY_NAME, INT32, "The port on which the broker accepts requests."));
+
+    private static final Schema LEADER_AND_ISR_REQUEST_V0 = new Schema(
+            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
+            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new Field(PARTITION_STATES_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_PARTITION_STATE_V0)),
+            new Field(LIVE_LEADERS_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0)));
+
+    // LEADER_AND_ISR_REQUEST_V1 added a per-partition is_new Field. This field specifies whether the replica should
+    // have existed on the broker or not.
+    private static final Schema LEADER_AND_ISR_REQUEST_V1 = new Schema(
+            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
+            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new Field(PARTITION_STATES_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_PARTITION_STATE_V1)),
+            new Field(LIVE_LEADERS_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0)));
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{LEADER_AND_ISR_REQUEST_V0, LEADER_AND_ISR_REQUEST_V1};
+    }
 
     public static class Builder extends AbstractRequest.Builder<LeaderAndIsrRequest> {
         private final int controllerId;
@@ -105,8 +158,8 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
         for (Object partitionStateDataObj : struct.getArray(PARTITION_STATES_KEY_NAME)) {
             Struct partitionStateData = (Struct) partitionStateDataObj;
-            String topic = partitionStateData.getString(TOPIC_KEY_NAME);
-            int partition = partitionStateData.getInt(PARTITION_KEY_NAME);
+            String topic = partitionStateData.get(TOPIC_NAME);
+            int partition = partitionStateData.get(PARTITION_ID);
             int controllerEpoch = partitionStateData.getInt(CONTROLLER_EPOCH_KEY_NAME);
             int leader = partitionStateData.getInt(LEADER_KEY_NAME);
             int leaderEpoch = partitionStateData.getInt(LEADER_EPOCH_KEY_NAME);
@@ -154,8 +207,8 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         for (Map.Entry<TopicPartition, PartitionState> entry : partitionStates.entrySet()) {
             Struct partitionStateData = struct.instance(PARTITION_STATES_KEY_NAME);
             TopicPartition topicPartition = entry.getKey();
-            partitionStateData.set(TOPIC_KEY_NAME, topicPartition.topic());
-            partitionStateData.set(PARTITION_KEY_NAME, topicPartition.partition());
+            partitionStateData.set(TOPIC_NAME, topicPartition.topic());
+            partitionStateData.set(PARTITION_ID, topicPartition.partition());
             PartitionState partitionState = entry.getValue();
             partitionStateData.set(CONTROLLER_EPOCH_KEY_NAME, partitionState.basePartitionState.controllerEpoch);
             partitionStateData.set(LEADER_KEY_NAME, partitionState.basePartitionState.leader);
@@ -182,17 +235,19 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+    public LeaderAndIsrResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        Errors error = Errors.forException(e);
+
         Map<TopicPartition, Errors> responses = new HashMap<>(partitionStates.size());
         for (TopicPartition partition : partitionStates.keySet()) {
-            responses.put(partition, Errors.forException(e));
+            responses.put(partition, error);
         }
 
         short versionId = version();
         switch (versionId) {
             case 0:
             case 1:
-                return new LeaderAndIsrResponse(Errors.NONE, responses);
+                return new LeaderAndIsrResponse(error, responses);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.LEADER_AND_ISR.latestVersion()));

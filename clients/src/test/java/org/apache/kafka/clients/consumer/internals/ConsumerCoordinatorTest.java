@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.CommitFailedException;
@@ -51,6 +52,7 @@ import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -58,6 +60,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -72,6 +75,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
@@ -122,7 +126,7 @@ public class ConsumerCoordinatorTest {
         this.metadata = new Metadata(0, Long.MAX_VALUE, true);
         this.metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
         this.client = new MockClient(time, metadata);
-        this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
+        this.consumerClient = new ConsumerNetworkClient(new LogContext(), client, metadata, time, 100, 1000, Integer.MAX_VALUE);
         this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();
         this.mockOffsetCommitCallback = new MockCommitCallback();
@@ -192,6 +196,62 @@ public class ConsumerCoordinatorTest {
         assertTrue(future.failed());
         assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.exception(), future.exception());
         assertTrue(coordinator.coordinatorUnknown());
+    }
+
+    @Test
+    public void testManyInFlightAsyncCommitsWithCoordinatorDisconnect() throws Exception {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady();
+
+        int numRequests = 1000;
+        TopicPartition tp = new TopicPartition("foo", 0);
+        final AtomicInteger responses = new AtomicInteger(0);
+
+        for (int i = 0; i < numRequests; i++) {
+            Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(tp, new OffsetAndMetadata(i));
+            coordinator.commitOffsetsAsync(offsets, new OffsetCommitCallback() {
+                @Override
+                public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+                    responses.incrementAndGet();
+                    Throwable cause = exception.getCause();
+                    assertTrue("Unexpected exception cause type: " + (cause == null ? null : cause.getClass()),
+                            cause instanceof DisconnectException);
+                }
+            });
+        }
+
+        coordinator.coordinatorDead();
+        coordinator.invokeCompletedOffsetCommitCallbacks();
+        assertEquals(numRequests, responses.get());
+    }
+
+    @Test
+    public void testCoordinatorUnknownInUnsentCallbacksAfterCoordinatorDead() throws Exception {
+        // When the coordinator is marked dead, all unsent or in-flight requests are cancelled
+        // with a disconnect error. This test case ensures that the corresponding callbacks see
+        // the coordinator as unknown which prevents additional retries to the same coordinator.
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady();
+
+        final AtomicBoolean asyncCallbackInvoked = new AtomicBoolean(false);
+        Map<TopicPartition, OffsetCommitRequest.PartitionData> offsets = Collections.singletonMap(
+                new TopicPartition("foo", 0), new OffsetCommitRequest.PartitionData(13L, ""));
+        consumerClient.send(coordinator.coordinator(), new OffsetCommitRequest.Builder(groupId, offsets))
+                .compose(new RequestFutureAdapter<ClientResponse, Object>() {
+                    @Override
+                    public void onSuccess(ClientResponse value, RequestFuture<Object> future) {}
+
+                    @Override
+                    public void onFailure(RuntimeException e, RequestFuture<Object> future) {
+                        assertTrue("Unexpected exception type: " + e.getClass(), e instanceof DisconnectException);
+                        assertTrue(coordinator.coordinatorUnknown());
+                        asyncCallbackInvoked.set(true);
+                    }
+                });
+
+        coordinator.coordinatorDead();
+        assertTrue(asyncCallbackInvoked.get());
     }
 
     @Test
@@ -951,6 +1011,37 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testCoordinatorDisconnectAfterNotCoordinatorError() {
+        testInFlightRequestsFailedAfterCoordinatorMarkedDead(Errors.NOT_COORDINATOR);
+    }
+
+    @Test
+    public void testCoordinatorDisconnectAfterCoordinatorNotAvailableError() {
+        testInFlightRequestsFailedAfterCoordinatorMarkedDead(Errors.COORDINATOR_NOT_AVAILABLE);
+    }
+
+    private void testInFlightRequestsFailedAfterCoordinatorMarkedDead(Errors error) {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady();
+
+        // Send two async commits and fail the first one with an error.
+        // This should cause a coordinator disconnect which will cancel the second request.
+
+        MockCommitCallback firstCommitCallback = new MockCommitCallback();
+        MockCommitCallback secondCommitCallback = new MockCommitCallback();
+        coordinator.commitOffsetsAsync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), firstCommitCallback);
+        coordinator.commitOffsetsAsync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), secondCommitCallback);
+
+        client.respond(offsetCommitResponse(Collections.singletonMap(t1p, error)));
+        consumerClient.pollNoWakeup();
+        coordinator.invokeCompletedOffsetCommitCallbacks();
+
+        assertTrue(coordinator.coordinatorUnknown());
+        assertTrue(firstCommitCallback.exception instanceof RetriableCommitFailedException);
+        assertTrue(secondCommitCallback.exception instanceof RetriableCommitFailedException);
+    }
+
+    @Test
     public void testAutoCommitDynamicAssignment() {
         final String consumerId = "consumer";
 
@@ -1210,6 +1301,42 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)));
         coordinator.commitOffsetsSync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), Long.MAX_VALUE);
+    }
+
+    @Test
+    public void testAsyncCommitCallbacksInvokedPriorToSyncCommitCompletion() throws Exception {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady();
+
+        final List<OffsetAndMetadata> committedOffsets = Collections.synchronizedList(new ArrayList<OffsetAndMetadata>());
+        final OffsetAndMetadata firstOffset = new OffsetAndMetadata(0L);
+        final OffsetAndMetadata secondOffset = new OffsetAndMetadata(1L);
+
+        coordinator.commitOffsetsAsync(Collections.singletonMap(t1p, firstOffset), new OffsetCommitCallback() {
+            @Override
+            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+                committedOffsets.add(firstOffset);
+            }
+        });
+
+        // Do a synchronous commit in the background so that we can send both responses at the same time
+        Thread thread = new Thread() {
+            @Override
+            public void run() {
+                coordinator.commitOffsetsSync(Collections.singletonMap(t1p, secondOffset), 10000);
+                committedOffsets.add(secondOffset);
+            }
+        };
+
+        thread.start();
+
+        client.waitForRequests(2, 5000);
+        client.respond(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)));
+        client.respond(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)));
+
+        thread.join();
+
+        assertEquals(Arrays.asList(firstOffset, secondOffset), committedOffsets);
     }
 
     @Test(expected = KafkaException.class)
@@ -1596,6 +1723,7 @@ public class ConsumerCoordinatorTest {
                                                  final boolean autoCommitEnabled,
                                                  final boolean leaveGroup) {
         return new ConsumerCoordinator(
+                new LogContext(),
                 consumerClient,
                 groupId,
                 rebalanceTimeoutMs,

@@ -22,11 +22,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -35,14 +34,12 @@ import java.util.Map;
  */
 public class StandbyTask extends AbstractTask {
 
-    private static final Logger log = LoggerFactory.getLogger(StandbyTask.class);
-    private final Map<TopicPartition, Long> checkpointedOffsets;
+    private Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
      *
      * @param id             the ID of this task
-     * @param applicationId  the ID of the stream processing application
      * @param partitions     the collection of assigned {@link TopicPartition}
      * @param topology       the instance of {@link ProcessorTopology}
      * @param consumer       the instance of {@link Consumer}
@@ -51,7 +48,6 @@ public class StandbyTask extends AbstractTask {
      * @param stateDirectory the {@link StateDirectory} created by the thread
      */
     StandbyTask(final TaskId id,
-                final String applicationId,
                 final Collection<TopicPartition> partitions,
                 final ProcessorTopology topology,
                 final Consumer<byte[], byte[]> consumer,
@@ -59,15 +55,25 @@ public class StandbyTask extends AbstractTask {
                 final StreamsConfig config,
                 final StreamsMetrics metrics,
                 final StateDirectory stateDirectory) {
-        super(id, applicationId, partitions, topology, consumer, changelogReader, true, stateDirectory, config);
+        super(id, partitions, topology, consumer, changelogReader, true, stateDirectory, config);
 
         // initialize the topology with its own context
-        processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
+        processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
+    }
 
-        log.debug("{} Initializing", logPrefix);
-        initializeStateStores();
-        processorContext.initialized();
+    @Override
+    public boolean initializeStateStores() {
+        log.trace("Initializing state stores");
+        registerStateStores();
         checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
+        processorContext.initialized();
+        taskInitialized = true;
+        return true;
+    }
+
+    @Override
+    public void initializeTopology() {
+        //no-op
     }
 
     /**
@@ -77,7 +83,7 @@ public class StandbyTask extends AbstractTask {
      */
     @Override
     public void resume() {
-        log.debug("{} Resuming", logPrefix);
+        log.debug("Resuming");
         updateOffsetLimits();
     }
 
@@ -90,7 +96,7 @@ public class StandbyTask extends AbstractTask {
      */
     @Override
     public void commit() {
-        log.trace("{} Committing", logPrefix);
+        log.trace("Committing");
         flushAndCheckpointState();
         // reinitialize offset limits
         updateOffsetLimits();
@@ -104,7 +110,7 @@ public class StandbyTask extends AbstractTask {
      */
     @Override
     public void suspend() {
-        log.debug("{} Suspending", logPrefix);
+        log.debug("Suspending");
         flushAndCheckpointState();
     }
 
@@ -120,17 +126,31 @@ public class StandbyTask extends AbstractTask {
      * <pre>
      * @param clean ignored by {@code StandbyTask} as it can always try to close cleanly
      *              (ie, commit, flush, and write checkpoint file)
+     * @param isZombie ignored by {@code StandbyTask} as it can never be a zombie
      */
     @Override
-    public void close(final boolean clean) {
-        log.debug("{} Closing", logPrefix);
+    public void close(final boolean clean,
+                      final boolean isZombie) {
+        if (!taskInitialized) {
+            return;
+        }
+        log.debug("Closing");
         boolean committedSuccessfully = false;
         try {
-            commit();
-            committedSuccessfully = true;
+            if (clean) {
+                commit();
+                committedSuccessfully = true;
+            }
         } finally {
             closeStateManager(committedSuccessfully);
         }
+    }
+
+    @Override
+    public void closeSuspended(final boolean clean,
+                               final boolean isZombie,
+                               final RuntimeException e) {
+        close(clean, isZombie);
     }
 
     /**
@@ -140,11 +160,11 @@ public class StandbyTask extends AbstractTask {
      */
     public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition,
                                                        final List<ConsumerRecord<byte[], byte[]>> records) {
-        log.trace("{} Updating standby replicas of its state store for partition [{}]", logPrefix, partition);
+        log.trace("Updating standby replicas of its state store for partition [{}]", partition);
         return stateMgr.updateStandbyStates(partition, records);
     }
 
-    Map<TopicPartition, Long> checkpointedOffsets() {
+    public Map<TopicPartition, Long> checkpointedOffsets() {
         return checkpointedOffsets;
     }
 

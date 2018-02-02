@@ -61,10 +61,16 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  * @param <K> Type of primary keys
  * @param <V> Type of value changes
  * @see KTable
- * @see StreamsBuilder#globalTable(String, String)
+ * @see StreamsBuilder#globalTable(String)
  * @see KStream#join(GlobalKTable, KeyValueMapper, ValueJoiner)
  * @see KStream#leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)
  */
 @InterfaceStability.Evolving
 public interface GlobalKTable<K, V> {
+    /**
+     * Get the name of the local state store that can be used to query this {@code GlobalKTable}.
+     *
+     * @return the underlying state store name, or {@code null} if this {@code GlobalKTable} cannot be queried.
+     */
+    String queryableStoreName();
 }

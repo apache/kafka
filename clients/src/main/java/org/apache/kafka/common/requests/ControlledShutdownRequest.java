@@ -19,23 +19,31 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
 
+import static org.apache.kafka.common.protocol.types.Type.INT32;
+
 public class ControlledShutdownRequest extends AbstractRequest {
     private static final String BROKER_ID_KEY_NAME = "broker_id";
+
+    private static final Schema CONTROLLED_SHUTDOWN_REQUEST_V0 = new Schema(
+            new Field(BROKER_ID_KEY_NAME, INT32, "The id of the broker for which controlled shutdown has been requested."));
+    private static final Schema CONTROLLED_SHUTDOWN_REQUEST_V1 = CONTROLLED_SHUTDOWN_REQUEST_V0;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[] {CONTROLLED_SHUTDOWN_REQUEST_V0, CONTROLLED_SHUTDOWN_REQUEST_V1};
+    }
 
     public static class Builder extends AbstractRequest.Builder<ControlledShutdownRequest> {
         private final int brokerId;
 
-        public Builder(int brokerId) {
-            this(brokerId, null);
-        }
-
-        public Builder(int brokerId, Short desiredVersion) {
-            super(ApiKeys.CONTROLLED_SHUTDOWN_KEY, desiredVersion);
+        public Builder(int brokerId, short desiredVersion) {
+            super(ApiKeys.CONTROLLED_SHUTDOWN, desiredVersion);
             this.brokerId = brokerId;
         }
 
@@ -74,7 +82,7 @@ public class ControlledShutdownRequest extends AbstractRequest {
                 return new ControlledShutdownResponse(Errors.forException(e), Collections.<TopicPartition>emptySet());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.CONTROLLED_SHUTDOWN_KEY.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()));
         }
     }
 
@@ -84,12 +92,12 @@ public class ControlledShutdownRequest extends AbstractRequest {
 
     public static ControlledShutdownRequest parse(ByteBuffer buffer, short version) {
         return new ControlledShutdownRequest(
-                ApiKeys.CONTROLLED_SHUTDOWN_KEY.parseRequest(version, buffer), version);
+                ApiKeys.CONTROLLED_SHUTDOWN.parseRequest(version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.CONTROLLED_SHUTDOWN_KEY.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.CONTROLLED_SHUTDOWN.requestSchema(version()));
         struct.set(BROKER_ID_KEY_NAME, brokerId);
         return struct;
     }

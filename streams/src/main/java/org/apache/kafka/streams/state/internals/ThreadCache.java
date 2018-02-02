@@ -17,11 +17,11 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.internals.RecordContext;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -37,9 +37,7 @@ import java.util.NoSuchElementException;
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 public class ThreadCache {
-    private static final Logger log = LoggerFactory.getLogger(ThreadCache.class);
-
-    private final String logPrefix;
+    private final Logger log;
     private final long maxCacheSizeBytes;
     private final StreamsMetrics metrics;
     private final Map<String, NamedCache> caches = new HashMap<>();
@@ -54,10 +52,10 @@ public class ThreadCache {
         void apply(final List<DirtyEntry> dirty);
     }
 
-    public ThreadCache(final String logPrefix, long maxCacheSizeBytes, final StreamsMetrics metrics) {
-        this.logPrefix = logPrefix;
+    public ThreadCache(final LogContext logContext, long maxCacheSizeBytes, final StreamsMetrics metrics) {
         this.maxCacheSizeBytes = maxCacheSizeBytes;
         this.metrics = metrics;
+        this.log = logContext.logger(getClass());
     }
 
     public long puts() {
@@ -129,8 +127,7 @@ public class ThreadCache {
         cache.flush();
 
         if (log.isTraceEnabled()) {
-            log.trace("{} Cache stats on flush: #puts={}, #gets={}, #evicts={}, #flushes={}",
-                logPrefix, puts(), gets(), evicts(), flushes());
+            log.trace("Cache stats on flush: #puts={}, #gets={}, #evicts={}, #flushes={}", puts(), gets(), evicts(), flushes());
         }
     }
 
@@ -198,8 +195,7 @@ public class ThreadCache {
         }
         return new MemoryLRUCacheBytesIterator(cache.allKeys(), cache);
     }
-
-
+    
     public long size() {
         long size = 0;
         for (NamedCache cache : caches.values()) {
@@ -207,10 +203,6 @@ public class ThreadCache {
             if (isOverflowing(size)) {
                 return Long.MAX_VALUE;
             }
-        }
-
-        if (isOverflowing(size)) {
-            return Long.MAX_VALUE;
         }
         return size;
     }
@@ -223,6 +215,9 @@ public class ThreadCache {
         long sizeInBytes = 0;
         for (final NamedCache namedCache : caches.values()) {
             sizeInBytes += namedCache.sizeInBytes();
+            if (isOverflowing(sizeInBytes)) {
+                return Long.MAX_VALUE;
+            }
         }
         return sizeInBytes;
     }
@@ -250,7 +245,7 @@ public class ThreadCache {
             numEvicted++;
         }
         if (log.isTraceEnabled()) {
-            log.trace("{} Evicted {} entries from cache {}", logPrefix, numEvicted, namespace);
+            log.trace("Evicted {} entries from cache {}", numEvicted, namespace);
         }
     }
 

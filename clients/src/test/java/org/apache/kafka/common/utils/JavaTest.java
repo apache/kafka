@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -40,17 +41,56 @@ public class JavaTest {
     @Test
     public void testIsIBMJdk() {
         System.setProperty("java.vendor", "Oracle Corporation");
-        assertFalse(Java.isIBMJdk());
+        assertFalse(Java.isIbmJdk());
         System.setProperty("java.vendor", "IBM Corporation");
-        assertTrue(Java.isIBMJdk());
+        assertTrue(Java.isIbmJdk());
     }
 
     @Test
     public void testLoadKerberosLoginModule() throws ClassNotFoundException {
-        String clazz = Java.isIBMJdk()
+        String clazz = Java.isIbmJdk()
                 ? "com.ibm.security.auth.module.Krb5LoginModule"
                 : "com.sun.security.auth.module.Krb5LoginModule";
         Class.forName(clazz);
     }
 
+    @Test
+    public void testJavaVersion() {
+        Java.Version v = Java.parseVersion("9");
+        assertEquals(9, v.majorVersion);
+        assertEquals(0, v.minorVersion);
+        assertTrue(v.isJava9Compatible());
+        assertTrue(v.isJava8Compatible());
+
+        v = Java.parseVersion("9.0.1");
+        assertEquals(9, v.majorVersion);
+        assertEquals(0, v.minorVersion);
+        assertTrue(v.isJava9Compatible());
+        assertTrue(v.isJava8Compatible());
+
+        v = Java.parseVersion("9.0.0.15"); // Azul Zulu
+        assertEquals(9, v.majorVersion);
+        assertEquals(0, v.minorVersion);
+        assertTrue(v.isJava9Compatible());
+        assertTrue(v.isJava8Compatible());
+
+        v = Java.parseVersion("9.1");
+        assertEquals(9, v.majorVersion);
+        assertEquals(1, v.minorVersion);
+        assertTrue(v.isJava9Compatible());
+        assertTrue(v.isJava8Compatible());
+
+        v = Java.parseVersion("1.8.0_152");
+        assertEquals(1, v.majorVersion);
+        assertEquals(8, v.minorVersion);
+        assertFalse(v.isJava9Compatible());
+        assertTrue(v.isJava8Compatible());
+
+        v = Java.parseVersion("1.7.0_80");
+        assertEquals(1, v.majorVersion);
+        assertEquals(7, v.minorVersion);
+        assertFalse(v.isJava9Compatible());
+        assertFalse(v.isJava8Compatible());
+
+    }
 }

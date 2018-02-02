@@ -16,6 +16,10 @@
 
 set -ex
 
+# The version of Kibosh to use for testing.
+# If you update this, also update tests/docker/Dockerfile
+export KIBOSH_VERSION=d85ac3ec44be0700efe605c16289fd901cfdaa13
+
 if [ -z `which javac` ]; then
     apt-get -y update
     apt-get install -y software-properties-common python-software-properties
@@ -81,6 +85,19 @@ get_kafka() {
         popd
     fi
 }
+
+# Install Kibosh
+apt-get update -y && apt-get install -y git cmake pkg-config libfuse-dev
+pushd /opt
+git clone -q  https://github.com/confluentinc/kibosh.git
+pushd "/opt/kibosh"
+git reset --hard $KIBOSH_VERSION
+mkdir "/opt/kibosh/build"
+pushd "/opt/kibosh/build"
+../configure && make -j 2
+popd
+popd
+popd
 
 # Test multiple Scala versions
 get_kafka 0.8.2.2 2.10

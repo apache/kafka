@@ -26,18 +26,8 @@ package org.apache.kafka.streams.kstream;
  * Thus, a windowed {@link KTable} has type {@code <Windowed<K>,V>}.
  *
  * @param <K> type of the key
- * @see KGroupedStream#count(Windows, String)
- * @see KGroupedStream#count(Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#count(SessionWindows, String)
- * @see KGroupedStream#count(SessionWindows, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#reduce(Reducer, Windows, String)
- * @see KGroupedStream#reduce(Reducer, Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#reduce(Reducer, SessionWindows, String)
- * @see KGroupedStream#reduce(Reducer, SessionWindows, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.common.serialization.Serde, String)
- * @see KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, org.apache.kafka.common.serialization.Serde, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, org.apache.kafka.common.serialization.Serde, String)
+ * @see KGroupedStream#windowedBy(Windows)
+ * @see KGroupedStream#windowedBy(SessionWindows)
  */
 public class Windowed<K> {
 

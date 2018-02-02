@@ -222,7 +222,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     cleanerManager
   }
 
-  private def createLog(segmentSize: Int, cleanupPolicy: String = "delete"): Log = {
+  private def createLog(segmentSize: Int, cleanupPolicy: String): Log = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, segmentSize: Integer)
     logProps.put(LogConfig.RetentionMsProp, 1: Integer)
@@ -243,7 +243,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     log
   }
 
-  private def makeLog(dir: File = logDir, config: LogConfig = logConfig) =
+  private def makeLog(dir: File = logDir, config: LogConfig) =
     Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
       time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,

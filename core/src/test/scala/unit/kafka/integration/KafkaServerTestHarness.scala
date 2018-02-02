@@ -22,10 +22,9 @@ import java.util.Arrays
 
 import kafka.common.KafkaException
 import kafka.server._
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.junit.{After, Before}
 
 import scala.collection.mutable.{ArrayBuffer, Buffer}
@@ -62,6 +61,12 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
    */
   def configureSecurityBeforeServersStart() {}
 
+  /**
+   * Override this in case Tokens or security credentials needs to be created after `servers` are started.
+   * The default implementation of this method is a no-op.
+   */
+  def configureSecurityAfterServersStart() {}
+
   def configs: Seq[KafkaConfig] = {
     if (instanceConfigs == null)
       instanceConfigs = generateConfigs
@@ -80,7 +85,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
 
   @Before
   override def setUp() {
-    super.setUp
+    super.setUp()
 
     if (configs.isEmpty)
       throw new KafkaException("Must supply at least one server config.")
@@ -95,6 +100,9 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
     brokerList = TestUtils.bootstrapServers(servers, listenerName)
     alive = new Array[Boolean](servers.length)
     Arrays.fill(alive, true)
+
+    // default implementation is a no-op, it is overridden by subclasses if required
+    configureSecurityAfterServersStart()
   }
 
   @After
@@ -104,6 +112,23 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
     }
     super.tearDown
   }
+
+  /**
+   * Create a topic in ZooKeeper.
+   * Wait until the leader is elected and the metadata is propagated to all brokers.
+   * Return the leader for each partition.
+   */
+  def createTopic(topic: String, numPartitions: Int = 1, replicationFactor: Int = 1,
+                  topicConfig: Properties = new Properties): scala.collection.immutable.Map[Int, Int] =
+    TestUtils.createTopic(zkClient, topic, numPartitions, replicationFactor, servers, topicConfig)
+
+  /**
+   * Create a topic in ZooKeeper using a customized replica assignment.
+   * Wait until the leader is elected and the metadata is propagated to all brokers.
+   * Return the leader for each partition.
+   */
+  def createTopic(topic: String, partitionReplicaAssignment: collection.Map[Int, Seq[Int]]): scala.collection.immutable.Map[Int, Int] =
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment, servers)
 
   /**
    * Pick a broker at random and kill it if it isn't already dead

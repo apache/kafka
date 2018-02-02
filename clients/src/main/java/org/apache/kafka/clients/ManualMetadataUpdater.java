@@ -17,8 +17,11 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,6 +36,8 @@ import java.util.List;
  * This class is not thread-safe!
  */
 public class ManualMetadataUpdater implements MetadataUpdater {
+
+    private static final Logger log = LoggerFactory.getLogger(ManualMetadataUpdater.class);
 
     private List<Node> nodes;
 
@@ -66,6 +71,13 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     @Override
     public void handleDisconnection(String destination) {
         // Do nothing
+    }
+
+    @Override
+    public void handleAuthenticationFailure(AuthenticationException exception) {
+        // We don't fail the broker on authentication failures, but there is sufficient information in the broker logs
+        // to identify the failure.
+        log.debug("An authentication error occurred in broker-to-broker communication.", exception);
     }
 
     @Override

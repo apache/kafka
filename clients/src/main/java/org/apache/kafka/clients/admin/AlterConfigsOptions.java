@@ -27,26 +27,19 @@ import java.util.Map;
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class AlterConfigsOptions {
+public class AlterConfigsOptions extends AbstractOptions<AlterConfigsOptions> {
 
-    private Integer timeoutMs = null;
     private boolean validateOnly = false;
 
     /**
      * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
      * AdminClient should be used.
+     *
      */
+    // This method is retained to keep binary compatibility with 0.11
     public AlterConfigsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;
-    }
-
-    /**
-     * The request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
-     * AdminClient should be used.
-     */
-    public Integer timeoutMs() {
-        return timeoutMs;
     }
 
     /**

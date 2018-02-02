@@ -20,6 +20,9 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
 
@@ -28,10 +31,41 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
+
 public class MetadataRequest extends AbstractRequest {
 
     private static final String TOPICS_KEY_NAME = "topics";
     private static final String ALLOW_AUTO_TOPIC_CREATION_KEY_NAME = "allow_auto_topic_creation";
+
+    private static final Schema METADATA_REQUEST_V0 = new Schema(
+            new Field(TOPICS_KEY_NAME, new ArrayOf(STRING), "An array of topics to fetch metadata for. If no topics are specified fetch metadata for all topics."));
+
+    private static final Schema METADATA_REQUEST_V1 = new Schema(
+            new Field(TOPICS_KEY_NAME, ArrayOf.nullable(STRING), "An array of topics to fetch metadata for. If the topics array is null fetch metadata for all topics."));
+
+    /* The v2 metadata request is the same as v1. An additional field for cluster id has been added to the v2 metadata response */
+    private static final Schema METADATA_REQUEST_V2 = METADATA_REQUEST_V1;
+
+    /* The v3 metadata request is the same as v1 and v2. An additional field for throttle time has been added to the v3 metadata response */
+    private static final Schema METADATA_REQUEST_V3 = METADATA_REQUEST_V2;
+
+    /* The v4 metadata request has an additional field for allowing auto topic creation. The response is the same as v3. */
+    private static final Schema METADATA_REQUEST_V4 = new Schema(
+            new Field(TOPICS_KEY_NAME, ArrayOf.nullable(STRING), "An array of topics to fetch metadata for. " +
+                    "If the topics array is null fetch metadata for all topics."),
+            new Field(ALLOW_AUTO_TOPIC_CREATION_KEY_NAME, BOOLEAN, "If this and the broker config " +
+                    "'auto.create.topics.enable' are true, topics that don't exist will be created by the broker. " +
+                    "Otherwise, no topics will be created by the broker."));
+
+    /* The v5 metadata request is the same as v4. An additional field for offline_replicas has been added to the v5 metadata response */
+    private static final Schema METADATA_REQUEST_V5 = METADATA_REQUEST_V4;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[] {METADATA_REQUEST_V0, METADATA_REQUEST_V1, METADATA_REQUEST_V2, METADATA_REQUEST_V3,
+            METADATA_REQUEST_V4, METADATA_REQUEST_V5};
+    }
 
     public static class Builder extends AbstractRequest.Builder<MetadataRequest> {
         private static final List<String> ALL_TOPICS = null;

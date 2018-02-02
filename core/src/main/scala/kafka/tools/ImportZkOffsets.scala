@@ -22,7 +22,6 @@ import java.nio.charset.StandardCharsets
 
 import joptsimple._
 import kafka.utils.{CommandLineUtils, Exit, Logging, ZkUtils}
-import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.security.JaasUtils
 
 

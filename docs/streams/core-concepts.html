@@ -19,10 +19,22 @@
 
 <script id="content-template" type="text/x-handlebars-template">
     <h1>Core Concepts</h1>
-
+    <div class="sub-nav-sticky">
+        <div class="sticky-top">
+            <div style="height:35px">
+                <a href="/{{version}}/documentation/streams/">Introduction</a>
+                <a href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
+                <a href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
+                <a class="active-menu-item" href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
+                <a href="/{{version}}/documentation/streams/architecture">Architecture</a>
+                <a href="/{{version}}/documentation/streams/developer-guide/">Developer Guide</a>
+                <a href="/{{version}}/documentation/streams/upgrade-guide">Upgrade</a>
+            </div>
+        </div>
+    </div>
     <p>
         Kafka Streams is a client library for processing and analyzing data stored in Kafka.
-        It builds upon important stream processing concepts such as properly distinguishing between event time and processing time, windowing support, and simple yet efficient management of application state.
+        It builds upon important stream processing concepts such as properly distinguishing between event time and processing time, windowing support, and simple yet efficient management and real-time querying of application state.
     </p>
     <p>
         Kafka Streams has a <b>low barrier to entry</b>: You can quickly write and run a small-scale proof-of-concept on a single machine; and you only need to run additional instances of your application on multiple machines to scale up to high-volume production workloads.
@@ -57,7 +69,7 @@
     There are two special processors in the topology:
 
     <ul>
-        <li><b>Source Processor</b>: A source processor is a special type of stream processor that does not have any upstream processors. It produces an input stream to its topology from one or multiple Kafka topics by consuming records from these topics and forward them to its down-stream processors.</li>
+        <li><b>Source Processor</b>: A source processor is a special type of stream processor that does not have any upstream processors. It produces an input stream to its topology from one or multiple Kafka topics by consuming records from these topics and forwarding them to its down-stream processors.</li>
         <li><b>Sink Processor</b>: A sink processor is a special type of stream processor that does not have down-stream processors. It sends any received records from its up-stream processors to a specified Kafka topic.</li>
     </ul>
 
@@ -95,14 +107,14 @@
         The choice between event-time and ingestion-time is actually done through the configuration of Kafka (not Kafka Streams): From Kafka 0.10.x onwards, timestamps are automatically embedded into Kafka messages. Depending on Kafka's configuration these timestamps represent event-time or ingestion-time. The respective Kafka configuration setting can be specified on the broker level or per topic. The default timestamp extractor in Kafka Streams will retrieve these embedded timestamps as-is. Hence, the effective time semantics of your application depend on the effective Kafka configuration for these embedded timestamps.
     </p>
     <p>
-        Kafka Streams assigns a <b>timestamp</b> to every data record
-        via the <code>TimestampExtractor</code> interface.
-        Concrete implementations of this interface may retrieve or compute timestamps based on the actual contents of data records such as an embedded timestamp field
-        to provide event-time semantics, or use any other approach such as returning the current wall-clock time at the time of processing,
-        thereby yielding processing-time semantics to stream processing applications.
-        Developers can thus enforce different notions of time depending on their business needs. For example,
-        per-record timestamps describe the progress of a stream with regards to time (although records may be out-of-order within the stream) and
-        are leveraged by time-dependent operations such as joins.
+        Kafka Streams assigns a <b>timestamp</b> to every data record via the <code>TimestampExtractor</code> interface.
+        These per-record timestamps describe the progress of a stream with regards to time and are leveraged by	time-dependent operations such as window operations.
+        As a result, this time will only advance when a new record arrives at the processor.
+        We call this data-driven time the <b>stream time</b> of the application to differentiate with the <b>wall-clock time</b> when this application is actually executing.
+        Concrete implementations of the <code>TimestampExtractor</code> interface will then provide different semantics to the stream time definition.
+        For example retrieving or computing timestamps based on the actual contents of data records such as an embedded timestamp field to provide event time semantics,
+        and returning the current wall-clock time thereby yield processing time semantics to stream time.
+        Developers can thus enforce different notions of time depending on their business needs.
     </p>
 
     <p>
@@ -111,7 +123,7 @@
 
     <ul>
         <li> When new output records are generated via processing some input record, for example, <code>context.forward()</code> triggered in the <code>process()</code> function call, output record timestamps are inherited from input record timestamps directly.</li>
-        <li> When new output records are generated via periodic functions such as <code>punctuate()</code>, the output record timestamp is defined as the current internal time (obtained through <code>context.timestamp()</code>) of the stream task.</li>
+        <li> When new output records are generated via periodic functions such as <code>Punctuator#punctuate()</code>, the output record timestamp is defined as the current internal time (obtained through <code>context.timestamp()</code>) of the stream task.</li>
         <li> For aggregations, the timestamp of a resulting aggregate update record will be that of the latest arrived input record that triggered the update.</li>
     </ul>
 
@@ -157,7 +169,7 @@
     </p>
 
     <div class="pagination">
-        <a href="/{{version}}/documentation/streams/developer-guide" class="pagination__btn pagination__btn__prev">Previous</a>
+        <a href="/{{version}}/documentation/streams/tutorial" class="pagination__btn pagination__btn__prev">Previous</a>
         <a href="/{{version}}/documentation/streams/architecture" class="pagination__btn pagination__btn__next">Next</a>
     </div>
 </script>
@@ -170,7 +182,7 @@
         <!--#include virtual="../../includes/_docs_banner.htm" -->
         <ul class="breadcrumbs">
             <li><a href="/documentation">Documentation</a></li>
-            <li><a href="/documentation/streams">Kafka Streams API</a></li>
+            <li><a href="/documentation/streams">Kafka Streams</a></li>
         </ul>
         <div class="p-content"></div>
     </div>
@@ -180,6 +192,22 @@
 $(function() {
   // Show selected style on nav item
   $('.b-nav__streams').addClass('selected');
+
+
+     //sticky secondary nav
+          var $navbar = $(".sub-nav-sticky"),
+               y_pos = $navbar.offset().top,
+               height = $navbar.height();
+       
+           $(window).scroll(function() {
+               var scrollTop = $(window).scrollTop();
+           
+               if (scrollTop > y_pos - height) {
+                   $navbar.addClass("navbar-fixed")
+               } else if (scrollTop <= y_pos) {
+                   $navbar.removeClass("navbar-fixed")
+               }
+           });
 
   // Display docs subnav items
   $('.b-nav__docs').parent().toggleClass('nav__item__with__subs--expanded');

@@ -20,7 +20,7 @@ package kafka.producer
 import java.util.Properties
 import java.util.concurrent.LinkedBlockingQueue
 
-import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.Errors
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.easymock.EasyMock
 import org.junit.Test
@@ -36,6 +36,7 @@ import kafka.utils.TestUtils._
 import scala.collection.Map
 import scala.collection.mutable.ArrayBuffer
 import kafka.utils._
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
 
 @deprecated("This test has been deprecated and it will be removed in a future release.", "0.10.0.0")
@@ -372,9 +373,9 @@ class AsyncProducerTest {
     val props = new Properties()
     props.put("metadata.broker.list", brokerList)
     props.put("request.required.acks", "1")
-    props.put("serializer.class", classOf[StringEncoder].getName.toString)
-    props.put("key.serializer.class", classOf[NullEncoder[Int]].getName.toString)
-    props.put("producer.num.retries", 3.toString)
+    props.put("serializer.class", classOf[StringEncoder].getName)
+    props.put("key.serializer.class", classOf[NullEncoder[Int]].getName)
+    props.put("producer.num.retries", "3")
 
     val config = new ProducerConfig(props)
 
@@ -391,26 +392,27 @@ class AsyncProducerTest {
     // entirely.  The second request will succeed for partition 1 but fail for partition 0.
     // On the third try for partition 0, let it succeed.
     val request1 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), messagesToSet(msgs), acks = 1,
-      correlationId = 11, timeout = DefaultAckTimeoutMs, clientId = DefaultClientId)
+      correlationId = 5, timeout = DefaultAckTimeoutMs, clientId = DefaultClientId)
     val request2 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), messagesToSet(msgs), acks = 1,
-      correlationId = 17, timeout = DefaultAckTimeoutMs, clientId = DefaultClientId)
+      correlationId = 11, timeout = DefaultAckTimeoutMs, clientId = DefaultClientId)
     val response1 = ProducerResponse(0,
       Map((TopicAndPartition("topic1", 0), ProducerResponseStatus(Errors.NOT_LEADER_FOR_PARTITION, 0L)),
           (TopicAndPartition("topic1", 1), ProducerResponseStatus(Errors.NONE, 0L))))
-    val request3 = TestUtils.produceRequest(topic1, 0, messagesToSet(msgs), acks = 1, correlationId = 21,
+    val request3 = TestUtils.produceRequest(topic1, 0, messagesToSet(msgs), acks = 1, correlationId = 15,
       timeout = DefaultAckTimeoutMs, clientId = DefaultClientId)
     val response2 = ProducerResponse(0,
       Map((TopicAndPartition("topic1", 0), ProducerResponseStatus(Errors.NONE, 0L))))
     val mockSyncProducer = EasyMock.createMock(classOf[SyncProducer])
     // don't care about config mock
-    EasyMock.expect(mockSyncProducer.config).andReturn(EasyMock.anyObject()).anyTimes()
+    val mockConfig = EasyMock.createNiceMock(classOf[SyncProducerConfig])
+    EasyMock.expect(mockSyncProducer.config).andReturn(mockConfig).anyTimes()
     EasyMock.expect(mockSyncProducer.send(request1)).andThrow(new RuntimeException) // simulate SocketTimeoutException
     EasyMock.expect(mockSyncProducer.send(request2)).andReturn(response1)
     EasyMock.expect(mockSyncProducer.send(request3)).andReturn(response2)
     EasyMock.replay(mockSyncProducer)
 
     val producerPool = EasyMock.createMock(classOf[ProducerPool])
-    EasyMock.expect(producerPool.getProducer(0)).andReturn(mockSyncProducer).times(4)
+    EasyMock.expect(producerPool.getProducer(0)).andReturn(mockSyncProducer).times(3)
     EasyMock.expect(producerPool.close())
     EasyMock.replay(producerPool)
     val time = new Time {
@@ -419,14 +421,14 @@ class AsyncProducerTest {
       override def sleep(ms: Long): Unit = {}
       override def hiResClockMs: Long = 0L
     }
-    val handler = new DefaultEventHandler[Int,String](config,
-                                                      partitioner = new FixedValuePartitioner(),
-                                                      encoder = new StringEncoder(),
-                                                      keyEncoder = new NullEncoder[Int](),
-                                                      producerPool = producerPool,
-                                                      topicPartitionInfos = topicPartitionInfos,
-                                                      time = time)
-    val data = msgs.map(m => new KeyedMessage[Int,String](topic1, 0, m)) ++ msgs.map(m => new KeyedMessage[Int,String](topic1, 1, m))
+    val handler = new DefaultEventHandler(config,
+                                          partitioner = new FixedValuePartitioner(),
+                                          encoder = new StringEncoder(),
+                                          keyEncoder = new NullEncoder[Int](),
+                                          producerPool = producerPool,
+                                          topicPartitionInfos = topicPartitionInfos,
+                                          time = time)
+    val data = msgs.map(m => new KeyedMessage(topic1, 0, m)) ++ msgs.map(m => new KeyedMessage(topic1, 1, m))
     handler.handle(data)
     handler.close()
 

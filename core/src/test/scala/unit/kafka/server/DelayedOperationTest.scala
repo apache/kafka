@@ -17,6 +17,11 @@
 
 package kafka.server
 
+import java.util.concurrent.{Executors, Future}
+import java.util.concurrent.locks.ReentrantLock
+
+import kafka.utils.CoreUtils.inLock
+
 import org.apache.kafka.common.utils.Time
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
@@ -117,9 +122,121 @@ class DelayedOperationTest {
     assertEquals(Nil, cancelledOperations)
   }
 
+  @Test
+  def testDelayedOperationLock() {
+    verifyDelayedOperationLock(new MockDelayedOperation(100000L), mismatchedLocks = false)
+  }
+
+  @Test
+  def testDelayedOperationLockOverride() {
+    def newMockOperation = {
+      val lock = new ReentrantLock
+      new MockDelayedOperation(100000L, Some(lock), Some(lock))
+    }
+    verifyDelayedOperationLock(newMockOperation, mismatchedLocks = false)
+
+    verifyDelayedOperationLock(new MockDelayedOperation(100000L, None, Some(new ReentrantLock)),
+        mismatchedLocks = true)
+  }
+
+  def verifyDelayedOperationLock(mockDelayedOperation: => MockDelayedOperation, mismatchedLocks: Boolean) {
+    val key = "key"
+    val executorService = Executors.newSingleThreadExecutor
+    try {
+      def createDelayedOperations(count: Int): Seq[MockDelayedOperation] = {
+        (1 to count).map { _ =>
+          val op = mockDelayedOperation
+          purgatory.tryCompleteElseWatch(op, Seq(key))
+          assertFalse("Not completable", op.isCompleted)
+          op
+        }
+      }
+
+      def createCompletableOperations(count: Int): Seq[MockDelayedOperation] = {
+        (1 to count).map { _ =>
+          val op = mockDelayedOperation
+          op.completable = true
+          op
+        }
+      }
+
+      def runOnAnotherThread(fun: => Unit, shouldComplete: Boolean): Future[_] = {
+        val future = executorService.submit(new Runnable {
+          def run() = fun
+        })
+        if (shouldComplete)
+          future.get()
+        else
+          assertFalse("Should not have completed", future.isDone)
+        future
+      }
+
+      def checkAndComplete(completableOps: Seq[MockDelayedOperation], expectedComplete: Seq[MockDelayedOperation]): Unit = {
+        completableOps.foreach(op => op.completable = true)
+        val completed = purgatory.checkAndComplete(key)
+        assertEquals(expectedComplete.size, completed)
+        expectedComplete.foreach(op => assertTrue("Should have completed", op.isCompleted))
+        val expectedNotComplete = completableOps.toSet -- expectedComplete
+        expectedNotComplete.foreach(op => assertFalse("Should not have completed", op.isCompleted))
+      }
+
+      // If locks are free all completable operations should complete
+      var ops = createDelayedOperations(2)
+      checkAndComplete(ops, ops)
+
+      // Lock held by current thread, completable operations should complete
+      ops = createDelayedOperations(2)
+      inLock(ops(1).lock) {
+        checkAndComplete(ops, ops)
+      }
+
+      // Lock held by another thread, should not block, only operations that can be
+      // locked without blocking on the current thread should complete
+      ops = createDelayedOperations(2)
+      runOnAnotherThread(ops(0).lock.lock(), true)
+      try {
+        checkAndComplete(ops, Seq(ops(1)))
+      } finally {
+        runOnAnotherThread(ops(0).lock.unlock(), true)
+        checkAndComplete(Seq(ops(0)), Seq(ops(0)))
+      }
+
+      // Lock acquired by response callback held by another thread, should not block
+      // if the response lock is used as operation lock, only operations
+      // that can be locked without blocking on the current thread should complete
+      ops = createDelayedOperations(2)
+      ops(0).responseLockOpt.foreach { lock =>
+        runOnAnotherThread(lock.lock(), true)
+        try {
+          try {
+            checkAndComplete(ops, Seq(ops(1)))
+            assertFalse("Should have failed with mismatched locks", mismatchedLocks)
+          } catch {
+            case e: IllegalStateException =>
+              assertTrue("Should not have failed with valid locks", mismatchedLocks)
+          }
+        } finally {
+          runOnAnotherThread(lock.unlock(), true)
+          checkAndComplete(Seq(ops(0)), Seq(ops(0)))
+        }
+      }
+
+      // Immediately completable operations should complete without locking
+      ops = createCompletableOperations(2)
+      ops.foreach { op =>
+        assertTrue("Should have completed", purgatory.tryCompleteElseWatch(op, Seq(key)))
+        assertTrue("Should have completed", op.isCompleted)
+      }
+
+    } finally {
+      executorService.shutdown()
+    }
+  }
 
 
-  class MockDelayedOperation(delayMs: Long) extends DelayedOperation(delayMs) {
+  class MockDelayedOperation(delayMs: Long,
+      lockOpt: Option[ReentrantLock] = None,
+      val responseLockOpt: Option[ReentrantLock] = None) extends DelayedOperation(delayMs, lockOpt) {
     var completable = false
 
     def awaitExpiration() {
@@ -140,6 +257,10 @@ class DelayedOperationTest {
     }
 
     override def onComplete() {
+      responseLockOpt.foreach { lock =>
+        if (!lock.tryLock())
+          throw new IllegalStateException("Response callback lock could not be acquired in callback")
+      }
       synchronized {
         notify()
       }

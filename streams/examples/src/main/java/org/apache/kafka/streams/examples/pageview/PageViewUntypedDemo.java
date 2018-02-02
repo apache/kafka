@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.connect.json.JsonDeserializer;
 import org.apache.kafka.connect.json.JsonSerializer;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -33,6 +34,8 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -71,10 +74,10 @@ public class PageViewUntypedDemo {
         final Deserializer<JsonNode> jsonDeserializer = new JsonDeserializer();
         final Serde<JsonNode> jsonSerde = Serdes.serdeFrom(jsonSerializer, jsonDeserializer);
 
-        KStream<String, JsonNode> views = builder.stream(Serdes.String(), jsonSerde, "streams-pageview-input");
+        final Consumed<String, JsonNode> consumed = Consumed.with(Serdes.String(), jsonSerde);
+        KStream<String, JsonNode> views = builder.stream("streams-pageview-input", consumed);
 
-        KTable<String, JsonNode> users = builder.table(Serdes.String(), jsonSerde,
-            "streams-userprofile-input", "streams-userprofile-store-name");
+        KTable<String, JsonNode> users = builder.table("streams-userprofile-input", consumed);
 
         KTable<String, String> userRegions = users.mapValues(new ValueMapper<JsonNode, String>() {
             @Override
@@ -84,42 +87,42 @@ public class PageViewUntypedDemo {
         });
 
         KStream<JsonNode, JsonNode> regionCount = views
-                .leftJoin(userRegions, new ValueJoiner<JsonNode, String, JsonNode>() {
-                    @Override
-                    public JsonNode apply(JsonNode view, String region) {
-                        ObjectNode jNode = JsonNodeFactory.instance.objectNode();
+            .leftJoin(userRegions, new ValueJoiner<JsonNode, String, JsonNode>() {
+                @Override
+                public JsonNode apply(JsonNode view, String region) {
+                    ObjectNode jNode = JsonNodeFactory.instance.objectNode();
 
-                        return jNode.put("user", view.get("user").textValue())
-                                .put("page", view.get("page").textValue())
-                                .put("region", region == null ? "UNKNOWN" : region);
-                    }
-                })
-                .map(new KeyValueMapper<String, JsonNode, KeyValue<String, JsonNode>>() {
-                    @Override
-                    public KeyValue<String, JsonNode> apply(String user, JsonNode viewRegion) {
-                        return new KeyValue<>(viewRegion.get("region").textValue(), viewRegion);
-                    }
-                })
-                .groupByKey(Serdes.String(), jsonSerde)
-                .count(TimeWindows.of(7 * 24 * 60 * 60 * 1000L).advanceBy(1000), "RollingSevenDaysOfPageViewsByRegion")
-                // TODO: we can merge ths toStream().map(...) with a single toStream(...)
-                .toStream()
-                .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<JsonNode, JsonNode>>() {
-                    @Override
-                    public KeyValue<JsonNode, JsonNode> apply(Windowed<String> key, Long value) {
-                        ObjectNode keyNode = JsonNodeFactory.instance.objectNode();
-                        keyNode.put("window-start", key.window().start())
-                                .put("region", key.key());
+                    return jNode.put("user", view.get("user").textValue())
+                            .put("page", view.get("page").textValue())
+                            .put("region", region == null ? "UNKNOWN" : region);
+                }
+            })
+            .map(new KeyValueMapper<String, JsonNode, KeyValue<String, JsonNode>>() {
+                @Override
+                public KeyValue<String, JsonNode> apply(String user, JsonNode viewRegion) {
+                    return new KeyValue<>(viewRegion.get("region").textValue(), viewRegion);
+                }
+            })
+            .groupByKey(Serialized.with(Serdes.String(), jsonSerde))
+            .windowedBy(TimeWindows.of(7 * 24 * 60 * 60 * 1000L).advanceBy(1000))
+            .count()
+            .toStream()
+            .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<JsonNode, JsonNode>>() {
+                @Override
+                public KeyValue<JsonNode, JsonNode> apply(Windowed<String> key, Long value) {
+                    ObjectNode keyNode = JsonNodeFactory.instance.objectNode();
+                    keyNode.put("window-start", key.window().start())
+                            .put("region", key.key());
 
-                        ObjectNode valueNode = JsonNodeFactory.instance.objectNode();
-                        valueNode.put("count", value);
+                    ObjectNode valueNode = JsonNodeFactory.instance.objectNode();
+                    valueNode.put("count", value);
 
-                        return new KeyValue<>((JsonNode) keyNode, (JsonNode) valueNode);
-                    }
-                });
+                    return new KeyValue<>((JsonNode) keyNode, (JsonNode) valueNode);
+                }
+            });
 
         // write to the result topic
-        regionCount.to(jsonSerde, jsonSerde, "streams-pageviewstats-untyped-output");
+        regionCount.to("streams-pageviewstats-untyped-output", Produced.with(jsonSerde, jsonSerde));
 
         KafkaStreams streams = new KafkaStreams(builder.build(), props);
         streams.start();

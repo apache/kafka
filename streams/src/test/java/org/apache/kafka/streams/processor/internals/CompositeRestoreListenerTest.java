@@ -124,7 +124,7 @@ public class CompositeRestoreListenerTest {
     @Test
     public void shouldHandleNullReportStoreListener() {
         compositeRestoreListener = new CompositeRestoreListener(batchingStateRestoreCallback);
-        compositeRestoreListener.setGlobalRestoreListener(null);
+        compositeRestoreListener.setUserRestoreListener(null);
 
         compositeRestoreListener.restoreAll(records);
         compositeRestoreListener.onRestoreStart(topicPartition, storeName, startOffset, endOffset);
@@ -138,7 +138,7 @@ public class CompositeRestoreListenerTest {
     @Test
     public void shouldHandleNoRestoreListener() {
         compositeRestoreListener = new CompositeRestoreListener(noListenBatchingStateRestoreCallback);
-        compositeRestoreListener.setGlobalRestoreListener(null);
+        compositeRestoreListener.setUserRestoreListener(null);
 
         compositeRestoreListener.restoreAll(records);
         compositeRestoreListener.onRestoreStart(topicPartition, storeName, startOffset, endOffset);
@@ -151,7 +151,7 @@ public class CompositeRestoreListenerTest {
     @Test(expected = UnsupportedOperationException.class)
     public void shouldThrowExceptionWhenSinglePutDirectlyCalled() {
         compositeRestoreListener = new CompositeRestoreListener(noListenBatchingStateRestoreCallback);
-        compositeRestoreListener.setGlobalRestoreListener(null);
+        compositeRestoreListener.setUserRestoreListener(null);
 
         compositeRestoreListener.restore(key, value);
     }
@@ -179,7 +179,7 @@ public class CompositeRestoreListenerTest {
 
     private void setUpCompositeRestoreListener(StateRestoreCallback stateRestoreCallback) {
         compositeRestoreListener = new CompositeRestoreListener(stateRestoreCallback);
-        compositeRestoreListener.setGlobalRestoreListener(reportingStoreListener);
+        compositeRestoreListener.setUserRestoreListener(reportingStoreListener);
     }
 
 

@@ -16,8 +16,13 @@
  */
 package kafka.coordinator.transaction
 
+import java.nio.charset.StandardCharsets
+
 import kafka.common.KafkaException
-import kafka.utils.{Json, Logging, ZkUtils}
+import kafka.utils.{Json, Logging}
+import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
+
+import scala.collection.JavaConverters._
 
 /**
  * ProducerIdManager is the part of the transaction coordinator that provides ProducerIds in a unique way
@@ -30,17 +35,17 @@ object ProducerIdManager extends Logging {
   val CurrentVersion: Long = 1L
   val PidBlockSize: Long = 1000L
 
-  def generateProducerIdBlockJson(producerIdBlock: ProducerIdBlock): String = {
-    Json.encode(Map("version" -> CurrentVersion,
+  def generateProducerIdBlockJson(producerIdBlock: ProducerIdBlock): Array[Byte] = {
+    Json.encodeAsBytes(Map("version" -> CurrentVersion,
       "broker" -> producerIdBlock.brokerId,
       "block_start" -> producerIdBlock.blockStartId.toString,
-      "block_end" -> producerIdBlock.blockEndId.toString)
+      "block_end" -> producerIdBlock.blockEndId.toString).asJava
     )
   }
 
-  def parseProducerIdBlockData(jsonData: String): ProducerIdBlock = {
+  def parseProducerIdBlockData(jsonData: Array[Byte]): ProducerIdBlock = {
     try {
-      Json.parseFull(jsonData).map(_.asJsonObject).flatMap { js =>
+      Json.parseBytes(jsonData).map(_.asJsonObject).flatMap { js =>
         val brokerId = js("broker").to[Int]
         val blockStart = js("block_start").to[String].toLong
         val blockEnd = js("block_end").to[String].toLong
@@ -65,7 +70,7 @@ case class ProducerIdBlock(brokerId: Int, blockStartId: Long, blockEndId: Long) 
   }
 }
 
-class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging {
+class ProducerIdManager(val brokerId: Int, val zkClient: KafkaZkClient) extends Logging {
 
   this.logIdent = "[ProducerId Manager " + brokerId + "]: "
 
@@ -82,7 +87,7 @@ class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging
     var zkWriteComplete = false
     while (!zkWriteComplete) {
       // refresh current producerId block from zookeeper again
-      val (dataOpt, zkVersion) = zkUtils.readDataAndVersionMaybeNull(ZkUtils.ProducerIdBlockPath)
+      val (dataOpt, zkVersion) = zkClient.getDataAndVersion(ProducerIdBlockZNode.path)
 
       // generate the new producerId block
       currentProducerIdBlock = dataOpt match {
@@ -105,7 +110,7 @@ class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging
       val newProducerIdBlockData = ProducerIdManager.generateProducerIdBlockJson(currentProducerIdBlock)
 
       // try to write the new producerId block into zookeeper
-      val (succeeded, version) = zkUtils.conditionalUpdatePersistentPath(ZkUtils.ProducerIdBlockPath,
+      val (succeeded, version) = zkClient.conditionalUpdatePath(ProducerIdBlockZNode.path,
         newProducerIdBlockData, zkVersion, Some(checkProducerIdBlockZkData))
       zkWriteComplete = succeeded
 
@@ -114,21 +119,19 @@ class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging
     }
   }
 
-  private def checkProducerIdBlockZkData(zkUtils: ZkUtils, path: String, expectedData: String): (Boolean, Int) = {
+  private def checkProducerIdBlockZkData(zkClient: KafkaZkClient, path: String, expectedData: Array[Byte]): (Boolean, Int) = {
     try {
       val expectedPidBlock = ProducerIdManager.parseProducerIdBlockData(expectedData)
-      val (dataOpt, zkVersion) = zkUtils.readDataAndVersionMaybeNull(ZkUtils.ProducerIdBlockPath)
-      dataOpt match {
-        case Some(data) =>
+      zkClient.getDataAndVersion(ProducerIdBlockZNode.path) match {
+        case (Some(data), zkVersion) =>
           val currProducerIdBLock = ProducerIdManager.parseProducerIdBlockData(data)
           (currProducerIdBLock == expectedPidBlock, zkVersion)
-        case None =>
-          (false, -1)
+        case (None, _) => (false, -1)
       }
     } catch {
       case e: Exception =>
-        warn(s"Error while checking for producerId block Zk data on path $path: expected data $expectedData", e)
-
+        warn(s"Error while checking for producerId block Zk data on path $path: expected data " +
+          s"${new String(expectedData, StandardCharsets.UTF_8)}", e)
         (false, -1)
     }
   }

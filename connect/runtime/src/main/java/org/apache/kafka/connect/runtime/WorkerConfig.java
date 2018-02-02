@@ -21,11 +21,17 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
  * Common base class providing configuration for Kafka Connect workers, whether standalone or distributed.
@@ -57,6 +63,15 @@ public class WorkerConfig extends AbstractConfig {
                     " This controls the format of the values in messages written to or read from Kafka, and since this is" +
                     " independent of connectors it allows any connector to work with any serialization format." +
                     " Examples of common formats include JSON and Avro.";
+
+    public static final String HEADER_CONVERTER_CLASS_CONFIG = "header.converter";
+    public static final String HEADER_CONVERTER_CLASS_DOC =
+            "HeaderConverter class used to convert between Kafka Connect format and the serialized form that is written to Kafka." +
+                    " This controls the format of the header values in messages written to or read from Kafka, and since this is" +
+                    " independent of connectors it allows any connector to work with any serialization format." +
+                    " Examples of common formats include JSON and Avro. By default, the SimpleHeaderConverter is used to serialize" +
+                    " header values to strings and deserialize them by inferring the schemas.";
+    public static final String HEADER_CONVERTER_CLASS_DEFAULT = SimpleHeaderConverter.class.getName();
 
     public static final String INTERNAL_KEY_CONVERTER_CLASS_CONFIG = "internal.key.converter";
     public static final String INTERNAL_KEY_CONVERTER_CLASS_DOC =
@@ -95,14 +110,29 @@ public class WorkerConfig extends AbstractConfig {
             + "data to be committed in a future attempt.";
     public static final long OFFSET_COMMIT_TIMEOUT_MS_DEFAULT = 5000L;
 
+    /**
+     * @deprecated As of 1.1.0.
+     */
+    @Deprecated
     public static final String REST_HOST_NAME_CONFIG = "rest.host.name";
     private static final String REST_HOST_NAME_DOC
             = "Hostname for the REST API. If this is set, it will only bind to this interface.";
 
+    /**
+     * @deprecated As of 1.1.0.
+     */
+    @Deprecated
     public static final String REST_PORT_CONFIG = "rest.port";
     private static final String REST_PORT_DOC
             = "Port for the REST API to listen on.";
     public static final int REST_PORT_DEFAULT = 8083;
+
+    public static final String LISTENERS_CONFIG = "listeners";
+    private static final String LISTENERS_DOC
+            = "List of comma-separated URIs the REST API will listen on. The supported protocols are HTTP and HTTPS.\n" +
+            " Specify hostname as 0.0.0.0 to bind to all interfaces.\n" +
+            " Leave hostname empty to bind to default interface.\n" +
+            " Examples of legal listener lists: HTTP://myhost:8083,HTTPS://myhost:8084";
 
     public static final String REST_ADVERTISED_HOST_NAME_CONFIG = "rest.advertised.host.name";
     private static final String REST_ADVERTISED_HOST_NAME_DOC
@@ -111,6 +141,10 @@ public class WorkerConfig extends AbstractConfig {
     public static final String REST_ADVERTISED_PORT_CONFIG = "rest.advertised.port";
     private static final String REST_ADVERTISED_PORT_DOC
             = "If this is set, this is the port that will be given out to other workers to connect to.";
+
+    public static final String REST_ADVERTISED_LISTENER_CONFIG = "rest.advertised.listener";
+    private static final String REST_ADVERTISED_LISTENER_DOC
+            = "Sets the advertised listener (HTTP or HTTPS) which will be given to other workers to use.";
 
     public static final String ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG = "access.control.allow.origin";
     protected static final String ACCESS_CONTROL_ALLOW_ORIGIN_DOC =
@@ -138,6 +172,11 @@ public class WorkerConfig extends AbstractConfig {
             + "Examples: plugin.path=/usr/local/share/java,/usr/local/share/kafka/plugins,"
             + "/opt/connectors";
 
+    public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
+    public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
+    public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
+    public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
+
     /**
      * Get a basic ConfigDef for a WorkerConfig. This includes all the common settings. Subclasses can use this to
      * bootstrap their own ConfigDef.
@@ -164,21 +203,40 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.LOW, OFFSET_COMMIT_TIMEOUT_MS_DOC)
                 .define(REST_HOST_NAME_CONFIG, Type.STRING, null, Importance.LOW, REST_HOST_NAME_DOC)
                 .define(REST_PORT_CONFIG, Type.INT, REST_PORT_DEFAULT, Importance.LOW, REST_PORT_DOC)
+                .define(LISTENERS_CONFIG, Type.LIST, null, Importance.LOW, LISTENERS_DOC)
                 .define(REST_ADVERTISED_HOST_NAME_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_HOST_NAME_DOC)
                 .define(REST_ADVERTISED_PORT_CONFIG, Type.INT,  null, Importance.LOW, REST_ADVERTISED_PORT_DOC)
+                .define(REST_ADVERTISED_LISTENER_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_LISTENER_DOC)
                 .define(ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, Type.STRING,
                         ACCESS_CONTROL_ALLOW_ORIGIN_DEFAULT, Importance.LOW,
                         ACCESS_CONTROL_ALLOW_ORIGIN_DOC)
                 .define(ACCESS_CONTROL_ALLOW_METHODS_CONFIG, Type.STRING,
                         ACCESS_CONTROL_ALLOW_METHODS_DEFAULT, Importance.LOW,
                         ACCESS_CONTROL_ALLOW_METHODS_DOC)
-                .define(
-                        PLUGIN_PATH_CONFIG,
+                .define(PLUGIN_PATH_CONFIG,
                         Type.LIST,
                         null,
                         Importance.LOW,
-                        PLUGIN_PATH_DOC
-                );
+                        PLUGIN_PATH_DOC)
+                .define(METRICS_SAMPLE_WINDOW_MS_CONFIG, Type.LONG,
+                        30000, atLeast(0), Importance.LOW,
+                        CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
+                .define(METRICS_NUM_SAMPLES_CONFIG, Type.INT,
+                        2, atLeast(1), Importance.LOW,
+                        CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
+                .define(METRICS_RECORDING_LEVEL_CONFIG, Type.STRING,
+                        Sensor.RecordingLevel.INFO.toString(),
+                        in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString()),
+                        Importance.LOW,
+                        CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
+                .define(METRIC_REPORTER_CLASSES_CONFIG, Type.LIST,
+                        "", Importance.LOW,
+                        CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
+                .define(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
+                        ConfigDef.Type.STRING, "none", ConfigDef.Importance.LOW, BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC)
+                .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS,
+                        HEADER_CONVERTER_CLASS_DEFAULT,
+                        Importance.LOW, HEADER_CONVERTER_CLASS_DOC);
     }
 
     @Override

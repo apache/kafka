@@ -19,6 +19,8 @@ package kafka.security.auth
 
 import kafka.utils.Json
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.utils.SecurityUtils
+import scala.collection.JavaConverters._
 
 object Acl {
   val WildCardPrincipal: KafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "*")
@@ -34,7 +36,7 @@ object Acl {
 
   /**
    *
-   * @param aclJson
+   * @param bytes of acls json string
    *
    * <p>
       {
@@ -52,15 +54,15 @@ object Acl {
    *
    * @return
    */
-  def fromJson(aclJson: String): Set[Acl] = {
-    if (aclJson == null || aclJson.isEmpty)
+  def fromBytes(bytes: Array[Byte]): Set[Acl] = {
+    if (bytes == null || bytes.isEmpty)
       return collection.immutable.Set.empty[Acl]
 
-    Json.parseFull(aclJson).map(_.asJsonObject).map { js =>
+    Json.parseBytes(bytes).map(_.asJsonObject).map { js =>
       //the acl json version.
       require(js(VersionKey).to[Int] == CurrentVersion)
       js(AclsKey).asJsonArray.iterator.map(_.asJsonObject).map { itemJs =>
-        val principal = KafkaPrincipal.fromString(itemJs(PrincipalKey).to[String])
+        val principal = SecurityUtils.parseKafkaPrincipal(itemJs(PrincipalKey).to[String])
         val permissionType = PermissionType.fromString(itemJs(PermissionTypeKey).to[String])
         val host = itemJs(HostsKey).to[String]
         val operation = Operation.fromString(itemJs(OperationKey).to[String])
@@ -70,7 +72,7 @@ object Acl {
   }
 
   def toJsonCompatibleMap(acls: Set[Acl]): Map[String, Any] = {
-    Map(Acl.VersionKey -> Acl.CurrentVersion, Acl.AclsKey -> acls.map(acl => acl.toMap).toList)
+    Map(Acl.VersionKey -> Acl.CurrentVersion, Acl.AclsKey -> acls.map(acl => acl.toMap.asJava).toList.asJava)
   }
 }
 

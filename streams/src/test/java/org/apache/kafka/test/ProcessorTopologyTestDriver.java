@@ -29,13 +29,14 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.InternalTopologyAccessor;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
-import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
@@ -153,9 +154,19 @@ public class ProcessorTopologyTestDriver {
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
     private final Set<String> internalTopics = new HashSet<>();
     private final Map<String, TopicPartition> globalPartitionsByTopic = new HashMap<>();
-    private final StateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private StreamTask task;
     private GlobalStateUpdateTask globalStateTask;
+
+    /**
+     * Create a new test diver instance
+     * @param config the stream configuration for the topology
+     * @param topology the {@link Topology} whose {@link InternalTopologyBuilder} will
+     *                        be use to create the topology instance.
+     */
+    public ProcessorTopologyTestDriver(final StreamsConfig config,
+                                       final Topology topology) {
+        this(config, InternalTopologyAccessor.getInternalTopologyBuilder(topology));
+    }
 
     /**
      * Create a new test driver instance.
@@ -191,12 +202,13 @@ public class ProcessorTopologyTestDriver {
 
         consumer.assign(offsetsByTopicPartition.keySet());
 
-        final StateDirectory stateDirectory = new StateDirectory(APPLICATION_ID, TestUtils.tempDirectory().getPath(), Time.SYSTEM);
+        final StateDirectory stateDirectory = new StateDirectory(config, Time.SYSTEM);
         final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
-        final ThreadCache cache = new ThreadCache("mock", 1024 * 1024, streamsMetrics);
+        final ThreadCache cache = new ThreadCache(new LogContext("mock "), 1024 * 1024, streamsMetrics);
 
         if (globalTopology != null) {
             final MockConsumer<byte[], byte[]> globalConsumer = createGlobalConsumer();
+            final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
             for (final String topicName : globalTopology.sourceTopics()) {
                 final List<PartitionInfo> partitionInfos = new ArrayList<>();
                 partitionInfos.add(new PartitionInfo(topicName, 1, null, null, null));
@@ -206,30 +218,38 @@ public class ProcessorTopologyTestDriver {
                 globalPartitionsByTopic.put(topicName, partition);
                 offsetsByTopicPartition.put(partition, new AtomicLong());
             }
-            final GlobalStateManagerImpl stateManager = new GlobalStateManagerImpl(globalTopology, globalConsumer, stateDirectory);
+            final GlobalStateManagerImpl stateManager = new GlobalStateManagerImpl(new LogContext("mock "),
+                                                                                   globalTopology,
+                                                                                   globalConsumer,
+                                                                                   stateDirectory,
+                                                                                   stateRestoreListener,
+                                                                                   config);
+            final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(config, stateManager, streamsMetrics, cache);
+            stateManager.setGlobalProcessorContext(globalProcessorContext);
             globalStateTask = new GlobalStateUpdateTask(globalTopology,
-                                                        new GlobalProcessorContextImpl(config, stateManager, streamsMetrics, cache),
-                                                        stateManager, new LogAndContinueExceptionHandler()
-            );
+                                                        globalProcessorContext,
+                                                        stateManager,
+                                                        new LogAndContinueExceptionHandler(),
+                                                        new LogContext());
             globalStateTask.initialize();
         }
 
         if (!partitionsByTopic.isEmpty()) {
             task = new StreamTask(TASK_ID,
-                                  APPLICATION_ID,
                                   partitionsByTopic.values(),
                                   topology,
                                   consumer,
                                   new StoreChangelogReader(
                                       createRestoreConsumer(topology.storeToChangelogTopic()),
-                                      Time.SYSTEM,
-                                      5000,
-                                      stateRestoreListener),
+                                      new MockStateRestoreListener(),
+                                      new LogContext("topology-test-driver ")),
                                   config,
                                   streamsMetrics, stateDirectory,
                                   cache,
                                   new MockTime(),
                                   producer);
+            task.initializeStateStores();
+            task.initializeTopology();
         }
     }
 
@@ -241,10 +261,10 @@ public class ProcessorTopologyTestDriver {
      * @param value the raw message value
      * @param timestamp the raw message timestamp
      */
-    private void process(final String topicName,
-                         final byte[] key,
-                         final byte[] value,
-                         final long timestamp) {
+    public void process(final String topicName,
+                        final byte[] key,
+                        final byte[] value,
+                        final long timestamp) {
 
         final TopicPartition tp = partitionsByTopic.get(topicName);
         if (tp != null) {
@@ -310,7 +330,26 @@ public class ProcessorTopologyTestDriver {
                                final V value,
                                final Serializer<K> keySerializer,
                                final Serializer<V> valueSerializer) {
-        process(topicName, keySerializer.serialize(topicName, key), valueSerializer.serialize(topicName, value));
+        process(topicName, key, value, keySerializer, valueSerializer, 0L);
+    }
+
+    /**
+     * Send an input message with the given key and value and timestamp on the specified topic to the topology.
+     *
+     * @param topicName the name of the topic on which the message is to be sent
+     * @param key the raw message key
+     * @param value the raw message value
+     * @param keySerializer the serializer for the key
+     * @param valueSerializer the serializer for the value
+     * @param timestamp the raw message timestamp
+     */
+    public <K, V> void process(final String topicName,
+                               final K key,
+                               final V value,
+                               final Serializer<K> keySerializer,
+                               final Serializer<V> valueSerializer,
+                               final long timestamp) {
+        process(topicName, keySerializer.serialize(topicName, key), valueSerializer.serialize(topicName, value), timestamp);
     }
 
     /**
@@ -393,7 +432,7 @@ public class ProcessorTopologyTestDriver {
      */
     public void close() {
         if (task != null) {
-            task.close(true);
+            task.close(true, false);
         }
         if (globalStateTask != null) {
             try {

@@ -53,8 +53,9 @@ class ReplicaVerificationToolTest {
     replicaBuffer.verifyCheckSum(line => sb.append(s"$line\n"))
     val output = sb.toString.trim
 
+    // If you change this assertion, you should verify that the replica_verification_test.py system test still passes
     assertTrue(s"Max lag information should be in output: `$output`",
-      output.endsWith(": max lag is 10 for partition [a,0] at offset 10 among 3 partitions"))
+      output.endsWith(": max lag is 10 for partition a-0 at offset 10 among 3 partitions"))
   }
 
 }

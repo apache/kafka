@@ -27,7 +27,6 @@ import kafka.javaapi.producer.Producer
 import kafka.utils.IntEncoder
 import kafka.utils.{Logging, TestUtils}
 import kafka.consumer.{KafkaStream, ConsumerConfig}
-import kafka.zk.ZooKeeperTestHarness
 import kafka.common.MessageStreamsExistException
 import org.junit.Test
 
@@ -58,7 +57,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     requestHandlerLogger.setLevel(Level.FATAL)
 
     // create the topic
-    TestUtils.createTopic(zkUtils, topic, numParts, 1, servers)
+    createTopic(topic, numParts, 1)
 
     // send some messages to each broker
     val sentMessages1 = sendMessages(servers, nMessages, "batch1")

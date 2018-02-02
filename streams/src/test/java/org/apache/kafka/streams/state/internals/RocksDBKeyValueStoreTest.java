@@ -72,12 +72,12 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldUseCustomRocksDbConfigSetter() throws Exception {
+    public void shouldUseCustomRocksDbConfigSetter() {
         assertTrue(TheRocksDbConfigSetter.called);
     }
 
     @Test
-    public void shouldPerformRangeQueriesWithCachingDisabled() throws Exception {
+    public void shouldPerformRangeQueriesWithCachingDisabled() {
         context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
@@ -88,7 +88,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldPerformAllQueriesWithCachingDisabled() throws Exception {
+    public void shouldPerformAllQueriesWithCachingDisabled() {
         context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
@@ -99,7 +99,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldCloseOpenIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext() throws Exception {
+    public void shouldCloseOpenIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext() {
         context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");

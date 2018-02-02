@@ -105,6 +105,15 @@ public class ConfigDef {
         return Collections.unmodifiableSet(configKeys.keySet());
     }
 
+    public Map<String, Object> defaultValues() {
+        Map<String, Object> defaultValues = new HashMap<>();
+        for (ConfigKey key : configKeys.values()) {
+            if (key.defaultValue != NO_DEFAULT_VALUE)
+                defaultValues.put(key.name, key.defaultValue);
+        }
+        return defaultValues;
+    }
+
     public ConfigDef define(ConfigKey key) {
         if (configKeys.containsKey(key.name)) {
             throw new ConfigException("Configuration " + key.name + " is defined twice.");
@@ -746,6 +755,30 @@ public class ConfigDef {
     }
 
     /**
+     * Converts a map of config (key, value) pairs to a map of strings where each value
+     * is converted to a string. This method should be used with care since it stores
+     * actual password values to String. Values from this map should never be used in log entries.
+     */
+    public static  Map<String, String> convertToStringMapWithPasswordValues(Map<String, ?> configs) {
+        Map<String, String> result = new HashMap<>();
+        for (Map.Entry<String, ?> entry : configs.entrySet()) {
+            Object value = entry.getValue();
+            String strValue;
+            if (value instanceof Password)
+                strValue = ((Password) value).value();
+            else if (value instanceof List)
+                strValue = convertToString(value, Type.LIST);
+            else if (value instanceof Class)
+                strValue = convertToString(value, Type.CLASS);
+            else
+                strValue = convertToString(value, null);
+            if (strValue != null)
+                result.put(entry.getKey(), strValue);
+        }
+        return result;
+    }
+
+    /**
      * The config types
      */
     public enum Type {
@@ -867,6 +900,7 @@ public class ConfigDef {
 
         @Override
         public void ensureValid(final String name, final Object value) {
+            @SuppressWarnings("unchecked")
             List<String> values = (List<String>) value;
             for (String string : values) {
                 validString.ensureValid(name, string);
@@ -903,6 +937,35 @@ public class ConfigDef {
         }
     }
 
+    public static class NonNullValidator implements Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                // Pass in the string null to avoid the findbugs warning
+                throw new ConfigException(name, "null", "entry must be non null");
+            }
+        }
+    }
+
+    public static class CompositeValidator implements Validator {
+        private final List<Validator> validators;
+
+        private CompositeValidator(List<Validator> validators) {
+            this.validators = Collections.unmodifiableList(validators);
+        }
+
+        public static CompositeValidator of(Validator... validators) {
+            return new CompositeValidator(Arrays.asList(validators));
+        }
+
+        @Override
+        public void ensureValid(String name, Object value) {
+            for (Validator validator: validators) {
+                validator.ensureValid(name, value);
+            }
+        }
+    }
+
     public static class NonEmptyString implements Validator {
 
         @Override
@@ -916,6 +979,40 @@ public class ConfigDef {
         @Override
         public String toString() {
             return "non-empty string";
+        }
+    }
+
+    public static class NonEmptyStringWithoutControlChars implements Validator {
+
+        public static NonEmptyStringWithoutControlChars nonEmptyStringWithoutControlChars() {
+            return new NonEmptyStringWithoutControlChars();
+        }
+
+        @Override
+        public void ensureValid(String name, Object value) {
+            String s = (String) value;
+
+            if (s == null) {
+                // This can happen during creation of the config object due to no default value being defined for the
+                // name configuration - a missing name parameter is caught when checking for mandatory parameters,
+                // thus we can ok a null value here
+                return;
+            } else if (s.isEmpty()) {
+                throw new ConfigException(name, value, "String may not be empty");
+            }
+
+            // Check name string for illegal characters
+            ArrayList<Integer> foundIllegalCharacters = new ArrayList<>();
+
+            for (int i = 0; i < s.length(); i++) {
+                if (Character.isISOControl(s.codePointAt(i))) {
+                    foundIllegalCharacters.add(s.codePointAt(i));
+                }
+            }
+
+            if (!foundIllegalCharacters.isEmpty()) {
+                throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " + Utils.join(foundIllegalCharacters, ", "));
+            }
         }
     }
 

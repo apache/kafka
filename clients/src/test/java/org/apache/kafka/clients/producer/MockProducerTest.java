@@ -242,17 +242,6 @@ public class MockProducerTest {
         assertFalse(producer.transactionCommitted());
     }
 
-    @Test
-    public void shouldAbortInFlightTransactionOnClose() {
-        buildMockProducer(true);
-        producer.initTransactions();
-        producer.beginTransaction();
-        producer.close();
-        assertFalse(producer.transactionInFlight());
-        assertTrue(producer.transactionAborted());
-        assertFalse(producer.transactionCommitted());
-    }
-
     @Test(expected = IllegalStateException.class)
     public void shouldThrowFenceProducerIfTransactionsNotInitialized() {
         buildMockProducer(true);

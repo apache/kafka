@@ -20,8 +20,6 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.auth.AuthCallbackHandler;
-import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,7 +29,6 @@ import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.sasl.AuthorizeCallback;
 import javax.security.sasl.RealmCallback;
 
-import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.network.Mode;
 
 /**
@@ -42,12 +39,10 @@ import org.apache.kafka.common.network.Mode;
  */
 public class SaslServerCallbackHandler implements AuthCallbackHandler {
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerCallbackHandler.class);
-    private final KerberosShortNamer kerberosShortNamer;
     private final JaasContext jaasContext;
 
-    public SaslServerCallbackHandler(JaasContext jaasContext, KerberosShortNamer kerberosNameParser) throws IOException {
+    public SaslServerCallbackHandler(JaasContext jaasContext) throws IOException {
         this.jaasContext = jaasContext;
-        this.kerberosShortNamer = kerberosNameParser;
     }
 
     @Override
@@ -77,19 +72,10 @@ public class SaslServerCallbackHandler implements AuthCallbackHandler {
     private void handleAuthorizeCallback(AuthorizeCallback ac) {
         String authenticationID = ac.getAuthenticationID();
         String authorizationID = ac.getAuthorizationID();
-
-        LOG.info("Successfully authenticated client: authenticationID={}; authorizationID={}.", authenticationID,
-                authorizationID);
+        LOG.info("Successfully authenticated client: authenticationID={}; authorizationID={}.",
+                authenticationID, authorizationID);
         ac.setAuthorized(true);
-
-        KerberosName kerberosName = KerberosName.parse(authenticationID);
-        try {
-            String userName = kerberosShortNamer.shortName(kerberosName);
-            LOG.info("Setting authorizedID: {}", userName);
-            ac.setAuthorizedID(userName);
-        } catch (IOException e) {
-            LOG.error("Failed to set name for '{}' based on Kerberos authentication rules.", kerberosName, e);
-        }
+        ac.setAuthorizedID(authenticationID);
     }
 
     @Override

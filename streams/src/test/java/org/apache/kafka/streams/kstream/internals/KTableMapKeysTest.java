@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -57,7 +58,7 @@ public class KTableMapKeysTest {
 
         String topic1 = "topic_map_keys";
 
-        KTable<Integer, String> table1 = builder.table(integerSerde, stringSerde, topic1, "anyStoreName");
+        KTable<Integer, String> table1 = builder.table(topic1, Consumed.with(integerSerde, stringSerde));
 
         final Map<Integer, String> keyMap = new HashMap<>();
         keyMap.put(1, "ONE");

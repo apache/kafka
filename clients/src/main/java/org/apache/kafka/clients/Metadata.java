@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +60,7 @@ public final class Metadata {
     private int version;
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
+    private AuthenticationException authenticationException;
     private Cluster cluster;
     private boolean needUpdate;
     /* Topics with expiry time */
@@ -112,6 +114,7 @@ public final class Metadata {
      * will be reset on the next update.
      */
     public synchronized void add(String topic) {
+        Objects.requireNonNull(topic, "topic cannot be null");
         if (topics.put(topic, TOPIC_EXPIRY_NEEDS_UPDATE) == null) {
             requestUpdateForNewTopics();
         }
@@ -145,15 +148,31 @@ public final class Metadata {
     }
 
     /**
+     * If any non-retriable authentication exceptions were encountered during
+     * metadata update, clear and return the exception.
+     */
+    public synchronized AuthenticationException getAndClearAuthenticationException() {
+        if (authenticationException != null) {
+            AuthenticationException exception = authenticationException;
+            authenticationException = null;
+            return exception;
+        } else
+            return null;
+    }
+
+    /**
      * Wait for metadata update until the current version is larger than the last version we know of
      */
     public synchronized void awaitUpdate(final int lastVersion, final long maxWaitMs) throws InterruptedException {
         if (maxWaitMs < 0) {
-            throw new IllegalArgumentException("Max time to wait for metadata updates should not be < 0 milli seconds");
+            throw new IllegalArgumentException("Max time to wait for metadata updates should not be < 0 milliseconds");
         }
         long begin = System.currentTimeMillis();
         long remainingWaitMs = maxWaitMs;
         while (this.version <= lastVersion) {
+            AuthenticationException ex = getAndClearAuthenticationException();
+            if (ex != null)
+                throw ex;
             if (remainingWaitMs != 0)
                 wait(remainingWaitMs);
             long elapsed = System.currentTimeMillis() - begin;
@@ -198,13 +217,13 @@ public final class Metadata {
      * Updates the cluster metadata. If topic expiry is enabled, expiry time
      * is set for topics if required and expired topics are removed from the metadata.
      *
-     * @param cluster the cluster containing metadata for topics with valid metadata
+     * @param newCluster the cluster containing metadata for topics with valid metadata
      * @param unavailableTopics topics which are non-existent or have one or more partitions whose
      *        leader is not known
      * @param now current time in milliseconds
      */
-    public synchronized void update(Cluster cluster, Set<String> unavailableTopics, long now) {
-        Objects.requireNonNull(cluster, "cluster should not be null");
+    public synchronized void update(Cluster newCluster, Set<String> unavailableTopics, long now) {
+        Objects.requireNonNull(newCluster, "cluster should not be null");
 
         this.needUpdate = false;
         this.lastRefreshMs = now;
@@ -226,7 +245,7 @@ public final class Metadata {
         }
 
         for (Listener listener: listeners)
-            listener.onMetadataUpdate(cluster, unavailableTopics);
+            listener.onMetadataUpdate(newCluster, unavailableTopics);
 
         String previousClusterId = cluster.clusterResource().clusterId();
 
@@ -234,17 +253,17 @@ public final class Metadata {
             // the listener may change the interested topics, which could cause another metadata refresh.
             // If we have already fetched all topics, however, another fetch should be unnecessary.
             this.needUpdate = false;
-            this.cluster = getClusterForCurrentTopics(cluster);
+            this.cluster = getClusterForCurrentTopics(newCluster);
         } else {
-            this.cluster = cluster;
+            this.cluster = newCluster;
         }
 
         // The bootstrap cluster is guaranteed not to have any useful information
-        if (!cluster.isBootstrapConfigured()) {
-            String clusterId = cluster.clusterResource().clusterId();
-            if (clusterId == null ? previousClusterId != null : !clusterId.equals(previousClusterId))
-                log.info("Cluster ID: {}", cluster.clusterResource().clusterId());
-            clusterResourceListeners.onUpdate(cluster.clusterResource());
+        if (!newCluster.isBootstrapConfigured()) {
+            String newClusterId = newCluster.clusterResource().clusterId();
+            if (newClusterId == null ? previousClusterId != null : !newClusterId.equals(previousClusterId))
+                log.info("Cluster ID: {}", newClusterId);
+            clusterResourceListeners.onUpdate(newCluster.clusterResource());
         }
 
         notifyAll();
@@ -255,8 +274,11 @@ public final class Metadata {
      * Record an attempt to update the metadata that failed. We need to keep track of this
      * to avoid retrying immediately.
      */
-    public synchronized void failedUpdate(long now) {
+    public synchronized void failedUpdate(long now, AuthenticationException authenticationException) {
         this.lastRefreshMs = now;
+        this.authenticationException = authenticationException;
+        if (authenticationException != null)
+            this.notifyAll();
     }
 
     /**

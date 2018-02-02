@@ -109,7 +109,7 @@ class ConsumerPerformanceService(PerformanceService):
                 args['new-consumer'] = ""
             args['broker-list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
         else:
-            args['zookeeper'] = self.kafka.zk.connect_setting()
+            args['zookeeper'] = self.kafka.zk_connect_setting()
 
         if self.fetch_size is not None:
             args['fetch-size'] = self.fetch_size

@@ -20,7 +20,7 @@ package kafka.coordinator.transaction
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, RequestCompletionHandler}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.WriteTxnMarkersResponse
 
 import scala.collection.mutable
@@ -37,9 +37,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
     val requestHeader = response.requestHeader
     val correlationId = requestHeader.correlationId
     if (response.wasDisconnected) {
-      val api = ApiKeys.forId(requestHeader.apiKey)
-      val correlation = requestHeader.correlationId
-      trace(s"Cancelled $api request $requestHeader with correlation id $correlation due to node ${response.destination} being disconnected")
+      trace(s"Cancelled request with header $requestHeader due to node ${response.destination} being disconnected")
 
       for (txnIdAndMarker <- txnIdAndMarkerEntries.asScala) {
         val transactionalId = txnIdAndMarker.txnId
@@ -131,7 +129,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
               txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
               abortSending = true
             } else {
-              txnMetadata synchronized {
+              txnMetadata.inLock {
                 for ((topicPartition, error) <- errors.asScala) {
                   error match {
                     case Errors.NONE =>

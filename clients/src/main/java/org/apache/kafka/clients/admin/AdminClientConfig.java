@@ -98,8 +98,7 @@ public class AdminClientConfig extends AbstractConfig {
     private static final String SECURITY_PROTOCOL_DOC = CommonClientConfigs.SECURITY_PROTOCOL_DOC;
     private static final String METRICS_RECORDING_LEVEL_DOC = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC;
 
-    public static final String RETRIES_CONFIG = "retries";
-    private static final String RETRIES_DOC = "The maximum number of times to retry a call before failing it.";
+    public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
 
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
@@ -144,7 +143,7 @@ public class AdminClientConfig extends AbstractConfig {
                                         5,
                                         atLeast(0),
                                         Importance.LOW,
-                                        RETRIES_DOC)
+                                        CommonClientConfigs.RETRIES_DOC)
                                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
                                         Type.LONG,
                                         30000,
@@ -154,11 +153,11 @@ public class AdminClientConfig extends AbstractConfig {
                                 .define(METRICS_NUM_SAMPLES_CONFIG, Type.INT, 2, atLeast(1), Importance.LOW, METRICS_NUM_SAMPLES_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG, Type.LIST, "", Importance.LOW, METRIC_REPORTER_CLASSES_DOC)
                                 .define(METRICS_RECORDING_LEVEL_CONFIG,
-                                    Type.STRING,
-                                    Sensor.RecordingLevel.INFO.toString(),
-                                    in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString()),
-                                    Importance.LOW,
-                                    METRICS_RECORDING_LEVEL_DOC)
+                                        Type.STRING,
+                                        Sensor.RecordingLevel.INFO.toString(),
+                                        in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString()),
+                                        Importance.LOW,
+                                        METRICS_RECORDING_LEVEL_DOC)
                                 // security support
                                 .define(SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,

@@ -32,7 +32,7 @@ class ConnectRestApiTest(KafkaTest):
     FILE_SINK_CONNECTOR = 'org.apache.kafka.connect.file.FileStreamSinkConnector'
 
     FILE_SOURCE_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'topic', 'file', 'transforms'}
-    FILE_SINK_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'topics', 'file', 'transforms'}
+    FILE_SINK_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'topics', 'file', 'transforms', 'topics.regex'}
 
     INPUT_FILE = "/mnt/connect.input"
     INPUT_FILE2 = "/mnt/connect.input2"
@@ -115,7 +115,8 @@ class ConnectRestApiTest(KafkaTest):
         expected_source_info = {
             'name': 'local-file-source',
             'config': self._config_dict_from_props(source_connector_props),
-            'tasks': [{'connector': 'local-file-source', 'task': 0}]
+            'tasks': [{'connector': 'local-file-source', 'task': 0}],
+            'type': 'source'
         }
         source_info = self.cc.get_connector("local-file-source")
         assert expected_source_info == source_info, "Incorrect info:" + json.dumps(source_info)
@@ -124,7 +125,8 @@ class ConnectRestApiTest(KafkaTest):
         expected_sink_info = {
             'name': 'local-file-sink',
             'config': self._config_dict_from_props(sink_connector_props),
-            'tasks': [{'connector': 'local-file-sink', 'task': 0}]
+            'tasks': [{'connector': 'local-file-sink', 'task': 0}],
+            'type': 'sink'
         }
         sink_info = self.cc.get_connector("local-file-sink")
         assert expected_sink_info == sink_info, "Incorrect info:" + json.dumps(sink_info)

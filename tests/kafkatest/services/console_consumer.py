@@ -73,8 +73,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     LOG_FILE = os.path.join(LOG_DIR, "console_consumer.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "console_consumer.properties")
-    JMX_TOOL_LOG = "/mnt/jmx_tool.log"
-    JMX_TOOL_ERROR_LOG = "/mnt/jmx_tool.err.log"
+    JMX_TOOL_LOG = os.path.join(PERSISTENT_ROOT, "jmx_tool.log")
+    JMX_TOOL_ERROR_LOG = os.path.join(PERSISTENT_ROOT, "jmx_tool.err.log")
 
     logs = {
         "consumer_stdout": {
@@ -120,7 +120,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             print_timestamp             if True, print each message's timestamp as well
             isolation_level             How to handle transactional messages.
         """
-        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [])
+        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [],
+                          root=ConsoleConsumer.PERSISTENT_ROOT)
         BackgroundThreadService.__init__(self, context, num_nodes)
         self.kafka = kafka
         self.new_consumer = new_consumer
@@ -170,7 +171,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def start_cmd(self, node):
         """Return the start command appropriate for the given node."""
         args = self.args.copy()
-        args['zk_connect'] = self.kafka.zk.connect_setting()
+        args['zk_connect'] = self.kafka.zk_connect_setting()
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['stderr'] = ConsoleConsumer.STDERR_CAPTURE
         args['log_dir'] = ConsoleConsumer.LOG_DIR
@@ -312,9 +313,11 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def _init_jmx_attributes(self):
         # Must hold lock
         if self.new_consumer:
-            if not self.jmx_object_names:
-                self.jmx_object_names = []
-                self.jmx_object_names += ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
-                self.jmx_attributes += ["assigned-partitions"]
+            # We use a flag to track whether we're using this automatically generated ID because the service could be
+            # restarted multiple times and the client ID may be changed.
+            if getattr(self, '_automatic_metrics', False) or not self.jmx_object_names:
+                self._automatic_metrics = True
+                self.jmx_object_names = ["kafka.consumer:type=consumer-coordinator-metrics,client-id=%s" % self.client_id]
+                self.jmx_attributes = ["assigned-partitions"]
                 self.assigned_partitions_jmx_attr = "kafka.consumer:type=consumer-coordinator-metrics,client-id=%s:assigned-partitions" % self.client_id
 

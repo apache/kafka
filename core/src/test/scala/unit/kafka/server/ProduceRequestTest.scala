@@ -20,7 +20,7 @@ package kafka.server
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, DefaultRecordBatch, MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, DefaultRecordBatch, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.junit.Assert._
 import org.junit.Test
@@ -41,7 +41,7 @@ class ProduceRequestTest extends BaseRequestTest {
       val topicPartition = new TopicPartition("topic", partition)
       val partitionRecords = Map(topicPartition -> memoryRecords)
       val produceResponse = sendProduceRequest(leader,
-          new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, -1, 3000, partitionRecords.asJava).build())
+          ProduceRequest.Builder.forCurrentMagic(-1, 3000, partitionRecords.asJava).build())
       assertEquals(1, produceResponse.responses.size)
       val (tp, partitionResponse) = produceResponse.responses.asScala.head
       assertEquals(topicPartition, tp)
@@ -61,7 +61,7 @@ class ProduceRequestTest extends BaseRequestTest {
 
   /* returns a pair of partition id and leader id */
   private def createTopicAndFindPartitionWithLeader(topic: String): (Int, Int) = {
-    val partitionToLeader = TestUtils.createTopic(zkUtils, topic, 3, 2, servers)
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, 3, 2, servers)
     partitionToLeader.collectFirst {
       case (partition, leader) if leader != -1 => (partition, leader)
     }.getOrElse(fail(s"No leader elected for topic $topic"))
@@ -79,7 +79,7 @@ class ProduceRequestTest extends BaseRequestTest {
     val topicPartition = new TopicPartition("topic", partition)
     val partitionRecords = Map(topicPartition -> memoryRecords)
     val produceResponse = sendProduceRequest(leader, 
-      new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, -1, 3000, partitionRecords.asJava).build())
+      ProduceRequest.Builder.forCurrentMagic(-1, 3000, partitionRecords.asJava).build())
     assertEquals(1, produceResponse.responses.size)
     val (tp, partitionResponse) = produceResponse.responses.asScala.head
     assertEquals(topicPartition, tp)

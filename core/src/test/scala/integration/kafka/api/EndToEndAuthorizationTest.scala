@@ -61,6 +61,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   override def configureSecurityBeforeServersStart() {
     AclCommand.main(clusterAclArgs)
+    AclCommand.main(topicBrokerReadAclArgs)
   }
 
   val numRecords = 1
@@ -69,7 +70,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   val topicWildcard = "*"
   val part = 0
   val tp = new TopicPartition(topic, part)
-  val topicAndPartition = new TopicAndPartition(topic, part)
+  val topicAndPartition = TopicAndPartition(topic, part)
   val clientPrincipal: String
   val kafkaPrincipal: String
 
@@ -154,14 +155,14 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Starts MiniKDC and only then sets up the parent trait.
     */
   @Before
-  override def setUp {
-    super.setUp
-    AclCommand.main(topicBrokerReadAclArgs)
+  override def setUp() {
+    super.setUp()
     servers.foreach { s =>
+      TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.apis.authorizer.get, Resource.ClusterResource)
       TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(Topic, "*"))
     }
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(zkUtils, topic, 1, 3, this.servers)
+    createTopic(topic, 1, 3)
   }
 
   override def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
@@ -177,9 +178,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Closes MiniKDC last when tearing down.
     */
   @After
-  override def tearDown {
+  override def tearDown() {
     consumers.foreach(_.wakeup())
-    super.tearDown
+    super.tearDown()
     closeSasl()
   }
 
@@ -214,7 +215,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Tests that a producer fails to publish messages when the appropriate ACL
     * isn't set.
     */
-  @Test(expected = classOf[TimeoutException])
+  @Test(expected = classOf[TopicAuthorizationException])
   def testNoProduceWithoutDescribeAcl(): Unit = {
     sendRecords(numRecords, tp)
   }
@@ -240,15 +241,15 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     */
   @Test(expected = classOf[KafkaException])
   def testNoConsumeWithoutDescribeAclViaAssign(): Unit = {
-    noConsumeWithoutDescribeAclSetup
+    noConsumeWithoutDescribeAclSetup()
     consumers.head.assign(List(tp).asJava)
     // the exception is expected when the consumer attempts to lookup offsets
     consumeRecords(this.consumers.head)
   }
   
-  @Test(expected = classOf[TimeoutException])
+  @Test(expected = classOf[TopicAuthorizationException])
   def testNoConsumeWithoutDescribeAclViaSubscribe(): Unit = {
-    noConsumeWithoutDescribeAclSetup
+    noConsumeWithoutDescribeAclSetup()
     consumers.head.subscribe(List(topic).asJava)
     // this should timeout since the consumer will not be able to fetch any metadata for the topic
     consumeRecords(this.consumers.head, timeout = 3000)
@@ -273,7 +274,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   
   @Test
   def testNoConsumeWithDescribeAclViaAssign(): Unit = {
-    noConsumeWithDescribeAclSetup
+    noConsumeWithDescribeAclSetup()
     consumers.head.assign(List(tp).asJava)
 
     try {
@@ -287,7 +288,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   
   @Test
   def testNoConsumeWithDescribeAclViaSubscribe(): Unit = {
-    noConsumeWithDescribeAclSetup
+    noConsumeWithDescribeAclSetup()
     consumers.head.subscribe(List(topic).asJava)
 
     try {

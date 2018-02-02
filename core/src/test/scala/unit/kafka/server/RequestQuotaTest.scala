@@ -19,28 +19,29 @@ import java.nio.ByteBuffer
 import java.util.{Collections, LinkedHashMap, Properties}
 import java.util.concurrent.{Executors, Future, TimeUnit}
 
-import kafka.admin.AdminUtils
 import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
 import kafka.security.auth._
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.resource.{ResourceFilter, Resource => AdminResource, ResourceType => AdminResourceType}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
-import org.apache.kafka.common.network.{Authenticator, ListenerName, TransportLayer}
-import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
-import org.apache.kafka.common.security.auth.{DefaultPrincipalBuilder, KafkaPrincipal}
+import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
+import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.common.utils.SecurityUtils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
-
 
 class RequestQuotaTest extends BaseRequestTest {
 
@@ -49,6 +50,7 @@ class RequestQuotaTest extends BaseRequestTest {
   private val topic = "topic-1"
   private val numPartitions = 1
   private val tp = new TopicPartition(topic, 0)
+  private val logDir = "logDir"
   private val unthrottledClientId = "unthrottled-client"
   private val brokerId: Integer = 0
   private var leaderNode: KafkaServer = null
@@ -73,18 +75,18 @@ class RequestQuotaTest extends BaseRequestTest {
     RequestQuotaTest.principal = KafkaPrincipal.ANONYMOUS
     super.setUp()
 
-    TestUtils.createTopic(zkUtils, topic, numPartitions, 1, servers)
+    createTopic(topic, numPartitions, 1)
     leaderNode = servers.head
 
     // Change default client-id request quota to a small value and a single unthrottledClient with a large quota
     val quotaProps = new Properties()
     quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "0.01")
-    AdminUtils.changeClientIdConfig(zkUtils, "<default>", quotaProps)
+    adminZkClient.changeClientIdConfig("<default>", quotaProps)
     quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "2000")
-    AdminUtils.changeClientIdConfig(zkUtils, unthrottledClientId, quotaProps)
+    adminZkClient.changeClientIdConfig(Sanitizer.sanitize(unthrottledClientId), quotaProps)
 
     TestUtils.retry(10000) {
-      val quotaManager = servers(0).apis.quotas.request
+      val quotaManager = servers.head.apis.quotas.request
       assertEquals(s"Default request quota not set", Quota.upperBound(0.01), quotaManager.quota("some-user", "some-client"))
       assertEquals(s"Request quota override not set", Quota.upperBound(2000), quotaManager.quota("some-user", unthrottledClientId))
     }
@@ -164,7 +166,7 @@ class RequestQuotaTest extends BaseRequestTest {
   private def requestBuilder(apiKey: ApiKeys): AbstractRequest.Builder[_ <: AbstractRequest] = {
     apiKey match {
         case ApiKeys.PRODUCE =>
-          new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, 1, 5000,
+          ProduceRequest.Builder.forCurrentMagic(1, 5000,
             collection.mutable.Map(tp -> MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))).asJava)
 
         case ApiKeys.FETCH =>
@@ -187,17 +189,17 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.STOP_REPLICA =>
           new StopReplicaRequest.Builder(brokerId, Int.MaxValue, true, Set(tp).asJava)
 
-        case ApiKeys.UPDATE_METADATA_KEY =>
+        case ApiKeys.UPDATE_METADATA =>
           val partitionState = Map(tp -> new UpdateMetadataRequest.PartitionState(
             Int.MaxValue, brokerId, Int.MaxValue, List(brokerId).asJava, 2, Seq(brokerId).asJava, Seq.empty[Integer].asJava)).asJava
           val securityProtocol = SecurityProtocol.PLAINTEXT
           val brokers = Set(new UpdateMetadataRequest.Broker(brokerId,
             Seq(new UpdateMetadataRequest.EndPoint("localhost", 0, securityProtocol,
             ListenerName.forSecurityProtocol(securityProtocol))).asJava, null)).asJava
-          new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA_KEY.latestVersion, brokerId, Int.MaxValue, partitionState, brokers)
+          new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, brokerId, Int.MaxValue, partitionState, brokers)
 
-        case ApiKeys.CONTROLLED_SHUTDOWN_KEY =>
-          new ControlledShutdownRequest.Builder(brokerId)
+        case ApiKeys.CONTROLLED_SHUTDOWN =>
+          new ControlledShutdownRequest.Builder(brokerId, ApiKeys.CONTROLLED_SHUTDOWN.latestVersion)
 
         case ApiKeys.OFFSET_COMMIT =>
           new OffsetCommitRequest.Builder("test-group",
@@ -232,6 +234,9 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.SASL_HANDSHAKE =>
           new SaslHandshakeRequest.Builder("PLAIN")
+
+        case ApiKeys.SASL_AUTHENTICATE =>
+          new SaslAuthenticateRequest.Builder(ByteBuffer.wrap(new Array[Byte](0)))
 
         case ApiKeys.API_VERSIONS =>
           new ApiVersionsRequest.Builder
@@ -290,6 +295,32 @@ class RequestQuotaTest extends BaseRequestTest {
                 new AlterConfigsRequest.ConfigEntry(LogConfig.MaxMessageBytesProp, "1000000")
               ))), true)
 
+        case ApiKeys.ALTER_REPLICA_LOG_DIRS =>
+          new AlterReplicaLogDirsRequest.Builder(Collections.singletonMap(tp, logDir))
+
+        case ApiKeys.DESCRIBE_LOG_DIRS =>
+          new DescribeLogDirsRequest.Builder(Collections.singleton(tp))
+
+        case ApiKeys.CREATE_PARTITIONS =>
+          new CreatePartitionsRequest.Builder(
+            Collections.singletonMap("topic-2", NewPartitions.increaseTo(1)), 0, false
+          )
+
+        case ApiKeys.CREATE_DELEGATION_TOKEN =>
+          new CreateDelegationTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")), 1000)
+
+        case ApiKeys.EXPIRE_DELEGATION_TOKEN =>
+          new ExpireDelegationTokenRequest.Builder(ByteBuffer.allocate(10), 1000)
+
+        case ApiKeys.DESCRIBE_DELEGATION_TOKEN =>
+          new DescribeDelegationTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")))
+
+        case ApiKeys.RENEW_DELEGATION_TOKEN =>
+          new RenewDelegationTokenRequest.Builder(ByteBuffer.allocate(10), 1000)
+
+        case ApiKeys.DELETE_GROUPS =>
+          new DeleteGroupsRequest.Builder(Collections.singleton("test-group"))
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
@@ -298,7 +329,7 @@ class RequestQuotaTest extends BaseRequestTest {
   private def requestResponse(socket: Socket, clientId: String, correlationId: Int, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Struct = {
     val apiKey = requestBuilder.apiKey
     val request = requestBuilder.build()
-    val header = new RequestHeader(apiKey.id, request.version, clientId, correlationId)
+    val header = new RequestHeader(apiKey, request.version, clientId, correlationId)
     val response = requestAndReceive(socket, request.serialize(header).array)
     val responseBuffer = skipResponseHeader(response)
     apiKey.parseResponse(request.version, responseBuffer)
@@ -326,7 +357,7 @@ class RequestQuotaTest extends BaseRequestTest {
     override def toString: String = {
       val requestTime = requestTimeMetricValue(clientId)
       val throttleTime = throttleTimeMetricValue(clientId)
-      s"Client $clientId apiKey ${apiKey} requests $correlationId requestTime $requestTime throttleTime $throttleTime"
+      s"Client $clientId apiKey $apiKey requests $correlationId requestTime $requestTime throttleTime $throttleTime"
     }
   }
 
@@ -381,6 +412,14 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.DELETE_ACLS => new DeleteAclsResponse(response).throttleTimeMs
       case ApiKeys.DESCRIBE_CONFIGS => new DescribeConfigsResponse(response).throttleTimeMs
       case ApiKeys.ALTER_CONFIGS => new AlterConfigsResponse(response).throttleTimeMs
+      case ApiKeys.ALTER_REPLICA_LOG_DIRS => new AlterReplicaLogDirsResponse(response).throttleTimeMs
+      case ApiKeys.DESCRIBE_LOG_DIRS => new DescribeLogDirsResponse(response).throttleTimeMs
+      case ApiKeys.CREATE_PARTITIONS => new CreatePartitionsResponse(response).throttleTimeMs
+      case ApiKeys.CREATE_DELEGATION_TOKEN => new CreateDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.DESCRIBE_DELEGATION_TOKEN=> new DescribeDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.EXPIRE_DELEGATION_TOKEN => new ExpireDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.RENEW_DELEGATION_TOKEN => new RenewDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.DELETE_GROUPS => new DeleteGroupsResponse(response).throttleTimeMs
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
     }
   }
@@ -425,7 +464,8 @@ class RequestQuotaTest extends BaseRequestTest {
 
 object RequestQuotaTest {
   val ClusterActions = ApiKeys.values.toSet.filter(apiKey => apiKey.clusterAction)
-  val ClientActions = ApiKeys.values.toSet -- ClusterActions - ApiKeys.SASL_HANDSHAKE
+  val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
+  val ClientActions = ApiKeys.values.toSet -- ClusterActions -- SaslActions
 
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
   // Principal used for all client connections. This is modified by tests which
@@ -436,8 +476,8 @@ object RequestQuotaTest {
       session.principal != UnauthorizedPrincipal
     }
   }
-  class TestPrincipalBuilder extends DefaultPrincipalBuilder {
-    override def buildPrincipal(transportLayer: TransportLayer,  authenticator: Authenticator) = {
+  class TestPrincipalBuilder extends KafkaPrincipalBuilder {
+    override def build(context: AuthenticationContext): KafkaPrincipal = {
       principal
     }
   }

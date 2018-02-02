@@ -23,6 +23,7 @@ import kafka.message.{CompressionCodec, NoCompressionCodec}
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.utils.Time
 
 import scala.collection.mutable
 import scala.collection.JavaConverters._
@@ -46,6 +47,7 @@ private[kafka] object LogValidator extends Logging {
    */
   private[kafka] def validateMessagesAndAssignOffsets(records: MemoryRecords,
                                                       offsetCounter: LongRef,
+                                                      time: Time,
                                                       now: Long,
                                                       sourceCodec: CompressionCodec,
                                                       targetCodec: CompressionCodec,
@@ -58,14 +60,14 @@ private[kafka] object LogValidator extends Logging {
     if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
       // check the magic value
       if (!records.hasMatchingMagic(magic))
-        convertAndAssignOffsetsNonCompressed(records, offsetCounter, compactedTopic, now, timestampType,
+        convertAndAssignOffsetsNonCompressed(records, offsetCounter, compactedTopic, time, now, timestampType,
           timestampDiffMaxMs, magic, partitionLeaderEpoch, isFromClient)
       else
         // Do in-place validation, offset assignment and maybe set timestamp
         assignOffsetsNonCompressed(records, offsetCounter, now, compactedTopic, timestampType, timestampDiffMaxMs,
           partitionLeaderEpoch, isFromClient, magic)
     } else {
-      validateMessagesAndAssignOffsetsCompressed(records, offsetCounter, now, sourceCodec, targetCodec, compactedTopic,
+      validateMessagesAndAssignOffsetsCompressed(records, offsetCounter, time, now, sourceCodec, targetCodec, compactedTopic,
         magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch, isFromClient)
     }
   }
@@ -109,6 +111,7 @@ private[kafka] object LogValidator extends Logging {
   private def convertAndAssignOffsetsNonCompressed(records: MemoryRecords,
                                                    offsetCounter: LongRef,
                                                    compactedTopic: Boolean,
+                                                   time: Time,
                                                    now: Long,
                                                    timestampType: TimestampType,
                                                    timestampDiffMaxMs: Long,
@@ -137,12 +140,16 @@ private[kafka] object LogValidator extends Logging {
     }
 
     val convertedRecords = builder.build()
+
     val info = builder.info
+    val recordsProcessingStats = new RecordsProcessingStats(builder.uncompressedBytesWritten,
+      builder.numRecords, time.nanoseconds - now)
     ValidationAndOffsetAssignResult(
       validatedRecords = convertedRecords,
       maxTimestamp = info.maxTimestamp,
       shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp,
-      messageSizeMaybeChanged = true)
+      messageSizeMaybeChanged = true,
+      recordsProcessingStats = recordsProcessingStats)
   }
 
   private def assignOffsetsNonCompressed(records: MemoryRecords,
@@ -203,7 +210,8 @@ private[kafka] object LogValidator extends Logging {
       validatedRecords = records,
       maxTimestamp = maxTimestamp,
       shallowOffsetOfMaxTimestamp = offsetOfMaxTimestamp,
-      messageSizeMaybeChanged = false)
+      messageSizeMaybeChanged = false,
+      recordsProcessingStats = RecordsProcessingStats.EMPTY)
   }
 
   /**
@@ -215,6 +223,7 @@ private[kafka] object LogValidator extends Logging {
    */
   def validateMessagesAndAssignOffsetsCompressed(records: MemoryRecords,
                                                  offsetCounter: LongRef,
+                                                 time: Time,
                                                  now: Long,
                                                  sourceCodec: CompressionCodec,
                                                  targetCodec: CompressionCodec,
@@ -232,8 +241,11 @@ private[kafka] object LogValidator extends Logging {
       val expectedInnerOffset = new LongRef(0)
       val validatedRecords = new mutable.ArrayBuffer[Record]
 
+      var uncompressedSizeInBytes = 0
+
       for (batch <- records.batches.asScala) {
         validateBatch(batch, isFromClient, toMagic)
+        uncompressedSizeInBytes += AbstractRecords.recordBatchHeaderSizeInBytes(toMagic, batch.compressionType())
 
         // Do not compress control records unless they are written compressed
         if (sourceCodec == NoCompressionCodec && batch.isControlBatch)
@@ -244,6 +256,8 @@ private[kafka] object LogValidator extends Logging {
           if (sourceCodec != NoCompressionCodec && record.isCompressed)
             throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
               s"compression attribute set: $record")
+
+          uncompressedSizeInBytes += record.sizeInBytes()
           if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && toMagic > RecordBatch.MAGIC_VALUE_V0) {
             // Check if we need to overwrite offset
             // No in place assignment situation 3
@@ -269,8 +283,9 @@ private[kafka] object LogValidator extends Logging {
           val first = records.batches.asScala.head
           (first.producerId, first.producerEpoch, first.baseSequence, first.isTransactional)
         }
-        buildRecordsAndAssignOffsets(toMagic, offsetCounter, timestampType, CompressionType.forId(targetCodec.codec), now,
-          validatedRecords, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch)
+        buildRecordsAndAssignOffsets(toMagic, offsetCounter, time, timestampType, CompressionType.forId(targetCodec.codec), now,
+          validatedRecords, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch, isFromClient,
+          uncompressedSizeInBytes)
       } else {
         // we can update the batch only and write the compressed payload as is
         val batch = records.batches.iterator.next()
@@ -287,15 +302,18 @@ private[kafka] object LogValidator extends Logging {
         if (toMagic >= RecordBatch.MAGIC_VALUE_V2)
           batch.setPartitionLeaderEpoch(partitionLeaderEpoch)
 
+        val recordsProcessingStats = new RecordsProcessingStats(uncompressedSizeInBytes, 0, -1)
         ValidationAndOffsetAssignResult(validatedRecords = records,
           maxTimestamp = maxTimestamp,
           shallowOffsetOfMaxTimestamp = lastOffset,
-          messageSizeMaybeChanged = false)
+          messageSizeMaybeChanged = false,
+          recordsProcessingStats = recordsProcessingStats)
       }
   }
 
   private def buildRecordsAndAssignOffsets(magic: Byte,
                                            offsetCounter: LongRef,
+                                           time: Time,
                                            timestampType: TimestampType,
                                            compressionType: CompressionType,
                                            logAppendTime: Long,
@@ -304,7 +322,10 @@ private[kafka] object LogValidator extends Logging {
                                            producerEpoch: Short,
                                            baseSequence: Int,
                                            isTransactional: Boolean,
-                                           partitionLeaderEpoch: Int): ValidationAndOffsetAssignResult = {
+                                           partitionLeaderEpoch: Int,
+                                           isFromClient: Boolean,
+                                           uncompresssedSizeInBytes: Int): ValidationAndOffsetAssignResult = {
+    val startNanos = time.nanoseconds
     val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType,
       validatedRecords.asJava)
     val buffer = ByteBuffer.allocate(estimatedSize)
@@ -316,13 +337,23 @@ private[kafka] object LogValidator extends Logging {
     }
 
     val records = builder.build()
+
     val info = builder.info
+
+    // This is not strictly correct, it represents the number of records where in-place assignment is not possible
+    // instead of the number of records that were converted. It will over-count cases where the source and target are
+    // message format V0 or if the inner offsets are not consecutive. This is OK since the impact is the same: we have
+    // to rebuild the records (including recompression if enabled).
+    val conversionCount = builder.numRecords
+    val recordsProcessingStats = new RecordsProcessingStats(uncompresssedSizeInBytes + builder.uncompressedBytesWritten,
+      conversionCount, time.nanoseconds - startNanos)
 
     ValidationAndOffsetAssignResult(
       validatedRecords = records,
       maxTimestamp = info.maxTimestamp,
       shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp,
-      messageSizeMaybeChanged = true)
+      messageSizeMaybeChanged = true,
+      recordsProcessingStats = recordsProcessingStats)
   }
 
   private def validateKey(record: Record, compactedTopic: Boolean) {
@@ -352,6 +383,7 @@ private[kafka] object LogValidator extends Logging {
   case class ValidationAndOffsetAssignResult(validatedRecords: MemoryRecords,
                                              maxTimestamp: Long,
                                              shallowOffsetOfMaxTimestamp: Long,
-                                             messageSizeMaybeChanged: Boolean)
+                                             messageSizeMaybeChanged: Boolean,
+                                             recordsProcessingStats: RecordsProcessingStats)
 
 }

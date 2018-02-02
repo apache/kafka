@@ -37,10 +37,10 @@ public class LogAndFailExceptionHandler implements DeserializationExceptionHandl
                                                  final ConsumerRecord<byte[], byte[]> record,
                                                  final Exception exception) {
 
-        log.warn("Exception caught during Deserialization, " +
-                        "taskId: {}, topic: {}, partition: {}, offset: {}",
-                context.taskId(), record.topic(), record.partition(), record.offset(),
-                exception);
+        log.error("Exception caught during Deserialization, " +
+                  "taskId: {}, topic: {}, partition: {}, offset: {}",
+                  context.taskId(), record.topic(), record.partition(), record.offset(),
+                  exception);
 
         return DeserializationHandlerResponse.FAIL;
     }

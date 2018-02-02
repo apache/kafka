@@ -20,6 +20,7 @@ package kafka.tools
 import kafka.metrics.KafkaMetricsReporter
 import kafka.producer.{NewShinyProducer, OldProducer}
 import kafka.utils.{CommandLineUtils, Exit, Logging, ToolsUtils, VerifiableProperties}
+import kafka.utils.Implicits._
 import kafka.message.CompressionCodec
 import kafka.serializer._
 import java.util.concurrent.{CountDownLatch, Executors}
@@ -30,7 +31,6 @@ import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 
 import org.apache.kafka.common.utils.Utils
-import org.apache.log4j.Logger
 
 /**
  * Load test for the producer
@@ -39,7 +39,6 @@ import org.apache.log4j.Logger
 object ProducerPerformance extends Logging {
 
   def main(args: Array[String]) {
-    val logger = Logger.getLogger(getClass)
     val config = new ProducerPerfConfig(args)
     if (!config.isFixedSize)
       logger.info("WARN: Throughput will be slower due to changing message size per request")
@@ -205,7 +204,7 @@ object ProducerPerformance extends Logging {
     val producer =
       if (config.useNewProducer) {
         import org.apache.kafka.clients.producer.ProducerConfig
-        props.putAll(config.producerProps)
+        props ++= config.producerProps
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
         props.put(ProducerConfig.SEND_BUFFER_CONFIG, (64 * 1024).toString)
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer-performance")
@@ -217,7 +216,7 @@ object ProducerPerformance extends Logging {
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
         new NewShinyProducer(props)
       } else {
-        props.putAll(config.producerProps)
+        props ++= config.producerProps
         props.put("metadata.broker.list", config.brokerList)
         props.put("compression.codec", config.compressionCodec.codec.toString)
         props.put("send.buffer.bytes", (64 * 1024).toString)

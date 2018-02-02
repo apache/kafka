@@ -282,7 +282,7 @@ public class KafkaConfigBackingStoreTest {
         assertNull(configState.taskConfig(TASK_IDS.get(0)));
         assertNull(configState.taskConfig(TASK_IDS.get(1)));
 
-        // Writing task task configs should block until all the writes have been performed and the root record update
+        // Writing task configs should block until all the writes have been performed and the root record update
         // has completed
         List<Map<String, String>> taskConfigs = Arrays.asList(SAMPLE_CONFIGS.get(0), SAMPLE_CONFIGS.get(1));
         configStorage.putTaskConfigs("connector1", taskConfigs);
@@ -335,7 +335,7 @@ public class KafkaConfigBackingStoreTest {
         ClusterConfigState configState = configStorage.snapshot();
         assertEquals(-1, configState.offset());
 
-        // Writing task task configs should block until all the writes have been performed and the root record update
+        // Writing task configs should block until all the writes have been performed and the root record update
         // has completed
         List<Map<String, String>> taskConfigs = Collections.emptyList();
         configStorage.putTaskConfigs("connector1", taskConfigs);

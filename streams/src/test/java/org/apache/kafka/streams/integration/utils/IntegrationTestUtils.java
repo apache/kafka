@@ -86,11 +86,26 @@ public class IntegrationTestUtils {
     public static <K, V> void produceKeyValuesSynchronously(
         final String topic, final Collection<KeyValue<K, V>> records, final Properties producerConfig, final Time time)
         throws ExecutionException, InterruptedException {
+        IntegrationTestUtils.produceKeyValuesSynchronously(topic, records, producerConfig, time, false);
+    }
+
+    /**
+     * @param topic               Kafka topic to write the data records to
+     * @param records             Data records to write to Kafka
+     * @param producerConfig      Kafka producer configuration
+     * @param enableTransactions  Send messages in a transaction
+     * @param <K>                 Key type of the data records
+     * @param <V>                 Value type of the data records
+     */
+    public static <K, V> void produceKeyValuesSynchronously(
+        final String topic, final Collection<KeyValue<K, V>> records, final Properties producerConfig, final Time time, final boolean enableTransactions)
+        throws ExecutionException, InterruptedException {
         for (final KeyValue<K, V> record : records) {
             produceKeyValuesSynchronouslyWithTimestamp(topic,
                 Collections.singleton(record),
                 producerConfig,
-                time.milliseconds());
+                time.milliseconds(),
+                enableTransactions);
             time.sleep(1L);
         }
     }
@@ -100,11 +115,27 @@ public class IntegrationTestUtils {
                                                                          final Properties producerConfig,
                                                                          final Long timestamp)
         throws ExecutionException, InterruptedException {
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, timestamp, false);
+    }
+
+    public static <K, V> void produceKeyValuesSynchronouslyWithTimestamp(final String topic,
+                                                                         final Collection<KeyValue<K, V>> records,
+                                                                         final Properties producerConfig,
+                                                                         final Long timestamp,
+                                                                         final boolean enableTransactions)
+        throws ExecutionException, InterruptedException {
         try (Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
+            if (enableTransactions) {
+                producer.initTransactions();
+                producer.beginTransaction();
+            }
             for (final KeyValue<K, V> record : records) {
                 final Future<RecordMetadata> f = producer.send(
                     new ProducerRecord<>(topic, null, timestamp, record.key, record.value));
                 f.get();
+            }
+            if (enableTransactions) {
+                producer.commitTransaction();
             }
             producer.flush();
         }
@@ -113,12 +144,18 @@ public class IntegrationTestUtils {
     public static <V> void produceValuesSynchronously(
         final String topic, final Collection<V> records, final Properties producerConfig, final Time time)
         throws ExecutionException, InterruptedException {
+        IntegrationTestUtils.produceValuesSynchronously(topic, records, producerConfig, time, false);
+    }
+
+    public static <V> void produceValuesSynchronously(
+        final String topic, final Collection<V> records, final Properties producerConfig, final Time time, final boolean enableTransactions)
+        throws ExecutionException, InterruptedException {
         final Collection<KeyValue<Object, V>> keyedRecords = new ArrayList<>();
         for (final V value : records) {
             final KeyValue<Object, V> kv = new KeyValue<>(null, value);
             keyedRecords.add(kv);
         }
-        produceKeyValuesSynchronously(topic, keyedRecords, producerConfig, time);
+        produceKeyValuesSynchronously(topic, keyedRecords, producerConfig, time, enableTransactions);
     }
 
     public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(final Properties consumerConfig,
@@ -136,7 +173,6 @@ public class IntegrationTestUtils {
      * @param expectedNumRecords Minimum number of expected records
      * @param waitTime           Upper bound in waiting time in milliseconds
      * @return All the records consumed, or null if no records are consumed
-     * @throws InterruptedException
      * @throws AssertionError       if the given wait time elapses
      */
     public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(final Properties consumerConfig,
@@ -154,9 +190,7 @@ public class IntegrationTestUtils {
                     return accumData.size() >= expectedNumRecords;
                 }
             };
-            final String conditionDetails =
-                "Expecting " + expectedNumRecords + " records from topic " + topic +
-                    " while only received " + accumData.size() + ": " + accumData;
+            final String conditionDetails = "Did not receive all " + expectedNumRecords + " records from topic " + topic;
             TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
         }
         return accumData;
@@ -177,7 +211,6 @@ public class IntegrationTestUtils {
      * @param expectedNumRecords Minimum number of expected records
      * @param waitTime           Upper bound in waiting time in milliseconds
      * @return All the records consumed, or null if no records are consumed
-     * @throws InterruptedException
      * @throws AssertionError       if the given wait time elapses
      */
     public static <V> List<V> waitUntilMinValuesRecordsReceived(final Properties consumerConfig,
@@ -195,9 +228,7 @@ public class IntegrationTestUtils {
                     return accumData.size() >= expectedNumRecords;
                 }
             };
-            final String conditionDetails =
-                "Expecting " + expectedNumRecords + " records from topic " + topic +
-                    " while only received " + accumData.size() + ": " + accumData;
+            final String conditionDetails = "Did not receive all " + expectedNumRecords + " records from topic " + topic;
             TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
         }
         return accumData;
@@ -287,7 +318,10 @@ public class IntegrationTestUtils {
      * @param maxMessages    Maximum number of messages to read via the consumer.
      * @return The values retrieved via the consumer.
      */
-    private static <V> List<V> readValues(final String topic, final Consumer<Object, V> consumer, final long waitTime, final int maxMessages) {
+    private static <V> List<V> readValues(final String topic,
+                                          final Consumer<Object, V> consumer,
+                                          final long waitTime,
+                                          final int maxMessages) {
         final List<V> returnList = new ArrayList<>();
         final List<KeyValue<Object, V>> kvs = readKeyValues(topic, consumer, waitTime, maxMessages);
         for (final KeyValue<?, V> kv : kvs) {
@@ -307,7 +341,9 @@ public class IntegrationTestUtils {
      * @return The KeyValue elements retrieved via the consumer
      */
     private static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic,
-        final Consumer<K, V> consumer, final long waitTime, final int maxMessages) {
+                                                             final Consumer<K, V> consumer,
+                                                             final long waitTime,
+                                                             final int maxMessages) {
         final List<KeyValue<K, V>> consumedValues;
         consumer.subscribe(Collections.singletonList(topic));
         final int pollIntervalMs = 100;
@@ -317,6 +353,7 @@ public class IntegrationTestUtils {
             continueConsuming(consumedValues.size(), maxMessages)) {
             totalPollTimeMs += pollIntervalMs;
             final ConsumerRecords<K, V> records = consumer.poll(pollIntervalMs);
+
             for (final ConsumerRecord<K, V> record : records) {
                 consumedValues.add(new KeyValue<>(record.key(), record.value()));
             }

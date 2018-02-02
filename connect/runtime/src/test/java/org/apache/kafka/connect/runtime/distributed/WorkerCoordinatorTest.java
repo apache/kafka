@@ -29,6 +29,7 @@ import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
@@ -88,18 +89,22 @@ public class WorkerCoordinatorTest {
 
     @Before
     public void setup() {
+        LogContext loggerFactory = new LogContext();
+
         this.time = new MockTime();
         this.client = new MockClient(time);
         this.metadata = new Metadata(0, Long.MAX_VALUE, true);
         this.metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
-        this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
+        this.consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time, 100, 1000, heartbeatIntervalMs);
         this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();
         this.configStorage = PowerMock.createMock(KafkaConfigBackingStore.class);
 
         client.setNode(node);
 
-        this.coordinator = new WorkerCoordinator(consumerClient,
+        this.coordinator = new WorkerCoordinator(
+                loggerFactory,
+                consumerClient,
                 groupId,
                 rebalanceTimeoutMs,
                 sessionTimeoutMs,

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -51,10 +52,11 @@ public class GlobalKTableJoinsTest {
     public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory();
-        global = builder.globalTable(Serdes.String(), Serdes.String(), null, globalTopic, "global-store");
-        stream = builder.stream(Serdes.String(), Serdes.String(), streamTopic);
+        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+        global = builder.globalTable(globalTopic, consumed);
+        stream = builder.stream(streamTopic, consumed);
         keyValueMapper = new KeyValueMapper<String, String, String>() {
             @Override
             public String apply(final String key, final String value) {

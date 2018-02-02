@@ -27,6 +27,7 @@ public class ScramLoginModule implements LoginModule {
 
     private static final String USERNAME_CONFIG = "username";
     private static final String PASSWORD_CONFIG = "password";
+    public static final String TOKEN_AUTH_CONFIG = "tokenauth";
 
     static {
         ScramSaslClientProvider.initialize();
@@ -41,6 +42,9 @@ public class ScramLoginModule implements LoginModule {
         String password = (String) options.get(PASSWORD_CONFIG);
         if (password != null)
             subject.getPrivateCredentials().add(password);
+
+        Boolean useTokenAuthentication = "true".equalsIgnoreCase((String) options.get(TOKEN_AUTH_CONFIG));
+        subject.getPublicCredentials().add(useTokenAuthentication);
     }
 
     @Override

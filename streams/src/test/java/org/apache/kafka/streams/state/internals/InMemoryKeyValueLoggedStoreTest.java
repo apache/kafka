@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
 
@@ -39,18 +42,27 @@ public class InMemoryKeyValueLoggedStoreTest extends AbstractKeyValueStoreTest {
             Class<V> valueClass,
             boolean useContextSerdes) {
 
-        StateStoreSupplier supplier;
+        final Serde<K> keySerde;
+        final Serde<V> valueSerde;
+
         if (useContextSerdes) {
-            supplier = Stores.create("my-store").withKeys(context.keySerde()).withValues(context.valueSerde())
-                .inMemory().enableLogging(Collections.singletonMap("retention.ms", "1000")).build();
+            keySerde = (Serde<K>) context.keySerde();
+            valueSerde = (Serde<V>) context.valueSerde();
         } else {
-            supplier = Stores.create("my-store").withKeys(keyClass).withValues(valueClass)
-                .inMemory().enableLogging(Collections.singletonMap("retention.ms", "1000")).build();
+            keySerde = Serdes.serdeFrom(keyClass);
+            valueSerde = Serdes.serdeFrom(valueClass);
         }
 
-        KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
+        final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(
+                Stores.inMemoryKeyValueStore("my-store"),
+                keySerde,
+                valueSerde)
+                .withLoggingEnabled(Collections.singletonMap("retention.ms", "1000"));
+
+        final StateStore store = storeBuilder.build();
         store.init(context, store);
-        return store;
+
+        return (KeyValueStore<K, V>) store;
     }
 
     @Test

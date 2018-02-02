@@ -16,18 +16,16 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
-
 import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
-
-import java.security.Principal;
-
 import java.util.Objects;
-import org.apache.kafka.common.memory.MemoryPool;
-import org.apache.kafka.common.utils.Utils;
 
 public class KafkaChannel {
     private final String id;
@@ -66,18 +64,27 @@ public class KafkaChannel {
     /**
      * Returns the principal returned by `authenticator.principal()`.
      */
-    public Principal principal() throws IOException {
+    public KafkaPrincipal principal() {
         return authenticator.principal();
     }
 
     /**
-     * Does handshake of transportLayer and authentication using configured authenticator
+     * Does handshake of transportLayer and authentication using configured authenticator.
+     * For SSL with client authentication enabled, {@link TransportLayer#handshake()} performs
+     * authentication. For SASL, authentication is performed by {@link Authenticator#authenticate()}.
      */
-    public void prepare() throws IOException {
-        if (!transportLayer.ready())
-            transportLayer.handshake();
-        if (transportLayer.ready() && !authenticator.complete())
-            authenticator.authenticate();
+    public void prepare() throws AuthenticationException, IOException {
+        try {
+            if (!transportLayer.ready())
+                transportLayer.handshake();
+            if (transportLayer.ready() && !authenticator.complete())
+                authenticator.authenticate();
+        } catch (AuthenticationException e) {
+            // Clients are notified of authentication exceptions to enable operations to be terminated
+            // without retries. Other errors are handled as network exceptions in Selector.
+            state = new ChannelState(ChannelState.State.AUTHENTICATION_FAILED, e);
+            throw e;
+        }
         if (ready())
             state = ChannelState.READY;
     }
@@ -108,6 +115,10 @@ public class KafkaChannel {
 
     public String id() {
         return id;
+    }
+
+    public SelectionKey selectionKey() {
+        return transportLayer.selectionKey();
     }
 
     /**

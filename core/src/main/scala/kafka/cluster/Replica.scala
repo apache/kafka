@@ -29,7 +29,7 @@ class Replica(val brokerId: Int,
               val topicPartition: TopicPartition,
               time: Time = Time.SYSTEM,
               initialHighWatermarkValue: Long = 0L,
-              val log: Option[Log] = None) extends Logging {
+              @volatile var log: Option[Log] = None) extends Logging {
   // the high watermark offset value, in non-leader replicas only its message offsets are kept
   @volatile private[this] var highWatermarkMetadata = new LogOffsetMetadata(initialHighWatermarkValue)
   // the log end offset value, kept in all replicas;
@@ -72,7 +72,7 @@ class Replica(val brokerId: Int,
    * fetch request is always smaller than the leader's LEO, which can happen if small produce requests are received at
    * high frequency.
    */
-  def updateLogReadResult(logReadResult : LogReadResult) {
+  def updateLogReadResult(logReadResult: LogReadResult) {
     if (logReadResult.info.fetchOffsetMetadata.messageOffset >= logReadResult.leaderLogEndOffset)
       _lastCaughtUpTimeMs = math.max(_lastCaughtUpTimeMs, logReadResult.fetchTimeMs)
     else if (logReadResult.info.fetchOffsetMetadata.messageOffset >= lastFetchLeaderLogEndOffset)

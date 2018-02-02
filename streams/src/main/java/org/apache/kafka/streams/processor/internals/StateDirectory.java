@@ -18,7 +18,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,39 +64,52 @@ public class StateDirectory {
         }
     }
 
-    public StateDirectory(final String applicationId, final String stateDirConfig, final Time time) {
+    /**
+     * Ensures that the state base directory as well as the application's sub-directory are created.
+     *
+     * @throws ProcessorStateException if the base state directory or application state directory does not exist
+     *                                 and could not be created
+     */
+    public StateDirectory(final StreamsConfig config,
+                          final Time time) {
         this.time = time;
-        final File baseDir = new File(stateDirConfig);
+        final String stateDirName = config.getString(StreamsConfig.STATE_DIR_CONFIG);
+        final File baseDir = new File(stateDirName);
         if (!baseDir.exists() && !baseDir.mkdirs()) {
-            throw new ProcessorStateException(String.format("state directory [%s] doesn't exist and couldn't be created",
-                                                            stateDirConfig));
+            throw new ProcessorStateException(
+                String.format("base state directory [%s] doesn't exist and couldn't be created", stateDirName));
         }
-        stateDir = new File(baseDir, applicationId);
+        stateDir = new File(baseDir, config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
         if (!stateDir.exists() && !stateDir.mkdir()) {
-            throw new ProcessorStateException(String.format("state directory [%s] doesn't exist and couldn't be created",
-                                                            stateDir.getPath()));
+            throw new ProcessorStateException(
+                String.format("state directory [%s] doesn't exist and couldn't be created", stateDir.getPath()));
         }
     }
 
     /**
-     * Get or create the directory for the {@link TaskId}
-     * @param taskId
+     * Get or create the directory for the provided {@link TaskId}.
      * @return directory for the {@link TaskId}
+     * @throws ProcessorStateException if the task directory does not exists and could not be created
      */
     File directoryForTask(final TaskId taskId) {
         final File taskDir = new File(stateDir, taskId.toString());
         if (!taskDir.exists() && !taskDir.mkdir()) {
-            throw new ProcessorStateException(String.format("task directory [%s] doesn't exist and couldn't be created",
-                                                            taskDir.getPath()));
+            throw new ProcessorStateException(
+                String.format("task directory [%s] doesn't exist and couldn't be created", taskDir.getPath()));
         }
         return taskDir;
     }
 
+    /**
+     * Get or create the directory for the global stores.
+     * @return directory for the global stores
+     * @throws ProcessorStateException if the global store directory does not exists and could not be created
+     */
     File globalStateDir() {
         final File dir = new File(stateDir, "global");
         if (!dir.exists() && !dir.mkdir()) {
-            throw new ProcessorStateException(String.format("global state directory [%s] doesn't exist and couldn't be created",
-                                                            dir.getPath()));
+            throw new ProcessorStateException(
+                String.format("global state directory [%s] doesn't exist and couldn't be created", dir.getPath()));
         }
         return dir;
     }
@@ -102,14 +117,14 @@ public class StateDirectory {
     private String logPrefix() {
         return String.format("stream-thread [%s]", Thread.currentThread().getName());
     }
+
     /**
      * Get the lock for the {@link TaskId}s directory if it is available
      * @param taskId
-     * @param retry
      * @return true if successful
      * @throws IOException
      */
-    synchronized boolean lock(final TaskId taskId, int retry) throws IOException {
+    synchronized boolean lock(final TaskId taskId) throws IOException {
 
         final File lockFile;
         // we already have the lock so bail out here
@@ -141,7 +156,7 @@ public class StateDirectory {
             return false;
         }
 
-        final FileLock lock = tryLock(retry, channel);
+        final FileLock lock = tryLock(channel);
         if (lock != null) {
             locks.put(taskId, new LockAndOwner(Thread.currentThread().getName(), lock));
 
@@ -150,7 +165,7 @@ public class StateDirectory {
         return lock != null;
     }
 
-    synchronized boolean lockGlobalState(final int retry) throws IOException {
+    synchronized boolean lockGlobalState() throws IOException {
         if (globalStateLock != null) {
             log.trace("{} Found cached state dir lock for the global task", logPrefix());
             return true;
@@ -166,7 +181,7 @@ public class StateDirectory {
             // file, in this case we will return immediately indicating locking failed.
             return false;
         }
-        final FileLock fileLock = tryLock(retry, channel);
+        final FileLock fileLock = tryLock(channel);
         if (fileLock == null) {
             channel.close();
             return false;
@@ -192,9 +207,7 @@ public class StateDirectory {
     }
 
     /**
-     * Unlock the state directory for the given {@link TaskId}
-     * @param taskId
-     * @throws IOException
+     * Unlock the state directory for the given {@link TaskId}.
      */
     synchronized void unlock(final TaskId taskId) throws IOException {
         final LockAndOwner lockAndOwner = locks.get(taskId);
@@ -210,6 +223,21 @@ public class StateDirectory {
         }
     }
 
+    public synchronized void clean() {
+        try {
+            cleanRemovedTasks(0, true);
+        } catch (final Exception e) {
+            // this is already logged within cleanRemovedTasks
+            throw new StreamsException(e);
+        }
+        try {
+            Utils.delete(globalStateDir().getAbsoluteFile());
+        } catch (final IOException e) {
+            log.error("{} Failed to delete global state directory due to an unexpected exception", logPrefix(), e);
+            throw new StreamsException(e);
+        }
+    }
+
     /**
      * Remove the directories for any {@link TaskId}s that are no-longer
      * owned by this {@link StreamThread} and aren't locked by either
@@ -218,37 +246,70 @@ public class StateDirectory {
      *                       this amount of time (milliseconds)
      */
     public synchronized void cleanRemovedTasks(final long cleanupDelayMs) {
+        try {
+            cleanRemovedTasks(cleanupDelayMs, false);
+        } catch (final Exception cannotHappen) {
+            throw new IllegalStateException("Should have swallowed exception.", cannotHappen);
+        }
+    }
+
+    private synchronized void cleanRemovedTasks(final long cleanupDelayMs,
+                                                final boolean manualUserCall) throws Exception {
         final File[] taskDirs = listTaskDirectories();
         if (taskDirs == null || taskDirs.length == 0) {
             return; // nothing to do
         }
-        for (File taskDir : taskDirs) {
+
+        for (final File taskDir : taskDirs) {
             final String dirName = taskDir.getName();
-            TaskId id = TaskId.parse(dirName);
+            final TaskId id = TaskId.parse(dirName);
             if (!locks.containsKey(id)) {
                 try {
-                    if (lock(id, 0)) {
-                        long now = time.milliseconds();
-                        long lastModifiedMs = taskDir.lastModified();
-                        if (now > lastModifiedMs + cleanupDelayMs) {
-                            log.info("{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms)", logPrefix(), dirName, id, now - lastModifiedMs, cleanupDelayMs);
+                    if (lock(id)) {
+                        final long now = time.milliseconds();
+                        final long lastModifiedMs = taskDir.lastModified();
+                        if (now > lastModifiedMs + cleanupDelayMs || manualUserCall) {
+                            if (!manualUserCall) {
+                                log.info(
+                                    "{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",
+                                    logPrefix(),
+                                    dirName,
+                                    id,
+                                    now - lastModifiedMs,
+                                    cleanupDelayMs);
+                            } else {
+                                log.info(
+                                        "{} Deleting state directory {} for task {} as user calling cleanup.",
+                                        logPrefix(),
+                                        dirName,
+                                        id);
+                            }
                             Utils.delete(taskDir);
                         }
                     }
-                } catch (OverlappingFileLockException e) {
+                } catch (final OverlappingFileLockException e) {
                     // locked by another thread
-                } catch (IOException e) {
-                    log.error("{} Failed to lock the state directory due to an unexpected exception", logPrefix(), e);
+                    if (manualUserCall) {
+                        log.error("{} Failed to get the state directory lock.", logPrefix(), e);
+                        throw e;
+                    }
+                } catch (final IOException e) {
+                    log.error("{} Failed to delete the state directory.", logPrefix(), e);
+                    if (manualUserCall) {
+                        throw e;
+                    }
                 } finally {
                     try {
                         unlock(id);
-                    } catch (IOException e) {
-                        log.error("{} Failed to release the state directory lock", logPrefix());
+                    } catch (final IOException e) {
+                        log.error("{} Failed to release the state directory lock.", logPrefix());
+                        if (manualUserCall) {
+                            throw e;
+                        }
                     }
                 }
             }
         }
-
     }
 
     /**
@@ -265,28 +326,15 @@ public class StateDirectory {
         });
     }
 
-    private FileLock tryLock(int retry, final FileChannel channel) throws IOException {
-        FileLock lock = tryAcquireLock(channel);
-        while (lock == null && retry > 0) {
-            try {
-                Thread.sleep(200);
-            } catch (Exception ex) {
-                // do nothing
-            }
-            retry--;
-            lock = tryAcquireLock(channel);
-        }
-        return lock;
-    }
-
-    private FileChannel getOrCreateFileChannel(final TaskId taskId, final Path lockPath) throws IOException {
+    private FileChannel getOrCreateFileChannel(final TaskId taskId,
+                                               final Path lockPath) throws IOException {
         if (!channels.containsKey(taskId)) {
             channels.put(taskId, FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE));
         }
         return channels.get(taskId);
     }
 
-    private FileLock tryAcquireLock(final FileChannel channel) throws IOException {
+    private FileLock tryLock(final FileChannel channel) throws IOException {
         try {
             return channel.tryLock();
         } catch (OverlappingFileLockException e) {

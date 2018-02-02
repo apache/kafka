@@ -21,13 +21,16 @@ import java.io.File
 import java.util.Properties
 import javax.security.auth.login.Configuration
 
+import kafka.admin.ConfigCommand
 import kafka.security.minikdc.MiniKdc
 import kafka.server.KafkaConfig
 import kafka.utils.JaasTestUtils.{JaasSection, Krb5LoginModule, ZkDigestModule}
 import kafka.utils.{JaasTestUtils, TestUtils}
+import org.apache.kafka.common.config.SaslConfigs
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.authenticator.LoginManager
-import org.apache.kafka.common.config.SaslConfigs
+import org.apache.kafka.common.security.scram.ScramMechanism
 
 /*
  * Implements an enumeration for the modes enabled here:
@@ -86,7 +89,7 @@ trait SaslSetup {
                              mode: SaslSetupMode = Both,
                              kafkaServerEntryName: String = JaasTestUtils.KafkaServerContextName): Seq[JaasSection] = {
     val hasKerberos = mode != ZkSasl &&
-      (kafkaServerSaslMechanisms.contains("GSSAPI") || kafkaClientSaslMechanism.exists(_ == "GSSAPI"))
+      (kafkaServerSaslMechanisms.contains("GSSAPI") || kafkaClientSaslMechanism.contains("GSSAPI"))
     if (hasKerberos)
       maybeCreateEmptyKeytabFiles()
     mode match {
@@ -119,7 +122,7 @@ trait SaslSetup {
   def kafkaServerSaslProperties(serverSaslMechanisms: Seq[String], interBrokerSaslMechanism: String): Properties = {
     val props = new Properties
     props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, interBrokerSaslMechanism)
-    props.put(SaslConfigs.SASL_ENABLED_MECHANISMS, serverSaslMechanisms.mkString(","))
+    props.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, serverSaslMechanisms.mkString(","))
     props
   }
 
@@ -133,5 +136,14 @@ trait SaslSetup {
 
   def jaasClientLoginModule(clientSaslMechanism: String): String =
     JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile)
+
+  def createScramCredentials(zkConnect: String, userName: String, password: String): Unit = {
+    val credentials = ScramMechanism.values.map(m => s"${m.mechanismName}=[iterations=4096,password=$password]")
+    val args = Array("--zookeeper", zkConnect,
+      "--alter", "--add-config", credentials.mkString(","),
+      "--entity-type", "users",
+      "--entity-name", userName)
+    ConfigCommand.main(args)
+  }
 
 }
