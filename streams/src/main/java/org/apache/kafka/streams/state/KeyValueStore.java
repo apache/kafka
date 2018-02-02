@@ -33,7 +33,7 @@ public interface KeyValueStore<K, V> extends StateStore, ReadOnlyKeyValueStore<K
      * Update the value associated with this key
      *
      * @param key The key to associate the value to
-     * @param value The value to update; if null it is equal as {@link #delete(K)}
+     * @param value The value to update; if null it is equal to {@link #delete(K)}
      * @throws NullPointerException If null is used for key.
      */
     void put(K key, V value);
