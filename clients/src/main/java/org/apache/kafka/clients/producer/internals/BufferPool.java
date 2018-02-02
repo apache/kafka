@@ -23,9 +23,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.utils.Time;
@@ -52,7 +50,6 @@ public class BufferPool {
     private final Deque<Condition> waiters;
     /** Total available memory is the sum of nonPooledAvailableMemory and the number of byte buffers in free * poolableSize.  */
     private long nonPooledAvailableMemory;
-    private final Metrics metrics;
     private final Time time;
     private final Sensor waitTime;
 
@@ -61,27 +58,20 @@ public class BufferPool {
      *
      * @param memory The maximum amount of memory that this buffer pool can allocate
      * @param poolableSize The buffer size to cache in the free list rather than deallocating
-     * @param metrics instance of Metrics
+     * @param metricsRegistry the metrics registry
      * @param time time instance
-     * @param metricGrpName logical group name for metrics
      */
-    public BufferPool(long memory, int poolableSize, Metrics metrics, Time time, String metricGrpName) {
+    public BufferPool(long memory, int poolableSize, BufferPoolMetricsRegistry metricsRegistry, Time time) {
         this.poolableSize = poolableSize;
         this.lock = new ReentrantLock();
         this.free = new ArrayDeque<>();
         this.waiters = new ArrayDeque<>();
         this.totalMemory = memory;
         this.nonPooledAvailableMemory = memory;
-        this.metrics = metrics;
         this.time = time;
-        this.waitTime = this.metrics.sensor(WAIT_TIME_SENSOR_NAME);
-        MetricName rateMetricName = metrics.metricName("bufferpool-wait-ratio",
-                                                   metricGrpName,
-                                                   "The fraction of time an appender waits for space allocation.");
-        MetricName totalMetricName = metrics.metricName("bufferpool-wait-time-total",
-                                                   metricGrpName,
-                                                   "The total time an appender waits for space allocation.");
-        this.waitTime.add(new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName));
+        this.waitTime = metricsRegistry.sensor(WAIT_TIME_SENSOR_NAME);
+        this.waitTime.add(new Meter(TimeUnit.NANOSECONDS, metricsRegistry.bufferPoolWaitRatio,
+                metricsRegistry.bufferPoolWaitTimeTotal));
     }
 
     /**

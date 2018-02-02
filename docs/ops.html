@@ -1120,39 +1120,8 @@
 
   The following metrics are available on producer instances.
 
-  <table class="data-table">
-  <tbody><tr>
-        <th>Metric/Attribute name</th>
-        <th>Description</th>
-        <th>Mbean name</th>
-      </tr>
-        <tr>
-        <td>waiting-threads</td>
-        <td>The number of user threads blocked waiting for buffer memory to enqueue their records.</td>
-        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>buffer-total-bytes</td>
-        <td>The maximum amount of buffer memory the client can use (whether or not it is currently used).</td>
-        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>buffer-available-bytes</td>
-        <td>The total amount of buffer memory that is not being used (either unallocated or in the free list).</td>
-        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>bufferpool-wait-time</td>
-        <td>The fraction of time an appender waits for space allocation.</td>
-        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-      </tr>
-
-  </tbody></table>
-
-  <h5><a id="producer_sender_monitoring" href="#producer_sender_monitoring">Producer Sender Metrics</a></h5>
-
+  
   <!--#include virtual="generated/producer_metrics.html" -->
-
 
   <h4><a id="new_consumer_monitoring" href="#new_consumer_monitoring">New consumer monitoring</a></h4>
 

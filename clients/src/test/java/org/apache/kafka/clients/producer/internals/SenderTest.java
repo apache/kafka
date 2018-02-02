@@ -109,6 +109,7 @@ public class SenderTest {
     private Cluster cluster = TestUtils.singletonCluster("test", 2);
     private Metrics metrics = null;
     private RecordAccumulator accumulator = null;
+    private RecordAccumulatorMetricsRegistry accumulatorMetricsRegistry = null;
     private Sender sender = null;
     private SenderMetricsRegistry senderMetricsRegistry = null;
     private final LogContext logContext = new LogContext();
@@ -1792,7 +1793,8 @@ public class SenderTest {
         // Set a good compression ratio.
         CompressionRatioEstimator.setEstimation(topic, CompressionType.GZIP, 0.2f);
         try (Metrics m = new Metrics()) {
-            accumulator = new RecordAccumulator(logContext, batchSize, 1024 * 1024, CompressionType.GZIP, 0L, 0L, m, time,
+            accumulatorMetricsRegistry = new RecordAccumulatorMetricsRegistry(m);
+            accumulator = new RecordAccumulator(logContext, batchSize, 1024 * 1024, CompressionType.GZIP, 0L, 0L, accumulatorMetricsRegistry, time,
                     new ApiVersions(), txnManager);
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
@@ -1930,7 +1932,8 @@ public class SenderTest {
         metricTags.put("client-id", CLIENT_ID);
         MetricConfig metricConfig = new MetricConfig().tags(metricTags);
         this.metrics = new Metrics(metricConfig, time);
-        this.accumulator = new RecordAccumulator(logContext, batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time,
+        this.accumulatorMetricsRegistry = new RecordAccumulatorMetricsRegistry(this.metrics);
+        this.accumulator = new RecordAccumulator(logContext, batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, accumulatorMetricsRegistry, time,
                 apiVersions, transactionManager);
         this.senderMetricsRegistry = new SenderMetricsRegistry(this.metrics);
 

@@ -19,7 +19,6 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -27,7 +26,6 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -97,7 +95,7 @@ public final class RecordAccumulator {
      *        latency for potentially better throughput due to more batching (and hence fewer, larger requests).
      * @param retryBackoffMs An artificial delay time to retry the produce request upon receiving an error. This avoids
      *        exhausting all retries in a short period of time.
-     * @param metrics The metrics
+     * @param metricsRegistry The metrics registry
      * @param time The time instance to use
      * @param apiVersions Request API versions for current connected brokers
      * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
@@ -109,7 +107,7 @@ public final class RecordAccumulator {
                              CompressionType compression,
                              long lingerMs,
                              long retryBackoffMs,
-                             Metrics metrics,
+                             RecordAccumulatorMetricsRegistry metricsRegistry,
                              Time time,
                              ApiVersions apiVersions,
                              TransactionManager transactionManager) {
@@ -123,45 +121,40 @@ public final class RecordAccumulator {
         this.lingerMs = lingerMs;
         this.retryBackoffMs = retryBackoffMs;
         this.batches = new CopyOnWriteMap<>();
-        String metricGrpName = "producer-metrics";
-        this.free = new BufferPool(totalSize, batchSize, metrics, time, metricGrpName);
+        this.free = new BufferPool(totalSize, batchSize, metricsRegistry.bufferPoolMetrics, time);
         this.incomplete = new IncompleteBatches();
         this.muted = new HashSet<>();
         this.time = time;
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
-        registerMetrics(metrics, metricGrpName);
+        registerMetrics(metricsRegistry);
     }
 
-    private void registerMetrics(Metrics metrics, String metricGrpName) {
-        MetricName metricName = metrics.metricName("waiting-threads", metricGrpName, "The number of user threads blocked waiting for buffer memory to enqueue their records");
+    private void registerMetrics(RecordAccumulatorMetricsRegistry metrics) {
         Measurable waitingThreads = new Measurable() {
             public double measure(MetricConfig config, long now) {
                 return free.queued();
             }
         };
-        metrics.addMetric(metricName, waitingThreads);
+        metrics.addMetric(metrics.waitingThreads, waitingThreads);
 
-        metricName = metrics.metricName("buffer-total-bytes", metricGrpName, "The maximum amount of buffer memory the client can use (whether or not it is currently used).");
         Measurable totalBytes = new Measurable() {
             public double measure(MetricConfig config, long now) {
                 return free.totalMemory();
             }
         };
-        metrics.addMetric(metricName, totalBytes);
+        metrics.addMetric(metrics.bufferTotalBytes, totalBytes);
 
-        metricName = metrics.metricName("buffer-available-bytes", metricGrpName, "The total amount of buffer memory that is not being used (either unallocated or in the free list).");
         Measurable availableBytes = new Measurable() {
             public double measure(MetricConfig config, long now) {
                 return free.availableMemory();
             }
         };
-        metrics.addMetric(metricName, availableBytes);
+        metrics.addMetric(metrics.bufferAvailableBytes, availableBytes);
 
         Sensor bufferExhaustedRecordSensor = metrics.sensor("buffer-exhausted-records");
-        MetricName rateMetricName = metrics.metricName("buffer-exhausted-rate", metricGrpName, "The average per-second number of record sends that are dropped due to buffer exhaustion");
-        MetricName totalMetricName = metrics.metricName("buffer-exhausted-total", metricGrpName, "The total number of record sends that are dropped due to buffer exhaustion");
-        bufferExhaustedRecordSensor.add(new Meter(rateMetricName, totalMetricName));
+        bufferExhaustedRecordSensor.add(new Meter(metrics.bufferExhaustedRate, 
+                metrics.bufferExhaustedTotal));
     }
 
     /**
