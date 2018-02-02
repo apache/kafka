@@ -44,6 +44,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
+
 /**
  * Non-blocking EchoServer implementation that uses ChannelBuilder to create channels
  * with the configured security protocol.
@@ -62,6 +64,8 @@ public class NioEchoServer extends Thread {
     private volatile WritableByteChannel outputChannel;
     private final CredentialCache credentialCache;
     private final Metrics metrics;
+    private int numSent = 0;
+    private final DelegationTokenCache tokenCache;
 
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
             String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache) throws Exception {
@@ -74,10 +78,11 @@ public class NioEchoServer extends Thread {
         this.socketChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
         this.newChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
         this.credentialCache = credentialCache;
+        this.tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames());
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL)
             ScramCredentialUtils.createCache(credentialCache, ScramMechanism.mechanismNames());
         if (channelBuilder == null)
-            channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialCache);
+            channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false, securityProtocol, config, credentialCache, tokenCache);
         this.metrics = new Metrics();
         this.selector = new Selector(5000, metrics, new MockTime(), "MetricGroup", channelBuilder, new LogContext());
         acceptorThread = new AcceptorThread();
@@ -89,6 +94,10 @@ public class NioEchoServer extends Thread {
 
     public CredentialCache credentialCache() {
         return credentialCache;
+    }
+
+    public DelegationTokenCache tokenCache() {
+        return tokenCache;
     }
 
     @SuppressWarnings("deprecation")
@@ -157,13 +166,19 @@ public class NioEchoServer extends Thread {
                         selector.unmute(channelId);
                     }
                 }
-                for (Send send : selector.completedSends())
+                for (Send send : selector.completedSends()) {
                     selector.unmute(send.destination());
+                    numSent += 1;
+                }
 
             }
         } catch (IOException e) {
             // ignore
         }
+    }
+
+    public int numSent() {
+        return numSent;
     }
 
     private String id(SocketChannel channel) {

@@ -127,6 +127,30 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         task.stop();
     }
 
+    @Test
+    public void testBatchSize() throws IOException, InterruptedException {
+        expectOffsetLookupReturnNone();
+        replay();
+
+        config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "5000");
+        task.start(config);
+
+        FileOutputStream os = new FileOutputStream(tempFile);
+        for (int i = 0; i < 10_000; i++) {
+            os.write("Neque porro quisquam est qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit...\n".getBytes());
+        }
+        os.flush();
+
+        List<SourceRecord> records = task.poll();
+        assertEquals(5000, records.size());
+
+        records = task.poll();
+        assertEquals(5000, records.size());
+
+        os.close();
+        task.stop();
+    }
+
     @Test(expected = ConnectException.class)
     public void testMissingTopic() throws InterruptedException {
         replay();

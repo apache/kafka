@@ -21,13 +21,23 @@ import java.util.Properties
 
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
+import kafka.common.KafkaException
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
-import kafka.security.auth.{Acl, Resource}
 import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
+import kafka.security.auth.{Acl, Resource}
+import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
 import org.apache.kafka.common.TopicPartition
-import org.apache.zookeeper.data.Stat
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
+import org.apache.kafka.common.utils.Time
+import org.apache.zookeeper.ZooDefs
+import org.apache.zookeeper.data.{ACL, Stat}
+
 import scala.collection.JavaConverters._
+import scala.collection.Seq
+import scala.collection.mutable.ArrayBuffer
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
 
@@ -60,21 +70,158 @@ object BrokerIdsZNode {
   def encode: Array[Byte] = null
 }
 
-object BrokerIdZNode {
-  def path(id: Int) = s"${BrokerIdsZNode.path}/$id"
-  def encode(id: Int,
-             host: String,
-             port: Int,
-             advertisedEndpoints: Seq[EndPoint],
-             jmxPort: Int,
-             rack: Option[String],
-             apiVersion: ApiVersion): Array[Byte] = {
+object BrokerInfo {
+
+  /**
+   * Create a broker info with v4 json format (which includes multiple endpoints and rack) if
+   * the apiVersion is 0.10.0.X or above. Register the broker with v2 json format otherwise.
+   *
+   * Due to KAFKA-3100, 0.9.0.0 broker and old clients will break if JSON version is above 2.
+   *
+   * We include v2 to make it possible for the broker to migrate from 0.9.0.0 to 0.10.0.X or above without having to
+   * upgrade to 0.9.0.1 first (clients have to be upgraded to 0.9.0.1 in any case).
+   */
+  def apply(broker: Broker, apiVersion: ApiVersion, jmxPort: Int): BrokerInfo = {
+    // see method documentation for the reason why we do this
     val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
-    Broker.toJsonBytes(version, id, host, port, advertisedEndpoints, jmxPort, rack)
+    BrokerInfo(broker, version, jmxPort)
   }
 
-  def decode(id: Int, bytes: Array[Byte]): Broker = {
-    Broker.createBroker(id, new String(bytes, UTF_8))
+}
+
+case class BrokerInfo(broker: Broker, version: Int, jmxPort: Int) {
+  val path: String = BrokerIdZNode.path(broker.id)
+  def toJsonBytes: Array[Byte] = BrokerIdZNode.encode(this)
+}
+
+object BrokerIdZNode {
+  private val HostKey = "host"
+  private val PortKey = "port"
+  private val VersionKey = "version"
+  private val EndpointsKey = "endpoints"
+  private val RackKey = "rack"
+  private val JmxPortKey = "jmx_port"
+  private val ListenerSecurityProtocolMapKey = "listener_security_protocol_map"
+  private val TimestampKey = "timestamp"
+
+  def path(id: Int) = s"${BrokerIdsZNode.path}/$id"
+
+  /**
+   * Encode to JSON bytes.
+   *
+   * The JSON format includes a top level host and port for compatibility with older clients.
+   */
+  def encode(version: Int, host: String, port: Int, advertisedEndpoints: Seq[EndPoint], jmxPort: Int,
+             rack: Option[String]): Array[Byte] = {
+    val jsonMap = collection.mutable.Map(VersionKey -> version,
+      HostKey -> host,
+      PortKey -> port,
+      EndpointsKey -> advertisedEndpoints.map(_.connectionString).toBuffer.asJava,
+      JmxPortKey -> jmxPort,
+      TimestampKey -> Time.SYSTEM.milliseconds().toString
+    )
+    rack.foreach(rack => if (version >= 3) jsonMap += (RackKey -> rack))
+
+    if (version >= 4) {
+      jsonMap += (ListenerSecurityProtocolMapKey -> advertisedEndpoints.map { endPoint =>
+        endPoint.listenerName.value -> endPoint.securityProtocol.name
+      }.toMap.asJava)
+    }
+    Json.encodeAsBytes(jsonMap.asJava)
+  }
+
+  def encode(brokerInfo: BrokerInfo): Array[Byte] = {
+    val broker = brokerInfo.broker
+    // the default host and port are here for compatibility with older clients that only support PLAINTEXT
+    // we choose the first plaintext port, if there is one
+    // or we register an empty endpoint, which means that older clients will not be able to connect
+    val plaintextEndpoint = broker.endPoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).getOrElse(
+      new EndPoint(null, -1, null, null))
+    encode(brokerInfo.version, plaintextEndpoint.host, plaintextEndpoint.port, broker.endPoints, brokerInfo.jmxPort,
+      broker.rack)
+  }
+
+  /**
+    * Create a BrokerInfo object from id and JSON bytes.
+    *
+    * @param id
+    * @param jsonBytes
+    *
+    * Version 1 JSON schema for a broker is:
+    * {
+    *   "version":1,
+    *   "host":"localhost",
+    *   "port":9092
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666"
+    * }
+    *
+    * Version 2 JSON schema for a broker is:
+    * {
+    *   "version":2,
+    *   "host":"localhost",
+    *   "port":9092,
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666",
+    *   "endpoints":["PLAINTEXT://host1:9092", "SSL://host1:9093"]
+    * }
+    *
+    * Version 3 JSON schema for a broker is:
+    * {
+    *   "version":3,
+    *   "host":"localhost",
+    *   "port":9092,
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666",
+    *   "endpoints":["PLAINTEXT://host1:9092", "SSL://host1:9093"],
+    *   "rack":"dc1"
+    * }
+    *
+    * Version 4 (current) JSON schema for a broker is:
+    * {
+    *   "version":4,
+    *   "host":"localhost",
+    *   "port":9092,
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666",
+    *   "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
+    *   "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"},
+    *   "rack":"dc1"
+    * }
+    */
+  def decode(id: Int, jsonBytes: Array[Byte]): BrokerInfo = {
+    Json.tryParseBytes(jsonBytes) match {
+      case Right(js) =>
+        val brokerInfo = js.asJsonObject
+        val version = brokerInfo(VersionKey).to[Int]
+        val jmxPort = brokerInfo(JmxPortKey).to[Int]
+
+        val endpoints =
+          if (version < 1)
+            throw new KafkaException("Unsupported version of broker registration: " +
+              s"${new String(jsonBytes, UTF_8)}")
+          else if (version == 1) {
+            val host = brokerInfo(HostKey).to[String]
+            val port = brokerInfo(PortKey).to[Int]
+            val securityProtocol = SecurityProtocol.PLAINTEXT
+            val endPoint = new EndPoint(host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
+            Seq(endPoint)
+          }
+          else {
+            val securityProtocolMap = brokerInfo.get(ListenerSecurityProtocolMapKey).map(
+              _.to[Map[String, String]].map { case (listenerName, securityProtocol) =>
+                new ListenerName(listenerName) -> SecurityProtocol.forName(securityProtocol)
+              })
+            val listeners = brokerInfo(EndpointsKey).to[Seq[String]]
+            listeners.map(EndPoint.createEndPoint(_, securityProtocolMap))
+          }
+
+        val rack = brokerInfo.get(RackKey).flatMap(_.to[Option[String]])
+        BrokerInfo(Broker(id, endpoints, rack), version, jmxPort)
+      case Left(e) =>
+        throw new KafkaException(s"Failed to parse ZooKeeper registration for broker $id: " +
+          s"${new String(jsonBytes, UTF_8)}", e)
+    }
   }
 }
 
@@ -144,7 +291,7 @@ object ConfigEntityZNode {
   def decode(bytes: Array[Byte]): Properties = {
     val props = new Properties()
     if (bytes != null) {
-      Json.parseBytes(bytes).map { js =>
+      Json.parseBytes(bytes).foreach { js =>
         val configOpt = js.asJsonObjectOption.flatMap(_.get("config").flatMap(_.asJsonObjectOption))
         configOpt.foreach(config => config.iterator.foreach { case (k, v) => props.setProperty(k, v.to[String]) })
       }
@@ -316,4 +463,106 @@ object AclChangeNotificationSequenceZNode {
   def deletePath(sequenceNode: String) = s"${AclChangeNotificationZNode.path}/${sequenceNode}"
   def encode(resourceName : String): Array[Byte] = resourceName.getBytes(UTF_8)
   def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
+}
+
+object ClusterZNode {
+  def path = "/cluster"
+}
+
+object ClusterIdZNode {
+  def path = s"${ClusterZNode.path}/id"
+
+  def toJson(id: String): Array[Byte] = {
+    Json.encodeAsBytes(Map("version" -> "1", "id" -> id).asJava)
+  }
+
+  def fromJson(clusterIdJson:  Array[Byte]): String = {
+    Json.parseBytes(clusterIdJson).map(_.asJsonObject("id").to[String]).getOrElse {
+      throw new KafkaException(s"Failed to parse the cluster id json $clusterIdJson")
+    }
+  }
+}
+
+object BrokerSequenceIdZNode {
+  def path = s"${BrokersZNode.path}/seqid"
+}
+
+object ProducerIdBlockZNode {
+  def path = "/latest_producer_id_block"
+}
+
+object DelegationTokenAuthZNode {
+  def path = "/delegation_token"
+}
+
+object DelegationTokenChangeNotificationZNode {
+  def path =  s"${DelegationTokenAuthZNode.path}/token_changes"
+}
+
+object DelegationTokenChangeNotificationSequenceZNode {
+  val SequenceNumberPrefix = "token_change_"
+  def createPath = s"${DelegationTokenChangeNotificationZNode.path}/$SequenceNumberPrefix"
+  def deletePath(sequenceNode: String) = s"${DelegationTokenChangeNotificationZNode.path}/${sequenceNode}"
+  def encode(tokenId : String): Array[Byte] = tokenId.getBytes(UTF_8)
+  def decode(bytes: Array[Byte]): String = new String(bytes, UTF_8)
+}
+
+object DelegationTokensZNode {
+  def path = s"${DelegationTokenAuthZNode.path}/tokens"
+}
+
+object DelegationTokenInfoZNode {
+  def path(tokenId: String) =  s"${DelegationTokensZNode.path}/$tokenId"
+  def encode(token: DelegationToken): Array[Byte] =  Json.encodeAsBytes(DelegationTokenManager.toJsonCompatibleMap(token).asJava)
+  def decode(bytes: Array[Byte]): Option[TokenInformation] = DelegationTokenManager.fromBytes(bytes)
+}
+
+object ZkData {
+
+  // Important: it is necessary to add any new top level Zookeeper path to the Seq
+  val SecureRootPaths = Seq(AdminZNode.path,
+    BrokersZNode.path,
+    ClusterZNode.path,
+    ConfigZNode.path,
+    ControllerZNode.path,
+    ControllerEpochZNode.path,
+    IsrChangeNotificationZNode.path,
+    AclZNode.path,
+    AclChangeNotificationZNode.path,
+    ProducerIdBlockZNode.path,
+    LogDirEventNotificationZNode.path,
+    DelegationTokenAuthZNode.path)
+
+  // These are persistent ZK paths that should exist on kafka broker startup.
+  val PersistentZkPaths = Seq(
+    "/consumers", // old consumer path
+    BrokerIdsZNode.path,
+    TopicsZNode.path,
+    ConfigEntityChangeNotificationZNode.path,
+    DeleteTopicsZNode.path,
+    BrokerSequenceIdZNode.path,
+    IsrChangeNotificationZNode.path,
+    ProducerIdBlockZNode.path,
+    LogDirEventNotificationZNode.path
+  ) ++ ConfigType.all.map(ConfigEntityTypeZNode.path)
+
+  val SensitiveRootPaths = Seq(
+    ConfigEntityTypeZNode.path(ConfigType.User),
+    ConfigEntityTypeZNode.path(ConfigType.Broker),
+    DelegationTokensZNode.path
+  )
+
+  def sensitivePath(path: String): Boolean = {
+    path != null && SensitiveRootPaths.exists(path.startsWith)
+  }
+
+  def defaultAcls(isSecure: Boolean, path: String): Seq[ACL] = {
+    if (isSecure) {
+      val acls = new ArrayBuffer[ACL]
+      acls ++= ZooDefs.Ids.CREATOR_ALL_ACL.asScala
+      if (!sensitivePath(path))
+        acls ++= ZooDefs.Ids.READ_ACL_UNSAFE.asScala
+      acls
+    } else ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala
+  }
 }

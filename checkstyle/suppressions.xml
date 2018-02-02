@@ -51,16 +51,13 @@
               files="(Utils|Topic|KafkaLZ4BlockOutputStream|AclData).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslTransportLayer|SaslClientAuthenticator).java"/>
+              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler).java"/>
 
     <suppress checks="JavaNCSS"
               files="AbstractRequest.java|KerberosLogin.java|WorkerSinkTaskTest.java"/>
 
-    <suppress checks="JavaNCSS"
-              files="AbstractRequest.java"/>
-
     <suppress checks="NPathComplexity"
-              files="(BufferPool|MetricName|Node|ConfigDef|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|Agent).java"/>
+              files="(BufferPool|MetricName|Node|ConfigDef|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|Agent|Values).java"/>
 
     <!-- clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
@@ -105,9 +102,13 @@
               files="DistributedHerder.java"/>
     <suppress checks="CyclomaticComplexity"
               files="KafkaConfigBackingStore.java"/>
+    <suppress checks="CyclomaticComplexity"
+              files="(Values|ConnectHeader|ConnectHeaders).java"/>
 
     <suppress checks="JavaNCSS"
               files="KafkaConfigBackingStore.java"/>
+    <suppress checks="JavaNCSS"
+              files="Values.java"/>
 
     <suppress checks="NPathComplexity"
               files="ConnectRecord.java"/>
@@ -119,6 +120,10 @@
               files="JsonConverter.java"/>
     <suppress checks="NPathComplexity"
               files="DistributedHerder.java"/>
+    <suppress checks="NPathComplexity"
+              files="ConnectHeaders.java"/>
+    <suppress checks="MethodLength"
+              files="Values.java"/>
 
     <!-- connect tests-->
     <suppress checks="ClassDataAbstractionCoupling"
@@ -156,7 +161,7 @@
     <suppress checks="NPathComplexity"
               files="StreamThread.java"/>
 
-    <!-- streams tests -->
+    <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
               files="(StreamThreadTest|StreamTaskTest|ProcessorTopologyTestDriver).java"/>
 
@@ -187,6 +192,12 @@
               files="KStreamKStreamJoinTest.java"/>
     <suppress checks="NPathComplexity"
               files="KStreamKStreamLeftJoinTest.java"/>
+
+    <!-- Streams Test-Utils -->
+    <suppress checks="ClassFanOutComplexity"
+              files="TopologyTestDriver.java"/>
+    <suppress checks="ClassDataAbstractionCoupling"
+              files="TopologyTestDriver.java"/>
 
     <!-- Tools -->
     <suppress checks="ClassDataAbstractionCoupling"

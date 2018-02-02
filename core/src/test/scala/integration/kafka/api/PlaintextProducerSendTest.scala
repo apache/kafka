@@ -78,7 +78,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
       assertEquals("Should have offset 0", 0L, producer.send(record).get.offset)
 
       // double check that the topic is created with leader elected
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
+      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
 
     } finally {
       producer.close()
@@ -89,7 +89,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   def testSendWithInvalidCreateTime() {
     val topicProps = new Properties()
     topicProps.setProperty(LogConfig.MessageTimestampDifferenceMaxMsProp, "1000")
-    TestUtils.createTopic(zkUtils, topic, 1, 2, servers, topicProps)
+    createTopic(topic, 1, 2, topicProps)
 
     val producer = createProducer(brokerList = brokerList)
     try {

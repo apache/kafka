@@ -22,6 +22,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -30,10 +31,13 @@ import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.header.Header;
+import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectUtils;
@@ -62,6 +66,7 @@ class WorkerSourceTask extends WorkerTask {
     private final SourceTask task;
     private final Converter keyConverter;
     private final Converter valueConverter;
+    private final HeaderConverter headerConverter;
     private final TransformationChain<SourceRecord> transformationChain;
     private KafkaProducer<byte[], byte[]> producer;
     private final OffsetStorageReader offsetReader;
@@ -89,6 +94,7 @@ class WorkerSourceTask extends WorkerTask {
                             TargetState initialState,
                             Converter keyConverter,
                             Converter valueConverter,
+                            HeaderConverter headerConverter,
                             TransformationChain<SourceRecord> transformationChain,
                             KafkaProducer<byte[], byte[]> producer,
                             OffsetStorageReader offsetReader,
@@ -103,6 +109,7 @@ class WorkerSourceTask extends WorkerTask {
         this.task = task;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
+        this.headerConverter = headerConverter;
         this.transformationChain = transformationChain;
         this.producer = producer;
         this.offsetReader = offsetReader;
@@ -216,10 +223,11 @@ class WorkerSourceTask extends WorkerTask {
                 continue;
             }
 
+            RecordHeaders headers = convertHeaderFor(record);
             byte[] key = keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key());
             byte[] value = valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
             final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(record.topic(), record.kafkaPartition(),
-                    ConnectUtils.checkAndConvertTimestamp(record.timestamp()), key, value);
+                    ConnectUtils.checkAndConvertTimestamp(record.timestamp()), key, value, headers);
             log.trace("{} Appending record with key {}, value {}", this, record.key(), record.value());
             // We need this queued first since the callback could happen immediately (even synchronously in some cases).
             // Because of this we need to be careful about handling retries -- we always save the previously attempted
@@ -276,6 +284,20 @@ class WorkerSourceTask extends WorkerTask {
         }
         toSend = null;
         return true;
+    }
+
+    private RecordHeaders convertHeaderFor(SourceRecord record) {
+        Headers headers = record.headers();
+        RecordHeaders result = new RecordHeaders();
+        if (headers != null) {
+            String topic = record.topic();
+            for (Header header : headers) {
+                String key = header.key();
+                byte[] rawHeader = headerConverter.fromConnectHeader(topic, key, header.schema(), header.value());
+                result.add(key, rawHeader);
+            }
+        }
+        return result;
     }
 
     private void commitTaskRecord(SourceRecord record) {
@@ -494,6 +516,8 @@ class WorkerSourceTask extends WorkerTask {
             metricGroup = connectMetrics.group(registry.sourceTaskGroupName(),
                     registry.connectorTagName(), id.connector(),
                     registry.taskTagName(), Integer.toString(id.task()));
+            // remove any previously created metrics in this group to prevent collisions.
+            metricGroup.close();
 
             sourceRecordPoll = metricGroup.sensor("source-record-poll");
             sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollRate), new Rate());

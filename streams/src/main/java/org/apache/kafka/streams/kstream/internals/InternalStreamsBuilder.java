@@ -158,7 +158,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                topic,
                                                processorName,
                                                tableSource);
-        return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<K, V>(storeBuilder.name()));
+        return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<K, V>(storeBuilder.name()), materialized.isQueryable());
     }
 
     @Override
@@ -193,5 +193,21 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                topic,
                                                processorName,
                                                stateUpdateSupplier);
+    }
+    
+    public synchronized void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,
+                                            final String topic,
+                                            final ConsumedInternal consumed,
+                                            final ProcessorSupplier stateUpdateSupplier) {
+        // explicitly disable logging for global stores
+        storeBuilder.withLoggingDisabled();
+        final String sourceName = newProcessorName(KStreamImpl.SOURCE_NAME);
+        final String processorName = newProcessorName(KTableImpl.SOURCE_NAME);
+        addGlobalStore(storeBuilder,
+                       sourceName,
+                       topic,
+                       consumed,
+                       processorName,
+                       stateUpdateSupplier);
     }
 }

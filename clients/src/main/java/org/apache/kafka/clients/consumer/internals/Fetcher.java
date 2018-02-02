@@ -604,11 +604,14 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             final Map<TopicPartition, Long> timestampsToSearch) {
         // Group the partitions by node.
         final Map<Node, Map<TopicPartition, Long>> timestampsToSearchByNode = new HashMap<>();
+        // Add the topics to the metadata to do a single metadata fetch.
+        for (TopicPartition tp : timestampsToSearch.keySet())
+            metadata.add(tp.topic());
+
         for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
             PartitionInfo info = metadata.fetch().partition(tp);
             if (info == null) {
-                metadata.add(tp.topic());
                 log.debug("Partition {} is unknown for fetching offset, wait for metadata refresh", tp);
                 return RequestFuture.staleMetadata();
             } else if (info.leader() == null) {
@@ -1327,16 +1330,25 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             String name = partitionLagMetricName(tp);
             Sensor recordsLag = this.metrics.getSensor(name);
             if (recordsLag == null) {
+                Map<String, String> metricTags = new HashMap<>(2);
+                metricTags.put("topic", tp.topic().replace('.', '_'));
+                metricTags.put("partition", String.valueOf(tp.partition()));
+
                 recordsLag = this.metrics.sensor(name);
+
+                recordsLag.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLag, metricTags), new Value());
+                recordsLag.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLagMax, metricTags), new Max());
+                recordsLag.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLagAvg, metricTags), new Avg());
+
                 recordsLag.add(this.metrics.metricName(name,
-                        metricsRegistry.partitionRecordsLag.group(),
-                        metricsRegistry.partitionRecordsLag.description()), new Value());
+                        metricsRegistry.partitionRecordsLagDeprecated.group(),
+                        metricsRegistry.partitionRecordsLagDeprecated.description()), new Value());
                 recordsLag.add(this.metrics.metricName(name + "-max",
-                        metricsRegistry.partitionRecordsLagMax.group(),
-                        metricsRegistry.partitionRecordsLagMax.description()), new Max());
+                        metricsRegistry.partitionRecordsLagMaxDeprecated.group(),
+                        metricsRegistry.partitionRecordsLagMaxDeprecated.description()), new Max());
                 recordsLag.add(this.metrics.metricName(name + "-avg",
-                        metricsRegistry.partitionRecordsLagAvg.group(),
-                        metricsRegistry.partitionRecordsLagAvg.description()), new Avg());
+                        metricsRegistry.partitionRecordsLagAvgDeprecated.group(),
+                        metricsRegistry.partitionRecordsLagAvgDeprecated.description()), new Avg());
             }
             recordsLag.record(lag);
         }

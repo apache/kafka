@@ -274,7 +274,11 @@ class TaskManager {
         standby.close(clean);
 
         // remove the changelog partitions from restore consumer
-        restoreConsumer.unsubscribe();
+        try {
+            restoreConsumer.unsubscribe();
+        } catch (final RuntimeException fatalException) {
+            firstException.compareAndSet(null, fatalException);
+        }
         taskCreator.close();
         standbyTaskCreator.close();
 
@@ -323,6 +327,7 @@ class TaskManager {
         standby.initializeNewTasks();
 
         final Collection<TopicPartition> restored = changelogReader.restore(active);
+
         resumed.addAll(active.updateRestored(restored));
 
         if (!resumed.isEmpty()) {

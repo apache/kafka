@@ -19,43 +19,49 @@ package org.apache.kafka.streams.integration;
 import kafka.server.KafkaConfig$;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
-import org.junit.AfterClass;
+
+import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.util.Properties;
 
+
 /**
  * Tests local state store and global application cleanup.
  */
+@Ignore
 @Category({IntegrationTest.class})
 public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER;
 
+    private static final String TEST_ID = "reset-integration-test";
+
     static {
-        final Properties props = new Properties();
+        final Properties brokerProps = new Properties();
         // we double the value passed to `time.sleep` in each iteration in one of the map functions, so we disable
         // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
         // very long sleep times
-        props.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
-        CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, props);
-        cluster = CLUSTER;
-    }
-
-    @AfterClass
-    public static void globalCleanup() {
-        afterClassGlobalCleanup();
+        brokerProps.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
+        CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
     }
 
     @Before
     public void before() throws Exception {
-        beforePrepareTest();
+        testId = TEST_ID;
+        cluster = CLUSTER;
+        prepareTest();
     }
 
+    @After
+    public void after() throws Exception {
+        cleanupTest();
+    }
 
     @Test
     public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
@@ -80,5 +86,20 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     @Test
     public void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
         super.testReprocessingByDurationAfterResetWithoutIntermediateUserTopic();
+    }
+
+    @Test
+    public void shouldNotAllowToResetWhileStreamsRunning() throws Exception {
+        super.shouldNotAllowToResetWhileStreamsIsRunning();
+    }
+
+    @Test
+    public void shouldNotAllowToResetWhenInputTopicAbsent() throws Exception {
+        super.shouldNotAllowToResetWhenInputTopicAbsent();
+    }
+
+    @Test
+    public void shouldNotAllowToResetWhenIntermediateTopicAbsent() throws Exception {
+        super.shouldNotAllowToResetWhenIntermediateTopicAbsent();
     }
 }

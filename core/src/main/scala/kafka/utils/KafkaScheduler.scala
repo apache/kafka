@@ -120,6 +120,10 @@ class KafkaScheduler(val threads: Int,
         executor.schedule(runnable, delay, unit)
     }
   }
+
+  def resizeThreadPool(newSize: Int): Unit = {
+    executor.setCorePoolSize(newSize)
+  }
   
   def isStarted: Boolean = {
     this synchronized {

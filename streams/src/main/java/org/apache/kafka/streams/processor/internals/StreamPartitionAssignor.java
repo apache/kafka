@@ -45,6 +45,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -228,7 +229,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             this.userEndPoint = userEndPoint;
         }
 
-        internalTopicManager = new InternalTopicManager(taskManager.adminClient, configs);
+        internalTopicManager = new InternalTopicManager(taskManager.adminClient, streamsConfig);
 
         copartitionedTopicsValidator = new CopartitionedTopicsValidator(logPrefix);
     }
@@ -361,6 +362,16 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         } while (numPartitionsNeeded);
 
+
+        // ensure the co-partitioning topics within the group have the same number of partitions,
+        // and enforce the number of partitions for those repartition topics to be the same if they
+        // are co-partitioned as well.
+        ensureCopartitioning(taskManager.builder().copartitionGroups(), repartitionTopicMetadata, metadata);
+
+        // make sure the repartition source topics exist with the right number of partitions,
+        // create these topics if necessary
+        prepareTopic(repartitionTopicMetadata);
+
         // augment the metadata with the newly computed number of partitions for all the
         // repartition source topics
         final Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions = new HashMap<>();
@@ -373,15 +384,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         new PartitionInfo(topic, partition, null, new Node[0], new Node[0]));
             }
         }
-
-        // ensure the co-partitioning topics within the group have the same number of partitions,
-        // and enforce the number of partitions for those repartition topics to be the same if they
-        // are co-partitioned as well.
-        ensureCopartitioning(taskManager.builder().copartitionGroups(), repartitionTopicMetadata, metadata);
-
-        // make sure the repartition source topics exist with the right number of partitions,
-        // create these topics if necessary
-        prepareTopic(repartitionTopicMetadata);
 
         final Cluster fullMetadata = metadata.withPartitions(allRepartitionTopicPartitions);
         taskManager.setClusterMetadata(fullMetadata);
@@ -504,27 +506,26 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             final Set<String> consumers = entry.getValue().consumers;
             final ClientState state = entry.getValue().state;
 
-            final ArrayList<TaskId> taskIds = new ArrayList<>(state.assignedTaskCount());
-            final int numActiveTasks = state.activeTaskCount();
+            final List<List<TaskId>> interleavedActive = interleaveTasksByGroupId(state.activeTasks(), consumers.size());
+            final List<List<TaskId>> interleavedStandby = interleaveTasksByGroupId(state.standbyTasks(), consumers.size());
 
-            taskIds.addAll(state.activeTasks());
-            taskIds.addAll(state.standbyTasks());
+            int consumerTaskIndex = 0;
 
-            final int numConsumers = consumers.size();
-
-            int i = 0;
             for (String consumer : consumers) {
                 final Map<TaskId, Set<TopicPartition>> standby = new HashMap<>();
                 final ArrayList<AssignedPartition> assignedPartitions = new ArrayList<>();
 
-                final int numTaskIds = taskIds.size();
-                for (int j = i; j < numTaskIds; j += numConsumers) {
-                    final TaskId taskId = taskIds.get(j);
-                    if (j < numActiveTasks) {
-                        for (TopicPartition partition : partitionsForTask.get(taskId)) {
-                            assignedPartitions.add(new AssignedPartition(taskId, partition));
-                        }
-                    } else {
+                final List<TaskId> assignedActiveList = interleavedActive.get(consumerTaskIndex);
+
+                for (final TaskId taskId : assignedActiveList) {
+                    for (final TopicPartition partition : partitionsForTask.get(taskId)) {
+                        assignedPartitions.add(new AssignedPartition(taskId, partition));
+                    }
+                }
+
+                if (!state.standbyTasks().isEmpty()) {
+                    final List<TaskId> assignedStandbyList = interleavedStandby.get(consumerTaskIndex);
+                    for (final TaskId taskId : assignedStandbyList) {
                         Set<TopicPartition> standbyPartitions = standby.get(taskId);
                         if (standbyPartitions == null) {
                             standbyPartitions = new HashSet<>();
@@ -533,6 +534,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         standbyPartitions.addAll(partitionsForTask.get(taskId));
                     }
                 }
+
+                consumerTaskIndex++;
 
                 Collections.sort(assignedPartitions);
                 final List<TaskId> active = new ArrayList<>();
@@ -544,11 +547,30 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
                 // finally, encode the assignment before sending back to coordinator
                 assignment.put(consumer, new Assignment(activePartitions, new AssignmentInfo(active, standby, partitionsByHostState).encode()));
-                i++;
             }
         }
 
         return assignment;
+    }
+
+    // visible for testing
+    List<List<TaskId>> interleaveTasksByGroupId(final Collection<TaskId> taskIds, final int numberThreads) {
+        final LinkedList<TaskId> sortedTasks = new LinkedList<>(taskIds);
+        Collections.sort(sortedTasks);
+        final List<List<TaskId>> taskIdsForConsumerAssignment = new ArrayList<>(numberThreads);
+        for (int i = 0; i < numberThreads; i++) {
+            taskIdsForConsumerAssignment.add(new ArrayList<TaskId>());
+        }
+        while (!sortedTasks.isEmpty()) {
+            for (final List<TaskId> taskIdList : taskIdsForConsumerAssignment) {
+                final TaskId taskId = sortedTasks.poll();
+                if (taskId == null) {
+                    break;
+                }
+                taskIdList.add(taskId);
+            }
+        }
+        return taskIdsForConsumerAssignment;
     }
 
     /**
@@ -631,30 +653,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         if (!topicsToMakeReady.isEmpty()) {
             internalTopicManager.makeReady(topicsToMakeReady);
-
-            // wait until each one of the topic metadata has been propagated to at least one broker
-            while (!allTopicsCreated(topicsToMakeReady)) {
-                try {
-                    Thread.sleep(50L);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    // ignore
-                }
-            }
         }
 
         log.debug("Completed validating internal topics in partition assignor.");
-    }
-
-    private boolean allTopicsCreated(final Map<String, InternalTopicConfig> topicsToMakeReady) {
-        final Map<String, Integer> partitions = internalTopicManager.getNumPartitions(topicsToMakeReady.keySet());
-        for (final InternalTopicConfig topic : topicsToMakeReady.values()) {
-            final Integer numPartitions = partitions.get(topic.name());
-            if (numPartitions == null || !numPartitions.equals(topic.numberOfPartitions())) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups,

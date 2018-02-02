@@ -50,9 +50,9 @@ import scala.collection.mutable.ArrayBuffer
 class LogManager(logDirs: Seq[File],
                  initialOfflineDirs: Seq[File],
                  val topicConfigs: Map[String, LogConfig], // note that this doesn't get updated after creation
-                 val defaultConfig: LogConfig,
+                 val initialDefaultConfig: LogConfig,
                  val cleanerConfig: CleanerConfig,
-                 ioThreads: Int,
+                 recoveryThreadsPerDataDir: Int,
                  val flushCheckMs: Long,
                  val flushRecoveryOffsetCheckpointMs: Long,
                  val flushStartOffsetCheckpointMs: Long,
@@ -78,6 +78,12 @@ class LogManager(logDirs: Seq[File],
   private val logsToBeDeleted = new LinkedBlockingQueue[Log]()
 
   private val _liveLogDirs: ConcurrentLinkedQueue[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
+  @volatile var currentDefaultConfig = initialDefaultConfig
+  @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
+
+  def reconfigureDefaultLogConfig(logConfig: LogConfig): Unit = {
+    this.currentDefaultConfig = logConfig
+  }
 
   def liveLogDirs: Seq[File] = {
     if (_liveLogDirs.size == logDirs.size)
@@ -167,6 +173,11 @@ class LogManager(logDirs: Seq[File],
     liveLogDirs
   }
 
+  def resizeRecoveryThreadPool(newSize: Int): Unit = {
+    info(s"Resizing recovery thread pool size for each data dir from $numRecoveryThreadsPerDataDir to $newSize")
+    numRecoveryThreadsPerDataDir = newSize
+  }
+
   // dir should be an absolute path
   def handleLogDirFailure(dir: String) {
     info(s"Stopping serving logs in dir $dir")
@@ -232,7 +243,7 @@ class LogManager(logDirs: Seq[File],
   private def loadLog(logDir: File, recoveryPoints: Map[TopicPartition, Long], logStartOffsets: Map[TopicPartition, Long]): Unit = {
     debug("Loading log '" + logDir.getName + "'")
     val topicPartition = Log.parseTopicPartitionName(logDir)
-    val config = topicConfigs.getOrElse(topicPartition.topic, defaultConfig)
+    val config = topicConfigs.getOrElse(topicPartition.topic, currentDefaultConfig)
     val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
     val logStartOffset = logStartOffsets.getOrElse(topicPartition, 0L)
 
@@ -281,7 +292,7 @@ class LogManager(logDirs: Seq[File],
 
     for (dir <- liveLogDirs) {
       try {
-        val pool = Executors.newFixedThreadPool(ioThreads)
+        val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
         threadPools.append(pool)
 
         val cleanShutdownFile = new File(dir, Log.CleanShutdownFile)
@@ -386,11 +397,10 @@ class LogManager(logDirs: Seq[File],
                          delay = InitialTaskDelayMs,
                          period = flushStartOffsetCheckpointMs,
                          TimeUnit.MILLISECONDS)
-      scheduler.schedule("kafka-delete-logs",
+      scheduler.schedule("kafka-delete-logs", // will be rescheduled after each delete logs with a dynamic period
                          deleteLogs _,
                          delay = InitialTaskDelayMs,
-                         period = defaultConfig.fileDeleteDelayMs,
-                         TimeUnit.MILLISECONDS)
+                         unit = TimeUnit.MILLISECONDS)
     }
     if (cleanerConfig.enableCleaner)
       cleaner.startup()
@@ -419,7 +429,7 @@ class LogManager(logDirs: Seq[File],
     for (dir <- liveLogDirs) {
       debug("Flushing and closing logs at " + dir)
 
-      val pool = Executors.newFixedThreadPool(ioThreads)
+      val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
       threadPools.append(pool)
 
       val logsInDir = logsByDir.getOrElse(dir.toString, Map()).values
@@ -708,6 +718,19 @@ class LogManager(logDirs: Seq[File],
     } catch {
       case e: Throwable =>
         error(s"Exception in kafka-delete-logs thread.", e)
+    } finally {
+      try {
+        scheduler.schedule("kafka-delete-logs",
+          deleteLogs _,
+          delay = currentDefaultConfig.fileDeleteDelayMs,
+          unit = TimeUnit.MILLISECONDS)
+      } catch {
+        case e: Throwable =>
+          if (scheduler.isStarted) {
+            // No errors should occur unless scheduler has been shutdown
+            error(s"Failed to schedule next delete in kafka-delete-logs thread", e)
+          }
+      }
     }
   }
 
@@ -893,25 +916,18 @@ object LogManager {
     val defaultProps = KafkaServer.copyKafkaConfigToLog(config)
     val defaultLogConfig = LogConfig(defaultProps)
 
+    // read the log configurations from zookeeper
     val (topicConfigs, failed) = zkClient.getLogConfigs(zkClient.getAllTopicsInCluster, defaultProps)
     if (!failed.isEmpty) throw failed.head._2
 
-    // read the log configurations from zookeeper
-    val cleanerConfig = CleanerConfig(numThreads = config.logCleanerThreads,
-      dedupeBufferSize = config.logCleanerDedupeBufferSize,
-      dedupeBufferLoadFactor = config.logCleanerDedupeBufferLoadFactor,
-      ioBufferSize = config.logCleanerIoBufferSize,
-      maxMessageSize = config.messageMaxBytes,
-      maxIoBytesPerSecond = config.logCleanerIoMaxBytesPerSecond,
-      backOffMs = config.logCleanerBackoffMs,
-      enableCleaner = config.logCleanerEnable)
+    val cleanerConfig = LogCleaner.cleanerConfig(config)
 
     new LogManager(logDirs = config.logDirs.map(new File(_).getAbsoluteFile),
       initialOfflineDirs = initialOfflineDirs.map(new File(_).getAbsoluteFile),
       topicConfigs = topicConfigs,
-      defaultConfig = defaultLogConfig,
+      initialDefaultConfig = defaultLogConfig,
       cleanerConfig = cleanerConfig,
-      ioThreads = config.numRecoveryThreadsPerDataDir,
+      recoveryThreadsPerDataDir = config.numRecoveryThreadsPerDataDir,
       flushCheckMs = config.logFlushSchedulerIntervalMs,
       flushRecoveryOffsetCheckpointMs = config.logFlushOffsetCheckpointIntervalMs,
       flushStartOffsetCheckpointMs = config.logFlushStartOffsetCheckpointIntervalMs,

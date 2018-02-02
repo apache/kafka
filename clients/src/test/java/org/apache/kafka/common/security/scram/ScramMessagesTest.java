@@ -70,7 +70,7 @@ public class ScramMessagesTest {
     @Test
     public void validClientFirstMessage() throws SaslException {
         String nonce = formatter.secureRandomString();
-        ClientFirstMessage m = new ClientFirstMessage("someuser", nonce);
+        ClientFirstMessage m = new ClientFirstMessage("someuser", nonce, "");
         checkClientFirstMessage(m, "someuser", nonce, "");
 
         // Default format used by Kafka client: only user and nonce are specified
@@ -107,6 +107,11 @@ public class ScramMessagesTest {
             str = String.format("n,,n=testuser,r=%s,%s", nonce, extension);
             checkClientFirstMessage(createScramMessage(ClientFirstMessage.class, str), "testuser", nonce, "");
         }
+
+        //optional tokenauth specified as extensions
+        str = String.format("n,,n=testuser,r=%s,%s", nonce, "tokenauth=true");
+        m = createScramMessage(ClientFirstMessage.class, str);
+        assertEquals("tokenauth=true", m.extensions());
     }
 
     @Test

@@ -16,19 +16,21 @@
   <!--#include virtual="../js/templateData.js" -->
 </script>
 <script id="streams-template" type="text/x-handlebars-template">
-  <h1>Kafka Streams API</h1>
-       <div class="sub-nav-sticky">
-          <div class="sticky-top">
-             <div style="height:35px">
-                <a  class="active-menu-item" href="/{{version}}/documentation/streams/">Introduction</a>
-                <a href="/{{version}}/documentation/streams/developer-guide">Developer Guide</a>
-                <a href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
+  <h1>Kafka Streams</h1>
+    <div class="sub-nav-sticky">
+        <div class="sticky-top">
+            <div style="height:35px">
+                <a class="active-menu-item" href="/{{version}}/documentation/streams/">Introduction</a>
                 <a href="/{{version}}/documentation/streams/quickstart">Run Demo App</a>
                 <a href="/{{version}}/documentation/streams/tutorial">Tutorial: Write App</a>
-             </div>
-           </div>
-       </div>
-       <h3 class="streams_intro">The easiest way to write mission-critical real-time applications and microservices</h3>
+                <a href="/{{version}}/documentation/streams/core-concepts">Concepts</a>
+                <a href="/{{version}}/documentation/streams/architecture">Architecture</a>
+                <a href="/{{version}}/documentation/streams/developer-guide/">Developer Guide</a>
+                <a href="/{{version}}/documentation/streams/upgrade-guide">Upgrade</a>
+            </div>
+        </div>
+    </div>
+    <h3 class="streams_intro">The easiest way to write mission-critical real-time applications and microservices</h3>
        <p class="streams__description">Kafka Streams is a client library for building applications and microservices, where the input and output data are stored in Kafka clusters. It combines the simplicity of writing and deploying standard Java and Scala applications on the client side with the benefits of Kafka's server-side cluster technology.</p>
        <div class="video__series__grid">
           <div class="yt__video__block">
@@ -68,7 +70,7 @@
                   <li>Fully integrated with Kafka security</li>
                   <li>Write standard Java applications</li>
                   <li>Exactly-once processing semantics</li>
-                  <li>No seperate processing cluster required</li>
+                  <li>No separate processing cluster required</li>
                   <li>Develop on Mac, Linux, Windows</li>
                   
                </ul>
@@ -77,8 +79,8 @@
                <a href="/{{version}}/documentation/streams/tutorial" class="first__app__btn">Write your first app</a>
            </div>
        </div>
-       <hr class="separator"> 
-        <h3 class="stream__text">Streams API use cases</h3>
+       <hr class="separator" id="streams-use-cases"> 
+        <h3 class="stream__text">Kafka Streams use cases</h3>
          <div class="customers__grid">
            <div class="customer__grid">
              <div class="customer__item streams_logo_grid streams__ny__grid">
@@ -86,7 +88,7 @@
                  <span class="grid__item__logo" style="background-image: url('/images/powered-by/NYT.jpg');"></span>
                </a>
                <p class="grid__item__customer__description extra__space">
-                 <a href="https://open.nytimes.com/publishing-with-apache-kafka-at-the-new-york-times-7f0e3b7d2077" target="_blank">The New York Times uses Apache Kafka </a>and the Kafka Streams API to store and distribute, in real-time, published content to the various applications and systems that make it available to the readers.
+                 <a href="https://open.nytimes.com/publishing-with-apache-kafka-at-the-new-york-times-7f0e3b7d2077" target="_blank">The New York Times uses Apache Kafka </a>and the Kafka Streams to store and distribute, in real-time, published content to the various applications and systems that make it available to the readers.
                </p>
              </div>
            </div>
@@ -114,7 +116,7 @@
                  <span class="grid__item__logo" style="background-image: url('/images/powered-by/pinterest.png');"></span>
                </a>
                <p class="grid__item__customer__description">
-                   <a href="https://medium.com/@Pinterest_Engineering/using-kafka-streams-api-for-predictive-budgeting-9f58d206c996" target="_blank">Pinterest uses Apache Kafka and the Kafka Streams API</a> at large scale to power the real-time, predictive budgeting system of their advertising infrastructure. With Kafka Streams, spend predictions are more accurate than ever.
+                   <a href="https://medium.com/@Pinterest_Engineering/using-kafka-streams-api-for-predictive-budgeting-9f58d206c996" target="_blank">Pinterest uses Apache Kafka and the Kafka Streams</a> at large scale to power the real-time, predictive budgeting system of their advertising infrastructure. With Kafka Streams, spend predictions are more accurate than ever.
                </p>
              </div>
            </div> 
@@ -287,7 +289,7 @@
        </div>
        
        <div class="pagination">
-           <a href="#" class="pagination__btn pagination__btn__prev pagination__btn--disabled">Previous</a>
+           <a href="/{{version}}/documentation" class="pagination__btn pagination__btn__prev">Previous</a>
            <a href="/{{version}}/documentation/streams/quickstart" class="pagination__btn pagination__btn__next">Next</a>
        </div>
      
@@ -300,6 +302,7 @@
     <!--#include virtual="../../includes/_docs_banner.htm" -->
     <ul class="breadcrumbs">
       <li><a href="/documentation">Documentation</a>
+      <li><a href="/documentation/streams">Kafka Streams</a></li>
       </li>
     </ul>
     <div class="p-streams"></div>

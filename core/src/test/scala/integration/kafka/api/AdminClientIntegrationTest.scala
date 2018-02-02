@@ -28,7 +28,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig, KafkaServer}
 import org.apache.kafka.clients.admin._
-import kafka.utils.{Logging, TestUtils, ZkUtils}
+import kafka.utils.{Logging, TestUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.KafkaConsumer
@@ -47,6 +47,8 @@ import org.junit.Assert._
 import scala.util.Random
 import scala.collection.JavaConverters._
 import java.lang.{Long => JLong}
+
+import kafka.zk.KafkaZkClient
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -229,7 +231,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val results = client.describeTopics(Seq(nonExistingTopic, existingTopic).asJava).values
     assertEquals(existingTopic, results.get(existingTopic).get.name)
     intercept[ExecutionException](results.get(nonExistingTopic).get).getCause.isInstanceOf[UnknownTopicOrPartitionException]
-    assertEquals(None, zkUtils.getTopicPartitionCount(nonExistingTopic))
+    assertEquals(None, zkClient.getTopicPartitionCount(nonExistingTopic))
   }
 
   @Test
@@ -253,7 +255,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   def testDescribeLogDirs(): Unit = {
     client = AdminClient.create(createConfig())
     val topic = "topic"
-    val leaderByPartition = TestUtils.createTopic(zkUtils, topic, 10, 1, servers, new Properties())
+    val leaderByPartition = createTopic(topic, numPartitions = 10, replicationFactor = 1)
     val partitionsByBroker = leaderByPartition.groupBy { case (partitionId, leaderId) => leaderId }.mapValues(_.keys.toSeq)
     val brokers = (0 until serverCount).map(Integer.valueOf)
     val logDirInfosByBroker = client.describeLogDirs(brokers.asJava).all.get
@@ -279,8 +281,10 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   def testDescribeReplicaLogDirs(): Unit = {
     client = AdminClient.create(createConfig())
     val topic = "topic"
-    val leaderByPartition = TestUtils.createTopic(zkUtils, topic, 10, 1, servers, new Properties())
-    val replicas = leaderByPartition.map { case (partition, brokerId) => new TopicPartitionReplica(topic, partition, brokerId) }.toSeq
+    val leaderByPartition = createTopic(topic, numPartitions = 10, replicationFactor = 1)
+    val replicas = leaderByPartition.map { case (partition, brokerId) =>
+      new TopicPartitionReplica(topic, partition, brokerId)
+    }.toSeq
 
     val replicaDirInfos = client.describeReplicaLogDirs(replicas.asJavaCollection).all.get
     replicaDirInfos.asScala.foreach { case (topicPartitionReplica, replicaDirInfo) =>
@@ -315,7 +319,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       assertTrue(exception.getCause.isInstanceOf[ReplicaNotAvailableException])
     }
 
-    TestUtils.createTopic(zkUtils, topic, 1, serverCount, servers, new Properties)
+    createTopic(topic, numPartitions = 1, replicationFactor = serverCount)
     servers.foreach { server =>
       val logDir = server.logManager.getLog(tp).get.dir.getParent
       assertEquals(firstReplicaAssignment(new TopicPartitionReplica(topic, 0, server.config.brokerId)), logDir)
@@ -327,7 +331,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       TestUtils.waitUntilTrue(() => {
         val logDir = server.logManager.getLog(tp).get.dir.getParent
         secondReplicaAssignment(new TopicPartitionReplica(topic, 0, server.config.brokerId)) == logDir
-      }, "timed out waiting for replica movement", 6000L)
+      }, "timed out waiting for replica movement")
     }
 
     // Verify that replica can be moved to the specified log directory while the producer is sending messages
@@ -354,14 +358,18 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     }
 
     try {
-      TestUtils.waitUntilTrue(() => numMessages.get > 100, "timed out waiting for message produce", 6000L)
+      TestUtils.waitUntilTrue(() => numMessages.get > 10, s"only $numMessages messages are produced before timeout. Producer future ${producerFuture.value}")
       client.alterReplicaLogDirs(firstReplicaAssignment.asJava, new AlterReplicaLogDirsOptions).all.get
       servers.foreach { server =>
         TestUtils.waitUntilTrue(() => {
           val logDir = server.logManager.getLog(tp).get.dir.getParent
           firstReplicaAssignment(new TopicPartitionReplica(topic, 0, server.config.brokerId)) == logDir
-        }, "timed out waiting for replica movement", 6000L)
+        }, s"timed out waiting for replica movement. Producer future ${producerFuture.value}")
       }
+
+      val currentMessagesNum = numMessages.get
+      TestUtils.waitUntilTrue(() => numMessages.get - currentMessagesNum > 10,
+        s"only ${numMessages.get - currentMessagesNum} messages are produced within timeout after replica movement. Producer future ${producerFuture.value}")
     } finally running.set(false)
 
     val finalNumMessages = Await.result(producerFuture, Duration(20, TimeUnit.SECONDS))
@@ -383,11 +391,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val topicConfig1 = new Properties
     topicConfig1.setProperty(LogConfig.MaxMessageBytesProp, "500000")
     topicConfig1.setProperty(LogConfig.RetentionMsProp, "60000000")
-    TestUtils.createTopic(zkUtils, topic1, 1, 1, servers, topicConfig1)
+    createTopic(topic1, numPartitions = 1, replicationFactor = 1, topicConfig1)
 
     val topic2 = "describe-alter-configs-topic-2"
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
-    TestUtils.createTopic(zkUtils, topic2, 1, 1, servers, new Properties)
+    createTopic(topic2, numPartitions = 1, replicationFactor = 1)
 
     // Describe topics and broker
     val brokerResource1 = new ConfigResource(ConfigResource.Type.BROKER, servers(1).config.brokerId.toString)
@@ -434,14 +442,14 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(KafkaConfig.CompressionTypeProp, compressionType.name)
     assertTrue(compressionType.isDefault)
     assertFalse(compressionType.isSensitive)
-    assertTrue(compressionType.isReadOnly)
+    assertFalse(compressionType.isReadOnly)
 
     assertEquals(servers(2).config.values.size, configs.get(brokerResource2).entries.size)
     assertEquals(servers(2).config.brokerId.toString, configs.get(brokerResource2).get(KafkaConfig.BrokerIdProp).value)
     assertEquals(servers(2).config.logCleanerThreads.toString,
       configs.get(brokerResource2).get(KafkaConfig.LogCleanerThreadsProp).value)
 
-    checkValidAlterConfigs(zkUtils, servers, client, topicResource1, topicResource2)
+    checkValidAlterConfigs(client, topicResource1, topicResource2)
   }
 
   @Test
@@ -450,10 +458,10 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     // Create topics
     val topic1 = "create-partitions-topic-1"
-    TestUtils.createTopic(zkUtils, topic1, 1, 1, servers, new Properties)
+    createTopic(topic1, numPartitions = 1, replicationFactor = 1)
 
     val topic2 = "create-partitions-topic-2"
-    TestUtils.createTopic(zkUtils, topic2, 1, 2, servers, new Properties)
+    createTopic(topic2, numPartitions = 1, replicationFactor = 2)
 
     // assert that both the topics have 1 partition
     assertEquals(1, client.describeTopics(Set(topic1).asJava).values.get(topic1).get.partitions.size)
@@ -708,7 +716,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
   @Test
   def testSeekAfterDeleteRecords(): Unit = {
-    TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
+    createTopic(topic, numPartitions = 2, replicationFactor = serverCount)
 
     client = AdminClient.create(createConfig)
 
@@ -735,7 +743,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Test
   @Ignore // Disabled temporarily until flakiness is resolved
   def testLogStartOffsetCheckpoint(): Unit = {
-    TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
+    createTopic(topic, numPartitions = 2, replicationFactor = serverCount)
 
     client = AdminClient.create(createConfig)
 
@@ -774,7 +782,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
   @Test
   def testLogStartOffsetAfterDeleteRecords(): Unit = {
-    TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
+    createTopic(topic, numPartitions = 2, replicationFactor = serverCount)
 
     client = AdminClient.create(createConfig)
 
@@ -793,7 +801,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
   @Test
   def testOffsetsForTimesAfterDeleteRecords(): Unit = {
-    TestUtils.createTopic(zkUtils, topic, 2, serverCount, servers)
+    createTopic(topic, numPartitions = 2, replicationFactor = serverCount)
 
     client = AdminClient.create(createConfig)
 
@@ -837,7 +845,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Test
   def testInvalidAlterConfigs(): Unit = {
     client = AdminClient.create(createConfig)
-    checkInvalidAlterConfigs(zkUtils, servers, client)
+    checkInvalidAlterConfigs(zkClient, servers, client)
   }
 
   val ACL1 = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic3"),
@@ -936,8 +944,7 @@ object AdminClientIntegrationTest {
 
   import org.scalatest.Assertions._
 
-  def checkValidAlterConfigs(zkUtils: ZkUtils, servers: Seq[KafkaServer], client: AdminClient,
-                             topicResource1: ConfigResource, topicResource2: ConfigResource): Unit = {
+  def checkValidAlterConfigs(client: AdminClient, topicResource1: ConfigResource, topicResource2: ConfigResource): Unit = {
     // Alter topics
     var topicConfigEntries1 = Seq(
       new ConfigEntry(LogConfig.FlushMsProp, "1000")
@@ -999,15 +1006,15 @@ object AdminClientIntegrationTest {
     assertEquals("0.9", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
   }
 
-  def checkInvalidAlterConfigs(zkUtils: ZkUtils, servers: Seq[KafkaServer], client: AdminClient): Unit = {
+  def checkInvalidAlterConfigs(zkClient: KafkaZkClient, servers: Seq[KafkaServer], client: AdminClient): Unit = {
     // Create topics
     val topic1 = "invalid-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
-    TestUtils.createTopic(zkUtils, topic1, 1, 1, servers, new Properties())
+    TestUtils.createTopic(zkClient, topic1, 1, 1, servers)
 
     val topic2 = "invalid-alter-configs-topic-2"
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
-    TestUtils.createTopic(zkUtils, topic2, 1, 1, servers, new Properties)
+    TestUtils.createTopic(zkClient, topic2, 1, 1, servers)
 
     val topicConfigEntries1 = Seq(
       new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "1.1"), // this value is invalid as it's above 1.0
@@ -1017,7 +1024,7 @@ object AdminClientIntegrationTest {
     var topicConfigEntries2 = Seq(new ConfigEntry(LogConfig.CompressionTypeProp, "snappy")).asJava
 
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, servers.head.config.brokerId.toString)
-    val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.CompressionTypeProp, "gzip")).asJava
+    val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.ZkConnectProp, "localhost:2181")).asJava
 
     // Alter configs: first and third are invalid, second is valid
     var alterResult = client.alterConfigs(Map(

@@ -15,7 +15,7 @@
  limitations under the License.
 -->
 <script id="ops-template" type="text/x-handlebars-template">
-  
+
   Here is some information on actually running Kafka as a production system based on usage and experience at LinkedIn. Please send us any additional tips you know of.
 
   <h3><a id="basic_ops" href="#basic_ops">6.1 Basic Kafka Operations</a></h3>
@@ -141,7 +141,7 @@
   &gt; bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group my-group
 
   Note: This will only show information about consumers that use the Java consumer API (non-ZooKeeper-based consumers).
-  
+
   TOPIC                          PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG        CONSUMER-ID                                       HOST                           CLIENT-ID
   my-topic                       0          2               4               2          consumer-1-029af89c-873c-4751-a720-cefd41a669d6   /127.0.0.1                     consumer-1
   my-topic                       1          2               3               1          consumer-1-029af89c-873c-4751-a720-cefd41a669d6   /127.0.0.1                     consumer-1
@@ -177,11 +177,51 @@
   To view offsets, as mentioned earlier, we "describe" the consumer group like this:
 
   <pre class="brush: bash;">
-  &gt; bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group test-consumer-group
+  &gt; bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group my-group
 
-  TOPIC                          PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG        CONSUMER-ID                                       HOST                           CLIENT-ID
-  test-foo                       0          1               3               2          consumer-1-a5d61779-4d04-4c50-a6d6-fb35d942642d   /127.0.0.1                     consumer-1
+  TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID                                    HOST            CLIENT-ID
+  topic3          0          241019          395308          154289          consumer2-e76ea8c3-5d30-4299-9005-47eb41f3d3c4 /127.0.0.1      consumer2
+  topic2          1          520678          803288          282610          consumer2-e76ea8c3-5d30-4299-9005-47eb41f3d3c4 /127.0.0.1      consumer2
+  topic3          1          241018          398817          157799          consumer2-e76ea8c3-5d30-4299-9005-47eb41f3d3c4 /127.0.0.1      consumer2
+  topic1          0          854144          855809          1665            consumer1-3fc8d6f1-581a-4472-bdf3-3515b4aee8c1 /127.0.0.1      consumer1
+  topic2          0          460537          803290          342753          consumer1-3fc8d6f1-581a-4472-bdf3-3515b4aee8c1 /127.0.0.1      consumer1
+  topic3          2          243655          398812          155157          consumer4-117fe4d3-c6c1-4178-8ee9-eb4a3954bee0 /127.0.0.1      consumer4
   </pre>
+
+  There are a number of additional "describe" options that can be used to provide more detailed information about a consumer group that uses the new consumer API:
+  <ul>
+    <li>--members: This option provides the list of all active members in the consumer group.
+      <pre class="brush: bash;">
+      &gt; bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group my-group --members
+
+      CONSUMER-ID                                    HOST            CLIENT-ID       #PARTITIONS
+      consumer1-3fc8d6f1-581a-4472-bdf3-3515b4aee8c1 /127.0.0.1      consumer1       2
+      consumer4-117fe4d3-c6c1-4178-8ee9-eb4a3954bee0 /127.0.0.1      consumer4       1
+      consumer2-e76ea8c3-5d30-4299-9005-47eb41f3d3c4 /127.0.0.1      consumer2       3
+      consumer3-ecea43e4-1f01-479f-8349-f9130b75d8ee /127.0.0.1      consumer3       0
+      </pre>
+    </li>
+    <li>--members --verbose: On top of the information reported by the "--members" options above, this option also provides the partitions assigned to each member.
+      <pre class="brush: bash;">
+      &gt; bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group my-group --members --verbose
+
+      CONSUMER-ID                                    HOST            CLIENT-ID       #PARTITIONS     ASSIGNMENT
+      consumer1-3fc8d6f1-581a-4472-bdf3-3515b4aee8c1 /127.0.0.1      consumer1       2               topic1(0), topic2(0)
+      consumer4-117fe4d3-c6c1-4178-8ee9-eb4a3954bee0 /127.0.0.1      consumer4       1               topic3(2)
+      consumer2-e76ea8c3-5d30-4299-9005-47eb41f3d3c4 /127.0.0.1      consumer2       3               topic2(1), topic3(0,1)
+      consumer3-ecea43e4-1f01-479f-8349-f9130b75d8ee /127.0.0.1      consumer3       0               -
+      </pre>
+    </li>
+    <li>--offsets: This is the default describe option and provides the same output as the "--describe" option.</li>
+    <li>--state: This option provides useful group-level information.
+      <pre class="brush: bash;">
+      &gt; bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group my-group --state
+
+      COORDINATOR (ID)          ASSIGNMENT-STRATEGY       STATE                #MEMBERS
+      localhost:9092 (0)        range                     Stable               4
+      </pre>
+    </li>
+  </ul>
 
   If you are using the old high-level consumer and storing the group metadata in ZooKeeper (i.e. <code>offsets.storage=zookeeper</code>), pass
   <code>--zookeeper</code> instead of <code>bootstrap-server</code>:
@@ -700,6 +740,9 @@
 
   Kafka uses Yammer Metrics for metrics reporting in the server and Scala clients. The Java clients use Kafka Metrics, a built-in metrics registry that minimizes transitive dependencies pulled into client applications. Both expose metrics via JMX and can be configured to report stats using pluggable stats reporters to hook up to your monitoring system.
   <p>
+  All Kafka rate metrics have a corresponding cumulative count metric with suffix <code>-total</code>. For example,
+  <code>records-consumed-rate</code> has a corresponding metric named <code>records-consumed-total</code>.
+  <p>
   The easiest way to see the available metrics is to fire up jconsole and point it at a running kafka client or server; this will allow browsing all metrics with JMX.
   <p>
   We do graphing and alerting on the following metrics:
@@ -723,6 +766,32 @@
         <td>Request rate</td>
         <td>kafka.network:type=RequestMetrics,name=RequestsPerSec,request={Produce|FetchConsumer|FetchFollower}</td>
         <td></td>
+      </tr>
+      <tr>
+        <td>Error rate</td>
+        <td>kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=([-.\w]+),error=([-.\w]+)</td>
+        <td>Number of errors in responses counted per-request-type, per-error-code. If a response contains
+            multiple errors, all are counted. error=NONE indicates successful responses.</td>
+      </tr>
+      <tr>
+        <td>Request size in bytes</td>
+        <td>kafka.network:type=RequestMetrics,name=RequestBytes,request=([-.\w]+)</td>
+        <td>Size of requests for each request type.</td>
+      </tr>
+      <tr>
+        <td>Temporary memory size in bytes</td>
+        <td>kafka.network:type=RequestMetrics,name=TemporaryMemoryBytes,request={Produce|Fetch}</td>
+        <td>Temporary memory used for message format conversions and decompression.</td>
+      </tr>
+      <tr>
+        <td>Message conversion time</td>
+        <td>kafka.network:type=RequestMetrics,name=MessageConversionsTimeMs,request={Produce|Fetch}</td>
+        <td>Time in milliseconds spent on message format conversions.</td>
+      </tr>
+      <tr>
+        <td>Message conversion rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name={Produce|Fetch}MessageConversionsPerSec,topic=([-.\w]+)</td>
+        <td>Number of records which required message format conversion.</td>
       </tr>
       <tr>
         <td>Byte out rate</td>
@@ -875,6 +944,17 @@
         <td>exempt-throttle-time indicates the percentage of time spent in broker network and I/O threads to process requests
             that are exempt from throttling.</td>
       </tr>
+      <tr>
+        <td>ZooKeeper client request latency</td>
+        <td>kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs</td>
+        <td>Latency in millseconds for ZooKeeper requests from broker.</td>
+      </tr>
+      <tr>
+        <td>ZooKeeper connection status</td>
+        <td>kafka.server:type=SessionExpireListener,name=SessionState</td>
+        <td>Connection status of broker's ZooKeeper session which may be one of
+            Disconnected|SyncConnected|AuthFailed|ConnectedReadOnly|SaslAuthenticated|Expired.</td>
+      </tr>
   </tbody></table>
 
   <h4><a id="selector_monitoring" href="#selector_monitoring">Common monitoring metrics for producer/consumer/connect/streams</a></h4>
@@ -961,6 +1041,16 @@
       <tr>
         <td>connection-count</td>
         <td>The current number of active connections.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>successful-authentication-rate</td>
+        <td>Connections that were successfully authenticated using SASL or SSL.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>failed-authentication-rate</td>
+        <td>Connections that failed authentication.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
     </tbody>
@@ -1160,7 +1250,7 @@
     own metrics. Each task has a number of processor nodes, with their own metrics. Each task also has a number of state stores
     and record caches, all with their own metrics.
   </p>
-  
+
   Use the following configuration option to specify which metrics
   you want collected:
 

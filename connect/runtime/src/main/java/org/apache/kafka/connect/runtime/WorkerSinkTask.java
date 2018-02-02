@@ -38,10 +38,13 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
+import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.SinkUtils;
@@ -70,6 +73,7 @@ class WorkerSinkTask extends WorkerTask {
     private final Time time;
     private final Converter keyConverter;
     private final Converter valueConverter;
+    private final HeaderConverter headerConverter;
     private final TransformationChain<SinkRecord> transformationChain;
     private final SinkTaskMetricsGroup sinkTaskMetricsGroup;
     private KafkaConsumer<byte[], byte[]> consumer;
@@ -94,6 +98,7 @@ class WorkerSinkTask extends WorkerTask {
                           ConnectMetrics connectMetrics,
                           Converter keyConverter,
                           Converter valueConverter,
+                          HeaderConverter headerConverter,
                           TransformationChain<SinkRecord> transformationChain,
                           ClassLoader loader,
                           Time time) {
@@ -103,6 +108,7 @@ class WorkerSinkTask extends WorkerTask {
         this.task = task;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
+        this.headerConverter = headerConverter;
         this.transformationChain = transformationChain;
         this.time = time;
         this.messageBatch = new ArrayList<>();
@@ -474,13 +480,15 @@ class WorkerSinkTask extends WorkerTask {
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
             SchemaAndValue keyAndSchema = keyConverter.toConnectData(msg.topic(), msg.key());
             SchemaAndValue valueAndSchema = valueConverter.toConnectData(msg.topic(), msg.value());
+            Headers headers = convertHeadersFor(msg);
             Long timestamp = ConnectUtils.checkAndConvertTimestamp(msg.timestamp());
             SinkRecord origRecord = new SinkRecord(msg.topic(), msg.partition(),
                     keyAndSchema.schema(), keyAndSchema.value(),
                     valueAndSchema.schema(), valueAndSchema.value(),
                     msg.offset(),
                     timestamp,
-                    msg.timestampType());
+                    msg.timestampType(),
+                    headers);
             log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
                     this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
             SinkRecord transRecord = transformationChain.apply(origRecord);
@@ -496,6 +504,19 @@ class WorkerSinkTask extends WorkerTask {
             }
         }
         sinkTaskMetricsGroup.recordConsumedOffsets(origOffsets);
+    }
+
+    private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {
+        Headers result = new ConnectHeaders();
+        org.apache.kafka.common.header.Headers recordHeaders = record.headers();
+        if (recordHeaders != null) {
+            String topic = record.topic();
+            for (org.apache.kafka.common.header.Header recordHeader : recordHeaders) {
+                SchemaAndValue schemaAndValue = headerConverter.toConnectHeader(topic, recordHeader.key(), recordHeader.value());
+                result.add(recordHeader.key(), schemaAndValue);
+            }
+        }
+        return result;
     }
 
     private void resumeAll() {
@@ -674,6 +695,8 @@ class WorkerSinkTask extends WorkerTask {
             metricGroup = connectMetrics
                                   .group(registry.sinkTaskGroupName(), registry.connectorTagName(), id.connector(), registry.taskTagName(),
                                          Integer.toString(id.task()));
+            // prevent collisions by removing any previously created metrics in this group.
+            metricGroup.close();
 
             sinkRecordRead = metricGroup.metrics().sensor("sink-record-read");
             sinkRecordRead.add(metricGroup.metricName(registry.sinkRecordReadRate), new Rate());

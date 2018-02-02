@@ -186,7 +186,7 @@ public class MetadataTest {
      * wait forever with a max timeout value of 0
      *
      * @throws Exception
-     * @see https://issues.apache.org/jira/browse/KAFKA-1836
+     * @see <a href=https://issues.apache.org/jira/browse/KAFKA-1836>KAFKA-1836</a>
      */
     @Test
     public void testMetadataUpdateWaitTime() throws Exception {

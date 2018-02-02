@@ -218,9 +218,8 @@ public class KerberosLogin extends AbstractLogin {
                                         return;
                                     }
                                 } else {
-                                    log.warn("[Principal={}]: Could not renew TGT due to problem running shell command: '{} {}'; " +
-                                            "exception was: %s. Exiting refresh thread.", 
-                                            principal, kinitCmd, kinitArgs, e, e);
+                                    log.warn("[Principal={}]: Could not renew TGT due to problem running shell command: '{} {}'. " +
+                                            "Exiting refresh thread.", principal, kinitCmd, kinitArgs, e);
                                     return;
                                 }
                             }
@@ -314,7 +313,7 @@ public class KerberosLogin extends AbstractLogin {
             return proposedRefresh;
     }
 
-    private synchronized KerberosTicket getTGT() {
+    private KerberosTicket getTGT() {
         Set<KerberosTicket> tickets = subject.getPrivateCredentials(KerberosTicket.class);
         for (KerberosTicket ticket : tickets) {
             KerberosPrincipal server = ticket.getServer();
@@ -341,7 +340,7 @@ public class KerberosLogin extends AbstractLogin {
      * Re-login a principal. This method assumes that {@link #login()} has happened already.
      * @throws javax.security.auth.login.LoginException on a failure
      */
-    private synchronized void reLogin() throws LoginException {
+    private void reLogin() throws LoginException {
         if (!isKrbTicket) {
             return;
         }
