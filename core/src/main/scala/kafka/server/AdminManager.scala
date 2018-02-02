@@ -26,7 +26,7 @@ import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource}
-import org.apache.kafka.common.errors.{ApiException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, PolicyViolationException, ReassignmentInProgressException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{ApiException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -128,7 +128,7 @@ class AdminManager(val config: KafkaConfig,
         CreatePartitionsMetadata(topic, assignments, ApiError.NONE)
       } catch {
         // Log client errors at a lower level than unexpected exceptions
-        case e@ (_: PolicyViolationException | _: ApiException) =>
+        case e: ApiException =>
           info(s"Error processing create topic request for topic $topic with arguments $arguments", e)
           CreatePartitionsMetadata(topic, Map(), ApiError.fromThrowable(e))
         case e: Throwable =>
@@ -388,7 +388,7 @@ class AdminManager(val config: KafkaConfig,
         case e: Throwable =>
           // Log client errors at a lower level than unexpected exceptions
           val message = s"Error processing alter configs request for resource $resource, config $config"
-          if (e.isInstanceOf[ApiException] || e.isInstanceOf[PolicyViolationException])
+          if (e.isInstanceOf[ApiException])
             info(message, e)
           else
             error(message, e)
