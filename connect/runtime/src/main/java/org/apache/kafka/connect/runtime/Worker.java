@@ -36,8 +36,6 @@ import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
-import org.apache.kafka.connect.storage.ConverterConfig;
-import org.apache.kafka.connect.storage.ConverterType;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
@@ -104,18 +102,8 @@ public class Worker {
         this.workerMetricsGroup = new WorkerMetricsGroup(metrics);
 
         // Internal converters are required properties, thus getClass won't return null.
-        this.internalKeyConverter = plugins.newConverter(
-                config.getClass(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG).getName(),
-                config,
-                true,
-                "internal.key.converter."
-        );
-        this.internalValueConverter = plugins.newConverter(
-                config.getClass(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG).getName(),
-                config,
-                false,
-                "internal.value.converter."
-        );
+        this.internalKeyConverter = plugins.newConverter(config, WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, true);
+        this.internalValueConverter = plugins.newConverter(config, WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, false);
 
         this.offsetBackingStore = offsetBackingStore;
         this.offsetBackingStore.configure(config);
@@ -382,35 +370,9 @@ public class Worker {
             // By maintaining connector's specific class loader for this thread here, we first
             // search for converters within the connector dependencies, and if not found the
             // plugin class loader delegates loading to the delegating classloader.
-            Converter keyConverter = connConfig.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
-            if (keyConverter != null) {
-                Map<String, Object> converterConfig = connConfig.originalsWithPrefix("key.converter.");
-                converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.KEY.getName());
-                keyConverter.configure(converterConfig, false);
-            } else {
-                String className = config.getClass(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG).getName();
-                keyConverter = plugins.newConverter(className, config, true, "key.converter.");
-            }
-
-            Converter valueConverter = connConfig.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
-            if (valueConverter != null) {
-                Map<String, Object> converterConfig = connConfig.originalsWithPrefix("value.converter.");
-                converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.VALUE.getName());
-                valueConverter.configure(converterConfig, false);
-            } else {
-                String className = config.getClass(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG).getName();
-                valueConverter = plugins.newConverter(className, config, false, "value.converter.");
-            }
-
-            HeaderConverter headerConverter = connConfig.getConfiguredInstance(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, HeaderConverter.class);
-            if (headerConverter != null) {
-                Map<String, Object> converterConfig = connConfig.originalsWithPrefix("header.converter.");
-                converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName());
-                headerConverter.configure(converterConfig);
-            } else {
-                String className = config.getClass(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG).getName();
-                headerConverter = plugins.newHeaderConverter(className, config, "header.converter.");
-            }
+            Converter keyConverter = plugins.newConverter(config, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, true);
+            Converter valueConverter = plugins.newConverter(config, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, false);
+            HeaderConverter headerConverter = plugins.newHeaderConverter(config, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG);
 
             workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, connectorLoader);
             workerTask.initialize(taskConfig);

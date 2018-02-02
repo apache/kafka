@@ -78,13 +78,13 @@ public class PluginsTest {
 
     @Test
     public void shouldInstantiateAndConfigureConverters() {
-        instantiateAndConfigureConverter("key.converter.", true);
+        instantiateAndConfigureConverter(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, true);
         // Validate extra configs got passed through to overridden converters
         assertConverterType(ConverterType.KEY, converter.configs);
         assertEquals("true", converter.configs.get(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG));
         assertEquals("foo1", converter.configs.get("extra.config"));
 
-        instantiateAndConfigureConverter("value.converter.", false);
+        instantiateAndConfigureConverter(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, false);
         // Validate extra configs got passed through to overridden converters
         assertConverterType(ConverterType.VALUE, converter.configs);
         assertEquals("true", converter.configs.get(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG));
@@ -93,13 +93,13 @@ public class PluginsTest {
 
     @Test
     public void shouldInstantiateAndConfigureInternalConverters() {
-        instantiateAndConfigureConverter("internal.key.converter.", true);
+        instantiateAndConfigureConverter(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, true);
         // Validate extra configs got passed through to overridden converters
         assertConverterType(ConverterType.KEY, converter.configs);
         assertEquals("false", converter.configs.get(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG));
         assertEquals("bar1", converter.configs.get("extra.config"));
 
-        instantiateAndConfigureConverter("internal.value.converter.", false);
+        instantiateAndConfigureConverter(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, false);
         // Validate extra configs got passed through to overridden converters
         assertConverterType(ConverterType.VALUE, converter.configs);
         assertEquals("false", converter.configs.get(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG));
@@ -108,19 +108,19 @@ public class PluginsTest {
 
     @Test
     public void shouldInstantiateAndConfigureHeaderConverter() {
-        instantiateAndConfigureHeaderConverter("header.converter.");
+        instantiateAndConfigureHeaderConverter(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG);
         // Validate extra configs got passed through to overridden converters
         assertConverterType(ConverterType.HEADER, headerConverter.configs);
         assertEquals("baz", headerConverter.configs.get("extra.config"));
     }
 
-    protected void instantiateAndConfigureConverter(String prefix, boolean isKeyConverter) {
-        converter = (TestConverter) plugins.newConverter(TestConverter.class.getName(), config, isKeyConverter, prefix);
+    protected void instantiateAndConfigureConverter(String configPropName, boolean isKeyConverter) {
+        converter = (TestConverter) plugins.newConverter(config, configPropName, isKeyConverter);
         assertNotNull(converter);
     }
 
-    protected void instantiateAndConfigureHeaderConverter(String prefix) {
-        headerConverter = (TestHeaderConverter) plugins.newHeaderConverter(TestHeaderConverter.class.getName(), config, prefix);
+    protected void instantiateAndConfigureHeaderConverter(String configPropName) {
+        headerConverter = (TestHeaderConverter) plugins.newHeaderConverter(config, configPropName);
         assertNotNull(headerConverter);
     }
 
@@ -144,6 +144,7 @@ public class PluginsTest {
         @Override
         public void configure(Map<String, ?> configs) {
             this.configs = configs;
+            new JsonConverterConfig(configs); // requires the `converter.type` config be set
         }
 
         @Override
@@ -173,6 +174,7 @@ public class PluginsTest {
         @Override
         public void configure(Map<String, ?> configs) {
             this.configs = configs;
+            new JsonConverterConfig(configs); // requires the `converter.type` config be set
         }
 
         @Override

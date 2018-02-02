@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Time;
@@ -28,6 +29,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.MockConnectMetrics.MockMetricsReporter;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
@@ -99,6 +101,9 @@ public class WorkerTest extends ThreadedTest {
     @Mock private WorkerSourceTask workerTask;
     @Mock private Converter keyConverter;
     @Mock private Converter valueConverter;
+    @Mock private Converter taskKeyConverter;
+    @Mock private Converter taskValueConverter;
+    @Mock private HeaderConverter taskHeaderConverter;
 
     @Before
     public void setup() {
@@ -463,6 +468,7 @@ public class WorkerTest extends ThreadedTest {
     public void testAddRemoveTask() throws Exception {
         expectConverters(true);
         expectStartStorage();
+        expectTaskHeaderConverter();
 
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
@@ -597,6 +603,7 @@ public class WorkerTest extends ThreadedTest {
     public void testCleanupTasksOnStop() throws Exception {
         expectConverters(true);
         expectStartStorage();
+        expectTaskHeaderConverter();
 
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
@@ -678,11 +685,13 @@ public class WorkerTest extends ThreadedTest {
     public void testConverterOverrides() throws Exception {
         expectConverters();
         expectStartStorage();
+        expectTaskConverters();
+        expectTaskHeaderConverter();
 
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
         Capture<TestConverter> keyConverter = EasyMock.newCapture();
-        Capture<TestConverter> valueConverter = EasyMock.newCapture();
+        Capture<TestConfigurableConverter> valueConverter = EasyMock.newCapture();
         Capture<HeaderConverter> headerConverter = EasyMock.newCapture();
 
         EasyMock.expect(plugins.currentThreadLoader()).andReturn(delegatingLoader).times(2);
@@ -753,7 +762,7 @@ public class WorkerTest extends ThreadedTest {
         Map<String, String> connProps = anyConnectorConfigMap();
         connProps.put(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
         connProps.put("key.converter.extra.config", "foo");
-        connProps.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
+        connProps.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConfigurableConverter.class.getName());
         connProps.put("value.converter.extra.config", "bar");
         worker.startTask(TASK_ID, connProps, origProps, taskStatusListener, TargetState.STARTED);
         assertStatistics(worker, 0, 1);
@@ -766,9 +775,6 @@ public class WorkerTest extends ThreadedTest {
         assertStatistics(worker, 0, 0);
 
         // We've mocked the Plugin.newConverter method, so we don't currently configure the converters
-        // Validate extra configs got passed through to overridden converters
-        assertEquals("foo", keyConverter.getValue().configs.get("extra.config"));
-        assertEquals("bar", valueConverter.getValue().configs.get("extra.config"));
 
         PowerMock.verifyAll();
     }
@@ -833,15 +839,9 @@ public class WorkerTest extends ThreadedTest {
         if (expectDefaultConverters) {
 
             // Instantiate and configure default
-            EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(),
-                                                 config,
-                                                 true,
-                                                 "key.converter."))
+            EasyMock.expect(plugins.newConverter(config, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, true))
                     .andReturn(keyConverter);
-            EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(),
-                                                 config,
-                                                 false,
-                                                 "value.converter."))
+            EasyMock.expect(plugins.newConverter(config, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, false))
                     .andReturn(valueConverter);
             EasyMock.expectLastCall();
         }
@@ -851,16 +851,25 @@ public class WorkerTest extends ThreadedTest {
         Converter internalValueConverter = PowerMock.createMock(converterClass);
 
         // Instantiate and configure internal
-        EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(),
-                                             config,
-                                             true,
-                                             "internal.key.converter."))
+        EasyMock.expect(plugins.newConverter(config, WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, true))
                 .andReturn(internalKeyConverter);
-        EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(),
-                                             config,
-                                             false,
-                                             "internal.value.converter."))
+        EasyMock.expect(plugins.newConverter(config, WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, false))
                 .andReturn(internalValueConverter);
+        EasyMock.expectLastCall();
+    }
+
+    private void expectTaskConverters() {
+        // Instantiate and configure default
+        EasyMock.expect(plugins.newConverter(config, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, true))
+                .andReturn(taskKeyConverter);
+        EasyMock.expect(plugins.newConverter(config, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, false))
+                .andReturn(taskValueConverter);
+        EasyMock.expectLastCall();
+    }
+
+    private void expectTaskHeaderConverter() {
+        EasyMock.expect(plugins.newHeaderConverter(config, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG))
+                .andReturn(taskHeaderConverter);
         EasyMock.expectLastCall();
     }
 
@@ -934,6 +943,35 @@ public class WorkerTest extends ThreadedTest {
 
     public static class TestConverter implements Converter {
         public Map<String, ?> configs;
+
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            this.configs = configs;
+        }
+
+        @Override
+        public byte[] fromConnectData(String topic, Schema schema, Object value) {
+            return new byte[0];
+        }
+
+        @Override
+        public SchemaAndValue toConnectData(String topic, byte[] value) {
+            return null;
+        }
+    }
+
+    public static class TestConfigurableConverter implements Converter, Configurable {
+        public Map<String, ?> configs;
+
+        public ConfigDef config() {
+            return JsonConverterConfig.configDef();
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            this.configs = configs;
+            new JsonConverterConfig(configs); // requires the `converter.type` config be set
+        }
 
         @Override
         public void configure(Map<String, ?> configs, boolean isKey) {
