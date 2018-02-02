@@ -13,20 +13,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark import ignore
 from ducktape.mark import parametrize
 from ducktape.tests.test import Test
-
+from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsBrokerCompatibilityService
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.version import DEV_BRANCH, LATEST_0_10_1, LATEST_0_10_0, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_0_11_0, LATEST_0_10_2, LATEST_0_10_1, LATEST_0_10_0, LATEST_0_9, LATEST_0_8_2, KafkaVersion
 
 
 class StreamsBrokerCompatibility(Test):
     """
-    These tests validate that Streams v0.10.2+ can connect to older brokers v0.10.1+
-    and that Streams fails fast for pre-0.10.0 brokers
+    These tests validates that
+    - Streams 0.11+ w/ EOS fails fast for older brokers 0.10.2 and 0.10.1
+    - Streams 0.11+ w/o EOS works for older brokers 0.10.2 and 0.10.1
+    - Streams fails fast for 0.10.0 brokers
+    - Streams times-out for pre-0.10.0 brokers
     """
 
     input = "brokerCompatibilitySourceTopic"
@@ -34,7 +38,6 @@ class StreamsBrokerCompatibility(Test):
 
     def __init__(self, test_context):
         super(StreamsBrokerCompatibility, self).__init__(test_context=test_context)
-
         self.zk = ZookeeperService(test_context, num_nodes=1)
         self.kafka = KafkaService(test_context,
                                   num_nodes=1,
@@ -43,9 +46,6 @@ class StreamsBrokerCompatibility(Test):
                                       self.input: {'partitions': 1, 'replication-factor': 1},
                                       self.output: {'partitions': 1, 'replication-factor': 1}
                                   })
-
-        self.processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka)
-
         self.consumer = VerifiableConsumer(test_context,
                                            1,
                                            self.kafka,
@@ -55,36 +55,73 @@ class StreamsBrokerCompatibility(Test):
     def setUp(self):
         self.zk.start()
 
-    @parametrize(broker_version=str(DEV_BRANCH))
+   
+    @parametrize(broker_version=str(LATEST_0_10_2))
     @parametrize(broker_version=str(LATEST_0_10_1))
-    def test_compatible_brokers(self, broker_version):
+    def test_fail_fast_on_incompatible_brokers_if_eos_enabled(self, broker_version):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
 
-        self.processor.start()
+        processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, True)
+        processor.start()
+
+        processor.node.account.ssh(processor.start_cmd(processor.node))
+        with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
+            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS ',
+                               timeout_sec=60,
+                               err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS ' error message " + str(processor.node.account))
+
+        self.kafka.stop()
+
+    @parametrize(broker_version=str(LATEST_0_11_0))
+    @parametrize(broker_version=str(LATEST_0_10_2))
+    @parametrize(broker_version=str(LATEST_0_10_1))
+    def test_compatible_brokers_eos_disabled(self, broker_version):
+        self.kafka.set_version(KafkaVersion(broker_version))
+        self.kafka.start()
+
+        processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, False)
+        processor.start()
+
         self.consumer.start()
 
-        self.processor.wait()
+        processor.wait()
 
-        num_consumed_mgs = self.consumer.total_consumed()
+        wait_until(lambda: self.consumer.total_consumed() > 0, timeout_sec=30, err_msg="Did expect to read a message but got none within 30 seconds.")
 
         self.consumer.stop()
         self.kafka.stop()
-
-        assert num_consumed_mgs == 1, \
-            "Did expect to read exactly one message but got %d" % num_consumed_mgs
 
     @parametrize(broker_version=str(LATEST_0_10_0))
     def test_fail_fast_on_incompatible_brokers(self, broker_version):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
 
-        self.processor.start()
+        processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, False)
+        processor.start()
 
-        self.processor.node.account.ssh(self.processor.start_cmd(self.processor.node))
-        with self.processor.node.account.monitor_log(self.processor.STDERR_FILE) as monitor:
-            monitor.wait_until('Exception in thread "main" org.apache.kafka.streams.errors.StreamsException: Kafka Streams requires broker version 0.10.1.x or higher.',
+        processor.node.account.ssh(processor.start_cmd(processor.node))
+        with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
+            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.streams.errors.StreamsException: Could not create topic kafka-streams-system-test-broker-compatibility-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog.',
                         timeout_sec=60,
-                        err_msg="Never saw 'incompatible broker' error message " + str(self.processor.node.account))
+                        err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.streams.errors.StreamsException: Could not create topic kafka-streams-system-test-broker-compatibility-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog.' error message " + str(processor.node.account))
+
+        self.kafka.stop()
+
+    @ignore
+    @parametrize(broker_version=str(LATEST_0_9))
+    @parametrize(broker_version=str(LATEST_0_8_2))
+    def test_timeout_on_pre_010_brokers(self, broker_version):
+        self.kafka.set_version(KafkaVersion(broker_version))
+        self.kafka.start()
+
+        processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, False)
+        processor.start()
+
+        processor.node.account.ssh(processor.start_cmd(processor.node))
+        with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
+            monitor.wait_until('Exception in thread "main" org.apache.kafka.streams.errors.BrokerNotFoundException: Could not find any available broker.',
+                               timeout_sec=60,
+                               err_msg="Never saw 'no available brokers' error message " + str(processor.node.account))
 
         self.kafka.stop()

@@ -16,7 +16,7 @@
  */
 package kafka.client
 
-import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.Errors
 
 import scala.collection._
 import kafka.cluster._
@@ -31,10 +31,13 @@ import kafka.network.BlockingChannel
 import kafka.utils.ZkUtils
 import java.io.IOException
 
+import org.apache.kafka.common.security.auth.SecurityProtocol
+
  /**
  * Helper functions common to clients (producer, consumer, or admin)
  */
-object ClientUtils extends Logging{
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
+object ClientUtils extends Logging {
 
   /**
    * Used by the producer to send a metadata request since it has access to the ProducerConfig

@@ -67,7 +67,7 @@ public class Crc32 implements Checksum {
      */
     public static long crc32(ByteBuffer buffer, int offset, int size) {
         Crc32 crc = new Crc32();
-        crc.update(buffer, offset, size);
+        Checksums.update(crc, buffer, offset, size);
         return crc.getValue();
     }
 
@@ -87,20 +87,6 @@ public class Crc32 implements Checksum {
     @Override
     public void reset() {
         crc = 0xffffffff;
-    }
-
-    public void update(ByteBuffer buffer, int length) {
-        update(buffer, 0, length);
-    }
-
-    public void update(ByteBuffer buffer, int offset, int length) {
-        if (buffer.hasArray()) {
-            update(buffer.array(), buffer.position() + buffer.arrayOffset() + offset, length);
-        } else {
-            int start = buffer.position() + offset;
-            for (int i = start; i < start + length; i++)
-                update(buffer.get(i));
-        }
     }
 
     @Override
@@ -155,27 +141,6 @@ public class Crc32 implements Checksum {
     @Override
     final public void update(int b) {
         crc = (crc >>> 8) ^ T[T8_0_START + ((crc ^ b) & 0xff)];
-    }
-
-    /**
-     * Update the CRC32 given an integer
-     */
-    final public void updateInt(int input) {
-        update((byte) (input >> 24));
-        update((byte) (input >> 16));
-        update((byte) (input >> 8));
-        update((byte) input /* >> 0 */);
-    }
-
-    final public void updateLong(long input) {
-        update((byte) (input >> 56));
-        update((byte) (input >> 48));
-        update((byte) (input >> 40));
-        update((byte) (input >> 32));
-        update((byte) (input >> 24));
-        update((byte) (input >> 16));
-        update((byte) (input >> 8));
-        update((byte) input /* >> 0 */);
     }
 
     /*

@@ -26,4 +26,8 @@ public class InvalidRecordException extends CorruptRecordException {
         super(s);
     }
 
+    public InvalidRecordException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
 }

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
+import org.apache.kafka.common.requests.IsolationLevel;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -50,7 +51,7 @@ import java.util.regex.Pattern;
  *
  * This class also maintains a cache of the latest commit position for each of the assigned
  * partitions. This is updated through {@link #committed(TopicPartition, OffsetAndMetadata)} and can be used
- * to set the initial fetch position (e.g. {@link Fetcher#resetOffset(TopicPartition)}.
+ * to set the initial fetch position (e.g. {@link Fetcher#resetOffsets(Set)}.
  */
 public class SubscriptionState {
     private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =
@@ -318,13 +319,20 @@ public class SubscriptionState {
         return assignedState(tp).position;
     }
 
-    public Long partitionLag(TopicPartition tp) {
+    public Long partitionLag(TopicPartition tp, IsolationLevel isolationLevel) {
         TopicPartitionState topicPartitionState = assignedState(tp);
-        return topicPartitionState.highWatermark == null ? null : topicPartitionState.highWatermark - topicPartitionState.position;
+        if (isolationLevel == IsolationLevel.READ_COMMITTED)
+            return topicPartitionState.lastStableOffset == null ? null : topicPartitionState.lastStableOffset - topicPartitionState.position;
+        else
+            return topicPartitionState.highWatermark == null ? null : topicPartitionState.highWatermark - topicPartitionState.position;
     }
 
     public void updateHighWatermark(TopicPartition tp, long highWatermark) {
         assignedState(tp).highWatermark = highWatermark;
+    }
+
+    public void updateLastStableOffset(TopicPartition tp, long lastStableOffset) {
+        assignedState(tp).lastStableOffset = lastStableOffset;
     }
 
     public Map<TopicPartition, OffsetAndMetadata> allConsumed() {
@@ -427,6 +435,7 @@ public class SubscriptionState {
     private static class TopicPartitionState {
         private Long position; // last consumed position
         private Long highWatermark; // the high watermark from last fetch
+        private Long lastStableOffset;
         private OffsetAndMetadata committed;  // last committed position
         private boolean paused;  // whether this partition has been paused by the user
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
@@ -435,6 +444,7 @@ public class SubscriptionState {
             this.paused = false;
             this.position = null;
             this.highWatermark = null;
+            this.lastStableOffset = null;
             this.committed = null;
             this.resetStrategy = null;
         }

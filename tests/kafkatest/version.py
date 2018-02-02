@@ -82,4 +82,14 @@ V_0_10_1_0 = KafkaVersion("0.10.1.0")
 V_0_10_1_1 = KafkaVersion("0.10.1.1")
 LATEST_0_10_1 = V_0_10_1_1
 
-LATEST_0_10 = LATEST_0_10_1
+# 0.10.2.x versions
+V_0_10_2_0 = KafkaVersion("0.10.2.0")
+V_0_10_2_1 = KafkaVersion("0.10.2.1")
+LATEST_0_10_2 = V_0_10_2_1
+
+LATEST_0_10 = LATEST_0_10_2
+
+# 0.11.0.0 versions
+V_0_11_0_0 = KafkaVersion("0.11.0.0")
+LATEST_0_11_0 = V_0_11_0_0
+LATEST_0_11 = LATEST_0_11_0

@@ -39,7 +39,7 @@ class TestVerifiableProducer(Test):
         self.num_messages = 1000
         # This will produce to source kafka cluster
         self.producer = VerifiableProducer(test_context, num_nodes=1, kafka=self.kafka, topic=self.topic,
-                                           max_messages=self.num_messages, throughput=1000)
+                                           max_messages=self.num_messages, throughput=self.num_messages/5)
 
     def setUp(self):
         self.zk.start()
@@ -66,10 +66,16 @@ class TestVerifiableProducer(Test):
         # that this check works with DEV_BRANCH
         # When running VerifiableProducer 0.8.X, both the current branch version and 0.8.X should show up because of the
         # way verifiable producer pulls in some development directories into its classpath
+        #
+        # If the test fails here because 'ps .. | grep' couldn't find the process it means
+        # the login and grep that is_version() performs is slower than
+        # the time it takes the producer to produce its messages.
+        # Easy fix is to decrease throughput= above, the good fix is to make the producer
+        # not terminate until explicitly killed in this case.
         if node.version <= LATEST_0_8_2:
-            assert is_version(node, [node.version.vstring, DEV_BRANCH.vstring])
+            assert is_version(node, [node.version.vstring, DEV_BRANCH.vstring], logger=self.logger)
         else:
-            assert is_version(node, [node.version.vstring])
+            assert is_version(node, [node.version.vstring], logger=self.logger)
 
         self.producer.wait()
         num_produced = self.producer.num_acked

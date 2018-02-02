@@ -67,14 +67,24 @@ object ApiVersion {
     "0.11.0-IV0" -> KAFKA_0_11_0_IV0,
     // introduced DeleteRecordsRequest v0 and FetchRequest v4 in KIP-107
     "0.11.0-IV1" -> KAFKA_0_11_0_IV1,
-    "0.11.0" -> KAFKA_0_11_0_IV1
+    // Introduced leader epoch fetches to the replica fetcher via KIP-101
+    "0.11.0-IV2" -> KAFKA_0_11_0_IV2,
+    "0.11.0" -> KAFKA_0_11_0_IV2,
+    // Introduced LeaderAndIsrRequest V1, UpdateMetadataRequest V4 and FetchRequest V6 via KIP-112
+    "1.0-IV0" -> KAFKA_1_0_IV0,
+    "1.0" -> KAFKA_1_0_IV0,
+    // Introduced DeleteGroupsRequest V0 via KIP-229
+    "1.1-IV0" -> KAFKA_1_1_IV0
   )
 
   private val versionPattern = "\\.".r
 
-  def apply(version: String): ApiVersion =
-    versionNameMap.getOrElse(versionPattern.split(version).slice(0, 3).mkString("."),
-      throw new IllegalArgumentException(s"Version `$version` is not a valid version"))
+  def apply(version: String): ApiVersion = {
+    val versionsSeq = versionPattern.split(version)
+    val numSegments = if (version.startsWith("0.")) 3 else 2
+    val key = versionsSeq.take(numSegments).mkString(".")
+    versionNameMap.getOrElse(key, throw new IllegalArgumentException(s"Version `$version` is not a valid version"))
+  }
 
   def latestVersion = versionNameMap.values.max
 
@@ -159,7 +169,26 @@ case object KAFKA_0_11_0_IV0 extends ApiVersion {
 }
 
 case object KAFKA_0_11_0_IV1 extends ApiVersion {
-  val version: String = "0.11.0-IV0"
+  val version: String = "0.11.0-IV1"
   val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
-  val id: Int = 10
+  val id: Int = 11
 }
+
+case object KAFKA_0_11_0_IV2 extends ApiVersion {
+  val version: String = "0.11.0-IV2"
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
+  val id: Int = 12
+}
+
+case object KAFKA_1_0_IV0 extends ApiVersion {
+  val version: String = "1.0-IV0"
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
+  val id: Int = 13
+}
+
+case object KAFKA_1_1_IV0 extends ApiVersion {
+  val version: String = "1.1-IV0"
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
+  val id: Int = 14
+}
+

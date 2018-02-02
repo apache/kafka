@@ -18,15 +18,17 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.io.File;
@@ -40,106 +42,145 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamKTableJoinTest {
 
-    final private String topic1 = "topic1";
-    final private String topic2 = "topic2";
+    final private String streamTopic = "streamTopic";
+    final private String tableTopic = "tableTopic";
 
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
-
-    private KStreamTestDriver driver = null;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
     private File stateDir = null;
-
-    @After
-    public void tearDown() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    private MockProcessorSupplier<Integer, String> processor;
+    private final int[] expectedKeys = {0, 1, 2, 3};
+    private StreamsBuilder builder;
 
     @Before
     public void setUp() throws IOException {
         stateDir = TestUtils.tempDirectory("kafka-test");
-    }
 
-    @Test
-    public void testJoin() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+        builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final KStream<Integer, String> stream;
         final KTable<Integer, String> table;
-        final MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        stream = builder.stream(intSerde, stringSerde, topic1);
-        table = builder.table(intSerde, stringSerde, topic2, "anyStoreName");
+        final Consumed<Integer, String> consumed = Consumed.with(intSerde, stringSerde);
+        stream = builder.stream(streamTopic, consumed);
+        table = builder.table(tableTopic, consumed);
         stream.join(table, MockValueJoiner.TOSTRING_JOINER).process(processor);
 
-        final Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
+        driver.setUp(builder, stateDir);
+        driver.setTime(0L);
+    }
+
+    private void pushToStream(final int messageCount, final String valuePrefix) {
+        for (int i = 0; i < messageCount; i++) {
+            driver.process(streamTopic, expectedKeys[i], valuePrefix + expectedKeys[i]);
+        }
+    }
+
+    private void pushToTable(final int messageCount, final String valuePrefix) {
+        for (int i = 0; i < messageCount; i++) {
+            driver.process(tableTopic, expectedKeys[i], valuePrefix + expectedKeys[i]);
+        }
+    }
+
+    private void pushNullValueToTable(final int messageCount) {
+        for (int i = 0; i < messageCount; i++) {
+            driver.process(tableTopic, expectedKeys[i], null);
+        }
+    }
+
+    @Test
+    public void shouldRequireCopartitionedStreams() {
+
+        final Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
+        assertEquals(new HashSet<>(Arrays.asList(streamTopic, tableTopic)), copartitionGroups.iterator().next());
+    }
 
-        driver = new KStreamTestDriver(builder, stateDir);
-        driver.setTime(0L);
+    @Test
+    public void shouldNotJoinWithEmptyTableOnStreamUpdates() {
 
-        // push two items to the primary stream. the other table is empty
+        // push two items to the primary stream. the table is empty
 
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
-        }
+        pushToStream(2, "X");
+        processor.checkAndClearProcessResult();
+    }
 
+    @Test
+    public void shouldNotJoinOnTableUpdates() {
+
+        // push two items to the primary stream. the table is empty
+
+        pushToStream(2, "X");
         processor.checkAndClearProcessResult();
 
-        // push two items to the other stream. this should not produce any item.
+        // push two items to the table. this should not produce any item.
 
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
-        }
-
+        pushToTable(2, "Y");
         processor.checkAndClearProcessResult();
 
         // push all four items to the primary stream. this should produce two items.
 
-        for (int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "X" + expectedKey);
-        }
-
+        pushToStream(4, "X");
         processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
 
-        // push all items to the other stream. this should not produce any item
-        for (int expectedKey : expectedKeys) {
-            driver.process(topic2, expectedKey, "YY" + expectedKey);
-        }
+        // push all items to the table. this should not produce any item
 
+        pushToTable(4, "YY");
         processor.checkAndClearProcessResult();
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "X" + expectedKey);
-        }
-
+        pushToStream(4, "X");
         processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
 
-        // push two items with null to the other stream as deletes. this should not produce any item.
+        // push all items to the table. this should not produce any item
 
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic2, expectedKeys[i], null);
-        }
+        pushToTable(4, "YYY");
+        processor.checkAndClearProcessResult();
+    }
 
+    @Test
+    public void shouldJoinOnlyIfMatchFoundOnStreamUpdates() {
+
+        // push two items to the table. this should not produce any item.
+
+        pushToTable(2, "Y");
         processor.checkAndClearProcessResult();
 
         // push all four items to the primary stream. this should produce two items.
 
-        for (int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "XX" + expectedKey);
-        }
+        pushToStream(4, "X");
+        processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
 
-        processor.checkAndClearProcessResult("2:XX2+YY2", "3:XX3+YY3");
     }
 
+    @Test
+    public void shouldClearTableEntryOnNullValueUpdates() {
+
+        // push all four items to the table. this should not produce any item.
+
+        pushToTable(4, "Y");
+        processor.checkAndClearProcessResult();
+
+        // push all four items to the primary stream. this should produce four items.
+
+        pushToStream(4, "X");
+        processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1", "2:X2+Y2", "3:X3+Y3");
+
+        // push two items with null to the table as deletes. this should not produce any item.
+
+        pushNullValueToTable(2);
+        processor.checkAndClearProcessResult();
+
+        // push all four items to the primary stream. this should produce two items.
+
+        pushToStream(4, "XX");
+        processor.checkAndClearProcessResult("2:XX2+Y2", "3:XX3+Y3");
+    }
 
 }

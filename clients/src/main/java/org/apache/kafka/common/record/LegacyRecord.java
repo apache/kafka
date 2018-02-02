@@ -19,6 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.Checksums;
 import org.apache.kafka.common.utils.Crc32;
 import org.apache.kafka.common.utils.Utils;
 
@@ -44,10 +45,10 @@ public final class LegacyRecord {
     public static final int MAGIC_OFFSET = CRC_OFFSET + CRC_LENGTH;
     public static final int MAGIC_LENGTH = 1;
     public static final int ATTRIBUTES_OFFSET = MAGIC_OFFSET + MAGIC_LENGTH;
-    public static final int ATTRIBUTE_LENGTH = 1;
-    public static final int TIMESTAMP_OFFSET = ATTRIBUTES_OFFSET + ATTRIBUTE_LENGTH;
+    public static final int ATTRIBUTES_LENGTH = 1;
+    public static final int TIMESTAMP_OFFSET = ATTRIBUTES_OFFSET + ATTRIBUTES_LENGTH;
     public static final int TIMESTAMP_LENGTH = 8;
-    public static final int KEY_SIZE_OFFSET_V0 = ATTRIBUTES_OFFSET + ATTRIBUTE_LENGTH;
+    public static final int KEY_SIZE_OFFSET_V0 = ATTRIBUTES_OFFSET + ATTRIBUTES_LENGTH;
     public static final int KEY_SIZE_OFFSET_V1 = TIMESTAMP_OFFSET + TIMESTAMP_LENGTH;
     public static final int KEY_SIZE_LENGTH = 4;
     public static final int KEY_OFFSET_V0 = KEY_SIZE_OFFSET_V0 + KEY_SIZE_LENGTH;
@@ -57,17 +58,18 @@ public final class LegacyRecord {
     /**
      * The size for the record header
      */
-    public static final int HEADER_SIZE = CRC_LENGTH + MAGIC_LENGTH + ATTRIBUTE_LENGTH;
+    public static final int HEADER_SIZE_V0 = CRC_LENGTH + MAGIC_LENGTH + ATTRIBUTES_LENGTH;
+    public static final int HEADER_SIZE_V1 = CRC_LENGTH + MAGIC_LENGTH + ATTRIBUTES_LENGTH + TIMESTAMP_LENGTH;
 
     /**
      * The amount of overhead bytes in a record
      */
-    public static final int RECORD_OVERHEAD_V0 = HEADER_SIZE + KEY_SIZE_LENGTH + VALUE_SIZE_LENGTH;
+    public static final int RECORD_OVERHEAD_V0 = HEADER_SIZE_V0 + KEY_SIZE_LENGTH + VALUE_SIZE_LENGTH;
 
     /**
      * The amount of overhead bytes in a record
      */
-    public static final int RECORD_OVERHEAD_V1 = HEADER_SIZE + TIMESTAMP_LENGTH + KEY_SIZE_LENGTH + VALUE_SIZE_LENGTH;
+    public static final int RECORD_OVERHEAD_V1 = HEADER_SIZE_V1 + KEY_SIZE_LENGTH + VALUE_SIZE_LENGTH;
 
     /**
      * Specifies the mask for the compression code. 3 bits to hold the compression codec. 0 is reserved to indicate no
@@ -278,7 +280,7 @@ public final class LegacyRecord {
 
     public String toString() {
         if (magic() > 0)
-            return String.format("Record(magic = %d, attributes = %d, compression = %s, crc = %d, %s = %d, key = %d bytes, value = %d bytes)",
+            return String.format("Record(magic=%d, attributes=%d, compression=%s, crc=%d, %s=%d, key=%d bytes, value=%d bytes)",
                                  magic(),
                                  attributes(),
                                  compressionType(),
@@ -288,7 +290,7 @@ public final class LegacyRecord {
                                  key() == null ? 0 : key().limit(),
                                  value() == null ? 0 : value().limit());
         else
-            return String.format("Record(magic = %d, attributes = %d, compression = %s, crc = %d, key = %d bytes, value = %d bytes)",
+            return String.format("Record(magic=%d, attributes=%d, compression=%s, crc=%d, key=%d bytes, value=%d bytes)",
                                  magic(),
                                  attributes(),
                                  compressionType(),
@@ -482,19 +484,11 @@ public final class LegacyRecord {
         }
     }
 
-    public static int recordSize(byte[] key, byte[] value) {
-        return recordSize(RecordBatch.CURRENT_MAGIC_VALUE, key, value);
-    }
-
-    public static int recordSize(byte magic, byte[] key, byte[] value) {
-        return recordSize(magic, key == null ? 0 : key.length, value == null ? 0 : value.length);
-    }
-
-    public static int recordSize(byte magic, ByteBuffer key, ByteBuffer value) {
+    static int recordSize(byte magic, ByteBuffer key, ByteBuffer value) {
         return recordSize(magic, key == null ? 0 : key.limit(), value == null ? 0 : value.limit());
     }
 
-    private static int recordSize(byte magic, int keySize, int valueSize) {
+    public static int recordSize(byte magic, int keySize, int valueSize) {
         return recordOverhead(magic) + keySize + valueSize;
     }
 
@@ -526,36 +520,48 @@ public final class LegacyRecord {
         crc.update(magic);
         crc.update(attributes);
         if (magic > RecordBatch.MAGIC_VALUE_V0)
-            crc.updateLong(timestamp);
+            Checksums.updateLong(crc, timestamp);
         // update for the key
         if (key == null) {
-            crc.updateInt(-1);
+            Checksums.updateInt(crc, -1);
         } else {
             int size = key.remaining();
-            crc.updateInt(size);
-            crc.update(key, size);
+            Checksums.updateInt(crc, size);
+            Checksums.update(crc, key, size);
         }
         // update for the value
         if (value == null) {
-            crc.updateInt(-1);
+            Checksums.updateInt(crc, -1);
         } else {
             int size = value.remaining();
-            crc.updateInt(size);
-            crc.update(value, size);
+            Checksums.updateInt(crc, size);
+            Checksums.update(crc, value, size);
         }
         return crc.getValue();
     }
 
-    public static int recordOverhead(byte magic) {
+    static int recordOverhead(byte magic) {
         if (magic == 0)
             return RECORD_OVERHEAD_V0;
-        return RECORD_OVERHEAD_V1;
+        else if (magic == 1)
+            return RECORD_OVERHEAD_V1;
+        throw new IllegalArgumentException("Invalid magic used in LegacyRecord: " + magic);
+    }
+
+    static int headerSize(byte magic) {
+        if (magic == 0)
+            return HEADER_SIZE_V0;
+        else if (magic == 1)
+            return HEADER_SIZE_V1;
+        throw new IllegalArgumentException("Invalid magic used in LegacyRecord: " + magic);
     }
 
     private static int keyOffset(byte magic) {
         if (magic == 0)
             return KEY_OFFSET_V0;
-        return KEY_OFFSET_V1;
+        else if (magic == 1)
+            return KEY_OFFSET_V1;
+        throw new IllegalArgumentException("Invalid magic used in LegacyRecord: " + magic);
     }
 
     public static TimestampType timestampType(byte magic, TimestampType wrapperRecordTimestampType, byte attributes) {

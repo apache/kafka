@@ -23,7 +23,7 @@ import java.io.Closeable;
 /**
  * Iterator interface of {@link KeyValue} with key typed {@link Long} used for {@link WindowStore#fetch(Object, long, long)}.
  *
- * Users need to call its {@code close} method explicitly upon completeness to release resources,
+ * Users must call its {@code close} method explicitly upon completeness to release resources,
  * or use try-with-resources statement (available since JDK7) for this {@link Closeable} class.
  *
  * @param <V> Type of values

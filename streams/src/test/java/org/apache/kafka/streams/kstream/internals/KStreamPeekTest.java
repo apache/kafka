@@ -16,13 +16,16 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.test.KStreamTestDriver;
-import org.junit.After;
+
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -34,24 +37,19 @@ import static org.junit.Assert.fail;
 public class KStreamPeekTest {
 
     private final String topicName = "topic";
-
-    private KStreamTestDriver driver = null;
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-    }
+    private final Serde<Integer> intSerd = Serdes.Integer();
+    private final Serde<String> stringSerd = Serdes.String();
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Test
     public void shouldObserveStreamElements() {
-        final KStreamBuilder builder = new KStreamBuilder();
-        final KStream<Integer, String> stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(intSerd, stringSerd));
         final List<KeyValue<Integer, String>> peekObserved = new ArrayList<>(), streamObserved = new ArrayList<>();
         stream.peek(collect(peekObserved)).foreach(collect(streamObserved));
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         final List<KeyValue<Integer, String>> expected = new ArrayList<>();
         for (int key = 0; key < 32; key++) {
             final String value = "V" + key;
@@ -65,12 +63,14 @@ public class KStreamPeekTest {
 
     @Test
     public void shouldNotAllowNullAction() {
-        final KStreamBuilder builder = new KStreamBuilder();
-        final KStream<Integer, String> stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(intSerd, stringSerd));
         try {
             stream.peek(null);
             fail("expected null action to throw NPE");
-        } catch (NullPointerException expected) { }
+        } catch (NullPointerException expected) {
+            // do nothing
+        }
     }
 
     private static <K, V> ForeachAction<K, V> collect(final List<KeyValue<K, V>> into) {

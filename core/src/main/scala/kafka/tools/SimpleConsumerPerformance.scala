@@ -20,10 +20,10 @@ package kafka.tools
 import java.net.URI
 import java.text.SimpleDateFormat
 
+import com.typesafe.scalalogging.LazyLogging
 import kafka.api.{FetchRequestBuilder, OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.consumer.SimpleConsumer
 import kafka.utils._
-import org.apache.log4j.Logger
 import kafka.common.TopicAndPartition
 import org.apache.kafka.common.utils.Time
 
@@ -31,11 +31,12 @@ import org.apache.kafka.common.utils.Time
 /**
  * Performance test for the simple consumer
  */
-object SimpleConsumerPerformance {
-
-  private val logger = Logger.getLogger(getClass())
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
+object SimpleConsumerPerformance extends LazyLogging {
 
   def main(args: Array[String]) {
+    logger.warn("WARNING: SimpleConsumerPerformance is deprecated and will be dropped in a future release following 0.11.0.0.")
+
     val config = new ConsumerPerfConfig(args)
     logger.info("Starting SimpleConsumer...")
 
@@ -142,6 +143,8 @@ object SimpleConsumerPerformance {
                            .describedAs("clientId")
                            .ofType(classOf[String])
                            .defaultsTo("SimpleConsumerPerformanceClient")
+    val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
+      "interval as configured by reporting-interval")
 
     val options = parser.parse(args : _*)
 

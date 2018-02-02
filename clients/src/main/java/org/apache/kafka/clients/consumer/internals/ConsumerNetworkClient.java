@@ -16,6 +16,23 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientRequest;
+import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.RequestCompletionHandler;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -27,22 +44,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.apache.kafka.clients.ClientRequest;
-import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.KafkaClient;
-import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.RequestCompletionHandler;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.errors.DisconnectException;
-import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.AbstractRequest;
-import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.utils.Time;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Higher level consumer access to the network layer with basic support for request futures. This class
@@ -50,16 +51,17 @@ import org.slf4j.LoggerFactory;
  * are held when they are invoked.
  */
 public class ConsumerNetworkClient implements Closeable {
-    private static final Logger log = LoggerFactory.getLogger(ConsumerNetworkClient.class);
-    private static final long MAX_POLL_TIMEOUT_MS = 5000L;
+    private static final int MAX_POLL_TIMEOUT_MS = 5000;
 
     // the mutable state of this class is protected by the object's monitor (excluding the wakeup
     // flag and the request completion queue below).
+    private final Logger log;
     private final KafkaClient client;
     private final UnsentRequests unsent = new UnsentRequests();
     private final Metadata metadata;
     private final Time time;
     private final long retryBackoffMs;
+    private final int maxPollTimeoutMs;
     private final long unsentExpiryMs;
     private final AtomicBoolean wakeupDisabled = new AtomicBoolean();
 
@@ -71,15 +73,19 @@ public class ConsumerNetworkClient implements Closeable {
     // atomic to avoid the need to acquire the lock above in order to enable it concurrently.
     private final AtomicBoolean wakeup = new AtomicBoolean(false);
 
-    public ConsumerNetworkClient(KafkaClient client,
+    public ConsumerNetworkClient(LogContext logContext,
+                                 KafkaClient client,
                                  Metadata metadata,
                                  Time time,
                                  long retryBackoffMs,
-                                 long requestTimeoutMs) {
+                                 long requestTimeoutMs,
+                                 int maxPollTimeoutMs) {
+        this.log = logContext.logger(ConsumerNetworkClient.class);
         this.client = client;
         this.metadata = metadata;
         this.time = time;
         this.retryBackoffMs = retryBackoffMs;
+        this.maxPollTimeoutMs = Math.min(maxPollTimeoutMs, MAX_POLL_TIMEOUT_MS);
         this.unsentExpiryMs = requestTimeoutMs;
     }
 
@@ -107,10 +113,12 @@ public class ConsumerNetworkClient implements Closeable {
         return completionHandler.future;
     }
 
-    public Node leastLoadedNode() {
-        synchronized (this) {
-            return client.leastLoadedNode(time.milliseconds());
-        }
+    public synchronized Node leastLoadedNode() {
+        return client.leastLoadedNode(time.milliseconds());
+    }
+
+    public synchronized boolean hasReadyNodes() {
+        return client.hasReadyNodes();
     }
 
     /**
@@ -130,6 +138,9 @@ public class ConsumerNetworkClient implements Closeable {
         int version = this.metadata.requestUpdate();
         do {
             poll(timeout);
+            AuthenticationException ex = this.metadata.getAndClearAuthenticationException();
+            if (ex != null)
+                throw ex;
         } while (this.metadata.version() == version && time.milliseconds() - startMs < timeout);
         return this.metadata.version() > version;
     }
@@ -150,7 +161,7 @@ public class ConsumerNetworkClient implements Closeable {
     public void wakeup() {
         // wakeup should be safe without holding the client lock since it simply delegates to
         // Selector's wakeup, which is threadsafe
-        log.trace("Received user wakeup");
+        log.debug("Received user wakeup");
         this.wakeup.set(true);
         this.client.wakeup();
     }
@@ -163,7 +174,7 @@ public class ConsumerNetworkClient implements Closeable {
      */
     public void poll(RequestFuture<?> future) {
         while (!future.isDone())
-            poll(MAX_POLL_TIMEOUT_MS, time.milliseconds(), future);
+            poll(Long.MAX_VALUE, time.milliseconds(), future);
     }
 
     /**
@@ -227,7 +238,7 @@ public class ConsumerNetworkClient implements Closeable {
                 // if there are no requests in flight, do not block longer than the retry backoff
                 if (client.inFlightRequestCount() == 0)
                     timeout = Math.min(timeout, retryBackoffMs);
-                client.poll(Math.min(MAX_POLL_TIMEOUT_MS, timeout), now);
+                client.poll(Math.min(maxPollTimeoutMs, timeout), now);
                 now = time.milliseconds();
             } else {
                 client.poll(0, now);
@@ -261,8 +272,7 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     /**
-     * Poll for network IO and return immediately. This will not trigger wakeups,
-     * nor will it execute any delayed tasks.
+     * Poll for network IO and return immediately. This will not trigger wakeups.
      */
     public void pollNoWakeup() {
         poll(0, time.milliseconds(), null, true);
@@ -364,12 +374,27 @@ public class ConsumerNetworkClient implements Closeable {
                 Collection<ClientRequest> requests = unsent.remove(node);
                 for (ClientRequest request : requests) {
                     RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
-                    handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().desiredOrLatestVersion()),
-                        request.callback(), request.destination(), request.createdTimeMs(), now, true,
-                        null, null));
+                    AuthenticationException authenticationException = client.authenticationException(node);
+                    if (authenticationException != null)
+                        handler.onFailure(authenticationException);
+                    else
+                        handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
+                            request.callback(), request.destination(), request.createdTimeMs(), now, true,
+                            null, null));
                 }
             }
         }
+    }
+
+    public void disconnect(Node node) {
+        failUnsentRequests(node, DisconnectException.INSTANCE);
+
+        synchronized (this) {
+            client.disconnect(node.idString());
+        }
+
+        // We need to poll to ensure callbacks from in-flight requests on the disconnected socket are fired
+        pollNoWakeup();
     }
 
     private void failExpiredRequests(long now) {
@@ -381,7 +406,7 @@ public class ConsumerNetworkClient implements Closeable {
         }
     }
 
-    public void failUnsentRequests(Node node, RuntimeException e) {
+    private void failUnsentRequests(Node node, RuntimeException e) {
         // clear unsent requests to node and fail their corresponding futures
         synchronized (this) {
             Collection<ClientRequest> unsentRequests = unsent.remove(node);
@@ -415,7 +440,7 @@ public class ConsumerNetworkClient implements Closeable {
 
     public void maybeTriggerWakeup() {
         if (!wakeupDisabled.get() && wakeup.get()) {
-            log.trace("Raising wakeup exception in response to user wakeup");
+            log.debug("Raising WakeupException in response to user wakeup");
             wakeup.set(false);
             throw new WakeupException();
         }
@@ -475,10 +500,9 @@ public class ConsumerNetworkClient implements Closeable {
                 future.raise(e);
             } else if (response.wasDisconnected()) {
                 RequestHeader requestHeader = response.requestHeader();
-                ApiKeys api = ApiKeys.forId(requestHeader.apiKey());
                 int correlation = requestHeader.correlationId();
                 log.debug("Cancelled {} request {} with correlation id {} due to node {} being disconnected",
-                        api, requestHeader, correlation, response.destination());
+                        requestHeader.apiKey(), requestHeader, correlation, response.destination());
                 future.raise(DisconnectException.INSTANCE);
             } else if (response.versionMismatch() != null) {
                 future.raise(response.versionMismatch());

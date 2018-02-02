@@ -23,18 +23,20 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
 
-class RocksDBSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore implements SessionStore<K, AGG> {
+public class RocksDBSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore implements SessionStore<K, AGG> {
 
     private final Serde<K> keySerde;
     private final Serde<AGG> aggSerde;
     protected final SegmentedBytesStore bytesStore;
 
     protected StateSerdes<K, AGG> serdes;
+    protected String topic;
 
     // this is optimizing the case when this store is already a bytes store, in which we can avoid Bytes.wrap() costs
     private static class RocksDBSessionBytesStore extends RocksDBSessionStore<Bytes, byte[]> {
@@ -75,16 +77,28 @@ class RocksDBSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     @Override
     @SuppressWarnings("unchecked")
     public void init(final ProcessorContext context, final StateStore root) {
-        this.serdes = new StateSerdes<>(bytesStore.name(),
-                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                aggSerde == null ? (Serde<AGG>) context.valueSerde() : aggSerde);
+        final String storeName = bytesStore.name();
+        topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
+
+        serdes = new StateSerdes<>(
+            topic,
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            aggSerde == null ? (Serde<AGG>) context.valueSerde() : aggSerde);
 
         bytesStore.init(context, root);
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
-        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(key)), earliestSessionEndTime, latestSessionStartTime);
+        return findSessions(key, key, earliestSessionEndTime, latestSessionStartTime);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom, final K keyTo, final long earliestSessionEndTime, final long latestSessionStartTime) {
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(
+            Bytes.wrap(serdes.rawKey(keyFrom)), Bytes.wrap(serdes.rawKey(keyTo)),
+            earliestSessionEndTime, latestSessionStartTime
+        );
         return new WrappedSessionStoreIterator<>(bytesIterator, serdes);
     }
 
@@ -94,12 +108,17 @@ class RocksDBSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     }
 
     @Override
+    public KeyValueIterator<Windowed<K>, AGG> fetch(K from, K to) {
+        return findSessions(from, to, 0, Long.MAX_VALUE);
+    }
+
+    @Override
     public void remove(final Windowed<K> key) {
-        bytesStore.remove(SessionKeySerde.toBinary(key, serdes.keySerializer()));
+        bytesStore.remove(SessionKeySerde.toBinary(key, serdes.keySerializer(), topic));
     }
 
     @Override
     public void put(final Windowed<K> sessionKey, final AGG aggregate) {
-        bytesStore.put(SessionKeySerde.toBinary(sessionKey, serdes.keySerializer()), aggSerde.serializer().serialize(bytesStore.name(), aggregate));
+        bytesStore.put(SessionKeySerde.toBinary(sessionKey, serdes.keySerializer(), topic), serdes.rawValue(aggregate));
     }
 }

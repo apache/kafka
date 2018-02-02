@@ -40,8 +40,8 @@ import java.nio.ByteBuffer;
  * The schema for the value field is left to the control record type to specify.
  */
 public enum ControlRecordType {
-    COMMIT((short) 0),
-    ABORT((short) 1),
+    ABORT((short) 0),
+    COMMIT((short) 1),
 
     // UNKNOWN is used to indicate a control type which the client is not aware of and should be ignored
     UNKNOWN((short) -1);
@@ -49,6 +49,7 @@ public enum ControlRecordType {
     private static final Logger log = LoggerFactory.getLogger(ControlRecordType.class);
 
     static final short CURRENT_CONTROL_RECORD_KEY_VERSION = 0;
+    static final int CURRENT_CONTROL_RECORD_KEY_SIZE = 4;
     private static final Schema CONTROL_RECORD_KEY_SCHEMA_VERSION_V0 = new Schema(
             new Field("version", Type.INT16),
             new Field("type", Type.INT16));
@@ -69,19 +70,34 @@ public enum ControlRecordType {
         return struct;
     }
 
-    public static ControlRecordType parse(ByteBuffer key) {
+    public static short parseTypeId(ByteBuffer key) {
+        if (key.remaining() < CURRENT_CONTROL_RECORD_KEY_SIZE)
+            throw new InvalidRecordException("Invalid value size found for end control record key. Must have " +
+                    "at least " + CURRENT_CONTROL_RECORD_KEY_SIZE + " bytes, but found only " + key.remaining());
+
         short version = key.getShort(0);
+        if (version < 0)
+            throw new InvalidRecordException("Invalid version found for control record: " + version +
+                    ". May indicate data corruption");
+
         if (version != CURRENT_CONTROL_RECORD_KEY_VERSION)
-            log.debug("Received unknown control record key version {}. Parsing as version {}" +
-                    version, CURRENT_CONTROL_RECORD_KEY_VERSION);
-        short type = key.getShort(2);
-        switch (type) {
+            log.debug("Received unknown control record key version {}. Parsing as version {}", version,
+                    CURRENT_CONTROL_RECORD_KEY_VERSION);
+        return key.getShort(2);
+    }
+
+    public static ControlRecordType fromTypeId(short typeId) {
+        switch (typeId) {
             case 0:
-                return COMMIT;
-            case 1:
                 return ABORT;
+            case 1:
+                return COMMIT;
             default:
                 return UNKNOWN;
         }
+    }
+
+    public static ControlRecordType parse(ByteBuffer key) {
+        return fromTypeId(parseTypeId(key));
     }
 }

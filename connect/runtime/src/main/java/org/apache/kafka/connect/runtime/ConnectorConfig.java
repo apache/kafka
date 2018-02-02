@@ -24,6 +24,8 @@ import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.isolation.PluginDesc;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.transforms.Transformation;
 
 import java.util.ArrayList;
@@ -35,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.NonEmptyStringWithoutControlChars.nonEmptyStringWithoutControlChars;
 
 /**
  * <p>
@@ -70,6 +73,11 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String VALUE_CONVERTER_CLASS_DOC = WorkerConfig.VALUE_CONVERTER_CLASS_DOC;
     public static final String VALUE_CONVERTER_CLASS_DISPLAY = "Value converter class";
 
+    public static final String HEADER_CONVERTER_CLASS_CONFIG = WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG;
+    public static final String HEADER_CONVERTER_CLASS_DOC = WorkerConfig.HEADER_CONVERTER_CLASS_DOC;
+    public static final String HEADER_CONVERTER_CLASS_DISPLAY = "Header converter class";
+    public static final String HEADER_CONVERTER_CLASS_DEFAULT = WorkerConfig.HEADER_CONVERTER_CLASS_DEFAULT;
+
     public static final String TASKS_MAX_CONFIG = "tasks.max";
     private static final String TASKS_MAX_DOC = "Maximum number of tasks to use for this connector.";
     public static final int TASKS_MAX_DEFAULT = 1;
@@ -81,35 +89,56 @@ public class ConnectorConfig extends AbstractConfig {
     private static final String TRANSFORMS_DOC = "Aliases for the transformations to be applied to records.";
     private static final String TRANSFORMS_DISPLAY = "Transforms";
 
+    private final EnrichedConnectorConfig enrichedConfig;
+    private static class EnrichedConnectorConfig extends AbstractConfig {
+        EnrichedConnectorConfig(ConfigDef configDef, Map<String, String> props) {
+            super(configDef, props);
+        }
+
+        public Object get(String key) {
+            return super.get(key);
+        }
+    }
+
     public static ConfigDef configDef() {
+        int orderInGroup = 0;
         return new ConfigDef()
-                .define(NAME_CONFIG, Type.STRING, Importance.HIGH, NAME_DOC, COMMON_GROUP, 1, Width.MEDIUM, NAME_DISPLAY)
-                .define(CONNECTOR_CLASS_CONFIG, Type.STRING, Importance.HIGH, CONNECTOR_CLASS_DOC, COMMON_GROUP, 2, Width.LONG, CONNECTOR_CLASS_DISPLAY)
-                .define(TASKS_MAX_CONFIG, Type.INT, TASKS_MAX_DEFAULT, atLeast(TASKS_MIN_CONFIG), Importance.HIGH, TASKS_MAX_DOC, COMMON_GROUP, 3, Width.SHORT, TASK_MAX_DISPLAY)
-                .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, KEY_CONVERTER_CLASS_DOC, COMMON_GROUP, 4, Width.SHORT, KEY_CONVERTER_CLASS_DISPLAY)
-                .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, VALUE_CONVERTER_CLASS_DOC, COMMON_GROUP, 5, Width.SHORT, VALUE_CONVERTER_CLASS_DISPLAY)
-                .define(TRANSFORMS_CONFIG, Type.LIST, null, new ConfigDef.Validator() {
+                .define(NAME_CONFIG, Type.STRING, ConfigDef.NO_DEFAULT_VALUE, nonEmptyStringWithoutControlChars(), Importance.HIGH, NAME_DOC, COMMON_GROUP, ++orderInGroup, Width.MEDIUM, NAME_DISPLAY)
+                .define(CONNECTOR_CLASS_CONFIG, Type.STRING, Importance.HIGH, CONNECTOR_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.LONG, CONNECTOR_CLASS_DISPLAY)
+                .define(TASKS_MAX_CONFIG, Type.INT, TASKS_MAX_DEFAULT, atLeast(TASKS_MIN_CONFIG), Importance.HIGH, TASKS_MAX_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, TASK_MAX_DISPLAY)
+                .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, KEY_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, KEY_CONVERTER_CLASS_DISPLAY)
+                .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, VALUE_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, VALUE_CONVERTER_CLASS_DISPLAY)
+                .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS, HEADER_CONVERTER_CLASS_DEFAULT, Importance.LOW, HEADER_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, HEADER_CONVERTER_CLASS_DISPLAY)
+                .define(TRANSFORMS_CONFIG, Type.LIST, Collections.emptyList(), ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), new ConfigDef.Validator() {
                     @Override
                     public void ensureValid(String name, Object value) {
-                        if (value == null) return;
                         final List<String> transformAliases = (List<String>) value;
                         if (transformAliases.size() > new HashSet<>(transformAliases).size()) {
                             throw new ConfigException(name, value, "Duplicate alias provided.");
                         }
                     }
-                }, Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, 6, Width.LONG, TRANSFORMS_DISPLAY);
+                }), Importance.LOW, TRANSFORMS_DOC, TRANSFORMS_GROUP, ++orderInGroup, Width.LONG, TRANSFORMS_DISPLAY);
     }
 
-    public ConnectorConfig() {
-        this(new HashMap<String, String>());
+    public ConnectorConfig(Plugins plugins) {
+        this(plugins, new HashMap<String, String>());
     }
 
-    public ConnectorConfig(Map<String, String> props) {
-        this(configDef(), props);
+    public ConnectorConfig(Plugins plugins, Map<String, String> props) {
+        this(plugins, configDef(), props);
     }
 
-    public ConnectorConfig(ConfigDef configDef, Map<String, String> props) {
-        super(enrich(configDef, props, true), props);
+    public ConnectorConfig(Plugins plugins, ConfigDef configDef, Map<String, String> props) {
+        super(configDef, props);
+        enrichedConfig = new EnrichedConnectorConfig(
+                enrich(plugins, configDef, props, true),
+                props
+        );
+    }
+
+    @Override
+    public Object get(String key) {
+        return enrichedConfig.get(key);
     }
 
     /**
@@ -117,9 +146,6 @@ public class ConnectorConfig extends AbstractConfig {
      */
     public <R extends ConnectRecord<R>> List<Transformation<R>> transformations() {
         final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
-        if (transformAliases == null || transformAliases.isEmpty()) {
-            return Collections.emptyList();
-        }
 
         final List<Transformation<R>> transformations = new ArrayList<>(transformAliases.size());
         for (String alias : transformAliases) {
@@ -142,15 +168,20 @@ public class ConnectorConfig extends AbstractConfig {
      * <p>
      * {@code requireFullConfig} specifies whether required config values that are missing should cause an exception to be thrown.
      */
-    public static ConfigDef enrich(ConfigDef baseConfigDef, Map<String, String> props, boolean requireFullConfig) {
-        final List<String> transformAliases = (List<String>) ConfigDef.parseType(TRANSFORMS_CONFIG, props.get(TRANSFORMS_CONFIG), Type.LIST);
-        if (transformAliases == null || transformAliases.isEmpty()) {
+    public static ConfigDef enrich(Plugins plugins, ConfigDef baseConfigDef, Map<String, String> props, boolean requireFullConfig) {
+        Object transformAliases = ConfigDef.parseType(TRANSFORMS_CONFIG, props.get(TRANSFORMS_CONFIG), Type.LIST);
+        if (!(transformAliases instanceof List)) {
             return baseConfigDef;
         }
 
-        final ConfigDef newDef = new ConfigDef(baseConfigDef);
-
-        for (String alias : new LinkedHashSet<>(transformAliases)) {
+        ConfigDef newDef = new ConfigDef(baseConfigDef);
+        LinkedHashSet<?> uniqueTransformAliases = new LinkedHashSet<>((List<?>) transformAliases);
+        for (Object o : uniqueTransformAliases) {
+            if (!(o instanceof String)) {
+                throw new ConfigException("Item in " + TRANSFORMS_CONFIG + " property is not of "
+                        + "type String");
+            }
+            String alias = (String) o;
             final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
             final String group = TRANSFORMS_GROUP + ": " + alias;
             int orderInGroup = 0;
@@ -164,7 +195,7 @@ public class ConnectorConfig extends AbstractConfig {
             };
             newDef.define(transformationTypeConfig, Type.CLASS, ConfigDef.NO_DEFAULT_VALUE, typeValidator, Importance.HIGH,
                     "Class for the '" + alias + "' transformation.", group, orderInGroup++, Width.LONG, "Transformation type for " + alias,
-                    Collections.<String>emptyList(), new TransformationClassRecommender());
+                    Collections.<String>emptyList(), new TransformationClassRecommender(plugins));
 
             final ConfigDef transformationConfigDef;
             try {
@@ -204,9 +235,19 @@ public class ConnectorConfig extends AbstractConfig {
      * Recommend bundled transformations.
      */
     static final class TransformationClassRecommender implements ConfigDef.Recommender {
+        private final Plugins plugins;
+
+        TransformationClassRecommender(Plugins plugins) {
+            this.plugins = plugins;
+        }
+
         @Override
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-            return (List) PluginDiscovery.transformationPlugins();
+            List<Object> transformationPlugins = new ArrayList<>();
+            for (PluginDesc<Transformation> plugin : plugins.transformations()) {
+                transformationPlugins.add(plugin.pluginClass());
+            }
+            return Collections.unmodifiableList(transformationPlugins);
         }
 
         @Override

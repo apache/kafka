@@ -26,6 +26,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -73,25 +74,26 @@ import java.util.Set;
  */
 public class ConfigDef {
     /**
-     * A unique Java object which represents the lack of a default value.<p>
-     * The 'new' here is intentional.
+     * A unique Java object which represents the lack of a default value.
      */
-    public static final Object NO_DEFAULT_VALUE = new String("");
+    public static final Object NO_DEFAULT_VALUE = new Object();
 
     private final Map<String, ConfigKey> configKeys;
     private final List<String> groups;
     private Set<String> configsWithNoParent;
 
     public ConfigDef() {
-        configKeys = new HashMap<>();
+        configKeys = new LinkedHashMap<>();
         groups = new LinkedList<>();
         configsWithNoParent = null;
     }
 
     public ConfigDef(ConfigDef base) {
-        configKeys = new HashMap<>(base.configKeys);
+        configKeys = new LinkedHashMap<>(base.configKeys);
         groups = new LinkedList<>(base.groups);
-        configsWithNoParent = base.configsWithNoParent == null ? null : new HashSet<>(base.configsWithNoParent);
+        // It is not safe to copy this from the parent because we may subsequently add to the set of configs and
+        // invalidate this
+        configsWithNoParent = null;
     }
 
     /**
@@ -101,6 +103,15 @@ public class ConfigDef {
      */
     public Set<String> names() {
         return Collections.unmodifiableSet(configKeys.keySet());
+    }
+
+    public Map<String, Object> defaultValues() {
+        Map<String, Object> defaultValues = new HashMap<>();
+        for (ConfigKey key : configKeys.values()) {
+            if (key.defaultValue != NO_DEFAULT_VALUE)
+                defaultValues.put(key.name, key.defaultValue);
+        }
+        return defaultValues;
     }
 
     public ConfigDef define(ConfigKey key) {
@@ -457,7 +468,7 @@ public class ConfigDef {
         if (isSet) {
             parsedValue = parseType(key.name, value, key.type);
         // props map doesn't contain setting, the key is required because no default value specified - its an error
-        } else if (key.defaultValue == NO_DEFAULT_VALUE) {
+        } else if (NO_DEFAULT_VALUE.equals(key.defaultValue)) {
             throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
         } else {
             // otherwise assign setting its default value
@@ -528,7 +539,8 @@ public class ConfigDef {
         return new ArrayList<>(undefinedConfigKeys);
     }
 
-    private Set<String> getConfigsWithNoParent() {
+    // package accessible for testing
+    Set<String> getConfigsWithNoParent() {
         if (this.configsWithNoParent != null) {
             return this.configsWithNoParent;
         }
@@ -559,7 +571,7 @@ public class ConfigDef {
             } catch (ConfigException e) {
                 config.addErrorMessage(e.getMessage());
             }
-        } else if (key.defaultValue == NO_DEFAULT_VALUE) {
+        } else if (NO_DEFAULT_VALUE.equals(key.defaultValue)) {
             config.addErrorMessage("Missing required configuration \"" + key.name + "\" which has no default value.");
         } else {
             value = key.defaultValue;
@@ -736,10 +748,34 @@ public class ConfigDef {
                 return Utils.join(valueList, ",");
             case CLASS:
                 Class<?> clazz = (Class<?>) parsedValue;
-                return clazz.getCanonicalName();
+                return clazz.getName();
             default:
                 throw new IllegalStateException("Unknown type.");
         }
+    }
+
+    /**
+     * Converts a map of config (key, value) pairs to a map of strings where each value
+     * is converted to a string. This method should be used with care since it stores
+     * actual password values to String. Values from this map should never be used in log entries.
+     */
+    public static  Map<String, String> convertToStringMapWithPasswordValues(Map<String, ?> configs) {
+        Map<String, String> result = new HashMap<>();
+        for (Map.Entry<String, ?> entry : configs.entrySet()) {
+            Object value = entry.getValue();
+            String strValue;
+            if (value instanceof Password)
+                strValue = ((Password) value).value();
+            else if (value instanceof List)
+                strValue = convertToString(value, Type.LIST);
+            else if (value instanceof Class)
+                strValue = convertToString(value, Type.CLASS);
+            else
+                strValue = convertToString(value, null);
+            if (strValue != null)
+                result.put(entry.getKey(), strValue);
+        }
+        return result;
     }
 
     /**
@@ -864,6 +900,7 @@ public class ConfigDef {
 
         @Override
         public void ensureValid(final String name, final Object value) {
+            @SuppressWarnings("unchecked")
             List<String> values = (List<String>) value;
             for (String string : values) {
                 validString.ensureValid(name, string);
@@ -900,6 +937,85 @@ public class ConfigDef {
         }
     }
 
+    public static class NonNullValidator implements Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                // Pass in the string null to avoid the findbugs warning
+                throw new ConfigException(name, "null", "entry must be non null");
+            }
+        }
+    }
+
+    public static class CompositeValidator implements Validator {
+        private final List<Validator> validators;
+
+        private CompositeValidator(List<Validator> validators) {
+            this.validators = Collections.unmodifiableList(validators);
+        }
+
+        public static CompositeValidator of(Validator... validators) {
+            return new CompositeValidator(Arrays.asList(validators));
+        }
+
+        @Override
+        public void ensureValid(String name, Object value) {
+            for (Validator validator: validators) {
+                validator.ensureValid(name, value);
+            }
+        }
+    }
+
+    public static class NonEmptyString implements Validator {
+
+        @Override
+        public void ensureValid(String name, Object o) {
+            String s = (String) o;
+            if (s != null && s.isEmpty()) {
+                throw new ConfigException(name, o, "String must be non-empty");
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "non-empty string";
+        }
+    }
+
+    public static class NonEmptyStringWithoutControlChars implements Validator {
+
+        public static NonEmptyStringWithoutControlChars nonEmptyStringWithoutControlChars() {
+            return new NonEmptyStringWithoutControlChars();
+        }
+
+        @Override
+        public void ensureValid(String name, Object value) {
+            String s = (String) value;
+
+            if (s == null) {
+                // This can happen during creation of the config object due to no default value being defined for the
+                // name configuration - a missing name parameter is caught when checking for mandatory parameters,
+                // thus we can ok a null value here
+                return;
+            } else if (s.isEmpty()) {
+                throw new ConfigException(name, value, "String may not be empty");
+            }
+
+            // Check name string for illegal characters
+            ArrayList<Integer> foundIllegalCharacters = new ArrayList<>();
+
+            for (int i = 0; i < s.length(); i++) {
+                if (Character.isISOControl(s.codePointAt(i))) {
+                    foundIllegalCharacters.add(s.codePointAt(i));
+                }
+            }
+
+            if (!foundIllegalCharacters.isEmpty()) {
+                throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " + Utils.join(foundIllegalCharacters, ", "));
+            }
+        }
+    }
+
     public static class ConfigKey {
         public final String name;
         public final Type type;
@@ -922,7 +1038,7 @@ public class ConfigDef {
                          boolean internalConfig) {
             this.name = name;
             this.type = type;
-            this.defaultValue = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
+            this.defaultValue = NO_DEFAULT_VALUE.equals(defaultValue) ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
             this.validator = validator;
             this.importance = importance;
             if (this.validator != null && hasDefault())
@@ -938,7 +1054,7 @@ public class ConfigDef {
         }
 
         public boolean hasDefault() {
-            return this.defaultValue != NO_DEFAULT_VALUE;
+            return !NO_DEFAULT_VALUE.equals(this.defaultValue);
         }
     }
 

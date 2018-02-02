@@ -28,19 +28,22 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.MockTime;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.util.ThreadedTest;
 import org.easymock.Capture;
 import org.easymock.CaptureType;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
 import org.easymock.IExpectationSetters;
+import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -98,11 +101,15 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private TargetState initialState = TargetState.STARTED;
     private Time time;
+    private ConnectMetrics metrics;
     @Mock private SinkTask sinkTask;
     private Capture<WorkerSinkTaskContext> sinkTaskContext = EasyMock.newCapture();
     private WorkerConfig workerConfig;
+    @Mock
+    private PluginClassLoader pluginLoader;
     @Mock private Converter keyConverter;
     @Mock private Converter valueConverter;
+    @Mock private HeaderConverter headerConverter;
     @Mock private TransformationChain transformationChain;
     private WorkerSinkTask workerTask;
     @Mock private KafkaConsumer<byte[], byte[]> consumer;
@@ -112,11 +119,11 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     private long recordsReturned;
 
 
-    @SuppressWarnings("unchecked")
     @Override
     public void setup() {
         super.setup();
         time = new MockTime();
+        metrics = new MockConnectMetrics();
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
@@ -125,12 +132,19 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         workerProps.put("internal.key.converter.schemas.enable", "false");
         workerProps.put("internal.value.converter.schemas.enable", "false");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
+        pluginLoader = PowerMock.createMock(PluginClassLoader.class);
         workerConfig = new StandaloneConfig(workerProps);
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter, valueConverter, TransformationChain.<SinkRecord>noOp(), time);
+                taskId, sinkTask, statusListener, initialState, workerConfig, metrics, keyConverter,
+                valueConverter, headerConverter, TransformationChain.noOp(), pluginLoader, time);
 
         recordsReturned = 0;
+    }
+
+    @After
+    public void tearDown() {
+        if (metrics != null) metrics.stop();
     }
 
     @Test
@@ -355,6 +369,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         // converted
         expectInitializeTask();
 
+        expectPollInitialAssignment();
         expectOnePoll().andAnswer(new IAnswer<Object>() {
             @Override
             public Object answer() throws Throwable {
@@ -408,6 +423,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
+        workerTask.iteration();
         workerTask.iteration();
         workerTask.iteration();
         workerTask.iteration();

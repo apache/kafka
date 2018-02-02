@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
@@ -37,7 +38,37 @@ public interface SegmentedBytesStore extends StateStore {
      * @param to        latest time to match
      * @return  an iterator over key-value pairs
      */
-    KeyValueIterator<Bytes, byte[]> fetch(Bytes key, long from, long to);
+    KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to);
+
+    /**
+     * Fetch all records from the segmented store in the provided key range and time range
+     * from all existing segments
+     * @param keyFrom   The first key that could be in the range
+     * @param keyTo     The last key that could be in the range
+     * @param from      earliest time to match
+     * @param to        latest time to match
+     * @return  an iterator over key-value pairs
+     */
+    KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to);
+    
+    /**
+     * Gets all the key-value pairs in the existing windows.
+     *
+     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
+     * @throws InvalidStateStoreException if the store is not initialized
+     */
+    KeyValueIterator<Bytes, byte[]> all();
+    
+    /**
+     * Gets all the key-value pairs that belong to the windows within in the given time range.
+     *
+     * @param timeFrom the beginning of the time slot from which to search
+     * @param timeTo   the end of the time slot from which to search
+     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
+     * @throws InvalidStateStoreException if the store is not initialized
+     * @throws NullPointerException if null is used for any key
+     */
+    KeyValueIterator<Bytes, byte[]> fetchAll(final long from, final long to);
 
     /**
      * Remove the record with the provided key. The key
@@ -66,8 +97,16 @@ public interface SegmentedBytesStore extends StateStore {
     byte[] get(Bytes key);
 
     interface KeySchema {
+
         /**
-         * Given a record-key and a time, construct a Segmented key that represents
+         * Initialized the schema with a topic.
+         *
+         * @param topic a topic name
+         */
+        void init(final String topic);
+
+        /**
+         * Given a range of record keys and a time, construct a Segmented key that represents
          * the upper range of keys to search when performing range queries.
          * @see SessionKeySchema#upperRange
          * @see WindowKeySchema#upperRange
@@ -78,7 +117,7 @@ public interface SegmentedBytesStore extends StateStore {
         Bytes upperRange(final Bytes key, final long to);
 
         /**
-         * Given a record-key and a time, construct a Segmented key that represents
+         * Given a range of record keys and a time, construct a Segmented key that represents
          * the lower range of keys to search when performing range queries.
          * @see SessionKeySchema#lowerRange
          * @see WindowKeySchema#lowerRange
@@ -87,6 +126,28 @@ public interface SegmentedBytesStore extends StateStore {
          * @return      The key that represents the lower range to search for in the store
          */
         Bytes lowerRange(final Bytes key, final long from);
+
+        /**
+         * Given a range of fixed size record keys and a time, construct a Segmented key that represents
+         * the upper range of keys to search when performing range queries.
+         * @see SessionKeySchema#upperRange
+         * @see WindowKeySchema#upperRange
+         * @param key the last key in the range
+         * @param to the last timestamp in the range
+         * @return The key that represents the upper range to search for in the store
+         */
+        Bytes upperRangeFixedSize(final Bytes key, final long to);
+
+        /**
+         * Given a range of fixed size record keys and a time, construct a Segmented key that represents
+         * the lower range of keys to search when performing range queries.
+         * @see SessionKeySchema#lowerRange
+         * @see WindowKeySchema#lowerRange
+         * @param key the first key in the range
+         * @param from the first timestamp in the range
+         * @return      The key that represents the lower range to search for in the store
+         */
+        Bytes lowerRangeFixedSize(final Bytes key, final long from);
 
         /**
          * Extract the timestamp of the segment from the key. The key is a composite of
@@ -100,13 +161,14 @@ public interface SegmentedBytesStore extends StateStore {
 
         /**
          * Create an implementation of {@link HasNextCondition} that knows when
-         * to stop iterating over the Segments. Used during {@link SegmentedBytesStore#fetch(Bytes, long, long)} operations
-         * @param binaryKey     the record-key
+         * to stop iterating over the Segments. Used during {@link SegmentedBytesStore#fetch(Bytes, Bytes, long, long)} operations
+         * @param binaryKeyFrom the first key in the range
+         * @param binaryKeyTo   the last key in the range
          * @param from          starting time range
          * @param to            ending time range
          * @return
          */
-        HasNextCondition hasNextCondition(final Bytes binaryKey, long from, long to);
+        HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to);
 
         /**
          * Used during {@link SegmentedBytesStore#fetch(Bytes, long, long)} operations to determine

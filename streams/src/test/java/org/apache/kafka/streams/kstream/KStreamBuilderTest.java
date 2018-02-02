@@ -19,49 +19,48 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.kstream.internals.KStreamImpl;
+import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.test.KStreamTestDriver;
-import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.MockValueJoiner;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("deprecation")
 public class KStreamBuilderTest {
 
     private static final String APP_ID = "app-id";
 
     private final KStreamBuilder builder = new KStreamBuilder();
-
-    private KStreamTestDriver driver = null;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
     public void setUp() {
         builder.setApplicationId(APP_ID);
-    }
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
     }
 
     @Test(expected = TopologyBuilderException.class)
@@ -77,26 +76,78 @@ public class KStreamBuilderTest {
         assertEquals("Y-0000000001", builder.newName("Y-"));
         assertEquals("Z-0000000002", builder.newName("Z-"));
 
-        KStreamBuilder newBuilder = new KStreamBuilder();
+        final KStreamBuilder newBuilder = new KStreamBuilder();
 
         assertEquals("X-0000000000", newBuilder.newName("X-"));
         assertEquals("Y-0000000001", newBuilder.newName("Y-"));
         assertEquals("Z-0000000002", newBuilder.newName("Z-"));
     }
 
+
+    @Test
+    public void shouldProcessFromSinkTopic() {
+        final KStream<String, String> source = builder.stream("topic-source");
+        source.to("topic-sink");
+
+        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+
+        source.process(processorSupplier);
+
+        driver.setUp(builder);
+        driver.setTime(0L);
+
+        driver.process("topic-source", "A", "aa");
+
+        // no exception was thrown
+        assertEquals(Utils.mkList("A:aa"), processorSupplier.processed);
+    }
+
+    @Test
+    public void shouldProcessViaThroughTopic() {
+        final KStream<String, String> source = builder.stream("topic-source");
+        final KStream<String, String> through = source.through("topic-sink");
+
+        final MockProcessorSupplier<String, String> sourceProcessorSupplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String> throughProcessorSupplier = new MockProcessorSupplier<>();
+
+        source.process(sourceProcessorSupplier);
+        through.process(throughProcessorSupplier);
+
+        driver.setUp(builder);
+        driver.setTime(0L);
+
+        driver.process("topic-source", "A", "aa");
+
+        assertEquals(Utils.mkList("A:aa"), sourceProcessorSupplier.processed);
+        assertEquals(Utils.mkList("A:aa"), throughProcessorSupplier.processed);
+    }
+
+    @Test
+    public void testNewStoreName() {
+        assertEquals("X-STATE-STORE-0000000000", builder.newStoreName("X-"));
+        assertEquals("Y-STATE-STORE-0000000001", builder.newStoreName("Y-"));
+        assertEquals("Z-STATE-STORE-0000000002", builder.newStoreName("Z-"));
+
+        KStreamBuilder newBuilder = new KStreamBuilder();
+
+        assertEquals("X-STATE-STORE-0000000000", newBuilder.newStoreName("X-"));
+        assertEquals("Y-STATE-STORE-0000000001", newBuilder.newStoreName("Y-"));
+        assertEquals("Z-STATE-STORE-0000000002", newBuilder.newStoreName("Z-"));
+    }
+
     @Test
     public void testMerge() {
-        String topic1 = "topic-1";
-        String topic2 = "topic-2";
+        final String topic1 = "topic-1";
+        final String topic2 = "topic-2";
 
-        KStream<String, String> source1 = builder.stream(topic1);
-        KStream<String, String> source2 = builder.stream(topic2);
-        KStream<String, String> merged = builder.merge(source1, source2);
+        final KStream<String, String> source1 = builder.stream(topic1);
+        final KStream<String, String> source2 = builder.stream(topic2);
+        final KStream<String, String> merged = builder.merge(source1, source2);
 
-        MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         driver.setTime(0L);
 
         driver.process(topic1, "A", "aa");
@@ -108,7 +159,7 @@ public class KStreamBuilderTest {
     }
 
     @Test
-    public void shouldHaveCorrectSourceTopicsForTableFromMergedStream() throws Exception {
+    public void shouldHaveCorrectSourceTopicsForTableFromMergedStream() {
         final String topic1 = "topic-1";
         final String topic2 = "topic-2";
         final String topic3 = "topic-3";
@@ -134,37 +185,43 @@ public class KStreamBuilderTest {
             }
         });
 
-        final KStream<String, String> merged = builder.merge(processedSource1, processedSource2, source3);
+        final KStream<String, String> merged = processedSource1.merge(processedSource2).merge(source3);
         merged.groupByKey().count("my-table");
         final Map<String, List<String>> actual = builder.stateStoreNameToSourceTopics();
         assertEquals(Utils.mkList("topic-1", "topic-2", "topic-3"), actual.get("my-table"));
     }
 
     @Test(expected = TopologyBuilderException.class)
-    public void shouldThrowExceptionWhenNoTopicPresent() throws Exception {
+    public void shouldThrowExceptionWhenNoTopicPresent() {
         builder.stream();
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldThrowExceptionWhenTopicNamesAreNull() throws Exception {
+    public void shouldThrowExceptionWhenTopicNamesAreNull() {
         builder.stream(Serdes.String(), Serdes.String(), null, null);
     }
 
     @Test
-    public void shouldNotMaterializeSourceKTableIfStateNameNotSpecified() throws Exception {
-        builder.table("topic1", "table1");
-        builder.table("topic2", null);
+    public void shouldStillMaterializeSourceKTableIfStateNameNotSpecified() {
+        KTable table1 = builder.table("topic1", "table1");
+        KTable table2 = builder.table("topic2", (String) null);
 
         final ProcessorTopology topology = builder.build(null);
 
-        assertEquals(1, topology.stateStores().size());
+        assertEquals(2, topology.stateStores().size());
         assertEquals("table1", topology.stateStores().get(0).name());
-        assertEquals(1, topology.storeToChangelogTopic().size());
+
+        final String internalStoreName = topology.stateStores().get(1).name();
+        assertTrue(internalStoreName.contains(KTableImpl.STATE_STORE_NAME));
+        assertEquals(2, topology.storeToChangelogTopic().size());
         assertEquals("topic1", topology.storeToChangelogTopic().get("table1"));
+        assertEquals("topic2", topology.storeToChangelogTopic().get(internalStoreName));
+        assertEquals(table1.queryableStoreName(), "table1");
+        assertNull(table2.queryableStoreName());
     }
 
     @Test
-    public void shouldBuildSimpleGlobalTableTopology() throws Exception {
+    public void shouldBuildSimpleGlobalTableTopology() {
         builder.globalTable("table", "globalTable");
 
         final ProcessorTopology topology = builder.buildGlobalStateTopology();
@@ -174,11 +231,7 @@ public class KStreamBuilderTest {
         assertEquals("globalTable", stateStores.get(0).name());
     }
 
-    @Test
-    public void shouldBuildGlobalTopologyWithAllGlobalTables() throws Exception {
-        builder.globalTable("table", "globalTable");
-        builder.globalTable("table2", "globalTable2");
-
+    private void doBuildGlobalTopologyWithAllGlobalTables() {
         final ProcessorTopology topology = builder.buildGlobalStateTopology();
 
         final List<StateStore> stateStores = topology.globalStateStores();
@@ -189,7 +242,23 @@ public class KStreamBuilderTest {
     }
 
     @Test
-    public void shouldAddGlobalTablesToEachGroup() throws Exception {
+    public void shouldBuildGlobalTopologyWithAllGlobalTables() {
+        builder.globalTable("table", "globalTable");
+        builder.globalTable("table2", "globalTable2");
+
+        doBuildGlobalTopologyWithAllGlobalTables();
+    }
+
+    @Test
+    public void shouldBuildGlobalTopologyWithAllGlobalTablesWithInternalStoreName() {
+        builder.globalTable("table");
+        builder.globalTable("table2");
+
+        doBuildGlobalTopologyWithAllGlobalTables();
+    }
+
+    @Test
+    public void shouldAddGlobalTablesToEachGroup() {
         final String one = "globalTable";
         final String two = "globalTable2";
         final GlobalKTable<String, String> globalTable = builder.globalTable("table", one);
@@ -225,13 +294,13 @@ public class KStreamBuilderTest {
     }
 
     @Test
-    public void shouldMapStateStoresToCorrectSourceTopics() throws Exception {
+    public void shouldMapStateStoresToCorrectSourceTopics() {
         final KStream<String, String> playEvents = builder.stream("events");
 
         final KTable<String, String> table = builder.table("table-topic", "table-store");
         assertEquals(Collections.singletonList("table-topic"), builder.stateStoreNameToSourceTopics().get("table-store"));
 
-        final KStream<String, String> mapped = playEvents.map(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper());
+        final KStream<String, String> mapped = playEvents.map(MockMapper.<String, String>selectValueKeyValueMapper());
         mapped.leftJoin(table, MockValueJoiner.TOSTRING_JOINER).groupByKey().count("count");
         assertEquals(Collections.singletonList("table-topic"), builder.stateStoreNameToSourceTopics().get("table-store"));
         assertEquals(Collections.singletonList(APP_ID + "-KSTREAM-MAP-0000000003-repartition"), builder.stateStoreNameToSourceTopics().get("count"));
@@ -240,9 +309,9 @@ public class KStreamBuilderTest {
     @Test
     public void shouldAddTopicToEarliestAutoOffsetResetList() {
         final String topicName = "topic-1";
-        
+
         builder.stream(TopologyBuilder.AutoOffsetReset.EARLIEST, topicName);
-        
+
         assertTrue(builder.earliestResetTopicsPattern().matcher(topicName).matches());
         assertFalse(builder.latestResetTopicsPattern().matcher(topicName).matches());
     }
@@ -297,7 +366,7 @@ public class KStreamBuilderTest {
         final String topic = "topic-5";
 
         builder.stream(topicPattern);
-        
+
         assertFalse(builder.latestResetTopicsPattern().matcher(topic).matches());
         assertFalse(builder.earliestResetTopicsPattern().matcher(topic).matches());
 
@@ -323,5 +392,49 @@ public class KStreamBuilderTest {
 
         assertTrue(builder.latestResetTopicsPattern().matcher(topicTwo).matches());
         assertFalse(builder.earliestResetTopicsPattern().matcher(topicTwo).matches());
+    }
+
+    @Test
+    public void kStreamTimestampExtractorShouldBeNull() {
+        builder.stream("topic");
+        final ProcessorTopology processorTopology = builder.build(null);
+        assertNull(processorTopology.source("topic").getTimestampExtractor());
+    }
+
+    @Test
+    public void shouldAddTimestampExtractorToStreamWithKeyValSerdePerSource() {
+        builder.stream(new MockTimestampExtractor(), null, null, "topic");
+        final ProcessorTopology processorTopology = builder.build(null);
+        for (final SourceNode sourceNode: processorTopology.sources()) {
+            assertThat(sourceNode.getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
+        }
+    }
+
+    @Test
+    public void shouldAddTimestampExtractorToStreamWithOffsetResetPerSource() {
+        builder.stream(null, new MockTimestampExtractor(), null, null, "topic");
+        final ProcessorTopology processorTopology = builder.build(null);
+        assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
+    }
+
+    @Test
+    public void shouldAddTimestampExtractorToTablePerSource() {
+        builder.table("topic", "store");
+        final ProcessorTopology processorTopology = builder.build(null);
+        assertNull(processorTopology.source("topic").getTimestampExtractor());
+    }
+
+    @Test
+    public void kTableTimestampExtractorShouldBeNull() {
+        builder.table("topic", "store");
+        final ProcessorTopology processorTopology = builder.build(null);
+        assertNull(processorTopology.source("topic").getTimestampExtractor());
+    }
+
+    @Test
+    public void shouldAddTimestampExtractorToTableWithKeyValSerdePerSource() {
+        builder.table(null, new MockTimestampExtractor(), null, null, "topic", "store");
+        final ProcessorTopology processorTopology = builder.build(null);
+        assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 }

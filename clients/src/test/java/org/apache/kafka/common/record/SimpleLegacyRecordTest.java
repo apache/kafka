@@ -40,7 +40,7 @@ public class SimpleLegacyRecordTest {
         buffer.flip();
 
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        for (Record record : records.records())
+        if (records.records().iterator().hasNext())
             fail("Iteration should have caused invalid record error");
     }
 
@@ -48,7 +48,7 @@ public class SimpleLegacyRecordTest {
     public void testCompressedIterationWithEmptyRecords() throws Exception {
         ByteBuffer emptyCompressedValue = ByteBuffer.allocate(64);
         OutputStream gzipOutput = CompressionType.GZIP.wrapForOutput(new ByteBufferOutputStream(emptyCompressedValue),
-                RecordBatch.MAGIC_VALUE_V1, 64);
+                RecordBatch.MAGIC_VALUE_V1);
         gzipOutput.close();
         emptyCompressedValue.flip();
 
@@ -61,7 +61,7 @@ public class SimpleLegacyRecordTest {
         buffer.flip();
 
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        for (Record record : records.records())
+        if (records.records().iterator().hasNext())
             fail("Iteration should have caused invalid record error");
     }
 

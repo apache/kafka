@@ -293,6 +293,73 @@ public class SchemaBuilderTest {
         new Struct(emptyStructSchema);
     }
 
+    @Test(expected = SchemaBuilderException.class)
+    public void testDuplicateFields() {
+        final Schema schema = SchemaBuilder.struct()
+                .name("testing")
+                .field("id", SchemaBuilder.string().doc("").build())
+                .field("id", SchemaBuilder.string().doc("").build())
+                .build();
+        final Struct struct = new Struct(schema)
+                .put("id", "testing");
+        struct.validate();
+    }
+
+    @Test
+    public void testDefaultFieldsSameValueOverwriting() {
+        final SchemaBuilder schemaBuilder = SchemaBuilder.string().name("testing").version(123);
+
+        schemaBuilder.name("testing");
+        schemaBuilder.version(123);
+
+        assertEquals("testing", schemaBuilder.name());
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testDefaultFieldsDifferentValueOverwriting() {
+        final SchemaBuilder schemaBuilder = SchemaBuilder.string().name("testing").version(123);
+
+        schemaBuilder.name("testing");
+        schemaBuilder.version(456);
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testFieldNameNull() {
+        Schema schema = SchemaBuilder.struct()
+            .field(null, Schema.STRING_SCHEMA)
+            .build();
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testFieldSchemaNull() {
+        Schema schema = SchemaBuilder.struct()
+            .field("fieldName", null)
+            .build();
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testArraySchemaNull() {
+        Schema schema = SchemaBuilder.array(null)
+            .build();
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testMapKeySchemaNull() {
+        Schema schema = SchemaBuilder.map(null, Schema.STRING_SCHEMA)
+            .build();
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testMapValueSchemaNull() {
+        Schema schema = SchemaBuilder.map(Schema.STRING_SCHEMA, null)
+            .build();
+    }
+
+    @Test(expected = SchemaBuilderException.class)
+    public void testTypeNotNull() {
+        SchemaBuilder.type(null);
+    }
+
     private void assertTypeAndDefault(Schema schema, Schema.Type type, boolean optional, Object defaultValue) {
         assertEquals(type, schema.type());
         assertEquals(optional, schema.isOptional());

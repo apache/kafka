@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.MockTime;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Before;
@@ -111,6 +112,8 @@ public class KafkaBasedLogTest {
     private KafkaBasedLog<String, String> store;
 
     @Mock
+    private Runnable initializer;
+    @Mock
     private KafkaProducer<String, String> producer;
     private MockConsumer<String, String> consumer;
 
@@ -131,7 +134,7 @@ public class KafkaBasedLogTest {
     @Before
     public void setUp() throws Exception {
         store = PowerMock.createPartialMock(KafkaBasedLog.class, new String[]{"createConsumer", "createProducer"},
-                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, time);
+                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, time, initializer);
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
         Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
@@ -384,7 +387,7 @@ public class KafkaBasedLogTest {
                 consumer.schedulePollTask(new Runnable() {
                     @Override
                     public void run() {
-                        consumer.setException(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.exception());
+                        consumer.setException(Errors.COORDINATOR_NOT_AVAILABLE.exception());
                     }
                 });
 
@@ -462,6 +465,9 @@ public class KafkaBasedLogTest {
 
 
     private void expectStart() throws Exception {
+        initializer.run();
+        EasyMock.expectLastCall().times(1);
+
         PowerMock.expectPrivate(store, "createProducer")
                 .andReturn(producer);
         PowerMock.expectPrivate(store, "createConsumer")

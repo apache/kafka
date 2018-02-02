@@ -25,6 +25,14 @@ import org.slf4j.LoggerFactory;
 public class KafkaThread extends Thread {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
+    
+    public static KafkaThread daemon(final String name, Runnable runnable) {
+        return new KafkaThread(name, runnable, true);
+    }
+
+    public static KafkaThread nonDaemon(final String name, Runnable runnable) {
+        return new KafkaThread(name, runnable, false);
+    }
 
     public KafkaThread(final String name, boolean daemon) {
         super(name);
@@ -38,9 +46,9 @@ public class KafkaThread extends Thread {
 
     private void configureThread(final String name, boolean daemon) {
         setDaemon(daemon);
-        setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+        setUncaughtExceptionHandler(new UncaughtExceptionHandler() {
             public void uncaughtException(Thread t, Throwable e) {
-                log.error("Uncaught exception in " + name + ": ", e);
+                log.error("Uncaught exception in thread '{}':", name, e);
             }
         });
     }

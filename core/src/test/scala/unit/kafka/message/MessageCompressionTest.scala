@@ -19,20 +19,19 @@ package kafka.message
 
 import java.io.ByteArrayOutputStream
 import scala.collection._
-import org.scalatest.junit.JUnitSuite
 import org.junit._
 import org.junit.Assert._
 
-class MessageCompressionTest extends JUnitSuite {
+class MessageCompressionTest {
 
   @Test
   def testSimpleCompressDecompress() {
     val codecs = mutable.ArrayBuffer[CompressionCodec](GZIPCompressionCodec)
-    if(isSnappyAvailable)
+    if (isSnappyAvailable)
       codecs += SnappyCompressionCodec
-    if(isLZ4Available)
+    if (isLZ4Available)
       codecs += LZ4CompressionCodec
-    for(codec <- codecs)
+    for (codec <- codecs)
       testSimpleCompressDecompress(codec)
   }
 
@@ -48,10 +47,10 @@ class MessageCompressionTest extends JUnitSuite {
 
     testCompressSize(GZIPCompressionCodec, messages, 396)
 
-    if(isSnappyAvailable)
-      testCompressSize(SnappyCompressionCodec, messages, 1063)
+    if (isSnappyAvailable)
+      testCompressSize(SnappyCompressionCodec, messages, 503)
 
-    if(isLZ4Available)
+    if (isLZ4Available)
       testCompressSize(LZ4CompressionCodec, messages, 387)
   }
 

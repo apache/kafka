@@ -55,11 +55,16 @@ public class AbstractConfig {
     @SuppressWarnings("unchecked")
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
         /* check that all the keys are really strings */
-        for (Object key : originals.keySet())
-            if (!(key instanceof String))
-                throw new ConfigException(key.toString(), originals.get(key), "Key must be a string.");
+        for (Map.Entry<?, ?> entry : originals.entrySet())
+            if (!(entry.getKey() instanceof String))
+                throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
         this.originals = (Map<String, ?>) originals;
         this.values = definition.parse(this.originals);
+        Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
+        for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
+            this.values.put(update.getKey(), update.getValue());
+        }
+        definition.parse(this.values);
         this.used = Collections.synchronizedSet(new HashSet<String>());
         this.definition = definition;
         if (doLog)
@@ -68,6 +73,17 @@ public class AbstractConfig {
 
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
         this(definition, originals, true);
+    }
+
+    /**
+     * Called directly after user configs got parsed (and thus default values got set).
+     * This allows to change default values for "secondary defaults" if required.
+     *
+     * @param parsedValues unmodifiable map of current configuration
+     * @return a map of updates that should be applied to the configuration (will be validated to prevent bad updates)
+     */
+    protected Map<String, Object> postProcessParsedConfig(Map<String, Object> parsedValues) {
+        return Collections.emptyMap();
     }
 
     protected Object get(String key) {
@@ -108,6 +124,13 @@ public class AbstractConfig {
 
     public String getString(String key) {
         return (String) get(key);
+    }
+
+    public ConfigDef.Type typeOf(String key) {
+        ConfigDef.ConfigKey configKey = definition.configKeys().get(key);
+        if (configKey == null)
+            return null;
+        return configKey.type;
     }
 
     public Password getPassword(String key) {
@@ -153,10 +176,25 @@ public class AbstractConfig {
      * @return a Map containing the settings with the prefix
      */
     public Map<String, Object> originalsWithPrefix(String prefix) {
+        return originalsWithPrefix(prefix, true);
+    }
+
+    /**
+     * Gets all original settings with the given prefix.
+     *
+     * @param prefix the prefix to use as a filter
+     * @param strip strip the prefix before adding to the output if set true
+     * @return a Map containing the settings with the prefix
+     */
+    public Map<String, Object> originalsWithPrefix(String prefix, boolean strip) {
         Map<String, Object> result = new RecordingMap<>(prefix, false);
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
-            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length())
-                result.put(entry.getKey().substring(prefix.length()), entry.getValue());
+            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
+                if (strip)
+                    result.put(entry.getKey().substring(prefix.length()), entry.getValue());
+                else
+                    result.put(entry.getKey(), entry.getValue());
+            }
         }
         return result;
     }
@@ -178,6 +216,31 @@ public class AbstractConfig {
             }
         }
         return result;
+    }
+
+    /**
+     * If at least one key with {@code prefix} exists, all prefixed values will be parsed and put into map.
+     * If no value with {@code prefix} exists all unprefixed values will be returned.
+     *
+     * This is useful if one wants to allow prefixed configs to override default ones, but wants to use either
+     * only prefixed configs or only regular configs, but not mix them.
+     */
+    public Map<String, Object> valuesWithPrefixAllOrNothing(String prefix) {
+        Map<String, Object> withPrefix = originalsWithPrefix(prefix, true);
+
+        if (withPrefix.isEmpty()) {
+            return new RecordingMap<>(values(), "", true);
+        } else {
+            Map<String, Object> result = new RecordingMap<>(prefix, true);
+
+            for (Map.Entry<String, ?> entry : withPrefix.entrySet()) {
+                ConfigDef.ConfigKey configKey = definition.configKeys().get(entry.getKey());
+                if (configKey != null)
+                    result.put(entry.getKey(), definition.parseValue(configKey, entry.getValue(), true));
+            }
+
+            return result;
+        }
     }
 
     public Map<String, ?> values() {
@@ -237,7 +300,7 @@ public class AbstractConfig {
      * @return The list of configured instances
      */
     public <T> List<T> getConfiguredInstances(String key, Class<T> t) {
-        return getConfiguredInstances(key, t, Collections.EMPTY_MAP);
+        return getConfiguredInstances(key, t, Collections.<String, Object>emptyMap());
     }
 
     /**
@@ -250,13 +313,26 @@ public class AbstractConfig {
      * @return The list of configured instances
      */
     public <T> List<T> getConfiguredInstances(String key, Class<T> t, Map<String, Object> configOverrides) {
-        List<String> klasses = getList(key);
+        return getConfiguredInstances(getList(key), t, configOverrides);
+    }
+
+
+    /**
+     * Get a list of configured instances of the given class specified by the given configuration key. The configuration
+     * may specify either null or an empty string to indicate no configured instances. In both cases, this method
+     * returns an empty list to indicate no configured instances.
+     * @param classNames The list of class names of the instances to create
+     * @param t The interface the class should implement
+     * @param configOverrides Configuration overrides to use.
+     * @return The list of configured instances
+     */
+    public <T> List<T> getConfiguredInstances(List<String> classNames, Class<T> t, Map<String, Object> configOverrides) {
         List<T> objects = new ArrayList<T>();
-        if (klasses == null)
+        if (classNames == null)
             return objects;
         Map<String, Object> configPairs = originals();
         configPairs.putAll(configOverrides);
-        for (Object klass : klasses) {
+        for (Object klass : classNames) {
             Object o;
             if (klass instanceof String) {
                 try {

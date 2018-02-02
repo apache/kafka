@@ -23,21 +23,47 @@ import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 
 
 class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
+    private static final int SUFFIX_SIZE = 2 * WindowStoreUtils.TIMESTAMP_SIZE;
+    private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
+
+    private String topic;
+
     @Override
-    public Bytes upperRange(final Bytes key, final long to) {
-        final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(to, Long.MAX_VALUE));
-        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer());
+    public void init(final String topic) {
+        this.topic = topic;
     }
 
     @Override
-    public Bytes lowerRange(final Bytes key, final long from) {
+    public Bytes upperRangeFixedSize(final Bytes key, final long to) {
+        final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(to, Long.MAX_VALUE));
+        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer(), topic);
+    }
+
+    @Override
+    public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
         final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(0, Math.max(0, from)));
-        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer());
+        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer(), topic);
+    }
+
+    @Override
+    public Bytes upperRange(Bytes key, long to) {
+        final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)
+            .putLong(to)
+            // start can at most be equal to end
+            .putLong(to)
+            .array();
+        return OrderedBytes.upperRange(key, maxSuffix);
+    }
+
+    @Override
+    public Bytes lowerRange(Bytes key, long from) {
+        return OrderedBytes.lowerRange(key, MIN_SUFFIX);
     }
 
     @Override
@@ -46,16 +72,17 @@ class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     }
 
     @Override
-    public HasNextCondition hasNextCondition(final Bytes binaryKey, final long from, final long to) {
+    public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to) {
         return new HasNextCondition() {
             @Override
             public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
                 while (iterator.hasNext()) {
                     final Bytes bytes = iterator.peekNextKey();
                     final Windowed<Bytes> windowedKey = SessionKeySerde.fromBytes(bytes);
-                    if (windowedKey.key().equals(binaryKey)
-                            && windowedKey.window().end() >= from
-                            && windowedKey.window().start() <= to) {
+                    if ((binaryKeyFrom == null || windowedKey.key().compareTo(binaryKeyFrom) >= 0)
+                        && (binaryKeyTo == null || windowedKey.key().compareTo(binaryKeyTo) <= 0)
+                        && windowedKey.window().end() >= from
+                        && windowedKey.window().start() <= to) {
                         return true;
                     }
                     iterator.next();
@@ -69,5 +96,4 @@ class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     public List<Segment> segmentsToSearch(final Segments segments, final long from, final long to) {
         return segments.segments(from, Long.MAX_VALUE);
     }
-
 }

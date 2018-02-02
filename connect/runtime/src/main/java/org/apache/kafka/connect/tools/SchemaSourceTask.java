@@ -27,7 +27,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -154,14 +153,12 @@ public class SchemaSourceTask extends SourceTask {
             }
 
             System.out.println("{\"task\": " + id + ", \"seqno\": " + seqno + "}");
-            List<SourceRecord> result = Arrays.asList(srcRecord);
+            List<SourceRecord> result = Collections.singletonList(srcRecord);
             seqno++;
             count++;
             return result;
         } else {
-            synchronized (this) {
-                this.wait();
-            }
+            throttler.throttle();
             return new ArrayList<>();
         }
     }

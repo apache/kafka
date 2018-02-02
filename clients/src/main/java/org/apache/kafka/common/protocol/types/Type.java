@@ -194,6 +194,36 @@ public abstract class Type {
         }
     };
 
+    public static final Type UNSIGNED_INT32 = new Type() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            ByteUtils.writeUnsignedInt(buffer, (long) o);
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            return ByteUtils.readUnsignedInt(buffer);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            return 4;
+        }
+
+        @Override
+        public String toString() {
+            return "UINT32";
+        }
+
+        @Override
+        public Long validate(Object item) {
+            if (item instanceof Long)
+                return (Long) item;
+            else
+                throw new SchemaException(item + " is not a Long.");
+        }
+    };
+
     public static final Type INT64 = new Type() {
         @Override
         public void write(ByteBuffer buffer, Object o) {

@@ -65,7 +65,7 @@ object ReplicaVerificationTool extends Logging {
   }
 
   def main(args: Array[String]): Unit = {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val brokerListOpt = parser.accepts("broker-list", "REQUIRED: The list of hostname and port of the server to connect to.")
                          .withRequiredArg
                          .describedAs("hostname:port,...,hostname:port")
@@ -118,7 +118,7 @@ object ReplicaVerificationTool extends Logging {
     val initialOffsetTime = options.valueOf(initialOffsetTimeOpt).longValue
     val reportInterval = options.valueOf(reportIntervalOpt).longValue
     // getting topic metadata
-    info("Getting topic metatdata...")
+    info("Getting topic metadata...")
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser,brokerList)
     val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
@@ -368,7 +368,7 @@ private class ReplicaFetcher(name: String, sourceBroker: BrokerEndPoint, topicAn
       response = simpleConsumer.fetch(fetchRequest)
     } catch {
       case t: Throwable =>
-        if (!isRunning.get)
+        if (!isRunning)
           throw t
     }
 

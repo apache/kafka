@@ -27,17 +27,17 @@ import scala.collection._
 import org.junit.Assert._
 import kafka.message._
 import kafka.server._
-import kafka.utils.TestUtils._
 import kafka.utils._
 import org.junit.{Before, Test}
 import kafka.serializer._
 import kafka.integration.KafkaServerTestHarness
 
+@deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
 class ConsumerIteratorTest extends KafkaServerTestHarness {
 
   val numNodes = 1
 
-  def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)
+  def generateConfigs = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)
 
   val messages = new mutable.HashMap[Int, Seq[Message]]
   val topic = "topic"
@@ -59,7 +59,7 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
       new AtomicLong(0),
       new AtomicInteger(0),
       ""))
-    createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)), servers = servers)
+    createTopic(topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)))
   }
 
   @Test
@@ -72,9 +72,9 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
     assertEquals(1, queue.size)
     queue.put(ZookeeperConsumerConnector.shutdownCommand)
 
-    val iter = new ConsumerIterator[String, String](queue, 
+    val iter = new ConsumerIterator[String, String](queue,
                                                     consumerConfig.consumerTimeoutMs,
-                                                    new StringDecoder(), 
+                                                    new StringDecoder(),
                                                     new StringDecoder(),
                                                     clientId = "")
     val receivedMessages = (0 until 5).map(_ => iter.next.message)

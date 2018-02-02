@@ -17,6 +17,8 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 
 import java.util.Collections;
@@ -33,7 +35,11 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
     public boolean initialized;
 
     public MockProcessorNode(long scheduleInterval) {
-        this(new MockProcessorSupplier<K, V>(scheduleInterval));
+        this(scheduleInterval, PunctuationType.STREAM_TIME);
+    }
+
+    public MockProcessorNode(long scheduleInterval, PunctuationType punctuationType) {
+        this(new MockProcessorSupplier<K, V>(scheduleInterval, punctuationType));
     }
 
     private MockProcessorNode(MockProcessorSupplier<K, V> supplier) {
@@ -54,8 +60,8 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
     }
 
     @Override
-    public void punctuate(final long timestamp) {
-        super.punctuate(timestamp);
+    public void punctuate(final long timestamp, final Punctuator punctuator) {
+        super.punctuate(timestamp, punctuator);
         this.punctuatedAt = timestamp;
     }
 

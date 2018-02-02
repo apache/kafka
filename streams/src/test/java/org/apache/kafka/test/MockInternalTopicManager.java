@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
-import org.apache.kafka.streams.processor.internals.StreamsKafkaClient;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,33 +29,38 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+
+
 public class MockInternalTopicManager extends InternalTopicManager {
 
-    public Map<String, Integer> readyTopics = new HashMap<>();
-    private MockConsumer<byte[], byte[]> restoreConsumer;
+    final public Map<String, Integer> readyTopics = new HashMap<>();
+    final private MockConsumer<byte[], byte[]> restoreConsumer;
 
-    public MockInternalTopicManager(StreamsConfig streamsConfig, MockConsumer<byte[], byte[]> restoreConsumer) {
-        super(new StreamsKafkaClient(streamsConfig), 0, 0);
+    public MockInternalTopicManager(final StreamsConfig streamsConfig,
+                                    final MockConsumer<byte[], byte[]> restoreConsumer) {
+        super(KafkaAdminClient.create(streamsConfig.originals()), streamsConfig);
 
         this.restoreConsumer = restoreConsumer;
     }
 
     @Override
-    public void makeReady(final Map<InternalTopicConfig, Integer> topics) {
-        for (Map.Entry<InternalTopicConfig, Integer> entry : topics.entrySet()) {
-            readyTopics.put(entry.getKey().name(), entry.getValue());
+    public void makeReady(final Map<String, InternalTopicConfig> topics) {
+        for (final InternalTopicConfig topic : topics.values()) {
+            final String topicName = topic.name();
+            final int numberOfPartitions = topic.numberOfPartitions();
+            readyTopics.put(topicName, numberOfPartitions);
 
             final List<PartitionInfo> partitions = new ArrayList<>();
-            for (int i = 0; i < entry.getValue(); i++) {
-                partitions.add(new PartitionInfo(entry.getKey().name(), i, null, null, null));
+            for (int i = 0; i < numberOfPartitions; i++) {
+                partitions.add(new PartitionInfo(topicName, i, null, null, null));
             }
 
-            restoreConsumer.updatePartitions(entry.getKey().name(), partitions);
+            restoreConsumer.updatePartitions(topicName, partitions);
         }
     }
 
     @Override
-    public Map<String, Integer> getNumPartitions(final Set<String> topics) {
+    protected Map<String, Integer> getNumPartitions(final Set<String> topics) {
         final Map<String, Integer> partitions = new HashMap<>();
         for (String topic : topics) {
             partitions.put(topic, restoreConsumer.partitionsFor(topic) == null ?  null : restoreConsumer.partitionsFor(topic).size());

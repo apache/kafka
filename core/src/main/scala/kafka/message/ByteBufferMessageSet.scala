@@ -166,15 +166,15 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
   /** When flag isShallow is set to be true, we do a shallow iteration: just traverse the first level of messages. **/
   private def internalIterator(isShallow: Boolean = false): Iterator[MessageAndOffset] = {
     if (isShallow)
-      asRecords.batches.asScala.iterator.map(batch => MessageAndOffset.fromRecordBatch(batch.asInstanceOf[AbstractLegacyRecordBatch]))
+      asRecords.batches.asScala.iterator.map(MessageAndOffset.fromRecordBatch)
     else
-      asRecords.records.asScala.iterator.map(record => MessageAndOffset.fromRecordBatch(record.asInstanceOf[AbstractLegacyRecordBatch]))
+      asRecords.records.asScala.iterator.map(MessageAndOffset.fromRecord)
   }
 
   /**
    * The total number of bytes in this message set, including any partial trailing messages
    */
-  def sizeInBytes: Int = buffer.limit
+  def sizeInBytes: Int = buffer.limit()
 
   /**
    * The total number of bytes in this message set not including any partial, trailing messages

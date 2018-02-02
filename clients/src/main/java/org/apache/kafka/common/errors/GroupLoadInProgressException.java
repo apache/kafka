@@ -19,7 +19,10 @@ package org.apache.kafka.common.errors;
 /**
  * The broker returns this error code for any coordinator request if it is still loading the metadata (after a leader change
  * for that offsets topic partition) for this group.
+ *
+ * @deprecated As of Kafka 0.11, this has been replaced by {@link CoordinatorLoadInProgressException}
  */
+@Deprecated
 public class GroupLoadInProgressException extends RetriableException {
 
     private static final long serialVersionUID = 1L;

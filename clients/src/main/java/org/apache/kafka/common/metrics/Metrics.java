@@ -17,6 +17,8 @@
 package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -26,9 +28,13 @@ import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -137,7 +143,7 @@ public class Metrics implements Closeable {
             // Creating a daemon thread to not block shutdown
             this.metricsScheduler.setThreadFactory(new ThreadFactory() {
                 public Thread newThread(Runnable runnable) {
-                    return Utils.newThread("SensorExpiryThread", runnable, true);
+                    return KafkaThread.daemon("SensorExpiryThread", runnable);
                 }
             });
             this.metricsScheduler.scheduleAtFixedRate(new ExpireSensorTask(), 30, 30, TimeUnit.SECONDS);
@@ -224,6 +230,65 @@ public class Metrics implements Closeable {
         for (int i = 0; i < keyValue.length; i += 2)
             tags.put(keyValue[i], keyValue[i + 1]);
         return tags;
+    }
+
+    public static String toHtmlTable(String domain, List<MetricNameTemplate> allMetrics) {
+        Map<String, Map<String, String>> beansAndAttributes = new TreeMap<String, Map<String, String>>();
+    
+        try (Metrics metrics = new Metrics()) {
+            for (MetricNameTemplate template : allMetrics) {
+                Map<String, String> tags = new TreeMap<String, String>();
+                for (String s : template.tags()) {
+                    tags.put(s, "{" + s + "}");
+                }
+    
+                MetricName metricName = metrics.metricName(template.name(), template.group(), template.description(), tags);
+                String mBeanName = JmxReporter.getMBeanName(domain, metricName);
+                if (!beansAndAttributes.containsKey(mBeanName)) {
+                    beansAndAttributes.put(mBeanName, new TreeMap<String, String>());
+                }
+                Map<String, String> attrAndDesc = beansAndAttributes.get(mBeanName);
+                if (!attrAndDesc.containsKey(template.name())) {
+                    attrAndDesc.put(template.name(), template.description());
+                } else {
+                    throw new IllegalArgumentException("mBean '" + mBeanName + "' attribute '" + template.name() + "' is defined twice.");
+                }
+            }
+        }
+        
+        StringBuilder b = new StringBuilder();
+        b.append("<table class=\"data-table\"><tbody>\n");
+    
+        for (Entry<String, Map<String, String>> e : beansAndAttributes.entrySet()) {
+            b.append("<tr>\n");
+            b.append("<td colspan=3 class=\"mbeanName\" style=\"background-color:#ccc; font-weight: bold;\">");
+            b.append(e.getKey());
+            b.append("</td>");
+            b.append("</tr>\n");
+            
+            b.append("<tr>\n");
+            b.append("<th style=\"width: 90px\"></th>\n");
+            b.append("<th>Attribute name</th>\n");
+            b.append("<th>Description</th>\n");
+            b.append("</tr>\n");
+            
+            for (Entry<String, String> e2 : e.getValue().entrySet()) {
+                b.append("<tr>\n");
+                b.append("<td></td>");
+                b.append("<td>");
+                b.append(e2.getKey());
+                b.append("</td>");
+                b.append("<td>");
+                b.append(e2.getValue());
+                b.append("</td>");
+                b.append("</tr>\n");
+            }
+    
+        }
+        b.append("</tbody></table>");
+    
+        return b.toString();
+    
     }
 
     public MetricConfig config() {
@@ -384,6 +449,10 @@ public class Metrics implements Closeable {
     /**
      * Add a metric to monitor an object that implements measurable. This metric won't be associated with any sensor.
      * This is a way to expose existing values as metrics.
+     *
+     * This method is kept for binary compatibility purposes, it has the same behaviour as
+     * {@link #addMetric(MetricName, MetricValue)}.
+     *
      * @param metricName The name of the metric
      * @param measurable The measurable that will be measured by this metric
      */
@@ -392,19 +461,45 @@ public class Metrics implements Closeable {
     }
 
     /**
-     * Add a metric to monitor an object that implements measurable. This metric won't be associated with any sensor.
+     * Add a metric to monitor an object that implements Measurable. This metric won't be associated with any sensor.
      * This is a way to expose existing values as metrics.
+     *
+     * This method is kept for binary compatibility purposes, it has the same behaviour as
+     * {@link #addMetric(MetricName, MetricConfig, MetricValueProvider)}.
+     *
      * @param metricName The name of the metric
      * @param config The configuration to use when measuring this measurable
      * @param measurable The measurable that will be measured by this metric
      */
-    public synchronized void addMetric(MetricName metricName, MetricConfig config, Measurable measurable) {
+    public void addMetric(MetricName metricName, MetricConfig config, Measurable measurable) {
+        addMetric(metricName, config, (MetricValueProvider<?>) measurable);
+    }
+
+    /**
+     * Add a metric to monitor an object that implements MetricValueProvider. This metric won't be associated with any
+     * sensor. This is a way to expose existing values as metrics.
+     *
+     * @param metricName The name of the metric
+     * @param metricValueProvider The metric value provider associated with this metric
+     */
+    public void addMetric(MetricName metricName, MetricConfig config, MetricValueProvider<?> metricValueProvider) {
         KafkaMetric m = new KafkaMetric(new Object(),
                                         Utils.notNull(metricName),
-                                        Utils.notNull(measurable),
+                                        Utils.notNull(metricValueProvider),
                                         config == null ? this.config : config,
                                         time);
         registerMetric(m);
+    }
+
+    /**
+     * Add a metric to monitor an object that implements MetricValueProvider. This metric won't be associated with any
+     * sensor. This is a way to expose existing values as metrics.
+     *
+     * @param metricName The name of the metric
+     * @param metricValueProvider The metric value provider associated with this metric
+     */
+    public void addMetric(MetricName metricName, MetricValueProvider<?> metricValueProvider) {
+        addMetric(metricName, null, metricValueProvider);
     }
 
     /**
@@ -429,6 +524,15 @@ public class Metrics implements Closeable {
     public synchronized void addReporter(MetricsReporter reporter) {
         Utils.notNull(reporter).init(new ArrayList<>(metrics.values()));
         this.reporters.add(reporter);
+    }
+
+    /**
+     * Remove a MetricReporter
+     */
+    public synchronized void removeReporter(MetricsReporter reporter) {
+        if (this.reporters.remove(reporter)) {
+            reporter.close();
+        }
     }
 
     synchronized void registerMetric(KafkaMetric metric) {
@@ -482,6 +586,25 @@ public class Metrics implements Closeable {
     /* For testing use only. */
     Map<Sensor, List<Sensor>> childrenSensors() {
         return Collections.unmodifiableMap(childrenSensors);
+    }
+
+    public MetricName metricInstance(MetricNameTemplate template, String... keyValue) {
+        return metricInstance(template, getTags(keyValue));
+    }
+
+    public MetricName metricInstance(MetricNameTemplate template, Map<String, String> tags) {
+        // check to make sure that the runtime defined tags contain all the template tags.
+        Set<String> runtimeTagKeys = new HashSet<>(tags.keySet());
+        runtimeTagKeys.addAll(config().tags().keySet());
+        
+        Set<String> templateTagKeys = template.tags();
+        
+        if (!runtimeTagKeys.equals(templateTagKeys)) {
+            throw new IllegalArgumentException("For '" + template.name() + "', runtime-defined metric tags do not match the tags in the template. "
+                    + "Runtime = " + runtimeTagKeys.toString() + " Template = " + templateTagKeys.toString());
+        }
+                
+        return this.metricName(template.name(), template.group(), template.description(), tags);
     }
 
     /**

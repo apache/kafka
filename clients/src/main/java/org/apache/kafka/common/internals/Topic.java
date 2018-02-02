@@ -16,45 +16,74 @@
  */
 package org.apache.kafka.common.internals;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.utils.Utils;
+
+import java.util.Collections;
+import java.util.Set;
 
 public class Topic {
 
-    private static final String INVALID_CHARS = "[^a-zA-Z0-9._\\-]";
+    public static final String GROUP_METADATA_TOPIC_NAME = "__consumer_offsets";
+    public static final String TRANSACTION_STATE_TOPIC_NAME = "__transaction_state";
+    public static final String LEGAL_CHARS = "[a-zA-Z0-9._-]";
+
+    private static final Set<String> INTERNAL_TOPICS = Collections.unmodifiableSet(
+            Utils.mkSet(GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME));
+
     private static final int MAX_NAME_LENGTH = 249;
-    private static final Pattern INVALID_CHARS_PATTERN = Pattern.compile(INVALID_CHARS);
-    private static final Pattern ONLY_PERIODS_PATTERN = Pattern.compile("^[.]+$");
 
     public static void validate(String topic) {
-        if (isEmpty(topic))
-            throw new org.apache.kafka.common.errors.InvalidTopicException("Topic name is illegal, can't be empty");
-        else if (containsOnlyPeriods(topic))
-            throw new org.apache.kafka.common.errors.InvalidTopicException("Topic name cannot be \".\" or \"..\"");
-        else if (exceedsMaxLength(topic))
-            throw new org.apache.kafka.common.errors.InvalidTopicException("Topic name is illegal, can't be longer than " + MAX_NAME_LENGTH + " characters");
-        else if (containsInvalidCharacters(topic)) throw new org.apache.kafka.common.errors.InvalidTopicException("Topic name " + topic + " is illegal, contains a character other than ASCII alphanumerics, '.', '_' and '-'");
+        if (topic.isEmpty())
+            throw new InvalidTopicException("Topic name is illegal, it can't be empty");
+        if (topic.equals(".") || topic.equals(".."))
+            throw new InvalidTopicException("Topic name cannot be \".\" or \"..\"");
+        if (topic.length() > MAX_NAME_LENGTH)
+            throw new InvalidTopicException("Topic name is illegal, it can't be longer than " + MAX_NAME_LENGTH +
+                    " characters, topic name: " + topic);
+        if (!containsValidPattern(topic))
+            throw new InvalidTopicException("Topic name \"" + topic + "\" is illegal, it contains a character other than " +
+                    "ASCII alphanumerics, '.', '_' and '-'");
     }
 
-    static boolean isEmpty(String topic) {
-        return topic.isEmpty();
+    public static boolean isInternal(String topic) {
+        return INTERNAL_TOPICS.contains(topic);
     }
 
-    static boolean containsOnlyPeriods(String topic) {
-        Matcher matcher = ONLY_PERIODS_PATTERN.matcher(topic);
-        return matcher.find();
+    /**
+     * Due to limitations in metric names, topics with a period ('.') or underscore ('_') could collide.
+     *
+     * @param topic The topic to check for colliding character
+     * @return true if the topic has collision characters
+     */
+    public static boolean hasCollisionChars(String topic) {
+        return topic.contains("_") || topic.contains(".");
     }
 
-    static boolean exceedsMaxLength(String topic) {
-        return topic.length() > MAX_NAME_LENGTH;
+    /**
+     * Returns true if the topicNames collide due to a period ('.') or underscore ('_') in the same position.
+     *
+     * @param topicA A topic to check for collision
+     * @param topicB A topic to check for collision
+     * @return true if the topics collide
+     */
+    public static boolean hasCollision(String topicA, String topicB) {
+        return topicA.replace('.', '_').equals(topicB.replace('.', '_'));
     }
 
     /**
      * Valid characters for Kafka topics are the ASCII alphanumerics, '.', '_', and '-'
      */
-    static boolean containsInvalidCharacters(String topic) {
-        Matcher matcher = INVALID_CHARS_PATTERN.matcher(topic);
-        return matcher.find();
-    }
+    static boolean containsValidPattern(String topic) {
+        for (int i = 0; i < topic.length(); ++i) {
+            char c = topic.charAt(i);
 
+            // We don't use Character.isLetterOrDigit(c) because it's slower
+            boolean validChar = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || c == '.' ||
+                    c == '_' || c == '-';
+            if (!validChar)
+                return false;
+        }
+        return true;
+    }
 }

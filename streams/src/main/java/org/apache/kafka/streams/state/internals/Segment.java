@@ -20,8 +20,10 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
+import java.io.IOException;
+
 // Use the Bytes wrapper for underlying rocksDB keys since they are used for hashing data structures
-class Segment extends RocksDBStore<Bytes, byte[]> {
+class Segment extends RocksDBStore<Bytes, byte[]> implements Comparable<Segment> {
     public final long id;
 
     Segment(String segmentName, String windowName, long id) {
@@ -29,8 +31,13 @@ class Segment extends RocksDBStore<Bytes, byte[]> {
         this.id = id;
     }
 
-    void destroy() {
+    void destroy() throws IOException {
         Utils.delete(dbDir);
+    }
+
+    @Override
+    public int compareTo(Segment segment) {
+        return Long.compare(id, segment.id);
     }
 
     @Override
@@ -38,7 +45,10 @@ class Segment extends RocksDBStore<Bytes, byte[]> {
         super.openDB(context);
 
         // skip the registering step
+    }
 
-        open = true;
+    @Override
+    public String toString() {
+        return "Segment(id=" + id + ", name=" + name() + ")";
     }
 }

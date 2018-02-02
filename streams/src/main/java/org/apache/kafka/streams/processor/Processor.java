@@ -16,20 +16,24 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
  * A processor of key-value pair records.
  *
  * @param <K> the type of keys
  * @param <V> the type of values
  */
+@InterfaceStability.Evolving
 public interface Processor<K, V> {
 
     /**
      * Initialize this processor with the given context. The framework ensures this is called once per processor when the topology
      * that contains it is initialized.
      * <p>
-     * If this processor is to be {@link #punctuate(long) called periodically} by the framework, then this method should
-     * {@link ProcessorContext#schedule(long) schedule itself} with the provided context.
+     * The provided {@link ProcessorContext context} can be used to access topology and record meta data, to
+     * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule} a method to be
+     * {@link Punctuator#punctuate(long) called periodically} and to access attached {@link StateStore}s.
      * 
      * @param context the context; may not be null
      */
@@ -46,9 +50,12 @@ public interface Processor<K, V> {
     /**
      * Perform any periodic operations, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
      * during {@link #init(ProcessorContext) initialization}.
+     *
+     * @deprecated Please use {@link Punctuator} functional interface instead.
      * 
      * @param timestamp the stream time when this method is being called
      */
+    @Deprecated
     void punctuate(long timestamp);
 
     /**

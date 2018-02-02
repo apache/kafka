@@ -226,7 +226,11 @@ function bring_up_aws {
 
         if [[ ! -z "$worker_machines" ]]; then
             echo "Bringing up test worker machines in parallel"
-            vagrant_batch_command "vagrant up $debug --provider=aws" "$worker_machines" "$max_parallel"
+	    # Try to isolate this job in its own /tmp space. See note
+	    # below about vagrant issue
+            local vagrant_rsync_temp_dir=$(mktemp -d);
+            TMPDIR=$vagrant_rsync_temp_dir vagrant_batch_command "vagrant up $debug --provider=aws" "$worker_machines" "$max_parallel"
+            rm -rf $vagrant_rsync_temp_dir
             vagrant hostmanager
         fi
     else
@@ -234,6 +238,21 @@ function bring_up_aws {
         vagrant hostmanager
         vagrant provision
     fi
+
+    # Currently it seems that the AWS provider will always run rsync
+    # as part of vagrant up. However,
+    # https://github.com/mitchellh/vagrant/issues/7531 means it is not
+    # safe to do so. Since the bug doesn't seem to cause any direct
+    # errors, just missing data on some nodes, follow up with serial
+    # rsyncing to ensure we're in a clean state. Use custom TMPDIR
+    # values to ensure we're isolated from any other instances of this
+    # script that are running/ran recently and may cause different
+    # instances to sync to the wrong nodes
+    for worker in $worker_machines; do
+        local vagrant_rsync_temp_dir=$(mktemp -d);
+        TMPDIR=$vagrant_rsync_temp_dir vagrant rsync $worker;
+        rm -rf $vagrant_rsync_temp_dir
+    done
 }
 
 function main {

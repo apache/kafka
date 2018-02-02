@@ -20,6 +20,7 @@ package org.apache.kafka.common.network;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.Map;
 
 /**
  * An interface for asynchronous, multi-channel network I/O
@@ -80,10 +81,10 @@ public interface Selectable {
     public List<NetworkReceive> completedReceives();
 
     /**
-     * The list of connections that finished disconnecting on the last {@link #poll(long) poll()}
-     * call.
+     * The connections that finished disconnecting on the last {@link #poll(long) poll()}
+     * call. Channel state indicates the local channel state at the time of disconnection.
      */
-    public List<String> disconnected();
+    public Map<String, ChannelState> disconnected();
 
     /**
      * The list of connections that completed their connection on the last {@link #poll(long) poll()}

@@ -21,7 +21,6 @@ import java.util
 import java.util.Properties
 
 import kafka.log.LogConfig
-import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest
@@ -62,7 +61,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
   def testErrorCreateTopicsRequests() {
     val timeout = 10000
     val existingTopic = "existing-topic"
-    TestUtils.createTopic(zkUtils, existingTopic, 1, 1, servers)
+    createTopic(existingTopic, 1, 1)
 
     // Policy violations
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(
@@ -96,11 +95,11 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(
       Map("error-replication" -> new CreateTopicsRequest.TopicDetails(10, (numBrokers + 1).toShort)).asJava, timeout, true).build(),
       Map("error-replication" -> error(Errors.INVALID_REPLICATION_FACTOR,
-        Some("replication factor: 4 larger than available brokers: 3"))))
+        Some("Replication factor: 4 larger than available brokers: 3."))))
 
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(
       Map("error-replication2" -> new CreateTopicsRequest.TopicDetails(10, -1: Short)).asJava, timeout, true).build(),
-      Map("error-replication2" -> error(Errors.INVALID_REPLICATION_FACTOR, Some("replication factor must be larger than 0"))))
+      Map("error-replication2" -> error(Errors.INVALID_REPLICATION_FACTOR, Some("Replication factor must be larger than 0."))))
   }
 
 }

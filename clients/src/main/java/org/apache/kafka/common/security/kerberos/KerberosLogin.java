@@ -27,9 +27,9 @@ import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.security.authenticator.AbstractLogin;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Shell;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -129,7 +129,7 @@ public class KerberosLogin extends AbstractLogin {
         // TGT's existing expiry date and the configured minTimeBeforeRelogin. For testing and development,
         // you can decrease the interval of expiration of tickets (for example, to 3 minutes) by running:
         //  "modprinc -maxlife 3mins <principal>" in kadmin.
-        t = Utils.newThread(String.format("kafka-kerberos-refresh-thread-%s", principal), new Runnable() {
+        t = KafkaThread.daemon(String.format("kafka-kerberos-refresh-thread-%s", principal), new Runnable() {
             public void run() {
                 log.info("[Principal={}]: TGT refresh thread started.", principal);
                 while (true) {  // renewal thread's main loop. if it exits from here, thread will exit.
@@ -218,9 +218,8 @@ public class KerberosLogin extends AbstractLogin {
                                         return;
                                     }
                                 } else {
-                                    log.warn("[Principal={}]: Could not renew TGT due to problem running shell command: '{} {}'; " +
-                                            "exception was: %s. Exiting refresh thread.", 
-                                            principal, kinitCmd, kinitArgs, e, e);
+                                    log.warn("[Principal={}]: Could not renew TGT due to problem running shell command: '{} {}'. " +
+                                            "Exiting refresh thread.", principal, kinitCmd, kinitArgs, e);
                                     return;
                                 }
                             }
@@ -253,7 +252,7 @@ public class KerberosLogin extends AbstractLogin {
                     }
                 }
             }
-        }, true);
+        });
         t.start();
         return loginContext;
     }
@@ -314,7 +313,7 @@ public class KerberosLogin extends AbstractLogin {
             return proposedRefresh;
     }
 
-    private synchronized KerberosTicket getTGT() {
+    private KerberosTicket getTGT() {
         Set<KerberosTicket> tickets = subject.getPrivateCredentials(KerberosTicket.class);
         for (KerberosTicket ticket : tickets) {
             KerberosPrincipal server = ticket.getServer();
@@ -341,7 +340,7 @@ public class KerberosLogin extends AbstractLogin {
      * Re-login a principal. This method assumes that {@link #login()} has happened already.
      * @throws javax.security.auth.login.LoginException on a failure
      */
-    private synchronized void reLogin() throws LoginException {
+    private void reLogin() throws LoginException {
         if (!isKrbTicket) {
             return;
         }
@@ -351,8 +350,8 @@ public class KerberosLogin extends AbstractLogin {
         if (!hasSufficientTimeElapsed()) {
             return;
         }
-        log.info("Initiating logout for {}", principal);
         synchronized (KerberosLogin.class) {
+            log.info("Initiating logout for {}", principal);
             // register most recent relogin attempt
             lastLogin = currentElapsedTime();
             //clear up the kerberos state. But the tokens are not cleared! As per

@@ -32,12 +32,13 @@ class FetchResponse(private val underlying: kafka.api.FetchResponse) {
 
   def errorCode(topic: String, partition: Int) = error(topic, partition).code
 
-  override def equals(other: Any) = canEqual(other) && {
-    val otherFetchResponse = other.asInstanceOf[kafka.javaapi.FetchResponse]
-    this.underlying.equals(otherFetchResponse.underlying)
+  override def equals(obj: Any): Boolean = {
+    obj match {
+      case null => false
+      case other: FetchResponse => this.underlying.equals(other.underlying)
+      case _ => false
+    }
   }
-
-  def canEqual(other: Any) = other.isInstanceOf[kafka.javaapi.FetchResponse]
 
   override def hashCode = underlying.hashCode
 }

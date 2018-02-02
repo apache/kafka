@@ -26,6 +26,7 @@ import org.apache.kafka.common.security.TestSecurityConfig;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +49,21 @@ public class AbstractConfigTest {
         testInvalidInputs("org.apache.kafka.clients.producer.unknown-metrics-reporter");
         testInvalidInputs("test1,test2");
         testInvalidInputs("org.apache.kafka.common.metrics.FakeMetricsReporter,");
+    }
+
+    @Test
+    public void testEmptyList() {
+        AbstractConfig conf;
+        ConfigDef configDef = new ConfigDef().define("a", Type.LIST, "", new ConfigDef.NonNullValidator(), Importance.HIGH, "doc");
+
+        conf = new AbstractConfig(configDef, Collections.emptyMap());
+        assertEquals(Collections.emptyList(), conf.getList("a"));
+
+        conf = new AbstractConfig(configDef, Collections.singletonMap("a", ""));
+        assertEquals(Collections.emptyList(), conf.getList("a"));
+
+        conf = new AbstractConfig(configDef, Collections.singletonMap("a", "b,c,d"));
+        assertEquals(Arrays.asList("b", "c", "d"), conf.getList("a"));
     }
 
     @Test
@@ -121,6 +137,34 @@ public class AbstractConfigTest {
         assertFalse(config.unused().contains("ssl.key.password"));
         assertNull(valuesWithPrefixOverride.get("ssl.key.password"));
         assertFalse(config.unused().contains("ssl.key.password"));
+    }
+
+    @Test
+    public void testValuesWithPrefixAllOrNothing() {
+        String prefix1 = "prefix1.";
+        String prefix2 = "prefix2.";
+        Properties props = new Properties();
+        props.put("sasl.mechanism", "PLAIN");
+        props.put("prefix1.sasl.mechanism", "GSSAPI");
+        props.put("prefix1.sasl.kerberos.kinit.cmd", "/usr/bin/kinit2");
+        props.put("prefix1.ssl.truststore.location", "my location");
+        props.put("sasl.kerberos.service.name", "service name");
+        props.put("ssl.keymanager.algorithm", "algorithm");
+        TestSecurityConfig config = new TestSecurityConfig(props);
+        Map<String, Object> valuesWithPrefixAllOrNothing1 = config.valuesWithPrefixAllOrNothing(prefix1);
+
+        // All prefixed values are there
+        assertEquals("GSSAPI", valuesWithPrefixAllOrNothing1.get("sasl.mechanism"));
+        assertEquals("/usr/bin/kinit2", valuesWithPrefixAllOrNothing1.get("sasl.kerberos.kinit.cmd"));
+        assertEquals("my location", valuesWithPrefixAllOrNothing1.get("ssl.truststore.location"));
+
+        // Non-prefixed values are missing
+        assertFalse(valuesWithPrefixAllOrNothing1.containsKey("sasl.kerberos.service.name"));
+        assertFalse(valuesWithPrefixAllOrNothing1.containsKey("ssl.keymanager.algorithm"));
+
+        Map<String, Object> valuesWithPrefixAllOrNothing2 = config.valuesWithPrefixAllOrNothing(prefix2);
+        assertTrue(valuesWithPrefixAllOrNothing2.containsKey("sasl.kerberos.service.name"));
+        assertTrue(valuesWithPrefixAllOrNothing2.containsKey("ssl.keymanager.algorithm"));
     }
 
     @Test

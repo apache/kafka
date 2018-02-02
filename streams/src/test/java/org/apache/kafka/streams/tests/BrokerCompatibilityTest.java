@@ -23,16 +23,21 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.requests.IsolationLevel;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
 import java.util.Collections;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
@@ -41,11 +46,12 @@ public class BrokerCompatibilityTest {
     private static final String SOURCE_TOPIC = "brokerCompatibilitySourceTopic";
     private static final String SINK_TOPIC = "brokerCompatibilitySinkTopic";
 
-    public static void main(String[] args) throws Exception {
+    public static void main(final String[] args) {
         System.out.println("StreamsTest instance started");
 
         final String kafka = args.length > 0 ? args[0] : "localhost:9092";
         final String stateDirStr = args.length > 1 ? args[1] : TestUtils.tempDirectory().getAbsolutePath();
+        final boolean eosEnabled = args.length > 2 ? Boolean.parseBoolean(args[2]) : false;
 
         final File stateDir = new File(stateDirStr);
         stateDir.mkdir();
@@ -55,20 +61,41 @@ public class BrokerCompatibilityTest {
         streamsProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, "kafka-streams-system-test-broker-compatibility");
         streamsProperties.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
         streamsProperties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsProperties.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsProperties.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsProperties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsProperties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsProperties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsProperties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        if (eosEnabled) {
+            streamsProperties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        }
+        final int timeout = 6000;
+        streamsProperties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), timeout);
+        streamsProperties.put(StreamsConfig.consumerPrefix(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG), timeout);
+        streamsProperties.put(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout + 1);
+        //TODO remove this config or set to smaller value when KIP-91 is merged
+        streamsProperties.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 60000);
+        Serde<String> stringSerde = Serdes.String();
 
 
-        final KStreamBuilder builder = new KStreamBuilder();
-        builder.stream(SOURCE_TOPIC).to(SINK_TOPIC);
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.<String, String>stream(SOURCE_TOPIC).groupByKey(Serialized.with(stringSerde, stringSerde))
+            .count()
+            .toStream()
+            .mapValues(new ValueMapper<Long, String>() {
+                @Override
+                public String apply(Long value) {
+                    return value.toString();
+                }
+            })
+            .to(SINK_TOPIC);
 
-        final KafkaStreams streams = new KafkaStreams(builder, streamsProperties);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
         streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
-            public void uncaughtException(Thread t, Throwable e) {
-                System.out.println("FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
-
+            public void uncaughtException(final Thread t, final Throwable e) {
+                System.err.println("FATAL: An unexpected exception " + e);
+                e.printStackTrace(System.err);
+                System.err.flush();
                 streams.close(30, TimeUnit.SECONDS);
             }
         });
@@ -87,28 +114,32 @@ public class BrokerCompatibilityTest {
 
 
         System.out.println("wait for result");
-        loopUntilRecordReceived(kafka);
+        loopUntilRecordReceived(kafka, eosEnabled);
 
 
         System.out.println("close Kafka Streams");
+        producer.close();
         streams.close();
     }
 
-    private static void loopUntilRecordReceived(final String kafka) {
+    private static void loopUntilRecordReceived(final String kafka, final boolean eosEnabled) {
         final Properties consumerProperties = new Properties();
         consumerProperties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         consumerProperties.put(ConsumerConfig.GROUP_ID_CONFIG, "broker-compatibility-consumer");
         consumerProperties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         consumerProperties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        if (eosEnabled) {
+            consumerProperties.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+        }
 
         final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProperties);
         consumer.subscribe(Collections.singletonList(SINK_TOPIC));
 
         while (true) {
-            ConsumerRecords<String, String> records = consumer.poll(100);
-            for (ConsumerRecord<String, String> record : records) {
-                if (record.key().equals("key") && record.value().equals("value")) {
+            final ConsumerRecords<String, String> records = consumer.poll(100);
+            for (final ConsumerRecord<String, String> record : records) {
+                if (record.key().equals("key") && record.value().equals("1")) {
                     consumer.close();
                     return;
                 }

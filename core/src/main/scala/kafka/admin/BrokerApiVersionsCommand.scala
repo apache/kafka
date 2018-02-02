@@ -24,7 +24,6 @@ import kafka.utils.CommandLineUtils
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.clients.CommonClientConfigs
 import joptsimple._
-import org.apache.kafka.common.Node
 
 import scala.util.{Failure, Success}
 
@@ -41,7 +40,7 @@ object BrokerApiVersionsCommand {
     val opts = new BrokerVersionCommandOptions(args)
     val adminClient = createAdminClient(opts)
     adminClient.awaitBrokers()
-    var brokerMap = adminClient.listAllBrokerVersionInfo()
+    val brokerMap = adminClient.listAllBrokerVersionInfo()
     brokerMap.foreach { case (broker, versionInfoOrError) =>
       versionInfoOrError match {
         case Success(v) => out.print(s"${broker} -> ${v.toString(true)}\n")
@@ -64,7 +63,7 @@ object BrokerApiVersionsCommand {
     val BootstrapServerDoc = "REQUIRED: The server to connect to."
     val CommandConfigDoc = "A property file containing configs to be passed to Admin Client."
 
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
                                  .withRequiredArg
                                  .describedAs("command config property file")

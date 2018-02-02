@@ -42,7 +42,7 @@ class KafkaVersionTest(Test):
         node.version = LATEST_0_8_2
         self.kafka.start()
 
-        assert is_version(node, [LATEST_0_8_2])
+        assert is_version(node, [LATEST_0_8_2], logger=self.logger)
 
     @cluster(num_nodes=3)
     def test_multi_version(self):
@@ -54,5 +54,5 @@ class KafkaVersionTest(Test):
         self.kafka.nodes[1].config[config_property.INTER_BROKER_PROTOCOL_VERSION] = "0.8.2.X"
         self.kafka.start()
 
-        assert is_version(self.kafka.nodes[0], [DEV_BRANCH.vstring])
-        assert is_version(self.kafka.nodes[1], [LATEST_0_8_2])
+        assert is_version(self.kafka.nodes[0], [DEV_BRANCH.vstring], logger=self.logger)
+        assert is_version(self.kafka.nodes[1], [LATEST_0_8_2], logger=self.logger)

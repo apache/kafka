@@ -57,10 +57,13 @@
     <module name="LocalFinalVariableName"/>
     <module name="MemberName"/>
     <module name="ClassTypeParameterName">
-      <property name="format" value="^[A-Z0-9]*$"/>
+      <property name="format" value="^[A-Z][a-zA-Z0-9]*$$"/>
     </module>
     <module name="MethodTypeParameterName">
-      <property name="format" value="^[A-Z0-9]*$"/>
+      <property name="format" value="^[A-Z][a-zA-Z0-9]*$$"/>
+    </module>
+    <module name="InterfaceTypeParameterName">
+      <property name="format" value="^[A-Z][a-zA-Z0-9]*$$"/>
     </module>
     <module name="PackageName"/>
     <module name="ParameterName"/>
@@ -98,24 +101,24 @@
     <module name="MethodLength"/>
     <module name="ParameterNumber">
       <!-- default is 8 -->
-      <property name="max" value="12"/>
+      <property name="max" value="13"/>
     </module>
     <module name="ClassDataAbstractionCoupling">
       <!-- default is 7 -->
-      <property name="max" value="15"/>
+      <property name="max" value="20"/>
     </module>
     <module name="BooleanExpressionComplexity">
       <!-- default is 3 -->
-      <property name="max" value="4"/>
+      <property name="max" value="5"/>
     </module>
 
     <module name="ClassFanOutComplexity">
       <!-- default is 20 -->
-      <property name="max" value="35"/>
+      <property name="max" value="40"/>
     </module>
     <module name="CyclomaticComplexity">
       <!-- default is 10-->
-      <property name="max" value="15"/>
+      <property name="max" value="16"/>
     </module>
     <module name="JavaNCSS">
       <!-- default is 50 -->

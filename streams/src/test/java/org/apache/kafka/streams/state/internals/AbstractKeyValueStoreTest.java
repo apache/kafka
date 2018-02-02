@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
-
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -30,20 +26,27 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-public abstract class AbstractKeyValueStoreTest {
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+
+public abstract class AbstractKeyValueStoreTest {
 
     protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(ProcessorContext context,
                                                                       Class<K> keyClass, Class<V> valueClass,
                                                                       boolean useContextSerdes);
 
+    protected MockProcessorContext context;
     protected KeyValueStore<Integer, String> store;
     protected KeyValueStoreTestDriver<Integer, String> driver;
 
     @Before
     public void before() {
         driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        final MockProcessorContext context = (MockProcessorContext) driver.context();
+        context = (MockProcessorContext) driver.context();
         context.setTime(10);
         store = createKeyValueStore(context, Integer.class, String.class, false);
     }
@@ -51,6 +54,17 @@ public abstract class AbstractKeyValueStoreTest {
     @After
     public void after() {
         store.close();
+        context.close();
+        driver.clear();
+    }
+
+    private static Map<Integer, String> getContents(final KeyValueIterator<Integer, String> iter) {
+        final HashMap<Integer, String> result = new HashMap<>();
+        while (iter.hasNext()) {
+            KeyValue<Integer, String> entry = iter.next();
+            result.put(entry.key, entry.value);
+        }
+        return result;
     }
 
     @Test
@@ -69,6 +83,7 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals("four", store.get(4));
         assertEquals("five", store.get(5));
         store.delete(5);
+        assertEquals(4, driver.sizeOf(store));
 
         // Flush the store and verify all current entries were properly flushed ...
         store.flush();
@@ -84,31 +99,18 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals(false, driver.flushedEntryRemoved(4));
         assertEquals(true, driver.flushedEntryRemoved(5));
 
-        // Check range iteration ...
-        try (KeyValueIterator<Integer, String> iter = store.range(2, 4)) {
-            while (iter.hasNext()) {
-                KeyValue<Integer, String> entry = iter.next();
-                if (entry.key.equals(2))
-                    assertEquals("two", entry.value);
-                else if (entry.key.equals(4))
-                    assertEquals("four", entry.value);
-                else
-                    fail("Unexpected entry: " + entry);
-            }
-        }
+        final HashMap<Integer, String> expectedContents = new HashMap<>();
+        expectedContents.put(2, "two");
+        expectedContents.put(4, "four");
 
         // Check range iteration ...
-        try (KeyValueIterator<Integer, String> iter = store.range(2, 6)) {
-            while (iter.hasNext()) {
-                KeyValue<Integer, String> entry = iter.next();
-                if (entry.key.equals(2))
-                    assertEquals("two", entry.value);
-                else if (entry.key.equals(4))
-                    assertEquals("four", entry.value);
-                else
-                    fail("Unexpected entry: " + entry);
-            }
-        }
+        assertEquals(expectedContents, getContents(store.range(2, 4)));
+        assertEquals(expectedContents, getContents(store.range(2, 6)));
+
+        // Check all iteration ...
+        expectedContents.put(0, "zero");
+        expectedContents.put(1, "one");
+        assertEquals(expectedContents, getContents(store.all()));
     }
 
     @Test
@@ -151,11 +153,13 @@ public abstract class AbstractKeyValueStoreTest {
         driver.addEntryToRestoreLog(0, "zero");
         driver.addEntryToRestoreLog(1, "one");
         driver.addEntryToRestoreLog(2, "two");
-        driver.addEntryToRestoreLog(4, "four");
+        driver.addEntryToRestoreLog(3, "three");
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
         store = createKeyValueStore(driver.context(), Integer.class, String.class, false);
+        context.restore(store.name(), driver.restoredEntries());
+
         // Verify that the store's contents were properly restored ...
         assertEquals(0, driver.checkForRestoredEntries(store));
 
@@ -171,11 +175,12 @@ public abstract class AbstractKeyValueStoreTest {
         driver.addEntryToRestoreLog(0, "zero");
         driver.addEntryToRestoreLog(1, "one");
         driver.addEntryToRestoreLog(2, "two");
-        driver.addEntryToRestoreLog(4, "four");
+        driver.addEntryToRestoreLog(3, "three");
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
         store = createKeyValueStore(driver.context(), Integer.class, String.class, true);
+        context.restore(store.name(), driver.restoredEntries());
         // Verify that the store's contents were properly restored ...
         assertEquals(0, driver.checkForRestoredEntries(store));
 
@@ -211,6 +216,56 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals(false, driver.flushedEntryRemoved(4));
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutNullKey() {
+        store.put(null, "anyValue");
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionOnPutNullValue() {
+        store.put(1, null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutIfAbsentNullKey() {
+        store.putIfAbsent(null, "anyValue");
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionOnPutIfAbsentNullValue() {
+        store.putIfAbsent(1, null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutAllNullKey() {
+        store.putAll(Collections.singletonList(new KeyValue<Integer, String>(null, "anyValue")));
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionOnPutAllNullKey() {
+        store.putAll(Collections.singletonList(new KeyValue<Integer, String>(1, null)));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnDeleteNullKey() {
+        store.delete(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnGetNullKey() {
+        store.get(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() {
+        store.range(null, 2);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullToKey() {
+        store.range(2, null);
+    }
+
     @Test
     public void testSize() {
         assertEquals("A newly created store should have no entries", 0, store.approximateNumEntries());
@@ -220,6 +275,7 @@ public abstract class AbstractKeyValueStoreTest {
         store.put(2, "two");
         store.put(4, "four");
         store.put(5, "five");
+        store.flush();
         assertEquals(5, store.approximateNumEntries());
     }
 }

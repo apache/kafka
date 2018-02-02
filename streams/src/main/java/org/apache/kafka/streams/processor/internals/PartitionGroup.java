@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -36,10 +35,8 @@ public class PartitionGroup {
 
     private final PriorityQueue<RecordQueue> queuesByTime;
 
-    private final TimestampExtractor timestampExtractor;
-
     public static class RecordInfo {
-        public RecordQueue queue;
+        RecordQueue queue;
 
         public ProcessorNode node() {
             return queue.source();
@@ -49,7 +46,7 @@ public class PartitionGroup {
             return queue.partition();
         }
 
-        public RecordQueue queue() {
+        RecordQueue queue() {
             return queue;
         }
     }
@@ -57,25 +54,27 @@ public class PartitionGroup {
     // since task is thread-safe, we do not need to synchronize on local variables
     private int totalBuffered;
 
-    public PartitionGroup(Map<TopicPartition, RecordQueue> partitionQueues, TimestampExtractor timestampExtractor) {
-        this.queuesByTime = new PriorityQueue<>(partitionQueues.size(), new Comparator<RecordQueue>() {
+    PartitionGroup(final Map<TopicPartition, RecordQueue> partitionQueues) {
+        queuesByTime = new PriorityQueue<>(partitionQueues.size(), new Comparator<RecordQueue>() {
 
             @Override
-            public int compare(RecordQueue queue1, RecordQueue queue2) {
-                long time1 = queue1.timestamp();
-                long time2 = queue2.timestamp();
+            public int compare(final RecordQueue queue1, final RecordQueue queue2) {
+                final long time1 = queue1.timestamp();
+                final long time2 = queue2.timestamp();
 
-                if (time1 < time2) return -1;
-                if (time1 > time2) return 1;
+                if (time1 < time2) {
+                    return -1;
+                }
+                if (time1 > time2) {
+                    return 1;
+                }
                 return 0;
             }
         });
 
         this.partitionQueues = partitionQueues;
 
-        this.timestampExtractor = timestampExtractor;
-
-        this.totalBuffered = 0;
+        totalBuffered = 0;
     }
 
     /**
@@ -83,10 +82,10 @@ public class PartitionGroup {
      *
      * @return StampedRecord
      */
-    public StampedRecord nextRecord(RecordInfo info) {
+    StampedRecord nextRecord(final RecordInfo info) {
         StampedRecord record = null;
 
-        RecordQueue queue = queuesByTime.poll();
+        final RecordQueue queue = queuesByTime.poll();
         if (queue != null) {
             // get the first record from this queue.
             record = queue.poll();
@@ -97,7 +96,9 @@ public class PartitionGroup {
         }
         info.queue = queue;
 
-        if (record != null) totalBuffered--;
+        if (record != null) {
+            --totalBuffered;
+        }
 
         return record;
     }
@@ -109,11 +110,11 @@ public class PartitionGroup {
      * @param rawRecords  the raw records
      * @return the queue size for the partition
      */
-    public int addRawRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
-        RecordQueue recordQueue = partitionQueues.get(partition);
+    int addRawRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
+        final RecordQueue recordQueue = partitionQueues.get(partition);
 
-        int oldSize = recordQueue.size();
-        int newSize = recordQueue.addRawRecords(rawRecords);
+        final int oldSize = recordQueue.size();
+        final int newSize = recordQueue.addRawRecords(rawRecords);
 
         // add this record queue to be considered for processing in the future if it was empty before
         if (oldSize == 0 && newSize > 0) {
@@ -137,9 +138,10 @@ public class PartitionGroup {
         // we should always return the smallest timestamp of all partitions
         // to avoid group partition time goes backward
         long timestamp = Long.MAX_VALUE;
-        for (RecordQueue queue : partitionQueues.values()) {
-            if (timestamp > queue.timestamp())
+        for (final RecordQueue queue : partitionQueues.values()) {
+            if (timestamp > queue.timestamp()) {
                 timestamp = queue.timestamp();
+            }
         }
         return timestamp;
     }
@@ -147,32 +149,27 @@ public class PartitionGroup {
     /**
      * @throws IllegalStateException if the record's partition does not belong to this partition group
      */
-    public int numBuffered(TopicPartition partition) {
-        RecordQueue recordQueue = partitionQueues.get(partition);
+    int numBuffered(final TopicPartition partition) {
+        final RecordQueue recordQueue = partitionQueues.get(partition);
 
-        if (recordQueue == null)
+        if (recordQueue == null) {
             throw new IllegalStateException("Record's partition does not belong to this partition-group.");
+        }
 
         return recordQueue.size();
     }
 
-    public int topQueueSize() {
-        RecordQueue recordQueue = queuesByTime.peek();
-        return (recordQueue == null) ? 0 : recordQueue.size();
-    }
-
-    public int numBuffered() {
+    int numBuffered() {
         return totalBuffered;
     }
 
     public void close() {
-        queuesByTime.clear();
         partitionQueues.clear();
     }
 
     public void clear() {
         queuesByTime.clear();
-        for (RecordQueue queue : partitionQueues.values()) {
+        for (final RecordQueue queue : partitionQueues.values()) {
             queue.clear();
         }
     }

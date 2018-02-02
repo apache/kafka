@@ -66,7 +66,7 @@ class WrappedSessionStoreIterator<K, V> implements KeyValueIterator<Windowed<K>,
     @Override
     public Windowed<K> peekNextKey() {
         final Bytes bytes = bytesIterator.peekNextKey();
-        return SessionKeySerde.from(bytes.get(), serdes.keyDeserializer());
+        return SessionKeySerde.from(bytes.get(), serdes.keyDeserializer(), serdes.topic());
     }
 
     @Override
@@ -77,7 +77,7 @@ class WrappedSessionStoreIterator<K, V> implements KeyValueIterator<Windowed<K>,
     @Override
     public KeyValue<Windowed<K>, V> next() {
         final KeyValue<Bytes, byte[]> next = bytesIterator.next();
-        return KeyValue.pair(SessionKeySerde.from(next.key.get(), serdes.keyDeserializer()), serdes.valueFrom(next.value));
+        return KeyValue.pair(SessionKeySerde.from(next.key.get(), serdes.keyDeserializer(), serdes.topic()), serdes.valueFrom(next.value));
     }
 
     @Override

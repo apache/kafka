@@ -22,7 +22,9 @@ import java.util.Map;
  * A state store supplier which can create one or more {@link StateStore} instances.
  *
  * @param <T> State store type
+ * @deprecated use {@link org.apache.kafka.streams.state.StoreSupplier}
  */
+@Deprecated
 public interface StateStoreSupplier<T extends StateStore> {
 
     /**

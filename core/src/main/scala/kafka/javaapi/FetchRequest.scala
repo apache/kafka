@@ -57,14 +57,14 @@ class FetchRequest(correlationId: Int,
 
   override def toString = underlying.toString
 
-  override def equals(other: Any) = canEqual(other) && {
-    val otherFetchRequest = other.asInstanceOf[kafka.javaapi.FetchRequest]
-    this.underlying.equals(otherFetchRequest.underlying)
+  override def equals(obj: Any): Boolean = {
+    obj match {
+      case null => false
+      case other: FetchRequest => this.underlying.equals(other.underlying)
+      case _ => false
+    }
   }
 
-  def canEqual(other: Any) = other.isInstanceOf[kafka.javaapi.FetchRequest]
-
   override def hashCode = underlying.hashCode
-
 }
 

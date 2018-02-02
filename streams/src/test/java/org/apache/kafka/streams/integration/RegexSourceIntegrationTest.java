@@ -17,28 +17,28 @@
 package org.apache.kafka.streams.integration;
 
 import kafka.utils.MockTime;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
-import org.apache.kafka.streams.processor.internals.StreamTask;
-import org.apache.kafka.streams.processor.internals.StreamThread;
-import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -49,14 +49,14 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
-import java.lang.reflect.Field;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
-import java.util.UUID;
 import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -89,34 +89,41 @@ public class RegexSourceIntegrationTest {
     private static final String STRING_SERDE_CLASSNAME = Serdes.String().getClass().getName();
     private Properties streamsConfiguration;
     private static final String STREAM_TASKS_NOT_UPDATED = "Stream tasks not updated";
+    private KafkaStreams streams;
 
 
     @BeforeClass
-    public static void startKafkaCluster() throws Exception {
-        CLUSTER.createTopic(TOPIC_1);
-        CLUSTER.createTopic(TOPIC_2);
-        CLUSTER.createTopic(TOPIC_A);
-        CLUSTER.createTopic(TOPIC_C);
-        CLUSTER.createTopic(TOPIC_Y);
-        CLUSTER.createTopic(TOPIC_Z);
-        CLUSTER.createTopic(FA_TOPIC);
-        CLUSTER.createTopic(FOO_TOPIC);
+    public static void startKafkaCluster() throws InterruptedException {
+        CLUSTER.createTopics(
+            TOPIC_1,
+            TOPIC_2,
+            TOPIC_A,
+            TOPIC_C,
+            TOPIC_Y,
+            TOPIC_Z,
+            FA_TOPIC,
+            FOO_TOPIC,
+            DEFAULT_OUTPUT_TOPIC);
         CLUSTER.createTopic(PARTITIONED_TOPIC_1, 2, 1);
         CLUSTER.createTopic(PARTITIONED_TOPIC_2, 2, 1);
-        CLUSTER.createTopic(DEFAULT_OUTPUT_TOPIC);
-
     }
 
     @Before
     public void setUp() {
-
-        streamsConfiguration = StreamsTestUtils.getStreamsConfig(CLUSTER.bootstrapServers(),
-            STRING_SERDE_CLASSNAME,
-            STRING_SERDE_CLASSNAME);
+        final Properties properties = new Properties();
+        properties.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
+        streamsConfiguration = StreamsTestUtils.getStreamsConfig("regex-source-integration-test",
+                                                                 CLUSTER.bootstrapServers(),
+                                                                 STRING_SERDE_CLASSNAME,
+                                                                 STRING_SERDE_CLASSNAME,
+                                                                 properties);
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() throws IOException {
+        if (streams != null) {
+            streams.close();
+        }
         // Remove any state from previous test runs
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
@@ -132,47 +139,43 @@ public class RegexSourceIntegrationTest {
 
         CLUSTER.createTopic("TEST-TOPIC-1");
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
 
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
+        final List<String> assignedTopics = new ArrayList<>();
+        streams = new KafkaStreams(builder.build(), streamsConfig, new DefaultKafkaClientSupplier() {
+            @Override
+            public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+                return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
+                    @Override
+                    public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
+                        super.subscribe(topics, new TheConsumerRebalanceListener(assignedTopics, listener));
+                    }
+                };
 
-        final KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+            }
+        });
 
-        final Field streamThreadsField = streams.getClass().getDeclaredField("threads");
-        streamThreadsField.setAccessible(true);
-        final StreamThread[] streamThreads = (StreamThread[]) streamThreadsField.get(streams);
-        final StreamThread originalThread = streamThreads[0];
 
-        final TestStreamThread testStreamThread = new TestStreamThread(builder, streamsConfig,
-            new DefaultKafkaClientSupplier(),
-            originalThread.applicationId, originalThread.clientId, originalThread.processId, new Metrics(), Time.SYSTEM);
-
-        final TestCondition oneTopicAdded = new TestCondition() {
+        streams.start();
+        TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
-                return testStreamThread.assignedTopicPartitions.equals(expectedFirstAssignment);
+                return assignedTopics.equals(expectedFirstAssignment);
             }
-        };
-
-        streamThreads[0] = testStreamThread;
-        streams.start();
-
-        TestUtils.waitForCondition(oneTopicAdded, STREAM_TASKS_NOT_UPDATED);
+        }, STREAM_TASKS_NOT_UPDATED);
 
         CLUSTER.createTopic("TEST-TOPIC-2");
 
-        final TestCondition secondTopicAdded = new TestCondition() {
+        TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
-                return testStreamThread.assignedTopicPartitions.equals(expectedSecondAssignment);
+                return assignedTopics.equals(expectedSecondAssignment);
             }
-        };
+        }, STREAM_TASKS_NOT_UPDATED);
 
-        TestUtils.waitForCondition(secondTopicAdded, STREAM_TASKS_NOT_UPDATED);
-
-        streams.close();
     }
 
     @Test
@@ -184,50 +187,79 @@ public class RegexSourceIntegrationTest {
 
         final StreamsConfig streamsConfig = new StreamsConfig(streamsConfiguration);
 
-        CLUSTER.createTopic("TEST-TOPIC-A");
-        CLUSTER.createTopic("TEST-TOPIC-B");
+        CLUSTER.createTopics("TEST-TOPIC-A", "TEST-TOPIC-B");
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-[A-Z]"));
 
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
-        final KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+        final List<String> assignedTopics = new ArrayList<>();
+        streams = new KafkaStreams(builder.build(), streamsConfig, new DefaultKafkaClientSupplier() {
+            @Override
+            public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+                return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
+                    @Override
+                    public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
+                        super.subscribe(topics, new TheConsumerRebalanceListener(assignedTopics, listener));
+                    }
+                };
 
-        final Field streamThreadsField = streams.getClass().getDeclaredField("threads");
-        streamThreadsField.setAccessible(true);
-        final StreamThread[] streamThreads = (StreamThread[]) streamThreadsField.get(streams);
-        final StreamThread originalThread = streamThreads[0];
+            }
+        });
 
-        final TestStreamThread testStreamThread = new TestStreamThread(builder, streamsConfig,
-            new DefaultKafkaClientSupplier(),
-            originalThread.applicationId, originalThread.clientId, originalThread.processId, new Metrics(), Time.SYSTEM);
 
-        streamThreads[0] = testStreamThread;
-
-        final TestCondition bothTopicsAdded = new TestCondition() {
+        streams.start();
+        TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
-                return testStreamThread.assignedTopicPartitions.equals(expectedFirstAssignment);
+                return assignedTopics.equals(expectedFirstAssignment);
             }
-        };
-        streams.start();
-
-        TestUtils.waitForCondition(bothTopicsAdded, STREAM_TASKS_NOT_UPDATED);
+        }, STREAM_TASKS_NOT_UPDATED);
 
         CLUSTER.deleteTopic("TEST-TOPIC-A");
 
-        final TestCondition oneTopicRemoved = new TestCondition() {
+        TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
-                return testStreamThread.assignedTopicPartitions.equals(expectedSecondAssignment);
+                return assignedTopics.equals(expectedSecondAssignment);
             }
-        };
+        }, STREAM_TASKS_NOT_UPDATED);
+    }
 
-        TestUtils.waitForCondition(oneTopicRemoved, STREAM_TASKS_NOT_UPDATED);
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldAddStateStoreToRegexDefinedSource() throws InterruptedException {
 
-        streams.close();
+        final ProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        final MockStateStoreSupplier stateStoreSupplier = new MockStateStoreSupplier("testStateStore", false);
+        final long thirtySecondTimeout = 30 * 1000;
+
+        final TopologyBuilder builder = new TopologyBuilder()
+                .addSource("ingest", Pattern.compile("topic-\\d+"))
+                .addProcessor("my-processor", processorSupplier, "ingest")
+                .addStateStore(stateStoreSupplier, "my-processor");
+
+
+        streams = new KafkaStreams(builder, streamsConfiguration);
+        try {
+            streams.start();
+
+            final TestCondition stateStoreNameBoundToSourceTopic = new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    final Map<String, List<String>> stateStoreToSourceTopic = builder.stateStoreNameToSourceTopics();
+                    final List<String> topicNamesList = stateStoreToSourceTopic.get("testStateStore");
+                    return topicNamesList != null && !topicNamesList.isEmpty() && topicNamesList.get(0).equals("topic-1");
+                }
+            };
+
+            TestUtils.waitForCondition(stateStoreNameBoundToSourceTopic, thirtySecondTimeout, "Did not find topic: [topic-1] connected to state store: [testStateStore]");
+
+        } finally {
+            streams.close();
+        }
     }
 
 
@@ -244,17 +276,17 @@ public class RegexSourceIntegrationTest {
 
         final Serde<String> stringSerde = Serdes.String();
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("topic-\\d"));
         final KStream<String, String> pattern2Stream = builder.stream(Pattern.compile("topic-[A-D]"));
-        final KStream<String, String> namedTopicsStream = builder.stream(TOPIC_Y, TOPIC_Z);
+        final KStream<String, String> namedTopicsStream = builder.stream(Arrays.asList(TOPIC_Y, TOPIC_Z));
 
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
         pattern2Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
         namedTopicsStream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
-        final KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+        streams = new KafkaStreams(builder.build(), streamsConfiguration);
         streams.start();
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
@@ -276,7 +308,6 @@ public class RegexSourceIntegrationTest {
             actualValues.add(receivedKeyValue.value);
         }
 
-        streams.close();
         Collections.sort(actualValues);
         Collections.sort(expectedReceivedValues);
         assertThat(actualValues, equalTo(expectedReceivedValues));
@@ -285,72 +316,67 @@ public class RegexSourceIntegrationTest {
     @Test
     public void testMultipleConsumersCanReadFromPartitionedTopic() throws Exception {
 
-        final Serde<String> stringSerde = Serdes.String();
-        final KStreamBuilder builderLeader = new KStreamBuilder();
-        final KStreamBuilder builderFollower = new KStreamBuilder();
-        final List<String> expectedAssignment = Arrays.asList(PARTITIONED_TOPIC_1,  PARTITIONED_TOPIC_2);
+        KafkaStreams partitionedStreamsLeader = null;
+        KafkaStreams partitionedStreamsFollower = null;
+        try {
+            final Serde<String> stringSerde = Serdes.String();
+            final StreamsBuilder builderLeader = new StreamsBuilder();
+            final StreamsBuilder builderFollower = new StreamsBuilder();
+            final List<String> expectedAssignment = Arrays.asList(PARTITIONED_TOPIC_1,  PARTITIONED_TOPIC_2);
 
-        final KStream<String, String> partitionedStreamLeader = builderLeader.stream(Pattern.compile("partitioned-\\d"));
-        final KStream<String, String> partitionedStreamFollower = builderFollower.stream(Pattern.compile("partitioned-\\d"));
-
-
-        partitionedStreamLeader.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
-        partitionedStreamFollower.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
-
-        final KafkaStreams partitionedStreamsLeader  = new KafkaStreams(builderLeader, streamsConfiguration);
-        final KafkaStreams partitionedStreamsFollower  = new KafkaStreams(builderFollower, streamsConfiguration);
-
-        final StreamsConfig streamsConfig = new StreamsConfig(streamsConfiguration);
+            final KStream<String, String> partitionedStreamLeader = builderLeader.stream(Pattern.compile("partitioned-\\d"));
+            final KStream<String, String> partitionedStreamFollower = builderFollower.stream(Pattern.compile("partitioned-\\d"));
 
 
-        final Field leaderStreamThreadsField = partitionedStreamsLeader.getClass().getDeclaredField("threads");
-        leaderStreamThreadsField.setAccessible(true);
-        final StreamThread[] leaderStreamThreads = (StreamThread[]) leaderStreamThreadsField.get(partitionedStreamsLeader);
-        final StreamThread originalLeaderThread = leaderStreamThreads[0];
+            partitionedStreamLeader.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
+            partitionedStreamFollower.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
-        final TestStreamThread leaderTestStreamThread = new TestStreamThread(builderLeader, streamsConfig,
-                new DefaultKafkaClientSupplier(),
-                originalLeaderThread.applicationId, originalLeaderThread.clientId, originalLeaderThread.processId, new Metrics(), Time.SYSTEM);
+            final List<String> leaderAssignment = new ArrayList<>();
+            final List<String> followerAssignment = new ArrayList<>();
+            StreamsConfig config = new StreamsConfig(streamsConfiguration);
 
-        leaderStreamThreads[0] = leaderTestStreamThread;
+            partitionedStreamsLeader  = new KafkaStreams(builderLeader.build(), config, new DefaultKafkaClientSupplier() {
+                @Override
+                public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+                    return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
+                        @Override
+                        public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
+                            super.subscribe(topics, new TheConsumerRebalanceListener(leaderAssignment, listener));
+                        }
+                    };
 
-        final TestCondition bothTopicsAddedToLeader = new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return leaderTestStreamThread.assignedTopicPartitions.equals(expectedAssignment);
+                }
+            });
+            partitionedStreamsFollower  = new KafkaStreams(builderFollower.build(), config, new DefaultKafkaClientSupplier() {
+                @Override
+                public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
+                    return new KafkaConsumer<byte[], byte[]>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()) {
+                        @Override
+                        public void subscribe(final Pattern topics, final ConsumerRebalanceListener listener) {
+                            super.subscribe(topics, new TheConsumerRebalanceListener(followerAssignment, listener));
+                        }
+                    };
+
+                }
+            });
+
+
+            partitionedStreamsLeader.start();
+            partitionedStreamsFollower.start();
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return followerAssignment.equals(expectedAssignment) && leaderAssignment.equals(expectedAssignment);
+                }
+            }, "topic assignment not completed");
+        } finally {
+            if (partitionedStreamsLeader != null) {
+                partitionedStreamsLeader.close();
             }
-        };
-
-
-
-        final Field followerStreamThreadsField = partitionedStreamsFollower.getClass().getDeclaredField("threads");
-        followerStreamThreadsField.setAccessible(true);
-        final StreamThread[] followerStreamThreads = (StreamThread[]) followerStreamThreadsField.get(partitionedStreamsFollower);
-        final StreamThread originalFollowerThread = followerStreamThreads[0];
-
-        final TestStreamThread followerTestStreamThread = new TestStreamThread(builderFollower, streamsConfig,
-                new DefaultKafkaClientSupplier(),
-                originalFollowerThread.applicationId, originalFollowerThread.clientId, originalFollowerThread.processId, new Metrics(), Time.SYSTEM);
-
-        followerStreamThreads[0] = followerTestStreamThread;
-
-
-        final TestCondition bothTopicsAddedToFollower = new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return followerTestStreamThread.assignedTopicPartitions.equals(expectedAssignment);
+            if (partitionedStreamsFollower != null) {
+                partitionedStreamsFollower.close();
             }
-        };
-
-        partitionedStreamsLeader.start();
-        TestUtils.waitForCondition(bothTopicsAddedToLeader, "Topics never assigned to leader stream");
-
-
-        partitionedStreamsFollower.start();
-        TestUtils.waitForCondition(bothTopicsAddedToFollower, "Topics never assigned to follower stream");
-
-        partitionedStreamsLeader.close();
-        partitionedStreamsFollower.close();
+        }
 
     }
 
@@ -364,7 +390,7 @@ public class RegexSourceIntegrationTest {
 
         final Serde<String> stringSerde = Serdes.String();
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
 
         // overlapping patterns here, no messages should be sent as TopologyBuilderException
@@ -377,7 +403,7 @@ public class RegexSourceIntegrationTest {
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
         pattern2Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
-        final KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+        streams = new KafkaStreams(builder.build(), streamsConfiguration);
         streams.start();
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
@@ -387,34 +413,33 @@ public class RegexSourceIntegrationTest {
 
         final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
 
-        try {
-            IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, DEFAULT_OUTPUT_TOPIC, 2, 5000);
-            fail("Should not get here");
-        } finally {
-            streams.close();
-        }
-
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, DEFAULT_OUTPUT_TOPIC, 2, 5000);
+        fail("Should not get here");
     }
 
-    private class TestStreamThread extends StreamThread {
-        public volatile List<String> assignedTopicPartitions = new ArrayList<>();
+    private static class TheConsumerRebalanceListener implements ConsumerRebalanceListener {
+        private final List<String> assignedTopics;
+        private final ConsumerRebalanceListener listener;
 
-        public TestStreamThread(final TopologyBuilder builder, final StreamsConfig config, final KafkaClientSupplier clientSupplier, final String applicationId, final String clientId, final UUID processId, final Metrics metrics, final Time time) {
-            super(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time, new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
-                  0);
+        TheConsumerRebalanceListener(final List<String> assignedTopics, final ConsumerRebalanceListener listener) {
+            this.assignedTopics = assignedTopics;
+            this.listener = listener;
         }
 
         @Override
-        public StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
-            final List<String> topicPartitions = new ArrayList<>();
-            for (final TopicPartition partition : partitions) {
-                topicPartitions.add(partition.topic());
-            }
-            Collections.sort(topicPartitions);
-
-            assignedTopicPartitions = topicPartitions;
-            return super.createStreamTask(id, partitions);
+        public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
+            assignedTopics.clear();
+            listener.onPartitionsRevoked(partitions);
         }
 
+        @Override
+        public void onPartitionsAssigned(final Collection<TopicPartition> partitions) {
+            for (final TopicPartition partition : partitions) {
+                assignedTopics.add(partition.topic());
+            }
+            Collections.sort(assignedTopics);
+            listener.onPartitionsAssigned(partitions);
+        }
     }
+
 }

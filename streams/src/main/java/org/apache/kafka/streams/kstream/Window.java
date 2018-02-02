@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 /**
@@ -33,7 +32,6 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
  * @see org.apache.kafka.streams.kstream.internals.UnlimitedWindow
  * @see TimestampExtractor
  */
-@InterfaceStability.Unstable
 public abstract class Window {
 
     protected final long startMs;

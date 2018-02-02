@@ -21,7 +21,6 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.Properties
 
-import kafka.admin.AdminUtils
 import kafka.api.FetchRequestBuilder
 import kafka.common.FailedToSendMessageException
 import kafka.consumer.SimpleConsumer
@@ -30,7 +29,7 @@ import kafka.serializer.StringEncoder
 import kafka.server.{KafkaConfig, KafkaRequestHandler, KafkaServer}
 import kafka.utils._
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Time
 import org.apache.log4j.{Level, Logger}
@@ -59,7 +58,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
   def getConsumer2() = {
     if (consumer2 == null)
-      consumer2 = new SimpleConsumer("localhost", TestUtils.boundPort(server2), 100, 64*1024, "")
+      consumer2 = new SimpleConsumer("localhost", TestUtils.boundPort(server2), 1000000, 64*1024, "")
     consumer2
   }
 
@@ -91,17 +90,14 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     if (consumer2 != null)
       consumer2.close()
 
-    server1.shutdown
-    server2.shutdown
-    CoreUtils.delete(server1.config.logDirs)
-    CoreUtils.delete(server2.config.logDirs)
+    TestUtils.shutdownServers(Seq(server1, server2))
     super.tearDown()
   }
 
   @Test
   def testUpdateBrokerPartitionInfo() {
     val topic = "new-topic"
-    TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
+    TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
 
     val props = new Properties()
     // no need to retry since the send will always fail
@@ -153,7 +149,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
     val topic = "new-topic"
     // create topic with 1 partition and await leadership
-    TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
+    TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
 
     val producer1 = TestUtils.createProducer[String, String](
       brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
@@ -167,7 +163,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     producer1.send(new KeyedMessage[String, String](topic, "test", "test2"))
     val endTime = System.currentTimeMillis()
     // get the leader
-    val leaderOpt = zkUtils.getLeaderForPartition(topic, 0)
+    val leaderOpt = zkClient.getLeaderForPartition(new TopicPartition(topic, 0))
     assertTrue("Leader for topic new-topic partition 0 should exist", leaderOpt.isDefined)
     val leader = leaderOpt.get
 
@@ -225,7 +221,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
     val topic = "new-topic"
     // create topic
-    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0->Seq(0), 1->Seq(0), 2->Seq(0), 3->Seq(0)),
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(0), 1->Seq(0), 2->Seq(0), 3->Seq(0)),
                           servers = servers)
 
     val producer = TestUtils.createProducer[String, String](
@@ -258,7 +254,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
     // restart server 1
     server1.startup()
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
     TestUtils.waitUntilLeaderIsKnown(servers, topic, 0)
 
@@ -284,7 +280,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
   def testAsyncSendCanCorrectlyFailWithTimeout() {
     val topic = "new-topic"
     // create topics in ZK
-    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0->Seq(0, 1)), servers = servers)
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(0, 1)), servers = servers)
 
     val timeoutMs = 500
     val props = new Properties()
@@ -343,16 +339,8 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       partitioner = classOf[StaticPartitioner].getName)
 
     try {
-
-      // create topic
-      AdminUtils.createTopic(zkUtils, "new-topic", 2, 1)
-      TestUtils.waitUntilTrue(() =>
-        AdminUtils.fetchTopicMetadataFromZk("new-topic", zkUtils).error != Errors.UNKNOWN_TOPIC_OR_PARTITION,
-        "Topic new-topic not created after timeout",
-        waitTime = zookeeper.tickTime)
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, "new-topic", 0)
-
-      producer.send(new KeyedMessage[String, String]("new-topic", "key", null))
+      TestUtils.createTopic(zkClient, "new-topic", 2, 1, servers)
+      producer.send(new KeyedMessage("new-topic", "key", null))
     } finally {
       producer.close()
     }

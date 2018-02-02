@@ -33,7 +33,6 @@ import java.util.Map;
  */
 public class SessionKeySerde<K> implements Serde<Windowed<K>> {
     private static final int TIMESTAMP_SIZE = 8;
-    private static final String SESSIONKEY = "sessionkey";
 
     private final Serde<K> keySerde;
 
@@ -77,7 +76,7 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
             if (data == null) {
                 return null;
             }
-            return toBinary(data, keySerializer).get();
+            return toBinary(data, keySerializer, topic).get();
         }
 
         @Override
@@ -102,7 +101,7 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
             if (data == null || data.length == 0) {
                 return null;
             }
-            return from(data, deserializer);
+            return from(data, deserializer, topic);
         }
 
 
@@ -120,7 +119,7 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
         return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - TIMESTAMP_SIZE);
     }
 
-    static Window extractWindow(final byte[] binaryKey) {
+    public static Window extractWindow(final byte[] binaryKey) {
         final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
         final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE);
         final long end = buffer.getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
@@ -133,8 +132,8 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
         return bytes;
     }
 
-    public static <K> Windowed<K> from(final byte[] binaryKey, final Deserializer<K> keyDeserializer) {
-        final K key = extractKey(binaryKey, keyDeserializer);
+    public static <K> Windowed<K> from(final byte[] binaryKey, final Deserializer<K> keyDeserializer, final String topic) {
+        final K key = extractKey(binaryKey, keyDeserializer, topic);
         final Window window = extractWindow(binaryKey);
         return new Windowed<>(key, window);
     }
@@ -147,12 +146,12 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
         return new Windowed<>(Bytes.wrap(extractKeyBytes(binaryKey)), new SessionWindow(start, end));
     }
 
-    private static <K> K extractKey(final byte[] binaryKey, Deserializer<K> deserializer) {
-        return deserializer.deserialize(SESSIONKEY, extractKeyBytes(binaryKey));
+    private static <K> K extractKey(final byte[] binaryKey, final Deserializer<K> deserializer, final String topic) {
+        return deserializer.deserialize(topic, extractKeyBytes(binaryKey));
     }
 
-    public static <K> Bytes toBinary(final Windowed<K> sessionKey, final Serializer<K> serializer) {
-        final byte[] bytes = serializer.serialize(SESSIONKEY, sessionKey.key());
+    public static <K> Bytes toBinary(final Windowed<K> sessionKey, final Serializer<K> serializer, final String topic) {
+        final byte[] bytes = serializer.serialize(topic, sessionKey.key());
         ByteBuffer buf = ByteBuffer.allocate(bytes.length + 2 * TIMESTAMP_SIZE);
         buf.put(bytes);
         buf.putLong(sessionKey.window().end());

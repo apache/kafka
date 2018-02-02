@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -34,8 +35,8 @@ public class OffsetCheckpointTest {
 
     @Test
     public void testReadWrite() throws IOException {
-        File f = TestUtils.tempFile();
-        OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
+        final File f = TestUtils.tempFile();
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
 
         try {
             Map<TopicPartition, Long> offsets = new HashMap<>();
@@ -55,5 +56,21 @@ public class OffsetCheckpointTest {
         } finally {
             checkpoint.delete();
         }
+    }
+
+    @Test
+    public void shouldNotWriteCheckpointWhenNoOffsets() throws IOException {
+        // we do not need to worry about file name uniqueness since this file should not be created
+        final File f = new File(TestUtils.tempDirectory().getAbsolutePath(), "kafka.tmp");
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
+
+        checkpoint.write(Collections.<TopicPartition, Long>emptyMap());
+
+        assertFalse(f.exists());
+
+        assertEquals(Collections.<TopicPartition, Long>emptyMap(), checkpoint.read());
+
+        // deleting a non-exist checkpoint file should be fine
+        checkpoint.delete();
     }
 }

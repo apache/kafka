@@ -26,7 +26,6 @@ import org.junit.{Before, Test}
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
 
-
 class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with Logging {
 
   private val nodesNum = 3
@@ -48,7 +47,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
 
   @volatile private var running = true
   
-  override def generateConfigs() = TestUtils.createBrokerConfigs(nodesNum, zkConnect)
+  override def generateConfigs = TestUtils.createBrokerConfigs(nodesNum, zkConnect)
     .map(KafkaConfig.fromProps(_, overridingProps))
 
   @Before
@@ -56,13 +55,9 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
     // Do some Metrics Registry cleanup by removing the metrics that this test checks. 
     // This is a test workaround to the issue that prior harness runs may have left a populated registry.
     // see https://issues.apache.org/jira/browse/KAFKA-4605
-    for (m <- (testedMetrics)) {
-        Metrics.defaultRegistry.allMetrics.asScala
-        .filterKeys(k => k.getName.endsWith(m))
-        .headOption match {
-           case Some(e) => Metrics.defaultRegistry.removeMetric(e._1)
-           case None =>
-        }
+    for (m <- testedMetrics) {
+        val metricName = Metrics.defaultRegistry.allMetrics.asScala.keys.find(_.getName.endsWith(m))
+        metricName.foreach(Metrics.defaultRegistry.removeMetric)
     }
     
     super.setUp
@@ -140,7 +135,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
       // Create topics
       for (t <- topics if running) {
         try {
-          kafka.admin.AdminUtils.createTopic(zkUtils, t, partitionNum, replicationFactor)
+          adminZkClient.createTopic(t, partitionNum, replicationFactor)
         } catch {
           case e: Exception => e.printStackTrace
         }
@@ -150,7 +145,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
       // Delete topics
       for (t <- topics if running) {
           try {
-              kafka.admin.AdminUtils.deleteTopic(zkUtils, t)
+              adminZkClient.deleteTopic(t)
           } catch {
           case e: Exception => e.printStackTrace
           }

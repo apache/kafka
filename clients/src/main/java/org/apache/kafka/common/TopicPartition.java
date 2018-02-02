@@ -75,5 +75,4 @@ public final class TopicPartition implements Serializable {
     public String toString() {
         return topic + "-" + partition;
     }
-
 }

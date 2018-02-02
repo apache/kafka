@@ -23,7 +23,11 @@ import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.KafkaException;
 
-/** DefaultPrincipalBuilder which return transportLayer's peer Principal **/
+/**
+ * DefaultPrincipalBuilder which return transportLayer's peer Principal
+ * @deprecated As of Kafka 1.0.0. This will be removed in a future major release.
+ **/
+@Deprecated
 public class DefaultPrincipalBuilder implements PrincipalBuilder {
 
     public void configure(Map<String, ?> configs) {}

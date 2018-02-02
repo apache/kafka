@@ -19,7 +19,7 @@ package kafka.utils
 import org.apache.kafka.common.utils.{Exit => JExit}
 
 /**
-  * Internal class that should be used instead of `Exit.exit()` and `Runtime.getRuntime().halt()` so that tests can
+  * Internal class that should be used instead of `System.exit()` and `Runtime.getRuntime().halt()` so that tests can
   * easily change the behaviour.
   */
 object Exit {
@@ -38,7 +38,7 @@ object Exit {
     JExit.setExitProcedure(functionToProcedure(exitProcedure))
 
   def setHaltProcedure(haltProcedure: (Int, Option[String]) => Nothing): Unit =
-    JExit.setExitProcedure(functionToProcedure(haltProcedure))
+    JExit.setHaltProcedure(functionToProcedure(haltProcedure))
 
   def resetExitProcedure(): Unit =
     JExit.resetExitProcedure()

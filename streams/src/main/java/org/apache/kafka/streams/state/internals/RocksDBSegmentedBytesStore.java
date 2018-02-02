@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.List;
@@ -45,14 +46,45 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to) {
         final List<Segment> searchSpace = keySchema.segmentsToSearch(segments, from, to);
 
-        final Bytes binaryFrom = keySchema.lowerRange(key, from);
-        final Bytes binaryTo = keySchema.upperRange(key, to);
+        final Bytes binaryFrom = keySchema.lowerRangeFixedSize(key, from);
+        final Bytes binaryTo = keySchema.upperRangeFixedSize(key, to);
 
         return new SegmentIterator(searchSpace.iterator(),
-                                   keySchema.hasNextCondition(key, from, to),
+                                   keySchema.hasNextCondition(key, key, from, to),
                                    binaryFrom, binaryTo);
     }
 
+    @Override
+    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, Bytes keyTo, final long from, final long to) {
+        final List<Segment> searchSpace = keySchema.segmentsToSearch(segments, from, to);
+
+        final Bytes binaryFrom = keySchema.lowerRange(keyFrom, from);
+        final Bytes binaryTo = keySchema.upperRange(keyTo, to);
+
+        return new SegmentIterator(searchSpace.iterator(),
+                                   keySchema.hasNextCondition(keyFrom, keyTo, from, to),
+                                   binaryFrom, binaryTo);
+    }
+    
+    @Override
+    public KeyValueIterator<Bytes, byte[]> all() {
+        
+        final List<Segment> searchSpace = segments.allSegments();
+        
+        return new SegmentIterator(searchSpace.iterator(),
+                                   keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
+                                   null, null);
+    }
+    
+    @Override
+    public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom, final long timeTo) {
+        final List<Segment> searchSpace = segments.segments(timeFrom, timeTo);
+        
+        return new SegmentIterator(searchSpace.iterator(),
+                                   keySchema.hasNextCondition(null, null, timeFrom, timeTo),
+                                   null, null);
+    }
+    
     @Override
     public void remove(final Bytes key) {
         final Segment segment = segments.getSegmentForTimestamp(keySchema.segmentTimestamp(key));
@@ -89,6 +121,8 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     public void init(ProcessorContext context, StateStore root) {
         this.context = context;
 
+        keySchema.init(ProcessorStateManager.storeChangelogTopic(context.applicationId(), root.name()));
+
         segments.openExisting(context);
 
         // register and possibly restore the state from the logs
@@ -123,4 +157,5 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     public boolean isOpen() {
         return open;
     }
+
 }

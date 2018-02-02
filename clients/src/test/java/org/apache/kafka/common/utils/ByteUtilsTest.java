@@ -65,6 +65,16 @@ public class ByteUtilsTest {
     }
 
     @Test
+    public void testReadUnsignedInt() {
+        ByteBuffer buffer = ByteBuffer.allocate(4);
+        long writeValue = 133444;
+        ByteUtils.writeUnsignedInt(buffer, writeValue);
+        buffer.flip();
+        long readValue = ByteUtils.readUnsignedInt(buffer);
+        assertEquals(writeValue, readValue);
+    }
+
+    @Test
     public void testWriteUnsignedIntLEToArray() {
         int value1 = 0x04030201;
 

@@ -70,6 +70,12 @@ public class Serdes {
         }
     }
 
+    static public final class ShortSerde extends WrapperSerde<Short> {
+        public ShortSerde() {
+            super(new ShortSerializer(), new ShortDeserializer());
+        }
+    }
+
     static public final class FloatSerde extends WrapperSerde<Float> {
         public FloatSerde() {
             super(new FloatSerializer(), new FloatDeserializer());
@@ -112,6 +118,10 @@ public class Serdes {
             return (Serde<T>) String();
         }
 
+        if (Short.class.isAssignableFrom(type)) {
+            return (Serde<T>) Short();
+        }
+
         if (Integer.class.isAssignableFrom(type)) {
             return (Serde<T>) Integer();
         }
@@ -141,7 +151,8 @@ public class Serdes {
         }
 
         // TODO: we can also serializes objects of type T using generic Java serialization by default
-        throw new IllegalArgumentException("Unknown class for built-in serializer");
+        throw new IllegalArgumentException("Unknown class for built-in serializer. Supported types are: " +
+            "String, Short, Integer, Long, Float, Double, ByteArray, ByteBuffer, Bytes");
     }
 
     /**
@@ -173,6 +184,13 @@ public class Serdes {
      */
     static public Serde<Integer> Integer() {
         return new IntegerSerde();
+    }
+
+    /*
+     * A serde for nullable {@code Short} type.
+     */
+    static public Serde<Short> Short() {
+        return new ShortSerde();
     }
 
     /*

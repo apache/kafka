@@ -32,6 +32,8 @@ import org.apache.kafka.common.utils.Utils._
 /**
  * A consumer of kafka messages
  */
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.consumer.KafkaConsumer instead.", "0.11.0.0")
 @threadsafe
 class SimpleConsumer(val host: String,
                      val port: Int,

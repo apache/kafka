@@ -24,16 +24,19 @@ import org.junit.Test;
 import java.io.Closeable;
 import java.io.DataOutputStream;
 import java.io.EOFException;
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Random;
 
 import static org.apache.kafka.common.utils.Utils.formatAddress;
+import static org.apache.kafka.common.utils.Utils.formatBytes;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.junit.Assert.assertArrayEquals;
@@ -76,12 +79,23 @@ public class UtilsTest {
     }
 
     @Test
+    public void testFormatBytes() {
+        assertEquals("-1", formatBytes(-1));
+        assertEquals("1023 B", formatBytes(1023));
+        assertEquals("1 KB", formatBytes(1024));
+        assertEquals("1024 KB", formatBytes((1024 * 1024) - 1));
+        assertEquals("1 MB", formatBytes(1024 * 1024));
+        assertEquals("1.1 MB", formatBytes((long) (1.1 * 1024 * 1024)));
+        assertEquals("10 MB", formatBytes(10 * 1024 * 1024));
+    }
+
+    @Test
     public void testJoin() {
         assertEquals("", Utils.join(Collections.emptyList(), ","));
         assertEquals("1", Utils.join(Arrays.asList("1"), ","));
         assertEquals("1,2,3", Utils.join(Arrays.asList(1, 2, 3), ","));
     }
-
+    
     @Test
     public void testAbs() {
         assertEquals(0, Utils.abs(Integer.MIN_VALUE));
@@ -425,4 +439,26 @@ public class UtilsTest {
         }
     }
 
+    @Test(timeout = 120000)
+    public void testRecursiveDelete() throws IOException {
+        Utils.delete(null); // delete of null does nothing.
+
+        // Test that deleting a temporary file works.
+        File tempFile = TestUtils.tempFile();
+        Utils.delete(tempFile);
+        assertFalse(Files.exists(tempFile.toPath()));
+
+        // Test recursive deletes
+        File tempDir = TestUtils.tempDirectory();
+        File tempDir2 = TestUtils.tempDirectory(tempDir.toPath(), "a");
+        TestUtils.tempDirectory(tempDir.toPath(), "b");
+        TestUtils.tempDirectory(tempDir2.toPath(), "c");
+        Utils.delete(tempDir);
+        assertFalse(Files.exists(tempDir.toPath()));
+        assertFalse(Files.exists(tempDir2.toPath()));
+
+        // Test that deleting a non-existent directory hierarchy works.
+        Utils.delete(tempDir);
+        assertFalse(Files.exists(tempDir.toPath()));
+    }
 }

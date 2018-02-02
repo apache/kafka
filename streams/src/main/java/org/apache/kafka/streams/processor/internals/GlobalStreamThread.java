@@ -19,20 +19,29 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+
+import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
+import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.PENDING_SHUTDOWN;
 
 /**
  * This is the thread responsible for keeping all Global State Stores updated.
@@ -40,136 +49,303 @@ import java.util.Map;
  */
 public class GlobalStreamThread extends Thread {
 
-    private static final Logger log = LoggerFactory.getLogger(GlobalStreamThread.class);
-
+    private final Logger log;
+    private final LogContext logContext;
     private final StreamsConfig config;
-    private final Consumer<byte[], byte[]> consumer;
+    private final Consumer<byte[], byte[]> globalConsumer;
     private final StateDirectory stateDirectory;
     private final Time time;
     private final ThreadCache cache;
     private final StreamsMetrics streamsMetrics;
     private final ProcessorTopology topology;
-    private volatile boolean running = false;
     private volatile StreamsException startupException;
+
+    /**
+     * The states that the global stream thread can be in
+     *
+     * <pre>
+     *                +-------------+
+     *          +<--- | Created (0) |
+     *          |     +-----+-------+
+     *          |           |
+     *          |           v
+     *          |     +-----+-------+
+     *          +<--- | Running (1) |
+     *          |     +-----+-------+
+     *          |           |
+     *          |           v
+     *          |     +-----+-------+
+     *          +---> | Pending     |
+     *                | Shutdown (2)|
+     *                +-----+-------+
+     *                      |
+     *                      v
+     *                +-----+-------+
+     *                | Dead (3)    |
+     *                +-------------+
+     * </pre>
+     *
+     * Note the following:
+     * - Any state can go to PENDING_SHUTDOWN.
+     *   That is because streams can be closed at any time.
+     * - State PENDING_SHUTDOWN may want to transit itself.
+     *   In this case we will forbid the transition but will not treat as an error.
+     *
+     */
+    public enum State implements ThreadStateTransitionValidator {
+        CREATED(1, 2), RUNNING(2), PENDING_SHUTDOWN(3), DEAD;
+
+        private final Set<Integer> validTransitions = new HashSet<>();
+
+        State(final Integer... validTransitions) {
+            this.validTransitions.addAll(Arrays.asList(validTransitions));
+        }
+
+        public boolean isRunning() {
+            return equals(RUNNING);
+        }
+
+        @Override
+        public boolean isValidTransition(final ThreadStateTransitionValidator newState) {
+            State tmpState = (State) newState;
+            return validTransitions.contains(tmpState.ordinal());
+        }
+    }
+
+    private volatile State state = State.CREATED;
+    private final Object stateLock = new Object();
+    private StreamThread.StateListener stateListener = null;
+    private final String logPrefix;
+    private final StateRestoreListener stateRestoreListener;
+
+    /**
+     * Set the {@link StreamThread.StateListener} to be notified when state changes. Note this API is internal to
+     * Kafka Streams and is not intended to be used by an external application.
+     */
+    public void setStateListener(final StreamThread.StateListener listener) {
+        stateListener = listener;
+    }
+
+    /**
+     * @return The state this instance is in
+     */
+    public State state() {
+        // we do not need to use the stat lock since the variable is volatile
+        return state;
+    }
+
+    /**
+     * Sets the state
+     * @param newState New state
+     */
+    private boolean setState(final State newState) {
+        final State oldState = state;
+
+        synchronized (stateLock) {
+            if (state == State.PENDING_SHUTDOWN && newState == State.PENDING_SHUTDOWN) {
+                // when the state is already in PENDING_SHUTDOWN, its transition to itself
+                // will be refused but we do not throw exception here
+                return false;
+            } else if (state == State.DEAD) {
+                // when the state is already in NOT_RUNNING, all its transitions
+                // will be refused but we do not throw exception here
+                return false;
+            } else if (!state.isValidTransition(newState)) {
+                log.error("Unexpected state transition from {} to {}", oldState, newState);
+                throw new StreamsException(logPrefix + "Unexpected state transition from " + oldState + " to " + newState);
+            } else {
+                log.info("State transition from {} to {}", oldState, newState);
+            }
+
+            state = newState;
+        }
+
+        if (stateListener != null) {
+            stateListener.onChange(this, state, oldState);
+        }
+
+        return true;
+    }
+
+    public boolean stillRunning() {
+        synchronized (stateLock) {
+            return state.isRunning();
+        }
+    }
 
     public GlobalStreamThread(final ProcessorTopology topology,
                               final StreamsConfig config,
                               final Consumer<byte[], byte[]> globalConsumer,
                               final StateDirectory stateDirectory,
+                              final long cacheSizeBytes,
                               final Metrics metrics,
                               final Time time,
-                              final String threadClientId) {
+                              final String threadClientId,
+                              final StateRestoreListener stateRestoreListener) {
         super(threadClientId);
         this.time = time;
         this.config = config;
         this.topology = topology;
-        this.consumer = globalConsumer;
+        this.globalConsumer = globalConsumer;
         this.stateDirectory = stateDirectory;
-        long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
-                (config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG) + 1));
         this.streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId, Collections.singletonMap("client-id", threadClientId));
-        this.cache = new ThreadCache(threadClientId, cacheSizeBytes, streamsMetrics);
+        this.logPrefix = String.format("global-stream-thread [%s] ", threadClientId);
+        this.logContext = new LogContext(logPrefix);
+        this.log = logContext.logger(getClass());
+        this.cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
+        this.stateRestoreListener = stateRestoreListener;
+
     }
 
     static class StateConsumer {
-        private final Consumer<byte[], byte[]> consumer;
+        private final Consumer<byte[], byte[]> globalConsumer;
         private final GlobalStateMaintainer stateMaintainer;
         private final Time time;
         private final long pollMs;
         private final long flushInterval;
+        private final Logger log;
 
         private long lastFlush;
 
-        StateConsumer(final Consumer<byte[], byte[]> consumer,
+        StateConsumer(final LogContext logContext,
+                      final Consumer<byte[], byte[]> globalConsumer,
                       final GlobalStateMaintainer stateMaintainer,
                       final Time time,
                       final long pollMs,
                       final long flushInterval) {
-            this.consumer = consumer;
+            this.log = logContext.logger(getClass());
+            this.globalConsumer = globalConsumer;
             this.stateMaintainer = stateMaintainer;
             this.time = time;
             this.pollMs = pollMs;
             this.flushInterval = flushInterval;
         }
 
+        /**
+         * @throws IllegalStateException If store gets registered after initialized is already finished
+         * @throws StreamsException if the store's change log does not contain the partition
+         */
         void initialize() {
             final Map<TopicPartition, Long> partitionOffsets = stateMaintainer.initialize();
-            consumer.assign(partitionOffsets.keySet());
+            globalConsumer.assign(partitionOffsets.keySet());
             for (Map.Entry<TopicPartition, Long> entry : partitionOffsets.entrySet()) {
-                consumer.seek(entry.getKey(), entry.getValue());
+                globalConsumer.seek(entry.getKey(), entry.getValue());
             }
             lastFlush = time.milliseconds();
         }
 
         void pollAndUpdate() {
-            final ConsumerRecords<byte[], byte[]> received = consumer.poll(pollMs);
-            for (ConsumerRecord<byte[], byte[]> record : received) {
-                stateMaintainer.update(record);
-            }
-            final long now = time.milliseconds();
-            if (flushInterval >= 0 && now >= lastFlush + flushInterval) {
-                stateMaintainer.flushState();
-                lastFlush = now;
+            try {
+                final ConsumerRecords<byte[], byte[]> received = globalConsumer.poll(pollMs);
+                for (ConsumerRecord<byte[], byte[]> record : received) {
+                    stateMaintainer.update(record);
+                }
+                final long now = time.milliseconds();
+                if (flushInterval >= 0 && now >= lastFlush + flushInterval) {
+                    stateMaintainer.flushState();
+                    lastFlush = now;
+                }
+            } catch (final InvalidOffsetException recoverableException) {
+                log.error("Updating global state failed. You can restart KafkaStreams to recover from this error.", recoverableException);
+                throw new StreamsException("Updating global state failed. " +
+                    "You can restart KafkaStreams to recover from this error.", recoverableException);
             }
         }
 
         public void close() throws IOException {
-            // just log an error if the consumer throws an exception during close
-            // so we can always attempt to close the state stores.
             try {
-                consumer.close();
-            } catch (Exception e) {
-                log.error("Failed to cleanly close GlobalStreamThread consumer", e);
+                globalConsumer.close();
+            } catch (final RuntimeException e) {
+                // just log an error if the consumer throws an exception during close
+                // so we can always attempt to close the state stores.
+                log.error("Failed to close consumer due to the following error:", e);
             }
 
             stateMaintainer.close();
-
         }
     }
 
     @Override
     public void run() {
         final StateConsumer stateConsumer = initialize();
+
         if (stateConsumer == null) {
+            // during initialization, the caller thread would wait for the state consumer
+            // to restore the global state store before transiting to RUNNING state and return;
+            // if an error happens during the restoration process, the stateConsumer will be null
+            // and in this case we will transit the state to PENDING_SHUTDOWN and DEAD immediately.
+            // the exception will be thrown in the caller thread during start() function.
+            setState(State.PENDING_SHUTDOWN);
+            setState(State.DEAD);
+
+            log.warn("Error happened during initialization of the global state store; this thread has shutdown");
+
             return;
         }
+        setState(State.RUNNING);
 
         try {
-            while (running) {
+            while (stillRunning()) {
                 stateConsumer.pollAndUpdate();
             }
-            log.debug("Shutting down GlobalStreamThread at user request");
         } finally {
+            // set the state to pending shutdown first as it may be called due to error;
+            // its state may already be PENDING_SHUTDOWN so it will return false but we
+            // intentionally do not check the returned flag
+            setState(State.PENDING_SHUTDOWN);
+
+            log.info("Shutting down");
+
             try {
                 stateConsumer.close();
-            } catch (IOException e) {
-                log.error("Failed to cleanly shutdown GlobalStreamThread", e);
+            } catch (final IOException e) {
+                log.error("Failed to close state maintainer due to the following error:", e);
             }
+            setState(DEAD);
+
+            log.info("Shutdown complete");
         }
     }
 
     private StateConsumer initialize() {
         try {
-            final GlobalStateManager stateMgr = new GlobalStateManagerImpl(topology, consumer, stateDirectory);
+            final GlobalStateManager stateMgr = new GlobalStateManagerImpl(logContext,
+                                                                           topology,
+                                                                           globalConsumer,
+                                                                           stateDirectory,
+                                                                           stateRestoreListener,
+                                                                           config);
+
+            final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(
+                config,
+                stateMgr,
+                streamsMetrics,
+                cache);
+            stateMgr.setGlobalProcessorContext(globalProcessorContext);
+
             final StateConsumer stateConsumer
-                    = new StateConsumer(consumer,
+                    = new StateConsumer(this.logContext,
+                                        globalConsumer,
                                         new GlobalStateUpdateTask(topology,
-                                                                  new GlobalProcessorContextImpl(
-                                                                          config,
-                                                                          stateMgr,
-                                                                          streamsMetrics,
-                                                                          cache),
-                                                                  stateMgr),
+                                                                  globalProcessorContext,
+                                                                  stateMgr,
+                                                                  config.defaultDeserializationExceptionHandler(),
+                                                                  logContext),
                                         time,
                                         config.getLong(StreamsConfig.POLL_MS_CONFIG),
                                         config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
             stateConsumer.initialize();
-            running = true;
+
             return stateConsumer;
-        } catch (StreamsException e) {
-            startupException = e;
-        } catch (Exception e) {
-            startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", e);
+        } catch (final LockException fatalException) {
+            final String errorMsg = "Could not lock global state directory. This could happen if multiple KafkaStreams " +
+                "instances are running on the same host using the same state directory.";
+            log.error(errorMsg, fatalException);
+            startupException = new StreamsException(errorMsg, fatalException);
+        } catch (final StreamsException fatalException) {
+            startupException = fatalException;
+        } catch (final Exception fatalException) {
+            startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", fatalException);
         }
         return null;
     }
@@ -177,7 +353,7 @@ public class GlobalStreamThread extends Thread {
     @Override
     public synchronized void start() {
         super.start();
-        while (!running) {
+        while (!stillRunning()) {
             Utils.sleep(1);
             if (startupException != null) {
                 throw startupException;
@@ -185,14 +361,9 @@ public class GlobalStreamThread extends Thread {
         }
     }
 
-
-    public void close() {
-        running = false;
+    public void shutdown() {
+        // one could call shutdown() multiple times, so ignore subsequent calls
+        // if already shutting down or dead
+        setState(PENDING_SHUTDOWN);
     }
-
-    public boolean stillRunning() {
-        return running;
-    }
-
-
 }

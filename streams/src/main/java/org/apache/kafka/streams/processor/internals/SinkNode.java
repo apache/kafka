@@ -31,7 +31,11 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
     private ProcessorContext context;
 
-    public SinkNode(String name, String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, StreamPartitioner<? super K, ? super V> partitioner) {
+    public SinkNode(final String name,
+                    final String topic,
+                    final Serializer<K> keySerializer,
+                    final Serializer<V> valSerializer,
+                    final StreamPartitioner<? super K, ? super V> partitioner) {
         super(name);
 
         this.topic = topic;
@@ -44,30 +48,35 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
      * @throws UnsupportedOperationException if this method adds a child to a sink node
      */
     @Override
-    public void addChild(ProcessorNode<?, ?> child) {
+    public void addChild(final ProcessorNode<?, ?> child) {
         throw new UnsupportedOperationException("sink node does not allow addChild");
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public void init(ProcessorContext context) {
+    public void init(final ProcessorContext context) {
         super.init(context);
         this.context = context;
 
         // if serializers are null, get the default ones from the context
-        if (this.keySerializer == null) this.keySerializer = (Serializer<K>) context.keySerde().serializer();
-        if (this.valSerializer == null) this.valSerializer = (Serializer<V>) context.valueSerde().serializer();
+        if (keySerializer == null) {
+            keySerializer = (Serializer<K>) context.keySerde().serializer();
+        }
+        if (valSerializer == null) {
+            valSerializer = (Serializer<V>) context.valueSerde().serializer();
+        }
 
         // if value serializers are for {@code Change} values, set the inner serializer when necessary
-        if (this.valSerializer instanceof ChangedSerializer &&
-                ((ChangedSerializer) this.valSerializer).inner() == null)
-            ((ChangedSerializer) this.valSerializer).setInner(context.valueSerde().serializer());
+        if (valSerializer instanceof ChangedSerializer &&
+                ((ChangedSerializer) valSerializer).inner() == null) {
+            ((ChangedSerializer) valSerializer).setInner(context.valueSerde().serializer());
+        }
     }
 
 
     @Override
     public void process(final K key, final V value) {
-        RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
+        final RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
 
         final long timestamp = context.timestamp();
         if (timestamp < 0) {
@@ -75,8 +84,8 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         }
 
         try {
-            collector.send(topic, key, value, null, timestamp, keySerializer, valSerializer, partitioner);
-        } catch (ClassCastException e) {
+            collector.send(topic, key, value, timestamp, keySerializer, valSerializer, partitioner);
+        } catch (final ClassCastException e) {
             final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
             final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
             throw new StreamsException(
@@ -102,7 +111,8 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     /**
      * @return a string representation of this node starting with the given indent, useful for debugging.
      */
-    public String toString(String indent) {
+    @Override
+    public String toString(final String indent) {
         final StringBuilder sb = new StringBuilder(super.toString(indent));
         sb.append(indent).append("\ttopic:\t\t");
         sb.append(topic);

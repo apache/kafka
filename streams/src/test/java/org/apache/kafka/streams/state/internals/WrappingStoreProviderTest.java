@@ -42,9 +42,9 @@ public class WrappingStoreProviderTest {
         final StateStoreProviderStub stubProviderTwo = new StateStoreProviderStub(false);
 
 
-        stubProviderOne.addStore("kv", StateStoreTestUtils.newKeyValueStore("kv", String.class, String.class));
+        stubProviderOne.addStore("kv", StateStoreTestUtils.newKeyValueStore("kv", "app-id", String.class, String.class));
         stubProviderOne.addStore("window", new NoOpWindowStore());
-        stubProviderTwo.addStore("kv", StateStoreTestUtils.newKeyValueStore("kv", String.class, String.class));
+        stubProviderTwo.addStore("kv", StateStoreTestUtils.newKeyValueStore("kv", "app-id", String.class, String.class));
         stubProviderTwo.addStore("window", new NoOpWindowStore());
 
         wrappingStoreProvider = new WrappingStoreProvider(
@@ -52,14 +52,14 @@ public class WrappingStoreProviderTest {
     }
 
     @Test
-    public void shouldFindKeyValueStores() throws Exception {
+    public void shouldFindKeyValueStores() {
         List<ReadOnlyKeyValueStore<String, String>> results =
                 wrappingStoreProvider.stores("kv", QueryableStoreTypes.<String, String>keyValueStore());
         assertEquals(2, results.size());
     }
 
     @Test
-    public void shouldFindWindowStores() throws Exception {
+    public void shouldFindWindowStores() {
         final List<ReadOnlyWindowStore<Object, Object>>
                 windowStores =
                 wrappingStoreProvider.stores("window", windowStore());
@@ -67,7 +67,7 @@ public class WrappingStoreProviderTest {
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStoreExceptionIfNoStoreOfTypeFound() throws Exception {
+    public void shouldThrowInvalidStoreExceptionIfNoStoreOfTypeFound() {
         wrappingStoreProvider.stores("doesn't exist", QueryableStoreTypes.keyValueStore());
     }
 }

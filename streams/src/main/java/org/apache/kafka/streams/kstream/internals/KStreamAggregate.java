@@ -64,20 +64,21 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
         @Override
         public void process(K key, V value) {
-            if (key == null)
+            // If the key or value is null we don't need to proceed
+            if (key == null || value == null) {
                 return;
+            }
 
             T oldAgg = store.get(key);
 
-            if (oldAgg == null)
+            if (oldAgg == null) {
                 oldAgg = initializer.apply();
+            }
 
             T newAgg = oldAgg;
 
-            // try to add the new new value
-            if (value != null) {
-                newAgg = aggregator.apply(key, value, newAgg);
-            }
+            // try to add the new value
+            newAgg = aggregator.apply(key, value, newAgg);
 
             // update the store with the new value
             store.put(key, newAgg);

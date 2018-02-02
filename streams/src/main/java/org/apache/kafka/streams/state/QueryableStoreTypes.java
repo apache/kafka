@@ -33,7 +33,7 @@ public class QueryableStoreTypes {
      * A {@link QueryableStoreType} that accepts {@link ReadOnlyKeyValueStore}
      * @param <K>   key type of the store
      * @param <V>   value type of the store
-     * @return  {@link KeyValueStoreType}
+     * @return  {@link QueryableStoreTypes.KeyValueStoreType}
      */
     public static <K, V> QueryableStoreType<ReadOnlyKeyValueStore<K, V>> keyValueStore() {
         return new KeyValueStoreType<>();
@@ -43,7 +43,7 @@ public class QueryableStoreTypes {
      * A {@link QueryableStoreType} that accepts {@link ReadOnlyWindowStore}
      * @param <K>   key type of the store
      * @param <V>   value type of the store
-     * @return  {@link WindowStoreType}
+     * @return  {@link QueryableStoreTypes.WindowStoreType}
      */
     public static <K, V> QueryableStoreType<ReadOnlyWindowStore<K, V>> windowStore() {
         return new WindowStoreType<>();
@@ -53,7 +53,7 @@ public class QueryableStoreTypes {
      * A {@link QueryableStoreType} that accepts {@link ReadOnlySessionStore}
      * @param <K>   key type of the store
      * @param <V>   value type of the store
-     * @return  {@link SessionStoreType}
+     * @return  {@link QueryableStoreTypes.SessionStoreType}
      */
     public static <K, V> QueryableStoreType<ReadOnlySessionStore<K, V>> sessionStore() {
         return new SessionStoreType<>();

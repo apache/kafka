@@ -19,8 +19,7 @@ import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
-import kafka.utils.{Logging, ShutdownableThread, TestUtils}
-import kafka.common.Topic
+import kafka.utils.ShutdownableThread
 import kafka.server.KafkaConfig
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -29,6 +28,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.common.internals.Topic
 
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures
@@ -45,6 +45,8 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
   val tp = new TopicPartition(topic, part)
   val part2 = 1
   val tp2 = new TopicPartition(topic, part2)
+  val producerClientId = "ConsumerTestProducer"
+  val consumerClientId = "ConsumerTestConsumer"
 
   // configure the servers and clients
   this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
@@ -52,7 +54,10 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   this.serverConfig.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "100") // set small enough session timeout
   this.serverConfig.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, "30000")
+  this.serverConfig.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
+  this.producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
+  this.consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, consumerClientId)
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
   this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
@@ -63,7 +68,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     super.setUp()
 
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(this.zkUtils, topic, 2, serverCount, this.servers)
+    createTopic(topic, 2, serverCount)
   }
 
   @Test
@@ -102,7 +107,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     // get metadata for the topic
     var parts: Seq[PartitionInfo] = null
     while (parts == null)
-      parts = consumer0.partitionsFor(Topic.GroupMetadataTopicName).asScala
+      parts = consumer0.partitionsFor(Topic.GROUP_METADATA_TOPIC_NAME).asScala
     assertEquals(1, parts.size)
     assertNotNull(parts.head.leader())
 
@@ -255,7 +260,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
      */
     def subscribe(newTopicsToSubscribe: List[String]): Unit = {
       if (subscriptionChanged) {
-        throw new IllegalStateException("Do not call subscribe until the previous subsribe request is processed.")
+        throw new IllegalStateException("Do not call subscribe until the previous subscribe request is processed.")
       }
       topicsSubscription = newTopicsToSubscribe
       subscriptionChanged = true

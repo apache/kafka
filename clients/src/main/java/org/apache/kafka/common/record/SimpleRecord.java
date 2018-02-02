@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -105,5 +106,13 @@ public class SimpleRecord {
         result = 31 * result + (int) (timestamp ^ (timestamp >>> 32));
         result = 31 * result + Arrays.hashCode(headers);
         return result;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("SimpleRecord(timestamp=%d, key=%d bytes, value=%d bytes)",
+                timestamp(),
+                key == null ? 0 : key.limit(),
+                value == null ? 0 : value.limit());
     }
 }

@@ -18,9 +18,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -31,21 +32,68 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
+import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
+import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
+import static org.apache.kafka.common.protocol.types.Type.INT16;
+import static org.apache.kafka.common.protocol.types.Type.INT32;
+import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
+
 public class CreateTopicsRequest extends AbstractRequest {
     private static final String REQUESTS_KEY_NAME = "create_topic_requests";
 
     private static final String TIMEOUT_KEY_NAME = "timeout";
     private static final String VALIDATE_ONLY_KEY_NAME = "validate_only";
-    private static final String TOPIC_KEY_NAME = "topic";
     private static final String NUM_PARTITIONS_KEY_NAME = "num_partitions";
     private static final String REPLICATION_FACTOR_KEY_NAME = "replication_factor";
     private static final String REPLICA_ASSIGNMENT_KEY_NAME = "replica_assignment";
-    private static final String REPLICA_ASSIGNMENT_PARTITION_ID_KEY_NAME = "partition_id";
     private static final String REPLICA_ASSIGNMENT_REPLICAS_KEY_NAME = "replicas";
 
-    private static final String CONFIG_KEY_KEY_NAME = "config_key";
+    private static final String CONFIG_NAME_KEY_NAME = "config_name";
     private static final String CONFIG_VALUE_KEY_NAME = "config_value";
-    private static final String CONFIGS_KEY_NAME = "configs";
+    private static final String CONFIG_ENTRIES_KEY_NAME = "config_entries";
+
+    private static final Schema CONFIG_ENTRY = new Schema(
+            new Field(CONFIG_NAME_KEY_NAME, STRING, "Configuration name"),
+            new Field(CONFIG_VALUE_KEY_NAME, NULLABLE_STRING, "Configuration value"));
+
+    private static final Schema PARTITION_REPLICA_ASSIGNMENT_ENTRY = new Schema(
+            PARTITION_ID,
+            new Field(REPLICA_ASSIGNMENT_REPLICAS_KEY_NAME, new ArrayOf(INT32), "The set of all nodes that should " +
+                    "host this partition. The first replica in the list is the preferred leader."));
+
+    private static final Schema SINGLE_CREATE_TOPIC_REQUEST_V0 = new Schema(
+            TOPIC_NAME,
+            new Field(NUM_PARTITIONS_KEY_NAME, INT32, "Number of partitions to be created. -1 indicates unset."),
+            new Field(REPLICATION_FACTOR_KEY_NAME, INT16, "Replication factor for the topic. -1 indicates unset."),
+            new Field(REPLICA_ASSIGNMENT_KEY_NAME, new ArrayOf(PARTITION_REPLICA_ASSIGNMENT_ENTRY),
+                    "Replica assignment among kafka brokers for this topic partitions. If this is set num_partitions " +
+                            "and replication_factor must be unset."),
+            new Field(CONFIG_ENTRIES_KEY_NAME, new ArrayOf(CONFIG_ENTRY), "Topic level configuration for topic to be set."));
+
+    private static final Schema SINGLE_CREATE_TOPIC_REQUEST_V1 = SINGLE_CREATE_TOPIC_REQUEST_V0;
+
+    private static final Schema CREATE_TOPICS_REQUEST_V0 = new Schema(
+            new Field(REQUESTS_KEY_NAME, new ArrayOf(SINGLE_CREATE_TOPIC_REQUEST_V0),
+                    "An array of single topic creation requests. Can not have multiple entries for the same topic."),
+            new Field(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for a topic to be completely created on the " +
+                    "controller node. Values <= 0 will trigger topic creation and return immediately"));
+
+    private static final Schema CREATE_TOPICS_REQUEST_V1 = new Schema(
+            new Field(REQUESTS_KEY_NAME, new ArrayOf(SINGLE_CREATE_TOPIC_REQUEST_V1), "An array of single " +
+                    "topic creation requests. Can not have multiple entries for the same topic."),
+            new Field(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for a topic to be completely created on the " +
+                    "controller node. Values <= 0 will trigger topic creation and return immediately"),
+            new Field(VALIDATE_ONLY_KEY_NAME, BOOLEAN, "If this is true, the request will be validated, but the " +
+                    "topic won't be created."));
+
+    /* v2 request is the same as v1. Throttle time has been added to the response */
+    private static final Schema CREATE_TOPICS_REQUEST_V2 = CREATE_TOPICS_REQUEST_V1;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{CREATE_TOPICS_REQUEST_V0, CREATE_TOPICS_REQUEST_V1, CREATE_TOPICS_REQUEST_V2};
+    }
 
     public static final class TopicDetails {
         public final int numPartitions;
@@ -88,8 +136,8 @@ public class CreateTopicsRequest extends AbstractRequest {
             StringBuilder bld = new StringBuilder();
             bld.append("(numPartitions=").append(numPartitions).
                     append(", replicationFactor=").append(replicationFactor).
-                    append(", replicasAssignments=").append(Utils.mkString(replicasAssignments)).
-                    append(", configs=").append(Utils.mkString(configs)).
+                    append(", replicasAssignments=").append(replicasAssignments).
+                    append(", configs=").append(configs).
                     append(")");
             return bld.toString();
         }
@@ -123,7 +171,7 @@ public class CreateTopicsRequest extends AbstractRequest {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("(type=CreateTopicsRequest").
-                append(", topics=").append(Utils.mkString(topics)).
+                append(", topics=").append(topics).
                 append(", timeout=").append(timeout).
                 append(", validateOnly=").append(validateOnly).
                 append(")");
@@ -159,7 +207,7 @@ public class CreateTopicsRequest extends AbstractRequest {
 
         for (Object requestStructObj : requestStructs) {
             Struct singleRequestStruct = (Struct) requestStructObj;
-            String topic = singleRequestStruct.getString(TOPIC_KEY_NAME);
+            String topic = singleRequestStruct.get(TOPIC_NAME);
 
             if (topics.containsKey(topic))
                 duplicateTopics.add(topic);
@@ -173,7 +221,7 @@ public class CreateTopicsRequest extends AbstractRequest {
             for (Object assignmentStructObj : assignmentsArray) {
                 Struct assignmentStruct = (Struct) assignmentStructObj;
 
-                Integer partitionId = assignmentStruct.getInt(REPLICA_ASSIGNMENT_PARTITION_ID_KEY_NAME);
+                Integer partitionId = assignmentStruct.get(PARTITION_ID);
 
                 Object[] replicasArray = assignmentStruct.getArray(REPLICA_ASSIGNMENT_REPLICAS_KEY_NAME);
                 List<Integer> replicas = new ArrayList<>(replicasArray.length);
@@ -184,12 +232,12 @@ public class CreateTopicsRequest extends AbstractRequest {
                 partitionReplicaAssignments.put(partitionId, replicas);
             }
 
-            Object[] configArray = singleRequestStruct.getArray(CONFIGS_KEY_NAME);
+            Object[] configArray = singleRequestStruct.getArray(CONFIG_ENTRIES_KEY_NAME);
             Map<String, String> configs = new HashMap<>(configArray.length);
             for (Object configStructObj : configArray) {
                 Struct configStruct = (Struct) configStructObj;
 
-                String key = configStruct.getString(CONFIG_KEY_KEY_NAME);
+                String key = configStruct.getString(CONFIG_NAME_KEY_NAME);
                 String value = configStruct.getString(CONFIG_VALUE_KEY_NAME);
 
                 configs.put(key, value);
@@ -210,13 +258,10 @@ public class CreateTopicsRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
-        Map<String, CreateTopicsResponse.Error> topicErrors = new HashMap<>();
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        Map<String, ApiError> topicErrors = new HashMap<>();
         for (String topic : topics.keySet()) {
-            Errors error = Errors.forException(e);
-            // Avoid populating the error message if it's a generic one
-            String message = error.message().equals(e.getMessage()) ? null : e.getMessage();
-            topicErrors.put(topic, new CreateTopicsResponse.Error(error, message));
+            topicErrors.put(topic, ApiError.fromThrowable(e));
         }
 
         short versionId = version();
@@ -224,6 +269,8 @@ public class CreateTopicsRequest extends AbstractRequest {
             case 0:
             case 1:
                 return new CreateTopicsResponse(topicErrors);
+            case 2:
+                return new CreateTopicsResponse(throttleTimeMs, topicErrors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                     versionId, this.getClass().getSimpleName(), ApiKeys.CREATE_TOPICS.latestVersion()));
@@ -265,7 +312,7 @@ public class CreateTopicsRequest extends AbstractRequest {
             String topic = entry.getKey();
             TopicDetails args = entry.getValue();
 
-            singleRequestStruct.set(TOPIC_KEY_NAME, topic);
+            singleRequestStruct.set(TOPIC_NAME, topic);
             singleRequestStruct.set(NUM_PARTITIONS_KEY_NAME, args.numPartitions);
             singleRequestStruct.set(REPLICATION_FACTOR_KEY_NAME, args.replicationFactor);
 
@@ -273,7 +320,7 @@ public class CreateTopicsRequest extends AbstractRequest {
             List<Struct> replicaAssignmentsStructs = new ArrayList<>(args.replicasAssignments.size());
             for (Map.Entry<Integer, List<Integer>> partitionReplicaAssignment : args.replicasAssignments.entrySet()) {
                 Struct replicaAssignmentStruct = singleRequestStruct.instance(REPLICA_ASSIGNMENT_KEY_NAME);
-                replicaAssignmentStruct.set(REPLICA_ASSIGNMENT_PARTITION_ID_KEY_NAME, partitionReplicaAssignment.getKey());
+                replicaAssignmentStruct.set(PARTITION_ID, partitionReplicaAssignment.getKey());
                 replicaAssignmentStruct.set(REPLICA_ASSIGNMENT_REPLICAS_KEY_NAME, partitionReplicaAssignment.getValue().toArray());
                 replicaAssignmentsStructs.add(replicaAssignmentStruct);
             }
@@ -282,12 +329,12 @@ public class CreateTopicsRequest extends AbstractRequest {
             // configs
             List<Struct> configsStructs = new ArrayList<>(args.configs.size());
             for (Map.Entry<String, String> configEntry : args.configs.entrySet()) {
-                Struct configStruct = singleRequestStruct.instance(CONFIGS_KEY_NAME);
-                configStruct.set(CONFIG_KEY_KEY_NAME, configEntry.getKey());
+                Struct configStruct = singleRequestStruct.instance(CONFIG_ENTRIES_KEY_NAME);
+                configStruct.set(CONFIG_NAME_KEY_NAME, configEntry.getKey());
                 configStruct.set(CONFIG_VALUE_KEY_NAME, configEntry.getValue());
                 configsStructs.add(configStruct);
             }
-            singleRequestStruct.set(CONFIGS_KEY_NAME, configsStructs.toArray());
+            singleRequestStruct.set(CONFIG_ENTRIES_KEY_NAME, configsStructs.toArray());
             createTopicRequestStructs.add(singleRequestStruct);
         }
         struct.set(REQUESTS_KEY_NAME, createTopicRequestStructs.toArray());

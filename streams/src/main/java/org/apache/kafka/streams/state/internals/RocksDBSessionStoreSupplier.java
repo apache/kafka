@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.SessionStore;
 
@@ -31,58 +30,32 @@ import java.util.Map;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
+@Deprecated
 public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, SessionStore> implements WindowStoreSupplier<SessionStore> {
 
-    private static final String METRIC_SCOPE = "rocksdb-session";
-    private static final int NUM_SEGMENTS = 3;
+    static final int NUM_SEGMENTS = 3;
     private final long retentionPeriod;
-    private final boolean cached;
+    private final SessionStoreBuilder<K, V> builder;
 
     public RocksDBSessionStoreSupplier(String name, long retentionPeriod, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig, boolean cached) {
         super(name, keySerde, valueSerde, Time.SYSTEM, logged, logConfig);
         this.retentionPeriod = retentionPeriod;
-        this.cached = cached;
-    }
-
-    public String name() {
-        return name;
+        builder = new SessionStoreBuilder<>(new RocksDbSessionBytesStoreSupplier(name,
+                                                                                 retentionPeriod),
+                                            keySerde,
+                                            valueSerde,
+                                            time);
+        if (cached) {
+            builder.withCachingEnabled();
+        }
+        // logged by default so we only need to worry about when it is disabled.
+        if (!logged) {
+            builder.withLoggingDisabled();
+        }
     }
 
     public SessionStore<K, V> get() {
-        final SessionKeySchema keySchema = new SessionKeySchema();
-        final RocksDBSegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(name,
-                                                                                     retentionPeriod,
-                                                                                     NUM_SEGMENTS,
-                                                                                     keySchema);
-
-        if (cached && logged) {
-            final ChangeLoggingSegmentedBytesStore logged = new ChangeLoggingSegmentedBytesStore(segmented);
-            final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(logged,
-                                                                                      METRIC_SCOPE, time);
-            final RocksDBSessionStore<Bytes, byte[]> sessionStore
-                    = RocksDBSessionStore.bytesStore(metered);
-
-            return new CachingSessionStore<>(sessionStore, keySerde, valueSerde);
-        }
-
-        if (cached) {
-            final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(segmented,
-                                                                                      METRIC_SCOPE, time);
-            final RocksDBSessionStore<Bytes, byte[]> sessionStore
-                    = RocksDBSessionStore.bytesStore(metered);
-
-            return new CachingSessionStore<>(sessionStore, keySerde, valueSerde);
-        }
-
-        if (logged) {
-            final ChangeLoggingSegmentedBytesStore logged = new ChangeLoggingSegmentedBytesStore(segmented);
-            final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(logged,
-                                                                                      METRIC_SCOPE, time);
-            return new RocksDBSessionStore<>(metered, keySerde, valueSerde);
-        }
-
-        return new RocksDBSessionStore<>(
-                new MeteredSegmentedBytesStore(segmented, METRIC_SCOPE, time), keySerde, valueSerde);
+        return builder.build();
 
     }
 

@@ -17,6 +17,8 @@
 
 package kafka.serializer
 
+import java.nio.ByteBuffer
+
 import kafka.utils.VerifiableProperties
 
 /**
@@ -55,4 +57,23 @@ class StringEncoder(props: VerifiableProperties = null) extends Encoder[String] 
       null
     else
       s.getBytes(encoding)
+}
+
+/**
+  * The long encoder translates longs into bytes.
+  */
+class LongEncoder(props: VerifiableProperties = null) extends Encoder[Long] {
+  override def toBytes(l: Long): Array[Byte] =
+    ByteBuffer.allocate(8).putLong(l).array()
+}
+
+/**
+  * The integer encoder translates integers into bytes.
+  */
+class IntegerEncoder(props: VerifiableProperties = null) extends Encoder[Integer] {
+  override def toBytes(i: Integer): Array[Byte] =
+    if(i == null)
+      null
+    else
+      ByteBuffer.allocate(4).putInt(i).array()
 }

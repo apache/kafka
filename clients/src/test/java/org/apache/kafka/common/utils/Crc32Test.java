@@ -18,44 +18,35 @@ package org.apache.kafka.common.utils;
 
 import org.junit.Test;
 
-import java.nio.ByteBuffer;
+import java.util.zip.Checksum;
 
 import static org.junit.Assert.assertEquals;
 
 public class Crc32Test {
 
     @Test
-    public void testUpdateByteBuffer() {
-        byte[] bytes = new byte[]{0, 1, 2, 3, 4, 5};
-        doTestUpdateByteBuffer(bytes, ByteBuffer.allocate(bytes.length));
-        doTestUpdateByteBuffer(bytes, ByteBuffer.allocateDirect(bytes.length));
-    }
+    public void testUpdate() {
+        final byte[] bytes = "Any String you want".getBytes();
+        final int len = bytes.length;
 
-    private void doTestUpdateByteBuffer(byte[] bytes, ByteBuffer buffer) {
-        buffer.put(bytes);
-        buffer.flip();
-        Crc32 bufferCrc = new Crc32();
-        bufferCrc.update(buffer, buffer.remaining());
-        assertEquals(Crc32.crc32(bytes), bufferCrc.getValue());
-        assertEquals(0, buffer.position());
+        Checksum crc1 = Crc32C.create();
+        Checksum crc2 = Crc32C.create();
+        Checksum crc3 = Crc32C.create();
+
+        crc1.update(bytes, 0, len);
+        for (int i = 0; i < len; i++)
+            crc2.update(bytes[i]);
+        crc3.update(bytes, 0, len / 2);
+        crc3.update(bytes, len / 2, len - len / 2);
+
+        assertEquals("Crc values should be the same", crc1.getValue(), crc2.getValue());
+        assertEquals("Crc values should be the same", crc1.getValue(), crc3.getValue());
     }
 
     @Test
-    public void testUpdateByteBufferWithOffsetPosition() {
-        byte[] bytes = new byte[]{-2, -1, 0, 1, 2, 3, 4, 5};
-        doTestUpdateByteBufferWithOffsetPosition(bytes, ByteBuffer.allocate(bytes.length), 2);
-        doTestUpdateByteBufferWithOffsetPosition(bytes, ByteBuffer.allocateDirect(bytes.length), 2);
-    }
-
-    private void doTestUpdateByteBufferWithOffsetPosition(byte[] bytes, ByteBuffer buffer, int offset) {
-        buffer.put(bytes);
-        buffer.flip();
-        buffer.position(offset);
-
-        Crc32 bufferCrc = new Crc32();
-        bufferCrc.update(buffer, buffer.remaining());
-        assertEquals(Crc32.crc32(bytes, offset, buffer.remaining()), bufferCrc.getValue());
-        assertEquals(offset, buffer.position());
+    public void testValue() {
+        final byte[] bytes = "Some String".getBytes();
+        assertEquals(2021503672, Crc32.crc32(bytes));
     }
 
 }

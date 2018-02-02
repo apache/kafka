@@ -26,19 +26,14 @@ import java.util.Map;
 public class JsonPOJOSerializer<T> implements Serializer<T> {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private Class<T> tClass;
-
     /**
      * Default constructor needed by Kafka
      */
     public JsonPOJOSerializer() {
-
     }
-
-    @SuppressWarnings("unchecked")
+    
     @Override
     public void configure(Map<String, ?> props, boolean isKey) {
-        tClass = (Class<T>) props.get("JsonPOJOClass");
     }
 
     @Override
