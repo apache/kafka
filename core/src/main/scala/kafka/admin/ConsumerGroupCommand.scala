@@ -850,7 +850,7 @@ object ConsumerGroupCommand extends Logging {
       }.keySet
 
       if (successfullyDeleted.size == result.size)
-        println(s"Deletion of requested consumer groups (${successfullyDeleted.mkString("'", ", ", "'")}) was successful.")
+        println(s"Deletion of requested consumer groups (${successfullyDeleted.mkString("'", "', '", "'")}) was successful.")
       else {
         printError("Deletion of some consumer groups failed:")
         result.foreach {
@@ -858,7 +858,7 @@ object ConsumerGroupCommand extends Logging {
           case _ => // no need to print successful deletions individually
         }
         if (successfullyDeleted.nonEmpty)
-          println(s"\nThese consumer groups were deleted successfully: ${successfullyDeleted.mkString("'", ", ", "'")}")
+          println(s"\nThese consumer groups were deleted successfully: ${successfullyDeleted.mkString("'", "', '", "'")}")
       }
 
       result
