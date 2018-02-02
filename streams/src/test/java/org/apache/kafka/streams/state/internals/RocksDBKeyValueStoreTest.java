@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
 import org.rocksdb.Options;
@@ -36,19 +39,15 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @SuppressWarnings("unchecked")
     @Override
-    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context,
-                                                             final Class<K> keyClass,
-                                                             final Class<V> valueClass) {
-        final Stores.PersistentKeyValueFactory<?, ?> factory;
-        factory = Stores
-                .create("my-store")
-                .withKeys(context.keySerde())
-                .withValues(context.valueSerde())
-                .persistent();
+    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context) {
+        final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(
+                Stores.persistentKeyValueStore("my-store"),
+                (Serde<K>) context.keySerde(),
+                (Serde<V>) context.valueSerde());
 
-        final KeyValueStore<K, V> store = (KeyValueStore<K, V>) factory.build().get();
+        final StateStore store = storeBuilder.build();
         store.init(context, store);
-        return store;
+        return (KeyValueStore<K, V>) store;
     }
 
     public static class TheRocksDbConfigSetter implements RocksDBConfigSetter {

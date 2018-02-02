@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
 
@@ -36,17 +38,17 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
 
     @SuppressWarnings("unchecked")
     @Override
-    protected <K, V> KeyValueStore<K, V> createKeyValueStore(
-            ProcessorContext context,
-            Class<K> keyClass,
-            Class<V> valueClass) {
+    protected <K, V> KeyValueStore<K, V> createKeyValueStore(ProcessorContext context) {
 
-        StateStoreSupplier supplier;
-        supplier = Stores.create("my-store").withKeys(context.keySerde()).withValues(context.valueSerde()).inMemory().maxEntries(10).build();
+        final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(
+                Stores.lruMap("my-store", 10),
+                (Serde<K>) context.keySerde(),
+                (Serde<V>) context.valueSerde());
 
-        KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
+        final StateStore store = storeBuilder.build();
         store.init(context, store);
-        return store;
+
+        return (KeyValueStore<K, V>) store;
     }
 
     @Test
@@ -152,7 +154,7 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
-        store = createKeyValueStore(driver.context(), Integer.class, String.class);
+        store = createKeyValueStore(driver.context());
         context.restore(store.name(), driver.restoredEntries());
         // Verify that the store's changelog does not get more appends ...
         assertEquals(0, driver.numFlushedEntryStored());

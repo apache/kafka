@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
 
@@ -30,17 +32,15 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @SuppressWarnings("unchecked")
     @Override
-    protected <K, V> KeyValueStore<K, V> createKeyValueStore(
-            ProcessorContext context,
-            Class<K> keyClass,
-            Class<V> valueClass) {
+    protected <K, V> KeyValueStore<K, V> createKeyValueStore(ProcessorContext context) {
+        final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(
+                Stores.inMemoryKeyValueStore("my-store"),
+                (Serde<K>) context.keySerde(),
+                (Serde<V>) context.valueSerde());
 
-        StateStoreSupplier supplier;
-        supplier = Stores.create("my-store").withKeys(context.keySerde()).withValues(context.valueSerde()).inMemory().build();
-
-        KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
+        final StateStore store = storeBuilder.build();
         store.init(context, store);
-        return store;
+        return (KeyValueStore<K, V>) store;
     }
 
     @Test
@@ -54,7 +54,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         driver.addEntryToRestoreLog(3, "three");
         driver.addEntryToRestoreLog(0, null);
 
-        store = createKeyValueStore(driver.context(), Integer.class, String.class);
+        store = createKeyValueStore(driver.context());
         context.restore(store.name(), driver.restoredEntries());
 
         assertEquals(3, driver.sizeOf(store));

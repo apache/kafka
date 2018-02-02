@@ -136,13 +136,17 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     @Override
     public synchronized V get(K key) {
         Objects.requireNonNull(key);
+
         return this.map.get(key);
     }
 
     @Override
     public synchronized void put(K key, V value) {
         Objects.requireNonNull(key);
-        this.map.put(key, value);
+        if (value == null)
+            this.map.remove(key);
+        else
+            this.map.put(key, value);
     }
 
     @Override

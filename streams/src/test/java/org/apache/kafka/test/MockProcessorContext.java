@@ -50,12 +50,12 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
 
     private final File stateDir;
     private final Metrics metrics;
-    private final Serde<?> keySerde;
-    private final Serde<?> valSerde;
     private final RecordCollector.Supplier recordCollectorSupplier;
     private final Map<String, StateStore> storeMap = new LinkedHashMap<>();
     private final Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
 
+    private Serde<?> keySerde;
+    private Serde<?> valSerde;
     private long timestamp = -1L;
 
     public MockProcessorContext(final File stateDir,
@@ -119,6 +119,14 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
             throw new UnsupportedOperationException("No RecordCollector specified");
         }
         return recordCollector;
+    }
+
+    public void setKeySerde(Serde<?> keySerde) {
+        this.keySerde = keySerde;
+    }
+
+    public void setValueSerde(Serde<?> valSerde) {
+        this.valSerde = valSerde;
     }
 
     // serdes will override whatever specified in the configs

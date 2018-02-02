@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -35,9 +39,7 @@ import static org.junit.Assert.assertNull;
 
 public abstract class AbstractKeyValueStoreTest {
 
-    protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(ProcessorContext context,
-                                                                      Class<K> keyClass,
-                                                                      Class<V> valueClass);
+    protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(ProcessorContext context);
 
     protected MockProcessorContext context;
     protected KeyValueStore<Integer, String> store;
@@ -48,7 +50,7 @@ public abstract class AbstractKeyValueStoreTest {
         driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
         context = (MockProcessorContext) driver.context();
         context.setTime(10);
-        store = createKeyValueStore(context, Integer.class, String.class);
+        store = createKeyValueStore(context);
     }
 
     @After
@@ -70,22 +72,29 @@ public abstract class AbstractKeyValueStoreTest {
     @Test
     public void testDelete() {
         store.close();
-        store = createKeyValueStore(driver.context(), Integer.class, String.class);
+
+        final Serializer<String> serializer = new StringSerializer() {
+            @Override
+            public byte[] serialize(final String topic, final String data) {
+                if (data == null) {
+                    return "null-encoding-that-is-not-just-'null'".getBytes();
+                }
+                return super.serialize(topic, data);
+            }
+        };
+
+        context.setValueSerde(Serdes.serdeFrom(serializer, new StringDeserializer()));
+        store = createKeyValueStore(driver.context());
 
         store.put(0, "zero");
         store.put(1, "one");
         store.put(2, "two");
         store.delete(0);
-        store.put(1, null);
-        final KeyValueIterator<Integer, String> it = store.all();
+        store.put(1, null); // same as delete
 
-        while (it.hasNext()) {
-            final KeyValue<Integer, String> next = it.next();
-            // should not return deleted records in iterator
-            if (!next.key.equals(2)) {
-                fail("Got deleted key from iterator");
-            }
-        }
+        // should not include deleted records in iterator
+        final Map<Integer, String> expectedContents = Collections.singletonMap(2, "two");
+        assertEquals(expectedContents, getContents(store.all()));
     }
 
     @Test
@@ -178,7 +187,7 @@ public abstract class AbstractKeyValueStoreTest {
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
-        store = createKeyValueStore(driver.context(), Integer.class, String.class);
+        store = createKeyValueStore(driver.context());
         context.restore(store.name(), driver.restoredEntries());
 
         // Verify that the store's contents were properly restored ...
@@ -200,7 +209,7 @@ public abstract class AbstractKeyValueStoreTest {
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
-        store = createKeyValueStore(driver.context(), Integer.class, String.class);
+        store = createKeyValueStore(driver.context());
         context.restore(store.name(), driver.restoredEntries());
         // Verify that the store's contents were properly restored ...
         assertEquals(0, driver.checkForRestoredEntries(store));
