@@ -34,7 +34,7 @@
   <div class="section" id="testing">
     <span id="streams-developer-guide-testing"></span><h1>Testing a Streams Application<a class="headerlink" href="#testing" title="Permalink to this headline"></a></h1>
     <p>
-      To test a Kafka Streams application, Kafka provides a test-utils artifact since 1.1.0 release that can be added as regular dependency to your test code base.
+      To test a Kafka Streams application, Kafka provides a test-utils artifact that can be added as regular dependency to your test code base.
       Example <code>pom.xml</code> snippet when using Maven:
     </p>
     <pre>
@@ -48,9 +48,9 @@
     <p>
     The test-utils package provides a <code>TopologyTestDriver</code> that can be used pipe data through a <code>Topology</code> that is either assembled manually
     using Processor API or via the DSL using <code>StreamsBuilder</code>.
-    The test driver is simulating the library runtime that continuously fetches records from input topics and processes them by traversing the topology,
-    and hence it can be used to test if your specified processor topology is behaving correctly with the manually piped in data records by checking
-    its outputs as well as querying its embedded state stores.
+    The test driver simulates the library runtime that continuously fetches records from input topics and processes them by traversing the topology.
+    You can use the test driver to verify that your specified processor topology computes the correct result with the manually piped in data records.
+    The test driver captures the results records and allows to query its embedded state stores.
     <pre>
 // Processor API
 Topology topology = new Topology();
@@ -71,8 +71,8 @@ TopologyTestDriver testDriver = new TopologyTestDriver(topology, config);
     </pre>
     <p>
     The test driver accepts <code>ConsumerRecord</code>s with key and value type <code>byte[]</code>.
-    Because <code>byte[]</code> types are hard to handle, the <code>ConsumerRecordFactory</code> can be used to generate those records providing regular Java types
-    for key and values as well as the corresponding serializers.
+    Because <code>byte[]</code> types can be problematic, you can use the <code>ConsumerRecordFactory</code> to generate those records
+    by providing regular Java types for key and values and the corresponding serializers.
     </p>
     <pre>
 ConsumerRecordFactory&lt;String, Integer&gt; factory = new ConsumerRecordFactory&lt;&gt;("input-topic", new StringSerializer(), new IntegerSerializer());
@@ -118,8 +118,8 @@ testDriver.close();
 
     <h2>Example</h2>
     <p>
-    Below, we show a complex example how to use the test driver and helper classes.
-    We create a topology that computed the maximum per key using a key-value-store.
+    The following example demonstrates how to use the test driver and helper classes.
+    The example creates a topology that computes the maximum value per key using a key-value-store.
     While processing, no output is generated, but only the store is updated.
     Output is only sent downstream based on event-time and wall-clock punctuations.
     </p>
