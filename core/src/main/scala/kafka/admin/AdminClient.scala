@@ -528,18 +528,20 @@ object AdminClient {
     val bootstrapCluster = Cluster.bootstrap(brokerAddresses)
     metadata.update(bootstrapCluster, Collections.emptySet(), 0)
 
+    val clientId = "admin-" + AdminClientIdSequence.getAndIncrement()
+
     val selector = new Selector(
       DefaultConnectionMaxIdleMs,
       metrics,
       time,
       "admin",
       channelBuilder,
-      new LogContext())
+      new LogContext(String.format("[Producer clientId=%s] ", clientId)))
 
     val networkClient = new NetworkClient(
       selector,
       metadata,
-      "admin-" + AdminClientIdSequence.getAndIncrement(),
+      clientId,
       DefaultMaxInFlightRequestsPerConnection,
       DefaultReconnectBackoffMs,
       DefaultReconnectBackoffMax,
@@ -549,10 +551,10 @@ object AdminClient {
       time,
       true,
       new ApiVersions,
-      new LogContext())
+      new LogContext(String.format("[NetworkClient clientId=%s] ", clientId)))
 
     val highLevelClient = new ConsumerNetworkClient(
-      new LogContext(),
+      new LogContext(String.format("[ConsumerNetworkClient clientId=%s] ", clientId)),
       networkClient,
       metadata,
       time,
