@@ -287,9 +287,9 @@ class AdminManager(val config: KafkaConfig,
       def allConfigs(config: AbstractConfig) = {
         config.originals.asScala.filter(_._2 != null) ++ config.values.asScala
       }
-      def createResponseConfig(allConfigs: Map[String, Any],
+      def createResponseConfig(configs: Map[String, Any],
                                createConfigEntry: (String, Any) => DescribeConfigsResponse.ConfigEntry): DescribeConfigsResponse.Config = {
-        val filteredConfigPairs = allConfigs.filter { case (configName, _) =>
+        val filteredConfigPairs = configs.filter { case (configName, _) =>
           /* Always returns true if configNames is None */
           configNames.forall(_.contains(configName))
         }.toIndexedSeq
@@ -317,7 +317,7 @@ class AdminManager(val config: KafkaConfig,
               createResponseConfig(allConfigs(config),
                 createBrokerConfigEntry(perBrokerConfig = true, includeSynonyms))
             else
-              throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId}, but received $resource.name")
+              throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} or empty string, but received $resource.name")
 
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
         }

@@ -56,6 +56,10 @@ import scala.collection.JavaConverters._
 object ConfigCommand extends Config {
 
   val DefaultScramIterations = 4096
+  // Dynamic broker configs can only be updated using the new AdminClient since they may require
+  // password encryption currently implemented only in the broker. For consistency with older versions,
+  // quota-related broker configs can still be updated using ZooKeeper. ConfigCommand will be migrated
+  // fully to the new AdminClient later (KIP-248).
   val BrokerConfigsUpdatableUsingZooKeeper = Set(DynamicConfig.Broker.LeaderReplicationThrottledRateProp,
     DynamicConfig.Broker.FollowerReplicationThrottledRateProp,
     DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp)
@@ -189,8 +193,10 @@ object ConfigCommand extends Config {
   }
 
   private def processBrokerConfig(opts: ConfigCommandOptions): Unit = {
-
-    val props = if (opts.options.has(opts.commandConfigOpt)) Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) else new Properties()
+    val props = if (opts.options.has(opts.commandConfigOpt))
+      Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
+    else
+      new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
     val adminClient = JAdminClient.create(props)
     val entityName = if (opts.options.has(opts.entityName))
@@ -398,7 +404,7 @@ object ConfigCommand extends Config {
       .describedAs("server to connect to")
       .ofType(classOf[String])
     val commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client. " +
-      "This is required for describing and altering broker configs.")
+      "This is used only with --bootstrap-server option for describing and altering broker configs.")
       .withRequiredArg
       .describedAs("command config property file")
       .ofType(classOf[String])
@@ -449,7 +455,7 @@ object ConfigCommand extends Config {
       if(options.has(alterOpt)) {
         if (entityTypeVals.contains(ConfigType.User) || entityTypeVals.contains(ConfigType.Client) || entityTypeVals.contains(ConfigType.Broker)) {
           if (!options.has(entityName) && !options.has(entityDefault))
-            throw new IllegalArgumentException("--entity-name or --entity-default must be specified with --alter of users/clients")
+            throw new IllegalArgumentException("--entity-name or --entity-default must be specified with --alter of users, clients or brokers")
         } else if (!options.has(entityName))
             throw new IllegalArgumentException(s"--entity-name must be specified with --alter of ${entityTypeVals}")
 

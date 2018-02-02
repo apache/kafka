@@ -162,44 +162,42 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def shouldAddBrokerDynamicConfig(): Unit = {
-    val alterBrokerOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
-      "--entity-name", "1",
-      "--entity-type", "brokers",
-      "--alter",
-      "--add-config", "message.max.bytes=10"))
-
-    val alterDefaultOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
-      "--entity-default",
-      "--entity-type", "brokers",
-      "--alter",
-      "--add-config", "message.max.bytes=20"))
-
     val node = new Node(1, "localhost", 9092)
-    val brokerConfigs = mutable.Map[String, String]("num.io.threads" -> "5")
-    val defaultConfigs = mutable.Map[String, String]("num.io.threads" -> "10")
+    verifyAlterBrokerConfig(node, "1", List("--entity-name", "1"))
+  }
 
-    val describeFutures = mutable.Buffer[KafkaFuture[util.Map[ConfigResource, Config]]]()
+  @Test
+  def shouldAddDefaultBrokerDynamicConfig(): Unit = {
+    val node = new Node(1, "localhost", 9092)
+    verifyAlterBrokerConfig(node, "", List("--entity-default"))
+  }
+
+  def verifyAlterBrokerConfig(node: Node, resourceName: String, resourceOpts: List[String]): Unit = {
+    val optsList = List("--bootstrap-server", "localhost:9092",
+      "--entity-type", "brokers",
+      "--alter",
+      "--add-config", "message.max.bytes=10") ++ resourceOpts
+    val alterOpts = new ConfigCommandOptions(optsList.toArray)
+    val brokerConfigs = mutable.Map[String, String]("num.io.threads" -> "5")
+
+    val resource = new ConfigResource(ConfigResource.Type.BROKER, resourceName)
+    val configEntries = util.Collections.singletonList(new ConfigEntry("num.io.threads", "5"))
+    val future = new KafkaFutureImpl[util.Map[ConfigResource, Config]]
+    future.complete(util.Collections.singletonMap(resource, new Config(configEntries)))
     val describeResult = EasyMock.createNiceMock(classOf[DescribeConfigsResult])
-    EasyMock.expect(describeResult.all()).andAnswer(new IAnswer[KafkaFuture[util.Map[ConfigResource, Config]]] {
-      override def answer(): KafkaFuture[util.Map[ConfigResource, Config]] = describeFutures.remove(0)
-    }).anyTimes
+    EasyMock.expect(describeResult.all()).andReturn(future).once()
+
     val alterFuture = new KafkaFutureImpl[Void]
     alterFuture.complete(null)
     val alterResult = EasyMock.createNiceMock(classOf[AlterConfigsResult])
-    EasyMock.expect(alterResult.all()).andReturn(alterFuture).anyTimes
+    EasyMock.expect(alterResult.all()).andReturn(alterFuture)
 
     val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
       override def describeConfigs(resources: util.Collection[ConfigResource], options: DescribeConfigsOptions): DescribeConfigsResult = {
         assertEquals(1, resources.size)
         val resource = resources.iterator.next
         assertEquals(ConfigResource.Type.BROKER, resource.`type`)
-        val configEntries = new util.ArrayList[ConfigEntry]
-        val entries = if (resource.name.isEmpty) defaultConfigs else brokerConfigs
-        entries.foreach { case (k, v) => configEntries.add(new ConfigEntry(k, v)) }
-        val allConfigs = util.Collections.singletonMap(resource, new Config(configEntries))
-        val future = new KafkaFutureImpl[util.Map[ConfigResource, Config]]
-        future.complete(allConfigs)
-        describeFutures += future
+        assertEquals(resourceName, resource.name)
         describeResult
       }
 
@@ -209,16 +207,13 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         val resource = entry.getKey
         val config = entry.getValue
         assertEquals(ConfigResource.Type.BROKER, resource.`type`)
-        val map = if (resource.name.isEmpty) defaultConfigs else brokerConfigs
-        config.entries.asScala.foreach { configEntry => map.put(configEntry.name, configEntry.value) }
+        config.entries.asScala.foreach { e => brokerConfigs.put(e.name, e.value) }
         alterResult
       }
     }
     EasyMock.replay(alterResult, describeResult)
-    ConfigCommand.alterBrokerConfig(mockAdminClient, alterBrokerOpts, "1")
-    assertEquals(Map("num.io.threads" -> "5", "message.max.bytes" -> "10"), brokerConfigs.toMap)
-    ConfigCommand.alterBrokerConfig(mockAdminClient, alterDefaultOpts, "")
-    assertEquals(Map("num.io.threads" -> "10", "message.max.bytes" -> "20"), defaultConfigs.toMap)
+    ConfigCommand.alterBrokerConfig(mockAdminClient, alterOpts, resourceName)
+    assertEquals(Map("message.max.bytes" -> "10", "num.io.threads" -> "5"), brokerConfigs.toMap)
     EasyMock.reset(alterResult, describeResult)
   }
 
