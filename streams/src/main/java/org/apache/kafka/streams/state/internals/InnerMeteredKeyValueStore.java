@@ -55,7 +55,7 @@ class InnerMeteredKeyValueStore<K, IK, V, IV> extends WrappedStateStore.Abstract
 
     /**
      * For a period of time we will have 2 store hierarchies. 1 which is built by a
-     * {@link org.apache.kafka.streams.processor.StateStoreSupplier} where the outer most store will be of user defined
+     * {@link org.apache.kafka.streams.state.StoreSupplier} where the outer most store will be of user defined
      * type, i.e, &lt;String,Integer&gt;, and another where the outermost store will be of type &lt;Bytes,byte[]&gt;
      * This interface is so we don't need to have 2 complete implementations for collecting the metrics, rather
      * we just provide an instance of this to do the type conversions from the outer store types to the inner store types.
