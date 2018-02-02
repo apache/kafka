@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.Values.Parser;
+import org.apache.kafka.connect.errors.DataException;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -157,6 +159,39 @@ public class ValuesTest {
     @Test
     public void shouldConvertListWithIntegerValues() {
         assertRoundTrip(INT_LIST_SCHEMA, INT_LIST_SCHEMA, INT_LIST);
+    }
+
+    @Test
+    public void shouldParseStringListWithMultipleElementTypesAsListWithUnknownSchema() {
+        String str = "[1, 2, 3, \"four\",,]";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.STRING, result.schema().type());
+        assertEquals(str, result.value());
+    }
+
+    @Test
+    public void shouldParseStringListWithExtraDelimiters() {
+        String str = "[1, 2, 3,,,]";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.STRING, result.schema().type());
+        assertEquals(str, result.value());
+
+        int thirdValue = Short.MAX_VALUE + 1;
+        List<?> list = Values.convertToList(Schema.STRING_SCHEMA, "[1, 2, " + thirdValue + "]");
+        assertEquals(3, list.size());
+        assertEquals(1, ((Number)list.get(0)).intValue());
+        assertEquals(2, ((Number)list.get(1)).intValue());
+        assertEquals(thirdValue, ((Number)list.get(2)).intValue());
+    }
+
+    @Test(expected = DataException.class)
+    public void shouldFailToConvertToListFromStringWithExtraDelimiters() {
+        Values.convertToList(Schema.STRING_SCHEMA, "[1, 2, 3,,,]");
+    }
+
+    @Test(expected = DataException.class)
+    public void shouldFailToConvertToListFromStringWithNonCommonElementType() {
+        Values.convertToList(Schema.STRING_SCHEMA, "[1, 2, 3, \"four\"]");
     }
 
     @Test
