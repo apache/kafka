@@ -243,6 +243,19 @@ public class StoreChangelogReaderTest {
         assertCorrectOffsetsReportedByListener(callbackTwo, 0L, 2L, 3L);
     }
 
+    @Test
+    public void shouldOnlyReportTheLastRestoredOffset() {
+        setupConsumer(10, topicPartition);
+        changelogReader
+            .register(new StateRestorer(topicPartition, restoreListener, null, 5, true, "storeName1"));
+        changelogReader.restore(active);
+
+        assertThat(callback.restored.size(), equalTo(5));
+        assertAllCallbackStatesExecuted(callback, "storeName1");
+        assertCorrectOffsetsReportedByListener(callback, 0L, 4L, 5L);
+    }
+
+
     private void assertAllCallbackStatesExecuted(final MockStateRestoreListener restoreListener,
                                                  final String storeName) {
         assertThat(restoreListener.storeNameCalledStates.get(RESTORE_START), equalTo(storeName));
