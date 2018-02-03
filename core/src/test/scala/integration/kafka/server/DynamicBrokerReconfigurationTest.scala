@@ -98,6 +98,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       props.put(KafkaConfig.ListenersProp, s"$SecureInternal://localhost:0, $SecureExternal://localhost:0")
       props.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"$SecureInternal:SSL, $SecureExternal:SASL_SSL")
       props.put(KafkaConfig.InterBrokerListenerNameProp, SecureInternal)
+      props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, "PLAIN")
       props.put(KafkaConfig.ZkEnableSecureAclsProp, "true")
       props.put(KafkaConfig.SaslEnabledMechanismsProp, kafkaServerSaslMechanisms.mkString(","))
       props.put(KafkaConfig.LogSegmentBytesProp, "2000")
@@ -543,6 +544,18 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val producer = createProducer(trustStoreFile1, retries = 0)
     val consumer = createConsumer("group2", trustStoreFile1, topic)
     verifyProduceConsume(producer, consumer, 10, topic)
+
+    // Verify updating inter-broker listener
+    val props = new Properties
+    props.put(KafkaConfig.InterBrokerListenerNameProp, SecureExternal)
+    try {
+      reconfigureServers(props, perBrokerConfig = true, (KafkaConfig.InterBrokerListenerNameProp, SecureExternal))
+      fail("Inter-broker listener cannot be dynamically updated")
+    } catch {
+      case e: ExecutionException =>
+        assertTrue(s"Unexpected exception ${e.getCause}", e.getCause.isInstanceOf[InvalidRequestException])
+        servers.foreach(server => assertEquals(SecureInternal, server.config.interBrokerListenerName.value))
+    }
 
     // Verify that the other send did not complete
     verifyTimeout(sendFuture)

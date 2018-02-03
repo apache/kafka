@@ -124,6 +124,4 @@ class PasswordEncoderTest {
     assertNotNull("Invalid encoded password", encoder.base64Decode(encodedMap(PasswordEncoder.EncyrptedPasswordProp)))
     assertEquals(password, encoder.decode(encoded).value)
   }
-
-
 }

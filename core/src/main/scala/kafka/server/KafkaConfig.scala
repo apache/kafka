@@ -722,12 +722,12 @@ object KafkaConfig {
   /** ********* Password encryption configuration for dynamic configs *********/
   val PasswordEncoderSecretDoc = "The secret used for encoding dynamically configured passwords for this broker."
   val PasswordEncoderOldSecretDoc = "The old secret that was used for encoding dynamically configured passwords. " +
-    "This is required only when secret is updated. If specified, all dynamically encoded passwords are " +
+    "This is required only when the secret is updated. If specified, all dynamically encoded passwords are " +
     s"decoded using this old secret and re-encoded using $PasswordEncoderSecretProp when broker starts up."
-  val PasswordEncoderKeyFactoryAlgorithmDoc = "The SecretKeyFactory algorithm used for encoding dynamically configured passwords." +
+  val PasswordEncoderKeyFactoryAlgorithmDoc = "The SecretKeyFactory algorithm used for encoding dynamically configured passwords. " +
     "Default is PBKDF2WithHmacSHA512 if available and PBKDF2WithHmacSHA1 otherwise."
   val PasswordEncoderCipherAlgorithmDoc = "The Cipher algorithm used for encoding dynamically configured passwords."
-  val PasswordEncoderKeyLengthDoc =  s"The key length used for encoding dynamically configured passwords."
+  val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
   private val configDef = {
@@ -940,10 +940,10 @@ object KafkaConfig {
       /** ********* Password encryption configuration for dynamic configs *********/
       .define(PasswordEncoderSecretProp, PASSWORD, null, MEDIUM, PasswordEncoderSecretDoc)
       .define(PasswordEncoderOldSecretProp, PASSWORD, null, MEDIUM, PasswordEncoderOldSecretDoc)
-      .define(PasswordEncoderKeyFactoryAlgorithmProp, STRING, null, MEDIUM, PasswordEncoderKeyFactoryAlgorithmDoc)
-      .define(PasswordEncoderCipherAlgorithmProp, STRING, Defaults.PasswordEncoderCipherAlgorithm, MEDIUM, PasswordEncoderCipherAlgorithmDoc)
-      .define(PasswordEncoderKeyLengthProp, INT, Defaults.PasswordEncoderKeyLength, atLeast(8), MEDIUM, PasswordEncoderKeyLengthDoc)
-      .define(PasswordEncoderIterationsProp, INT, Defaults.PasswordEncoderIterations, atLeast(1024), MEDIUM, PasswordEncoderIterationsDoc)
+      .define(PasswordEncoderKeyFactoryAlgorithmProp, STRING, null, LOW, PasswordEncoderKeyFactoryAlgorithmDoc)
+      .define(PasswordEncoderCipherAlgorithmProp, STRING, Defaults.PasswordEncoderCipherAlgorithm, LOW, PasswordEncoderCipherAlgorithmDoc)
+      .define(PasswordEncoderKeyLengthProp, INT, Defaults.PasswordEncoderKeyLength, atLeast(8), LOW, PasswordEncoderKeyLengthDoc)
+      .define(PasswordEncoderIterationsProp, INT, Defaults.PasswordEncoderIterations, atLeast(1024), LOW, PasswordEncoderIterationsDoc)
   }
 
   def configNames() = configDef.names().asScala.toList.sorted

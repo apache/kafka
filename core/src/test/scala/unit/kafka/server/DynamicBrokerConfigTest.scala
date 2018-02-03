@@ -194,8 +194,15 @@ class DynamicBrokerConfigTest {
     newConfigWithSameSecret.dynamicConfig.updateBrokerConfig(0, persistedProps)
     assertEquals("dynamicLoginModule required;", newConfigWithSameSecret.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)
 
-    // New config with new secret should revert to static password config since dynamic config cannot be decoded
+    // New config with new secret should use the dynamic password config if new and old secrets are configured in KafkaConfig
     props.put(KafkaConfig.PasswordEncoderSecretProp, "new-encoder-secret")
+    props.put(KafkaConfig.PasswordEncoderOldSecretProp, "config-encoder-secret")
+    val newConfigWithNewAndOldSecret = KafkaConfig(props)
+    newConfigWithNewAndOldSecret.dynamicConfig.updateBrokerConfig(0, persistedProps)
+    assertEquals("dynamicLoginModule required;", newConfigWithSameSecret.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)
+
+    // New config with new secret alone should revert to static password config since dynamic config cannot be decoded
+    props.put(KafkaConfig.PasswordEncoderSecretProp, "another-new-encoder-secret")
     val newConfigWithNewSecret = KafkaConfig(props)
     newConfigWithNewSecret.dynamicConfig.updateBrokerConfig(0, persistedProps)
     assertEquals("staticLoginModule required;", newConfigWithNewSecret.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)

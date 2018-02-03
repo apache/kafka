@@ -1227,7 +1227,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  case class BrokerModifications() extends ControllerEvent {
+  case object BrokerModifications extends ControllerEvent {
     override def state: ControllerState = ControllerState.BrokerChange
 
     override def process(): Unit = {
@@ -1240,10 +1240,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
           case None => false
         }
       }
-      val updatedBrokerIdsSorted = updatedBrokers.map(_.id).toSeq.sorted
-      info(s"Updated brokers: ${updatedBrokerIdsSorted.mkString(",")}")
+      if (updatedBrokers.nonEmpty) {
+        val updatedBrokerIdsSorted = updatedBrokers.map(_.id).toSeq.sorted
+        info(s"Updated brokers: ${updatedBrokerIdsSorted.mkString(",")}")
 
-      if (updatedBrokerIdsSorted.nonEmpty) {
         controllerContext.liveBrokers = curBrokers // Update broker metadata
         onBrokerUpdate(updatedBrokerIdsSorted)
       }
@@ -1508,7 +1508,7 @@ class BrokerModificationsHandler(controller: KafkaController, eventManager: Cont
   override val path: String = BrokerIdZNode.path(brokerId)
 
   override def handleDataChange(): Unit = {
-    eventManager.put(controller.BrokerModifications())
+    eventManager.put(controller.BrokerModifications)
   }
 }
 

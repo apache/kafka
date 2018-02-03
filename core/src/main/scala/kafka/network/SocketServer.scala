@@ -161,7 +161,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     info("Stopped socket server request processors")
   }
 
-  def resizeThreadPool(oldNumNetworkThreads: Int, newNumNetworkThreads: Int): Unit = {
+  def resizeThreadPool(oldNumNetworkThreads: Int, newNumNetworkThreads: Int): Unit = synchronized {
     info(s"Resizing network thread pool size for each listener from $oldNumNetworkThreads to $newNumNetworkThreads")
     if (newNumNetworkThreads > oldNumNetworkThreads)
       createProcessors(newNumNetworkThreads - oldNumNetworkThreads, config.listeners)
@@ -193,10 +193,12 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   }
 
   def addListeners(listenersAdded: Seq[EndPoint]): Unit = synchronized {
+    info(s"Adding listeners for endpoints $listenersAdded")
     createProcessors(config.numNetworkThreads, listenersAdded)
   }
 
   def removeListeners(listenersRemoved: Seq[EndPoint]): Unit = synchronized {
+    info(s"Removing listeners for endpoints $listenersRemoved")
     listenersRemoved.foreach { endpoint =>
       acceptors.asScala.remove(endpoint).foreach(_.shutdown())
     }

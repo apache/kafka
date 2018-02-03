@@ -41,7 +41,9 @@ object PasswordEncoder {
 }
 
 /**
-  * Password encoder and decoder implementation.
+  * Password encoder and decoder implementation. Encoded passwords are persisted as a CSV map
+  * containing the encoded password in base64 and along with the properties used for encryption.
+  *
   * @param secret The secret used for encoding and decoding
   * @param keyFactoryAlgorithm  Key factory algorithm if configured. By default, PBKDF2WithHmacSHA512 is
   *                             used if available, PBKDF2WithHmacSHA1 otherwise.

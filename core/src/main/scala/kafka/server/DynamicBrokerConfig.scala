@@ -424,8 +424,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
           if (needsReconfiguration(reconfigurable.reconfigurableConfigs.asJava, updatedMap.keySet)) {
             if (validateOnly)
               reconfigurable.validateReconfiguration(newConfig)
-            else
-              brokerReconfigurablesToUpdate += reconfigurable
+            brokerReconfigurablesToUpdate += reconfigurable
           }
         }
         (newConfig, brokerReconfigurablesToUpdate.toList)
@@ -713,7 +712,7 @@ class DynamicListenerConfig(server: KafkaServer) extends BrokerReconfigurable wi
     val oldListeners = listenersToMap(oldConfig.listeners)
     val oldAdvertisedListeners = listenersToMap(oldConfig.advertisedListeners)
     if (!newAdvertisedListeners.keySet.subsetOf(newListeners.keySet))
-      throw new ConfigException(s"Listeners '$newListeners' and advertisedListeners '$newAdvertisedListeners' don't match")
+      throw new ConfigException(s"Advertised listeners '$newAdvertisedListeners' must be a subset of listeners '$newListeners'")
     if (newListeners.keySet != newConfig.listenerSecurityProtocolMap.keySet)
       throw new ConfigException(s"Listeners '$newListeners' and listener map '${newConfig.listenerSecurityProtocolMap}' don't match")
     newListeners.keySet.intersect(oldListeners.keySet).foreach { listenerName =>
@@ -723,13 +722,11 @@ class DynamicListenerConfig(server: KafkaServer) extends BrokerReconfigurable wi
       if (newListenerProps != oldListenerProps)
         throw new ConfigException(s"Configs cannot be updated dynamically for existing listener $listenerName, " +
           "restart broker or create a new listener for update")
+      if (oldConfig.listenerSecurityProtocolMap(listenerName) != newConfig.listenerSecurityProtocolMap(listenerName))
+        throw new ConfigException(s"Security protocol cannot be updated for existing listener $listenerName")
     }
-    if (!newListeners.contains(newConfig.interBrokerListenerName))
-      throw new ConfigException(s"Cannot delete inter-broker listener ${newConfig.interBrokerListenerName}")
     if (!newAdvertisedListeners.contains(newConfig.interBrokerListenerName))
       throw new ConfigException(s"Advertised listener must be specified for inter-broker listener ${newConfig.interBrokerListenerName}")
-    else if (!oldAdvertisedListeners.contains(newConfig.interBrokerListenerName))
-      throw new ConfigException(s"Advertised listener cannot be updated to a new listener ${newConfig.interBrokerListenerName}")
   }
 
   def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
