@@ -96,6 +96,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
                     final byte[] oldBytesValue = underlying.get(entry.key());
                     oldValue = oldBytesValue == null ? null : serdes.valueFrom(oldBytesValue);
                 }
+                // we rely on underlying store to handle null new value bytes as deletes
                 underlying.put(entry.key(), entry.newValue());
                 flushListener.apply(serdes.keyFrom(entry.key().get()),
                                     serdes.valueFrom(entry.newValue()),
@@ -272,8 +273,11 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
 
     private byte[] deleteInternal(final Bytes key) {
         final byte[] v = getInternal(key);
+        putInternal(key, null);
+        /*
         cache.delete(cacheName, key);
         underlying.delete(key);
+        */
         return v;
     }
 

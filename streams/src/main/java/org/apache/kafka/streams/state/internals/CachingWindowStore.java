@@ -211,8 +211,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
             if (!iter.hasNext()) {
                 return null;
             } else {
-                final byte[] valueBytes = iter.next().value;
-                return serdes.valueFrom(valueBytes);
+                return serdes.valueFrom(iter.next().value);
             }
         }
     }

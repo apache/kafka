@@ -185,8 +185,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
             if (!iterator.hasNext()) {
                 return null;
             }
-            final byte[] valueBytes = iterator.next().value;
-            return serdes.valueFrom(valueBytes);
+            return serdes.valueFrom(iterator.next().value);
         }
     }
 
