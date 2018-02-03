@@ -98,7 +98,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
                 }
                 underlying.put(entry.key(), entry.newValue());
                 flushListener.apply(serdes.keyFrom(entry.key().get()),
-                                    entry.newValue() == null ? null : serdes.valueFrom(entry.newValue()),
+                                    serdes.valueFrom(entry.newValue()),
                                     oldValue);
             } else {
                 underlying.put(entry.key(), entry.newValue());
@@ -145,6 +145,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
 
     @Override
     public byte[] get(final Bytes key) {
+        Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         Lock theLock;
         if (Thread.currentThread().equals(streamThread)) {
@@ -154,7 +155,6 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         }
         theLock.lock();
         try {
-            Objects.requireNonNull(key);
             return getInternal(key);
         } finally {
             theLock.unlock();
@@ -216,15 +216,15 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         validateStoreOpen();
         lock.writeLock().lock();
         try {
+            // for null bytes, we still put it into cache indicating tombstones
             putInternal(key, value);
         } finally {
             lock.writeLock().unlock();
         }
     }
 
-    private void putInternal(final Bytes rawKey, final byte[] value) {
-        Objects.requireNonNull(rawKey, "key cannot be null");
-        cache.put(cacheName, rawKey, new LRUCacheEntry(value, true, context.offset(),
+    private void putInternal(final Bytes key, final byte[] value) {
+        cache.put(cacheName, key, new LRUCacheEntry(value, true, context.offset(),
               context.timestamp(), context.partition(), context.topic()));
     }
 
@@ -246,9 +246,11 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
 
     @Override
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+        validateStoreOpen();
         lock.writeLock().lock();
         try {
             for (KeyValue<Bytes, byte[]> entry : entries) {
+                Objects.requireNonNull(entry.key, "key cannot be null");
                 put(entry.key, entry.value);
             }
         } finally {
@@ -258,17 +260,21 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
 
     @Override
     public byte[] delete(final Bytes key) {
+        Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         lock.writeLock().lock();
         try {
-            Objects.requireNonNull(key);
-            final byte[] v = getInternal(key);
-            cache.delete(cacheName, key);
-            underlying.delete(key);
-            return v;
+            return deleteInternal(key);
         } finally {
             lock.writeLock().unlock();
         }
+    }
+
+    private byte[] deleteInternal(final Bytes key) {
+        final byte[] v = getInternal(key);
+        cache.delete(cacheName, key);
+        underlying.delete(key);
+        return v;
     }
 
     KeyValueStore<Bytes, byte[]> underlying() {

@@ -119,6 +119,6 @@ public class RocksDBSessionStore<K, AGG> extends WrappedStateStore.AbstractState
 
     @Override
     public void put(final Windowed<K> sessionKey, final AGG aggregate) {
-        bytesStore.put(SessionKeySerde.toBinary(sessionKey, serdes.keySerializer(), topic), aggregate == null ? null : serdes.rawValue(aggregate));
+        bytesStore.put(SessionKeySerde.toBinary(sessionKey, serdes.keySerializer(), topic), serdes.rawValue(aggregate));
     }
 }

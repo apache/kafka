@@ -121,11 +121,11 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
         return recordCollector;
     }
 
-    public void setKeySerde(Serde<?> keySerde) {
+    public void setKeySerde(final Serde<?> keySerde) {
         this.keySerde = keySerde;
     }
 
-    public void setValueSerde(Serde<?> valSerde) {
+    public void setValueSerde(final Serde<?> valSerde) {
         this.valSerde = valSerde;
     }
 

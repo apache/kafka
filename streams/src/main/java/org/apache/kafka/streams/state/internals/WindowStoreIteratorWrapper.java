@@ -129,7 +129,7 @@ class WindowStoreIteratorWrapper<K, V> {
         public KeyValue<Long, V> next() {
             final KeyValue<Bytes, byte[]> next = bytesIterator.next();
             final long timestamp = WindowStoreUtils.timestampFromBinaryKey(next.key.get());
-            final V value = next.value == null ? null : serdes.valueFrom(next.value);
+            final V value = serdes.valueFrom(next.value);
             return KeyValue.pair(timestamp, value);
         }
 
@@ -149,8 +149,9 @@ class WindowStoreIteratorWrapper<K, V> {
         final StateSerdes<K, V> serdes;
         final long windowSize;
 
-        WrappedKeyValueIterator(
-            KeyValueIterator<Bytes, byte[]> bytesIterator, StateSerdes<K, V> serdes, long windowSize) {
+        WrappedKeyValueIterator(final KeyValueIterator<Bytes, byte[]> bytesIterator,
+                                final StateSerdes<K, V> serdes,
+                                final long windowSize) {
             this.bytesIterator = bytesIterator;
             this.serdes = serdes;
             this.windowSize = windowSize;
@@ -174,7 +175,7 @@ class WindowStoreIteratorWrapper<K, V> {
             final KeyValue<Bytes, byte[]> next = bytesIterator.next();
             final long timestamp = WindowStoreUtils.timestampFromBinaryKey(next.key.get());
             final K key = WindowStoreUtils.keyFromBinaryKey(next.key.get(), serdes);
-            final V value = next.value == null ? null : serdes.valueFrom(next.value);
+            final V value = serdes.valueFrom(next.value);
             return KeyValue.pair(
                 new Windowed<>(key, WindowStoreUtils.timeWindowForSize(timestamp, windowSize)),
                 value

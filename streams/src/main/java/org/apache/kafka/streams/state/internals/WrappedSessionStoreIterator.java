@@ -78,7 +78,7 @@ class WrappedSessionStoreIterator<K, V> implements KeyValueIterator<Windowed<K>,
     public KeyValue<Windowed<K>, V> next() {
         final KeyValue<Bytes, byte[]> next = bytesIterator.next();
         return KeyValue.pair(SessionKeySerde.from(next.key.get(), serdes.keyDeserializer(), serdes.topic()),
-                             next.value == null ? null : serdes.valueFrom(next.value));
+                             serdes.valueFrom(next.value));
     }
 
     @Override

@@ -39,7 +39,7 @@ import static org.junit.Assert.assertNull;
 
 public abstract class AbstractKeyValueStoreTest {
 
-    protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(ProcessorContext context);
+    protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context);
 
     protected MockProcessorContext context;
     protected KeyValueStore<Integer, String> store;
@@ -76,8 +76,8 @@ public abstract class AbstractKeyValueStoreTest {
         final Serializer<String> serializer = new StringSerializer() {
             @Override
             public byte[] serialize(final String topic, final String data) {
-                if (data == null) {
-                    return "null-encoding-that-is-not-just-'null'".getBytes();
+                if (data.equals("null")) {
+                    return null;
                 }
                 return super.serialize(topic, data);
             }
@@ -90,7 +90,7 @@ public abstract class AbstractKeyValueStoreTest {
         store.put(1, "one");
         store.put(2, "two");
         store.delete(0);
-        store.put(1, null); // same as delete
+        store.put(1, "null"); // will be serialized to null bytes, indicating deletes
 
         // should not include deleted records in iterator
         final Map<Integer, String> expectedContents = Collections.singletonMap(2, "two");

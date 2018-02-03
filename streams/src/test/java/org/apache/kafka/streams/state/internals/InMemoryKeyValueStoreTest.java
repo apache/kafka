@@ -32,7 +32,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @SuppressWarnings("unchecked")
     @Override
-    protected <K, V> KeyValueStore<K, V> createKeyValueStore(ProcessorContext context) {
+    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context) {
         final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(
                 Stores.inMemoryKeyValueStore("my-store"),
                 (Serde<K>) context.keySerde(),

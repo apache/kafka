@@ -168,8 +168,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     @Override
     public synchronized V delete(K key) {
         Objects.requireNonNull(key);
-        V value = this.map.remove(key);
-        return value;
+        return this.map.remove(key);
     }
 
     /**

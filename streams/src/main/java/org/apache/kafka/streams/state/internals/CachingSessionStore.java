@@ -160,8 +160,6 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
         return findSessions(from, to, 0, Long.MAX_VALUE);
     }
 
-
-
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
         final Bytes binaryKey = cacheFunction.key(entry.key());
         final RecordContext current = context.recordContext();
@@ -170,7 +168,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
             final Windowed<K> key = SessionKeySerde.from(binaryKey.get(), serdes.keyDeserializer(), topic);
             final Bytes rawKey = Bytes.wrap(serdes.rawKey(key.key()));
             if (flushListener != null) {
-                final AGG newValue = entry.newValue() == null ? null : serdes.valueFrom(entry.newValue());
+                final AGG newValue = serdes.valueFrom(entry.newValue());
                 final AGG oldValue = newValue == null || sendOldValues ? fetchPrevious(rawKey, key.window()) : null;
                 if (!(newValue == null && oldValue == null)) {
                     flushListener.apply(key, newValue, oldValue);
@@ -183,13 +181,12 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     }
 
     private AGG fetchPrevious(final Bytes rawKey, final Window window) {
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = bytesStore
-                .findSessions(rawKey, window.start(), window.end())) {
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = bytesStore.findSessions(rawKey, window.start(), window.end())) {
             if (!iterator.hasNext()) {
                 return null;
             }
             final byte[] valueBytes = iterator.next().value;
-            return valueBytes == null ? null : serdes.valueFrom(valueBytes);
+            return serdes.valueFrom(valueBytes);
         }
     }
 

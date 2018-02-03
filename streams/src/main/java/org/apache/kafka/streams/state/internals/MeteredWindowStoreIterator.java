@@ -53,7 +53,7 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V> {
     @Override
     public KeyValue<Long, V> next() {
         final KeyValue<Long, byte[]> next = iter.next();
-        return KeyValue.pair(next.key, next.value == null ? null : serdes.valueFrom(next.value));
+        return KeyValue.pair(next.key, serdes.valueFrom(next.value));
     }
 
     @Override
