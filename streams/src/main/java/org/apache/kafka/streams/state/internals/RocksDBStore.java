@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
@@ -28,11 +27,9 @@ import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallba
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
-import org.apache.kafka.streams.state.StateSerdes;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
@@ -66,12 +63,9 @@ import java.util.Set;
  * If you intend to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
  * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
  *
- * @param <K> The key type
- * @param <V> The value type
- *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
+public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
     private static final int TTL_NOT_USED = -1;
 
@@ -89,10 +83,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private final Set<KeyValueIterator> openIterators = Collections.synchronizedSet(new HashSet<KeyValueIterator>());
 
     File dbDir;
-    private StateSerdes<K, V> serdes;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-
     private RocksDB db;
 
     // the following option objects will be created in the constructor and closed in the close() method
@@ -107,15 +97,13 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     protected volatile boolean open = false;
 
-    RocksDBStore(String name, Serde<K> keySerde, Serde<V> valueSerde) {
-        this(name, DB_FILE_DIR, keySerde, valueSerde);
+    RocksDBStore(String name) {
+        this(name, DB_FILE_DIR);
     }
 
-    RocksDBStore(String name, String parentDir, Serde<K> keySerde, Serde<V> valueSerde) {
+    RocksDBStore(String name, String parentDir) {
         this.name = name;
         this.parentDir = parentDir;
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
     }
 
     @SuppressWarnings("unchecked")
@@ -161,13 +149,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             final RocksDBConfigSetter configSetter = Utils.newInstance(configSetterClass);
             configSetter.setConfig(name, options, configs);
         }
-        // we need to construct the serde while opening DB since
-        // it is also triggered by windowed DB segments without initialization
-        this.serdes = new StateSerdes<>(
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
-
         this.dbDir = new File(new File(context.stateDir(), parentDir), this.name);
 
         try {
@@ -226,9 +207,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized V get(K key) {
+    public synchronized byte[] get(Bytes key) {
         validateStoreOpen();
-        byte[] byteValue = getInternal(serdes.rawKey(key));
+        byte[] byteValue = getInternal(key.get());
         return byteValue  == null ? null : serdes.valueFrom(byteValue);
     }
 
@@ -242,7 +223,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         try {
             return this.db.get(rawKey);
         } catch (RocksDBException e) {
-            throw new ProcessorStateException("Error while getting value for key " + serdes.keyFrom(rawKey) +
+            throw new ProcessorStateException("Error while getting value for key " + rawKey +
                     " from store " + this.name, e);
         }
     }
@@ -280,18 +261,16 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public synchronized void put(K key, V value) {
+    public synchronized void put(Bytes key, byte[] value) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
-        byte[] rawKey = serdes.rawKey(key);
-        byte[] rawValue = serdes.rawValue(value);
-        putInternal(rawKey, rawValue);
+        putInternal(key.get(), value);
     }
 
     @Override
-    public synchronized V putIfAbsent(K key, V value) {
+    public synchronized byte[] putIfAbsent(Bytes key, byte[] value) {
         Objects.requireNonNull(key, "key cannot be null");
-        V originalValue = get(key);
+        byte[] originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
         }
@@ -318,30 +297,28 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             try {
                 db.delete(wOptions, rawKey);
             } catch (RocksDBException e) {
-                throw new ProcessorStateException("Error while removing key " + serdes.keyFrom(rawKey) +
+                throw new ProcessorStateException("Error while removing key " + rawKey +
                         " from store " + this.name, e);
             }
         } else {
             try {
                 db.put(wOptions, rawKey, rawValue);
             } catch (RocksDBException e) {
-                throw new ProcessorStateException("Error while executing put key " + serdes.keyFrom(rawKey) +
-                        " and value " + serdes.keyFrom(rawValue) + " from store " + this.name, e);
+                throw new ProcessorStateException("Error while executing put key " + rawKey +
+                        " and value " + rawValue + " from store " + this.name, e);
             }
         }
     }
 
     @Override
-    public void putAll(List<KeyValue<K, V>> entries) {
+    public void putAll(List<KeyValue<Bytes, byte[]>> entries) {
         try (WriteBatch batch = new WriteBatch()) {
-            for (KeyValue<K, V> entry : entries) {
+            for (KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
-                final byte[] rawKey = serdes.rawKey(entry.key);
-                final byte[] rawValue = serdes.rawValue(entry.value);
-                if (rawValue == null) {
-                    batch.remove(rawKey);
+                if (entry.value == null) {
+                    batch.remove(entry.key.get());
                 } else {
-                    batch.put(rawKey, rawValue);
+                    batch.put(entry.key.get(), entry.value);
                 }
             }
             db.write(wOptions, batch);
@@ -352,54 +329,54 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized V delete(K key) {
+    public synchronized byte[] delete(Bytes key) {
         Objects.requireNonNull(key, "key cannot be null");
-        V value = get(key);
+        byte[] value = get(key);
         put(key, null);
         return value;
     }
 
     @Override
-    public synchronized KeyValueIterator<K, V> range(K from, K to) {
+    public synchronized KeyValueIterator<Bytes, byte[]> range(Bytes from, Bytes to) {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
         validateStoreOpen();
 
         // query rocksdb
-        final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(name, db.newIterator(), serdes, from, to);
+        final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(name, db.newIterator(), from, to);
         openIterators.add(rocksDBRangeIterator);
 
         return rocksDBRangeIterator;
     }
 
     @Override
-    public synchronized KeyValueIterator<K, V> all() {
+    public synchronized KeyValueIterator<Bytes, byte[]> all() {
         validateStoreOpen();
         // query rocksdb
         RocksIterator innerIter = db.newIterator();
         innerIter.seekToFirst();
-        final RocksDbIterator rocksDbIterator = new RocksDbIterator(name, innerIter, serdes);
+        final RocksDbIterator rocksDbIterator = new RocksDbIterator(name, innerIter);
         openIterators.add(rocksDbIterator);
         return rocksDbIterator;
     }
 
-    public synchronized KeyValue<K, V> first() {
+    public synchronized KeyValue<Bytes, byte[]> first() {
         validateStoreOpen();
         
         RocksIterator innerIter = db.newIterator();
         innerIter.seekToFirst();
-        KeyValue<K, V> pair = new KeyValue<>(serdes.keyFrom(innerIter.key()), serdes.valueFrom(innerIter.value()));
+        KeyValue<Bytes, byte[]> pair = new KeyValue<>(new Bytes(innerIter.key()), innerIter.value());
         innerIter.close();
 
         return pair;
     }
 
-    public synchronized KeyValue<K, V> last() {
+    public synchronized KeyValue<Bytes, byte[]> last() {
         validateStoreOpen();
         
         RocksIterator innerIter = db.newIterator();
         innerIter.seekToLast();
-        KeyValue<K, V> pair = new KeyValue<>(serdes.keyFrom(innerIter.key()), serdes.valueFrom(innerIter.value()));
+        KeyValue<Bytes, byte[]> pair = new KeyValue<>(new Bytes(innerIter.key()), innerIter.value());
         innerIter.close();
 
         return pair;
@@ -485,16 +462,14 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
     }
 
-    private class RocksDbIterator implements KeyValueIterator<K, V> {
+    private class RocksDbIterator implements KeyValueIterator<Bytes, byte[]> {
         private final String storeName;
         private final RocksIterator iter;
-        private final StateSerdes<K, V> serdes;
 
         private volatile boolean open = true;
 
-        RocksDbIterator(String storeName, RocksIterator iter, StateSerdes<K, V> serdes) {
+        RocksDbIterator(String storeName, RocksIterator iter) {
             this.iter = iter;
-            this.serdes = serdes;
             this.storeName = storeName;
         }
 
@@ -502,8 +477,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             return iter.key();
         }
 
-        private KeyValue<K, V> getKeyValue() {
-            return new KeyValue<>(serdes.keyFrom(iter.key()), serdes.valueFrom(iter.value()));
+        private KeyValue<Bytes, byte[]> getKeyValue() {
+            return new KeyValue<>(new Bytes(iter.key()), iter.value());
         }
 
         @Override
@@ -519,11 +494,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
          * @throws NoSuchElementException if no next element exist
          */
         @Override
-        public synchronized KeyValue<K, V> next() {
+        public synchronized KeyValue<Bytes, byte[]> next() {
             if (!hasNext())
                 throw new NoSuchElementException();
 
-            KeyValue<K, V> entry = this.getKeyValue();
+            KeyValue<Bytes, byte[]> entry = this.getKeyValue();
             iter.next();
             return entry;
         }
@@ -541,11 +516,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
 
         @Override
-        public K peekNextKey() {
+        public Bytes peekNextKey() {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
-            return serdes.keyFrom(iter.key());
+            return new Bytes(iter.key());
         }
     }
 
@@ -556,10 +531,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
         private byte[] rawToKey;
 
-        RocksDBRangeIterator(String storeName, RocksIterator iter, StateSerdes<K, V> serdes, K from, K to) {
-            super(storeName, iter, serdes);
-            iter.seek(serdes.rawKey(from));
-            this.rawToKey = serdes.rawKey(to);
+        RocksDBRangeIterator(String storeName, RocksIterator iter, Bytes from, Bytes to) {
+            super(storeName, iter);
+            iter.seek(from.get());
+            this.rawToKey = to.get();
             if (this.rawToKey == null) {
                 throw new NullPointerException("RocksDBRangeIterator: RawToKey is null for key " + to);
             }
@@ -580,7 +555,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             this.rocksDBStore = rocksDBStore;
         }
 
-        @SuppressWarnings("unchecked")
         @Override
         public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
             rocksDBStore.restoreAllInternal(records);

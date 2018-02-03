@@ -29,7 +29,6 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Collections;
@@ -49,7 +48,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     protected final Serde<K> keySerde;
     protected final Serde<V> valSerde;
-    private boolean isQueryable = true;
+    private boolean isQueryable;
     private final Initializer<Long> countInitializer = new Initializer<Long>() {
         @Override
         public Long apply() {
@@ -142,7 +141,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     @SuppressWarnings("deprecation")
     private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
                                          final String functionName,
-                                         final StateStoreSupplier<KeyValueStore> storeSupplier) {
+                                         final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
         final String sinkName = builder.newProcessorName(KStreamImpl.SINK_NAME);
         final String sourceName = builder.newProcessorName(KStreamImpl.SOURCE_NAME);
         final String funcName = builder.newProcessorName(functionName);
