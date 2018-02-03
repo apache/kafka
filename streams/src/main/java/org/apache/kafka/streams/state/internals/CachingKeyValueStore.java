@@ -274,10 +274,6 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     private byte[] deleteInternal(final Bytes key) {
         final byte[] v = getInternal(key);
         putInternal(key, null);
-        /*
-        cache.delete(cacheName, key);
-        underlying.delete(key);
-        */
         return v;
     }
 
