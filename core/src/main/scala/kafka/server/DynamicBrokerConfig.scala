@@ -32,7 +32,7 @@ import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
-import org.apache.kafka.common.utils.{Base64, Utils}
+import org.apache.kafka.common.utils.Utils
 
 import scala.collection._
 import scala.collection.JavaConverters._
@@ -422,9 +422,9 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         val brokerReconfigurablesToUpdate = mutable.Buffer[BrokerReconfigurable]()
         brokerReconfigurables.foreach { reconfigurable =>
           if (needsReconfiguration(reconfigurable.reconfigurableConfigs.asJava, updatedMap.keySet)) {
-            if (validateOnly)
-              reconfigurable.validateReconfiguration(newConfig)
-            brokerReconfigurablesToUpdate += reconfigurable
+            reconfigurable.validateReconfiguration(newConfig)
+            if (!validateOnly)
+              brokerReconfigurablesToUpdate += reconfigurable
           }
         }
         (newConfig, brokerReconfigurablesToUpdate.toList)
@@ -710,7 +710,6 @@ class DynamicListenerConfig(server: KafkaServer) extends BrokerReconfigurable wi
     val newListeners = listenersToMap(newConfig.listeners)
     val newAdvertisedListeners = listenersToMap(newConfig.advertisedListeners)
     val oldListeners = listenersToMap(oldConfig.listeners)
-    val oldAdvertisedListeners = listenersToMap(oldConfig.advertisedListeners)
     if (!newAdvertisedListeners.keySet.subsetOf(newListeners.keySet))
       throw new ConfigException(s"Advertised listeners '$newAdvertisedListeners' must be a subset of listeners '$newListeners'")
     if (newListeners.keySet != newConfig.listenerSecurityProtocolMap.keySet)

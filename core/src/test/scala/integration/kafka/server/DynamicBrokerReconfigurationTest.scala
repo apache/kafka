@@ -18,7 +18,7 @@
 
 package kafka.server
 
-import java.io.{Closeable, File, FileOutputStream, FileWriter}
+import java.io.{Closeable, File, FileWriter}
 import java.nio.file.{Files, StandardCopyOption}
 import java.lang.management.ManagementFactory
 import java.util
@@ -67,7 +67,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   import DynamicBrokerReconfigurationTest._
 
-  private var servers = new ArrayBuffer[KafkaServer]
+  private val servers = new ArrayBuffer[KafkaServer]
   private val numServers = 3
   private val producers = new ArrayBuffer[KafkaProducer[String, String]]
   private val consumers = new ArrayBuffer[KafkaConsumer[String, String]]
@@ -534,7 +534,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     // Verify that producer connections fail since advertised listener is invalid
     val bootstrap = bootstrapServers.replaceAll(invalidHost, "localhost") // allow bootstrap connection to succeed
     val producer1 = createProducer(trustStoreFile1, retries = 0, bootstrap = bootstrap)
-    val executor = Executors.newSingleThreadExecutor
 
     val sendFuture = verifyConnectionFailure(producer1)
 
@@ -778,7 +777,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       None
     val securityProps = TestUtils.securityConfigs(Mode.CLIENT, securityProtocol,
       Some(trustStoreFile1), "client", TestUtils.SslCertificateCn, saslProps)
-    props.putAll(securityProps)
+    props ++= securityProps
     props
   }
 
@@ -828,7 +827,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private def verifyProduceConsume(producer: KafkaProducer[String, String],
                                    consumer: KafkaConsumer[String, String],
                                    numRecords: Int,
-                                   topic: String = topic): Unit = {
+                                   topic: String): Unit = {
     val producerRecords = (1 to numRecords).map(i => new ProducerRecord(topic, s"key$i", s"value$i"))
     producerRecords.map(producer.send).map(_.get(10, TimeUnit.SECONDS))
 
@@ -995,12 +994,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     kafkaConfig.dynamicConfig.toPersistentProps(keystoreProps, perBrokerConfig = true)
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     adminZkClient.changeBrokerConfig(brokers, keystoreProps)
-  }
-
-  private def waitForKeystore(sslProperties: Properties, maxWaitMs: Long = 10000): Unit = {
-    waitForConfig(new ListenerName(SecureExternal).configPrefix + SSL_KEYSTORE_LOCATION_CONFIG,
-      sslProperties.getProperty(SSL_KEYSTORE_LOCATION_CONFIG), maxWaitMs)
-
   }
 
   private def waitForConfig(propName: String, propValue: String, maxWaitMs: Long = 10000): Unit = {
