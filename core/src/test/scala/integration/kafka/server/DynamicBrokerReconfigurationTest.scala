@@ -18,8 +18,7 @@
 
 package kafka.server
 
-import java.io.Closeable
-import java.io.File
+import java.io.{Closeable, File, FileOutputStream, FileWriter}
 import java.nio.file.{Files, StandardCopyOption}
 import java.lang.management.ManagementFactory
 import java.util
@@ -27,6 +26,7 @@ import java.util.{Collections, Properties}
 import java.util.concurrent.{ConcurrentLinkedQueue, ExecutionException, TimeUnit}
 import javax.management.ObjectName
 
+import kafka.admin.ConfigCommand
 import kafka.api.SaslSetup
 import kafka.log.LogConfig
 import kafka.coordinator.group.OffsetConfig
@@ -136,32 +136,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   @Test
-  def testKeystoreUpdate(): Unit = {
-    val producer = createProducer(trustStoreFile1, retries = 0)
-    val consumer = createConsumer("group1", trustStoreFile1)
-    verifyProduceConsume(producer, consumer, 10)
-
-    // Producer with new truststore should fail to connect before keystore update
-    val producer2 = createProducer(trustStoreFile2, retries = 0)
-    verifyAuthenticationFailure(producer2)
-
-    // Update broker keystore
-    configureDynamicKeystoreInZooKeeper(servers.head.config, servers.map(_.config.brokerId), sslProperties2)
-    waitForKeystore(sslProperties2)
-
-    // New producer with old truststore should fail to connect
-    val producer1 = createProducer(trustStoreFile1, retries = 0)
-    verifyAuthenticationFailure(producer1)
-
-    // New producer with new truststore should work
-    val producer3 = createProducer(trustStoreFile2, retries = 0)
-    verifyProduceConsume(producer3, consumer, 10)
-
-    // Old producer with old truststore should continue to work (with their old connections)
-    verifyProduceConsume(producer, consumer, 10)
-  }
-
-  @Test
   def testKeyStoreDescribeUsingAdminClient(): Unit = {
 
     def verifyConfig(configName: String, configEntry: ConfigEntry, isSensitive: Boolean, expectedProps: Properties): Unit = {
@@ -220,7 +194,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   @Test
-  def testKeyStoreAlterUsingAdminClient(): Unit = {
+  def testKeyStoreAlter(): Unit = {
     val topic2 = "testtopic2"
     TestUtils.createTopic(zkClient, topic2, numPartitions = 10, replicationFactor = numServers, servers)
 
@@ -229,20 +203,28 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val (producerThread, consumerThread) = startProduceConsume(retries = 0)
     TestUtils.waitUntilTrue(() => consumerThread.received >= 10, "Messages not received")
 
-    // Update broker keystore for external listener
-    val adminClient = adminClients.head
-    alterSslKeystore(adminClient, sslProperties2, SecureExternal)
+    // Producer with new truststore should fail to connect before keystore update
+    val producer1 = createProducer(trustStoreFile2, retries = 0)
+    verifyAuthenticationFailure(producer1)
 
-    // Produce/consume should work with new truststore
+    // Update broker keystore for external listener
+    alterSslKeystoreUsingConfigCommand(sslProperties2, SecureExternal)
+
+    // New producer with old truststore should fail to connect
+    val producer2 = createProducer(trustStoreFile1, retries = 0)
+    verifyAuthenticationFailure(producer2)
+
+    // Produce/consume should work with new truststore with new producer/consumer
     val producer = createProducer(trustStoreFile2, retries = 0)
     val consumer = createConsumer("group1", trustStoreFile2, topic2)
     verifyProduceConsume(producer, consumer, 10, topic2)
 
     // Broker keystore update for internal listener with incompatible keystore should fail without update
+    val adminClient = adminClients.head
     alterSslKeystore(adminClient, sslProperties2, SecureInternal, expectFailure = true)
     verifyProduceConsume(producer, consumer, 10, topic2)
 
-    // Broker keystore update for internal listener with incompatible keystore should succeed
+    // Broker keystore update for internal listener with compatible keystore should succeed
     val sslPropertiesCopy = sslProperties1.clone().asInstanceOf[Properties]
     val oldFile = new File(sslProperties1.getProperty(SSL_KEYSTORE_LOCATION_CONFIG))
     val newFile = File.createTempFile("keystore", ".jks")
@@ -613,15 +595,48 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     configDescription
   }
 
+  private def sslProperties(props: Properties, configPrefix: String): Properties = {
+    val sslProps = new Properties
+    sslProps.setProperty(s"$configPrefix$SSL_KEYSTORE_LOCATION_CONFIG", props.getProperty(SSL_KEYSTORE_LOCATION_CONFIG))
+    sslProps.setProperty(s"$configPrefix$SSL_KEYSTORE_TYPE_CONFIG", props.getProperty(SSL_KEYSTORE_TYPE_CONFIG))
+    sslProps.setProperty(s"$configPrefix$SSL_KEYSTORE_PASSWORD_CONFIG", props.get(SSL_KEYSTORE_PASSWORD_CONFIG).asInstanceOf[Password].value)
+    sslProps.setProperty(s"$configPrefix$SSL_KEY_PASSWORD_CONFIG", props.get(SSL_KEY_PASSWORD_CONFIG).asInstanceOf[Password].value)
+    sslProps
+  }
+
   private def alterSslKeystore(adminClient: AdminClient, props: Properties, listener: String, expectFailure: Boolean  = false): Unit = {
-    val newProps = new Properties
     val configPrefix = new ListenerName(listener).configPrefix
-    val keystoreLocation = props.getProperty(SSL_KEYSTORE_LOCATION_CONFIG)
-    newProps.setProperty(s"$configPrefix$SSL_KEYSTORE_LOCATION_CONFIG", keystoreLocation)
-    newProps.setProperty(s"$configPrefix$SSL_KEYSTORE_TYPE_CONFIG", props.getProperty(SSL_KEYSTORE_TYPE_CONFIG))
-    newProps.setProperty(s"$configPrefix$SSL_KEYSTORE_PASSWORD_CONFIG", props.get(SSL_KEYSTORE_PASSWORD_CONFIG).asInstanceOf[Password].value)
-    newProps.setProperty(s"$configPrefix$SSL_KEY_PASSWORD_CONFIG", props.get(SSL_KEY_PASSWORD_CONFIG).asInstanceOf[Password].value)
-    reconfigureServers(newProps, perBrokerConfig = true, (s"$configPrefix$SSL_KEYSTORE_LOCATION_CONFIG", keystoreLocation), expectFailure)
+    val newProps = sslProperties(props, configPrefix)
+    reconfigureServers(newProps, perBrokerConfig = true,
+      (s"$configPrefix$SSL_KEYSTORE_LOCATION_CONFIG", props.getProperty(SSL_KEYSTORE_LOCATION_CONFIG)), expectFailure)
+  }
+
+  private def alterSslKeystoreUsingConfigCommand(props: Properties, listener: String): Unit = {
+    val configPrefix = new ListenerName(listener).configPrefix
+    val newProps = sslProperties(props, configPrefix)
+
+    val securityProps: util.Map[Object, Object] = TestUtils.adminClientSecurityConfigs(SecurityProtocol.SSL, Some(trustStoreFile1), None)
+    val propsFile = TestUtils.tempFile()
+    val propsWriter = new FileWriter(propsFile)
+    try {
+      securityProps.asScala.foreach {
+        case (k, v: Password) => propsWriter.write(s"$k=${v.value}\n")
+        case (k, v: util.List[_]) => propsWriter.write(s"""$k=${v.asScala.mkString(",")}\n""")
+        case (k, v) => propsWriter.write(s"$k=$v\n")
+      }
+    } finally {
+      propsWriter.close()
+    }
+
+    servers.foreach { server =>
+      val args = Array("--bootstrap-server", TestUtils.bootstrapServers(servers, new ListenerName(SecureInternal)),
+        "--command-config", propsFile.getAbsolutePath,
+        "--alter", "--add-config", newProps.asScala.map { case (k, v) => s"$k=$v" }.mkString(","),
+        "--entity-type", "brokers",
+        "--entity-name", server.config.brokerId.toString)
+      ConfigCommand.main(args)
+    }
+    waitForConfig(s"$configPrefix$SSL_KEYSTORE_LOCATION_CONFIG", props.getProperty(SSL_KEYSTORE_LOCATION_CONFIG))
   }
 
   private def alterConfigs(adminClient: AdminClient, props: Properties, perBrokerConfig: Boolean): AlterConfigsResult = {
