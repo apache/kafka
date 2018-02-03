@@ -1,0 +1,5144 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Configuration &mdash; Apache Kafka 4.0.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../genindex.html"/>
+        <link rel="search" title="Search" href="../search.html"/>
+    <link rel="top" title="Apache Kafka 4.0.0 documentation" href="../index.html"/>
+        <link rel="up" title="Apache Kafka Documentation" href="index.html"/>
+        <link rel="next" title="Design" href="design.html"/>
+        <link rel="prev" title="Kafka APIs" href="api.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> Apache Kafka
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                4.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../uses.html">Use Cases</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Apache Kafka Documentation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html">Kafka APIs</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#broker-configs">3.1 Broker Configs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#topic-level-configs">3.2 Topic-Level Configs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#producer-configs">3.3 Producer Configs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#consumer-configs">3.4 Consumer Configs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#new-consumer-configs">3.4.1 New Consumer Configs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#old-consumer-configs">3.4.2 Old Consumer Configs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#kafka-connect-configs">3.5 Kafka Connect Configs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#kafka-streams-configs">3.6 Kafka Streams Configs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#adminclient-configs">3.7 AdminClient Configs</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="design.html">Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation.html">Implementation</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Apache Kafka</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="index.html">Apache Kafka Documentation</a> &raquo;</li>
+        
+      <li>Configuration</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/documentation/configuration.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="configuration">
+<span id="id1"></span><h1>Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h1>
+<div class="contents local topic" id="contents">
+<ul class="simple">
+<li><a class="reference internal" href="#broker-configs" id="id9">3.1 Broker Configs</a></li>
+<li><a class="reference internal" href="#topic-level-configs" id="id10">3.2 Topic-Level Configs</a></li>
+<li><a class="reference internal" href="#producer-configs" id="id11">3.3 Producer Configs</a></li>
+<li><a class="reference internal" href="#consumer-configs" id="id12">3.4 Consumer Configs</a></li>
+<li><a class="reference internal" href="#new-consumer-configs" id="id13">3.4.1 New Consumer Configs</a></li>
+<li><a class="reference internal" href="#old-consumer-configs" id="id14">3.4.2 Old Consumer Configs</a></li>
+<li><a class="reference internal" href="#kafka-connect-configs" id="id15">3.5 Kafka Connect Configs</a></li>
+<li><a class="reference internal" href="#kafka-streams-configs" id="id16">3.6 Kafka Streams Configs</a></li>
+<li><a class="reference internal" href="#adminclient-configs" id="id17">3.7 AdminClient Configs</a></li>
+</ul>
+</div>
+<p>Kafka uses key-value pairs in the <a class="reference external" href="http://en.wikipedia.org/wiki/.properties">property file
+format</a> for configuration.
+These values can be supplied either from a file or programmatically.</p>
+<div class="section" id="broker-configs">
+<span id="brokerconfigs"></span><h2><a class="toc-backref" href="#id9">3.1 Broker Configs</a><a class="headerlink" href="#broker-configs" title="Permalink to this headline">¶</a></h2>
+<p>The essential configurations are the following:</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">broker.id</span></code></li>
+<li><code class="docutils literal"><span class="pre">log.dirs</span></code></li>
+<li><code class="docutils literal"><span class="pre">zookeeper.connect</span></code></li>
+</ul>
+<p>Topic-level configurations and defaults are discussed in more detail
+<a class="reference external" href="#topicconfigs">below</a>.</p>
+<p>More details about broker configuration can be found in the scala class
+<code class="docutils literal"><span class="pre">kafka.server.KafkaConfig</span></code>.</p>
+</div>
+<div class="section" id="topic-level-configs">
+<span id="topicconfigs"></span><h2><a class="toc-backref" href="#id10">3.2 Topic-Level Configs</a><a class="headerlink" href="#topic-level-configs" title="Permalink to this headline">¶</a></h2>
+<p>Configurations pertinent to topics have both a server default as well an
+optional per-topic override. If no per-topic configuration is given the
+server default is used. The override can be set at topic creation time
+by giving one or more <code class="docutils literal"><span class="pre">--config</span></code> options. This example creates a topic
+named <em>my-topic</em> with a custom max message size and flush rate:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="nb">bin</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">topics</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">zookeeper</span> <span class="n">localhost</span><span class="p">:</span><span class="mi">2181</span> <span class="o">--</span><span class="n">create</span> <span class="o">--</span><span class="n">topic</span> <span class="n">my</span><span class="o">-</span><span class="n">topic</span> <span class="o">--</span><span class="n">partitions</span> <span class="mi">1</span>
+    <span class="o">--</span><span class="n">replication</span><span class="o">-</span><span class="n">factor</span> <span class="mi">1</span> <span class="o">--</span><span class="n">config</span> <span class="nb">max</span><span class="o">.</span><span class="n">message</span><span class="o">.</span><span class="n">bytes</span><span class="o">=</span><span class="mi">64000</span> <span class="o">--</span><span class="n">config</span> <span class="n">flush</span><span class="o">.</span><span class="n">messages</span><span class="o">=</span><span class="mi">1</span>
+</pre></div>
+</div>
+<p>Overrides can also be changed or set later using the alter configs
+command. This example updates the max message size for <em>my-topic</em>:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="nb">bin</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">configs</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">zookeeper</span> <span class="n">localhost</span><span class="p">:</span><span class="mi">2181</span> <span class="o">--</span><span class="n">entity</span><span class="o">-</span><span class="nb">type</span> <span class="n">topics</span> <span class="o">--</span><span class="n">entity</span><span class="o">-</span><span class="n">name</span> <span class="n">my</span><span class="o">-</span><span class="n">topic</span>
+    <span class="o">--</span><span class="n">alter</span> <span class="o">--</span><span class="n">add</span><span class="o">-</span><span class="n">config</span> <span class="nb">max</span><span class="o">.</span><span class="n">message</span><span class="o">.</span><span class="n">bytes</span><span class="o">=</span><span class="mi">128000</span>
+</pre></div>
+</div>
+<p>To check overrides set on the topic you can do</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="nb">bin</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">configs</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">zookeeper</span> <span class="n">localhost</span><span class="p">:</span><span class="mi">2181</span> <span class="o">--</span><span class="n">entity</span><span class="o">-</span><span class="nb">type</span> <span class="n">topics</span> <span class="o">--</span><span class="n">entity</span><span class="o">-</span><span class="n">name</span> <span class="n">my</span><span class="o">-</span><span class="n">topic</span> <span class="o">--</span><span class="n">describe</span>
+</pre></div>
+</div>
+<p>To remove an override you can do</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="nb">bin</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">configs</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">zookeeper</span> <span class="n">localhost</span><span class="p">:</span><span class="mi">2181</span>  <span class="o">--</span><span class="n">entity</span><span class="o">-</span><span class="nb">type</span> <span class="n">topics</span> <span class="o">--</span><span class="n">entity</span><span class="o">-</span><span class="n">name</span> <span class="n">my</span><span class="o">-</span><span class="n">topic</span> <span class="o">--</span><span class="n">alter</span> <span class="o">--</span><span class="n">delete</span><span class="o">-</span><span class="n">config</span> <span class="nb">max</span><span class="o">.</span><span class="n">message</span><span class="o">.</span><span class="n">bytes</span>
+</pre></div>
+</div>
+<p>The following are the topic-level configurations. The server&#8217;s default
+configuration for this property is given under the Server Default
+Property heading. A given server default config value only applies to a
+topic if it does not have an explicit topic config override.</p>
+</div>
+<div class="section" id="producer-configs">
+<span id="producerconfigs"></span><h2><a class="toc-backref" href="#id11">3.3 Producer Configs</a><a class="headerlink" href="#producer-configs" title="Permalink to this headline">¶</a></h2>
+<p>Below is the configuration of the Java producer:</p>
+<p>For those interested in the legacy Scala producer configs, information
+can be found
+<a class="reference external" href="http://kafka.apache.org/082/documentation.html#producerconfigs">here</a>.</p>
+</div>
+<div class="section" id="consumer-configs">
+<span id="consumerconfigs"></span><h2><a class="toc-backref" href="#id12">3.4 Consumer Configs</a><a class="headerlink" href="#consumer-configs" title="Permalink to this headline">¶</a></h2>
+<p>In 0.9.0.0 we introduced the new Java consumer as a replacement for the
+older Scala-based simple and high-level consumers. The configs for both
+new and old consumers are described below.</p>
+</div>
+<div class="section" id="new-consumer-configs">
+<span id="newconsumerconfigs"></span><h2><a class="toc-backref" href="#id13">3.4.1 New Consumer Configs</a><a class="headerlink" href="#new-consumer-configs" title="Permalink to this headline">¶</a></h2>
+<p>Below is the configuration for the new consumer:</p>
+</div>
+<div class="section" id="old-consumer-configs">
+<span id="oldconsumerconfigs"></span><h2><a class="toc-backref" href="#id14">3.4.2 Old Consumer Configs</a><a class="headerlink" href="#old-consumer-configs" title="Permalink to this headline">¶</a></h2>
+<p>The essential old consumer configurations are the following:</p>
+<ul class="simple">
+<li><code class="docutils literal"><span class="pre">group.id</span></code></li>
+<li><code class="docutils literal"><span class="pre">zookeeper.connect</span></code></li>
+</ul>
+<table border="1" class="docutils">
+<colgroup>
+<col width="33%" />
+<col width="33%" />
+<col width="33%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Property</th>
+<th class="head">Default</th>
+<th class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>group.id</td>
+<td>&nbsp;</td>
+<td>A string that
+uniquely identifies
+the group of consumer
+processes to which
+this consumer
+belongs. By setting
+the same group id
+multiple processes
+indicate that they
+are all part of the
+same consumer group.</td>
+</tr>
+<tr class="row-odd"><td>zookeeper.connect</td>
+<td>&nbsp;</td>
+<td>Specifies the
+ZooKeeper connection
+string in the form
+<code class="docutils literal"><span class="pre">hostname:port</span></code>
+where host and port
+are the host and port
+of a ZooKeeper
+server. To allow
+connecting through
+other ZooKeeper nodes
+when that ZooKeeper
+machine is down you
+can also specify
+multiple hosts in the
+form
+<code class="docutils literal"><span class="pre">hostname1:port1,hos</span>
+<span class="pre">tname2:port2,hostname</span>
+<span class="pre">3:port3</span></code>.
+The server may also
+have a ZooKeeper
+chroot path as part
+of its ZooKeeper
+connection string
+which puts its data
+under some path in
+the global ZooKeeper
+namespace. If so the
+consumer should use
+the same chroot path
+in its connection
+string. For example
+to give a chroot path
+of <code class="docutils literal"><span class="pre">/chroot/path</span></code>
+you would give the
+connection string as
+<code class="docutils literal"><span class="pre">hostname1:port1,hos</span>
+<span class="pre">tname2:port2,hostname</span>
+<span class="pre">3:port3/chroot/path</span></code>
+.</td>
+</tr>
+<tr class="row-even"><td>consumer.id</td>
+<td>null</td>
+<td>Generated
+automatically if not
+set.</td>
+</tr>
+<tr class="row-odd"><td>socket.timeout.ms</td>
+<td>30 * 1000</td>
+<td>The socket timeout
+for network requests.
+The actual timeout
+set will be
+fetch.wait.max.ms +
+socket.timeout.ms.</td>
+</tr>
+<tr class="row-even"><td>socket.receive.buffer
+.bytes</td>
+<td>64 * 1024</td>
+<td>The socket receive
+buffer for network
+requests</td>
+</tr>
+<tr class="row-odd"><td>fetch.message.max.byt
+es</td>
+<td>1024 * 1024</td>
+<td>The number of bytes
+of messages to
+attempt to fetch for
+each topic-partition
+in each fetch
+request. These bytes
+will be read into
+memory for each
+partition, so this
+helps control the
+memory used by the
+consumer. The fetch
+request size must be
+at least as large as
+the maximum message
+size the server
+allows or else it is
+possible for the
+producer to send
+messages larger than
+the consumer can
+fetch.</td>
+</tr>
+<tr class="row-even"><td>num.consumer.fetchers</td>
+<td>1</td>
+<td>The number fetcher
+threads used to fetch
+data.</td>
+</tr>
+<tr class="row-odd"><td>auto.commit.enable</td>
+<td>true</td>
+<td>If true, periodically
+commit to ZooKeeper
+the offset of
+messages already
+fetched by the
+consumer. This
+committed offset will
+be used when the
+process fails as the
+position from which
+the new consumer will
+begin.</td>
+</tr>
+<tr class="row-even"><td>auto.commit.interval.
+ms</td>
+<td>60 * 1000</td>
+<td>The frequency in ms
+that the consumer
+offsets are committed
+to zookeeper.</td>
+</tr>
+<tr class="row-odd"><td>queued.max.message.ch
+unks</td>
+<td>2</td>
+<td>Max number of message
+chunks buffered for
+consumption. Each
+chunk can be up to
+fetch.message.max.byt
+es.</td>
+</tr>
+<tr class="row-even"><td>rebalance.max.retries</td>
+<td>4</td>
+<td>When a new consumer
+joins a consumer
+group the set of
+consumers attempt to
+&#8220;rebalance&#8221; the load
+to assign partitions
+to each consumer. If
+the set of consumers
+changes while this
+assignment is taking
+place the rebalance
+will fail and retry.
+This setting controls
+the maximum number of
+attempts before
+giving up.</td>
+</tr>
+<tr class="row-odd"><td>fetch.min.bytes</td>
+<td>1</td>
+<td>The minimum amount of
+data the server
+should return for a
+fetch request. If
+insufficient data is
+available the request
+will wait for that
+much data to
+accumulate before
+answering the
+request.</td>
+</tr>
+<tr class="row-even"><td>fetch.wait.max.ms</td>
+<td>100</td>
+<td>The maximum amount of
+time the server will
+block before
+answering the fetch
+request if there
+isn&#8217;t sufficient data
+to immediately
+satisfy
+fetch.min.bytes</td>
+</tr>
+<tr class="row-odd"><td>rebalance.backoff.ms</td>
+<td>2000</td>
+<td>Backoff time between
+retries during
+rebalance. If not set
+explicitly, the value
+in
+zookeeper.sync.time.m
+s
+is used.</td>
+</tr>
+<tr class="row-even"><td>refresh.leader.backof
+f.ms</td>
+<td>200</td>
+<td>Backoff time to wait
+before trying to
+determine the leader
+of a partition that
+has just lost its
+leader.</td>
+</tr>
+<tr class="row-odd"><td>auto.offset.reset</td>
+<td>largest</td>
+<td><div class="first last line-block">
+<div class="line">What to do when
+there is no initial
+offset in ZooKeeper
+or if an offset is
+out of range:</div>
+<div class="line">* smallest :
+automatically reset
+the offset to the
+smallest offset</div>
+<div class="line">* largest :
+automatically reset
+the offset to the
+largest offset</div>
+<div class="line">* anything else:
+throw exception to
+the consumer</div>
+</div>
+</td>
+</tr>
+<tr class="row-even"><td>consumer.timeout.ms</td>
+<td>-1</td>
+<td>Throw a timeout
+exception to the
+consumer if no
+message is available
+for consumption after
+the specified
+interval</td>
+</tr>
+<tr class="row-odd"><td>exclude.internal.topi
+cs</td>
+<td>true</td>
+<td>Whether messages from
+internal topics (such
+as offsets) should be
+exposed to the
+consumer.</td>
+</tr>
+<tr class="row-even"><td>client.id</td>
+<td>group id value</td>
+<td>The client id is a
+user-specified string
+sent in each request
+to help trace calls.
+It should logically
+identify the
+application making
+the request.</td>
+</tr>
+<tr class="row-odd"><td>zookeeper.session.tim
+eout.ms</td>
+<td>6000</td>
+<td>ZooKeeper session
+timeout. If the
+consumer fails to
+heartbeat to
+ZooKeeper for this
+period of time it is
+considered dead and a
+rebalance will occur.</td>
+</tr>
+<tr class="row-even"><td>zookeeper.connection.
+timeout.ms</td>
+<td>6000</td>
+<td>The max time that the
+client waits while
+establishing a
+connection to
+zookeeper.</td>
+</tr>
+<tr class="row-odd"><td>zookeeper.sync.time.m
+s</td>
+<td>2000</td>
+<td>How far a ZK follower
+can be behind a ZK
+leader</td>
+</tr>
+<tr class="row-even"><td>offsets.storage</td>
+<td>zookeeper</td>
+<td>Select where offsets
+should be stored
+(zookeeper or kafka).</td>
+</tr>
+<tr class="row-odd"><td>offsets.channel.backo
+ff.ms</td>
+<td>1000</td>
+<td>The backoff period
+when reconnecting the
+offsets channel or
+retrying failed
+offset fetch/commit
+requests.</td>
+</tr>
+<tr class="row-even"><td>offsets.channel.socke
+t.timeout.ms</td>
+<td>10000</td>
+<td>Socket timeout when
+reading responses for
+offset fetch/commit
+requests. This
+timeout is also used
+for ConsumerMetadata
+requests that are
+used to query for the
+offset manager.</td>
+</tr>
+<tr class="row-odd"><td>offsets.commit.max.re
+tries</td>
+<td>5</td>
+<td>Retry the offset
+commit up to this
+many times on
+failure. This retry
+count only applies to
+offset commits during
+shut-down. It does
+not apply to commits
+originating from the
+auto-commit thread.
+It also does not
+apply to attempts to
+query for the offset
+coordinator before
+committing offsets.
+i.e., if a consumer
+metadata request
+fails for any reason,
+it will be retried
+and that retry does
+not count toward this
+limit.</td>
+</tr>
+<tr class="row-even"><td>dual.commit.enabled</td>
+<td>true</td>
+<td>If you are using
+&#8220;kafka&#8221; as
+offsets.storage, you
+can dual commit
+offsets to ZooKeeper
+(in addition to
+Kafka). This is
+required during
+migration from
+zookeeper-based
+offset storage to
+kafka-based offset
+storage. With respect
+to any given consumer
+group, it is safe to
+turn this off after
+all instances within
+that group have been
+migrated to the new
+version that commits
+offsets to the broker
+(instead of directly
+to ZooKeeper).</td>
+</tr>
+<tr class="row-odd"><td>partition.assignment.
+strategy</td>
+<td>range</td>
+<td><p class="first">Select between the
+&#8220;range&#8221; or
+&#8220;roundrobin&#8221; strategy
+for assigning
+partitions to
+consumer streams.</p>
+<p>The round-robin
+partition assignor
+lays out all the
+available partitions
+and all the available
+consumer threads. It
+then proceeds to do a
+round-robin
+assignment from
+partition to consumer
+thread. If the
+subscriptions of all
+consumer instances
+are identical, then
+the partitions will
+be uniformly
+distributed. (i.e.,
+the partition
+ownership counts will
+be within a delta of
+exactly one across
+all consumer
+threads.) Round-robin
+assignment is
+permitted only if:
+(a) Every topic has
+the same number of
+streams within a
+consumer instance (b)
+The set of subscribed
+topics is identical
+for every consumer
+instance within the
+group.</p>
+<p class="last">Range partitioning
+works on a per-topic
+basis. For each
+topic, we lay out the
+available partitions
+in numeric order and
+the consumer threads
+in lexicographic
+order. We then divide
+the number of
+partitions by the
+total number of
+consumer streams
+(threads) to
+determine the number
+of partitions to
+assign to each
+consumer. If it does
+not evenly divide,
+then the first few
+consumers will have
+one extra partition.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p>More details about consumer configuration can be found in the scala
+class <code class="docutils literal"><span class="pre">kafka.consumer.ConsumerConfig</span></code>.</p>
+</div>
+<div class="section" id="kafka-connect-configs">
+<span id="connectconfigs"></span><h2><a class="toc-backref" href="#id15">3.5 Kafka Connect Configs</a><a class="headerlink" href="#kafka-connect-configs" title="Permalink to this headline">¶</a></h2>
+<p>Below is the configuration of the Kafka Connect framework.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Name</th>
+<th class="head">Descripti
+on</th>
+<th class="head">Type</th>
+<th class="head">Default</th>
+<th class="head">Valid
+Values</th>
+<th class="head">Importanc
+e</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>config.st
+orage.top
+ic</td>
+<td>The name
+of the
+Kafka
+topic
+where
+connector
+configura
+tions
+are
+stored</td>
+<td>string</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>group.id</td>
+<td>A unique
+string
+that
+identifie
+s
+the
+Connect
+cluster
+group
+this
+worker
+belongs
+to.</td>
+<td>string</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-even"><td>key.conve
+rter</td>
+<td>Converter
+class
+used to
+convert
+between
+Kafka
+Connect
+format
+and the
+serialize
+d
+form that
+is
+written
+to Kafka.
+This
+controls
+the
+format of
+the keys
+in
+messages
+written
+to or
+read from
+Kafka,
+and since
+this is
+independe
+nt
+of
+connector
+s
+it allows
+any
+connector
+to work
+with any
+serializa
+tion
+format.
+Examples
+of common
+formats
+include
+JSON and
+Avro.</td>
+<td>class</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>offset.st
+orage.top
+ic</td>
+<td>The name
+of the
+Kafka
+topic
+where
+connector
+offsets
+are
+stored</td>
+<td>string</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-even"><td>status.st
+orage.top
+ic</td>
+<td>The name
+of the
+Kafka
+topic
+where
+connector
+and task
+status
+are
+stored</td>
+<td>string</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>value.con
+verter</td>
+<td>Converter
+class
+used to
+convert
+between
+Kafka
+Connect
+format
+and the
+serialize
+d
+form that
+is
+written
+to Kafka.
+This
+controls
+the
+format of
+the
+values in
+messages
+written
+to or
+read from
+Kafka,
+and since
+this is
+independe
+nt
+of
+connector
+s
+it allows
+any
+connector
+to work
+with any
+serializa
+tion
+format.
+Examples
+of common
+formats
+include
+JSON and
+Avro.</td>
+<td>class</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-even"><td>internal.
+key.conve
+rter</td>
+<td>Converter
+class
+used to
+convert
+between
+Kafka
+Connect
+format
+and the
+serialize
+d
+form that
+is
+written
+to Kafka.
+This
+controls
+the
+format of
+the keys
+in
+messages
+written
+to or
+read from
+Kafka,
+and since
+this is
+independe
+nt
+of
+connector
+s
+it allows
+any
+connector
+to work
+with any
+serializa
+tion
+format.
+Examples
+of common
+formats
+include
+JSON and
+Avro.
+This
+setting
+controls
+the
+format
+used for
+internal
+bookkeepi
+ng
+data used
+by the
+framework
+,
+such as
+configs
+and
+offsets,
+so users
+can
+typically
+use any
+functioni
+ng
+Converter
+implement
+ation.</td>
+<td>class</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>internal.
+value.con
+verter</td>
+<td>Converter
+class
+used to
+convert
+between
+Kafka
+Connect
+format
+and the
+serialize
+d
+form that
+is
+written
+to Kafka.
+This
+controls
+the
+format of
+the
+values in
+messages
+written
+to or
+read from
+Kafka,
+and since
+this is
+independe
+nt
+of
+connector
+s
+it allows
+any
+connector
+to work
+with any
+serializa
+tion
+format.
+Examples
+of common
+formats
+include
+JSON and
+Avro.
+This
+setting
+controls
+the
+format
+used for
+internal
+bookkeepi
+ng
+data used
+by the
+framework
+,
+such as
+configs
+and
+offsets,
+so users
+can
+typically
+use any
+functioni
+ng
+Converter
+implement
+ation.</td>
+<td>class</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>bootstrap
+.servers</td>
+<td>A list of
+host/port
+pairs to
+use for
+establish
+ing
+the
+initial
+connectio
+n
+to the
+Kafka
+cluster.
+The
+client
+will make
+use of
+all
+servers
+irrespect
+ive
+of which
+servers
+are
+specified
+here for
+bootstrap
+ping—this
+list only
+impacts
+the
+initial
+hosts
+used to
+discover
+the full
+set of
+servers.
+This list
+should be
+in the
+form
+<code class="docutils literal"><span class="pre">host1:p</span>
+<span class="pre">ort1,host</span>
+<span class="pre">2:port2,.</span>
+<span class="pre">..</span></code>.
+Since
+these
+servers
+are just
+used for
+the
+initial
+connectio
+n
+to
+discover
+the full
+cluster
+membershi
+p
+(which
+may
+change
+dynamical
+ly),
+this list
+need not
+contain
+the full
+set of
+servers
+(you may
+want more
+than one,
+though,
+in case a
+server is
+down).</td>
+<td>list</td>
+<td>localhost
+:9092</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>heartbeat
+.interval
+.ms</td>
+<td>The
+expected
+time
+between
+heartbeat
+s
+to the
+group
+coordinat
+or
+when
+using
+Kafka&#8217;s
+group
+managemen
+t
+facilitie
+s.
+Heartbeat
+s
+are used
+to ensure
+that the
+worker&#8217;s
+session
+stays
+active
+and to
+facilitat
+e
+rebalanci
+ng
+when new
+members
+join or
+leave the
+group.
+The value
+must be
+set lower
+than
+<code class="docutils literal"><span class="pre">session</span>
+<span class="pre">.timeout.</span>
+<span class="pre">ms</span></code>,
+but
+typically
+should be
+set no
+higher
+than 1/3
+of that
+value. It
+can be
+adjusted
+even
+lower to
+control
+the
+expected
+time for
+normal
+rebalance
+s.</td>
+<td>int</td>
+<td>3000</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-even"><td>rebalance
+.timeout.
+ms</td>
+<td>The
+maximum
+allowed
+time for
+each
+worker to
+join the
+group
+once a
+rebalance
+has
+begun.
+This is
+basically
+a limit
+on the
+amount of
+time
+needed
+for all
+tasks to
+flush any
+pending
+data and
+commit
+offsets.
+If the
+timeout
+is
+exceeded,
+then the
+worker
+will be
+removed
+from the
+group,
+which
+will
+cause
+offset
+commit
+failures.</td>
+<td>int</td>
+<td>60000</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>session.t
+imeout.ms</td>
+<td>The
+timeout
+used to
+detect
+worker
+failures.
+The
+worker
+sends
+periodic
+heartbeat
+s
+to
+indicate
+its
+liveness
+to the
+broker.
+If no
+heartbeat
+s
+are
+received
+by the
+broker
+before
+the
+expiratio
+n
+of this
+session
+timeout,
+then the
+broker
+will
+remove
+the
+worker
+from the
+group and
+initiate
+a
+rebalance
+.
+Note that
+the value
+must be
+in the
+allowable
+range as
+configure
+d
+in the
+broker
+configura
+tion
+by
+<code class="docutils literal"><span class="pre">group.m</span>
+<span class="pre">in.sessio</span>
+<span class="pre">n.timeout</span>
+<span class="pre">.ms</span></code>
+and
+<code class="docutils literal"><span class="pre">group.m</span>
+<span class="pre">ax.sessio</span>
+<span class="pre">n.timeout</span>
+<span class="pre">.ms</span></code>.</td>
+<td>int</td>
+<td>10000</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-even"><td>ssl.key.p
+assword</td>
+<td>The
+password
+of the
+private
+key in
+the key
+store
+file.
+This is
+optional
+for
+client.</td>
+<td>password</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>ssl.keyst
+ore.locat
+ion</td>
+<td>The
+location
+of the
+key store
+file.
+This is
+optional
+for
+client
+and can
+be used
+for
+two-way
+authentic
+ation
+for
+client.</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-even"><td>ssl.keyst
+ore.passw
+ord</td>
+<td>The store
+password
+for the
+key store
+file.
+This is
+optional
+for
+client
+and only
+needed if
+ssl.keyst
+ore.locat
+ion
+is
+configure
+d.</td>
+<td>password</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>ssl.trust
+store.loc
+ation</td>
+<td>The
+location
+of the
+trust
+store
+file.</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-even"><td>ssl.trust
+store.pas
+sword</td>
+<td>The
+password
+for the
+trust
+store
+file. If
+a
+password
+is not
+set
+access to
+the
+truststor
+e
+is still
+available
+,
+but
+integrity
+checking
+is
+disabled.</td>
+<td>password</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>connectio
+ns.max.id
+le.ms</td>
+<td>Close
+idle
+connectio
+ns
+after the
+number of
+milliseco
+nds
+specified
+by this
+config.</td>
+<td>long</td>
+<td>540000</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>receive.b
+uffer.byt
+es</td>
+<td>The size
+of the
+TCP
+receive
+buffer
+(SO_RCVBU
+F)
+to use
+when
+reading
+data. If
+the value
+is -1,
+the OS
+default
+will be
+used.</td>
+<td>int</td>
+<td>32768</td>
+<td>[0,...]</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>request.t
+imeout.ms</td>
+<td>The
+configura
+tion
+controls
+the
+maximum
+amount of
+time the
+client
+will wait
+for the
+response
+of a
+request.
+If the
+response
+is not
+received
+before
+the
+timeout
+elapses
+the
+client
+will
+resend
+the
+request
+if
+necessary
+or fail
+the
+request
+if
+retries
+are
+exhausted
+.</td>
+<td>int</td>
+<td>40000</td>
+<td>[0,...]</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>sasl.jaas
+.config</td>
+<td>JAAS
+login
+context
+parameter
+s
+for SASL
+connectio
+ns
+in the
+format
+used by
+JAAS
+configura
+tion
+files.
+JAAS
+configura
+tion
+file
+format is
+described
+<a class="reference external" href="http://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/LoginConfigFile.html">here</a>
+_.
+The
+format
+for the
+value is:
+&#8216; (=)*;&#8217;</td>
+<td>password</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>sasl.kerb
+eros.serv
+ice.name</td>
+<td>The
+Kerberos
+principal
+name that
+Kafka
+runs as.
+This can
+be
+defined
+either in
+Kafka&#8217;s
+JAAS
+config or
+in
+Kafka&#8217;s
+config.</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>sasl.mech
+anism</td>
+<td>SASL
+mechanism
+used for
+client
+connectio
+ns.
+This may
+be any
+mechanism
+for which
+a
+security
+provider
+is
+available
+.
+GSSAPI is
+the
+default
+mechanism
+.</td>
+<td>string</td>
+<td>GSSAPI</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>security.
+protocol</td>
+<td>Protocol
+used to
+communica
+te
+with
+brokers.
+Valid
+values
+are:
+PLAINTEXT
+,
+SSL,
+SASL_PLAI
+NTEXT,
+SASL_SSL.</td>
+<td>string</td>
+<td>PLAINTEXT</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>send.buff
+er.bytes</td>
+<td>The size
+of the
+TCP send
+buffer
+(SO_SNDBU
+F)
+to use
+when
+sending
+data. If
+the value
+is -1,
+the OS
+default
+will be
+used.</td>
+<td>int</td>
+<td>131072</td>
+<td>[0,...]</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>ssl.enabl
+ed.protoc
+ols</td>
+<td>The list
+of
+protocols
+enabled
+for SSL
+connectio
+ns.</td>
+<td>list</td>
+<td>TLSv1.2,T
+LSv1.1,TL
+Sv1</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>ssl.keyst
+ore.type</td>
+<td>The file
+format of
+the key
+store
+file.
+This is
+optional
+for
+client.</td>
+<td>string</td>
+<td>JKS</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>ssl.proto
+col</td>
+<td>The SSL
+protocol
+used to
+generate
+the
+SSLContex
+t.
+Default
+setting
+is TLS,
+which is
+fine for
+most
+cases.
+Allowed
+values in
+recent
+JVMs are
+TLS,
+TLSv1.1
+and
+TLSv1.2.
+SSL,
+SSLv2 and
+SSLv3 may
+be
+supported
+in older
+JVMs, but
+their
+usage is
+discourag
+ed
+due to
+known
+security
+vulnerabi
+lities.</td>
+<td>string</td>
+<td>TLS</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>ssl.provi
+der</td>
+<td>The name
+of the
+security
+provider
+used for
+SSL
+connectio
+ns.
+Default
+value is
+the
+default
+security
+provider
+of the
+JVM.</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>ssl.trust
+store.typ
+e</td>
+<td>The file
+format of
+the trust
+store
+file.</td>
+<td>string</td>
+<td>JKS</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>worker.sy
+nc.timeou
+t.ms</td>
+<td>When the
+worker is
+out of
+sync with
+other
+workers
+and needs
+to
+resynchro
+nize
+configura
+tions,
+wait up
+to this
+amount of
+time
+before
+giving
+up,
+leaving
+the
+group,
+and
+waiting a
+backoff
+period
+before
+rejoining
+.</td>
+<td>int</td>
+<td>3000</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>worker.un
+sync.back
+off.ms</td>
+<td>When the
+worker is
+out of
+sync with
+other
+workers
+and fails
+to catch
+up within
+worker.sy
+nc.timeou
+t.ms,
+leave the
+Connect
+cluster
+for this
+long
+before
+rejoining
+.</td>
+<td>int</td>
+<td>300000</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>access.co
+ntrol.all
+ow.method
+s</td>
+<td>Sets the
+methods
+supported
+for cross
+origin
+requests
+by
+setting
+the
+Access-Co
+ntrol-All
+ow-Method
+s
+header.
+The
+default
+value of
+the
+Access-Co
+ntrol-All
+ow-Method
+s
+header
+allows
+cross
+origin
+requests
+for GET,
+POST and
+HEAD.</td>
+<td>string</td>
+<td>&#8220;&#8221;</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>access.co
+ntrol.all
+ow.origin</td>
+<td>Value to
+set the
+Access-Co
+ntrol-All
+ow-Origin
+header to
+for REST
+API
+requests.
+To
+enable
+cross
+origin
+access,
+set this
+to the
+domain of
+the
+applicati
+on
+that
+should be
+permitted
+to access
+the API,
+or &#8216;*&#8217; to
+allow
+access
+from any
+domain.
+The
+default
+value
+only
+allows
+access
+from the
+domain of
+the REST
+API.</td>
+<td>string</td>
+<td>&#8220;&#8221;</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>client.id</td>
+<td>An id
+string to
+pass to
+the
+server
+when
+making
+requests.
+The
+purpose
+of this
+is to be
+able to
+track the
+source of
+requests
+beyond
+just
+ip/port
+by
+allowing
+a logical
+applicati
+on
+name to
+be
+included
+in
+server-si
+de
+request
+logging.</td>
+<td>string</td>
+<td>&#8220;&#8221;</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>config.st
+orage.rep
+lication.
+factor</td>
+<td>Replicati
+on
+factor
+used when
+creating
+the
+configura
+tion
+storage
+topic</td>
+<td>short</td>
+<td>3</td>
+<td>[1,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>metadata.
+max.age.m
+s</td>
+<td>The
+period of
+time in
+milliseco
+nds
+after
+which we
+force a
+refresh
+of
+metadata
+even if
+we
+haven&#8217;t
+seen any
+partition
+leadershi
+p
+changes
+to
+proactive
+ly
+discover
+any new
+brokers
+or
+partition
+s.</td>
+<td>long</td>
+<td>300000</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>metric.re
+porters</td>
+<td>A list of
+classes
+to use as
+metrics
+reporters
+.
+Implement
+ing
+the
+<code class="docutils literal"><span class="pre">org.apa</span>
+<span class="pre">che.kafka</span>
+<span class="pre">.common.m</span>
+<span class="pre">etrics.Me</span>
+<span class="pre">tricsRepo</span>
+<span class="pre">rter</span></code>
+interface
+allows
+plugging
+in
+classes
+that will
+be
+notified
+of new
+metric
+creation.
+The
+JmxReport
+er
+is always
+included
+to
+register
+JMX
+statistic
+s.</td>
+<td>list</td>
+<td>&#8220;&#8221;</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>metrics.n
+um.sample
+s</td>
+<td>The
+number of
+samples
+maintaine
+d
+to
+compute
+metrics.</td>
+<td>int</td>
+<td>2</td>
+<td>[1,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>metrics.r
+ecording.
+level</td>
+<td>The
+highest
+recording
+level for
+metrics.</td>
+<td>string</td>
+<td>INFO</td>
+<td>[INFO,
+DEBUG]</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>metrics.s
+ample.win
+dow.ms</td>
+<td>The
+window of
+time a
+metrics
+sample is
+computed
+over.</td>
+<td>long</td>
+<td>30000</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>offset.fl
+ush.inter
+val.ms</td>
+<td>Interval
+at which
+to try
+committin
+g
+offsets
+for
+tasks.</td>
+<td>long</td>
+<td>60000</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>offset.fl
+ush.timeo
+ut.ms</td>
+<td>Maximum
+number of
+milliseco
+nds
+to wait
+for
+records
+to flush
+and
+partition
+offset
+data to
+be
+committed
+to offset
+storage
+before
+cancellin
+g
+the
+process
+and
+restoring
+the
+offset
+data to
+be
+committed
+in a
+future
+attempt.</td>
+<td>long</td>
+<td>5000</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>offset.st
+orage.par
+titions</td>
+<td>The
+number of
+partition
+s
+used when
+creating
+the
+offset
+storage
+topic</td>
+<td>int</td>
+<td>25</td>
+<td>[1,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>offset.st
+orage.rep
+lication.
+factor</td>
+<td>Replicati
+on
+factor
+used when
+creating
+the
+offset
+storage
+topic</td>
+<td>short</td>
+<td>3</td>
+<td>[1,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>plugin.pa
+th</td>
+<td>List of
+paths
+separated
+by commas
+(,) that
+contain
+plugins
+(connecto
+rs,
+converter
+s,
+transform
+ations).
+The list
+should
+consist
+of top
+level
+directori
+es
+that
+include
+any
+combinati
+on
+of: a)
+directori
+es
+immediate
+ly
+containin
+g
+jars with
+plugins
+and their
+dependenc
+ies
+b)
+uber-jars
+with
+plugins
+and their
+dependenc
+ies
+c)
+directori
+es
+immediate
+ly
+containin
+g
+the
+package
+directory
+structure
+of
+classes
+of
+plugins
+and their
+dependenc
+ies
+Note:
+symlinks
+will be
+followed
+to
+discover
+dependenc
+ies
+or
+plugins.
+Examples:
+plugin.pa
+th=/usr/l
+ocal/shar
+e/java,/u
+sr/local/
+share/kaf
+ka/plugin
+s,/opt/co
+nnectors</td>
+<td>list</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>reconnect
+.backoff.
+max.ms</td>
+<td>The
+maximum
+amount of
+time in
+milliseco
+nds
+to wait
+when
+reconnect
+ing
+to a
+broker
+that has
+repeatedl
+y
+failed to
+connect.
+If
+provided,
+the
+backoff
+per host
+will
+increase
+exponenti
+ally
+for each
+consecuti
+ve
+connectio
+n
+failure,
+up to
+this
+maximum.
+After
+calculati
+ng
+the
+backoff
+increase,
+20%
+random
+jitter is
+added to
+avoid
+connectio
+n
+storms.</td>
+<td>long</td>
+<td>1000</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>reconnect
+.backoff.
+ms</td>
+<td>The base
+amount of
+time to
+wait
+before
+attemptin
+g
+to
+reconnect
+to a
+given
+host.
+This
+avoids
+repeatedl
+y
+connectin
+g
+to a host
+in a
+tight
+loop.
+This
+backoff
+applies
+to all
+connectio
+n
+attempts
+by the
+client to
+a broker.</td>
+<td>long</td>
+<td>50</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>rest.adve
+rtised.ho
+st.name</td>
+<td>If this
+is set,
+this is
+the
+hostname
+that will
+be given
+out to
+other
+workers
+to
+connect
+to.</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>rest.adve
+rtised.po
+rt</td>
+<td>If this
+is set,
+this is
+the port
+that will
+be given
+out to
+other
+workers
+to
+connect
+to.</td>
+<td>int</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>rest.host
+.name</td>
+<td>Hostname
+for the
+REST API.
+If this
+is set,
+it will
+only bind
+to this
+interface
+.</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>rest.port</td>
+<td>Port for
+the REST
+API to
+listen
+on.</td>
+<td>int</td>
+<td>8083</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>retry.bac
+koff.ms</td>
+<td>The
+amount of
+time to
+wait
+before
+attemptin
+g
+to retry
+a failed
+request
+to a
+given
+topic
+partition
+.
+This
+avoids
+repeatedl
+y
+sending
+requests
+in a
+tight
+loop
+under
+some
+failure
+scenarios
+.</td>
+<td>long</td>
+<td>100</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>sasl.kerb
+eros.kini
+t.cmd</td>
+<td>Kerberos
+kinit
+command
+path.</td>
+<td>string</td>
+<td>/usr/bin/
+kinit</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>sasl.kerb
+eros.min.
+time.befo
+re.relogi
+n</td>
+<td>Login
+thread
+sleep
+time
+between
+refresh
+attempts.</td>
+<td>long</td>
+<td>60000</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>sasl.kerb
+eros.tick
+et.renew.
+jitter</td>
+<td>Percentag
+e
+of random
+jitter
+added to
+the
+renewal
+time.</td>
+<td>double</td>
+<td>0.05</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>sasl.kerb
+eros.tick
+et.renew.
+window.fa
+ctor</td>
+<td>Login
+thread
+will
+sleep
+until the
+specified
+window
+factor of
+time from
+last
+refresh
+to
+ticket&#8217;s
+expiry
+has been
+reached,
+at which
+time it
+will try
+to renew
+the
+ticket.</td>
+<td>double</td>
+<td>0.8</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>ssl.ciphe
+r.suites</td>
+<td>A list of
+cipher
+suites.
+This is a
+named
+combinati
+on
+of
+authentic
+ation,
+encryptio
+n,
+MAC and
+key
+exchange
+algorithm
+used to
+negotiate
+the
+security
+settings
+for a
+network
+connectio
+n
+using TLS
+or SSL
+network
+protocol.
+By
+default
+all the
+available
+cipher
+suites
+are
+supported
+.</td>
+<td>list</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>ssl.endpo
+int.ident
+ification
+.algorith
+m</td>
+<td>The
+endpoint
+identific
+ation
+algorithm
+to
+validate
+server
+hostname
+using
+server
+certifica
+te.</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>ssl.keyma
+nager.alg
+orithm</td>
+<td>The
+algorithm
+used by
+key
+manager
+factory
+for SSL
+connectio
+ns.
+Default
+value is
+the key
+manager
+factory
+algorithm
+configure
+d
+for the
+Java
+Virtual
+Machine.</td>
+<td>string</td>
+<td>SunX509</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>ssl.secur
+e.random.
+implement
+ation</td>
+<td>The
+SecureRan
+dom
+PRNG
+implement
+ation
+to use
+for SSL
+cryptogra
+phy
+operation
+s.</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>ssl.trust
+manager.a
+lgorithm</td>
+<td>The
+algorithm
+used by
+trust
+manager
+factory
+for SSL
+connectio
+ns.
+Default
+value is
+the trust
+manager
+factory
+algorithm
+configure
+d
+for the
+Java
+Virtual
+Machine.</td>
+<td>string</td>
+<td>PKIX</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>status.st
+orage.par
+titions</td>
+<td>The
+number of
+partition
+s
+used when
+creating
+the
+status
+storage
+topic</td>
+<td>int</td>
+<td>5</td>
+<td>[1,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>status.st
+orage.rep
+lication.
+factor</td>
+<td>Replicati
+on
+factor
+used when
+creating
+the
+status
+storage
+topic</td>
+<td>short</td>
+<td>3</td>
+<td>[1,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>task.shut
+down.grac
+eful.time
+out.ms</td>
+<td>Amount of
+time to
+wait for
+tasks to
+shutdown
+gracefull
+y.
+This is
+the total
+amount of
+time, not
+per task.
+All task
+have
+shutdown
+triggered
+,
+then they
+are
+waited on
+sequentia
+lly.</td>
+<td>long</td>
+<td>5000</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="kafka-streams-configs">
+<span id="streamsconfigs"></span><h2><a class="toc-backref" href="#id16">3.6 Kafka Streams Configs</a><a class="headerlink" href="#kafka-streams-configs" title="Permalink to this headline">¶</a></h2>
+<p>Below is the configuration of the Kafka Streams client library.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Name</th>
+<th class="head">Descripti
+on</th>
+<th class="head">Type</th>
+<th class="head">Default</th>
+<th class="head">Valid
+Values</th>
+<th class="head">Importanc
+e</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>applicati
+on.id</td>
+<td>An
+identifie
+r
+for the
+stream
+processin
+g
+applicati
+on.
+Must be
+unique
+within
+the Kafka
+cluster.
+It is
+used as
+1) the
+default
+client-id
+prefix,
+2) the
+group-id
+for
+membershi
+p
+managemen
+t,
+3) the
+changelog
+topic
+prefix.</td>
+<td>string</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>bootstrap
+.servers</td>
+<td>A list of
+host/port
+pairs to
+use for
+establish
+ing
+the
+initial
+connectio
+n
+to the
+Kafka
+cluster.
+The
+client
+will make
+use of
+all
+servers
+irrespect
+ive
+of which
+servers
+are
+specified
+here for
+bootstrap
+ping—this
+list only
+impacts
+the
+initial
+hosts
+used to
+discover
+the full
+set of
+servers.
+This list
+should be
+in the
+form
+<code class="docutils literal"><span class="pre">host1:p</span>
+<span class="pre">ort1,host</span>
+<span class="pre">2:port2,.</span>
+<span class="pre">..</span></code>.
+Since
+these
+servers
+are just
+used for
+the
+initial
+connectio
+n
+to
+discover
+the full
+cluster
+membershi
+p
+(which
+may
+change
+dynamical
+ly),
+this list
+need not
+contain
+the full
+set of
+servers
+(you may
+want more
+than one,
+though,
+in case a
+server is
+down).</td>
+<td>list</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-even"><td>replicati
+on.factor</td>
+<td>The
+replicati
+on
+factor
+for
+change
+log
+topics
+and
+repartiti
+on
+topics
+created
+by the
+stream
+processin
+g
+applicati
+on.</td>
+<td>int</td>
+<td>1</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>state.dir</td>
+<td>Directory
+location
+for state
+store.</td>
+<td>string</td>
+<td>/tmp/kafk
+a-streams</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-even"><td>cache.max
+.bytes.bu
+ffering</td>
+<td>Maximum
+number of
+memory
+bytes to
+be used
+for
+buffering
+across
+all
+threads</td>
+<td>long</td>
+<td>10485760</td>
+<td>[0,...]</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>client.id</td>
+<td>An ID
+prefix
+string
+used for
+the
+client
+IDs of
+internal
+consumer,
+producer
+and
+restore-c
+onsumer,
+with
+pattern
+&#8216;-StreamT
+hread&#8211;&#8217;.</td>
+<td>string</td>
+<td>&#8220;&#8221;</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>default.d
+eserializ
+ation.exc
+eption.ha
+ndler</td>
+<td>Exception
+handling
+class
+that
+implement
+s
+the
+<code class="docutils literal"><span class="pre">org.apa</span>
+<span class="pre">che.kafka</span>
+<span class="pre">.streams.</span>
+<span class="pre">errors.De</span>
+<span class="pre">serializa</span>
+<span class="pre">tionExcep</span>
+<span class="pre">tionHandl</span>
+<span class="pre">er</span></code>
+interface
+.</td>
+<td>class</td>
+<td>org.apach
+e.kafka.s
+treams.er
+rors.LogA
+ndFailExc
+eptionHan
+dler</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>default.k
+ey.serde</td>
+<td>Default
+serialize
+r
+/
+deseriali
+zer
+class for
+key that
+implement
+s
+the
+<a href="#id2"><span class="problematic" id="id3">``</span></a>org.apa
+che.kafka
+.common.s
+erializat
+ion.Serde
+``
+interface
+.</td>
+<td>class</td>
+<td>org.apach
+e.kafka.c
+ommon.ser
+ializatio
+n.Serdes$
+ByteArray
+Serde</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>default.t
+imestamp.
+extractor</td>
+<td>Default
+timestamp
+extractor
+class
+that
+implement
+s
+the
+<code class="docutils literal"><span class="pre">org.apa</span>
+<span class="pre">che.kafka</span>
+<span class="pre">.streams.</span>
+<span class="pre">processor</span>
+<span class="pre">.Timestam</span>
+<span class="pre">pExtracto</span>
+<span class="pre">r</span></code>
+interface
+.</td>
+<td>class</td>
+<td>org.apach
+e.kafka.s
+treams.pr
+ocessor.F
+ailOnInva
+lidTimest
+amp</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>default.v
+alue.serd
+e</td>
+<td>Default
+serialize
+r
+/
+deseriali
+zer
+class for
+value
+that
+implement
+s
+the
+<a href="#id4"><span class="problematic" id="id5">``</span></a>org.apa
+che.kafka
+.common.s
+erializat
+ion.Serde
+``
+interface
+.</td>
+<td>class</td>
+<td>org.apach
+e.kafka.c
+ommon.ser
+ializatio
+n.Serdes$
+ByteArray
+Serde</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>num.stand
+by.replic
+as</td>
+<td>The
+number of
+standby
+replicas
+for each
+task.</td>
+<td>int</td>
+<td>0</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>num.strea
+m.threads</td>
+<td>The
+number of
+threads
+to
+execute
+stream
+processin
+g.</td>
+<td>int</td>
+<td>1</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>processin
+g.guarant
+ee</td>
+<td>The
+processin
+g
+guarantee
+that
+should be
+used.
+Possible
+values
+are
+<code class="docutils literal"><span class="pre">at_leas</span>
+<span class="pre">t_once</span></code>
+(default)
+and
+<code class="docutils literal"><span class="pre">exactly</span>
+<span class="pre">_once</span></code>.</td>
+<td>string</td>
+<td><a href="#id18"><span class="problematic" id="id19">at_least_</span></a>
+once</td>
+<td>[at_least
+_once,
+exactly_o
+nce]</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>security.
+protocol</td>
+<td>Protocol
+used to
+communica
+te
+with
+brokers.
+Valid
+values
+are:
+PLAINTEXT
+,
+SSL,
+SASL_PLAI
+NTEXT,
+SASL_SSL.</td>
+<td>string</td>
+<td>PLAINTEXT</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>applicati
+on.server</td>
+<td>A
+host:port
+pair
+pointing
+to an
+embedded
+user
+defined
+endpoint
+that can
+be used
+for
+discoveri
+ng
+the
+locations
+of state
+stores
+within a
+single
+KafkaStre
+ams
+applicati
+on</td>
+<td>string</td>
+<td>&#8220;&#8221;</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>buffered.
+records.p
+er.partit
+ion</td>
+<td>The
+maximum
+number of
+records
+to buffer
+per
+partition
+.</td>
+<td>int</td>
+<td>1000</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>commit.in
+terval.ms</td>
+<td>The
+frequency
+with
+which to
+save the
+position
+of the
+processor
+.
+(Note, if
+&#8216;processi
+ng.guaran
+tee&#8217;
+is set to
+&#8216;<a href="#id20"><span class="problematic" id="id21">exactly_</span></a>
+once&#8217;,
+the
+default
+value is
+100,
+otherwise
+the
+default
+value is
+30000.</td>
+<td>long</td>
+<td>30000</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>connectio
+ns.max.id
+le.ms</td>
+<td>Close
+idle
+connectio
+ns
+after the
+number of
+milliseco
+nds
+specified
+by this
+config.</td>
+<td>long</td>
+<td>540000</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>key.serde</td>
+<td>Serialize
+r
+/
+deseriali
+zer
+class for
+key that
+implement
+s
+the
+<code class="docutils literal"><span class="pre">org.apa</span>
+<span class="pre">che.kafka</span>
+<span class="pre">.common.s</span>
+<span class="pre">erializat</span>
+<span class="pre">ion.Serde</span>
+<span class="pre">``</span>
+<span class="pre">interface</span>
+<span class="pre">.</span>
+<span class="pre">This</span>
+<span class="pre">config</span> <span class="pre">is</span>
+<span class="pre">deprecate</span>
+<span class="pre">d,</span>
+<span class="pre">use</span>
+<span class="pre">``default</span>
+<span class="pre">.key.serd</span>
+<span class="pre">e</span></code>
+instead</td>
+<td>class</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>metadata.
+max.age.m
+s</td>
+<td>The
+period of
+time in
+milliseco
+nds
+after
+which we
+force a
+refresh
+of
+metadata
+even if
+we
+haven&#8217;t
+seen any
+partition
+leadershi
+p
+changes
+to
+proactive
+ly
+discover
+any new
+brokers
+or
+partition
+s.</td>
+<td>long</td>
+<td>300000</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>metric.re
+porters</td>
+<td>A list of
+classes
+to use as
+metrics
+reporters
+.
+Implement
+ing
+the
+<code class="docutils literal"><span class="pre">org.apa</span>
+<span class="pre">che.kafka</span>
+<span class="pre">.common.m</span>
+<span class="pre">etrics.Me</span>
+<span class="pre">tricsRepo</span>
+<span class="pre">rter</span></code>
+interface
+allows
+plugging
+in
+classes
+that will
+be
+notified
+of new
+metric
+creation.
+The
+JmxReport
+er
+is always
+included
+to
+register
+JMX
+statistic
+s.</td>
+<td>list</td>
+<td>&#8220;&#8221;</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>metrics.n
+um.sample
+s</td>
+<td>The
+number of
+samples
+maintaine
+d
+to
+compute
+metrics.</td>
+<td>int</td>
+<td>2</td>
+<td>[1,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>metrics.r
+ecording.
+level</td>
+<td>The
+highest
+recording
+level for
+metrics.</td>
+<td>string</td>
+<td>INFO</td>
+<td>[INFO,
+DEBUG]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>metrics.s
+ample.win
+dow.ms</td>
+<td>The
+window of
+time a
+metrics
+sample is
+computed
+over.</td>
+<td>long</td>
+<td>30000</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>partition
+.grouper</td>
+<td>Partition
+grouper
+class
+that
+implement
+s
+the
+<a href="#id6"><span class="problematic" id="id7">``</span></a>org.apa
+che.kafka
+.streams.
+processor
+.Partitio
+nGrouper`
+`
+interface
+.</td>
+<td>class</td>
+<td>org.apach
+e.kafka.s
+treams.pr
+ocessor.D
+efaultPar
+titionGro
+uper</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>poll.ms</td>
+<td>The
+amount of
+time in
+milliseco
+nds
+to block
+waiting
+for
+input.</td>
+<td>long</td>
+<td>100</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>receive.b
+uffer.byt
+es</td>
+<td>The size
+of the
+TCP
+receive
+buffer
+(SO_RCVBU
+F)
+to use
+when
+reading
+data. If
+the value
+is -1,
+the OS
+default
+will be
+used.</td>
+<td>int</td>
+<td>32768</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>reconnect
+.backoff.
+max.ms</td>
+<td>The
+maximum
+amount of
+time in
+milliseco
+nds
+to wait
+when
+reconnect
+ing
+to a
+broker
+that has
+repeatedl
+y
+failed to
+connect.
+If
+provided,
+the
+backoff
+per host
+will
+increase
+exponenti
+ally
+for each
+consecuti
+ve
+connectio
+n
+failure,
+up to
+this
+maximum.
+After
+calculati
+ng
+the
+backoff
+increase,
+20%
+random
+jitter is
+added to
+avoid
+connectio
+n
+storms.</td>
+<td>long</td>
+<td>1000</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>reconnect
+.backoff.
+ms</td>
+<td>The base
+amount of
+time to
+wait
+before
+attemptin
+g
+to
+reconnect
+to a
+given
+host.
+This
+avoids
+repeatedl
+y
+connectin
+g
+to a host
+in a
+tight
+loop.
+This
+backoff
+applies
+to all
+connectio
+n
+attempts
+by the
+client to
+a broker.</td>
+<td>long</td>
+<td>50</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>request.t
+imeout.ms</td>
+<td>The
+configura
+tion
+controls
+the
+maximum
+amount of
+time the
+client
+will wait
+for the
+response
+of a
+request.
+If the
+response
+is not
+received
+before
+the
+timeout
+elapses
+the
+client
+will
+resend
+the
+request
+if
+necessary
+or fail
+the
+request
+if
+retries
+are
+exhausted
+.</td>
+<td>int</td>
+<td>40000</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>retry.bac
+koff.ms</td>
+<td>The
+amount of
+time to
+wait
+before
+attemptin
+g
+to retry
+a failed
+request
+to a
+given
+topic
+partition
+.
+This
+avoids
+repeatedl
+y
+sending
+requests
+in a
+tight
+loop
+under
+some
+failure
+scenarios
+.</td>
+<td>long</td>
+<td>100</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>rocksdb.c
+onfig.set
+ter</td>
+<td>A Rocks
+DB config
+setter
+class or
+class
+name that
+implement
+s
+the
+<code class="docutils literal"><span class="pre">org.apa</span>
+<span class="pre">che.kafka</span>
+<span class="pre">.streams.</span>
+<span class="pre">state.Roc</span>
+<span class="pre">ksDBConfi</span>
+<span class="pre">gSetter</span></code>
+interface</td>
+<td>class</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>send.buff
+er.bytes</td>
+<td>The size
+of the
+TCP send
+buffer
+(SO_SNDBU
+F)
+to use
+when
+sending
+data. If
+the value
+is -1,
+the OS
+default
+will be
+used.</td>
+<td>int</td>
+<td>131072</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>state.cle
+anup.dela
+y.ms</td>
+<td>The
+amount of
+time in
+milliseco
+nds
+to wait
+before
+deleting
+state
+when a
+partition
+has
+migrated.
+Only
+state
+directori
+es
+that have
+not been
+modified
+for at
+least
+state.cle
+anup.dela
+y.ms
+will be
+removed</td>
+<td>long</td>
+<td>600000</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>timestamp
+.extracto
+r</td>
+<td>Timestamp
+extractor
+class
+that
+implement
+s
+the
+<code class="docutils literal"><span class="pre">org.apa</span>
+<span class="pre">che.kafka</span>
+<span class="pre">.streams.</span>
+<span class="pre">processor</span>
+<span class="pre">.Timestam</span>
+<span class="pre">pExtracto</span>
+<span class="pre">r</span></code>
+interface
+.
+This
+config is
+deprecate
+d,
+use
+<code class="docutils literal"><span class="pre">default</span>
+<span class="pre">.timestam</span>
+<span class="pre">p.extract</span>
+<span class="pre">or</span></code>
+instead</td>
+<td>class</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>value.ser
+de</td>
+<td>Serialize
+r
+/
+deseriali
+zer
+class for
+value
+that
+implement
+s
+the
+<code class="docutils literal"><span class="pre">org.apa</span>
+<span class="pre">che.kafka</span>
+<span class="pre">.common.s</span>
+<span class="pre">erializat</span>
+<span class="pre">ion.Serde</span>
+<span class="pre">``</span>
+<span class="pre">interface</span>
+<span class="pre">.</span>
+<span class="pre">This</span>
+<span class="pre">config</span> <span class="pre">is</span>
+<span class="pre">deprecate</span>
+<span class="pre">d,</span>
+<span class="pre">use</span>
+<span class="pre">``default</span>
+<span class="pre">.value.se</span>
+<span class="pre">rde</span></code>
+instead</td>
+<td>class</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>windowsto
+re.change
+log.addit
+ional.ret
+ention.ms</td>
+<td>Added to
+a windows
+maintainM
+s
+to ensure
+data is
+not
+deleted
+from the
+log
+premature
+ly.
+Allows
+for clock
+drift.
+Default
+is 1 day</td>
+<td>long</td>
+<td>86400000</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>zookeeper
+.connect</td>
+<td>Zookeeper
+connect
+string
+for Kafka
+topics
+managemen
+t.
+This
+config is
+deprecate
+d
+and will
+be
+ignored
+as
+Streams
+API does
+not use
+Zookeeper
+anymore.</td>
+<td>string</td>
+<td>&#8220;&#8221;</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="adminclient-configs">
+<span id="adminclientconfigs"></span><h2><a class="toc-backref" href="#id17">3.7 AdminClient Configs</a><a class="headerlink" href="#adminclient-configs" title="Permalink to this headline">¶</a></h2>
+<p>Below is the configuration of the Kafka Admin client library.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Name</th>
+<th class="head">Descripti
+on</th>
+<th class="head">Type</th>
+<th class="head">Default</th>
+<th class="head">Valid
+Values</th>
+<th class="head">Importanc
+e</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>bootstrap
+.servers</td>
+<td>A list of
+host/port
+pairs to
+use for
+establish
+ing
+the
+initial
+connectio
+n
+to the
+Kafka
+cluster.
+The
+client
+will make
+use of
+all
+servers
+irrespect
+ive
+of which
+servers
+are
+specified
+here for
+bootstrap
+ping—this
+list only
+impacts
+the
+initial
+hosts
+used to
+discover
+the full
+set of
+servers.
+This list
+should be
+in the
+form
+<code class="docutils literal"><span class="pre">host1:p</span>
+<span class="pre">ort1,host</span>
+<span class="pre">2:port2,.</span>
+<span class="pre">..</span></code>.
+Since
+these
+servers
+are just
+used for
+the
+initial
+connectio
+n
+to
+discover
+the full
+cluster
+membershi
+p
+(which
+may
+change
+dynamical
+ly),
+this list
+need not
+contain
+the full
+set of
+servers
+(you may
+want more
+than one,
+though,
+in case a
+server is
+down).</td>
+<td>list</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>ssl.key.p
+assword</td>
+<td>The
+password
+of the
+private
+key in
+the key
+store
+file.
+This is
+optional
+for
+client.</td>
+<td>password</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-even"><td>ssl.keyst
+ore.locat
+ion</td>
+<td>The
+location
+of the
+key store
+file.
+This is
+optional
+for
+client
+and can
+be used
+for
+two-way
+authentic
+ation
+for
+client.</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>ssl.keyst
+ore.passw
+ord</td>
+<td>The store
+password
+for the
+key store
+file.
+This is
+optional
+for
+client
+and only
+needed if
+ssl.keyst
+ore.locat
+ion
+is
+configure
+d.</td>
+<td>password</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-even"><td>ssl.trust
+store.loc
+ation</td>
+<td>The
+location
+of the
+trust
+store
+file.</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>ssl.trust
+store.pas
+sword</td>
+<td>The
+password
+for the
+trust
+store
+file. If
+a
+password
+is not
+set
+access to
+the
+truststor
+e
+is still
+available
+,
+but
+integrity
+checking
+is
+disabled.</td>
+<td>password</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-even"><td>client.id</td>
+<td>An id
+string to
+pass to
+the
+server
+when
+making
+requests.
+The
+purpose
+of this
+is to be
+able to
+track the
+source of
+requests
+beyond
+just
+ip/port
+by
+allowing
+a logical
+applicati
+on
+name to
+be
+included
+in
+server-si
+de
+request
+logging.</td>
+<td>string</td>
+<td>&#8220;&#8221;</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>connectio
+ns.max.id
+le.ms</td>
+<td>Close
+idle
+connectio
+ns
+after the
+number of
+milliseco
+nds
+specified
+by this
+config.</td>
+<td>long</td>
+<td>300000</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>receive.b
+uffer.byt
+es</td>
+<td>The size
+of the
+TCP
+receive
+buffer
+(SO_RCVBU
+F)
+to use
+when
+reading
+data. If
+the value
+is -1,
+the OS
+default
+will be
+used.</td>
+<td>int</td>
+<td>65536</td>
+<td>[-1,...]</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>request.t
+imeout.ms</td>
+<td>The
+configura
+tion
+controls
+the
+maximum
+amount of
+time the
+client
+will wait
+for the
+response
+of a
+request.
+If the
+response
+is not
+received
+before
+the
+timeout
+elapses
+the
+client
+will
+resend
+the
+request
+if
+necessary
+or fail
+the
+request
+if
+retries
+are
+exhausted
+.</td>
+<td>int</td>
+<td>120000</td>
+<td>[0,...]</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>sasl.jaas
+.config</td>
+<td>JAAS
+login
+context
+parameter
+s
+for SASL
+connectio
+ns
+in the
+format
+used by
+JAAS
+configura
+tion
+files.
+JAAS
+configura
+tion
+file
+format is
+described
+<a class="reference external" href="http://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/LoginConfigFile.html">here</a>
+_.
+The
+format
+for the
+value is:
+&#8216; (=)*;&#8217;</td>
+<td>password</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>sasl.kerb
+eros.serv
+ice.name</td>
+<td>The
+Kerberos
+principal
+name that
+Kafka
+runs as.
+This can
+be
+defined
+either in
+Kafka&#8217;s
+JAAS
+config or
+in
+Kafka&#8217;s
+config.</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>sasl.mech
+anism</td>
+<td>SASL
+mechanism
+used for
+client
+connectio
+ns.
+This may
+be any
+mechanism
+for which
+a
+security
+provider
+is
+available
+.
+GSSAPI is
+the
+default
+mechanism
+.</td>
+<td>string</td>
+<td>GSSAPI</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>security.
+protocol</td>
+<td>Protocol
+used to
+communica
+te
+with
+brokers.
+Valid
+values
+are:
+PLAINTEXT
+,
+SSL,
+SASL_PLAI
+NTEXT,
+SASL_SSL.</td>
+<td>string</td>
+<td>PLAINTEXT</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>send.buff
+er.bytes</td>
+<td>The size
+of the
+TCP send
+buffer
+(SO_SNDBU
+F)
+to use
+when
+sending
+data. If
+the value
+is -1,
+the OS
+default
+will be
+used.</td>
+<td>int</td>
+<td>131072</td>
+<td>[-1,...]</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>ssl.enabl
+ed.protoc
+ols</td>
+<td>The list
+of
+protocols
+enabled
+for SSL
+connectio
+ns.</td>
+<td>list</td>
+<td>TLSv1.2,T
+LSv1.1,TL
+Sv1</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>ssl.keyst
+ore.type</td>
+<td>The file
+format of
+the key
+store
+file.
+This is
+optional
+for
+client.</td>
+<td>string</td>
+<td>JKS</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>ssl.proto
+col</td>
+<td>The SSL
+protocol
+used to
+generate
+the
+SSLContex
+t.
+Default
+setting
+is TLS,
+which is
+fine for
+most
+cases.
+Allowed
+values in
+recent
+JVMs are
+TLS,
+TLSv1.1
+and
+TLSv1.2.
+SSL,
+SSLv2 and
+SSLv3 may
+be
+supported
+in older
+JVMs, but
+their
+usage is
+discourag
+ed
+due to
+known
+security
+vulnerabi
+lities.</td>
+<td>string</td>
+<td>TLS</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>ssl.provi
+der</td>
+<td>The name
+of the
+security
+provider
+used for
+SSL
+connectio
+ns.
+Default
+value is
+the
+default
+security
+provider
+of the
+JVM.</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>ssl.trust
+store.typ
+e</td>
+<td>The file
+format of
+the trust
+store
+file.</td>
+<td>string</td>
+<td>JKS</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>metadata.
+max.age.m
+s</td>
+<td>The
+period of
+time in
+milliseco
+nds
+after
+which we
+force a
+refresh
+of
+metadata
+even if
+we
+haven&#8217;t
+seen any
+partition
+leadershi
+p
+changes
+to
+proactive
+ly
+discover
+any new
+brokers
+or
+partition
+s.</td>
+<td>long</td>
+<td>300000</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>metric.re
+porters</td>
+<td>A list of
+classes
+to use as
+metrics
+reporters
+.
+Implement
+ing
+the
+<code class="docutils literal"><span class="pre">org.apa</span>
+<span class="pre">che.kafka</span>
+<span class="pre">.common.m</span>
+<span class="pre">etrics.Me</span>
+<span class="pre">tricsRepo</span>
+<span class="pre">rter</span></code>
+interface
+allows
+plugging
+in
+classes
+that will
+be
+notified
+of new
+metric
+creation.
+The
+JmxReport
+er
+is always
+included
+to
+register
+JMX
+statistic
+s.</td>
+<td>list</td>
+<td>&#8220;&#8221;</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>metrics.n
+um.sample
+s</td>
+<td>The
+number of
+samples
+maintaine
+d
+to
+compute
+metrics.</td>
+<td>int</td>
+<td>2</td>
+<td>[1,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>metrics.r
+ecording.
+level</td>
+<td>The
+highest
+recording
+level for
+metrics.</td>
+<td>string</td>
+<td>INFO</td>
+<td>[INFO,
+DEBUG]</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>metrics.s
+ample.win
+dow.ms</td>
+<td>The
+window of
+time a
+metrics
+sample is
+computed
+over.</td>
+<td>long</td>
+<td>30000</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>reconnect
+.backoff.
+max.ms</td>
+<td>The
+maximum
+amount of
+time in
+milliseco
+nds
+to wait
+when
+reconnect
+ing
+to a
+broker
+that has
+repeatedl
+y
+failed to
+connect.
+If
+provided,
+the
+backoff
+per host
+will
+increase
+exponenti
+ally
+for each
+consecuti
+ve
+connectio
+n
+failure,
+up to
+this
+maximum.
+After
+calculati
+ng
+the
+backoff
+increase,
+20%
+random
+jitter is
+added to
+avoid
+connectio
+n
+storms.</td>
+<td>long</td>
+<td>1000</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>reconnect
+.backoff.
+ms</td>
+<td>The base
+amount of
+time to
+wait
+before
+attemptin
+g
+to
+reconnect
+to a
+given
+host.
+This
+avoids
+repeatedl
+y
+connectin
+g
+to a host
+in a
+tight
+loop.
+This
+backoff
+applies
+to all
+connectio
+n
+attempts
+by the
+client to
+a broker.</td>
+<td>long</td>
+<td>50</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>retries</td>
+<td>The
+maximum
+number of
+times to
+retry a
+call
+before
+failing
+it.</td>
+<td>int</td>
+<td>5</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>retry.bac
+koff.ms</td>
+<td>The
+amount of
+time to
+wait
+before
+attemptin
+g
+to retry
+a failed
+request.
+This
+avoids
+repeatedl
+y
+sending
+requests
+in a
+tight
+loop
+under
+some
+failure
+scenarios
+.</td>
+<td>long</td>
+<td>100</td>
+<td>[0,...]</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>sasl.kerb
+eros.kini
+t.cmd</td>
+<td>Kerberos
+kinit
+command
+path.</td>
+<td>string</td>
+<td>/usr/bin/
+kinit</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>sasl.kerb
+eros.min.
+time.befo
+re.relogi
+n</td>
+<td>Login
+thread
+sleep
+time
+between
+refresh
+attempts.</td>
+<td>long</td>
+<td>60000</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>sasl.kerb
+eros.tick
+et.renew.
+jitter</td>
+<td>Percentag
+e
+of random
+jitter
+added to
+the
+renewal
+time.</td>
+<td>double</td>
+<td>0.05</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>sasl.kerb
+eros.tick
+et.renew.
+window.fa
+ctor</td>
+<td>Login
+thread
+will
+sleep
+until the
+specified
+window
+factor of
+time from
+last
+refresh
+to
+ticket&#8217;s
+expiry
+has been
+reached,
+at which
+time it
+will try
+to renew
+the
+ticket.</td>
+<td>double</td>
+<td>0.8</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>ssl.ciphe
+r.suites</td>
+<td>A list of
+cipher
+suites.
+This is a
+named
+combinati
+on
+of
+authentic
+ation,
+encryptio
+n,
+MAC and
+key
+exchange
+algorithm
+used to
+negotiate
+the
+security
+settings
+for a
+network
+connectio
+n
+using TLS
+or SSL
+network
+protocol.
+By
+default
+all the
+available
+cipher
+suites
+are
+supported
+.</td>
+<td>list</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>ssl.endpo
+int.ident
+ification
+.algorith
+m</td>
+<td>The
+endpoint
+identific
+ation
+algorithm
+to
+validate
+server
+hostname
+using
+server
+certifica
+te.</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>ssl.keyma
+nager.alg
+orithm</td>
+<td>The
+algorithm
+used by
+key
+manager
+factory
+for SSL
+connectio
+ns.
+Default
+value is
+the key
+manager
+factory
+algorithm
+configure
+d
+for the
+Java
+Virtual
+Machine.</td>
+<td>string</td>
+<td>SunX509</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-even"><td>ssl.secur
+e.random.
+implement
+ation</td>
+<td>The
+SecureRan
+dom
+PRNG
+implement
+ation
+to use
+for SSL
+cryptogra
+phy
+operation
+s.</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+<tr class="row-odd"><td>ssl.trust
+manager.a
+lgorithm</td>
+<td>The
+algorithm
+used by
+trust
+manager
+factory
+for SSL
+connectio
+ns.
+Default
+value is
+the trust
+manager
+factory
+algorithm
+configure
+d
+for the
+Java
+Virtual
+Machine.</td>
+<td>string</td>
+<td>PKIX</td>
+<td>&nbsp;</td>
+<td>low</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="design.html" class="btn btn-neutral float-right" title="Design" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="api.html" class="btn btn-neutral" title="Kafka APIs" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Apache Software Foundation.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'4.0.0',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: ''
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

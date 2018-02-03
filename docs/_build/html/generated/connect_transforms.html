@@ -1,0 +1,1020 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>&lt;no title&gt; &mdash; Apache Kafka 4.0.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../genindex.html"/>
+        <link rel="search" title="Search" href="../search.html"/>
+    <link rel="top" title="Apache Kafka 4.0.0 documentation" href="../index.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> Apache Kafka
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                4.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../uses.html">Use Cases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../documentation/index.html">Apache Kafka Documentation</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Apache Kafka</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+      <li>&lt;no title&gt;</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/generated/connect_transforms.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div id="org.apache.kafka.connect.transforms.InsertField"><p class="rubric" id="org-apache-kafka-connect-transforms-insertfield">org.apache.kafka.connect.transforms.InsertField</p>
+<p>Insert field(s) using attributes from the record metadata or a
+configured static value.</p>
+<p>Use the concrete transformation type designed for the record key
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.InsertField$Key</span></code>) or value
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.InsertField$Value</span></code>).</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Name</th>
+<th class="head">Descripti
+on</th>
+<th class="head">Type</th>
+<th class="head">Default</th>
+<th class="head">Valid
+Values</th>
+<th class="head">Importanc
+e</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>offset.fi
+eld</td>
+<td>Field
+name for
+Kafka
+offset -
+only
+applicabl
+e
+to sink
+connector
+s.
+Suffix
+with
+<code class="docutils literal"><span class="pre">!</span></code> to
+make this
+a
+required
+field, or
+<code class="docutils literal"><span class="pre">?</span></code> to
+keep it
+optional
+(the
+default).</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>partition
+.field</td>
+<td>Field
+name for
+Kafka
+partition
+.
+Suffix
+with
+<code class="docutils literal"><span class="pre">!</span></code> to
+make this
+a
+required
+field, or
+<code class="docutils literal"><span class="pre">?</span></code> to
+keep it
+optional
+(the
+default).</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>static.fi
+eld</td>
+<td>Field
+name for
+static
+data
+field.
+Suffix
+with
+<code class="docutils literal"><span class="pre">!</span></code> to
+make this
+a
+required
+field, or
+<code class="docutils literal"><span class="pre">?</span></code> to
+keep it
+optional
+(the
+default).</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>static.va
+lue</td>
+<td>Static
+field
+value, if
+field
+name
+configure
+d.</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>timestamp
+.field</td>
+<td>Field
+name for
+record
+timestamp
+.
+Suffix
+with
+<code class="docutils literal"><span class="pre">!</span></code> to
+make this
+a
+required
+field, or
+<code class="docutils literal"><span class="pre">?</span></code> to
+keep it
+optional
+(the
+default).</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>topic.fie
+ld</td>
+<td>Field
+name for
+Kafka
+topic.
+Suffix
+with
+<code class="docutils literal"><span class="pre">!</span></code> to
+make this
+a
+required
+field, or
+<code class="docutils literal"><span class="pre">?</span></code> to
+keep it
+optional
+(the
+default).</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+</tbody>
+</table>
+</div><div id="org.apache.kafka.connect.transforms.ReplaceField"><p class="rubric" id="org-apache-kafka-connect-transforms-replacefield">org.apache.kafka.connect.transforms.ReplaceField</p>
+<p>Filter or rename fields.</p>
+<p>Use the concrete transformation type designed for the record key
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.ReplaceField$Key</span></code>) or value
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.ReplaceField$Value</span></code>).</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Name</th>
+<th class="head">Descripti
+on</th>
+<th class="head">Type</th>
+<th class="head">Default</th>
+<th class="head">Valid
+Values</th>
+<th class="head">Importanc
+e</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>blacklist</td>
+<td>Fields to
+exclude.
+This
+takes
+precedenc
+e
+over the
+whitelist
+.</td>
+<td>list</td>
+<td>&#8220;&#8221;</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+<tr class="row-odd"><td>renames</td>
+<td>Field
+rename
+mappings.</td>
+<td>list</td>
+<td>&#8220;&#8221;</td>
+<td>list of
+colon-del
+imited
+pairs,
+e.g.
+<a href="#id1"><span class="problematic" id="id2">``</span></a>foo:bar
+,abc:xyz`
+`</td>
+<td>medium</td>
+</tr>
+<tr class="row-even"><td>whitelist</td>
+<td>Fields to
+include.
+If
+specified
+,
+only
+these
+fields
+will be
+used.</td>
+<td>list</td>
+<td>&#8220;&#8221;</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+</tbody>
+</table>
+</div><div id="org.apache.kafka.connect.transforms.MaskField"><p class="rubric" id="org-apache-kafka-connect-transforms-maskfield">org.apache.kafka.connect.transforms.MaskField</p>
+<p>Mask specified fields with a valid null value for the field type (i.e.
+0, false, empty string, and so on).</p>
+<p>Use the concrete transformation type designed for the record key
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.MaskField$Key</span></code>) or value
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.MaskField$Value</span></code>).</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="10%" />
+<col width="34%" />
+<col width="8%" />
+<col width="12%" />
+<col width="21%" />
+<col width="16%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Name</th>
+<th class="head">Description</th>
+<th class="head">Type</th>
+<th class="head">Default</th>
+<th class="head">Valid Values</th>
+<th class="head">Importance</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>fields</td>
+<td>Names of fields to mask.</td>
+<td>list</td>
+<td>&nbsp;</td>
+<td>non-empty list</td>
+<td>high</td>
+</tr>
+</tbody>
+</table>
+</div><div id="org.apache.kafka.connect.transforms.ValueToKey"><p class="rubric" id="org-apache-kafka-connect-transforms-valuetokey">org.apache.kafka.connect.transforms.ValueToKey</p>
+<p>Replace the record key with a new key formed from a subset of fields in
+the record value.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Name</th>
+<th class="head">Descripti
+on</th>
+<th class="head">Type</th>
+<th class="head">Default</th>
+<th class="head">Valid
+Values</th>
+<th class="head">Importanc
+e</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>fields</td>
+<td>Field
+names on
+the
+record
+value to
+extract
+as the
+record
+key.</td>
+<td>list</td>
+<td>&nbsp;</td>
+<td>non-empty
+list</td>
+<td>high</td>
+</tr>
+</tbody>
+</table>
+</div><div id="org.apache.kafka.connect.transforms.HoistField"><p class="rubric" id="org-apache-kafka-connect-transforms-hoistfield">org.apache.kafka.connect.transforms.HoistField</p>
+<p>Wrap data using the specified field name in a Struct when schema
+present, or a Map in the case of schemaless data.</p>
+<p>Use the concrete transformation type designed for the record key
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.HoistField$Key</span></code>) or value
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.HoistField$Value</span></code>).</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Name</th>
+<th class="head">Descripti
+on</th>
+<th class="head">Type</th>
+<th class="head">Default</th>
+<th class="head">Valid
+Values</th>
+<th class="head">Importanc
+e</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>field</td>
+<td>Field
+name for
+the
+single
+field
+that will
+be
+created
+in the
+resulting
+Struct or
+Map.</td>
+<td>string</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+</tbody>
+</table>
+</div><div id="org.apache.kafka.connect.transforms.ExtractField"><p class="rubric" id="org-apache-kafka-connect-transforms-extractfield">org.apache.kafka.connect.transforms.ExtractField</p>
+<p>Extract the specified field from a Struct when schema present, or a Map
+in the case of schemaless data. Any null values are passed through
+unmodified.</p>
+<p>Use the concrete transformation type designed for the record key
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.ExtractField$Key</span></code>) or value
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.ExtractField$Value</span></code>).</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="9%" />
+<col width="32%" />
+<col width="11%" />
+<col width="12%" />
+<col width="19%" />
+<col width="16%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Name</th>
+<th class="head">Description</th>
+<th class="head">Type</th>
+<th class="head">Default</th>
+<th class="head">Valid Values</th>
+<th class="head">Importance</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>field</td>
+<td>Field name to extract.</td>
+<td>string</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+</tbody>
+</table>
+</div><div id="org.apache.kafka.connect.transforms.SetSchemaMetadata"><p class="rubric" id="org-apache-kafka-connect-transforms-setschemametadata">org.apache.kafka.connect.transforms.SetSchemaMetadata</p>
+<p>Set the schema name, version or both on the record&#8217;s key
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.SetSchemaMetadata$Key</span></code>) or value
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.SetSchemaMetadata$Value</span></code>)
+schema.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="19%" />
+<col width="29%" />
+<col width="10%" />
+<col width="11%" />
+<col width="17%" />
+<col width="14%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Name</th>
+<th class="head">Description</th>
+<th class="head">Type</th>
+<th class="head">Default</th>
+<th class="head">Valid Values</th>
+<th class="head">Importance</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>schema.name</td>
+<td>Schema name to set.</td>
+<td>string</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>schema.version</td>
+<td>Schema version to set.</td>
+<td>int</td>
+<td>null</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+</tbody>
+</table>
+</div><div id="org.apache.kafka.connect.transforms.TimestampRouter"><p class="rubric" id="org-apache-kafka-connect-transforms-timestamprouter">org.apache.kafka.connect.transforms.TimestampRouter</p>
+<p>Update the record&#8217;s topic field as a function of the original topic
+value and the record timestamp.</p>
+<p>This is mainly useful for sink connectors, since the topic field is
+often used to determine the equivalent entity name in the destination
+system(e.g. database table or search index name).</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Name</th>
+<th class="head">Descripti
+on</th>
+<th class="head">Type</th>
+<th class="head">Default</th>
+<th class="head">Valid
+Values</th>
+<th class="head">Importanc
+e</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>timestamp
+.format</td>
+<td>Format
+string
+for the
+timestamp
+that is
+compatibl
+e
+with
+<code class="docutils literal"><span class="pre">java.te</span>
+<span class="pre">xt.Simple</span>
+<span class="pre">DateForma</span>
+<span class="pre">t</span></code>.</td>
+<td>string</td>
+<td>yyyyMMdd</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>topic.for
+mat</td>
+<td>Format
+string
+which can
+contain
+<code class="docutils literal"><span class="pre">${topic</span>
+<span class="pre">}</span></code>
+and
+<code class="docutils literal"><span class="pre">${times</span>
+<span class="pre">tamp}</span></code>
+as
+placehold
+ers
+for the
+topic and
+timestamp
+,
+respectiv
+ely.</td>
+<td>string</td>
+<td>${topic}-
+${timesta
+mp}</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+</tbody>
+</table>
+</div><div id="org.apache.kafka.connect.transforms.RegexRouter"><p class="rubric" id="org-apache-kafka-connect-transforms-regexrouter">org.apache.kafka.connect.transforms.RegexRouter</p>
+<p>Update the record topic using the configured regular expression and
+replacement string.</p>
+<p>Under the hood, the regex is compiled to a <code class="docutils literal"><span class="pre">java.util.regex.Pattern</span></code>.
+If the pattern matches the input topic,
+<code class="docutils literal"><span class="pre">java.util.regex.Matcher#replaceFirst()</span></code> is used with the replacement
+string to obtain the new topic.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Name</th>
+<th class="head">Descripti
+on</th>
+<th class="head">Type</th>
+<th class="head">Default</th>
+<th class="head">Valid
+Values</th>
+<th class="head">Importanc
+e</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>regex</td>
+<td>Regular
+expressio
+n
+to use
+for
+matching.</td>
+<td>string</td>
+<td>&nbsp;</td>
+<td>valid
+regex</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>replaceme
+nt</td>
+<td>Replaceme
+nt
+string.</td>
+<td>string</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+</tbody>
+</table>
+</div><div id="org.apache.kafka.connect.transforms.Flatten"><p class="rubric" id="org-apache-kafka-connect-transforms-flatten">org.apache.kafka.connect.transforms.Flatten</p>
+<p>Flatten a nested data structure, generating names for each field by
+concatenating the field names at each level with a configurable
+delimiter character. Applies to Struct when schema present, or a Map in
+the case of schemaless data. The default delimiter is &#8216;.&#8217;.</p>
+<p>Use the concrete transformation type designed for the record key
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.Flatten$Key</span></code>) or value
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.Flatten$Value</span></code>).</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Name</th>
+<th class="head">Descripti
+on</th>
+<th class="head">Type</th>
+<th class="head">Default</th>
+<th class="head">Valid
+Values</th>
+<th class="head">Importanc
+e</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>delimiter</td>
+<td>Delimiter
+to insert
+between
+field
+names
+from the
+input
+record
+when
+generatin
+g
+field
+names for
+the
+output
+record</td>
+<td>string</td>
+<td>.</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+</tbody>
+</table>
+</div><div id="org.apache.kafka.connect.transforms.Cast"><p class="rubric" id="org-apache-kafka-connect-transforms-cast">org.apache.kafka.connect.transforms.Cast</p>
+<p>Cast fields or the entire key or value to a specific type, e.g. to force
+an integer field to a smaller width. Only simple primitive types are
+supported &#8211; integers, floats, boolean, and string.</p>
+<p>Use the concrete transformation type designed for the record key
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.Cast$Key</span></code>) or value
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.Cast$Value</span></code>).</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Name</th>
+<th class="head">Descripti
+on</th>
+<th class="head">Type</th>
+<th class="head">Default</th>
+<th class="head">Valid
+Values</th>
+<th class="head">Importanc
+e</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>spec</td>
+<td>List of
+fields
+and the
+type to
+cast them
+to of the
+form
+field1:ty
+pe,field2
+:type
+to cast
+fields of
+Maps or
+Structs.
+A single
+type to
+cast the
+entire
+value.
+Valid
+types are
+int8,
+int16,
+int32,
+int64,
+float32,
+float64,
+boolean,
+and
+string.</td>
+<td>list</td>
+<td>&nbsp;</td>
+<td>list of
+colon-del
+imited
+pairs,
+e.g.
+<a href="#id3"><span class="problematic" id="id4">``</span></a>foo:bar
+,abc:xyz`
+`</td>
+<td>high</td>
+</tr>
+</tbody>
+</table>
+</div><div id="org.apache.kafka.connect.transforms.TimestampConverter"><p class="rubric" id="org-apache-kafka-connect-transforms-timestampconverter">org.apache.kafka.connect.transforms.TimestampConverter</p>
+<p>Convert timestamps between different formats such as Unix epoch,
+strings, and Connect Date/Timestamp types.Applies to individual fields
+or to the entire value.</p>
+<p>Use the concrete transformation type designed for the record key
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.TimestampConverter$Key</span></code>) or
+value
+(<code class="docutils literal"><span class="pre">org.apache.kafka.connect.transforms.TimestampConverter$Value</span></code>).</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Name</th>
+<th class="head">Descripti
+on</th>
+<th class="head">Type</th>
+<th class="head">Default</th>
+<th class="head">Valid
+Values</th>
+<th class="head">Importanc
+e</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>target.ty
+pe</td>
+<td>The
+desired
+timestamp
+represent
+ation:
+string,
+unix,
+Date,
+Time, or
+Timestamp</td>
+<td>string</td>
+<td>&nbsp;</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-odd"><td>field</td>
+<td>The field
+containin
+g
+the
+timestamp
+,
+or empty
+if the
+entire
+value is
+a
+timestamp</td>
+<td>string</td>
+<td>&#8220;&#8221;</td>
+<td>&nbsp;</td>
+<td>high</td>
+</tr>
+<tr class="row-even"><td>format</td>
+<td>A
+SimpleDat
+eFormat-c
+ompatible
+format
+for the
+timestamp
+.
+Used to
+generate
+the
+output
+when
+type=stri
+ng
+or used
+to parse
+the input
+if the
+input is
+a string.</td>
+<td>string</td>
+<td>&#8220;&#8221;</td>
+<td>&nbsp;</td>
+<td>medium</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Apache Software Foundation.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'4.0.0',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: ''
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

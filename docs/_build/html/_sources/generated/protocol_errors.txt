@@ -1,0 +1,72 @@
+.. raw:: html
+
+<table class="data-table"><tbody>
+<tr><th>Error</th>
+<th>Code</th>
+<th>Retriable</th>
+<th>Description</th>
+</tr>
+<tr><td>UNKNOWN_SERVER_ERROR</td><td>-1</td><td>False</td><td>The server experienced an unexpected error when processing the request</td></tr>
+<tr><td>NONE</td><td>0</td><td>False</td><td></td></tr>
+<tr><td>OFFSET_OUT_OF_RANGE</td><td>1</td><td>False</td><td>The requested offset is not within the range of offsets maintained by the server.</td></tr>
+<tr><td>CORRUPT_MESSAGE</td><td>2</td><td>True</td><td>This message has failed its CRC checksum, exceeds the valid size, or is otherwise corrupt.</td></tr>
+<tr><td>UNKNOWN_TOPIC_OR_PARTITION</td><td>3</td><td>True</td><td>This server does not host this topic-partition.</td></tr>
+<tr><td>INVALID_FETCH_SIZE</td><td>4</td><td>False</td><td>The requested fetch size is invalid.</td></tr>
+<tr><td>LEADER_NOT_AVAILABLE</td><td>5</td><td>True</td><td>There is no leader for this topic-partition as we are in the middle of a leadership election.</td></tr>
+<tr><td>NOT_LEADER_FOR_PARTITION</td><td>6</td><td>True</td><td>This server is not the leader for that topic-partition.</td></tr>
+<tr><td>REQUEST_TIMED_OUT</td><td>7</td><td>True</td><td>The request timed out.</td></tr>
+<tr><td>BROKER_NOT_AVAILABLE</td><td>8</td><td>False</td><td>The broker is not available.</td></tr>
+<tr><td>REPLICA_NOT_AVAILABLE</td><td>9</td><td>False</td><td>The replica is not available for the requested topic-partition</td></tr>
+<tr><td>MESSAGE_TOO_LARGE</td><td>10</td><td>False</td><td>The request included a message larger than the max message size the server will accept.</td></tr>
+<tr><td>STALE_CONTROLLER_EPOCH</td><td>11</td><td>False</td><td>The controller moved to another broker.</td></tr>
+<tr><td>OFFSET_METADATA_TOO_LARGE</td><td>12</td><td>False</td><td>The metadata field of the offset request was too large.</td></tr>
+<tr><td>NETWORK_EXCEPTION</td><td>13</td><td>True</td><td>The server disconnected before a response was received.</td></tr>
+<tr><td>COORDINATOR_LOAD_IN_PROGRESS</td><td>14</td><td>True</td><td>The coordinator is loading and hence can't process requests.</td></tr>
+<tr><td>COORDINATOR_NOT_AVAILABLE</td><td>15</td><td>True</td><td>The coordinator is not available.</td></tr>
+<tr><td>NOT_COORDINATOR</td><td>16</td><td>True</td><td>This is not the correct coordinator.</td></tr>
+<tr><td>INVALID_TOPIC_EXCEPTION</td><td>17</td><td>False</td><td>The request attempted to perform an operation on an invalid topic.</td></tr>
+<tr><td>RECORD_LIST_TOO_LARGE</td><td>18</td><td>False</td><td>The request included message batch larger than the configured segment size on the server.</td></tr>
+<tr><td>NOT_ENOUGH_REPLICAS</td><td>19</td><td>True</td><td>Messages are rejected since there are fewer in-sync replicas than required.</td></tr>
+<tr><td>NOT_ENOUGH_REPLICAS_AFTER_APPEND</td><td>20</td><td>True</td><td>Messages are written to the log, but to fewer in-sync replicas than required.</td></tr>
+<tr><td>INVALID_REQUIRED_ACKS</td><td>21</td><td>False</td><td>Produce request specified an invalid value for required acks.</td></tr>
+<tr><td>ILLEGAL_GENERATION</td><td>22</td><td>False</td><td>Specified group generation id is not valid.</td></tr>
+<tr><td>INCONSISTENT_GROUP_PROTOCOL</td><td>23</td><td>False</td><td>The group member's supported protocols are incompatible with those of existing members or first group member tried to join with empty protocol type or empty protocol list.</td></tr>
+<tr><td>INVALID_GROUP_ID</td><td>24</td><td>False</td><td>The configured groupId is invalid</td></tr>
+<tr><td>UNKNOWN_MEMBER_ID</td><td>25</td><td>False</td><td>The coordinator is not aware of this member.</td></tr>
+<tr><td>INVALID_SESSION_TIMEOUT</td><td>26</td><td>False</td><td>The session timeout is not within the range allowed by the broker (as configured by group.min.session.timeout.ms and group.max.session.timeout.ms).</td></tr>
+<tr><td>REBALANCE_IN_PROGRESS</td><td>27</td><td>False</td><td>The group is rebalancing, so a rejoin is needed.</td></tr>
+<tr><td>INVALID_COMMIT_OFFSET_SIZE</td><td>28</td><td>False</td><td>The committing offset data size is not valid</td></tr>
+<tr><td>TOPIC_AUTHORIZATION_FAILED</td><td>29</td><td>False</td><td>Not authorized to access topics: [Topic authorization failed.]</td></tr>
+<tr><td>GROUP_AUTHORIZATION_FAILED</td><td>30</td><td>False</td><td>Not authorized to access group: Group authorization failed.</td></tr>
+<tr><td>CLUSTER_AUTHORIZATION_FAILED</td><td>31</td><td>False</td><td>Cluster authorization failed.</td></tr>
+<tr><td>INVALID_TIMESTAMP</td><td>32</td><td>False</td><td>The timestamp of the message is out of acceptable range.</td></tr>
+<tr><td>UNSUPPORTED_SASL_MECHANISM</td><td>33</td><td>False</td><td>The broker does not support the requested SASL mechanism.</td></tr>
+<tr><td>ILLEGAL_SASL_STATE</td><td>34</td><td>False</td><td>Request is not valid given the current SASL state.</td></tr>
+<tr><td>UNSUPPORTED_VERSION</td><td>35</td><td>False</td><td>The version of API is not supported.</td></tr>
+<tr><td>TOPIC_ALREADY_EXISTS</td><td>36</td><td>False</td><td>Topic with this name already exists.</td></tr>
+<tr><td>INVALID_PARTITIONS</td><td>37</td><td>False</td><td>Number of partitions is invalid.</td></tr>
+<tr><td>INVALID_REPLICATION_FACTOR</td><td>38</td><td>False</td><td>Replication-factor is invalid.</td></tr>
+<tr><td>INVALID_REPLICA_ASSIGNMENT</td><td>39</td><td>False</td><td>Replica assignment is invalid.</td></tr>
+<tr><td>INVALID_CONFIG</td><td>40</td><td>False</td><td>Configuration is invalid.</td></tr>
+<tr><td>NOT_CONTROLLER</td><td>41</td><td>True</td><td>This is not the correct controller for this cluster.</td></tr>
+<tr><td>INVALID_REQUEST</td><td>42</td><td>False</td><td>This most likely occurs because of a request being malformed by the client library or the message was sent to an incompatible broker. See the broker logs for more details.</td></tr>
+<tr><td>UNSUPPORTED_FOR_MESSAGE_FORMAT</td><td>43</td><td>False</td><td>The message format version on the broker does not support the request.</td></tr>
+<tr><td>POLICY_VIOLATION</td><td>44</td><td>False</td><td>Request parameters do not satisfy the configured policy.</td></tr>
+<tr><td>OUT_OF_ORDER_SEQUENCE_NUMBER</td><td>45</td><td>False</td><td>The broker received an out of order sequence number</td></tr>
+<tr><td>DUPLICATE_SEQUENCE_NUMBER</td><td>46</td><td>False</td><td>The broker received a duplicate sequence number</td></tr>
+<tr><td>INVALID_PRODUCER_EPOCH</td><td>47</td><td>False</td><td>Producer attempted an operation with an old epoch. Either there is a newer producer with the same transactionalId, or the producer's transaction has been expired by the broker.</td></tr>
+<tr><td>INVALID_TXN_STATE</td><td>48</td><td>False</td><td>The producer attempted a transactional operation in an invalid state</td></tr>
+<tr><td>INVALID_PRODUCER_ID_MAPPING</td><td>49</td><td>False</td><td>The producer attempted to use a producer id which is not currently assigned to its transactional id</td></tr>
+<tr><td>INVALID_TRANSACTION_TIMEOUT</td><td>50</td><td>False</td><td>The transaction timeout is larger than the maximum value allowed by the broker (as configured by max.transaction.timeout.ms).</td></tr>
+<tr><td>CONCURRENT_TRANSACTIONS</td><td>51</td><td>False</td><td>The producer attempted to update a transaction while another concurrent operation on the same transaction was ongoing</td></tr>
+<tr><td>TRANSACTION_COORDINATOR_FENCED</td><td>52</td><td>False</td><td>Indicates that the transaction coordinator sending a WriteTxnMarker is no longer the current coordinator for a given producer</td></tr>
+<tr><td>TRANSACTIONAL_ID_AUTHORIZATION_FAILED</td><td>53</td><td>False</td><td>Transactional Id authorization failed</td></tr>
+<tr><td>SECURITY_DISABLED</td><td>54</td><td>False</td><td>Security features are disabled.</td></tr>
+<tr><td>OPERATION_NOT_ATTEMPTED</td><td>55</td><td>False</td><td>The broker did not attempt to execute this operation. This may happen for batched RPCs where some operations in the batch failed, causing the broker to respond without trying the rest.</td></tr>
+<tr><td>KAFKA_STORAGE_ERROR</td><td>56</td><td>True</td><td>Disk error when trying to access log file on the disk.</td></tr>
+<tr><td>LOG_DIR_NOT_FOUND</td><td>57</td><td>False</td><td>The user-specified log directory is not found in the broker config.</td></tr>
+<tr><td>SASL_AUTHENTICATION_FAILED</td><td>58</td><td>False</td><td>SASL Authentication failed.</td></tr>
+<tr><td>UNKNOWN_PRODUCER_ID</td><td>59</td><td>False</td><td>This exception is raised by the broker if it could not locate the producer metadata associated with the producerId in question. This could happen if, for instance, the producer's records were deleted because their retention time had elapsed. Once the last records of the producerId are removed, the producer's metadata is removed from the broker, and future appends by the producer will return this exception.</td></tr>
+<tr><td>REASSIGNMENT_IN_PROGRESS</td><td>60</td><td>False</td><td>A partition reassignment is in progress</td></tr>
+</table>
+

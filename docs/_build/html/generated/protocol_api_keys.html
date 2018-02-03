@@ -1,0 +1,304 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>&lt;no title&gt; &mdash; Apache Kafka 4.0.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../genindex.html"/>
+        <link rel="search" title="Search" href="../search.html"/>
+    <link rel="top" title="Apache Kafka 4.0.0 documentation" href="../index.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> Apache Kafka
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                4.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../uses.html">Use Cases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../documentation/index.html">Apache Kafka Documentation</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Apache Kafka</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+      <li>&lt;no title&gt;</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/generated/protocol_api_keys.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <p>&lt;table class=&#8221;data-table&#8221;&gt;&lt;tbody&gt;
+&lt;tr&gt;&lt;th&gt;Name&lt;/th&gt;
+&lt;th&gt;Key&lt;/th&gt;
+&lt;/tr&gt;&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_Produce&#8221;&gt;Produce&lt;/a&gt;&lt;/td&gt;&lt;td&gt;0&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_Fetch&#8221;&gt;Fetch&lt;/a&gt;&lt;/td&gt;&lt;td&gt;1&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_ListOffsets&#8221;&gt;ListOffsets&lt;/a&gt;&lt;/td&gt;&lt;td&gt;2&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_Metadata&#8221;&gt;Metadata&lt;/a&gt;&lt;/td&gt;&lt;td&gt;3&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_LeaderAndIsr&#8221;&gt;LeaderAndIsr&lt;/a&gt;&lt;/td&gt;&lt;td&gt;4&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_StopReplica&#8221;&gt;StopReplica&lt;/a&gt;&lt;/td&gt;&lt;td&gt;5&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_UpdateMetadata&#8221;&gt;UpdateMetadata&lt;/a&gt;&lt;/td&gt;&lt;td&gt;6&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_ControlledShutdown&#8221;&gt;ControlledShutdown&lt;/a&gt;&lt;/td&gt;&lt;td&gt;7&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_OffsetCommit&#8221;&gt;OffsetCommit&lt;/a&gt;&lt;/td&gt;&lt;td&gt;8&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_OffsetFetch&#8221;&gt;OffsetFetch&lt;/a&gt;&lt;/td&gt;&lt;td&gt;9&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_FindCoordinator&#8221;&gt;FindCoordinator&lt;/a&gt;&lt;/td&gt;&lt;td&gt;10&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_JoinGroup&#8221;&gt;JoinGroup&lt;/a&gt;&lt;/td&gt;&lt;td&gt;11&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_Heartbeat&#8221;&gt;Heartbeat&lt;/a&gt;&lt;/td&gt;&lt;td&gt;12&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_LeaveGroup&#8221;&gt;LeaveGroup&lt;/a&gt;&lt;/td&gt;&lt;td&gt;13&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_SyncGroup&#8221;&gt;SyncGroup&lt;/a&gt;&lt;/td&gt;&lt;td&gt;14&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_DescribeGroups&#8221;&gt;DescribeGroups&lt;/a&gt;&lt;/td&gt;&lt;td&gt;15&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_ListGroups&#8221;&gt;ListGroups&lt;/a&gt;&lt;/td&gt;&lt;td&gt;16&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_SaslHandshake&#8221;&gt;SaslHandshake&lt;/a&gt;&lt;/td&gt;&lt;td&gt;17&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_ApiVersions&#8221;&gt;ApiVersions&lt;/a&gt;&lt;/td&gt;&lt;td&gt;18&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_CreateTopics&#8221;&gt;CreateTopics&lt;/a&gt;&lt;/td&gt;&lt;td&gt;19&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_DeleteTopics&#8221;&gt;DeleteTopics&lt;/a&gt;&lt;/td&gt;&lt;td&gt;20&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_DeleteRecords&#8221;&gt;DeleteRecords&lt;/a&gt;&lt;/td&gt;&lt;td&gt;21&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_InitProducerId&#8221;&gt;InitProducerId&lt;/a&gt;&lt;/td&gt;&lt;td&gt;22&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_OffsetForLeaderEpoch&#8221;&gt;OffsetForLeaderEpoch&lt;/a&gt;&lt;/td&gt;&lt;td&gt;23&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_AddPartitionsToTxn&#8221;&gt;AddPartitionsToTxn&lt;/a&gt;&lt;/td&gt;&lt;td&gt;24&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_AddOffsetsToTxn&#8221;&gt;AddOffsetsToTxn&lt;/a&gt;&lt;/td&gt;&lt;td&gt;25&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_EndTxn&#8221;&gt;EndTxn&lt;/a&gt;&lt;/td&gt;&lt;td&gt;26&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_WriteTxnMarkers&#8221;&gt;WriteTxnMarkers&lt;/a&gt;&lt;/td&gt;&lt;td&gt;27&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_TxnOffsetCommit&#8221;&gt;TxnOffsetCommit&lt;/a&gt;&lt;/td&gt;&lt;td&gt;28&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_DescribeAcls&#8221;&gt;DescribeAcls&lt;/a&gt;&lt;/td&gt;&lt;td&gt;29&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_CreateAcls&#8221;&gt;CreateAcls&lt;/a&gt;&lt;/td&gt;&lt;td&gt;30&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_DeleteAcls&#8221;&gt;DeleteAcls&lt;/a&gt;&lt;/td&gt;&lt;td&gt;31&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_DescribeConfigs&#8221;&gt;DescribeConfigs&lt;/a&gt;&lt;/td&gt;&lt;td&gt;32&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_AlterConfigs&#8221;&gt;AlterConfigs&lt;/a&gt;&lt;/td&gt;&lt;td&gt;33&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_AlterReplicaLogDirs&#8221;&gt;AlterReplicaLogDirs&lt;/a&gt;&lt;/td&gt;&lt;td&gt;34&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_DescribeLogDirs&#8221;&gt;DescribeLogDirs&lt;/a&gt;&lt;/td&gt;&lt;td&gt;35&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_SaslAuthenticate&#8221;&gt;SaslAuthenticate&lt;/a&gt;&lt;/td&gt;&lt;td&gt;36&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;a href=&#8221;#The_Messages_CreatePartitions&#8221;&gt;CreatePartitions&lt;/a&gt;&lt;/td&gt;&lt;td&gt;37&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;</p>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Apache Software Foundation.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'4.0.0',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: ''
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

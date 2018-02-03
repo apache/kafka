@@ -1,0 +1,160 @@
+.. raw:: html
+
+<table class="data-table"><tbody>
+<tr>
+<td colspan=3 class="mbeanName" style="background-color:#ccc; font-weight: bold;">kafka.connect:type=connect-worker-metrics</td></tr>
+<tr>
+<th style="width: 90px"></th>
+<th>Attribute name</th>
+<th>Description</th>
+</tr>
+<tr>
+<td></td><td>connector-count</td><td>The number of connectors run in this worker.</td></tr>
+<tr>
+<td></td><td>connector-startup-attempts-total</td><td>The total number of connector startups that this worker has attempted.</td></tr>
+<tr>
+<td></td><td>connector-startup-failure-percentage</td><td>The average percentage of this worker's connectors starts that failed.</td></tr>
+<tr>
+<td></td><td>connector-startup-failure-total</td><td>The total number of connector starts that failed.</td></tr>
+<tr>
+<td></td><td>connector-startup-success-percentage</td><td>The average percentage of this worker's connectors starts that succeeded.</td></tr>
+<tr>
+<td></td><td>connector-startup-success-total</td><td>The total number of connector starts that succeeded.</td></tr>
+<tr>
+<td></td><td>task-count</td><td>The number of tasks run in this worker.</td></tr>
+<tr>
+<td></td><td>task-startup-attempts-total</td><td>The total number of task startups that this worker has attempted.</td></tr>
+<tr>
+<td></td><td>task-startup-failure-percentage</td><td>The average percentage of this worker's tasks starts that failed.</td></tr>
+<tr>
+<td></td><td>task-startup-failure-total</td><td>The total number of task starts that failed.</td></tr>
+<tr>
+<td></td><td>task-startup-success-percentage</td><td>The average percentage of this worker's tasks starts that succeeded.</td></tr>
+<tr>
+<td></td><td>task-startup-success-total</td><td>The total number of task starts that succeeded.</td></tr>
+<tr>
+<td colspan=3 class="mbeanName" style="background-color:#ccc; font-weight: bold;">kafka.connect:type=connect-worker-rebalance-metrics</td></tr>
+<tr>
+<th style="width: 90px"></th>
+<th>Attribute name</th>
+<th>Description</th>
+</tr>
+<tr>
+<td></td><td>completed-rebalances-total</td><td>The total number of rebalances completed by this worker.</td></tr>
+<tr>
+<td></td><td>epoch</td><td>The epoch or generation number of this worker.</td></tr>
+<tr>
+<td></td><td>leader-name</td><td>The name of the group leader.</td></tr>
+<tr>
+<td></td><td>rebalance-avg-time-ms</td><td>The average time in milliseconds spent by this worker to rebalance.</td></tr>
+<tr>
+<td></td><td>rebalance-max-time-ms</td><td>The maximum time in milliseconds spent by this worker to rebalance.</td></tr>
+<tr>
+<td></td><td>rebalancing</td><td>Whether this worker is currently rebalancing.</td></tr>
+<tr>
+<td></td><td>time-since-last-rebalance-ms</td><td>The time in milliseconds since this worker completed the most recent rebalance.</td></tr>
+<tr>
+<td colspan=3 class="mbeanName" style="background-color:#ccc; font-weight: bold;">kafka.connect:type=connector-metrics,connector="{connector}"</td></tr>
+<tr>
+<th style="width: 90px"></th>
+<th>Attribute name</th>
+<th>Description</th>
+</tr>
+<tr>
+<td></td><td>connector-class</td><td>The name of the connector class.</td></tr>
+<tr>
+<td></td><td>connector-type</td><td>The type of the connector. One of 'source' or 'sink'.</td></tr>
+<tr>
+<td></td><td>connector-version</td><td>The version of the connector class, as reported by the connector.</td></tr>
+<tr>
+<td></td><td>status</td><td>The status of the connector. One of 'unassigned', 'running', 'paused', 'failed', or 'destroyed'.</td></tr>
+<tr>
+<td colspan=3 class="mbeanName" style="background-color:#ccc; font-weight: bold;">kafka.connect:type=connector-task-metrics,connector="{connector}",task="{task}"</td></tr>
+<tr>
+<th style="width: 90px"></th>
+<th>Attribute name</th>
+<th>Description</th>
+</tr>
+<tr>
+<td></td><td>batch-size-avg</td><td>The average size of the batches processed by the connector.</td></tr>
+<tr>
+<td></td><td>batch-size-max</td><td>The maximum size of the batches processed by the connector.</td></tr>
+<tr>
+<td></td><td>offset-commit-avg-time-ms</td><td>The average time in milliseconds taken by this task to commit offsets.</td></tr>
+<tr>
+<td></td><td>offset-commit-failure-percentage</td><td>The average percentage of this task's offset commit attempts that failed.</td></tr>
+<tr>
+<td></td><td>offset-commit-max-time-ms</td><td>The maximum time in milliseconds taken by this task to commit offsets.</td></tr>
+<tr>
+<td></td><td>offset-commit-success-percentage</td><td>The average percentage of this task's offset commit attempts that succeeded.</td></tr>
+<tr>
+<td></td><td>pause-ratio</td><td>The fraction of time this task has spent in the pause state.</td></tr>
+<tr>
+<td></td><td>running-ratio</td><td>The fraction of time this task has spent in the running state.</td></tr>
+<tr>
+<td></td><td>status</td><td>The status of the connector task. One of 'unassigned', 'running', 'paused', 'failed', or 'destroyed'.</td></tr>
+<tr>
+<td colspan=3 class="mbeanName" style="background-color:#ccc; font-weight: bold;">kafka.connect:type=sink-task-metrics,connector="{connector}",task="{task}"</td></tr>
+<tr>
+<th style="width: 90px"></th>
+<th>Attribute name</th>
+<th>Description</th>
+</tr>
+<tr>
+<td></td><td>offset-commit-completion-rate</td><td>The average per-second number of offset commit completions that were completed successfully.</td></tr>
+<tr>
+<td></td><td>offset-commit-completion-total</td><td>The total number of offset commit completions that were completed successfully.</td></tr>
+<tr>
+<td></td><td>offset-commit-seq-no</td><td>The current sequence number for offset commits.</td></tr>
+<tr>
+<td></td><td>offset-commit-skip-rate</td><td>The average per-second number of offset commit completions that were received too late and skipped/ignored.</td></tr>
+<tr>
+<td></td><td>offset-commit-skip-total</td><td>The total number of offset commit completions that were received too late and skipped/ignored.</td></tr>
+<tr>
+<td></td><td>partition-count</td><td>The number of topic partitions assigned to this task belonging to the named sink connector in this worker.</td></tr>
+<tr>
+<td></td><td>put-batch-avg-time-ms</td><td>The average time taken by this task to put a batch of sinks records.</td></tr>
+<tr>
+<td></td><td>put-batch-max-time-ms</td><td>The maximum time taken by this task to put a batch of sinks records.</td></tr>
+<tr>
+<td></td><td>sink-record-active-count</td><td>The number of records that have been read from Kafka but not yet completely committed/flushed/acknowledged by the sink task.</td></tr>
+<tr>
+<td></td><td>sink-record-active-count-avg</td><td>The average number of records that have been read from Kafka but not yet completely committed/flushed/acknowledged by the sink task.</td></tr>
+<tr>
+<td></td><td>sink-record-active-count-max</td><td>The maximum number of records that have been read from Kafka but not yet completely committed/flushed/acknowledged by the sink task.</td></tr>
+<tr>
+<td></td><td>sink-record-lag-max</td><td>The maximum lag in terms of number of records that the sink task is behind the consumer's position for any topic partitions.</td></tr>
+<tr>
+<td></td><td>sink-record-read-rate</td><td>The average per-second number of records read from Kafka for this task belonging to the named sink connector in this worker. This is before transformations are applied.</td></tr>
+<tr>
+<td></td><td>sink-record-read-total</td><td>The total number of records read from Kafka by this task belonging to the named sink connector in this worker, since the task was last restarted.</td></tr>
+<tr>
+<td></td><td>sink-record-send-rate</td><td>The average per-second number of records output from the transformations and sent/put to this task belonging to the named sink connector in this worker. This is after transformations are applied and excludes any records filtered out by the transformations.</td></tr>
+<tr>
+<td></td><td>sink-record-send-total</td><td>The total number of records output from the transformations and sent/put to this task belonging to the named sink connector in this worker, since the task was last restarted.</td></tr>
+<tr>
+<td colspan=3 class="mbeanName" style="background-color:#ccc; font-weight: bold;">kafka.connect:type=source-task-metrics,connector="{connector}",task="{task}"</td></tr>
+<tr>
+<th style="width: 90px"></th>
+<th>Attribute name</th>
+<th>Description</th>
+</tr>
+<tr>
+<td></td><td>poll-batch-avg-time-ms</td><td>The average time in milliseconds taken by this task to poll for a batch of source records.</td></tr>
+<tr>
+<td></td><td>poll-batch-max-time-ms</td><td>The maximum time in milliseconds taken by this task to poll for a batch of source records.</td></tr>
+<tr>
+<td></td><td>source-record-active-count</td><td>The number of records that have been produced by this task but not yet completely written to Kafka.</td></tr>
+<tr>
+<td></td><td>source-record-active-count-avg</td><td>The average number of records that have been produced by this task but not yet completely written to Kafka.</td></tr>
+<tr>
+<td></td><td>source-record-active-count-max</td><td>The maximum number of records that have been produced by this task but not yet completely written to Kafka.</td></tr>
+<tr>
+<td></td><td>source-record-poll-rate</td><td>The average per-second number of records produced/polled (before transformation) by this task belonging to the named source connector in this worker.</td></tr>
+<tr>
+<td></td><td>source-record-poll-total</td><td>The total number of records produced/polled (before transformation) by this task belonging to the named source connector in this worker.</td></tr>
+<tr>
+<td></td><td>source-record-write-rate</td><td>The average per-second number of records output from the transformations and written to Kafka for this task belonging to the named source connector in this worker. This is after transformations are applied and excludes any records filtered out by the transformations.</td></tr>
+<tr>
+<td></td><td>source-record-write-total</td><td>The number of records output from the transformations and written to Kafka for this task belonging to the named source connector in this worker, since the task was last restarted.</td></tr>
+</tbody></table>

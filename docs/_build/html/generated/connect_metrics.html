@@ -1,0 +1,382 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>&lt;no title&gt; &mdash; Apache Kafka 4.0.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../genindex.html"/>
+        <link rel="search" title="Search" href="../search.html"/>
+    <link rel="top" title="Apache Kafka 4.0.0 documentation" href="../index.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> Apache Kafka
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                4.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../uses.html">Use Cases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../documentation/index.html">Apache Kafka Documentation</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Apache Kafka</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+      <li>&lt;no title&gt;</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/generated/connect_metrics.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <p>&lt;table class=&#8221;data-table&#8221;&gt;&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td colspan=3 class=&#8221;mbeanName&#8221; style=&#8221;background-color:#ccc; font-weight: bold;&#8221;&gt;kafka.connect:type=connect-worker-metrics&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;th style=&#8221;width: 90px&#8221;&gt;&lt;/th&gt;
+&lt;th&gt;Attribute name&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;connector-count&lt;/td&gt;&lt;td&gt;The number of connectors run in this worker.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;connector-startup-attempts-total&lt;/td&gt;&lt;td&gt;The total number of connector startups that this worker has attempted.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;connector-startup-failure-percentage&lt;/td&gt;&lt;td&gt;The average percentage of this worker&#8217;s connectors starts that failed.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;connector-startup-failure-total&lt;/td&gt;&lt;td&gt;The total number of connector starts that failed.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;connector-startup-success-percentage&lt;/td&gt;&lt;td&gt;The average percentage of this worker&#8217;s connectors starts that succeeded.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;connector-startup-success-total&lt;/td&gt;&lt;td&gt;The total number of connector starts that succeeded.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;task-count&lt;/td&gt;&lt;td&gt;The number of tasks run in this worker.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;task-startup-attempts-total&lt;/td&gt;&lt;td&gt;The total number of task startups that this worker has attempted.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;task-startup-failure-percentage&lt;/td&gt;&lt;td&gt;The average percentage of this worker&#8217;s tasks starts that failed.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;task-startup-failure-total&lt;/td&gt;&lt;td&gt;The total number of task starts that failed.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;task-startup-success-percentage&lt;/td&gt;&lt;td&gt;The average percentage of this worker&#8217;s tasks starts that succeeded.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;task-startup-success-total&lt;/td&gt;&lt;td&gt;The total number of task starts that succeeded.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td colspan=3 class=&#8221;mbeanName&#8221; style=&#8221;background-color:#ccc; font-weight: bold;&#8221;&gt;kafka.connect:type=connect-worker-rebalance-metrics&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;th style=&#8221;width: 90px&#8221;&gt;&lt;/th&gt;
+&lt;th&gt;Attribute name&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;completed-rebalances-total&lt;/td&gt;&lt;td&gt;The total number of rebalances completed by this worker.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;epoch&lt;/td&gt;&lt;td&gt;The epoch or generation number of this worker.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;leader-name&lt;/td&gt;&lt;td&gt;The name of the group leader.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;rebalance-avg-time-ms&lt;/td&gt;&lt;td&gt;The average time in milliseconds spent by this worker to rebalance.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;rebalance-max-time-ms&lt;/td&gt;&lt;td&gt;The maximum time in milliseconds spent by this worker to rebalance.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;rebalancing&lt;/td&gt;&lt;td&gt;Whether this worker is currently rebalancing.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;time-since-last-rebalance-ms&lt;/td&gt;&lt;td&gt;The time in milliseconds since this worker completed the most recent rebalance.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td colspan=3 class=&#8221;mbeanName&#8221; style=&#8221;background-color:#ccc; font-weight: bold;&#8221;&gt;kafka.connect:type=connector-metrics,connector=&#8221;{connector}&#8221;&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;th style=&#8221;width: 90px&#8221;&gt;&lt;/th&gt;
+&lt;th&gt;Attribute name&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;connector-class&lt;/td&gt;&lt;td&gt;The name of the connector class.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;connector-type&lt;/td&gt;&lt;td&gt;The type of the connector. One of &#8216;source&#8217; or &#8216;sink&#8217;.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;connector-version&lt;/td&gt;&lt;td&gt;The version of the connector class, as reported by the connector.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;status&lt;/td&gt;&lt;td&gt;The status of the connector. One of &#8216;unassigned&#8217;, &#8216;running&#8217;, &#8216;paused&#8217;, &#8216;failed&#8217;, or &#8216;destroyed&#8217;.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td colspan=3 class=&#8221;mbeanName&#8221; style=&#8221;background-color:#ccc; font-weight: bold;&#8221;&gt;kafka.connect:type=connector-task-metrics,connector=&#8221;{connector}&#8221;,task=&#8221;{task}&#8221;&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;th style=&#8221;width: 90px&#8221;&gt;&lt;/th&gt;
+&lt;th&gt;Attribute name&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;batch-size-avg&lt;/td&gt;&lt;td&gt;The average size of the batches processed by the connector.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;batch-size-max&lt;/td&gt;&lt;td&gt;The maximum size of the batches processed by the connector.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;offset-commit-avg-time-ms&lt;/td&gt;&lt;td&gt;The average time in milliseconds taken by this task to commit offsets.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;offset-commit-failure-percentage&lt;/td&gt;&lt;td&gt;The average percentage of this task&#8217;s offset commit attempts that failed.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;offset-commit-max-time-ms&lt;/td&gt;&lt;td&gt;The maximum time in milliseconds taken by this task to commit offsets.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;offset-commit-success-percentage&lt;/td&gt;&lt;td&gt;The average percentage of this task&#8217;s offset commit attempts that succeeded.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;pause-ratio&lt;/td&gt;&lt;td&gt;The fraction of time this task has spent in the pause state.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;running-ratio&lt;/td&gt;&lt;td&gt;The fraction of time this task has spent in the running state.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;status&lt;/td&gt;&lt;td&gt;The status of the connector task. One of &#8216;unassigned&#8217;, &#8216;running&#8217;, &#8216;paused&#8217;, &#8216;failed&#8217;, or &#8216;destroyed&#8217;.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td colspan=3 class=&#8221;mbeanName&#8221; style=&#8221;background-color:#ccc; font-weight: bold;&#8221;&gt;kafka.connect:type=sink-task-metrics,connector=&#8221;{connector}&#8221;,task=&#8221;{task}&#8221;&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;th style=&#8221;width: 90px&#8221;&gt;&lt;/th&gt;
+&lt;th&gt;Attribute name&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;offset-commit-completion-rate&lt;/td&gt;&lt;td&gt;The average per-second number of offset commit completions that were completed successfully.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;offset-commit-completion-total&lt;/td&gt;&lt;td&gt;The total number of offset commit completions that were completed successfully.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;offset-commit-seq-no&lt;/td&gt;&lt;td&gt;The current sequence number for offset commits.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;offset-commit-skip-rate&lt;/td&gt;&lt;td&gt;The average per-second number of offset commit completions that were received too late and skipped/ignored.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;offset-commit-skip-total&lt;/td&gt;&lt;td&gt;The total number of offset commit completions that were received too late and skipped/ignored.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;partition-count&lt;/td&gt;&lt;td&gt;The number of topic partitions assigned to this task belonging to the named sink connector in this worker.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;put-batch-avg-time-ms&lt;/td&gt;&lt;td&gt;The average time taken by this task to put a batch of sinks records.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;put-batch-max-time-ms&lt;/td&gt;&lt;td&gt;The maximum time taken by this task to put a batch of sinks records.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;sink-record-active-count&lt;/td&gt;&lt;td&gt;The number of records that have been read from Kafka but not yet completely committed/flushed/acknowledged by the sink task.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;sink-record-active-count-avg&lt;/td&gt;&lt;td&gt;The average number of records that have been read from Kafka but not yet completely committed/flushed/acknowledged by the sink task.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;sink-record-active-count-max&lt;/td&gt;&lt;td&gt;The maximum number of records that have been read from Kafka but not yet completely committed/flushed/acknowledged by the sink task.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;sink-record-lag-max&lt;/td&gt;&lt;td&gt;The maximum lag in terms of number of records that the sink task is behind the consumer&#8217;s position for any topic partitions.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;sink-record-read-rate&lt;/td&gt;&lt;td&gt;The average per-second number of records read from Kafka for this task belonging to the named sink connector in this worker. This is before transformations are applied.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;sink-record-read-total&lt;/td&gt;&lt;td&gt;The total number of records read from Kafka by this task belonging to the named sink connector in this worker, since the task was last restarted.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;sink-record-send-rate&lt;/td&gt;&lt;td&gt;The average per-second number of records output from the transformations and sent/put to this task belonging to the named sink connector in this worker. This is after transformations are applied and excludes any records filtered out by the transformations.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;sink-record-send-total&lt;/td&gt;&lt;td&gt;The total number of records output from the transformations and sent/put to this task belonging to the named sink connector in this worker, since the task was last restarted.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td colspan=3 class=&#8221;mbeanName&#8221; style=&#8221;background-color:#ccc; font-weight: bold;&#8221;&gt;kafka.connect:type=source-task-metrics,connector=&#8221;{connector}&#8221;,task=&#8221;{task}&#8221;&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;th style=&#8221;width: 90px&#8221;&gt;&lt;/th&gt;
+&lt;th&gt;Attribute name&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;poll-batch-avg-time-ms&lt;/td&gt;&lt;td&gt;The average time in milliseconds taken by this task to poll for a batch of source records.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;poll-batch-max-time-ms&lt;/td&gt;&lt;td&gt;The maximum time in milliseconds taken by this task to poll for a batch of source records.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;source-record-active-count&lt;/td&gt;&lt;td&gt;The number of records that have been produced by this task but not yet completely written to Kafka.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;source-record-active-count-avg&lt;/td&gt;&lt;td&gt;The average number of records that have been produced by this task but not yet completely written to Kafka.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;source-record-active-count-max&lt;/td&gt;&lt;td&gt;The maximum number of records that have been produced by this task but not yet completely written to Kafka.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;source-record-poll-rate&lt;/td&gt;&lt;td&gt;The average per-second number of records produced/polled (before transformation) by this task belonging to the named source connector in this worker.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;source-record-poll-total&lt;/td&gt;&lt;td&gt;The total number of records produced/polled (before transformation) by this task belonging to the named source connector in this worker.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;source-record-write-rate&lt;/td&gt;&lt;td&gt;The average per-second number of records output from the transformations and written to Kafka for this task belonging to the named source connector in this worker. This is after transformations are applied and excludes any records filtered out by the transformations.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;/td&gt;&lt;td&gt;source-record-write-total&lt;/td&gt;&lt;td&gt;The number of records output from the transformations and written to Kafka for this task belonging to the named source connector in this worker, since the task was last restarted.&lt;/td&gt;&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;</p>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Apache Software Foundation.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'4.0.0',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: ''
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

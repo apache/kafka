@@ -1,0 +1,1764 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Security &mdash; Apache Kafka 4.0.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../genindex.html"/>
+        <link rel="search" title="Search" href="../search.html"/>
+    <link rel="top" title="Apache Kafka 4.0.0 documentation" href="../index.html"/>
+        <link rel="up" title="Apache Kafka Documentation" href="index.html"/>
+        <link rel="next" title="Kafka Connect" href="connect.html"/>
+        <link rel="prev" title="Operations" href="ops.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> Apache Kafka
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                4.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../uses.html">Use Cases</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Apache Kafka Documentation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html">Kafka APIs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="design.html">Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation.html">Implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ops.html">Operations</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Security</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#security-overview">7.1 Security Overview</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#encryption-and-authentication-using-ssl">7.2 Encryption and Authentication using SSL</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#authentication-using-sasl">7.3 Authentication using SASL</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#authorization-and-acls">7.4 Authorization and ACLs</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#command-line-interface">Command Line Interface</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#incorporating-security-features-in-a-running-cluster">7.5 Incorporating Security Features in a Running Cluster</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#zookeeper-authentication">7.6 ZooKeeper Authentication</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#new-clusters">7.6.1 New clusters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#migrating-clusters">7.6.2 Migrating clusters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#migrating-the-zookeeper-ensemble">7.6.3 Migrating the ZooKeeper ensemble</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="connect.html">Kafka Connect</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Apache Kafka</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="index.html">Apache Kafka Documentation</a> &raquo;</li>
+        
+      <li>Security</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/documentation/security.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="security">
+<h1>Security<a class="headerlink" href="#security" title="Permalink to this headline">¶</a></h1>
+<div class="contents local topic" id="contents">
+<ul class="simple">
+<li><a class="reference internal" href="#security-overview" id="id1">7.1 Security Overview</a></li>
+<li><a class="reference internal" href="#encryption-and-authentication-using-ssl" id="id2">7.2 Encryption and Authentication using SSL</a></li>
+<li><a class="reference internal" href="#authentication-using-sasl" id="id3">7.3 Authentication using SASL</a></li>
+<li><a class="reference internal" href="#authorization-and-acls" id="id4">7.4 Authorization and ACLs</a><ul>
+<li><a class="reference internal" href="#command-line-interface" id="id5">Command Line Interface</a></li>
+<li><a class="reference internal" href="#examples" id="id6">Examples</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#incorporating-security-features-in-a-running-cluster" id="id7">7.5 Incorporating Security Features in a Running Cluster</a></li>
+<li><a class="reference internal" href="#zookeeper-authentication" id="id8">7.6 ZooKeeper Authentication</a><ul>
+<li><a class="reference internal" href="#new-clusters" id="id9">7.6.1 New clusters</a></li>
+<li><a class="reference internal" href="#migrating-clusters" id="id10">7.6.2 Migrating clusters</a></li>
+<li><a class="reference internal" href="#migrating-the-zookeeper-ensemble" id="id11">7.6.3 Migrating the ZooKeeper ensemble</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="security-overview">
+<h2><a class="reference external" href="#security_overview">7.1 Security Overview</a><a class="headerlink" href="#security-overview" title="Permalink to this headline">¶</a></h2>
+<p>In release 0.9.0.0, the Kafka community added a number of features that,
+used either separately or together, increases security in a Kafka
+cluster. The following security measures are currently supported:</p>
+<ol class="arabic simple">
+<li>Authentication of connections to brokers from clients (producers and
+consumers), other brokers and tools, using either SSL or SASL. Kafka
+supports the following SASL mechanisms:<ul>
+<li>SASL/GSSAPI (Kerberos) - starting at version 0.9.0.0</li>
+<li>SASL/PLAIN - starting at version 0.10.0.0</li>
+<li>SASL/SCRAM-SHA-256 and SASL/SCRAM-SHA-512 - starting at version
+0.10.2.0</li>
+</ul>
+</li>
+<li>Authentication of connections from brokers to ZooKeeper</li>
+<li>Encryption of data transferred between brokers and clients, between
+brokers, or between brokers and tools using SSL (Note that there is a
+performance degradation when SSL is enabled, the magnitude of which
+depends on the CPU type and the JVM implementation.)</li>
+<li>Authorization of read / write operations by clients</li>
+<li>Authorization is pluggable and integration with external
+authorization services is supported</li>
+</ol>
+<p>It&#8217;s worth noting that security is optional - non-secured clusters are
+supported, as well as a mix of authenticated, unauthenticated, encrypted
+and non-encrypted clients. The guides below explain how to configure and
+use the security features in both clients and brokers.</p>
+</div>
+<div class="section" id="encryption-and-authentication-using-ssl">
+<h2><a class="reference external" href="#security_ssl">7.2 Encryption and Authentication using SSL</a><a class="headerlink" href="#encryption-and-authentication-using-ssl" title="Permalink to this headline">¶</a></h2>
+<p>Apache Kafka allows clients to connect over SSL. By default, SSL is
+disabled but can be turned on as needed.</p>
+<ol class="arabic">
+<li><p class="first rubric" id="generate-ssl-key-and-certificate-for-each-kafka-broker"><a class="reference external" href="#security_ssl_key">Generate SSL key and certificate for each Kafka
+broker</a></p>
+<p>The first step of deploying one or more brokers with the SSL support
+is to generate the key and the certificate for each machine in the
+cluster. You can use Java&#8217;s keytool utility to accomplish this task.
+We will generate the key into a temporary keystore initially so that
+we can export and sign it later with CA.</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">keytool</span> <span class="o">-</span><span class="n">keystore</span> <span class="n">server</span><span class="o">.</span><span class="n">keystore</span><span class="o">.</span><span class="n">jks</span> <span class="o">-</span><span class="n">alias</span> <span class="n">localhost</span> <span class="o">-</span><span class="n">validity</span> <span class="p">{</span><span class="n">validity</span><span class="p">}</span> <span class="o">-</span><span class="n">genkey</span> <span class="o">-</span><span class="n">keyalg</span> <span class="n">RSA</span>
+</pre></div>
+</div>
+<p>You need to specify two parameters in the above command:</p>
+<ol class="arabic simple">
+<li>keystore: the keystore file that stores the certificate. The
+keystore file contains the private key of the certificate;
+therefore, it needs to be kept safely.</li>
+<li>validity: the valid time of the certificate in days.</li>
+</ol>
+<div class="line-block">
+<div class="line"><br /></div>
+<div class="line">Note: By default the property
+<code class="docutils literal"><span class="pre">ssl.endpoint.identification.algorithm</span></code> is not defined, so
+hostname verification is not performed. In order to enable hostname
+verification, set the following property:</div>
+</div>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">ssl</span><span class="o">.</span><span class="n">endpoint</span><span class="o">.</span><span class="n">identification</span><span class="o">.</span><span class="n">algorithm</span><span class="o">=</span><span class="n">HTTPS</span>
+</pre></div>
+</div>
+<p>Once enabled, clients will verify the server&#8217;s fully qualified domain
+name (FQDN) against one of the following two fields:</p>
+<ol class="arabic simple">
+<li>Common Name (CN)</li>
+<li>Subject Alternative Name (SAN)</li>
+</ol>
+<div class="line-block">
+<div class="line"><br /></div>
+<div class="line">Both fields are valid, RFC-2818 recommends the use of SAN however.
+SAN is also more flexible, allowing for multiple DNS entries to be
+declared. Another advantage is that the CN can be set to a more
+meaningful value for authorization purposes. To add a SAN field
+append the following argument <code class="docutils literal"><span class="pre">-ext</span> <span class="pre">SAN=DNS:{FQDN}</span></code> to the
+keytool command:</div>
+</div>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">keytool</span> <span class="o">-</span><span class="n">keystore</span> <span class="n">server</span><span class="o">.</span><span class="n">keystore</span><span class="o">.</span><span class="n">jks</span> <span class="o">-</span><span class="n">alias</span> <span class="n">localhost</span> <span class="o">-</span><span class="n">validity</span> <span class="p">{</span><span class="n">validity</span><span class="p">}</span> <span class="o">-</span><span class="n">genkey</span> <span class="o">-</span><span class="n">keyalg</span> <span class="n">RSA</span> <span class="o">-</span><span class="n">ext</span> <span class="n">SAN</span><span class="o">=</span><span class="n">DNS</span><span class="p">:{</span><span class="n">FQDN</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>The following command can be run afterwards to verify the contents of
+the generated certificate:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">keytool</span> <span class="o">-</span><span class="nb">list</span> <span class="o">-</span><span class="n">v</span> <span class="o">-</span><span class="n">keystore</span> <span class="n">server</span><span class="o">.</span><span class="n">keystore</span><span class="o">.</span><span class="n">jks</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first rubric" id="creating-your-own-ca"><a class="reference external" href="#security_ssl_ca">Creating your own CA</a></p>
+<p>After the first step, each machine in the cluster has a
+public-private key pair, and a certificate to identify the machine.
+The certificate, however, is unsigned, which means that an attacker
+can create such a certificate to pretend to be any machine.</p>
+<p>Therefore, it is important to prevent forged certificates by signing
+them for each machine in the cluster. A certificate authority (CA) is
+responsible for signing certificates. CA works likes a government
+that issues passports—the government stamps (signs) each passport so
+that the passport becomes difficult to forge. Other governments
+verify the stamps to ensure the passport is authentic. Similarly, the
+CA signs the certificates, and the cryptography guarantees that a
+signed certificate is computationally difficult to forge. Thus, as
+long as the CA is a genuine and trusted authority, the clients have
+high assurance that they are connecting to the authentic machines.</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">openssl</span> <span class="n">req</span> <span class="o">-</span><span class="n">new</span> <span class="o">-</span><span class="n">x509</span> <span class="o">-</span><span class="n">keyout</span> <span class="n">ca</span><span class="o">-</span><span class="n">key</span> <span class="o">-</span><span class="n">out</span> <span class="n">ca</span><span class="o">-</span><span class="n">cert</span> <span class="o">-</span><span class="n">days</span> <span class="mi">365</span>
+</pre></div>
+</div>
+<div class="line-block">
+<div class="line">The generated CA is simply a public-private key pair and
+certificate, and it is intended to sign other certificates.</div>
+<div class="line">The next step is to add the generated CA to the **clients&#8217;
+truststore** so that the clients can trust this CA:</div>
+</div>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">keytool</span> <span class="o">-</span><span class="n">keystore</span> <span class="n">client</span><span class="o">.</span><span class="n">truststore</span><span class="o">.</span><span class="n">jks</span> <span class="o">-</span><span class="n">alias</span> <span class="n">CARoot</span> <span class="o">-</span><span class="kn">import</span> <span class="o">-</span><span class="n">file</span> <span class="n">ca</span><span class="o">-</span><span class="n">cert</span>
+</pre></div>
+</div>
+<p><strong>Note:</strong> If you configure the Kafka brokers to require client
+authentication by setting ssl.client.auth to be &#8220;requested&#8221; or
+&#8220;required&#8221; on the <a class="reference external" href="#config_broker">Kafka brokers config</a> then you
+must provide a truststore for the Kafka brokers as well and it should
+have all the CA certificates that clients&#8217; keys were signed by.</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">keytool</span> <span class="o">-</span><span class="n">keystore</span> <span class="n">server</span><span class="o">.</span><span class="n">truststore</span><span class="o">.</span><span class="n">jks</span> <span class="o">-</span><span class="n">alias</span> <span class="n">CARoot</span> <span class="o">-</span><span class="kn">import</span> <span class="o">-</span><span class="n">file</span> <span class="n">ca</span><span class="o">-</span><span class="n">cert</span>
+</pre></div>
+</div>
+<p>In contrast to the keystore in step 1 that stores each machine&#8217;s own
+identity, the truststore of a client stores all the certificates that
+the client should trust. Importing a certificate into one&#8217;s
+truststore also means trusting all certificates that are signed by
+that certificate. As the analogy above, trusting the government (CA)
+also means trusting all passports (certificates) that it has issued.
+This attribute is called the chain of trust, and it is particularly
+useful when deploying SSL on a large Kafka cluster. You can sign all
+certificates in the cluster with a single CA, and have all machines
+share the same truststore that trusts the CA. That way all machines
+can authenticate all other machines.</p>
+</li>
+<li><p class="first rubric" id="signing-the-certificate"><a class="reference external" href="#security_ssl_signing">Signing the certificate</a></p>
+<p>The next step is to sign all certificates generated by step 1 with
+the CA generated in step 2. First, you need to export the certificate
+from the keystore:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">keytool</span> <span class="o">-</span><span class="n">keystore</span> <span class="n">server</span><span class="o">.</span><span class="n">keystore</span><span class="o">.</span><span class="n">jks</span> <span class="o">-</span><span class="n">alias</span> <span class="n">localhost</span> <span class="o">-</span><span class="n">certreq</span> <span class="o">-</span><span class="n">file</span> <span class="n">cert</span><span class="o">-</span><span class="n">file</span>
+</pre></div>
+</div>
+<p>Then sign it with the CA:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">openssl</span> <span class="n">x509</span> <span class="o">-</span><span class="n">req</span> <span class="o">-</span><span class="n">CA</span> <span class="n">ca</span><span class="o">-</span><span class="n">cert</span> <span class="o">-</span><span class="n">CAkey</span> <span class="n">ca</span><span class="o">-</span><span class="n">key</span> <span class="o">-</span><span class="ow">in</span> <span class="n">cert</span><span class="o">-</span><span class="n">file</span> <span class="o">-</span><span class="n">out</span> <span class="n">cert</span><span class="o">-</span><span class="n">signed</span> <span class="o">-</span><span class="n">days</span> <span class="p">{</span><span class="n">validity</span><span class="p">}</span> <span class="o">-</span><span class="n">CAcreateserial</span> <span class="o">-</span><span class="n">passin</span> <span class="k">pass</span><span class="p">:{</span><span class="n">ca</span><span class="o">-</span><span class="n">password</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>Finally, you need to import both the certificate of the CA and the
+signed certificate into the keystore:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">keytool</span> <span class="o">-</span><span class="n">keystore</span> <span class="n">server</span><span class="o">.</span><span class="n">keystore</span><span class="o">.</span><span class="n">jks</span> <span class="o">-</span><span class="n">alias</span> <span class="n">CARoot</span> <span class="o">-</span><span class="kn">import</span> <span class="o">-</span><span class="n">file</span> <span class="n">ca</span><span class="o">-</span><span class="n">cert</span>
+<span class="n">keytool</span> <span class="o">-</span><span class="n">keystore</span> <span class="n">server</span><span class="o">.</span><span class="n">keystore</span><span class="o">.</span><span class="n">jks</span> <span class="o">-</span><span class="n">alias</span> <span class="n">localhost</span> <span class="o">-</span><span class="kn">import</span> <span class="o">-</span><span class="n">file</span> <span class="n">cert</span><span class="o">-</span><span class="n">signed</span>
+</pre></div>
+</div>
+<p>The definitions of the parameters are the following:</p>
+<ol class="arabic simple">
+<li>keystore: the location of the keystore</li>
+<li>ca-cert: the certificate of the CA</li>
+<li>ca-key: the private key of the CA</li>
+<li>ca-password: the passphrase of the CA</li>
+<li>cert-file: the exported, unsigned certificate of the server</li>
+<li>cert-signed: the signed certificate of the server</li>
+</ol>
+<p>Here is an example of a bash script with all above steps. Note that
+one of the commands assumes a password of `test1234`, so either use
+that password or edit the command before running it.</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="ch">#!/bin/bash</span>
+<span class="c1">#Step 1</span>
+<span class="n">keytool</span> <span class="o">-</span><span class="n">keystore</span> <span class="n">server</span><span class="o">.</span><span class="n">keystore</span><span class="o">.</span><span class="n">jks</span> <span class="o">-</span><span class="n">alias</span> <span class="n">localhost</span> <span class="o">-</span><span class="n">validity</span> <span class="mi">365</span> <span class="o">-</span><span class="n">keyalg</span> <span class="n">RSA</span> <span class="o">-</span><span class="n">genkey</span>
+<span class="c1">#Step 2</span>
+<span class="n">openssl</span> <span class="n">req</span> <span class="o">-</span><span class="n">new</span> <span class="o">-</span><span class="n">x509</span> <span class="o">-</span><span class="n">keyout</span> <span class="n">ca</span><span class="o">-</span><span class="n">key</span> <span class="o">-</span><span class="n">out</span> <span class="n">ca</span><span class="o">-</span><span class="n">cert</span> <span class="o">-</span><span class="n">days</span> <span class="mi">365</span>
+<span class="n">keytool</span> <span class="o">-</span><span class="n">keystore</span> <span class="n">server</span><span class="o">.</span><span class="n">truststore</span><span class="o">.</span><span class="n">jks</span> <span class="o">-</span><span class="n">alias</span> <span class="n">CARoot</span> <span class="o">-</span><span class="kn">import</span> <span class="o">-</span><span class="n">file</span> <span class="n">ca</span><span class="o">-</span><span class="n">cert</span>
+<span class="n">keytool</span> <span class="o">-</span><span class="n">keystore</span> <span class="n">client</span><span class="o">.</span><span class="n">truststore</span><span class="o">.</span><span class="n">jks</span> <span class="o">-</span><span class="n">alias</span> <span class="n">CARoot</span> <span class="o">-</span><span class="kn">import</span> <span class="o">-</span><span class="n">file</span> <span class="n">ca</span><span class="o">-</span><span class="n">cert</span>
+<span class="c1">#Step 3</span>
+<span class="n">keytool</span> <span class="o">-</span><span class="n">keystore</span> <span class="n">server</span><span class="o">.</span><span class="n">keystore</span><span class="o">.</span><span class="n">jks</span> <span class="o">-</span><span class="n">alias</span> <span class="n">localhost</span> <span class="o">-</span><span class="n">certreq</span> <span class="o">-</span><span class="n">file</span> <span class="n">cert</span><span class="o">-</span><span class="n">file</span>
+<span class="n">openssl</span> <span class="n">x509</span> <span class="o">-</span><span class="n">req</span> <span class="o">-</span><span class="n">CA</span> <span class="n">ca</span><span class="o">-</span><span class="n">cert</span> <span class="o">-</span><span class="n">CAkey</span> <span class="n">ca</span><span class="o">-</span><span class="n">key</span> <span class="o">-</span><span class="ow">in</span> <span class="n">cert</span><span class="o">-</span><span class="n">file</span> <span class="o">-</span><span class="n">out</span> <span class="n">cert</span><span class="o">-</span><span class="n">signed</span> <span class="o">-</span><span class="n">days</span> <span class="mi">365</span> <span class="o">-</span><span class="n">CAcreateserial</span> <span class="o">-</span><span class="n">passin</span> <span class="k">pass</span><span class="p">:</span><span class="n">test1234</span>
+<span class="n">keytool</span> <span class="o">-</span><span class="n">keystore</span> <span class="n">server</span><span class="o">.</span><span class="n">keystore</span><span class="o">.</span><span class="n">jks</span> <span class="o">-</span><span class="n">alias</span> <span class="n">CARoot</span> <span class="o">-</span><span class="kn">import</span> <span class="o">-</span><span class="n">file</span> <span class="n">ca</span><span class="o">-</span><span class="n">cert</span>
+<span class="n">keytool</span> <span class="o">-</span><span class="n">keystore</span> <span class="n">server</span><span class="o">.</span><span class="n">keystore</span><span class="o">.</span><span class="n">jks</span> <span class="o">-</span><span class="n">alias</span> <span class="n">localhost</span> <span class="o">-</span><span class="kn">import</span> <span class="o">-</span><span class="n">file</span> <span class="n">cert</span><span class="o">-</span><span class="n">signed</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first rubric" id="configuring-kafka-brokers"><a class="reference external" href="#security_configbroker">Configuring Kafka Brokers</a></p>
+<p>Kafka Brokers support listening for connections on multiple ports. We
+need to configure the following property in server.properties, which
+must have one or more comma-separated values:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">listeners</span>
+</pre></div>
+</div>
+<p>If SSL is not enabled for inter-broker communication (see below for
+how to enable it), both PLAINTEXT and SSL ports will be necessary.</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">listeners</span><span class="o">=</span><span class="n">PLAINTEXT</span><span class="p">:</span><span class="o">//</span><span class="n">host</span><span class="o">.</span><span class="n">name</span><span class="p">:</span><span class="n">port</span><span class="p">,</span><span class="n">SSL</span><span class="p">:</span><span class="o">//</span><span class="n">host</span><span class="o">.</span><span class="n">name</span><span class="p">:</span><span class="n">port</span>
+</pre></div>
+</div>
+<p>Following SSL configs are needed on the broker side</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">ssl</span><span class="o">.</span><span class="n">keystore</span><span class="o">.</span><span class="n">location</span><span class="o">=/</span><span class="n">var</span><span class="o">/</span><span class="n">private</span><span class="o">/</span><span class="n">ssl</span><span class="o">/</span><span class="n">server</span><span class="o">.</span><span class="n">keystore</span><span class="o">.</span><span class="n">jks</span>
+<span class="n">ssl</span><span class="o">.</span><span class="n">keystore</span><span class="o">.</span><span class="n">password</span><span class="o">=</span><span class="n">test1234</span>
+<span class="n">ssl</span><span class="o">.</span><span class="n">key</span><span class="o">.</span><span class="n">password</span><span class="o">=</span><span class="n">test1234</span>
+<span class="n">ssl</span><span class="o">.</span><span class="n">truststore</span><span class="o">.</span><span class="n">location</span><span class="o">=/</span><span class="n">var</span><span class="o">/</span><span class="n">private</span><span class="o">/</span><span class="n">ssl</span><span class="o">/</span><span class="n">server</span><span class="o">.</span><span class="n">truststore</span><span class="o">.</span><span class="n">jks</span>
+<span class="n">ssl</span><span class="o">.</span><span class="n">truststore</span><span class="o">.</span><span class="n">password</span><span class="o">=</span><span class="n">test1234</span>
+</pre></div>
+</div>
+<p>Note: ssl.truststore.password is technically optional but highly
+recommended. If a password is not set access to the truststore is
+still available, but integrity checking is disabled. Optional
+settings that are worth considering:</p>
+<ol class="arabic simple">
+<li>ssl.client.auth=none (&#8220;required&#8221; =&gt; client authentication is
+required, &#8220;requested&#8221; =&gt; client authentication is requested and
+client without certs can still connect. The usage of &#8220;requested&#8221;
+is discouraged as it provides a false sense of security and
+misconfigured clients will still connect successfully.)</li>
+<li>ssl.cipher.suites (Optional). A cipher suite is a named
+combination of authentication, encryption, MAC and key exchange
+algorithm used to negotiate the security settings for a network
+connection using TLS or SSL network protocol. (Default is an empty
+list)</li>
+<li>ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1 (list out the SSL
+protocols that you are going to accept from clients. Do note that
+SSL is deprecated in favor of TLS and using SSL in production is
+not recommended)</li>
+<li>ssl.keystore.type=JKS</li>
+<li>ssl.truststore.type=JKS</li>
+<li>ssl.secure.random.implementation=SHA1PRNG</li>
+</ol>
+<p>If you want to enable SSL for inter-broker communication, add the
+following to the server.properties file (it defaults to PLAINTEXT)</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">security</span><span class="o">.</span><span class="n">inter</span><span class="o">.</span><span class="n">broker</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">SSL</span>
+</pre></div>
+</div>
+<p>Due to import regulations in some countries, the Oracle
+implementation limits the strength of cryptographic algorithms
+available by default. If stronger algorithms are needed (for example,
+AES with 256-bit keys), the <a class="reference external" href="http://www.oracle.com/technetwork/java/javase/downloads/index.html">JCE Unlimited Strength Jurisdiction
+Policy
+Files</a>
+must be obtained and installed in the JDK/JRE. See the <a class="reference external" href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/SunProviders.html">JCA Providers
+Documentation</a>
+for more information.</p>
+<p>The JRE/JDK will have a default pseudo-random number generator (PRNG)
+that is used for cryptography operations, so it is not required to
+configure the implementation used with the</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ssl</span><span class="o">.</span><span class="n">secure</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">implementation</span>
+</pre></div>
+</div>
+<p>. However, there are performance issues with some implementations
+(notably, the default chosen on Linux systems,</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">NativePRNG</span>
+</pre></div>
+</div>
+<p>, utilizes a global lock). In cases where performance of SSL
+connections becomes an issue, consider explicitly setting the
+implementation to be used. The</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">SHA1PRNG</span>
+</pre></div>
+</div>
+<p>implementation is non-blocking, and has shown very good performance
+characteristics under heavy load (50 MB/sec of produced messages,
+plus replication traffic, per-broker).</p>
+<p>Once you start the broker you should be able to see in the server.log</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">addresses</span><span class="p">:</span> <span class="n">PLAINTEXT</span> <span class="o">-&gt;</span> <span class="n">EndPoint</span><span class="p">(</span><span class="mf">192.168</span><span class="o">.</span><span class="mf">64.1</span><span class="p">,</span><span class="mi">9092</span><span class="p">,</span><span class="n">PLAINTEXT</span><span class="p">),</span><span class="n">SSL</span> <span class="o">-&gt;</span> <span class="n">EndPoint</span><span class="p">(</span><span class="mf">192.168</span><span class="o">.</span><span class="mf">64.1</span><span class="p">,</span><span class="mi">9093</span><span class="p">,</span><span class="n">SSL</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To check quickly if the server keystore and truststore are setup
+properly you can run the following command</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">openssl</span> <span class="n">s_client</span> <span class="o">-</span><span class="n">debug</span> <span class="o">-</span><span class="n">connect</span> <span class="n">localhost</span><span class="p">:</span><span class="mi">9093</span> <span class="o">-</span><span class="n">tls1</span>
+</pre></div>
+</div>
+<div class="line-block">
+<div class="line">(Note: TLSv1 should be listed under ssl.enabled.protocols)</div>
+<div class="line">In the output of this command you should see server&#8217;s certificate:</div>
+</div>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="o">-----</span><span class="n">BEGIN</span> <span class="n">CERTIFICATE</span><span class="o">-----</span>
+<span class="p">{</span><span class="n">variable</span> <span class="n">sized</span> <span class="n">random</span> <span class="nb">bytes</span><span class="p">}</span>
+<span class="o">-----</span><span class="n">END</span> <span class="n">CERTIFICATE</span><span class="o">-----</span>
+<span class="n">subject</span><span class="o">=/</span><span class="n">C</span><span class="o">=</span><span class="n">US</span><span class="o">/</span><span class="n">ST</span><span class="o">=</span><span class="n">CA</span><span class="o">/</span><span class="n">L</span><span class="o">=</span><span class="n">Santa</span> <span class="n">Clara</span><span class="o">/</span><span class="n">O</span><span class="o">=</span><span class="n">org</span><span class="o">/</span><span class="n">OU</span><span class="o">=</span><span class="n">org</span><span class="o">/</span><span class="n">CN</span><span class="o">=</span><span class="n">Sriharsha</span> <span class="n">Chintalapani</span>
+<span class="n">issuer</span><span class="o">=/</span><span class="n">C</span><span class="o">=</span><span class="n">US</span><span class="o">/</span><span class="n">ST</span><span class="o">=</span><span class="n">CA</span><span class="o">/</span><span class="n">L</span><span class="o">=</span><span class="n">Santa</span> <span class="n">Clara</span><span class="o">/</span><span class="n">O</span><span class="o">=</span><span class="n">org</span><span class="o">/</span><span class="n">OU</span><span class="o">=</span><span class="n">org</span><span class="o">/</span><span class="n">CN</span><span class="o">=</span><span class="n">kafka</span><span class="o">/</span><span class="n">emailAddress</span><span class="o">=</span><span class="n">test</span><span class="nd">@test</span><span class="o">.</span><span class="n">com</span>
+</pre></div>
+</div>
+<p>If the certificate does not show up or if there are any other error
+messages then your keystore is not setup properly.</p>
+</li>
+<li><p class="first rubric" id="configuring-kafka-clients"><a class="reference external" href="#security_configclients">Configuring Kafka Clients</a></p>
+<div class="line-block">
+<div class="line">SSL is supported only for the new Kafka Producer and Consumer, the
+older API is not supported. The configs for SSL will be the same
+for both producer and consumer.</div>
+<div class="line">If client authentication is not required in the broker, then the
+following is a minimal configuration example:</div>
+</div>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">security</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">SSL</span>
+<span class="n">ssl</span><span class="o">.</span><span class="n">truststore</span><span class="o">.</span><span class="n">location</span><span class="o">=/</span><span class="n">var</span><span class="o">/</span><span class="n">private</span><span class="o">/</span><span class="n">ssl</span><span class="o">/</span><span class="n">client</span><span class="o">.</span><span class="n">truststore</span><span class="o">.</span><span class="n">jks</span>
+<span class="n">ssl</span><span class="o">.</span><span class="n">truststore</span><span class="o">.</span><span class="n">password</span><span class="o">=</span><span class="n">test1234</span>
+</pre></div>
+</div>
+<p>Note: ssl.truststore.password is technically optional but highly
+recommended. If a password is not set access to the truststore is
+still available, but integrity checking is disabled. If client
+authentication is required, then a keystore must be created like in
+step 1 and the following must also be configured:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">ssl</span><span class="o">.</span><span class="n">keystore</span><span class="o">.</span><span class="n">location</span><span class="o">=/</span><span class="n">var</span><span class="o">/</span><span class="n">private</span><span class="o">/</span><span class="n">ssl</span><span class="o">/</span><span class="n">client</span><span class="o">.</span><span class="n">keystore</span><span class="o">.</span><span class="n">jks</span>
+<span class="n">ssl</span><span class="o">.</span><span class="n">keystore</span><span class="o">.</span><span class="n">password</span><span class="o">=</span><span class="n">test1234</span>
+<span class="n">ssl</span><span class="o">.</span><span class="n">key</span><span class="o">.</span><span class="n">password</span><span class="o">=</span><span class="n">test1234</span>
+</pre></div>
+</div>
+<p>Other configuration settings that may also be needed depending on our
+requirements and the broker configuration:</p>
+<ol class="arabic simple">
+<li>ssl.provider (Optional). The name of the security provider used
+for SSL connections. Default value is the default security
+provider of the JVM.</li>
+<li>ssl.cipher.suites (Optional). A cipher suite is a named
+combination of authentication, encryption, MAC and key exchange
+algorithm used to negotiate the security settings for a network
+connection using TLS or SSL network protocol.</li>
+<li>ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1. It should list at
+least one of the protocols configured on the broker side</li>
+<li>ssl.truststore.type=JKS</li>
+<li>ssl.keystore.type=JKS</li>
+</ol>
+<div class="line-block">
+<div class="line"><br /></div>
+<div class="line">Examples using console-producer and console-consumer:</div>
+</div>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">kafka</span><span class="o">-</span><span class="n">console</span><span class="o">-</span><span class="n">producer</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">broker</span><span class="o">-</span><span class="nb">list</span> <span class="n">localhost</span><span class="p">:</span><span class="mi">9093</span> <span class="o">--</span><span class="n">topic</span> <span class="n">test</span> <span class="o">--</span><span class="n">producer</span><span class="o">.</span><span class="n">config</span> <span class="n">client</span><span class="o">-</span><span class="n">ssl</span><span class="o">.</span><span class="n">properties</span>
+<span class="n">kafka</span><span class="o">-</span><span class="n">console</span><span class="o">-</span><span class="n">consumer</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">bootstrap</span><span class="o">-</span><span class="n">server</span> <span class="n">localhost</span><span class="p">:</span><span class="mi">9093</span> <span class="o">--</span><span class="n">topic</span> <span class="n">test</span> <span class="o">--</span><span class="n">consumer</span><span class="o">.</span><span class="n">config</span> <span class="n">client</span><span class="o">-</span><span class="n">ssl</span><span class="o">.</span><span class="n">properties</span>
+</pre></div>
+</div>
+</li>
+</ol>
+</div>
+<div class="section" id="authentication-using-sasl">
+<h2><a class="reference external" href="#security_sasl">7.3 Authentication using SASL</a><a class="headerlink" href="#authentication-using-sasl" title="Permalink to this headline">¶</a></h2>
+<ol class="arabic">
+<li><p class="first rubric" id="jaas-configuration"><a class="reference external" href="#security_sasl_jaasconfig">JAAS configuration</a></p>
+<p>Kafka uses the Java Authentication and Authorization Service
+(<a class="reference external" href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jaas/JAASRefGuide.html">JAAS</a>)
+for SASL configuration.</p>
+<ol class="arabic">
+<li><p class="first rubric" id="jaas-configuration-for-kafka-brokers"><a class="reference external" href="#security_jaas_broker">JAAS configuration for Kafka
+brokers</a></p>
+<p><code class="docutils literal"><span class="pre">KafkaServer</span></code> is the section name in the JAAS file used by each
+KafkaServer/Broker. This section provides SASL configuration
+options for the broker including any SASL client connections made
+by the broker for inter-broker communication.</p>
+<p><code class="docutils literal"><span class="pre">Client</span></code> section is used to authenticate a SASL connection with
+zookeeper. It also allows the brokers to set SASL ACL on zookeeper
+nodes which locks these nodes down so that only the brokers can
+modify it. It is necessary to have the same principal name across
+all brokers. If you want to use a section name other than Client,
+set the system property <code class="docutils literal"><span class="pre">zookeeper.sasl.clientconfig</span></code> to the
+appropriate name (<em>e.g.</em>,
+<code class="docutils literal"><span class="pre">-Dzookeeper.sasl.clientconfig=ZkClient</span></code>).</p>
+<p>ZooKeeper uses &#8220;zookeeper&#8221; as the service name by default. If you
+want to change this, set the system property
+<code class="docutils literal"><span class="pre">zookeeper.sasl.client.username</span></code> to the appropriate name
+(<em>e.g.</em>, <code class="docutils literal"><span class="pre">-Dzookeeper.sasl.client.username=zk</span></code>).</p>
+</li>
+<li><p class="first rubric" id="jaas-configuration-for-kafka-clients"><a class="reference external" href="#security_jaas_client">JAAS configuration for Kafka
+clients</a></p>
+<p>Clients may configure JAAS using the client configuration property
+<a class="reference external" href="#security_client_dynamicjaas">sasl.jaas.config</a> or using the
+<a class="reference external" href="#security_client_staticjaas">static JAAS config file</a> similar
+to brokers.</p>
+<ol class="arabic">
+<li><p class="first rubric" id="jaas-configuration-using-client-configuration-property"><a class="reference external" href="#security_client_dynamicjaas">JAAS configuration using client configuration
+property</a></p>
+<p>Clients may specify JAAS configuration as a producer or
+consumer property without creating a physical configuration
+file. This mode also enables different producers and consumers
+within the same JVM to use different credentials by specifying
+different properties for each client. If both static JAAS
+configuration system property
+<code class="docutils literal"><span class="pre">java.security.auth.login.config</span></code> and client property
+<code class="docutils literal"><span class="pre">sasl.jaas.config</span></code> are specified, the client property will be
+used.</p>
+<p>See <a class="reference external" href="#security_sasl_kerberos_clientconfig">GSSAPI
+(Kerberos)</a>,
+<a class="reference external" href="#security_sasl_plain_clientconfig">PLAIN</a> or
+<a class="reference external" href="#security_sasl_scram_clientconfig">SCRAM</a> for example
+configurations.</p>
+</li>
+<li><p class="first rubric" id="jaas-configuration-using-static-config-file"><a class="reference external" href="#security_client_staticjaas">JAAS configuration using static config
+file</a></p>
+<p>To configure SASL authentication on the clients using static
+JAAS config file:</p>
+<ol class="arabic">
+<li><p class="first">Add a JAAS config file with a client login section named
+<code class="docutils literal"><span class="pre">KafkaClient</span></code>. Configure a login module in <code class="docutils literal"><span class="pre">KafkaClient</span></code>
+for the selected mechanism as described in the examples for
+setting up <a class="reference external" href="#security_sasl_kerberos_clientconfig">GSSAPI
+(Kerberos)</a>,
+<a class="reference external" href="#security_sasl_plain_clientconfig">PLAIN</a> or
+<a class="reference external" href="#security_sasl_scram_clientconfig">SCRAM</a>. For example,
+<a class="reference external" href="#security_sasl_gssapi_clientconfig">GSSAPI</a> credentials
+may be configured as:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span>    <span class="n">KafkaClient</span> <span class="p">{</span>
+    <span class="n">com</span><span class="o">.</span><span class="n">sun</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">auth</span><span class="o">.</span><span class="n">module</span><span class="o">.</span><span class="n">Krb5LoginModule</span> <span class="n">required</span>
+    <span class="n">useKeyTab</span><span class="o">=</span><span class="n">true</span>
+    <span class="n">storeKey</span><span class="o">=</span><span class="n">true</span>
+    <span class="n">keyTab</span><span class="o">=</span><span class="s2">&quot;/etc/security/keytabs/kafka_client.keytab&quot;</span>
+    <span class="n">principal</span><span class="o">=</span><span class="s2">&quot;kafka-client-1@EXAMPLE.COM&quot;</span><span class="p">;</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Pass the JAAS config file location as JVM parameter to each
+client JVM. For example:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">-</span><span class="n">Djava</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">auth</span><span class="o">.</span><span class="n">login</span><span class="o">.</span><span class="n">config</span><span class="o">=/</span><span class="n">etc</span><span class="o">/</span><span class="n">kafka</span><span class="o">/</span><span class="n">kafka_client_jaas</span><span class="o">.</span><span class="n">conf</span>
+</pre></div>
+</div>
+</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+</li>
+<li><p class="first rubric" id="sasl-configuration"><a class="reference external" href="#security_sasl_config">SASL configuration</a></p>
+<p>SASL may be used with PLAINTEXT or SSL as the transport layer using
+the security protocol SASL_PLAINTEXT or SASL_SSL respectively. If
+SASL_SSL is used, then <a class="reference external" href="#security_ssl">SSL must also be
+configured</a>.</p>
+<ol class="arabic">
+<li><p class="first rubric" id="sasl-mechanisms"><a class="reference external" href="#security_sasl_mechanism">SASL mechanisms</a></p>
+<p>Kafka supports the following SASL mechanisms:</p>
+<ul class="simple">
+<li><a class="reference external" href="#security_sasl_kerberos">GSSAPI</a> (Kerberos)</li>
+<li><a class="reference external" href="#security_sasl_plain">PLAIN</a></li>
+<li><a class="reference external" href="#security_sasl_scram">SCRAM-SHA-256</a></li>
+<li><a class="reference external" href="#security_sasl_scram">SCRAM-SHA-512</a></li>
+</ul>
+</li>
+<li><p class="first rubric" id="sasl-configuration-for-kafka-brokers"><a class="reference external" href="#security_sasl_brokerconfig">SASL configuration for Kafka
+brokers</a></p>
+<ol class="arabic">
+<li><p class="first">Configure a SASL port in server.properties, by adding at least
+one of SASL_PLAINTEXT or SASL_SSL to the <em>listeners</em> parameter,
+which contains one or more comma-separated values:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">listeners</span><span class="o">=</span><span class="n">SASL_PLAINTEXT</span><span class="p">:</span><span class="o">//</span><span class="n">host</span><span class="o">.</span><span class="n">name</span><span class="p">:</span><span class="n">port</span>
+</pre></div>
+</div>
+<p>If you are only configuring a SASL port (or if you want the
+Kafka brokers to authenticate each other using SASL) then make
+sure you set the same SASL protocol for inter-broker
+communication:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">security</span><span class="o">.</span><span class="n">inter</span><span class="o">.</span><span class="n">broker</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">SASL_PLAINTEXT</span> <span class="p">(</span><span class="ow">or</span> <span class="n">SASL_SSL</span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Select one or more <a class="reference external" href="#security_sasl_mechanism">supported
+mechanisms</a> to enable in the
+broker and follow the steps to configure SASL for the
+mechanism. To enable multiple mechanisms in the broker, follow
+the steps <a class="reference external" href="#security_sasl_multimechanism">here</a>.</p>
+</li>
+</ol>
+</li>
+<li><p class="first rubric" id="sasl-configuration-for-kafka-clients"><a class="reference external" href="#security_sasl_clientconfig">SASL configuration for Kafka
+clients</a></p>
+<p>SASL authentication is only supported for the new Java Kafka
+producer and consumer, the older API is not supported.</p>
+<p>To configure SASL authentication on the clients, select a SASL
+<a class="reference external" href="#security_sasl_mechanism">mechanism</a> that is enabled in the
+broker for client authentication and follow the steps to configure
+SASL for the selected mechanism.</p>
+</li>
+</ol>
+</li>
+<li><p class="first rubric" id="authentication-using-saslkerberos"><a class="reference external" href="#security_sasl_kerberos">Authentication using
+SASL/Kerberos</a></p>
+<ol class="arabic">
+<li><p class="first rubric" id="prerequisites"><a class="reference external" href="#security_sasl_kerberos_prereq">Prerequisites</a></p>
+<ol class="arabic">
+<li><p class="first"><strong>Kerberos</strong>
+If your organization is already using a Kerberos server (for
+example, by using Active Directory), there is no need to
+install a new server just for Kafka. Otherwise you will need to
+install one, your Linux vendor likely has packages for Kerberos
+and a short guide on how to install and configure it
+(<a class="reference external" href="https://help.ubuntu.com/community/Kerberos">Ubuntu</a>,
+<a class="reference external" href="https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html/Managing_Smart_Cards/installing-kerberos.html">Redhat</a>).
+Note that if you are using Oracle Java, you will need to
+download JCE policy files for your Java version and copy them
+to $JAVA_HOME/jre/lib/security.</p>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>Create Kerberos Principals</strong></div>
+<div class="line">If you are using the organization&#8217;s Kerberos or Active
+Directory server, ask your Kerberos administrator for a
+principal for each Kafka broker in your cluster and for every
+operating system user that will access Kafka with Kerberos
+authentication (via clients and tools). If you have installed
+your own Kerberos, you will need to create these principals
+yourself using the following commands:</div>
+</div>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">sbin</span><span class="o">/</span><span class="n">kadmin</span><span class="o">.</span><span class="n">local</span> <span class="o">-</span><span class="n">q</span> <span class="s1">&#39;addprinc -randkey kafka/</span><span class="si">{hostname}</span><span class="s1">@</span><span class="si">{REALM}</span><span class="s1">&#39;</span>
+<span class="n">sudo</span> <span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">sbin</span><span class="o">/</span><span class="n">kadmin</span><span class="o">.</span><span class="n">local</span> <span class="o">-</span><span class="n">q</span> <span class="s2">&quot;ktadd -k /etc/security/keytabs/</span><span class="si">{keytabname}</span><span class="s2">.keytab kafka/</span><span class="si">{hostname}</span><span class="s2">@</span><span class="si">{REALM}</span><span class="s2">&quot;</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first"><strong>Make sure all hosts can be reachable using hostnames</strong> - it
+is a Kerberos requirement that all your hosts can be resolved
+with their FQDNs.</p>
+</li>
+</ol>
+</li>
+<li><p class="first rubric" id="configuring-kafka-brokers-1"><a class="reference external" href="#security_sasl_kerberos_brokerconfig">Configuring Kafka
+Brokers</a></p>
+<ol class="arabic">
+<li><p class="first">Add a suitably modified JAAS file similar to the one below to
+each Kafka broker&#8217;s config directory, let&#8217;s call it
+kafka_server_jaas.conf for this example (note that each broker
+should have its own keytab):</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">KafkaServer</span> <span class="p">{</span>
+    <span class="n">com</span><span class="o">.</span><span class="n">sun</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">auth</span><span class="o">.</span><span class="n">module</span><span class="o">.</span><span class="n">Krb5LoginModule</span> <span class="n">required</span>
+    <span class="n">useKeyTab</span><span class="o">=</span><span class="n">true</span>
+    <span class="n">storeKey</span><span class="o">=</span><span class="n">true</span>
+    <span class="n">keyTab</span><span class="o">=</span><span class="s2">&quot;/etc/security/keytabs/kafka_server.keytab&quot;</span>
+    <span class="n">principal</span><span class="o">=</span><span class="s2">&quot;kafka/kafka1.hostname.com@EXAMPLE.COM&quot;</span><span class="p">;</span>
+<span class="p">};</span>
+
+<span class="o">//</span> <span class="n">Zookeeper</span> <span class="n">client</span> <span class="n">authentication</span>
+<span class="n">Client</span> <span class="p">{</span>
+<span class="n">com</span><span class="o">.</span><span class="n">sun</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">auth</span><span class="o">.</span><span class="n">module</span><span class="o">.</span><span class="n">Krb5LoginModule</span> <span class="n">required</span>
+<span class="n">useKeyTab</span><span class="o">=</span><span class="n">true</span>
+<span class="n">storeKey</span><span class="o">=</span><span class="n">true</span>
+<span class="n">keyTab</span><span class="o">=</span><span class="s2">&quot;/etc/security/keytabs/kafka_server.keytab&quot;</span>
+<span class="n">principal</span><span class="o">=</span><span class="s2">&quot;kafka/kafka1.hostname.com@EXAMPLE.COM&quot;</span><span class="p">;</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Pass the JAAS and optionally the krb5 file locations as JVM
+parameters to each Kafka broker (see
+<a class="reference external" href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a>
+for more details):</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="o">-</span><span class="n">Djava</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">krb5</span><span class="o">.</span><span class="n">conf</span><span class="o">=/</span><span class="n">etc</span><span class="o">/</span><span class="n">kafka</span><span class="o">/</span><span class="n">krb5</span><span class="o">.</span><span class="n">conf</span>
+    <span class="o">-</span><span class="n">Djava</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">auth</span><span class="o">.</span><span class="n">login</span><span class="o">.</span><span class="n">config</span><span class="o">=/</span><span class="n">etc</span><span class="o">/</span><span class="n">kafka</span><span class="o">/</span><span class="n">kafka_server_jaas</span><span class="o">.</span><span class="n">conf</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Make sure the keytabs configured in the JAAS file are readable
+by the operating system user who is starting kafka broker.</p>
+</li>
+<li><p class="first">Configure SASL port and SASL mechanisms in server.properties as
+described <a class="reference external" href="#security_sasl_brokerconfig">here</a>. For example:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">listeners</span><span class="o">=</span><span class="n">SASL_PLAINTEXT</span><span class="p">:</span><span class="o">//</span><span class="n">host</span><span class="o">.</span><span class="n">name</span><span class="p">:</span><span class="n">port</span>
+    <span class="n">security</span><span class="o">.</span><span class="n">inter</span><span class="o">.</span><span class="n">broker</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">SASL_PLAINTEXT</span>
+    <span class="n">sasl</span><span class="o">.</span><span class="n">mechanism</span><span class="o">.</span><span class="n">inter</span><span class="o">.</span><span class="n">broker</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">GSSAPI</span>
+    <span class="n">sasl</span><span class="o">.</span><span class="n">enabled</span><span class="o">.</span><span class="n">mechanisms</span><span class="o">=</span><span class="n">GSSAPI</span>
+</pre></div>
+</div>
+</li>
+</ol>
+</li>
+<li><p class="first rubric" id="configuring-kafka-clients-1"><a class="reference external" href="#security_kerberos_sasl_clientconfig">Configuring Kafka
+Clients</a></p>
+<p>To configure SASL authentication on the clients:</p>
+<ol class="arabic">
+<li><p class="first">Clients (producers, consumers, connect workers, etc) will
+authenticate to the cluster with their own principal (usually
+with the same name as the user running the client), so obtain
+or create these principals as needed. Then configure the JAAS
+configuration property for each client. Different clients
+within a JVM may run as different users by specifiying
+different principals. The property <code class="docutils literal"><span class="pre">sasl.jaas.config</span></code> in
+producer.properties or consumer.properties describes how
+clients like producer and consumer can connect to the Kafka
+Broker. The following is an example configuration for a client
+using a keytab (recommended for long-running processes):</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">sasl</span><span class="o">.</span><span class="n">jaas</span><span class="o">.</span><span class="n">config</span><span class="o">=</span><span class="n">com</span><span class="o">.</span><span class="n">sun</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">auth</span><span class="o">.</span><span class="n">module</span><span class="o">.</span><span class="n">Krb5LoginModule</span> <span class="n">required</span> \
+    <span class="n">useKeyTab</span><span class="o">=</span><span class="n">true</span> \
+    <span class="n">storeKey</span><span class="o">=</span><span class="n">true</span>  \
+    <span class="n">keyTab</span><span class="o">=</span><span class="s2">&quot;/etc/security/keytabs/kafka_client.keytab&quot;</span> \
+    <span class="n">principal</span><span class="o">=</span><span class="s2">&quot;kafka-client-1@EXAMPLE.COM&quot;</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>For command-line utilities like kafka-console-consumer or
+kafka-console-producer, kinit can be used along with
+&#8220;useTicketCache=true&#8221; as in:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">sasl</span><span class="o">.</span><span class="n">jaas</span><span class="o">.</span><span class="n">config</span><span class="o">=</span><span class="n">com</span><span class="o">.</span><span class="n">sun</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">auth</span><span class="o">.</span><span class="n">module</span><span class="o">.</span><span class="n">Krb5LoginModule</span> <span class="n">required</span> \
+    <span class="n">useTicketCache</span><span class="o">=</span><span class="n">true</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>JAAS configuration for clients may alternatively be specified
+as a JVM parameter similar to brokers as described
+<a class="reference external" href="#security_client_staticjaas">here</a>. Clients use the login
+section named <code class="docutils literal"><span class="pre">KafkaClient</span></code>. This option allows only one user
+for all client connections from a JVM.</p>
+</li>
+<li><p class="first">Make sure the keytabs configured in the JAAS configuration are
+readable by the operating system user who is starting kafka
+client.</p>
+</li>
+<li><p class="first">Optionally pass the krb5 file locations as JVM parameters to
+each client JVM (see
+<a class="reference external" href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/KerberosReq.html">here</a>
+for more details):</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="o">-</span><span class="n">Djava</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">krb5</span><span class="o">.</span><span class="n">conf</span><span class="o">=/</span><span class="n">etc</span><span class="o">/</span><span class="n">kafka</span><span class="o">/</span><span class="n">krb5</span><span class="o">.</span><span class="n">conf</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Configure the following properties in producer.properties or
+consumer.properties:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">security</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">SASL_PLAINTEXT</span> <span class="p">(</span><span class="ow">or</span> <span class="n">SASL_SSL</span><span class="p">)</span>
+<span class="n">sasl</span><span class="o">.</span><span class="n">mechanism</span><span class="o">=</span><span class="n">GSSAPI</span>
+<span class="n">sasl</span><span class="o">.</span><span class="n">kerberos</span><span class="o">.</span><span class="n">service</span><span class="o">.</span><span class="n">name</span><span class="o">=</span><span class="n">kafka</span>
+</pre></div>
+</div>
+</li>
+</ol>
+</li>
+</ol>
+</li>
+<li><p class="first rubric" id="authentication-using-saslplain"><a class="reference external" href="#security_sasl_plain">Authentication using
+SASL/PLAIN</a></p>
+<p>SASL/PLAIN is a simple username/password authentication mechanism
+that is typically used with TLS for encryption to implement secure
+authentication. Kafka supports a default implementation for
+SASL/PLAIN which can be extended for production use as described
+<a class="reference external" href="#security_sasl_plain_production">here</a>.</p>
+<p>The username is used as the authenticated <code class="docutils literal"><span class="pre">Principal</span></code> for
+configuration of ACLs etc.</p>
+<ol class="arabic">
+<li><p class="first rubric" id="configuring-kafka-brokers-2"><a class="reference external" href="#security_sasl_plain_brokerconfig">Configuring Kafka
+Brokers</a></p>
+<ol class="arabic">
+<li><p class="first">Add a suitably modified JAAS file similar to the one below to
+each Kafka broker&#8217;s config directory, let&#8217;s call it
+kafka_server_jaas.conf for this example:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">KafkaServer</span> <span class="p">{</span>
+    <span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">kafka</span><span class="o">.</span><span class="n">common</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">plain</span><span class="o">.</span><span class="n">PlainLoginModule</span> <span class="n">required</span>
+    <span class="n">username</span><span class="o">=</span><span class="s2">&quot;admin&quot;</span>
+    <span class="n">password</span><span class="o">=</span><span class="s2">&quot;admin-secret&quot;</span>
+    <span class="n">user_admin</span><span class="o">=</span><span class="s2">&quot;admin-secret&quot;</span>
+    <span class="n">user_alice</span><span class="o">=</span><span class="s2">&quot;alice-secret&quot;</span><span class="p">;</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+<p>This configuration defines two users (<em>admin</em> and <em>alice</em>). The
+properties <code class="docutils literal"><span class="pre">username</span></code> and <code class="docutils literal"><span class="pre">password</span></code> in the <code class="docutils literal"><span class="pre">KafkaServer</span></code>
+section are used by the broker to initiate connections to other
+brokers. In this example, <em>admin</em> is the user for inter-broker
+communication. The set of properties <code class="docutils literal"><span class="pre">user_userName</span></code> defines
+the passwords for all users that connect to the broker and the
+broker validates all client connections including those from
+other brokers using these properties.</p>
+</li>
+<li><p class="first">Pass the JAAS config file location as JVM parameter to each
+Kafka broker:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="o">-</span><span class="n">Djava</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">auth</span><span class="o">.</span><span class="n">login</span><span class="o">.</span><span class="n">config</span><span class="o">=/</span><span class="n">etc</span><span class="o">/</span><span class="n">kafka</span><span class="o">/</span><span class="n">kafka_server_jaas</span><span class="o">.</span><span class="n">conf</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Configure SASL port and SASL mechanisms in server.properties as
+described <a class="reference external" href="#security_sasl_brokerconfig">here</a>. For example:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">listeners</span><span class="o">=</span><span class="n">SASL_SSL</span><span class="p">:</span><span class="o">//</span><span class="n">host</span><span class="o">.</span><span class="n">name</span><span class="p">:</span><span class="n">port</span>
+    <span class="n">security</span><span class="o">.</span><span class="n">inter</span><span class="o">.</span><span class="n">broker</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">SASL_SSL</span>
+    <span class="n">sasl</span><span class="o">.</span><span class="n">mechanism</span><span class="o">.</span><span class="n">inter</span><span class="o">.</span><span class="n">broker</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">PLAIN</span>
+    <span class="n">sasl</span><span class="o">.</span><span class="n">enabled</span><span class="o">.</span><span class="n">mechanisms</span><span class="o">=</span><span class="n">PLAIN</span>
+</pre></div>
+</div>
+</li>
+</ol>
+</li>
+<li><p class="first rubric" id="configuring-kafka-clients-2"><a class="reference external" href="#security_sasl_plain_clientconfig">Configuring Kafka
+Clients</a></p>
+<p>To configure SASL authentication on the clients:</p>
+<ol class="arabic">
+<li><p class="first">Configure the JAAS configuration property for each client in
+producer.properties or consumer.properties. The login module
+describes how the clients like producer and consumer can
+connect to the Kafka Broker. The following is an example
+configuration for a client for the PLAIN mechanism:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">sasl</span><span class="o">.</span><span class="n">jaas</span><span class="o">.</span><span class="n">config</span><span class="o">=</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">kafka</span><span class="o">.</span><span class="n">common</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">plain</span><span class="o">.</span><span class="n">PlainLoginModule</span> <span class="n">required</span> \
+    <span class="n">username</span><span class="o">=</span><span class="s2">&quot;alice&quot;</span> \
+    <span class="n">password</span><span class="o">=</span><span class="s2">&quot;alice-secret&quot;</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>The options <code class="docutils literal"><span class="pre">username</span></code> and <code class="docutils literal"><span class="pre">password</span></code> are used by clients
+to configure the user for client connections. In this example,
+clients connect to the broker as user <em>alice</em>. Different
+clients within a JVM may connect as different users by
+specifying different user names and passwords in
+<code class="docutils literal"><span class="pre">sasl.jaas.config</span></code>.</p>
+<p>JAAS configuration for clients may alternatively be specified
+as a JVM parameter similar to brokers as described
+<a class="reference external" href="#security_client_staticjaas">here</a>. Clients use the login
+section named <code class="docutils literal"><span class="pre">KafkaClient</span></code>. This option allows only one user
+for all client connections from a JVM.</p>
+</li>
+<li><p class="first">Configure the following properties in producer.properties or
+consumer.properties:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">security</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">SASL_SSL</span>
+<span class="n">sasl</span><span class="o">.</span><span class="n">mechanism</span><span class="o">=</span><span class="n">PLAIN</span>
+</pre></div>
+</div>
+</li>
+</ol>
+</li>
+<li><p class="first rubric" id="use-of-saslplain-in-production"><a class="reference external" href="#security_sasl_plain_production">Use of SASL/PLAIN in
+production</a></p>
+<ul>
+<li><p class="first">SASL/PLAIN should be used only with SSL as transport layer to
+ensure that clear passwords are not transmitted on the wire
+without encryption.</p>
+</li>
+<li><p class="first">The default implementation of SASL/PLAIN in Kafka specifies
+usernames and passwords in the JAAS configuration file as shown
+<a class="reference external" href="#security_sasl_plain_brokerconfig">here</a>. To avoid storing
+passwords on disk, you can plug in your own implementation of
+<code class="docutils literal"><span class="pre">javax.security.auth.spi.LoginModule</span></code> that provides usernames
+and passwords from an external source. The login module
+implementation should provide username as the public credential
+and password as the private credential of the <code class="docutils literal"><span class="pre">Subject</span></code>. The
+default implementation
+<code class="docutils literal"><span class="pre">org.apache.kafka.common.security.plain.PlainLoginModule</span></code> can
+be used as an example.</p>
+</li>
+<li><p class="first">In production systems, external authentication servers may
+implement password authentication. Kafka brokers can be
+integrated with these servers by adding your own implementation
+of <code class="docutils literal"><span class="pre">javax.security.sasl.SaslServer</span></code>. The default
+implementation included in Kafka in the package
+<code class="docutils literal"><span class="pre">org.apache.kafka.common.security.plain</span></code> can be used as an
+example to get started.</p>
+<ul>
+<li><p class="first">New providers must be installed and registered in the JVM.
+Providers can be installed by adding provider classes to the
+normal <code class="docutils literal"><span class="pre">CLASSPATH</span></code> or bundled as a jar file and added to
+<code class="docutils literal"><span class="pre">JAVA_HOME/lib/ext</span></code>.</p>
+</li>
+<li><p class="first">Providers can be registered statically by adding a provider
+to the security properties file
+<code class="docutils literal"><span class="pre">JAVA_HOME/lib/security/java.security</span></code>.</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">security</span><span class="o">.</span><span class="n">provider</span><span class="o">.</span><span class="n">n</span><span class="o">=</span><span class="n">providerClassName</span>
+</pre></div>
+</div>
+<p>where <em>providerClassName</em> is the fully qualified name of the
+new provider and <em>n</em> is the preference order with lower
+numbers indicating higher preference.</p>
+</li>
+<li><p class="first">Alternatively, you can register providers dynamically at
+runtime by invoking <code class="docutils literal"><span class="pre">Security.addProvider</span></code> at the
+beginning of the client application or in a static
+initializer in the login module. For example:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">Security</span><span class="o">.</span><span class="n">addProvider</span><span class="p">(</span><span class="n">new</span> <span class="n">PlainSaslServerProvider</span><span class="p">());</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">For more details, see <a class="reference external" href="http://docs.oracle.com/javase/8/docs/technotes/guides/security/crypto/CryptoSpec.html">JCA
+Reference</a>.</p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ol>
+</li>
+<li><p class="first rubric" id="authentication-using-saslscram"><a class="reference external" href="#security_sasl_scram">Authentication using
+SASL/SCRAM</a></p>
+<p>Salted Challenge Response Authentication Mechanism (SCRAM) is a
+family of SASL mechanisms that addresses the security concerns with
+traditional mechanisms that perform username/password authentication
+like PLAIN and DIGEST-MD5. The mechanism is defined in <a class="reference external" href="https://tools.ietf.org/html/rfc5802">RFC
+5802</a>. Kafka supports
+<a class="reference external" href="https://tools.ietf.org/html/rfc7677">SCRAM-SHA-256</a> and
+SCRAM-SHA-512 which can be used with TLS to perform secure
+authentication. The username is used as the authenticated
+<code class="docutils literal"><span class="pre">Principal</span></code> for configuration of ACLs etc. The default SCRAM
+implementation in Kafka stores SCRAM credentials in Zookeeper and is
+suitable for use in Kafka installations where Zookeeper is on a
+private network. Refer to <a class="reference external" href="#security_sasl_scram_security">Security
+Considerations</a> for more details.</p>
+<ol class="arabic">
+<li><p class="first rubric" id="creating-scram-credentials"><a class="reference external" href="#security_sasl_scram_credentials">Creating SCRAM
+Credentials</a></p>
+<p>The SCRAM implementation in Kafka uses Zookeeper as credential
+store. Credentials can be created in Zookeeper using
+<code class="docutils literal"><span class="pre">kafka-configs.sh</span></code>. For each SCRAM mechanism enabled,
+credentials must be created by adding a config with the mechanism
+name. Credentials for inter-broker communication must be created
+before Kafka brokers are started. Client credentials may be
+created and updated dynamically and updated credentials will be
+used to authenticate new connections.</p>
+<p>Create SCRAM credentials for user <em>alice</em> with password
+<em>alice-secret</em>:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="nb">bin</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">configs</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">zookeeper</span> <span class="n">localhost</span><span class="p">:</span><span class="mi">2181</span> <span class="o">--</span><span class="n">alter</span> <span class="o">--</span><span class="n">add</span><span class="o">-</span><span class="n">config</span> <span class="s1">&#39;SCRAM-SHA-256=[iterations=8192,password=alice-secret],SCRAM-SHA-512=[password=alice-secret]&#39;</span> <span class="o">--</span><span class="n">entity</span><span class="o">-</span><span class="nb">type</span> <span class="n">users</span> <span class="o">--</span><span class="n">entity</span><span class="o">-</span><span class="n">name</span> <span class="n">alice</span>
+</pre></div>
+</div>
+<p>The default iteration count of 4096 is used if iterations are not
+specified. A random salt is created and the SCRAM identity
+consisting of salt, iterations, StoredKey and ServerKey are stored
+in Zookeeper. See <a class="reference external" href="https://tools.ietf.org/html/rfc5802">RFC
+5802</a> for details on SCRAM
+identity and the individual fields.</p>
+<p>The following examples also require a user <em>admin</em> for
+inter-broker communication which can be created using:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="nb">bin</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">configs</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">zookeeper</span> <span class="n">localhost</span><span class="p">:</span><span class="mi">2181</span> <span class="o">--</span><span class="n">alter</span> <span class="o">--</span><span class="n">add</span><span class="o">-</span><span class="n">config</span> <span class="s1">&#39;SCRAM-SHA-256=[password=admin-secret],SCRAM-SHA-512=[password=admin-secret]&#39;</span> <span class="o">--</span><span class="n">entity</span><span class="o">-</span><span class="nb">type</span> <span class="n">users</span> <span class="o">--</span><span class="n">entity</span><span class="o">-</span><span class="n">name</span> <span class="n">admin</span>
+</pre></div>
+</div>
+<p>Existing credentials may be listed using the <em>&#8211;describe</em> option:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="nb">bin</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">configs</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">zookeeper</span> <span class="n">localhost</span><span class="p">:</span><span class="mi">2181</span> <span class="o">--</span><span class="n">describe</span> <span class="o">--</span><span class="n">entity</span><span class="o">-</span><span class="nb">type</span> <span class="n">users</span> <span class="o">--</span><span class="n">entity</span><span class="o">-</span><span class="n">name</span> <span class="n">alice</span>
+</pre></div>
+</div>
+<p>Credentials may be deleted for one or more SCRAM mechanisms using
+the <em>&#8211;delete</em> option:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="nb">bin</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">configs</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">zookeeper</span> <span class="n">localhost</span><span class="p">:</span><span class="mi">2181</span> <span class="o">--</span><span class="n">alter</span> <span class="o">--</span><span class="n">delete</span><span class="o">-</span><span class="n">config</span> <span class="s1">&#39;SCRAM-SHA-512&#39;</span> <span class="o">--</span><span class="n">entity</span><span class="o">-</span><span class="nb">type</span> <span class="n">users</span> <span class="o">--</span><span class="n">entity</span><span class="o">-</span><span class="n">name</span> <span class="n">alice</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first rubric" id="configuring-kafka-brokers-3"><a class="reference external" href="#security_sasl_scram_brokerconfig">Configuring Kafka
+Brokers</a></p>
+<ol class="arabic">
+<li><p class="first">Add a suitably modified JAAS file similar to the one below to
+each Kafka broker&#8217;s config directory, let&#8217;s call it
+kafka_server_jaas.conf for this example:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">KafkaServer</span> <span class="p">{</span>
+    <span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">kafka</span><span class="o">.</span><span class="n">common</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">scram</span><span class="o">.</span><span class="n">ScramLoginModule</span> <span class="n">required</span>
+    <span class="n">username</span><span class="o">=</span><span class="s2">&quot;admin&quot;</span>
+    <span class="n">password</span><span class="o">=</span><span class="s2">&quot;admin-secret&quot;</span><span class="p">;</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+<p>The properties <code class="docutils literal"><span class="pre">username</span></code> and <code class="docutils literal"><span class="pre">password</span></code> in the
+<code class="docutils literal"><span class="pre">KafkaServer</span></code> section are used by the broker to initiate
+connections to other brokers. In this example, <em>admin</em> is the
+user for inter-broker communication.</p>
+</li>
+<li><p class="first">Pass the JAAS config file location as JVM parameter to each
+Kafka broker:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="o">-</span><span class="n">Djava</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">auth</span><span class="o">.</span><span class="n">login</span><span class="o">.</span><span class="n">config</span><span class="o">=/</span><span class="n">etc</span><span class="o">/</span><span class="n">kafka</span><span class="o">/</span><span class="n">kafka_server_jaas</span><span class="o">.</span><span class="n">conf</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Configure SASL port and SASL mechanisms in server.properties as
+described <a class="reference external" href="#security_sasl_brokerconfig">here</a>.</p>
+<p>For example:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">listeners</span><span class="o">=</span><span class="n">SASL_SSL</span><span class="p">:</span><span class="o">//</span><span class="n">host</span><span class="o">.</span><span class="n">name</span><span class="p">:</span><span class="n">port</span>
+<span class="n">security</span><span class="o">.</span><span class="n">inter</span><span class="o">.</span><span class="n">broker</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">SASL_SSL</span>
+<span class="n">sasl</span><span class="o">.</span><span class="n">mechanism</span><span class="o">.</span><span class="n">inter</span><span class="o">.</span><span class="n">broker</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">SCRAM</span><span class="o">-</span><span class="n">SHA</span><span class="o">-</span><span class="mi">256</span> <span class="p">(</span><span class="ow">or</span> <span class="n">SCRAM</span><span class="o">-</span><span class="n">SHA</span><span class="o">-</span><span class="mi">512</span><span class="p">)</span>
+<span class="n">sasl</span><span class="o">.</span><span class="n">enabled</span><span class="o">.</span><span class="n">mechanisms</span><span class="o">=</span><span class="n">SCRAM</span><span class="o">-</span><span class="n">SHA</span><span class="o">-</span><span class="mi">256</span> <span class="p">(</span><span class="ow">or</span> <span class="n">SCRAM</span><span class="o">-</span><span class="n">SHA</span><span class="o">-</span><span class="mi">512</span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+</ol>
+</li>
+<li><p class="first rubric" id="configuring-kafka-clients-3"><a class="reference external" href="#security_sasl_scram_clientconfig">Configuring Kafka
+Clients</a></p>
+<p>To configure SASL authentication on the clients:</p>
+<ol class="arabic">
+<li><p class="first">Configure the JAAS configuration property for each client in
+producer.properties or consumer.properties. The login module
+describes how the clients like producer and consumer can
+connect to the Kafka Broker. The following is an example
+configuration for a client for the SCRAM mechanisms:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">sasl</span><span class="o">.</span><span class="n">jaas</span><span class="o">.</span><span class="n">config</span><span class="o">=</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">kafka</span><span class="o">.</span><span class="n">common</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">scram</span><span class="o">.</span><span class="n">ScramLoginModule</span> <span class="n">required</span> \
+     <span class="n">username</span><span class="o">=</span><span class="s2">&quot;alice&quot;</span> \
+     <span class="n">password</span><span class="o">=</span><span class="s2">&quot;alice-secret&quot;</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>The options <code class="docutils literal"><span class="pre">username</span></code> and <code class="docutils literal"><span class="pre">password</span></code> are used by clients
+to configure the user for client connections. In this example,
+clients connect to the broker as user <em>alice</em>. Different
+clients within a JVM may connect as different users by
+specifying different user names and passwords in
+<code class="docutils literal"><span class="pre">sasl.jaas.config</span></code>.</p>
+<p>JAAS configuration for clients may alternatively be specified
+as a JVM parameter similar to brokers as described
+<a class="reference external" href="#security_client_staticjaas">here</a>. Clients use the login
+section named <code class="docutils literal"><span class="pre">KafkaClient</span></code>. This option allows only one user
+for all client connections from a JVM.</p>
+</li>
+<li><p class="first">Configure the following properties in producer.properties or
+consumer.properties:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">security</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">SASL_SSL</span>
+<span class="n">sasl</span><span class="o">.</span><span class="n">mechanism</span><span class="o">=</span><span class="n">SCRAM</span><span class="o">-</span><span class="n">SHA</span><span class="o">-</span><span class="mi">256</span> <span class="p">(</span><span class="ow">or</span> <span class="n">SCRAM</span><span class="o">-</span><span class="n">SHA</span><span class="o">-</span><span class="mi">512</span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+</ol>
+</li>
+<li><p class="first rubric" id="security-considerations-for-saslscram"><a class="reference external" href="#security_sasl_scram_security">Security Considerations for
+SASL/SCRAM</a></p>
+<ul class="simple">
+<li>The default implementation of SASL/SCRAM in Kafka stores SCRAM
+credentials in Zookeeper. This is suitable for production use
+in installations where Zookeeper is secure and on a private
+network.</li>
+<li>Kafka supports only the strong hash functions SHA-256 and
+SHA-512 with a minimum iteration count of 4096. Strong hash
+functions combined with strong passwords and high iteration
+counts protect against brute force attacks if Zookeeper
+security is compromised.</li>
+<li>SCRAM should be used only with TLS-encryption to prevent
+interception of SCRAM exchanges. This protects against
+dictionary or brute force attacks and against impersonation if
+Zookeeper is compromised.</li>
+<li>The default SASL/SCRAM implementation may be overridden using
+custom login modules in installations where Zookeeper is not
+secure. See <a class="reference external" href="#security_sasl_plain_production">here</a> for
+details.</li>
+<li>For more details on security considerations, refer to <a class="reference external" href="https://tools.ietf.org/html/rfc5802#section-9">RFC
+5802</a>.</li>
+</ul>
+</li>
+</ol>
+</li>
+<li><p class="first rubric" id="enabling-multiple-sasl-mechanisms-in-a-broker"><a class="reference external" href="#security_sasl_multimechanism">Enabling multiple SASL mechanisms in a
+broker</a></p>
+<ol class="arabic">
+<li><p class="first">Specify configuration for the login modules of all enabled
+mechanisms in the <code class="docutils literal"><span class="pre">KafkaServer</span></code> section of the JAAS config file.
+For example:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">KafkaServer</span> <span class="p">{</span>
+    <span class="n">com</span><span class="o">.</span><span class="n">sun</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">auth</span><span class="o">.</span><span class="n">module</span><span class="o">.</span><span class="n">Krb5LoginModule</span> <span class="n">required</span>
+    <span class="n">useKeyTab</span><span class="o">=</span><span class="n">true</span>
+    <span class="n">storeKey</span><span class="o">=</span><span class="n">true</span>
+    <span class="n">keyTab</span><span class="o">=</span><span class="s2">&quot;/etc/security/keytabs/kafka_server.keytab&quot;</span>
+    <span class="n">principal</span><span class="o">=</span><span class="s2">&quot;kafka/kafka1.hostname.com@EXAMPLE.COM&quot;</span><span class="p">;</span>
+
+    <span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">kafka</span><span class="o">.</span><span class="n">common</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">plain</span><span class="o">.</span><span class="n">PlainLoginModule</span> <span class="n">required</span>
+    <span class="n">username</span><span class="o">=</span><span class="s2">&quot;admin&quot;</span>
+    <span class="n">password</span><span class="o">=</span><span class="s2">&quot;admin-secret&quot;</span>
+    <span class="n">user_admin</span><span class="o">=</span><span class="s2">&quot;admin-secret&quot;</span>
+    <span class="n">user_alice</span><span class="o">=</span><span class="s2">&quot;alice-secret&quot;</span><span class="p">;</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Enable the SASL mechanisms in server.properties:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">sasl</span><span class="o">.</span><span class="n">enabled</span><span class="o">.</span><span class="n">mechanisms</span><span class="o">=</span><span class="n">GSSAPI</span><span class="p">,</span><span class="n">PLAIN</span><span class="p">,</span><span class="n">SCRAM</span><span class="o">-</span><span class="n">SHA</span><span class="o">-</span><span class="mi">256</span><span class="p">,</span><span class="n">SCRAM</span><span class="o">-</span><span class="n">SHA</span><span class="o">-</span><span class="mi">512</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Specify the SASL security protocol and mechanism for inter-broker
+communication in server.properties if required:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">security</span><span class="o">.</span><span class="n">inter</span><span class="o">.</span><span class="n">broker</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">SASL_PLAINTEXT</span> <span class="p">(</span><span class="ow">or</span> <span class="n">SASL_SSL</span><span class="p">)</span>
+<span class="n">sasl</span><span class="o">.</span><span class="n">mechanism</span><span class="o">.</span><span class="n">inter</span><span class="o">.</span><span class="n">broker</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">GSSAPI</span> <span class="p">(</span><span class="ow">or</span> <span class="n">one</span> <span class="n">of</span> <span class="n">the</span> <span class="n">other</span> <span class="n">enabled</span> <span class="n">mechanisms</span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Follow the mechanism-specific steps in <a class="reference external" href="#security_sasl_kerberos_brokerconfig">GSSAPI
+(Kerberos)</a>,
+<a class="reference external" href="#security_sasl_plain_brokerconfig">PLAIN</a> and
+<a class="reference external" href="#security_sasl_scram_brokerconfig">SCRAM</a> to configure SASL
+for the enabled mechanisms.</p>
+</li>
+</ol>
+</li>
+<li><p class="first rubric" id="modifying-sasl-mechanism-in-a-running-cluster"><a class="reference external" href="#saslmechanism_rolling_upgrade">Modifying SASL mechanism in a Running
+Cluster</a></p>
+<p>SASL mechanism can be modified in a running cluster using the
+following sequence:</p>
+<ol class="arabic simple">
+<li>Enable new SASL mechanism by adding the mechanism to
+<code class="docutils literal"><span class="pre">sasl.enabled.mechanisms</span></code> in server.properties for each broker.
+Update JAAS config file to include both mechanisms as described
+<a class="reference external" href="#security_sasl_multimechanism">here</a>. Incrementally bounce the
+cluster nodes.</li>
+<li>Restart clients using the new mechanism.</li>
+<li>To change the mechanism of inter-broker communication (if this is
+required), set <code class="docutils literal"><span class="pre">sasl.mechanism.inter.broker.protocol</span></code> in
+server.properties to the new mechanism and incrementally bounce
+the cluster again.</li>
+<li>To remove old mechanism (if this is required), remove the old
+mechanism from <code class="docutils literal"><span class="pre">sasl.enabled.mechanisms</span></code> in server.properties
+and remove the entries for the old mechanism from JAAS config
+file. Incrementally bounce the cluster again.</li>
+</ol>
+</li>
+</ol>
+</div>
+<div class="section" id="authorization-and-acls">
+<h2><a class="reference external" href="#security_authz">7.4 Authorization and ACLs</a><a class="headerlink" href="#authorization-and-acls" title="Permalink to this headline">¶</a></h2>
+<p>Kafka ships with a pluggable Authorizer and an out-of-box authorizer
+implementation that uses zookeeper to store all the acls. The Authorizer
+is configured by setting <code class="docutils literal"><span class="pre">authorizer.class.name</span></code> in server.properties.
+To enable the out of the box implementation use:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">authorizer</span><span class="o">.</span><span class="n">class</span><span class="o">.</span><span class="n">name</span><span class="o">=</span><span class="n">kafka</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">auth</span><span class="o">.</span><span class="n">SimpleAclAuthorizer</span>
+</pre></div>
+</div>
+<p>Kafka acls are defined in the general format of &#8220;Principal P is
+[Allowed/Denied] Operation O From Host H On Resource R&#8221;. You can read
+more about the acl structure on KIP-11. In order to add, remove or list
+acls you can use the Kafka authorizer CLI. By default, if a Resource R
+has no associated acls, no one other than super users is allowed to
+access R. If you want to change that behavior, you can include the
+following in server.properties.</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">allow</span><span class="o">.</span><span class="n">everyone</span><span class="o">.</span><span class="k">if</span><span class="o">.</span><span class="n">no</span><span class="o">.</span><span class="n">acl</span><span class="o">.</span><span class="n">found</span><span class="o">=</span><span class="n">true</span>
+</pre></div>
+</div>
+<p>One can also add super users in server.properties like the following
+(note that the delimiter is semicolon since SSL user names may contain
+comma).</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="nb">super</span><span class="o">.</span><span class="n">users</span><span class="o">=</span><span class="n">User</span><span class="p">:</span><span class="n">Bob</span><span class="p">;</span><span class="n">User</span><span class="p">:</span><span class="n">Alice</span>
+</pre></div>
+</div>
+<p>By default, the SSL user name will be of the form
+&#8220;CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown&#8221;. One
+can change that by setting a customized PrincipalBuilder in
+server.properties like the following.</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">principal</span><span class="o">.</span><span class="n">builder</span><span class="o">.</span><span class="n">class</span><span class="o">=</span><span class="n">CustomizedPrincipalBuilderClass</span>
+</pre></div>
+</div>
+<p>By default, the SASL user name will be the primary part of the Kerberos
+principal. One can change that by setting
+<code class="docutils literal"><span class="pre">sasl.kerberos.principal.to.local.rules</span></code> to a customized rule in
+server.properties. The format of
+<code class="docutils literal"><span class="pre">sasl.kerberos.principal.to.local.rules</span></code> is a list where each rule
+works in the same way as the auth_to_local in <a class="reference external" href="http://web.mit.edu/Kerberos/krb5-latest/doc/admin/conf_files/krb5_conf.html">Kerberos configuration
+file
+(krb5.conf)</a>.
+This also support additional lowercase rule, to force the translated
+result to be all lower case. This is done by adding a &#8220;/L&#8221; to the end of
+the rule. check below formats for syntax. Each rules starts with RULE:
+and contains an expression as the following formats. See the kerberos
+documentation for more details.</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">RULE</span><span class="p">:[</span><span class="n">n</span><span class="p">:</span><span class="n">string</span><span class="p">](</span><span class="n">regexp</span><span class="p">)</span><span class="n">s</span><span class="o">/</span><span class="n">pattern</span><span class="o">/</span><span class="n">replacement</span><span class="o">/</span>
+<span class="n">RULE</span><span class="p">:[</span><span class="n">n</span><span class="p">:</span><span class="n">string</span><span class="p">](</span><span class="n">regexp</span><span class="p">)</span><span class="n">s</span><span class="o">/</span><span class="n">pattern</span><span class="o">/</span><span class="n">replacement</span><span class="o">/</span><span class="n">g</span>
+<span class="n">RULE</span><span class="p">:[</span><span class="n">n</span><span class="p">:</span><span class="n">string</span><span class="p">](</span><span class="n">regexp</span><span class="p">)</span><span class="n">s</span><span class="o">/</span><span class="n">pattern</span><span class="o">/</span><span class="n">replacement</span><span class="o">//</span><span class="n">L</span>
+<span class="n">RULE</span><span class="p">:[</span><span class="n">n</span><span class="p">:</span><span class="n">string</span><span class="p">](</span><span class="n">regexp</span><span class="p">)</span><span class="n">s</span><span class="o">/</span><span class="n">pattern</span><span class="o">/</span><span class="n">replacement</span><span class="o">/</span><span class="n">g</span><span class="o">/</span><span class="n">L</span>
+</pre></div>
+</div>
+<p>An example of adding a rule to properly translate <a class="reference external" href="mailto:user&#37;&#52;&#48;MYDOMAIN&#46;COM">user<span>&#64;</span>MYDOMAIN<span>&#46;</span>COM</a> to
+user while also keeping the default rule in place is:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>sasl.kerberos.principal.to.local.rules=RULE:[1:$1@$0](.*@MYDOMAIN.COM)s/@.*//,DEFAULT
+</pre></div>
+</div>
+<div class="section" id="command-line-interface">
+<h3><a class="reference external" href="#security_authz_cli">Command Line Interface</a><a class="headerlink" href="#command-line-interface" title="Permalink to this headline">¶</a></h3>
+<p>Kafka Authorization management CLI can be found under bin directory with
+all the other CLIs. The CLI script is called <strong>kafka-acls.sh</strong>.
+Following lists all the options that the script supports:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="25%" />
+<col width="25%" />
+<col width="25%" />
+<col width="25%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Option</th>
+<th class="head">Description</th>
+<th class="head">Default</th>
+<th class="head">Option type</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>&#8211;add</td>
+<td>Indicates to
+the script that
+user is trying
+to add an acl.</td>
+<td>&nbsp;</td>
+<td>Action</td>
+</tr>
+<tr class="row-odd"><td>&#8211;remove</td>
+<td>Indicates to
+the script that
+user is trying
+to remove an
+acl.</td>
+<td>&nbsp;</td>
+<td>Action</td>
+</tr>
+<tr class="row-even"><td>&#8211;list</td>
+<td>Indicates to
+the script that
+user is trying
+to list acls.</td>
+<td>&nbsp;</td>
+<td>Action</td>
+</tr>
+<tr class="row-odd"><td>&#8211;authorizer</td>
+<td>Fully qualified
+class name of
+the authorizer.</td>
+<td>kafka.security.
+auth.SimpleAclA
+uthorizer</td>
+<td>Configuration</td>
+</tr>
+<tr class="row-even"><td>&#8211;authorizer-pr
+operties</td>
+<td>key=val pairs
+that will be
+passed to
+authorizer for
+initialization.
+For the default
+authorizer the
+example values
+are:
+zookeeper.conne
+ct=localhost:21
+81</td>
+<td>&nbsp;</td>
+<td>Configuration</td>
+</tr>
+<tr class="row-odd"><td>&#8211;cluster</td>
+<td>Specifies
+cluster as
+resource.</td>
+<td>&nbsp;</td>
+<td>Resource</td>
+</tr>
+<tr class="row-even"><td>&#8211;topic
+[topic-name]</td>
+<td>Specifies the
+topic as
+resource.</td>
+<td>&nbsp;</td>
+<td>Resource</td>
+</tr>
+<tr class="row-odd"><td>&#8211;group
+[group-name]</td>
+<td>Specifies the
+consumer-group
+as resource.</td>
+<td>&nbsp;</td>
+<td>Resource</td>
+</tr>
+<tr class="row-even"><td>&#8211;allow-princip
+al</td>
+<td>Principal is in
+PrincipalType:n
+ame
+format that
+will be added
+to ACL with
+Allow
+permission.
+You can specify
+multiple
+&#8211;allow-princip
+al
+in a single
+command.</td>
+<td>&nbsp;</td>
+<td>Principal</td>
+</tr>
+<tr class="row-odd"><td>&#8211;deny-principa
+l</td>
+<td>Principal is in
+PrincipalType:n
+ame
+format that
+will be added
+to ACL with
+Deny
+permission.
+You can specify
+multiple
+&#8211;deny-principa
+l
+in a single
+command.</td>
+<td>&nbsp;</td>
+<td>Principal</td>
+</tr>
+<tr class="row-even"><td>&#8211;allow-host</td>
+<td>IP address from
+which
+principals
+listed in
+&#8211;allow-princip
+al
+will have
+access.</td>
+<td>if
+&#8211;allow-princip
+al
+is specified
+defaults to *
+which
+translates to
+&#8220;all hosts&#8221;</td>
+<td>Host</td>
+</tr>
+<tr class="row-odd"><td>&#8211;deny-host</td>
+<td>IP address from
+which
+principals
+listed in
+&#8211;deny-principa
+l
+will be denied
+access.</td>
+<td>if
+&#8211;deny-principa
+l
+is specified
+defaults to *
+which
+translates to
+&#8220;all hosts&#8221;</td>
+<td>Host</td>
+</tr>
+<tr class="row-even"><td>&#8211;operation</td>
+<td>Operation that
+will be allowed
+or denied.
+Valid values
+are : Read,
+Write, Create,
+Delete, Alter,
+Describe,
+ClusterAction,
+All</td>
+<td>All</td>
+<td>Operation</td>
+</tr>
+<tr class="row-odd"><td>&#8211;producer</td>
+<td>Convenience
+option to
+add/remove acls
+for producer
+role. This will
+generate acls
+that allows
+WRITE, DESCRIBE
+on topic and
+CREATE on
+cluster.</td>
+<td>&nbsp;</td>
+<td>Convenience</td>
+</tr>
+<tr class="row-even"><td>&#8211;consumer</td>
+<td>Convenience
+option to
+add/remove acls
+for consumer
+role. This will
+generate acls
+that allows
+READ, DESCRIBE
+on topic and
+READ on
+consumer-group.</td>
+<td>&nbsp;</td>
+<td>Convenience</td>
+</tr>
+<tr class="row-odd"><td>&#8211;force</td>
+<td>Convenience
+option to
+assume yes to
+all queries and
+do not prompt.</td>
+<td>&nbsp;</td>
+<td>Convenience</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="examples">
+<h3><a class="reference external" href="#security_authz_examples">Examples</a><a class="headerlink" href="#examples" title="Permalink to this headline">¶</a></h3>
+<ul>
+<li><div class="first line-block">
+<div class="line"><strong>Adding Acls</strong></div>
+<div class="line">Suppose you want to add an acl &#8220;Principals User:Bob and User:Alice
+are allowed to perform Operation Read and Write on Topic Test-Topic
+from IP 198.51.100.0 and IP 198.51.100.1&#8221;. You can do that by
+executing the CLI with following options:</div>
+</div>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="nb">bin</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">acls</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">authorizer</span><span class="o">-</span><span class="n">properties</span> <span class="n">zookeeper</span><span class="o">.</span><span class="n">connect</span><span class="o">=</span><span class="n">localhost</span><span class="p">:</span><span class="mi">2181</span> <span class="o">--</span><span class="n">add</span> <span class="o">--</span><span class="n">allow</span><span class="o">-</span><span class="n">principal</span> <span class="n">User</span><span class="p">:</span><span class="n">Bob</span> <span class="o">--</span><span class="n">allow</span><span class="o">-</span><span class="n">principal</span> <span class="n">User</span><span class="p">:</span><span class="n">Alice</span> <span class="o">--</span><span class="n">allow</span><span class="o">-</span><span class="n">host</span> <span class="mf">198.51</span><span class="o">.</span><span class="mf">100.0</span> <span class="o">--</span><span class="n">allow</span><span class="o">-</span><span class="n">host</span> <span class="mf">198.51</span><span class="o">.</span><span class="mf">100.1</span> <span class="o">--</span><span class="n">operation</span> <span class="n">Read</span> <span class="o">--</span><span class="n">operation</span> <span class="n">Write</span> <span class="o">--</span><span class="n">topic</span> <span class="n">Test</span><span class="o">-</span><span class="n">topic</span>
+</pre></div>
+</div>
+<p>By default, all principals that don&#8217;t have an explicit acl that
+allows access for an operation to a resource are denied. In rare
+cases where an allow acl is defined that allows access to all but
+some principal we will have to use the &#8211;deny-principal and
+&#8211;deny-host option. For example, if we want to allow all users to
+Read from Test-topic but only deny User:BadBob from IP 198.51.100.3
+we can do so using following commands:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="nb">bin</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">acls</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">authorizer</span><span class="o">-</span><span class="n">properties</span> <span class="n">zookeeper</span><span class="o">.</span><span class="n">connect</span><span class="o">=</span><span class="n">localhost</span><span class="p">:</span><span class="mi">2181</span> <span class="o">--</span><span class="n">add</span> <span class="o">--</span><span class="n">allow</span><span class="o">-</span><span class="n">principal</span> <span class="n">User</span><span class="p">:</span><span class="o">*</span> <span class="o">--</span><span class="n">allow</span><span class="o">-</span><span class="n">host</span> <span class="o">*</span> <span class="o">--</span><span class="n">deny</span><span class="o">-</span><span class="n">principal</span> <span class="n">User</span><span class="p">:</span><span class="n">BadBob</span> <span class="o">--</span><span class="n">deny</span><span class="o">-</span><span class="n">host</span> <span class="mf">198.51</span><span class="o">.</span><span class="mf">100.3</span> <span class="o">--</span><span class="n">operation</span> <span class="n">Read</span> <span class="o">--</span><span class="n">topic</span> <span class="n">Test</span><span class="o">-</span><span class="n">topic</span>
+</pre></div>
+</div>
+<p>Note that ``&#8211;allow-host`` and ``deny-host`` only support IP
+addresses (hostnames are not supported). Above examples add acls to a
+topic by specifying &#8211;topic [topic-name] as the resource option.
+Similarly user can add acls to cluster by specifying &#8211;cluster and to
+a consumer group by specifying &#8211;group [group-name].</p>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>Removing Acls</strong></div>
+<div class="line">Removing acls is pretty much the same. The only difference is
+instead of &#8211;add option users will have to specify &#8211;remove option.
+To remove the acls added by the first example above we can execute
+the CLI with following options:</div>
+</div>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="nb">bin</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">acls</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">authorizer</span><span class="o">-</span><span class="n">properties</span> <span class="n">zookeeper</span><span class="o">.</span><span class="n">connect</span><span class="o">=</span><span class="n">localhost</span><span class="p">:</span><span class="mi">2181</span> <span class="o">--</span><span class="n">remove</span> <span class="o">--</span><span class="n">allow</span><span class="o">-</span><span class="n">principal</span> <span class="n">User</span><span class="p">:</span><span class="n">Bob</span> <span class="o">--</span><span class="n">allow</span><span class="o">-</span><span class="n">principal</span> <span class="n">User</span><span class="p">:</span><span class="n">Alice</span> <span class="o">--</span><span class="n">allow</span><span class="o">-</span><span class="n">host</span> <span class="mf">198.51</span><span class="o">.</span><span class="mf">100.0</span> <span class="o">--</span><span class="n">allow</span><span class="o">-</span><span class="n">host</span> <span class="mf">198.51</span><span class="o">.</span><span class="mf">100.1</span> <span class="o">--</span><span class="n">operation</span> <span class="n">Read</span> <span class="o">--</span><span class="n">operation</span> <span class="n">Write</span> <span class="o">--</span><span class="n">topic</span> <span class="n">Test</span><span class="o">-</span><span class="n">topic</span>
+</pre></div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>List Acls</strong></div>
+<div class="line">We can list acls for any resource by specifying the &#8211;list option
+with the resource. To list all acls for Test-topic we can execute
+the CLI with following options:</div>
+</div>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="nb">bin</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">acls</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">authorizer</span><span class="o">-</span><span class="n">properties</span> <span class="n">zookeeper</span><span class="o">.</span><span class="n">connect</span><span class="o">=</span><span class="n">localhost</span><span class="p">:</span><span class="mi">2181</span> <span class="o">--</span><span class="nb">list</span> <span class="o">--</span><span class="n">topic</span> <span class="n">Test</span><span class="o">-</span><span class="n">topic</span>
+</pre></div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>Adding or removing a principal as producer or consumer</strong></div>
+<div class="line">The most common use case for acl management are adding/removing a
+principal as producer or consumer so we added convenience options
+to handle these cases. In order to add User:Bob as a producer of
+Test-topic we can execute the following command:</div>
+</div>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="nb">bin</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">acls</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">authorizer</span><span class="o">-</span><span class="n">properties</span> <span class="n">zookeeper</span><span class="o">.</span><span class="n">connect</span><span class="o">=</span><span class="n">localhost</span><span class="p">:</span><span class="mi">2181</span> <span class="o">--</span><span class="n">add</span> <span class="o">--</span><span class="n">allow</span><span class="o">-</span><span class="n">principal</span> <span class="n">User</span><span class="p">:</span><span class="n">Bob</span> <span class="o">--</span><span class="n">producer</span> <span class="o">--</span><span class="n">topic</span> <span class="n">Test</span><span class="o">-</span><span class="n">topic</span>
+</pre></div>
+</div>
+<p>Similarly to add Alice as a consumer of Test-topic with consumer
+group Group-1 we just have to pass &#8211;consumer option:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="nb">bin</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">acls</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">authorizer</span><span class="o">-</span><span class="n">properties</span> <span class="n">zookeeper</span><span class="o">.</span><span class="n">connect</span><span class="o">=</span><span class="n">localhost</span><span class="p">:</span><span class="mi">2181</span> <span class="o">--</span><span class="n">add</span> <span class="o">--</span><span class="n">allow</span><span class="o">-</span><span class="n">principal</span> <span class="n">User</span><span class="p">:</span><span class="n">Bob</span> <span class="o">--</span><span class="n">consumer</span> <span class="o">--</span><span class="n">topic</span> <span class="n">Test</span><span class="o">-</span><span class="n">topic</span> <span class="o">--</span><span class="n">group</span> <span class="n">Group</span><span class="o">-</span><span class="mi">1</span>
+</pre></div>
+</div>
+<p>Note that for consumer option we must also specify the consumer
+group. In order to remove a principal from producer or consumer role
+we just need to pass &#8211;remove option.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="section" id="incorporating-security-features-in-a-running-cluster">
+<h2><a class="reference external" href="#security_rolling_upgrade">7.5 Incorporating Security Features in a Running Cluster</a><a class="headerlink" href="#incorporating-security-features-in-a-running-cluster" title="Permalink to this headline">¶</a></h2>
+<p>You can secure a running cluster via one or more of the supported
+protocols discussed previously. This is done in phases:</p>
+<ul class="simple">
+<li>Incrementally bounce the cluster nodes to open additional secured
+port(s).</li>
+<li>Restart clients using the secured rather than PLAINTEXT port
+(assuming you are securing the client-broker connection).</li>
+<li>Incrementally bounce the cluster again to enable broker-to-broker
+security (if this is required)</li>
+<li>A final incremental bounce to close the PLAINTEXT port.</li>
+</ul>
+<p>The specific steps for configuring SSL and SASL are described in
+sections <a class="reference external" href="#security_ssl">7.2</a> and <a class="reference external" href="#security_sasl">7.3</a>. Follow
+these steps to enable security for your desired protocol(s).</p>
+<p>The security implementation lets you configure different protocols for
+both broker-client and broker-broker communication. These must be
+enabled in separate bounces. A PLAINTEXT port must be left open
+throughout so brokers and/or clients can continue to communicate.</p>
+<p>When performing an incremental bounce stop the brokers cleanly via a
+SIGTERM. It&#8217;s also good practice to wait for restarted replicas to
+return to the ISR list before moving onto the next node.</p>
+<p>As an example, say we wish to encrypt both broker-client and
+broker-broker communication with SSL. In the first incremental bounce, a
+SSL port is opened on each node:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">listeners</span><span class="o">=</span><span class="n">PLAINTEXT</span><span class="p">:</span><span class="o">//</span><span class="n">broker1</span><span class="p">:</span><span class="mi">9091</span><span class="p">,</span><span class="n">SSL</span><span class="p">:</span><span class="o">//</span><span class="n">broker1</span><span class="p">:</span><span class="mi">9092</span>
+</pre></div>
+</div>
+<p>We then restart the clients, changing their config to point at the newly
+opened, secured port:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">bootstrap</span><span class="o">.</span><span class="n">servers</span> <span class="o">=</span> <span class="p">[</span><span class="n">broker1</span><span class="p">:</span><span class="mi">9092</span><span class="p">,</span><span class="o">...</span><span class="p">]</span>
+<span class="n">security</span><span class="o">.</span><span class="n">protocol</span> <span class="o">=</span> <span class="n">SSL</span>
+<span class="o">...</span><span class="n">etc</span>
+</pre></div>
+</div>
+<p>In the second incremental server bounce we instruct Kafka to use SSL as
+the broker-broker protocol (which will use the same SSL port):</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">listeners</span><span class="o">=</span><span class="n">PLAINTEXT</span><span class="p">:</span><span class="o">//</span><span class="n">broker1</span><span class="p">:</span><span class="mi">9091</span><span class="p">,</span><span class="n">SSL</span><span class="p">:</span><span class="o">//</span><span class="n">broker1</span><span class="p">:</span><span class="mi">9092</span>
+<span class="n">security</span><span class="o">.</span><span class="n">inter</span><span class="o">.</span><span class="n">broker</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">SSL</span>
+</pre></div>
+</div>
+<p>In the final bounce we secure the cluster by closing the PLAINTEXT port:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">listeners</span><span class="o">=</span><span class="n">SSL</span><span class="p">:</span><span class="o">//</span><span class="n">broker1</span><span class="p">:</span><span class="mi">9092</span>
+<span class="n">security</span><span class="o">.</span><span class="n">inter</span><span class="o">.</span><span class="n">broker</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">SSL</span>
+</pre></div>
+</div>
+<p>Alternatively we might choose to open multiple ports so that different
+protocols can be used for broker-broker and broker-client communication.
+Say we wished to use SSL encryption throughout (i.e. for broker-broker
+and broker-client communication) but we&#8217;d like to add SASL
+authentication to the broker-client connection also. We would achieve
+this by opening two additional ports during the first bounce:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">listeners</span><span class="o">=</span><span class="n">PLAINTEXT</span><span class="p">:</span><span class="o">//</span><span class="n">broker1</span><span class="p">:</span><span class="mi">9091</span><span class="p">,</span><span class="n">SSL</span><span class="p">:</span><span class="o">//</span><span class="n">broker1</span><span class="p">:</span><span class="mi">9092</span><span class="p">,</span><span class="n">SASL_SSL</span><span class="p">:</span><span class="o">//</span><span class="n">broker1</span><span class="p">:</span><span class="mi">9093</span>
+</pre></div>
+</div>
+<p>We would then restart the clients, changing their config to point at the
+newly opened, SASL &amp; SSL secured port:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">bootstrap</span><span class="o">.</span><span class="n">servers</span> <span class="o">=</span> <span class="p">[</span><span class="n">broker1</span><span class="p">:</span><span class="mi">9093</span><span class="p">,</span><span class="o">...</span><span class="p">]</span>
+<span class="n">security</span><span class="o">.</span><span class="n">protocol</span> <span class="o">=</span> <span class="n">SASL_SSL</span>
+<span class="o">...</span><span class="n">etc</span>
+</pre></div>
+</div>
+<p>The second server bounce would switch the cluster to use encrypted
+broker-broker communication via the SSL port we previously opened on
+port 9092:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">listeners</span><span class="o">=</span><span class="n">PLAINTEXT</span><span class="p">:</span><span class="o">//</span><span class="n">broker1</span><span class="p">:</span><span class="mi">9091</span><span class="p">,</span><span class="n">SSL</span><span class="p">:</span><span class="o">//</span><span class="n">broker1</span><span class="p">:</span><span class="mi">9092</span><span class="p">,</span><span class="n">SASL_SSL</span><span class="p">:</span><span class="o">//</span><span class="n">broker1</span><span class="p">:</span><span class="mi">9093</span>
+<span class="n">security</span><span class="o">.</span><span class="n">inter</span><span class="o">.</span><span class="n">broker</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">SSL</span>
+</pre></div>
+</div>
+<p>The final bounce secures the cluster by closing the PLAINTEXT port.</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">listeners</span><span class="o">=</span><span class="n">SSL</span><span class="p">:</span><span class="o">//</span><span class="n">broker1</span><span class="p">:</span><span class="mi">9092</span><span class="p">,</span><span class="n">SASL_SSL</span><span class="p">:</span><span class="o">//</span><span class="n">broker1</span><span class="p">:</span><span class="mi">9093</span>
+<span class="n">security</span><span class="o">.</span><span class="n">inter</span><span class="o">.</span><span class="n">broker</span><span class="o">.</span><span class="n">protocol</span><span class="o">=</span><span class="n">SSL</span>
+</pre></div>
+</div>
+<p>ZooKeeper can be secured independently of the Kafka cluster. The steps
+for doing this are covered in section <a class="reference external" href="#zk_authz_migration">7.6.2</a>.</p>
+</div>
+<div class="section" id="zookeeper-authentication">
+<h2><a class="reference external" href="#zk_authz">7.6 ZooKeeper Authentication</a><a class="headerlink" href="#zookeeper-authentication" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="new-clusters">
+<h3><a class="reference external" href="#zk_authz_new">7.6.1 New clusters</a><a class="headerlink" href="#new-clusters" title="Permalink to this headline">¶</a></h3>
+<p>To enable ZooKeeper authentication on brokers, there are two necessary
+steps:</p>
+<ol class="arabic simple">
+<li>Create a JAAS login file and set the appropriate system property to
+point to it as described above</li>
+<li>Set the configuration property <code class="docutils literal"><span class="pre">zookeeper.set.acl</span></code> in each broker
+to true</li>
+</ol>
+<p>The metadata stored in ZooKeeper for the Kafka cluster is
+world-readable, but can only be modified by the brokers. The rationale
+behind this decision is that the data stored in ZooKeeper is not
+sensitive, but inappropriate manipulation of that data can cause cluster
+disruption. We also recommend limiting the access to ZooKeeper via
+network segmentation (only brokers and some admin tools need access to
+ZooKeeper if the new Java consumer and producer clients are used).</p>
+</div>
+<div class="section" id="migrating-clusters">
+<h3><a class="reference external" href="#zk_authz_migration">7.6.2 Migrating clusters</a><a class="headerlink" href="#migrating-clusters" title="Permalink to this headline">¶</a></h3>
+<p>If you are running a version of Kafka that does not support security or
+simply with security disabled, and you want to make the cluster secure,
+then you need to execute the following steps to enable ZooKeeper
+authentication with minimal disruption to your operations:</p>
+<ol class="arabic simple">
+<li>Perform a rolling restart setting the JAAS login file, which enables
+brokers to authenticate. At the end of the rolling restart, brokers
+are able to manipulate znodes with strict ACLs, but they will not
+create znodes with those ACLs</li>
+<li>Perform a second rolling restart of brokers, this time setting the
+configuration parameter <code class="docutils literal"><span class="pre">zookeeper.set.acl</span></code> to true, which enables
+the use of secure ACLs when creating znodes</li>
+<li>Execute the ZkSecurityMigrator tool. To execute the tool, there is
+this script: <code class="docutils literal"><span class="pre">./bin/zookeeper-security-migration.sh</span></code> with
+<code class="docutils literal"><span class="pre">zookeeper.acl</span></code> set to secure. This tool traverses the
+corresponding sub-trees changing the ACLs of the znodes</li>
+</ol>
+<p>It is also possible to turn off authentication in a secure cluster. To
+do it, follow these steps:</p>
+<ol class="arabic simple">
+<li>Perform a rolling restart of brokers setting the JAAS login file,
+which enables brokers to authenticate, but setting
+<code class="docutils literal"><span class="pre">zookeeper.set.acl</span></code> to false. At the end of the rolling restart,
+brokers stop creating znodes with secure ACLs, but are still able to
+authenticate and manipulate all znodes</li>
+<li>Execute the ZkSecurityMigrator tool. To execute the tool, run this
+script <code class="docutils literal"><span class="pre">./bin/zookeeper-security-migration.sh</span></code> with
+<code class="docutils literal"><span class="pre">zookeeper.acl</span></code> set to unsecure. This tool traverses the
+corresponding sub-trees changing the ACLs of the znodes</li>
+<li>Perform a second rolling restart of brokers, this time omitting the
+system property that sets the JAAS login file</li>
+</ol>
+<p>Here is an example of how to run the migration tool:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">./</span><span class="nb">bin</span><span class="o">/</span><span class="n">zookeeper</span><span class="o">-</span><span class="n">security</span><span class="o">-</span><span class="n">migration</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">zookeeper</span><span class="o">.</span><span class="n">acl</span><span class="o">=</span><span class="n">secure</span> <span class="o">--</span><span class="n">zookeeper</span><span class="o">.</span><span class="n">connect</span><span class="o">=</span><span class="n">localhost</span><span class="p">:</span><span class="mi">2181</span>
+</pre></div>
+</div>
+<p>Run this to see the full list of parameters:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">./</span><span class="nb">bin</span><span class="o">/</span><span class="n">zookeeper</span><span class="o">-</span><span class="n">security</span><span class="o">-</span><span class="n">migration</span><span class="o">.</span><span class="n">sh</span> <span class="o">--</span><span class="n">help</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="migrating-the-zookeeper-ensemble">
+<h3><a class="reference external" href="#zk_authz_ensemble">7.6.3 Migrating the ZooKeeper ensemble</a><a class="headerlink" href="#migrating-the-zookeeper-ensemble" title="Permalink to this headline">¶</a></h3>
+<p>It is also necessary to enable authentication on the ZooKeeper ensemble.
+To do it, we need to perform a rolling restart of the server and set a
+few properties. Please refer to the ZooKeeper documentation for more
+detail:</p>
+<ol class="arabic simple">
+<li><a class="reference external" href="http://zookeeper.apache.org/doc/r3.4.9/zookeeperProgrammers.html#sc_ZooKeeperAccessControl">Apache ZooKeeper
+documentation</a></li>
+<li><a class="reference external" href="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Zookeeper+and+SASL">Apache ZooKeeper
+wiki</a></li>
+</ol>
+<div class="p-security"></div></div>
+</div>
+</div>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="connect.html" class="btn btn-neutral float-right" title="Kafka Connect" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="ops.html" class="btn btn-neutral" title="Operations" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Apache Software Foundation.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'4.0.0',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: ''
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

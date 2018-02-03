@@ -1,0 +1,61 @@
+.. raw:: html
+
+<table class="data-table"><tbody>
+<tr>
+<th>Name</th>
+<th>Description</th>
+<th>Type</th>
+<th>Default</th>
+<th>Valid Values</th>
+<th>Server Default Property</th>
+<th>Importance</th>
+</tr>
+<tr>
+<td>cleanup.policy</td><td>A string that is either "delete" or "compact". This string designates the retention policy to use on old log segments. The default policy ("delete") will discard old segments when their retention time or size limit has been reached. The "compact" setting will enable <a href="#compaction">log compaction</a> on the topic.</td><td>list</td><td>delete</td><td>[compact, delete]</td><td>log.cleanup.policy</td><td>medium</td></tr>
+<tr>
+<td>compression.type</td><td>Specify the final compression type for a given topic. This configuration accepts the standard compression codecs ('gzip', 'snappy', lz4). It additionally accepts 'uncompressed' which is equivalent to no compression; and 'producer' which means retain the original compression codec set by the producer.</td><td>string</td><td>producer</td><td>[uncompressed, snappy, lz4, gzip, producer]</td><td>compression.type</td><td>medium</td></tr>
+<tr>
+<td>delete.retention.ms</td><td>The amount of time to retain delete tombstone markers for <a href="#compaction">log compacted</a> topics. This setting also gives a bound on the time in which a consumer must complete a read if they begin from offset 0 to ensure that they get a valid snapshot of the final stage (otherwise delete tombstones may be collected before they complete their scan).</td><td>long</td><td>86400000</td><td>[0,...]</td><td>log.cleaner.delete.retention.ms</td><td>medium</td></tr>
+<tr>
+<td>file.delete.delay.ms</td><td>The time to wait before deleting a file from the filesystem</td><td>long</td><td>60000</td><td>[0,...]</td><td>log.segment.delete.delay.ms</td><td>medium</td></tr>
+<tr>
+<td>flush.messages</td><td>This setting allows specifying an interval at which we will force an fsync of data written to the log. For example if this was set to 1 we would fsync after every message; if it were 5 we would fsync after every five messages. In general we recommend you not set this and use replication for durability and allow the operating system's background flush capabilities as it is more efficient. This setting can be overridden on a per-topic basis (see <a href="#topicconfigs">the per-topic configuration section</a>).</td><td>long</td><td>9223372036854775807</td><td>[0,...]</td><td>log.flush.interval.messages</td><td>medium</td></tr>
+<tr>
+<td>flush.ms</td><td>This setting allows specifying a time interval at which we will force an fsync of data written to the log. For example if this was set to 1000 we would fsync after 1000 ms had passed. In general we recommend you not set this and use replication for durability and allow the operating system's background flush capabilities as it is more efficient.</td><td>long</td><td>9223372036854775807</td><td>[0,...]</td><td>log.flush.interval.ms</td><td>medium</td></tr>
+<tr>
+<td>follower.replication.throttled.replicas</td><td>A list of replicas for which log replication should be throttled on the follower side. The list should describe a set of replicas in the form [PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle all replicas for this topic.</td><td>list</td><td>""</td><td>[partitionId],[brokerId]:[partitionId],[brokerId]:...</td><td>follower.replication.throttled.replicas</td><td>medium</td></tr>
+<tr>
+<td>index.interval.bytes</td><td>This setting controls how frequently Kafka adds an index entry to it's offset index. The default setting ensures that we index a message roughly every 4096 bytes. More indexing allows reads to jump closer to the exact position in the log but makes the index larger. You probably don't need to change this.</td><td>int</td><td>4096</td><td>[0,...]</td><td>log.index.interval.bytes</td><td>medium</td></tr>
+<tr>
+<td>leader.replication.throttled.replicas</td><td>A list of replicas for which log replication should be throttled on the leader side. The list should describe a set of replicas in the form [PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle all replicas for this topic.</td><td>list</td><td>""</td><td>[partitionId],[brokerId]:[partitionId],[brokerId]:...</td><td>leader.replication.throttled.replicas</td><td>medium</td></tr>
+<tr>
+<td>max.message.bytes</td><td><p>The largest record batch size allowed by Kafka. If this is increased and there are consumers older than 0.10.2, the consumers' fetch size must also be increased so that the they can fetch record batches this large.</p><p>In the latest message format version, records are always grouped into batches for efficiency. In previous message format versions, uncompressed records are not grouped into batches and this limit only applies to a single record in that case.</p></td><td>int</td><td>1000012</td><td>[0,...]</td><td>message.max.bytes</td><td>medium</td></tr>
+<tr>
+<td>message.format.version</td><td>Specify the message format version the broker will use to append messages to the logs. The value should be a valid ApiVersion. Some examples are: 0.8.2, 0.9.0.0, 0.10.0, check ApiVersion for more details. By setting a particular message format version, the user is certifying that all the existing messages on disk are smaller or equal than the specified version. Setting this value incorrectly will cause consumers with older versions to break as they will receive messages with a format that they don't understand.</td><td>string</td><td>1.0-IV0</td><td></td><td>log.message.format.version</td><td>medium</td></tr>
+<tr>
+<td>message.timestamp.difference.max.ms</td><td>The maximum difference allowed between the timestamp when a broker receives a message and the timestamp specified in the message. If message.timestamp.type=CreateTime, a message will be rejected if the difference in timestamp exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.</td><td>long</td><td>9223372036854775807</td><td>[0,...]</td><td>log.message.timestamp.difference.max.ms</td><td>medium</td></tr>
+<tr>
+<td>message.timestamp.type</td><td>Define whether the timestamp in the message is message create time or log append time. The value should be either `CreateTime` or `LogAppendTime`</td><td>string</td><td>CreateTime</td><td></td><td>log.message.timestamp.type</td><td>medium</td></tr>
+<tr>
+<td>min.cleanable.dirty.ratio</td><td>This configuration controls how frequently the log compactor will attempt to clean the log (assuming <a href="#compaction">log compaction</a> is enabled). By default we will avoid cleaning a log where more than 50% of the log has been compacted. This ratio bounds the maximum space wasted in the log by duplicates (at 50% at most 50% of the log could be duplicates). A higher ratio will mean fewer, more efficient cleanings but will mean more wasted space in the log.</td><td>double</td><td>0.5</td><td>[0,...,1]</td><td>log.cleaner.min.cleanable.ratio</td><td>medium</td></tr>
+<tr>
+<td>min.compaction.lag.ms</td><td>The minimum time a message will remain uncompacted in the log. Only applicable for logs that are being compacted.</td><td>long</td><td>0</td><td>[0,...]</td><td>log.cleaner.min.compaction.lag.ms</td><td>medium</td></tr>
+<tr>
+<td>min.insync.replicas</td><td>When a producer sets acks to "all" (or "-1"), this configuration specifies the minimum number of replicas that must acknowledge a write for the write to be considered successful. If this minimum cannot be met, then the producer will raise an exception (either NotEnoughReplicas or NotEnoughReplicasAfterAppend).<br>When used together, min.insync.replicas and acks allow you to enforce greater durability guarantees. A typical scenario would be to create a topic with a replication factor of 3, set min.insync.replicas to 2, and produce with acks of "all". This will ensure that the producer raises an exception if a majority of replicas do not receive a write.</td><td>int</td><td>1</td><td>[1,...]</td><td>min.insync.replicas</td><td>medium</td></tr>
+<tr>
+<td>preallocate</td><td>True if we should preallocate the file on disk when creating a new log segment.</td><td>boolean</td><td>false</td><td></td><td>log.preallocate</td><td>medium</td></tr>
+<tr>
+<td>retention.bytes</td><td>This configuration controls the maximum size a partition (which consists of log segments) can grow to before we will discard old log segments to free up space if we are using the "delete" retention policy. By default there is no size limit only a time limit. Since this limit is enforced at the partition level, multiply it by the number of partitions to compute the topic retention in bytes.</td><td>long</td><td>-1</td><td></td><td>log.retention.bytes</td><td>medium</td></tr>
+<tr>
+<td>retention.ms</td><td>This configuration controls the maximum time we will retain a log before we will discard old log segments to free up space if we are using the "delete" retention policy. This represents an SLA on how soon consumers must read their data.</td><td>long</td><td>604800000</td><td></td><td>log.retention.ms</td><td>medium</td></tr>
+<tr>
+<td>segment.bytes</td><td>This configuration controls the segment file size for the log. Retention and cleaning is always done a file at a time so a larger segment size means fewer files but less granular control over retention.</td><td>int</td><td>1073741824</td><td>[14,...]</td><td>log.segment.bytes</td><td>medium</td></tr>
+<tr>
+<td>segment.index.bytes</td><td>This configuration controls the size of the index that maps offsets to file positions. We preallocate this index file and shrink it only after log rolls. You generally should not need to change this setting.</td><td>int</td><td>10485760</td><td>[0,...]</td><td>log.index.size.max.bytes</td><td>medium</td></tr>
+<tr>
+<td>segment.jitter.ms</td><td>The maximum random jitter subtracted from the scheduled segment roll time to avoid thundering herds of segment rolling</td><td>long</td><td>0</td><td>[0,...]</td><td>log.roll.jitter.ms</td><td>medium</td></tr>
+<tr>
+<td>segment.ms</td><td>This configuration controls the period of time after which Kafka will force the log to roll even if the segment file isn't full to ensure that retention can delete or compact old data.</td><td>long</td><td>604800000</td><td>[0,...]</td><td>log.roll.ms</td><td>medium</td></tr>
+<tr>
+<td>unclean.leader.election.enable</td><td>Indicates whether to enable replicas not in the ISR set to be elected as leader as a last resort, even though doing so may result in data loss.</td><td>boolean</td><td>false</td><td></td><td>unclean.leader.election.enable</td><td>medium</td></tr>
+</tbody></table>

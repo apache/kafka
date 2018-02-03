@@ -1,0 +1,367 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Kafka APIs &mdash; Apache Kafka 4.0.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../genindex.html"/>
+        <link rel="search" title="Search" href="../search.html"/>
+    <link rel="top" title="Apache Kafka 4.0.0 documentation" href="../index.html"/>
+        <link rel="up" title="Apache Kafka Documentation" href="index.html"/>
+        <link rel="next" title="Configuration" href="configuration.html"/>
+        <link rel="prev" title="Introduction" href="introduction.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> Apache Kafka
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                4.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../uses.html">Use Cases</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Apache Kafka Documentation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Kafka APIs</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#producer-api">2.1 Producer API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#consumer-api">2.2 Consumer API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#streams-api">2.3 Streams API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#connect-api">2.4 Connect API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#adminclient-api">2.5 AdminClient API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#legacy-apis">2.6 Legacy APIs</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="design.html">Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation.html">Implementation</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Apache Kafka</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="index.html">Apache Kafka Documentation</a> &raquo;</li>
+        
+      <li>Kafka APIs</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/documentation/api.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="kafka-apis">
+<span id="kafka-api"></span><h1>Kafka APIs<a class="headerlink" href="#kafka-apis" title="Permalink to this headline">¶</a></h1>
+<div class="contents local topic" id="contents">
+<ul class="simple">
+<li><a class="reference internal" href="#producer-api" id="id1">2.1 Producer API</a></li>
+<li><a class="reference internal" href="#consumer-api" id="id2">2.2 Consumer API</a></li>
+<li><a class="reference internal" href="#streams-api" id="id3">2.3 Streams API</a></li>
+<li><a class="reference internal" href="#connect-api" id="id4">2.4 Connect API</a></li>
+<li><a class="reference internal" href="#adminclient-api" id="id5">2.5 AdminClient API</a></li>
+<li><a class="reference internal" href="#legacy-apis" id="id6">2.6 Legacy APIs</a></li>
+</ul>
+</div>
+<p>Kafka includes five core APIs:</p>
+<ol class="arabic simple">
+<li>The <a class="reference external" href="#producerapi">Producer</a> API allows applications to send
+streams of data to topics in the Kafka cluster.</li>
+<li>The <a class="reference external" href="#consumerapi">Consumer</a> API allows applications to read
+streams of data from topics in the Kafka cluster.</li>
+<li>The <a class="reference external" href="#streamsapi">Streams</a> API allows transforming streams of data
+from input topics to output topics.</li>
+<li>The <a class="reference external" href="#connectapi">Connect</a> API allows implementing connectors that
+continually pull from some source system or application into Kafka or
+push from Kafka into some sink system or application.</li>
+<li>The <a class="reference external" href="#adminapi">AdminClient</a> API allows managing and inspecting
+topics, brokers, and other Kafka objects.</li>
+</ol>
+<p>Kafka exposes all its functionality over a language independent protocol
+which has clients available in many programming languages. However only
+the Java clients are maintained as part of the main Kafka project, the
+others are available as independent open source projects. A list of
+non-Java clients is available
+<a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/Clients">here</a>.</p>
+<div class="section" id="producer-api">
+<span id="producerapi"></span><h2><a class="toc-backref" href="#id1">2.1 Producer API</a><a class="headerlink" href="#producer-api" title="Permalink to this headline">¶</a></h2>
+<p>The Producer API allows applications to send streams of data to topics
+in the Kafka cluster.</p>
+<p>Examples showing how to use the producer are given in the
+<a class="reference external" href="/%7B%7Bversion%7D%7D/javadoc/index.html?org/apache/kafka/clients/producer/KafkaProducer.html">javadocs</a>.</p>
+<p>To use the producer, you can use the following maven dependency:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">dependency</span><span class="o">&gt;</span>
+    <span class="o">&lt;</span><span class="n">groupId</span><span class="o">&gt;</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">kafka</span><span class="o">&lt;/</span><span class="n">groupId</span><span class="o">&gt;</span>
+    <span class="o">&lt;</span><span class="n">artifactId</span><span class="o">&gt;</span><span class="n">kafka</span><span class="o">-</span><span class="n">clients</span><span class="o">&lt;/</span><span class="n">artifactId</span><span class="o">&gt;</span>
+    <span class="o">&lt;</span><span class="n">version</span><span class="o">&gt;</span><span class="p">{{</span><span class="n">fullDotVersion</span><span class="p">}}</span><span class="o">&lt;/</span><span class="n">version</span><span class="o">&gt;</span>
+<span class="o">&lt;/</span><span class="n">dependency</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="consumer-api">
+<h2><a class="toc-backref" href="#id2">2.2 Consumer API</a><a class="headerlink" href="#consumer-api" title="Permalink to this headline">¶</a></h2>
+<p>The Consumer API allows applications to read streams of data from topics
+in the Kafka cluster.</p>
+<p>Examples showing how to use the consumer are given in the
+<a class="reference external" href="/%7B%7Bversion%7D%7D/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaConsumer.html">javadocs</a>.</p>
+<p>To use the consumer, you can use the following maven dependency:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">dependency</span><span class="o">&gt;</span>
+    <span class="o">&lt;</span><span class="n">groupId</span><span class="o">&gt;</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">kafka</span><span class="o">&lt;/</span><span class="n">groupId</span><span class="o">&gt;</span>
+    <span class="o">&lt;</span><span class="n">artifactId</span><span class="o">&gt;</span><span class="n">kafka</span><span class="o">-</span><span class="n">clients</span><span class="o">&lt;/</span><span class="n">artifactId</span><span class="o">&gt;</span>
+    <span class="o">&lt;</span><span class="n">version</span><span class="o">&gt;</span><span class="p">{{</span><span class="n">fullDotVersion</span><span class="p">}}</span><span class="o">&lt;/</span><span class="n">version</span><span class="o">&gt;</span>
+<span class="o">&lt;/</span><span class="n">dependency</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="streams-api">
+<span id="streamsapi"></span><h2><a class="toc-backref" href="#id3">2.3 Streams API</a><a class="headerlink" href="#streams-api" title="Permalink to this headline">¶</a></h2>
+<p>The <a class="reference external" href="#streamsapi">Streams</a> API allows transforming streams of data
+from input topics to output topics.</p>
+<p>Examples showing how to use this library are given in the
+<a class="reference external" href="/%7B%7Bversion%7D%7D/javadoc/index.html?org/apache/kafka/streams/KafkaStreams.html">javadocs</a></p>
+<p>Additional documentation on using the Streams API is available
+<a class="reference external" href="/%7B%7Bversion%7D%7D/documentation/streams">here</a>.</p>
+<p>To use Kafka Streams you can use the following maven dependency:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">dependency</span><span class="o">&gt;</span>
+    <span class="o">&lt;</span><span class="n">groupId</span><span class="o">&gt;</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">kafka</span><span class="o">&lt;/</span><span class="n">groupId</span><span class="o">&gt;</span>
+    <span class="o">&lt;</span><span class="n">artifactId</span><span class="o">&gt;</span><span class="n">kafka</span><span class="o">-</span><span class="n">streams</span><span class="o">&lt;/</span><span class="n">artifactId</span><span class="o">&gt;</span>
+    <span class="o">&lt;</span><span class="n">version</span><span class="o">&gt;</span><span class="p">{{</span><span class="n">fullDotVersion</span><span class="p">}}</span><span class="o">&lt;/</span><span class="n">version</span><span class="o">&gt;</span>
+<span class="o">&lt;/</span><span class="n">dependency</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="connect-api">
+<span id="connectapi"></span><h2><a class="toc-backref" href="#id4">2.4 Connect API</a><a class="headerlink" href="#connect-api" title="Permalink to this headline">¶</a></h2>
+<p>The Connect API allows implementing connectors that continually pull
+from some source data system into Kafka or push from Kafka into some
+sink data system.</p>
+<p>Many users of Connect won&#8217;t need to use this API directly, though, they
+can use pre-built connectors without needing to write any code.
+Additional information on using Connect is available
+<a class="reference external" href="/documentation.html#connect">here</a>.</p>
+<p>Those who want to implement custom connectors can see the
+<a class="reference external" href="/%7B%7Bversion%7D%7D/javadoc/index.html?org/apache/kafka/connect">javadoc</a>.</p>
+</div>
+<div class="section" id="adminclient-api">
+<span id="adminapi"></span><h2><a class="toc-backref" href="#id5">2.5 AdminClient API</a><a class="headerlink" href="#adminclient-api" title="Permalink to this headline">¶</a></h2>
+<p>The AdminClient API supports managing and inspecting topics, brokers,
+acls, and other Kafka objects.</p>
+<p>To use the AdminClient API, add the following Maven dependency:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">dependency</span><span class="o">&gt;</span>
+    <span class="o">&lt;</span><span class="n">groupId</span><span class="o">&gt;</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">kafka</span><span class="o">&lt;/</span><span class="n">groupId</span><span class="o">&gt;</span>
+    <span class="o">&lt;</span><span class="n">artifactId</span><span class="o">&gt;</span><span class="n">kafka</span><span class="o">-</span><span class="n">clients</span><span class="o">&lt;/</span><span class="n">artifactId</span><span class="o">&gt;</span>
+    <span class="o">&lt;</span><span class="n">version</span><span class="o">&gt;</span><span class="p">{{</span><span class="n">fullDotVersion</span><span class="p">}}</span><span class="o">&lt;/</span><span class="n">version</span><span class="o">&gt;</span>
+<span class="o">&lt;/</span><span class="n">dependency</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>For more information about the AdminClient APIs, see the
+<a class="reference external" href="/%7B%7Bversion%7D%7D/javadoc/index.html?org/apache/kafka/clients/admin/AdminClient.html">javadoc</a>.</p>
+</div>
+<div class="section" id="legacy-apis">
+<span id="legacyapis"></span><h2><a class="toc-backref" href="#id6">2.6 Legacy APIs</a><a class="headerlink" href="#legacy-apis" title="Permalink to this headline">¶</a></h2>
+<p>A more limited legacy producer and consumer API is also included in
+Kafka. These old Scala APIs are deprecated and only still available for
+compatibility purposes. Information on them can be found here
+<a class="reference external" href="/081/documentation.html#producerapi">here</a>.</p>
+</div>
+</div>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="configuration.html" class="btn btn-neutral float-right" title="Configuration" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="introduction.html" class="btn btn-neutral" title="Introduction" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Apache Software Foundation.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'4.0.0',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: ''
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

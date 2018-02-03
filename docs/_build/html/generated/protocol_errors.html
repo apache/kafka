@@ -1,0 +1,293 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>&lt;no title&gt; &mdash; Apache Kafka 4.0.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../genindex.html"/>
+        <link rel="search" title="Search" href="../search.html"/>
+    <link rel="top" title="Apache Kafka 4.0.0 documentation" href="../index.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> Apache Kafka
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                4.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../uses.html">Use Cases</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../documentation/index.html">Apache Kafka Documentation</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Apache Kafka</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+      <li>&lt;no title&gt;</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/generated/protocol_errors.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <p>&lt;table class=&#8221;data-table&#8221;&gt;&lt;tbody&gt;
+&lt;tr&gt;&lt;th&gt;Error&lt;/th&gt;
+&lt;th&gt;Code&lt;/th&gt;
+&lt;th&gt;Retriable&lt;/th&gt;
+&lt;th&gt;Description&lt;/th&gt;
+&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;UNKNOWN_SERVER_ERROR&lt;/td&gt;&lt;td&gt;-1&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The server experienced an unexpected error when processing the request&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;NONE&lt;/td&gt;&lt;td&gt;0&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;OFFSET_OUT_OF_RANGE&lt;/td&gt;&lt;td&gt;1&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The requested offset is not within the range of offsets maintained by the server.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;CORRUPT_MESSAGE&lt;/td&gt;&lt;td&gt;2&lt;/td&gt;&lt;td&gt;True&lt;/td&gt;&lt;td&gt;This message has failed its CRC checksum, exceeds the valid size, or is otherwise corrupt.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;UNKNOWN_TOPIC_OR_PARTITION&lt;/td&gt;&lt;td&gt;3&lt;/td&gt;&lt;td&gt;True&lt;/td&gt;&lt;td&gt;This server does not host this topic-partition.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INVALID_FETCH_SIZE&lt;/td&gt;&lt;td&gt;4&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The requested fetch size is invalid.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;LEADER_NOT_AVAILABLE&lt;/td&gt;&lt;td&gt;5&lt;/td&gt;&lt;td&gt;True&lt;/td&gt;&lt;td&gt;There is no leader for this topic-partition as we are in the middle of a leadership election.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;NOT_LEADER_FOR_PARTITION&lt;/td&gt;&lt;td&gt;6&lt;/td&gt;&lt;td&gt;True&lt;/td&gt;&lt;td&gt;This server is not the leader for that topic-partition.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;REQUEST_TIMED_OUT&lt;/td&gt;&lt;td&gt;7&lt;/td&gt;&lt;td&gt;True&lt;/td&gt;&lt;td&gt;The request timed out.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;BROKER_NOT_AVAILABLE&lt;/td&gt;&lt;td&gt;8&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The broker is not available.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;REPLICA_NOT_AVAILABLE&lt;/td&gt;&lt;td&gt;9&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The replica is not available for the requested topic-partition&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;MESSAGE_TOO_LARGE&lt;/td&gt;&lt;td&gt;10&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The request included a message larger than the max message size the server will accept.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;STALE_CONTROLLER_EPOCH&lt;/td&gt;&lt;td&gt;11&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The controller moved to another broker.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;OFFSET_METADATA_TOO_LARGE&lt;/td&gt;&lt;td&gt;12&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The metadata field of the offset request was too large.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;NETWORK_EXCEPTION&lt;/td&gt;&lt;td&gt;13&lt;/td&gt;&lt;td&gt;True&lt;/td&gt;&lt;td&gt;The server disconnected before a response was received.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;COORDINATOR_LOAD_IN_PROGRESS&lt;/td&gt;&lt;td&gt;14&lt;/td&gt;&lt;td&gt;True&lt;/td&gt;&lt;td&gt;The coordinator is loading and hence can&#8217;t process requests.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;COORDINATOR_NOT_AVAILABLE&lt;/td&gt;&lt;td&gt;15&lt;/td&gt;&lt;td&gt;True&lt;/td&gt;&lt;td&gt;The coordinator is not available.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;NOT_COORDINATOR&lt;/td&gt;&lt;td&gt;16&lt;/td&gt;&lt;td&gt;True&lt;/td&gt;&lt;td&gt;This is not the correct coordinator.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INVALID_TOPIC_EXCEPTION&lt;/td&gt;&lt;td&gt;17&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The request attempted to perform an operation on an invalid topic.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;RECORD_LIST_TOO_LARGE&lt;/td&gt;&lt;td&gt;18&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The request included message batch larger than the configured segment size on the server.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;NOT_ENOUGH_REPLICAS&lt;/td&gt;&lt;td&gt;19&lt;/td&gt;&lt;td&gt;True&lt;/td&gt;&lt;td&gt;Messages are rejected since there are fewer in-sync replicas than required.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;NOT_ENOUGH_REPLICAS_AFTER_APPEND&lt;/td&gt;&lt;td&gt;20&lt;/td&gt;&lt;td&gt;True&lt;/td&gt;&lt;td&gt;Messages are written to the log, but to fewer in-sync replicas than required.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INVALID_REQUIRED_ACKS&lt;/td&gt;&lt;td&gt;21&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;Produce request specified an invalid value for required acks.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;ILLEGAL_GENERATION&lt;/td&gt;&lt;td&gt;22&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;Specified group generation id is not valid.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INCONSISTENT_GROUP_PROTOCOL&lt;/td&gt;&lt;td&gt;23&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The group member&#8217;s supported protocols are incompatible with those of existing members or first group member tried to join with empty protocol type or empty protocol list.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INVALID_GROUP_ID&lt;/td&gt;&lt;td&gt;24&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The configured groupId is invalid&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;UNKNOWN_MEMBER_ID&lt;/td&gt;&lt;td&gt;25&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The coordinator is not aware of this member.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INVALID_SESSION_TIMEOUT&lt;/td&gt;&lt;td&gt;26&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The session timeout is not within the range allowed by the broker (as configured by group.min.session.timeout.ms and group.max.session.timeout.ms).&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;REBALANCE_IN_PROGRESS&lt;/td&gt;&lt;td&gt;27&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The group is rebalancing, so a rejoin is needed.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INVALID_COMMIT_OFFSET_SIZE&lt;/td&gt;&lt;td&gt;28&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The committing offset data size is not valid&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;TOPIC_AUTHORIZATION_FAILED&lt;/td&gt;&lt;td&gt;29&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;Not authorized to access topics: [Topic authorization failed.]&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;GROUP_AUTHORIZATION_FAILED&lt;/td&gt;&lt;td&gt;30&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;Not authorized to access group: Group authorization failed.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;CLUSTER_AUTHORIZATION_FAILED&lt;/td&gt;&lt;td&gt;31&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;Cluster authorization failed.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INVALID_TIMESTAMP&lt;/td&gt;&lt;td&gt;32&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The timestamp of the message is out of acceptable range.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;UNSUPPORTED_SASL_MECHANISM&lt;/td&gt;&lt;td&gt;33&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The broker does not support the requested SASL mechanism.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;ILLEGAL_SASL_STATE&lt;/td&gt;&lt;td&gt;34&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;Request is not valid given the current SASL state.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;UNSUPPORTED_VERSION&lt;/td&gt;&lt;td&gt;35&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The version of API is not supported.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;TOPIC_ALREADY_EXISTS&lt;/td&gt;&lt;td&gt;36&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;Topic with this name already exists.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INVALID_PARTITIONS&lt;/td&gt;&lt;td&gt;37&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;Number of partitions is invalid.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INVALID_REPLICATION_FACTOR&lt;/td&gt;&lt;td&gt;38&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;Replication-factor is invalid.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INVALID_REPLICA_ASSIGNMENT&lt;/td&gt;&lt;td&gt;39&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;Replica assignment is invalid.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INVALID_CONFIG&lt;/td&gt;&lt;td&gt;40&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;Configuration is invalid.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;NOT_CONTROLLER&lt;/td&gt;&lt;td&gt;41&lt;/td&gt;&lt;td&gt;True&lt;/td&gt;&lt;td&gt;This is not the correct controller for this cluster.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INVALID_REQUEST&lt;/td&gt;&lt;td&gt;42&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;This most likely occurs because of a request being malformed by the client library or the message was sent to an incompatible broker. See the broker logs for more details.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;UNSUPPORTED_FOR_MESSAGE_FORMAT&lt;/td&gt;&lt;td&gt;43&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The message format version on the broker does not support the request.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;POLICY_VIOLATION&lt;/td&gt;&lt;td&gt;44&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;Request parameters do not satisfy the configured policy.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;OUT_OF_ORDER_SEQUENCE_NUMBER&lt;/td&gt;&lt;td&gt;45&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The broker received an out of order sequence number&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;DUPLICATE_SEQUENCE_NUMBER&lt;/td&gt;&lt;td&gt;46&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The broker received a duplicate sequence number&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INVALID_PRODUCER_EPOCH&lt;/td&gt;&lt;td&gt;47&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;Producer attempted an operation with an old epoch. Either there is a newer producer with the same transactionalId, or the producer&#8217;s transaction has been expired by the broker.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INVALID_TXN_STATE&lt;/td&gt;&lt;td&gt;48&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The producer attempted a transactional operation in an invalid state&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INVALID_PRODUCER_ID_MAPPING&lt;/td&gt;&lt;td&gt;49&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The producer attempted to use a producer id which is not currently assigned to its transactional id&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;INVALID_TRANSACTION_TIMEOUT&lt;/td&gt;&lt;td&gt;50&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The transaction timeout is larger than the maximum value allowed by the broker (as configured by max.transaction.timeout.ms).&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;CONCURRENT_TRANSACTIONS&lt;/td&gt;&lt;td&gt;51&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The producer attempted to update a transaction while another concurrent operation on the same transaction was ongoing&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;TRANSACTION_COORDINATOR_FENCED&lt;/td&gt;&lt;td&gt;52&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;Indicates that the transaction coordinator sending a WriteTxnMarker is no longer the current coordinator for a given producer&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;TRANSACTIONAL_ID_AUTHORIZATION_FAILED&lt;/td&gt;&lt;td&gt;53&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;Transactional Id authorization failed&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;SECURITY_DISABLED&lt;/td&gt;&lt;td&gt;54&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;Security features are disabled.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;OPERATION_NOT_ATTEMPTED&lt;/td&gt;&lt;td&gt;55&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The broker did not attempt to execute this operation. This may happen for batched RPCs where some operations in the batch failed, causing the broker to respond without trying the rest.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;KAFKA_STORAGE_ERROR&lt;/td&gt;&lt;td&gt;56&lt;/td&gt;&lt;td&gt;True&lt;/td&gt;&lt;td&gt;Disk error when trying to access log file on the disk.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;LOG_DIR_NOT_FOUND&lt;/td&gt;&lt;td&gt;57&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;The user-specified log directory is not found in the broker config.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;SASL_AUTHENTICATION_FAILED&lt;/td&gt;&lt;td&gt;58&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;SASL Authentication failed.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;UNKNOWN_PRODUCER_ID&lt;/td&gt;&lt;td&gt;59&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;This exception is raised by the broker if it could not locate the producer metadata associated with the producerId in question. This could happen if, for instance, the producer&#8217;s records were deleted because their retention time had elapsed. Once the last records of the producerId are removed, the producer&#8217;s metadata is removed from the broker, and future appends by the producer will return this exception.&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;REASSIGNMENT_IN_PROGRESS&lt;/td&gt;&lt;td&gt;60&lt;/td&gt;&lt;td&gt;False&lt;/td&gt;&lt;td&gt;A partition reassignment is in progress&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;</p>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Apache Software Foundation.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'4.0.0',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: ''
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

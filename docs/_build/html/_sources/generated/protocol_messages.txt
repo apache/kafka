@@ -1,0 +1,4347 @@
+.. raw:: html
+
+<h5>Headers:</h5>
+<pre>Request Header => api_key api_version correlation_id client_id 
+  api_key => INT16
+  api_version => INT16
+  correlation_id => INT32
+  client_id => NULLABLE_STRING
+</pre>
+<table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>api_key</td><td>The id of the request type.</td></tr>
+<tr>
+<td>api_version</td><td>The version of the API.</td></tr>
+<tr>
+<td>correlation_id</td><td>A user-supplied integer value that will be passed back with the response</td></tr>
+<tr>
+<td>client_id</td><td>A user specified identifier for the client making the request.</td></tr>
+</table>
+<pre>Response Header => correlation_id 
+  correlation_id => INT32
+</pre>
+<table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>correlation_id</td><td>The user-supplied value passed in with the request</td></tr>
+</table>
+<h5><a name="The_Messages_Produce">Produce API (Key: 0):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>Produce Request (Version: 0) => acks timeout [topic_data] 
+  acks => INT16
+  timeout => INT32
+  topic_data => topic [data] 
+    topic => STRING
+    data => partition record_set 
+      partition => INT32
+      record_set => RECORDS
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>acks</td><td>The number of acknowledgments the producer requires the leader to have received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 for only the leader and -1 for the full ISR.</td></tr>
+<tr>
+<td>timeout</td><td>The time to await a response in ms.</td></tr>
+<tr>
+<td>topic_data</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>data</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>record_set</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>Produce Request (Version: 1) => acks timeout [topic_data] 
+  acks => INT16
+  timeout => INT32
+  topic_data => topic [data] 
+    topic => STRING
+    data => partition record_set 
+      partition => INT32
+      record_set => RECORDS
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>acks</td><td>The number of acknowledgments the producer requires the leader to have received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 for only the leader and -1 for the full ISR.</td></tr>
+<tr>
+<td>timeout</td><td>The time to await a response in ms.</td></tr>
+<tr>
+<td>topic_data</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>data</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>record_set</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>Produce Request (Version: 2) => acks timeout [topic_data] 
+  acks => INT16
+  timeout => INT32
+  topic_data => topic [data] 
+    topic => STRING
+    data => partition record_set 
+      partition => INT32
+      record_set => RECORDS
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>acks</td><td>The number of acknowledgments the producer requires the leader to have received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 for only the leader and -1 for the full ISR.</td></tr>
+<tr>
+<td>timeout</td><td>The time to await a response in ms.</td></tr>
+<tr>
+<td>topic_data</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>data</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>record_set</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>Produce Request (Version: 3) => transactional_id acks timeout [topic_data] 
+  transactional_id => NULLABLE_STRING
+  acks => INT16
+  timeout => INT32
+  topic_data => topic [data] 
+    topic => STRING
+    data => partition record_set 
+      partition => INT32
+      record_set => RECORDS
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>transactional_id</td><td>The transactional id or null if the producer is not transactional</td></tr>
+<tr>
+<td>acks</td><td>The number of acknowledgments the producer requires the leader to have received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 for only the leader and -1 for the full ISR.</td></tr>
+<tr>
+<td>timeout</td><td>The time to await a response in ms.</td></tr>
+<tr>
+<td>topic_data</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>data</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>record_set</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>Produce Request (Version: 4) => transactional_id acks timeout [topic_data] 
+  transactional_id => NULLABLE_STRING
+  acks => INT16
+  timeout => INT32
+  topic_data => topic [data] 
+    topic => STRING
+    data => partition record_set 
+      partition => INT32
+      record_set => RECORDS
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>transactional_id</td><td>The transactional id or null if the producer is not transactional</td></tr>
+<tr>
+<td>acks</td><td>The number of acknowledgments the producer requires the leader to have received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 for only the leader and -1 for the full ISR.</td></tr>
+<tr>
+<td>timeout</td><td>The time to await a response in ms.</td></tr>
+<tr>
+<td>topic_data</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>data</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>record_set</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>Produce Request (Version: 5) => transactional_id acks timeout [topic_data] 
+  transactional_id => NULLABLE_STRING
+  acks => INT16
+  timeout => INT32
+  topic_data => topic [data] 
+    topic => STRING
+    data => partition record_set 
+      partition => INT32
+      record_set => RECORDS
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>transactional_id</td><td>The transactional id or null if the producer is not transactional</td></tr>
+<tr>
+<td>acks</td><td>The number of acknowledgments the producer requires the leader to have received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 for only the leader and -1 for the full ISR.</td></tr>
+<tr>
+<td>timeout</td><td>The time to await a response in ms.</td></tr>
+<tr>
+<td>topic_data</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>data</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>record_set</td><td>null</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>Produce Response (Version: 0) => [responses] 
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition error_code base_offset 
+      partition => INT32
+      error_code => INT16
+      base_offset => INT64
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>base_offset</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>Produce Response (Version: 1) => [responses] throttle_time_ms 
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition error_code base_offset 
+      partition => INT32
+      error_code => INT16
+      base_offset => INT64
+  throttle_time_ms => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>base_offset</td><td>null</td></tr>
+<tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+</table>
+</p>
+<p><pre>Produce Response (Version: 2) => [responses] throttle_time_ms 
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition error_code base_offset log_append_time 
+      partition => INT32
+      error_code => INT16
+      base_offset => INT64
+      log_append_time => INT64
+  throttle_time_ms => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>base_offset</td><td>null</td></tr>
+<tr>
+<td>log_append_time</td><td>The timestamp returned by broker after appending the messages. If CreateTime is used for the topic, the timestamp will be -1. If LogAppendTime is used for the topic, the timestamp will be the broker local time when the messages are appended.</td></tr>
+<tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+</table>
+</p>
+<p><pre>Produce Response (Version: 3) => [responses] throttle_time_ms 
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition error_code base_offset log_append_time 
+      partition => INT32
+      error_code => INT16
+      base_offset => INT64
+      log_append_time => INT64
+  throttle_time_ms => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>base_offset</td><td>null</td></tr>
+<tr>
+<td>log_append_time</td><td>The timestamp returned by broker after appending the messages. If CreateTime is used for the topic, the timestamp will be -1. If LogAppendTime is used for the topic, the timestamp will be the broker local time when the messages are appended.</td></tr>
+<tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+</table>
+</p>
+<p><pre>Produce Response (Version: 4) => [responses] throttle_time_ms 
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition error_code base_offset log_append_time 
+      partition => INT32
+      error_code => INT16
+      base_offset => INT64
+      log_append_time => INT64
+  throttle_time_ms => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>base_offset</td><td>null</td></tr>
+<tr>
+<td>log_append_time</td><td>The timestamp returned by broker after appending the messages. If CreateTime is used for the topic, the timestamp will be -1. If LogAppendTime is used for the topic, the timestamp will be the broker local time when the messages are appended.</td></tr>
+<tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+</table>
+</p>
+<p><pre>Produce Response (Version: 5) => [responses] throttle_time_ms 
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition error_code base_offset log_append_time log_start_offset 
+      partition => INT32
+      error_code => INT16
+      base_offset => INT64
+      log_append_time => INT64
+      log_start_offset => INT64
+  throttle_time_ms => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>base_offset</td><td>null</td></tr>
+<tr>
+<td>log_append_time</td><td>The timestamp returned by broker after appending the messages. If CreateTime is used for the topic, the timestamp will be -1. If LogAppendTime is used for the topic, the timestamp will be the broker local time when the messages are appended.</td></tr>
+<tr>
+<td>log_start_offset</td><td>The start offset of the log at the time this produce response was created</td></tr>
+<tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_Fetch">Fetch API (Key: 1):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>Fetch Request (Version: 0) => replica_id max_wait_time min_bytes [topics] 
+  replica_id => INT32
+  max_wait_time => INT32
+  min_bytes => INT32
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition fetch_offset max_bytes 
+      partition => INT32
+      fetch_offset => INT64
+      max_bytes => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>replica_id</td><td>Broker id of the follower. For normal consumers, use -1.</td></tr>
+<tr>
+<td>max_wait_time</td><td>Maximum time in ms to wait for the response.</td></tr>
+<tr>
+<td>min_bytes</td><td>Minimum bytes to accumulate in the response.</td></tr>
+<tr>
+<td>topics</td><td>Topics to fetch.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to fetch.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>fetch_offset</td><td>Message offset.</td></tr>
+<tr>
+<td>max_bytes</td><td>Maximum bytes to fetch.</td></tr>
+</table>
+</p>
+<p><pre>Fetch Request (Version: 1) => replica_id max_wait_time min_bytes [topics] 
+  replica_id => INT32
+  max_wait_time => INT32
+  min_bytes => INT32
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition fetch_offset max_bytes 
+      partition => INT32
+      fetch_offset => INT64
+      max_bytes => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>replica_id</td><td>Broker id of the follower. For normal consumers, use -1.</td></tr>
+<tr>
+<td>max_wait_time</td><td>Maximum time in ms to wait for the response.</td></tr>
+<tr>
+<td>min_bytes</td><td>Minimum bytes to accumulate in the response.</td></tr>
+<tr>
+<td>topics</td><td>Topics to fetch.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to fetch.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>fetch_offset</td><td>Message offset.</td></tr>
+<tr>
+<td>max_bytes</td><td>Maximum bytes to fetch.</td></tr>
+</table>
+</p>
+<p><pre>Fetch Request (Version: 2) => replica_id max_wait_time min_bytes [topics] 
+  replica_id => INT32
+  max_wait_time => INT32
+  min_bytes => INT32
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition fetch_offset max_bytes 
+      partition => INT32
+      fetch_offset => INT64
+      max_bytes => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>replica_id</td><td>Broker id of the follower. For normal consumers, use -1.</td></tr>
+<tr>
+<td>max_wait_time</td><td>Maximum time in ms to wait for the response.</td></tr>
+<tr>
+<td>min_bytes</td><td>Minimum bytes to accumulate in the response.</td></tr>
+<tr>
+<td>topics</td><td>Topics to fetch.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to fetch.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>fetch_offset</td><td>Message offset.</td></tr>
+<tr>
+<td>max_bytes</td><td>Maximum bytes to fetch.</td></tr>
+</table>
+</p>
+<p><pre>Fetch Request (Version: 3) => replica_id max_wait_time min_bytes max_bytes [topics] 
+  replica_id => INT32
+  max_wait_time => INT32
+  min_bytes => INT32
+  max_bytes => INT32
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition fetch_offset max_bytes 
+      partition => INT32
+      fetch_offset => INT64
+      max_bytes => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>replica_id</td><td>Broker id of the follower. For normal consumers, use -1.</td></tr>
+<tr>
+<td>max_wait_time</td><td>Maximum time in ms to wait for the response.</td></tr>
+<tr>
+<td>min_bytes</td><td>Minimum bytes to accumulate in the response.</td></tr>
+<tr>
+<td>max_bytes</td><td>Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, if the first message in the first non-empty partition of the fetch is larger than this value, the message will still be returned to ensure that progress can be made.</td></tr>
+<tr>
+<td>topics</td><td>Topics to fetch in the order provided.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to fetch.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>fetch_offset</td><td>Message offset.</td></tr>
+<tr>
+<td>max_bytes</td><td>Maximum bytes to fetch.</td></tr>
+</table>
+</p>
+<p><pre>Fetch Request (Version: 4) => replica_id max_wait_time min_bytes max_bytes isolation_level [topics] 
+  replica_id => INT32
+  max_wait_time => INT32
+  min_bytes => INT32
+  max_bytes => INT32
+  isolation_level => INT8
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition fetch_offset max_bytes 
+      partition => INT32
+      fetch_offset => INT64
+      max_bytes => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>replica_id</td><td>Broker id of the follower. For normal consumers, use -1.</td></tr>
+<tr>
+<td>max_wait_time</td><td>Maximum time in ms to wait for the response.</td></tr>
+<tr>
+<td>min_bytes</td><td>Minimum bytes to accumulate in the response.</td></tr>
+<tr>
+<td>max_bytes</td><td>Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, if the first message in the first non-empty partition of the fetch is larger than this value, the message will still be returned to ensure that progress can be made.</td></tr>
+<tr>
+<td>isolation_level</td><td>This setting controls the visibility of transactional records. Using READ_UNCOMMITTED (isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), non-transactional and COMMITTED transactional records are visible. To be more concrete, READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), and enables the inclusion of the list of aborted transactions in the result, which allows consumers to discard ABORTED transactional records</td></tr>
+<tr>
+<td>topics</td><td>Topics to fetch in the order provided.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to fetch.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>fetch_offset</td><td>Message offset.</td></tr>
+<tr>
+<td>max_bytes</td><td>Maximum bytes to fetch.</td></tr>
+</table>
+</p>
+<p><pre>Fetch Request (Version: 5) => replica_id max_wait_time min_bytes max_bytes isolation_level [topics] 
+  replica_id => INT32
+  max_wait_time => INT32
+  min_bytes => INT32
+  max_bytes => INT32
+  isolation_level => INT8
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition fetch_offset log_start_offset max_bytes 
+      partition => INT32
+      fetch_offset => INT64
+      log_start_offset => INT64
+      max_bytes => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>replica_id</td><td>Broker id of the follower. For normal consumers, use -1.</td></tr>
+<tr>
+<td>max_wait_time</td><td>Maximum time in ms to wait for the response.</td></tr>
+<tr>
+<td>min_bytes</td><td>Minimum bytes to accumulate in the response.</td></tr>
+<tr>
+<td>max_bytes</td><td>Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, if the first message in the first non-empty partition of the fetch is larger than this value, the message will still be returned to ensure that progress can be made.</td></tr>
+<tr>
+<td>isolation_level</td><td>This setting controls the visibility of transactional records. Using READ_UNCOMMITTED (isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), non-transactional and COMMITTED transactional records are visible. To be more concrete, READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), and enables the inclusion of the list of aborted transactions in the result, which allows consumers to discard ABORTED transactional records</td></tr>
+<tr>
+<td>topics</td><td>Topics to fetch in the order provided.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to fetch.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>fetch_offset</td><td>Message offset.</td></tr>
+<tr>
+<td>log_start_offset</td><td>Earliest available offset of the follower replica. The field is only used when request is sent by follower. </td></tr>
+<tr>
+<td>max_bytes</td><td>Maximum bytes to fetch.</td></tr>
+</table>
+</p>
+<p><pre>Fetch Request (Version: 6) => replica_id max_wait_time min_bytes max_bytes isolation_level [topics] 
+  replica_id => INT32
+  max_wait_time => INT32
+  min_bytes => INT32
+  max_bytes => INT32
+  isolation_level => INT8
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition fetch_offset log_start_offset max_bytes 
+      partition => INT32
+      fetch_offset => INT64
+      log_start_offset => INT64
+      max_bytes => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>replica_id</td><td>Broker id of the follower. For normal consumers, use -1.</td></tr>
+<tr>
+<td>max_wait_time</td><td>Maximum time in ms to wait for the response.</td></tr>
+<tr>
+<td>min_bytes</td><td>Minimum bytes to accumulate in the response.</td></tr>
+<tr>
+<td>max_bytes</td><td>Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, if the first message in the first non-empty partition of the fetch is larger than this value, the message will still be returned to ensure that progress can be made.</td></tr>
+<tr>
+<td>isolation_level</td><td>This setting controls the visibility of transactional records. Using READ_UNCOMMITTED (isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), non-transactional and COMMITTED transactional records are visible. To be more concrete, READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), and enables the inclusion of the list of aborted transactions in the result, which allows consumers to discard ABORTED transactional records</td></tr>
+<tr>
+<td>topics</td><td>Topics to fetch in the order provided.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to fetch.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>fetch_offset</td><td>Message offset.</td></tr>
+<tr>
+<td>log_start_offset</td><td>Earliest available offset of the follower replica. The field is only used when request is sent by follower. </td></tr>
+<tr>
+<td>max_bytes</td><td>Maximum bytes to fetch.</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>Fetch Response (Version: 0) => [responses] 
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition_header record_set 
+      partition_header => partition error_code high_watermark 
+        partition => INT32
+        error_code => INT16
+        high_watermark => INT64
+      record_set => RECORDS
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition_header</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>high_watermark</td><td>Last committed offset.</td></tr>
+<tr>
+<td>record_set</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>Fetch Response (Version: 1) => throttle_time_ms [responses] 
+  throttle_time_ms => INT32
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition_header record_set 
+      partition_header => partition error_code high_watermark 
+        partition => INT32
+        error_code => INT16
+        high_watermark => INT64
+      record_set => RECORDS
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition_header</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>high_watermark</td><td>Last committed offset.</td></tr>
+<tr>
+<td>record_set</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>Fetch Response (Version: 2) => throttle_time_ms [responses] 
+  throttle_time_ms => INT32
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition_header record_set 
+      partition_header => partition error_code high_watermark 
+        partition => INT32
+        error_code => INT16
+        high_watermark => INT64
+      record_set => RECORDS
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition_header</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>high_watermark</td><td>Last committed offset.</td></tr>
+<tr>
+<td>record_set</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>Fetch Response (Version: 3) => throttle_time_ms [responses] 
+  throttle_time_ms => INT32
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition_header record_set 
+      partition_header => partition error_code high_watermark 
+        partition => INT32
+        error_code => INT16
+        high_watermark => INT64
+      record_set => RECORDS
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition_header</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>high_watermark</td><td>Last committed offset.</td></tr>
+<tr>
+<td>record_set</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>Fetch Response (Version: 4) => throttle_time_ms [responses] 
+  throttle_time_ms => INT32
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition_header record_set 
+      partition_header => partition error_code high_watermark last_stable_offset [aborted_transactions] 
+        partition => INT32
+        error_code => INT16
+        high_watermark => INT64
+        last_stable_offset => INT64
+        aborted_transactions => producer_id first_offset 
+          producer_id => INT64
+          first_offset => INT64
+      record_set => RECORDS
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition_header</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>high_watermark</td><td>Last committed offset.</td></tr>
+<tr>
+<td>last_stable_offset</td><td>The last stable offset (or LSO) of the partition. This is the last offset such that the state of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)</td></tr>
+<tr>
+<td>aborted_transactions</td><td>null</td></tr>
+<tr>
+<td>producer_id</td><td>The producer id associated with the aborted transactions</td></tr>
+<tr>
+<td>first_offset</td><td>The first offset in the aborted transaction</td></tr>
+<tr>
+<td>record_set</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>Fetch Response (Version: 5) => throttle_time_ms [responses] 
+  throttle_time_ms => INT32
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition_header record_set 
+      partition_header => partition error_code high_watermark last_stable_offset log_start_offset [aborted_transactions] 
+        partition => INT32
+        error_code => INT16
+        high_watermark => INT64
+        last_stable_offset => INT64
+        log_start_offset => INT64
+        aborted_transactions => producer_id first_offset 
+          producer_id => INT64
+          first_offset => INT64
+      record_set => RECORDS
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition_header</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>high_watermark</td><td>Last committed offset.</td></tr>
+<tr>
+<td>last_stable_offset</td><td>The last stable offset (or LSO) of the partition. This is the last offset such that the state of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)</td></tr>
+<tr>
+<td>log_start_offset</td><td>Earliest available offset.</td></tr>
+<tr>
+<td>aborted_transactions</td><td>null</td></tr>
+<tr>
+<td>producer_id</td><td>The producer id associated with the aborted transactions</td></tr>
+<tr>
+<td>first_offset</td><td>The first offset in the aborted transaction</td></tr>
+<tr>
+<td>record_set</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>Fetch Response (Version: 6) => throttle_time_ms [responses] 
+  throttle_time_ms => INT32
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition_header record_set 
+      partition_header => partition error_code high_watermark last_stable_offset log_start_offset [aborted_transactions] 
+        partition => INT32
+        error_code => INT16
+        high_watermark => INT64
+        last_stable_offset => INT64
+        log_start_offset => INT64
+        aborted_transactions => producer_id first_offset 
+          producer_id => INT64
+          first_offset => INT64
+      record_set => RECORDS
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition_header</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>high_watermark</td><td>Last committed offset.</td></tr>
+<tr>
+<td>last_stable_offset</td><td>The last stable offset (or LSO) of the partition. This is the last offset such that the state of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)</td></tr>
+<tr>
+<td>log_start_offset</td><td>Earliest available offset.</td></tr>
+<tr>
+<td>aborted_transactions</td><td>null</td></tr>
+<tr>
+<td>producer_id</td><td>The producer id associated with the aborted transactions</td></tr>
+<tr>
+<td>first_offset</td><td>The first offset in the aborted transaction</td></tr>
+<tr>
+<td>record_set</td><td>null</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_ListOffsets">ListOffsets API (Key: 2):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>ListOffsets Request (Version: 0) => replica_id [topics] 
+  replica_id => INT32
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition timestamp max_num_offsets 
+      partition => INT32
+      timestamp => INT64
+      max_num_offsets => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>replica_id</td><td>Broker id of the follower. For normal consumers, use -1.</td></tr>
+<tr>
+<td>topics</td><td>Topics to list offsets.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to list offset.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>timestamp</td><td>Timestamp.</td></tr>
+<tr>
+<td>max_num_offsets</td><td>Maximum offsets to return.</td></tr>
+</table>
+</p>
+<p><pre>ListOffsets Request (Version: 1) => replica_id [topics] 
+  replica_id => INT32
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition timestamp 
+      partition => INT32
+      timestamp => INT64
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>replica_id</td><td>Broker id of the follower. For normal consumers, use -1.</td></tr>
+<tr>
+<td>topics</td><td>Topics to list offsets.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to list offset.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>timestamp</td><td>The target timestamp for the partition.</td></tr>
+</table>
+</p>
+<p><pre>ListOffsets Request (Version: 2) => replica_id isolation_level [topics] 
+  replica_id => INT32
+  isolation_level => INT8
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition timestamp 
+      partition => INT32
+      timestamp => INT64
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>replica_id</td><td>Broker id of the follower. For normal consumers, use -1.</td></tr>
+<tr>
+<td>isolation_level</td><td>This setting controls the visibility of transactional records. Using READ_UNCOMMITTED (isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), non-transactional and COMMITTED transactional records are visible. To be more concrete, READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), and enables the inclusion of the list of aborted transactions in the result, which allows consumers to discard ABORTED transactional records</td></tr>
+<tr>
+<td>topics</td><td>Topics to list offsets.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to list offset.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>timestamp</td><td>The target timestamp for the partition.</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>ListOffsets Response (Version: 0) => [responses] 
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition error_code [offsets] 
+      partition => INT32
+      error_code => INT16
+      offsets => INT64
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>offsets</td><td>A list of offsets.</td></tr>
+</table>
+</p>
+<p><pre>ListOffsets Response (Version: 1) => [responses] 
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition error_code timestamp offset 
+      partition => INT32
+      error_code => INT16
+      timestamp => INT64
+      offset => INT64
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>timestamp</td><td>The timestamp associated with the returned offset</td></tr>
+<tr>
+<td>offset</td><td>offset found</td></tr>
+</table>
+</p>
+<p><pre>ListOffsets Response (Version: 2) => throttle_time_ms [responses] 
+  throttle_time_ms => INT32
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition error_code timestamp offset 
+      partition => INT32
+      error_code => INT16
+      timestamp => INT64
+      offset => INT64
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>timestamp</td><td>The timestamp associated with the returned offset</td></tr>
+<tr>
+<td>offset</td><td>offset found</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_Metadata">Metadata API (Key: 3):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>Metadata Request (Version: 0) => [topics] 
+  topics => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>topics</td><td>An array of topics to fetch metadata for. If no topics are specified fetch metadata for all topics.</td></tr>
+</table>
+</p>
+<p><pre>Metadata Request (Version: 1) => [topics] 
+  topics => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>topics</td><td>An array of topics to fetch metadata for. If the topics array is null fetch metadata for all topics.</td></tr>
+</table>
+</p>
+<p><pre>Metadata Request (Version: 2) => [topics] 
+  topics => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>topics</td><td>An array of topics to fetch metadata for. If the topics array is null fetch metadata for all topics.</td></tr>
+</table>
+</p>
+<p><pre>Metadata Request (Version: 3) => [topics] 
+  topics => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>topics</td><td>An array of topics to fetch metadata for. If the topics array is null fetch metadata for all topics.</td></tr>
+</table>
+</p>
+<p><pre>Metadata Request (Version: 4) => [topics] allow_auto_topic_creation 
+  topics => STRING
+  allow_auto_topic_creation => BOOLEAN
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>topics</td><td>An array of topics to fetch metadata for. If the topics array is null fetch metadata for all topics.</td></tr>
+<tr>
+<td>allow_auto_topic_creation</td><td>If this and the broker config 'auto.create.topics.enable' are true, topics that don't exist will be created by the broker. Otherwise, no topics will be created by the broker.</td></tr>
+</table>
+</p>
+<p><pre>Metadata Request (Version: 5) => [topics] allow_auto_topic_creation 
+  topics => STRING
+  allow_auto_topic_creation => BOOLEAN
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>topics</td><td>An array of topics to fetch metadata for. If the topics array is null fetch metadata for all topics.</td></tr>
+<tr>
+<td>allow_auto_topic_creation</td><td>If this and the broker config 'auto.create.topics.enable' are true, topics that don't exist will be created by the broker. Otherwise, no topics will be created by the broker.</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>Metadata Response (Version: 0) => [brokers] [topic_metadata] 
+  brokers => node_id host port 
+    node_id => INT32
+    host => STRING
+    port => INT32
+  topic_metadata => error_code topic [partition_metadata] 
+    error_code => INT16
+    topic => STRING
+    partition_metadata => error_code partition leader [replicas] [isr] 
+      error_code => INT16
+      partition => INT32
+      leader => INT32
+      replicas => INT32
+      isr => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>brokers</td><td>Host and port information for all brokers.</td></tr>
+<tr>
+<td>node_id</td><td>The broker id.</td></tr>
+<tr>
+<td>host</td><td>The hostname of the broker.</td></tr>
+<tr>
+<td>port</td><td>The port on which the broker accepts requests.</td></tr>
+<tr>
+<td>topic_metadata</td><td>null</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_metadata</td><td>Metadata for each partition of the topic.</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>leader</td><td>The id of the broker acting as leader for this partition.</td></tr>
+<tr>
+<td>replicas</td><td>The set of all nodes that host this partition.</td></tr>
+<tr>
+<td>isr</td><td>The set of nodes that are in sync with the leader for this partition.</td></tr>
+</table>
+</p>
+<p><pre>Metadata Response (Version: 1) => [brokers] controller_id [topic_metadata] 
+  brokers => node_id host port rack 
+    node_id => INT32
+    host => STRING
+    port => INT32
+    rack => NULLABLE_STRING
+  controller_id => INT32
+  topic_metadata => error_code topic is_internal [partition_metadata] 
+    error_code => INT16
+    topic => STRING
+    is_internal => BOOLEAN
+    partition_metadata => error_code partition leader [replicas] [isr] 
+      error_code => INT16
+      partition => INT32
+      leader => INT32
+      replicas => INT32
+      isr => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>brokers</td><td>Host and port information for all brokers.</td></tr>
+<tr>
+<td>node_id</td><td>The broker id.</td></tr>
+<tr>
+<td>host</td><td>The hostname of the broker.</td></tr>
+<tr>
+<td>port</td><td>The port on which the broker accepts requests.</td></tr>
+<tr>
+<td>rack</td><td>The rack of the broker.</td></tr>
+<tr>
+<td>controller_id</td><td>The broker id of the controller broker.</td></tr>
+<tr>
+<td>topic_metadata</td><td>null</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>is_internal</td><td>Indicates if the topic is considered a Kafka internal topic</td></tr>
+<tr>
+<td>partition_metadata</td><td>Metadata for each partition of the topic.</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>leader</td><td>The id of the broker acting as leader for this partition.</td></tr>
+<tr>
+<td>replicas</td><td>The set of all nodes that host this partition.</td></tr>
+<tr>
+<td>isr</td><td>The set of nodes that are in sync with the leader for this partition.</td></tr>
+</table>
+</p>
+<p><pre>Metadata Response (Version: 2) => [brokers] cluster_id controller_id [topic_metadata] 
+  brokers => node_id host port rack 
+    node_id => INT32
+    host => STRING
+    port => INT32
+    rack => NULLABLE_STRING
+  cluster_id => NULLABLE_STRING
+  controller_id => INT32
+  topic_metadata => error_code topic is_internal [partition_metadata] 
+    error_code => INT16
+    topic => STRING
+    is_internal => BOOLEAN
+    partition_metadata => error_code partition leader [replicas] [isr] 
+      error_code => INT16
+      partition => INT32
+      leader => INT32
+      replicas => INT32
+      isr => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>brokers</td><td>Host and port information for all brokers.</td></tr>
+<tr>
+<td>node_id</td><td>The broker id.</td></tr>
+<tr>
+<td>host</td><td>The hostname of the broker.</td></tr>
+<tr>
+<td>port</td><td>The port on which the broker accepts requests.</td></tr>
+<tr>
+<td>rack</td><td>The rack of the broker.</td></tr>
+<tr>
+<td>cluster_id</td><td>The cluster id that this broker belongs to.</td></tr>
+<tr>
+<td>controller_id</td><td>The broker id of the controller broker.</td></tr>
+<tr>
+<td>topic_metadata</td><td>null</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>is_internal</td><td>Indicates if the topic is considered a Kafka internal topic</td></tr>
+<tr>
+<td>partition_metadata</td><td>Metadata for each partition of the topic.</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>leader</td><td>The id of the broker acting as leader for this partition.</td></tr>
+<tr>
+<td>replicas</td><td>The set of all nodes that host this partition.</td></tr>
+<tr>
+<td>isr</td><td>The set of nodes that are in sync with the leader for this partition.</td></tr>
+</table>
+</p>
+<p><pre>Metadata Response (Version: 3) => throttle_time_ms [brokers] cluster_id controller_id [topic_metadata] 
+  throttle_time_ms => INT32
+  brokers => node_id host port rack 
+    node_id => INT32
+    host => STRING
+    port => INT32
+    rack => NULLABLE_STRING
+  cluster_id => NULLABLE_STRING
+  controller_id => INT32
+  topic_metadata => error_code topic is_internal [partition_metadata] 
+    error_code => INT16
+    topic => STRING
+    is_internal => BOOLEAN
+    partition_metadata => error_code partition leader [replicas] [isr] 
+      error_code => INT16
+      partition => INT32
+      leader => INT32
+      replicas => INT32
+      isr => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>brokers</td><td>Host and port information for all brokers.</td></tr>
+<tr>
+<td>node_id</td><td>The broker id.</td></tr>
+<tr>
+<td>host</td><td>The hostname of the broker.</td></tr>
+<tr>
+<td>port</td><td>The port on which the broker accepts requests.</td></tr>
+<tr>
+<td>rack</td><td>The rack of the broker.</td></tr>
+<tr>
+<td>cluster_id</td><td>The cluster id that this broker belongs to.</td></tr>
+<tr>
+<td>controller_id</td><td>The broker id of the controller broker.</td></tr>
+<tr>
+<td>topic_metadata</td><td>null</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>is_internal</td><td>Indicates if the topic is considered a Kafka internal topic</td></tr>
+<tr>
+<td>partition_metadata</td><td>Metadata for each partition of the topic.</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>leader</td><td>The id of the broker acting as leader for this partition.</td></tr>
+<tr>
+<td>replicas</td><td>The set of all nodes that host this partition.</td></tr>
+<tr>
+<td>isr</td><td>The set of nodes that are in sync with the leader for this partition.</td></tr>
+</table>
+</p>
+<p><pre>Metadata Response (Version: 4) => throttle_time_ms [brokers] cluster_id controller_id [topic_metadata] 
+  throttle_time_ms => INT32
+  brokers => node_id host port rack 
+    node_id => INT32
+    host => STRING
+    port => INT32
+    rack => NULLABLE_STRING
+  cluster_id => NULLABLE_STRING
+  controller_id => INT32
+  topic_metadata => error_code topic is_internal [partition_metadata] 
+    error_code => INT16
+    topic => STRING
+    is_internal => BOOLEAN
+    partition_metadata => error_code partition leader [replicas] [isr] 
+      error_code => INT16
+      partition => INT32
+      leader => INT32
+      replicas => INT32
+      isr => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>brokers</td><td>Host and port information for all brokers.</td></tr>
+<tr>
+<td>node_id</td><td>The broker id.</td></tr>
+<tr>
+<td>host</td><td>The hostname of the broker.</td></tr>
+<tr>
+<td>port</td><td>The port on which the broker accepts requests.</td></tr>
+<tr>
+<td>rack</td><td>The rack of the broker.</td></tr>
+<tr>
+<td>cluster_id</td><td>The cluster id that this broker belongs to.</td></tr>
+<tr>
+<td>controller_id</td><td>The broker id of the controller broker.</td></tr>
+<tr>
+<td>topic_metadata</td><td>null</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>is_internal</td><td>Indicates if the topic is considered a Kafka internal topic</td></tr>
+<tr>
+<td>partition_metadata</td><td>Metadata for each partition of the topic.</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>leader</td><td>The id of the broker acting as leader for this partition.</td></tr>
+<tr>
+<td>replicas</td><td>The set of all nodes that host this partition.</td></tr>
+<tr>
+<td>isr</td><td>The set of nodes that are in sync with the leader for this partition.</td></tr>
+</table>
+</p>
+<p><pre>Metadata Response (Version: 5) => throttle_time_ms [brokers] cluster_id controller_id [topic_metadata] 
+  throttle_time_ms => INT32
+  brokers => node_id host port rack 
+    node_id => INT32
+    host => STRING
+    port => INT32
+    rack => NULLABLE_STRING
+  cluster_id => NULLABLE_STRING
+  controller_id => INT32
+  topic_metadata => error_code topic is_internal [partition_metadata] 
+    error_code => INT16
+    topic => STRING
+    is_internal => BOOLEAN
+    partition_metadata => error_code partition leader [replicas] [isr] [offline_replicas] 
+      error_code => INT16
+      partition => INT32
+      leader => INT32
+      replicas => INT32
+      isr => INT32
+      offline_replicas => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>brokers</td><td>Host and port information for all brokers.</td></tr>
+<tr>
+<td>node_id</td><td>The broker id.</td></tr>
+<tr>
+<td>host</td><td>The hostname of the broker.</td></tr>
+<tr>
+<td>port</td><td>The port on which the broker accepts requests.</td></tr>
+<tr>
+<td>rack</td><td>The rack of the broker.</td></tr>
+<tr>
+<td>cluster_id</td><td>The cluster id that this broker belongs to.</td></tr>
+<tr>
+<td>controller_id</td><td>The broker id of the controller broker.</td></tr>
+<tr>
+<td>topic_metadata</td><td>null</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>is_internal</td><td>Indicates if the topic is considered a Kafka internal topic</td></tr>
+<tr>
+<td>partition_metadata</td><td>Metadata for each partition of the topic.</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>leader</td><td>The id of the broker acting as leader for this partition.</td></tr>
+<tr>
+<td>replicas</td><td>The set of all nodes that host this partition.</td></tr>
+<tr>
+<td>isr</td><td>The set of nodes that are in sync with the leader for this partition.</td></tr>
+<tr>
+<td>offline_replicas</td><td>The set of offline replicas of this partition.</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_LeaderAndIsr">LeaderAndIsr API (Key: 4):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>LeaderAndIsr Request (Version: 0) => controller_id controller_epoch [partition_states] [live_leaders] 
+  controller_id => INT32
+  controller_epoch => INT32
+  partition_states => topic partition controller_epoch leader leader_epoch [isr] zk_version [replicas] 
+    topic => STRING
+    partition => INT32
+    controller_epoch => INT32
+    leader => INT32
+    leader_epoch => INT32
+    isr => INT32
+    zk_version => INT32
+    replicas => INT32
+  live_leaders => id host port 
+    id => INT32
+    host => STRING
+    port => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>controller_id</td><td>The controller id.</td></tr>
+<tr>
+<td>controller_epoch</td><td>The controller epoch.</td></tr>
+<tr>
+<td>partition_states</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>controller_epoch</td><td>The controller epoch.</td></tr>
+<tr>
+<td>leader</td><td>The broker id for the leader.</td></tr>
+<tr>
+<td>leader_epoch</td><td>The leader epoch.</td></tr>
+<tr>
+<td>isr</td><td>The in sync replica ids.</td></tr>
+<tr>
+<td>zk_version</td><td>The ZK version.</td></tr>
+<tr>
+<td>replicas</td><td>The replica ids.</td></tr>
+<tr>
+<td>live_leaders</td><td>null</td></tr>
+<tr>
+<td>id</td><td>The broker id.</td></tr>
+<tr>
+<td>host</td><td>The hostname of the broker.</td></tr>
+<tr>
+<td>port</td><td>The port on which the broker accepts requests.</td></tr>
+</table>
+</p>
+<p><pre>LeaderAndIsr Request (Version: 1) => controller_id controller_epoch [partition_states] [live_leaders] 
+  controller_id => INT32
+  controller_epoch => INT32
+  partition_states => topic partition controller_epoch leader leader_epoch [isr] zk_version [replicas] is_new 
+    topic => STRING
+    partition => INT32
+    controller_epoch => INT32
+    leader => INT32
+    leader_epoch => INT32
+    isr => INT32
+    zk_version => INT32
+    replicas => INT32
+    is_new => BOOLEAN
+  live_leaders => id host port 
+    id => INT32
+    host => STRING
+    port => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>controller_id</td><td>The controller id.</td></tr>
+<tr>
+<td>controller_epoch</td><td>The controller epoch.</td></tr>
+<tr>
+<td>partition_states</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>controller_epoch</td><td>The controller epoch.</td></tr>
+<tr>
+<td>leader</td><td>The broker id for the leader.</td></tr>
+<tr>
+<td>leader_epoch</td><td>The leader epoch.</td></tr>
+<tr>
+<td>isr</td><td>The in sync replica ids.</td></tr>
+<tr>
+<td>zk_version</td><td>The ZK version.</td></tr>
+<tr>
+<td>replicas</td><td>The replica ids.</td></tr>
+<tr>
+<td>is_new</td><td>Whether the replica should have existed on the broker or not</td></tr>
+<tr>
+<td>live_leaders</td><td>null</td></tr>
+<tr>
+<td>id</td><td>The broker id.</td></tr>
+<tr>
+<td>host</td><td>The hostname of the broker.</td></tr>
+<tr>
+<td>port</td><td>The port on which the broker accepts requests.</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>LeaderAndIsr Response (Version: 0) => error_code [partitions] 
+  error_code => INT16
+  partitions => topic partition error_code 
+    topic => STRING
+    partition => INT32
+    error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>partitions</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<p><pre>LeaderAndIsr Response (Version: 1) => error_code [partitions] 
+  error_code => INT16
+  partitions => topic partition error_code 
+    topic => STRING
+    partition => INT32
+    error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>partitions</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_StopReplica">StopReplica API (Key: 5):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>StopReplica Request (Version: 0) => controller_id controller_epoch delete_partitions [partitions] 
+  controller_id => INT32
+  controller_epoch => INT32
+  delete_partitions => BOOLEAN
+  partitions => topic partition 
+    topic => STRING
+    partition => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>controller_id</td><td>The controller id.</td></tr>
+<tr>
+<td>controller_epoch</td><td>The controller epoch.</td></tr>
+<tr>
+<td>delete_partitions</td><td>Boolean which indicates if replica's partitions must be deleted.</td></tr>
+<tr>
+<td>partitions</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>StopReplica Response (Version: 0) => error_code [partitions] 
+  error_code => INT16
+  partitions => topic partition error_code 
+    topic => STRING
+    partition => INT32
+    error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>partitions</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_UpdateMetadata">UpdateMetadata API (Key: 6):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>UpdateMetadata Request (Version: 0) => controller_id controller_epoch [partition_states] [live_brokers] 
+  controller_id => INT32
+  controller_epoch => INT32
+  partition_states => topic partition controller_epoch leader leader_epoch [isr] zk_version [replicas] 
+    topic => STRING
+    partition => INT32
+    controller_epoch => INT32
+    leader => INT32
+    leader_epoch => INT32
+    isr => INT32
+    zk_version => INT32
+    replicas => INT32
+  live_brokers => id host port 
+    id => INT32
+    host => STRING
+    port => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>controller_id</td><td>The controller id.</td></tr>
+<tr>
+<td>controller_epoch</td><td>The controller epoch.</td></tr>
+<tr>
+<td>partition_states</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>controller_epoch</td><td>The controller epoch.</td></tr>
+<tr>
+<td>leader</td><td>The broker id for the leader.</td></tr>
+<tr>
+<td>leader_epoch</td><td>The leader epoch.</td></tr>
+<tr>
+<td>isr</td><td>The in sync replica ids.</td></tr>
+<tr>
+<td>zk_version</td><td>The ZK version.</td></tr>
+<tr>
+<td>replicas</td><td>The replica ids.</td></tr>
+<tr>
+<td>live_brokers</td><td>null</td></tr>
+<tr>
+<td>id</td><td>The broker id.</td></tr>
+<tr>
+<td>host</td><td>The hostname of the broker.</td></tr>
+<tr>
+<td>port</td><td>The port on which the broker accepts requests.</td></tr>
+</table>
+</p>
+<p><pre>UpdateMetadata Request (Version: 1) => controller_id controller_epoch [partition_states] [live_brokers] 
+  controller_id => INT32
+  controller_epoch => INT32
+  partition_states => topic partition controller_epoch leader leader_epoch [isr] zk_version [replicas] 
+    topic => STRING
+    partition => INT32
+    controller_epoch => INT32
+    leader => INT32
+    leader_epoch => INT32
+    isr => INT32
+    zk_version => INT32
+    replicas => INT32
+  live_brokers => id [end_points] 
+    id => INT32
+    end_points => port host security_protocol_type 
+      port => INT32
+      host => STRING
+      security_protocol_type => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>controller_id</td><td>The controller id.</td></tr>
+<tr>
+<td>controller_epoch</td><td>The controller epoch.</td></tr>
+<tr>
+<td>partition_states</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>controller_epoch</td><td>The controller epoch.</td></tr>
+<tr>
+<td>leader</td><td>The broker id for the leader.</td></tr>
+<tr>
+<td>leader_epoch</td><td>The leader epoch.</td></tr>
+<tr>
+<td>isr</td><td>The in sync replica ids.</td></tr>
+<tr>
+<td>zk_version</td><td>The ZK version.</td></tr>
+<tr>
+<td>replicas</td><td>The replica ids.</td></tr>
+<tr>
+<td>live_brokers</td><td>null</td></tr>
+<tr>
+<td>id</td><td>The broker id.</td></tr>
+<tr>
+<td>end_points</td><td>null</td></tr>
+<tr>
+<td>port</td><td>The port on which the broker accepts requests.</td></tr>
+<tr>
+<td>host</td><td>The hostname of the broker.</td></tr>
+<tr>
+<td>security_protocol_type</td><td>The security protocol type.</td></tr>
+</table>
+</p>
+<p><pre>UpdateMetadata Request (Version: 2) => controller_id controller_epoch [partition_states] [live_brokers] 
+  controller_id => INT32
+  controller_epoch => INT32
+  partition_states => topic partition controller_epoch leader leader_epoch [isr] zk_version [replicas] 
+    topic => STRING
+    partition => INT32
+    controller_epoch => INT32
+    leader => INT32
+    leader_epoch => INT32
+    isr => INT32
+    zk_version => INT32
+    replicas => INT32
+  live_brokers => id [end_points] rack 
+    id => INT32
+    end_points => port host security_protocol_type 
+      port => INT32
+      host => STRING
+      security_protocol_type => INT16
+    rack => NULLABLE_STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>controller_id</td><td>The controller id.</td></tr>
+<tr>
+<td>controller_epoch</td><td>The controller epoch.</td></tr>
+<tr>
+<td>partition_states</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>controller_epoch</td><td>The controller epoch.</td></tr>
+<tr>
+<td>leader</td><td>The broker id for the leader.</td></tr>
+<tr>
+<td>leader_epoch</td><td>The leader epoch.</td></tr>
+<tr>
+<td>isr</td><td>The in sync replica ids.</td></tr>
+<tr>
+<td>zk_version</td><td>The ZK version.</td></tr>
+<tr>
+<td>replicas</td><td>The replica ids.</td></tr>
+<tr>
+<td>live_brokers</td><td>null</td></tr>
+<tr>
+<td>id</td><td>The broker id.</td></tr>
+<tr>
+<td>end_points</td><td>null</td></tr>
+<tr>
+<td>port</td><td>The port on which the broker accepts requests.</td></tr>
+<tr>
+<td>host</td><td>The hostname of the broker.</td></tr>
+<tr>
+<td>security_protocol_type</td><td>The security protocol type.</td></tr>
+<tr>
+<td>rack</td><td>The rack</td></tr>
+</table>
+</p>
+<p><pre>UpdateMetadata Request (Version: 3) => controller_id controller_epoch [partition_states] [live_brokers] 
+  controller_id => INT32
+  controller_epoch => INT32
+  partition_states => topic partition controller_epoch leader leader_epoch [isr] zk_version [replicas] 
+    topic => STRING
+    partition => INT32
+    controller_epoch => INT32
+    leader => INT32
+    leader_epoch => INT32
+    isr => INT32
+    zk_version => INT32
+    replicas => INT32
+  live_brokers => id [end_points] rack 
+    id => INT32
+    end_points => port host listener_name security_protocol_type 
+      port => INT32
+      host => STRING
+      listener_name => STRING
+      security_protocol_type => INT16
+    rack => NULLABLE_STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>controller_id</td><td>The controller id.</td></tr>
+<tr>
+<td>controller_epoch</td><td>The controller epoch.</td></tr>
+<tr>
+<td>partition_states</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>controller_epoch</td><td>The controller epoch.</td></tr>
+<tr>
+<td>leader</td><td>The broker id for the leader.</td></tr>
+<tr>
+<td>leader_epoch</td><td>The leader epoch.</td></tr>
+<tr>
+<td>isr</td><td>The in sync replica ids.</td></tr>
+<tr>
+<td>zk_version</td><td>The ZK version.</td></tr>
+<tr>
+<td>replicas</td><td>The replica ids.</td></tr>
+<tr>
+<td>live_brokers</td><td>null</td></tr>
+<tr>
+<td>id</td><td>The broker id.</td></tr>
+<tr>
+<td>end_points</td><td>null</td></tr>
+<tr>
+<td>port</td><td>The port on which the broker accepts requests.</td></tr>
+<tr>
+<td>host</td><td>The hostname of the broker.</td></tr>
+<tr>
+<td>listener_name</td><td>The listener name.</td></tr>
+<tr>
+<td>security_protocol_type</td><td>The security protocol type.</td></tr>
+<tr>
+<td>rack</td><td>The rack</td></tr>
+</table>
+</p>
+<p><pre>UpdateMetadata Request (Version: 4) => controller_id controller_epoch [partition_states] [live_brokers] 
+  controller_id => INT32
+  controller_epoch => INT32
+  partition_states => topic partition controller_epoch leader leader_epoch [isr] zk_version [replicas] [offline_replicas] 
+    topic => STRING
+    partition => INT32
+    controller_epoch => INT32
+    leader => INT32
+    leader_epoch => INT32
+    isr => INT32
+    zk_version => INT32
+    replicas => INT32
+    offline_replicas => INT32
+  live_brokers => id [end_points] rack 
+    id => INT32
+    end_points => port host listener_name security_protocol_type 
+      port => INT32
+      host => STRING
+      listener_name => STRING
+      security_protocol_type => INT16
+    rack => NULLABLE_STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>controller_id</td><td>The controller id.</td></tr>
+<tr>
+<td>controller_epoch</td><td>The controller epoch.</td></tr>
+<tr>
+<td>partition_states</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>controller_epoch</td><td>The controller epoch.</td></tr>
+<tr>
+<td>leader</td><td>The broker id for the leader.</td></tr>
+<tr>
+<td>leader_epoch</td><td>The leader epoch.</td></tr>
+<tr>
+<td>isr</td><td>The in sync replica ids.</td></tr>
+<tr>
+<td>zk_version</td><td>The ZK version.</td></tr>
+<tr>
+<td>replicas</td><td>The replica ids.</td></tr>
+<tr>
+<td>offline_replicas</td><td>The offline replica ids</td></tr>
+<tr>
+<td>live_brokers</td><td>null</td></tr>
+<tr>
+<td>id</td><td>The broker id.</td></tr>
+<tr>
+<td>end_points</td><td>null</td></tr>
+<tr>
+<td>port</td><td>The port on which the broker accepts requests.</td></tr>
+<tr>
+<td>host</td><td>The hostname of the broker.</td></tr>
+<tr>
+<td>listener_name</td><td>The listener name.</td></tr>
+<tr>
+<td>security_protocol_type</td><td>The security protocol type.</td></tr>
+<tr>
+<td>rack</td><td>The rack</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>UpdateMetadata Response (Version: 0) => error_code 
+  error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<p><pre>UpdateMetadata Response (Version: 1) => error_code 
+  error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<p><pre>UpdateMetadata Response (Version: 2) => error_code 
+  error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<p><pre>UpdateMetadata Response (Version: 3) => error_code 
+  error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<p><pre>UpdateMetadata Response (Version: 4) => error_code 
+  error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_ControlledShutdown">ControlledShutdown API (Key: 7):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>ControlledShutdown Request (Version: 0) => broker_id 
+  broker_id => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>broker_id</td><td>The id of the broker for which controlled shutdown has been requested.</td></tr>
+</table>
+</p>
+<p><pre>ControlledShutdown Request (Version: 1) => broker_id 
+  broker_id => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>broker_id</td><td>The id of the broker for which controlled shutdown has been requested.</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>ControlledShutdown Response (Version: 0) => error_code [partitions_remaining] 
+  error_code => INT16
+  partitions_remaining => topic partition 
+    topic => STRING
+    partition => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>partitions_remaining</td><td>The partitions that the broker still leads.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+</table>
+</p>
+<p><pre>ControlledShutdown Response (Version: 1) => error_code [partitions_remaining] 
+  error_code => INT16
+  partitions_remaining => topic partition 
+    topic => STRING
+    partition => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>partitions_remaining</td><td>The partitions that the broker still leads.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_OffsetCommit">OffsetCommit API (Key: 8):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>OffsetCommit Request (Version: 0) => group_id [topics] 
+  group_id => STRING
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition offset metadata 
+      partition => INT32
+      offset => INT64
+      metadata => NULLABLE_STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>topics</td><td>Topics to commit offsets.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to commit offsets.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>offset</td><td>Message offset to be committed.</td></tr>
+<tr>
+<td>metadata</td><td>Any associated metadata the client wants to keep.</td></tr>
+</table>
+</p>
+<p><pre>OffsetCommit Request (Version: 1) => group_id generation_id member_id [topics] 
+  group_id => STRING
+  generation_id => INT32
+  member_id => STRING
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition offset timestamp metadata 
+      partition => INT32
+      offset => INT64
+      timestamp => INT64
+      metadata => NULLABLE_STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>generation_id</td><td>The generation of the group.</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>topics</td><td>Topics to commit offsets.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to commit offsets.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>offset</td><td>Message offset to be committed.</td></tr>
+<tr>
+<td>timestamp</td><td>Timestamp of the commit</td></tr>
+<tr>
+<td>metadata</td><td>Any associated metadata the client wants to keep.</td></tr>
+</table>
+</p>
+<p><pre>OffsetCommit Request (Version: 2) => group_id generation_id member_id retention_time [topics] 
+  group_id => STRING
+  generation_id => INT32
+  member_id => STRING
+  retention_time => INT64
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition offset metadata 
+      partition => INT32
+      offset => INT64
+      metadata => NULLABLE_STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>generation_id</td><td>The generation of the group.</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>retention_time</td><td>Time period in ms to retain the offset.</td></tr>
+<tr>
+<td>topics</td><td>Topics to commit offsets.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to commit offsets.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>offset</td><td>Message offset to be committed.</td></tr>
+<tr>
+<td>metadata</td><td>Any associated metadata the client wants to keep.</td></tr>
+</table>
+</p>
+<p><pre>OffsetCommit Request (Version: 3) => group_id generation_id member_id retention_time [topics] 
+  group_id => STRING
+  generation_id => INT32
+  member_id => STRING
+  retention_time => INT64
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition offset metadata 
+      partition => INT32
+      offset => INT64
+      metadata => NULLABLE_STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>generation_id</td><td>The generation of the group.</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>retention_time</td><td>Time period in ms to retain the offset.</td></tr>
+<tr>
+<td>topics</td><td>Topics to commit offsets.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to commit offsets.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>offset</td><td>Message offset to be committed.</td></tr>
+<tr>
+<td>metadata</td><td>Any associated metadata the client wants to keep.</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>OffsetCommit Response (Version: 0) => [responses] 
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition error_code 
+      partition => INT32
+      error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<p><pre>OffsetCommit Response (Version: 1) => [responses] 
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition error_code 
+      partition => INT32
+      error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<p><pre>OffsetCommit Response (Version: 2) => [responses] 
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition error_code 
+      partition => INT32
+      error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<p><pre>OffsetCommit Response (Version: 3) => throttle_time_ms [responses] 
+  throttle_time_ms => INT32
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition error_code 
+      partition => INT32
+      error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_OffsetFetch">OffsetFetch API (Key: 9):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>OffsetFetch Request (Version: 0) => group_id [topics] 
+  group_id => STRING
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition 
+      partition => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>topics</td><td>Topics to fetch offsets.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to fetch offsets.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+</table>
+</p>
+<p><pre>OffsetFetch Request (Version: 1) => group_id [topics] 
+  group_id => STRING
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition 
+      partition => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>topics</td><td>Topics to fetch offsets.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to fetch offsets.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+</table>
+</p>
+<p><pre>OffsetFetch Request (Version: 2) => group_id [topics] 
+  group_id => STRING
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition 
+      partition => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>topics</td><td>Topics to fetch offsets. If the topic array is null fetch offsets for all topics.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to fetch offsets.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+</table>
+</p>
+<p><pre>OffsetFetch Request (Version: 3) => group_id [topics] 
+  group_id => STRING
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition 
+      partition => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>topics</td><td>Topics to fetch offsets. If the topic array is null fetch offsets for all topics.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>Partitions to fetch offsets.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>OffsetFetch Response (Version: 0) => [responses] 
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition offset metadata error_code 
+      partition => INT32
+      offset => INT64
+      metadata => NULLABLE_STRING
+      error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>offset</td><td>Last committed message offset.</td></tr>
+<tr>
+<td>metadata</td><td>Any associated metadata the client wants to keep.</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<p><pre>OffsetFetch Response (Version: 1) => [responses] 
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition offset metadata error_code 
+      partition => INT32
+      offset => INT64
+      metadata => NULLABLE_STRING
+      error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>offset</td><td>Last committed message offset.</td></tr>
+<tr>
+<td>metadata</td><td>Any associated metadata the client wants to keep.</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<p><pre>OffsetFetch Response (Version: 2) => [responses] error_code 
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition offset metadata error_code 
+      partition => INT32
+      offset => INT64
+      metadata => NULLABLE_STRING
+      error_code => INT16
+  error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>offset</td><td>Last committed message offset.</td></tr>
+<tr>
+<td>metadata</td><td>Any associated metadata the client wants to keep.</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<p><pre>OffsetFetch Response (Version: 3) => throttle_time_ms [responses] error_code 
+  throttle_time_ms => INT32
+  responses => topic [partition_responses] 
+    topic => STRING
+    partition_responses => partition offset metadata error_code 
+      partition => INT32
+      offset => INT64
+      metadata => NULLABLE_STRING
+      error_code => INT16
+  error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>responses</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_responses</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>offset</td><td>Last committed message offset.</td></tr>
+<tr>
+<td>metadata</td><td>Any associated metadata the client wants to keep.</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_FindCoordinator">FindCoordinator API (Key: 10):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>FindCoordinator Request (Version: 0) => group_id 
+  group_id => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+</table>
+</p>
+<p><pre>FindCoordinator Request (Version: 1) => coordinator_key coordinator_type 
+  coordinator_key => STRING
+  coordinator_type => INT8
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>coordinator_key</td><td>Id to use for finding the coordinator (for groups, this is the groupId, for transactional producers, this is the transactional id)</td></tr>
+<tr>
+<td>coordinator_type</td><td>The type of coordinator to find (0 = group, 1 = transaction)</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>FindCoordinator Response (Version: 0) => error_code coordinator 
+  error_code => INT16
+  coordinator => node_id host port 
+    node_id => INT32
+    host => STRING
+    port => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>coordinator</td><td>Host and port information for the coordinator for a consumer group.</td></tr>
+<tr>
+<td>node_id</td><td>The broker id.</td></tr>
+<tr>
+<td>host</td><td>The hostname of the broker.</td></tr>
+<tr>
+<td>port</td><td>The port on which the broker accepts requests.</td></tr>
+</table>
+</p>
+<p><pre>FindCoordinator Response (Version: 1) => throttle_time_ms error_code error_message coordinator 
+  throttle_time_ms => INT32
+  error_code => INT16
+  error_message => NULLABLE_STRING
+  coordinator => node_id host port 
+    node_id => INT32
+    host => STRING
+    port => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>error_message</td><td>Response error message</td></tr>
+<tr>
+<td>coordinator</td><td>Host and port information for the coordinator</td></tr>
+<tr>
+<td>node_id</td><td>The broker id.</td></tr>
+<tr>
+<td>host</td><td>The hostname of the broker.</td></tr>
+<tr>
+<td>port</td><td>The port on which the broker accepts requests.</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_JoinGroup">JoinGroup API (Key: 11):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>JoinGroup Request (Version: 0) => group_id session_timeout member_id protocol_type [group_protocols] 
+  group_id => STRING
+  session_timeout => INT32
+  member_id => STRING
+  protocol_type => STRING
+  group_protocols => protocol_name protocol_metadata 
+    protocol_name => STRING
+    protocol_metadata => BYTES
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>session_timeout</td><td>The coordinator considers the consumer dead if it receives no heartbeat after this timeout in ms.</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>protocol_type</td><td>Unique name for class of protocols implemented by group</td></tr>
+<tr>
+<td>group_protocols</td><td>List of protocols that the member supports</td></tr>
+<tr>
+<td>protocol_name</td><td>null</td></tr>
+<tr>
+<td>protocol_metadata</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>JoinGroup Request (Version: 1) => group_id session_timeout rebalance_timeout member_id protocol_type [group_protocols] 
+  group_id => STRING
+  session_timeout => INT32
+  rebalance_timeout => INT32
+  member_id => STRING
+  protocol_type => STRING
+  group_protocols => protocol_name protocol_metadata 
+    protocol_name => STRING
+    protocol_metadata => BYTES
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>session_timeout</td><td>The coordinator considers the consumer dead if it receives no heartbeat after this timeout in ms.</td></tr>
+<tr>
+<td>rebalance_timeout</td><td>The maximum time that the coordinator will wait for each member to rejoin when rebalancing the group</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>protocol_type</td><td>Unique name for class of protocols implemented by group</td></tr>
+<tr>
+<td>group_protocols</td><td>List of protocols that the member supports</td></tr>
+<tr>
+<td>protocol_name</td><td>null</td></tr>
+<tr>
+<td>protocol_metadata</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>JoinGroup Request (Version: 2) => group_id session_timeout rebalance_timeout member_id protocol_type [group_protocols] 
+  group_id => STRING
+  session_timeout => INT32
+  rebalance_timeout => INT32
+  member_id => STRING
+  protocol_type => STRING
+  group_protocols => protocol_name protocol_metadata 
+    protocol_name => STRING
+    protocol_metadata => BYTES
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>session_timeout</td><td>The coordinator considers the consumer dead if it receives no heartbeat after this timeout in ms.</td></tr>
+<tr>
+<td>rebalance_timeout</td><td>The maximum time that the coordinator will wait for each member to rejoin when rebalancing the group</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>protocol_type</td><td>Unique name for class of protocols implemented by group</td></tr>
+<tr>
+<td>group_protocols</td><td>List of protocols that the member supports</td></tr>
+<tr>
+<td>protocol_name</td><td>null</td></tr>
+<tr>
+<td>protocol_metadata</td><td>null</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>JoinGroup Response (Version: 0) => error_code generation_id group_protocol leader_id member_id [members] 
+  error_code => INT16
+  generation_id => INT32
+  group_protocol => STRING
+  leader_id => STRING
+  member_id => STRING
+  members => member_id member_metadata 
+    member_id => STRING
+    member_metadata => BYTES
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>generation_id</td><td>The generation of the group.</td></tr>
+<tr>
+<td>group_protocol</td><td>The group protocol selected by the coordinator</td></tr>
+<tr>
+<td>leader_id</td><td>The leader of the group</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>members</td><td>null</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>member_metadata</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>JoinGroup Response (Version: 1) => error_code generation_id group_protocol leader_id member_id [members] 
+  error_code => INT16
+  generation_id => INT32
+  group_protocol => STRING
+  leader_id => STRING
+  member_id => STRING
+  members => member_id member_metadata 
+    member_id => STRING
+    member_metadata => BYTES
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>generation_id</td><td>The generation of the group.</td></tr>
+<tr>
+<td>group_protocol</td><td>The group protocol selected by the coordinator</td></tr>
+<tr>
+<td>leader_id</td><td>The leader of the group</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>members</td><td>null</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>member_metadata</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>JoinGroup Response (Version: 2) => throttle_time_ms error_code generation_id group_protocol leader_id member_id [members] 
+  throttle_time_ms => INT32
+  error_code => INT16
+  generation_id => INT32
+  group_protocol => STRING
+  leader_id => STRING
+  member_id => STRING
+  members => member_id member_metadata 
+    member_id => STRING
+    member_metadata => BYTES
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>generation_id</td><td>The generation of the group.</td></tr>
+<tr>
+<td>group_protocol</td><td>The group protocol selected by the coordinator</td></tr>
+<tr>
+<td>leader_id</td><td>The leader of the group</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>members</td><td>null</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>member_metadata</td><td>null</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_Heartbeat">Heartbeat API (Key: 12):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>Heartbeat Request (Version: 0) => group_id generation_id member_id 
+  group_id => STRING
+  generation_id => INT32
+  member_id => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>generation_id</td><td>The generation of the group.</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+</table>
+</p>
+<p><pre>Heartbeat Request (Version: 1) => group_id generation_id member_id 
+  group_id => STRING
+  generation_id => INT32
+  member_id => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>generation_id</td><td>The generation of the group.</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>Heartbeat Response (Version: 0) => error_code 
+  error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<p><pre>Heartbeat Response (Version: 1) => throttle_time_ms error_code 
+  throttle_time_ms => INT32
+  error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_LeaveGroup">LeaveGroup API (Key: 13):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>LeaveGroup Request (Version: 0) => group_id member_id 
+  group_id => STRING
+  member_id => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+</table>
+</p>
+<p><pre>LeaveGroup Request (Version: 1) => group_id member_id 
+  group_id => STRING
+  member_id => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>LeaveGroup Response (Version: 0) => error_code 
+  error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<p><pre>LeaveGroup Response (Version: 1) => throttle_time_ms error_code 
+  throttle_time_ms => INT32
+  error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_SyncGroup">SyncGroup API (Key: 14):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>SyncGroup Request (Version: 0) => group_id generation_id member_id [group_assignment] 
+  group_id => STRING
+  generation_id => INT32
+  member_id => STRING
+  group_assignment => member_id member_assignment 
+    member_id => STRING
+    member_assignment => BYTES
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>generation_id</td><td>The generation of the group.</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>group_assignment</td><td>null</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>member_assignment</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>SyncGroup Request (Version: 1) => group_id generation_id member_id [group_assignment] 
+  group_id => STRING
+  generation_id => INT32
+  member_id => STRING
+  group_assignment => member_id member_assignment 
+    member_id => STRING
+    member_assignment => BYTES
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>generation_id</td><td>The generation of the group.</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>group_assignment</td><td>null</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>member_assignment</td><td>null</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>SyncGroup Response (Version: 0) => error_code member_assignment 
+  error_code => INT16
+  member_assignment => BYTES
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>member_assignment</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>SyncGroup Response (Version: 1) => throttle_time_ms error_code member_assignment 
+  throttle_time_ms => INT32
+  error_code => INT16
+  member_assignment => BYTES
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>member_assignment</td><td>null</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_DescribeGroups">DescribeGroups API (Key: 15):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>DescribeGroups Request (Version: 0) => [group_ids] 
+  group_ids => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_ids</td><td>List of groupIds to request metadata for (an empty groupId array will return empty group metadata).</td></tr>
+</table>
+</p>
+<p><pre>DescribeGroups Request (Version: 1) => [group_ids] 
+  group_ids => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>group_ids</td><td>List of groupIds to request metadata for (an empty groupId array will return empty group metadata).</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>DescribeGroups Response (Version: 0) => [groups] 
+  groups => error_code group_id state protocol_type protocol [members] 
+    error_code => INT16
+    group_id => STRING
+    state => STRING
+    protocol_type => STRING
+    protocol => STRING
+    members => member_id client_id client_host member_metadata member_assignment 
+      member_id => STRING
+      client_id => STRING
+      client_host => STRING
+      member_metadata => BYTES
+      member_assignment => BYTES
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>groups</td><td>null</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>state</td><td>The current state of the group (one of: Dead, Stable, AwaitingSync, PreparingRebalance, or empty if there is no active group)</td></tr>
+<tr>
+<td>protocol_type</td><td>The current group protocol type (will be empty if there is no active group)</td></tr>
+<tr>
+<td>protocol</td><td>The current group protocol (only provided if the group is Stable)</td></tr>
+<tr>
+<td>members</td><td>Current group members (only provided if the group is not Dead)</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>client_id</td><td>The client id used in the member's latest join group request</td></tr>
+<tr>
+<td>client_host</td><td>The client host used in the request session corresponding to the member's join group.</td></tr>
+<tr>
+<td>member_metadata</td><td>The metadata corresponding to the current group protocol in use (will only be present if the group is stable).</td></tr>
+<tr>
+<td>member_assignment</td><td>The current assignment provided by the group leader (will only be present if the group is stable).</td></tr>
+</table>
+</p>
+<p><pre>DescribeGroups Response (Version: 1) => throttle_time_ms [groups] 
+  throttle_time_ms => INT32
+  groups => error_code group_id state protocol_type protocol [members] 
+    error_code => INT16
+    group_id => STRING
+    state => STRING
+    protocol_type => STRING
+    protocol => STRING
+    members => member_id client_id client_host member_metadata member_assignment 
+      member_id => STRING
+      client_id => STRING
+      client_host => STRING
+      member_metadata => BYTES
+      member_assignment => BYTES
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>groups</td><td>null</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>state</td><td>The current state of the group (one of: Dead, Stable, AwaitingSync, PreparingRebalance, or empty if there is no active group)</td></tr>
+<tr>
+<td>protocol_type</td><td>The current group protocol type (will be empty if there is no active group)</td></tr>
+<tr>
+<td>protocol</td><td>The current group protocol (only provided if the group is Stable)</td></tr>
+<tr>
+<td>members</td><td>Current group members (only provided if the group is not Dead)</td></tr>
+<tr>
+<td>member_id</td><td>The member id assigned by the group coordinator or null if joining for the first time.</td></tr>
+<tr>
+<td>client_id</td><td>The client id used in the member's latest join group request</td></tr>
+<tr>
+<td>client_host</td><td>The client host used in the request session corresponding to the member's join group.</td></tr>
+<tr>
+<td>member_metadata</td><td>The metadata corresponding to the current group protocol in use (will only be present if the group is stable).</td></tr>
+<tr>
+<td>member_assignment</td><td>The current assignment provided by the group leader (will only be present if the group is stable).</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_ListGroups">ListGroups API (Key: 16):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>ListGroups Request (Version: 0) => 
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr></table>
+</p>
+<p><pre>ListGroups Request (Version: 1) => 
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr></table>
+</p>
+<b>Responses:</b><br>
+<p><pre>ListGroups Response (Version: 0) => error_code [groups] 
+  error_code => INT16
+  groups => group_id protocol_type 
+    group_id => STRING
+    protocol_type => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>groups</td><td>null</td></tr>
+<tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>protocol_type</td><td>null</td></tr>
+</table>
+</p>
+<p><pre>ListGroups Response (Version: 1) => throttle_time_ms error_code [groups] 
+  throttle_time_ms => INT32
+  error_code => INT16
+  groups => group_id protocol_type 
+    group_id => STRING
+    protocol_type => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>groups</td><td>null</td></tr>
+<tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>protocol_type</td><td>null</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_SaslHandshake">SaslHandshake API (Key: 17):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>SaslHandshake Request (Version: 0) => mechanism 
+  mechanism => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>mechanism</td><td>SASL Mechanism chosen by the client.</td></tr>
+</table>
+</p>
+<p><pre>SaslHandshake Request (Version: 1) => mechanism 
+  mechanism => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>mechanism</td><td>SASL Mechanism chosen by the client.</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>SaslHandshake Response (Version: 0) => error_code [enabled_mechanisms] 
+  error_code => INT16
+  enabled_mechanisms => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>enabled_mechanisms</td><td>Array of mechanisms enabled in the server.</td></tr>
+</table>
+</p>
+<p><pre>SaslHandshake Response (Version: 1) => error_code [enabled_mechanisms] 
+  error_code => INT16
+  enabled_mechanisms => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>enabled_mechanisms</td><td>Array of mechanisms enabled in the server.</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_ApiVersions">ApiVersions API (Key: 18):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>ApiVersions Request (Version: 0) => 
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr></table>
+</p>
+<p><pre>ApiVersions Request (Version: 1) => 
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr></table>
+</p>
+<b>Responses:</b><br>
+<p><pre>ApiVersions Response (Version: 0) => error_code [api_versions] 
+  error_code => INT16
+  api_versions => api_key min_version max_version 
+    api_key => INT16
+    min_version => INT16
+    max_version => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>api_versions</td><td>API versions supported by the broker.</td></tr>
+<tr>
+<td>api_key</td><td>API key.</td></tr>
+<tr>
+<td>min_version</td><td>Minimum supported version.</td></tr>
+<tr>
+<td>max_version</td><td>Maximum supported version.</td></tr>
+</table>
+</p>
+<p><pre>ApiVersions Response (Version: 1) => error_code [api_versions] throttle_time_ms 
+  error_code => INT16
+  api_versions => api_key min_version max_version 
+    api_key => INT16
+    min_version => INT16
+    max_version => INT16
+  throttle_time_ms => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>api_versions</td><td>API versions supported by the broker.</td></tr>
+<tr>
+<td>api_key</td><td>API key.</td></tr>
+<tr>
+<td>min_version</td><td>Minimum supported version.</td></tr>
+<tr>
+<td>max_version</td><td>Maximum supported version.</td></tr>
+<tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_CreateTopics">CreateTopics API (Key: 19):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>CreateTopics Request (Version: 0) => [create_topic_requests] timeout 
+  create_topic_requests => topic num_partitions replication_factor [replica_assignment] [config_entries] 
+    topic => STRING
+    num_partitions => INT32
+    replication_factor => INT16
+    replica_assignment => partition [replicas] 
+      partition => INT32
+      replicas => INT32
+    config_entries => config_name config_value 
+      config_name => STRING
+      config_value => NULLABLE_STRING
+  timeout => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>create_topic_requests</td><td>An array of single topic creation requests. Can not have multiple entries for the same topic.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>num_partitions</td><td>Number of partitions to be created. -1 indicates unset.</td></tr>
+<tr>
+<td>replication_factor</td><td>Replication factor for the topic. -1 indicates unset.</td></tr>
+<tr>
+<td>replica_assignment</td><td>Replica assignment among kafka brokers for this topic partitions. If this is set num_partitions and replication_factor must be unset.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>replicas</td><td>The set of all nodes that should host this partition. The first replica in the list is the preferred leader.</td></tr>
+<tr>
+<td>config_entries</td><td>Topic level configuration for topic to be set.</td></tr>
+<tr>
+<td>config_name</td><td>Configuration name</td></tr>
+<tr>
+<td>config_value</td><td>Configuration value</td></tr>
+<tr>
+<td>timeout</td><td>The time in ms to wait for a topic to be completely created on the controller node. Values <= 0 will trigger topic creation and return immediately</td></tr>
+</table>
+</p>
+<p><pre>CreateTopics Request (Version: 1) => [create_topic_requests] timeout validate_only 
+  create_topic_requests => topic num_partitions replication_factor [replica_assignment] [config_entries] 
+    topic => STRING
+    num_partitions => INT32
+    replication_factor => INT16
+    replica_assignment => partition [replicas] 
+      partition => INT32
+      replicas => INT32
+    config_entries => config_name config_value 
+      config_name => STRING
+      config_value => NULLABLE_STRING
+  timeout => INT32
+  validate_only => BOOLEAN
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>create_topic_requests</td><td>An array of single topic creation requests. Can not have multiple entries for the same topic.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>num_partitions</td><td>Number of partitions to be created. -1 indicates unset.</td></tr>
+<tr>
+<td>replication_factor</td><td>Replication factor for the topic. -1 indicates unset.</td></tr>
+<tr>
+<td>replica_assignment</td><td>Replica assignment among kafka brokers for this topic partitions. If this is set num_partitions and replication_factor must be unset.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>replicas</td><td>The set of all nodes that should host this partition. The first replica in the list is the preferred leader.</td></tr>
+<tr>
+<td>config_entries</td><td>Topic level configuration for topic to be set.</td></tr>
+<tr>
+<td>config_name</td><td>Configuration name</td></tr>
+<tr>
+<td>config_value</td><td>Configuration value</td></tr>
+<tr>
+<td>timeout</td><td>The time in ms to wait for a topic to be completely created on the controller node. Values <= 0 will trigger topic creation and return immediately</td></tr>
+<tr>
+<td>validate_only</td><td>If this is true, the request will be validated, but the topic won't be created.</td></tr>
+</table>
+</p>
+<p><pre>CreateTopics Request (Version: 2) => [create_topic_requests] timeout validate_only 
+  create_topic_requests => topic num_partitions replication_factor [replica_assignment] [config_entries] 
+    topic => STRING
+    num_partitions => INT32
+    replication_factor => INT16
+    replica_assignment => partition [replicas] 
+      partition => INT32
+      replicas => INT32
+    config_entries => config_name config_value 
+      config_name => STRING
+      config_value => NULLABLE_STRING
+  timeout => INT32
+  validate_only => BOOLEAN
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>create_topic_requests</td><td>An array of single topic creation requests. Can not have multiple entries for the same topic.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>num_partitions</td><td>Number of partitions to be created. -1 indicates unset.</td></tr>
+<tr>
+<td>replication_factor</td><td>Replication factor for the topic. -1 indicates unset.</td></tr>
+<tr>
+<td>replica_assignment</td><td>Replica assignment among kafka brokers for this topic partitions. If this is set num_partitions and replication_factor must be unset.</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>replicas</td><td>The set of all nodes that should host this partition. The first replica in the list is the preferred leader.</td></tr>
+<tr>
+<td>config_entries</td><td>Topic level configuration for topic to be set.</td></tr>
+<tr>
+<td>config_name</td><td>Configuration name</td></tr>
+<tr>
+<td>config_value</td><td>Configuration value</td></tr>
+<tr>
+<td>timeout</td><td>The time in ms to wait for a topic to be completely created on the controller node. Values <= 0 will trigger topic creation and return immediately</td></tr>
+<tr>
+<td>validate_only</td><td>If this is true, the request will be validated, but the topic won't be created.</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>CreateTopics Response (Version: 0) => [topic_errors] 
+  topic_errors => topic error_code 
+    topic => STRING
+    error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>topic_errors</td><td>An array of per topic error codes.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<p><pre>CreateTopics Response (Version: 1) => [topic_errors] 
+  topic_errors => topic error_code error_message 
+    topic => STRING
+    error_code => INT16
+    error_message => NULLABLE_STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>topic_errors</td><td>An array of per topic errors.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>error_message</td><td>Response error message</td></tr>
+</table>
+</p>
+<p><pre>CreateTopics Response (Version: 2) => throttle_time_ms [topic_errors] 
+  throttle_time_ms => INT32
+  topic_errors => topic error_code error_message 
+    topic => STRING
+    error_code => INT16
+    error_message => NULLABLE_STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>topic_errors</td><td>An array of per topic errors.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>error_message</td><td>Response error message</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_DeleteTopics">DeleteTopics API (Key: 20):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>DeleteTopics Request (Version: 0) => [topics] timeout 
+  topics => STRING
+  timeout => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>topics</td><td>An array of topics to be deleted.</td></tr>
+<tr>
+<td>timeout</td><td>The time in ms to wait for a topic to be completely deleted on the controller node. Values <= 0 will trigger topic deletion and return immediately</td></tr>
+</table>
+</p>
+<p><pre>DeleteTopics Request (Version: 1) => [topics] timeout 
+  topics => STRING
+  timeout => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>topics</td><td>An array of topics to be deleted.</td></tr>
+<tr>
+<td>timeout</td><td>The time in ms to wait for a topic to be completely deleted on the controller node. Values <= 0 will trigger topic deletion and return immediately</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>DeleteTopics Response (Version: 0) => [topic_error_codes] 
+  topic_error_codes => topic error_code 
+    topic => STRING
+    error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>topic_error_codes</td><td>An array of per topic error codes.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<p><pre>DeleteTopics Response (Version: 1) => throttle_time_ms [topic_error_codes] 
+  throttle_time_ms => INT32
+  topic_error_codes => topic error_code 
+    topic => STRING
+    error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>topic_error_codes</td><td>An array of per topic error codes.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_DeleteRecords">DeleteRecords API (Key: 21):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>DeleteRecords Request (Version: 0) => [topics] timeout 
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition offset 
+      partition => INT32
+      offset => INT64
+  timeout => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>topics</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>offset</td><td>The offset before which the messages will be deleted. -1 means high-watermark for the partition.</td></tr>
+<tr>
+<td>timeout</td><td>The maximum time to await a response in ms.</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>DeleteRecords Response (Version: 0) => throttle_time_ms [topics] 
+  throttle_time_ms => INT32
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition low_watermark error_code 
+      partition => INT32
+      low_watermark => INT64
+      error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>topics</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>low_watermark</td><td>Smallest available offset of all live replicas</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_InitProducerId">InitProducerId API (Key: 22):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>InitProducerId Request (Version: 0) => transactional_id transaction_timeout_ms 
+  transactional_id => NULLABLE_STRING
+  transaction_timeout_ms => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>transactional_id</td><td>The transactional id or null if the producer is not transactional</td></tr>
+<tr>
+<td>transaction_timeout_ms</td><td>The time in ms to wait for before aborting idle transactions sent by this producer.</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>InitProducerId Response (Version: 0) => throttle_time_ms error_code producer_id producer_epoch 
+  throttle_time_ms => INT32
+  error_code => INT16
+  producer_id => INT64
+  producer_epoch => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>producer_id</td><td>Current producer id in use by the transactional id.</td></tr>
+<tr>
+<td>producer_epoch</td><td>Current epoch associated with the producer id.</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_OffsetForLeaderEpoch">OffsetForLeaderEpoch API (Key: 23):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>OffsetForLeaderEpoch Request (Version: 0) => [topics] 
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition leader_epoch 
+      partition => INT32
+      leader_epoch => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>topics</td><td>An array of topics to get epochs for</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>leader_epoch</td><td>The epoch</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>OffsetForLeaderEpoch Response (Version: 0) => [topics] 
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => error_code partition end_offset 
+      error_code => INT16
+      partition => INT32
+      end_offset => INT64
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>topics</td><td>An array of topics for which we have leader offsets for some requested Partition Leader Epoch</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>null</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>end_offset</td><td>The end offset</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_AddPartitionsToTxn">AddPartitionsToTxn API (Key: 24):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>AddPartitionsToTxn Request (Version: 0) => transactional_id producer_id producer_epoch [topics] 
+  transactional_id => STRING
+  producer_id => INT64
+  producer_epoch => INT16
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>transactional_id</td><td>The transactional id corresponding to the transaction.</td></tr>
+<tr>
+<td>producer_id</td><td>Current producer id in use by the transactional id.</td></tr>
+<tr>
+<td>producer_epoch</td><td>Current epoch associated with the producer id.</td></tr>
+<tr>
+<td>topics</td><td>The partitions to add to the transaction.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>null</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>AddPartitionsToTxn Response (Version: 0) => throttle_time_ms [errors] 
+  throttle_time_ms => INT32
+  errors => topic [partition_errors] 
+    topic => STRING
+    partition_errors => partition error_code 
+      partition => INT32
+      error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>errors</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partition_errors</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_AddOffsetsToTxn">AddOffsetsToTxn API (Key: 25):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>AddOffsetsToTxn Request (Version: 0) => transactional_id producer_id producer_epoch group_id 
+  transactional_id => STRING
+  producer_id => INT64
+  producer_epoch => INT16
+  group_id => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>transactional_id</td><td>The transactional id corresponding to the transaction.</td></tr>
+<tr>
+<td>producer_id</td><td>Current producer id in use by the transactional id.</td></tr>
+<tr>
+<td>producer_epoch</td><td>Current epoch associated with the producer id.</td></tr>
+<tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>AddOffsetsToTxn Response (Version: 0) => throttle_time_ms error_code 
+  throttle_time_ms => INT32
+  error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_EndTxn">EndTxn API (Key: 26):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>EndTxn Request (Version: 0) => transactional_id producer_id producer_epoch transaction_result 
+  transactional_id => STRING
+  producer_id => INT64
+  producer_epoch => INT16
+  transaction_result => BOOLEAN
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>transactional_id</td><td>The transactional id corresponding to the transaction.</td></tr>
+<tr>
+<td>producer_id</td><td>Current producer id in use by the transactional id.</td></tr>
+<tr>
+<td>producer_epoch</td><td>Current epoch associated with the producer id.</td></tr>
+<tr>
+<td>transaction_result</td><td>The result of the transaction (0 = ABORT, 1 = COMMIT)</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>EndTxn Response (Version: 0) => throttle_time_ms error_code 
+  throttle_time_ms => INT32
+  error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_WriteTxnMarkers">WriteTxnMarkers API (Key: 27):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>WriteTxnMarkers Request (Version: 0) => [transaction_markers] 
+  transaction_markers => producer_id producer_epoch transaction_result [topics] coordinator_epoch 
+    producer_id => INT64
+    producer_epoch => INT16
+    transaction_result => BOOLEAN
+    topics => topic [partitions] 
+      topic => STRING
+      partitions => INT32
+    coordinator_epoch => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>transaction_markers</td><td>The transaction markers to be written.</td></tr>
+<tr>
+<td>producer_id</td><td>Current producer id in use by the transactional id.</td></tr>
+<tr>
+<td>producer_epoch</td><td>Current epoch associated with the producer id.</td></tr>
+<tr>
+<td>transaction_result</td><td>The result of the transaction to write to the partitions (false = ABORT, true = COMMIT).</td></tr>
+<tr>
+<td>topics</td><td>The partitions to write markers for.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>null</td></tr>
+<tr>
+<td>coordinator_epoch</td><td>Epoch associated with the transaction state partition hosted by this transaction coordinator</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>WriteTxnMarkers Response (Version: 0) => [transaction_markers] 
+  transaction_markers => producer_id [topics] 
+    producer_id => INT64
+    topics => topic [partitions] 
+      topic => STRING
+      partitions => partition error_code 
+        partition => INT32
+        error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>transaction_markers</td><td>Errors per partition from writing markers.</td></tr>
+<tr>
+<td>producer_id</td><td>Current producer id in use by the transactional id.</td></tr>
+<tr>
+<td>topics</td><td>Errors per partition from writing markers.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_TxnOffsetCommit">TxnOffsetCommit API (Key: 28):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>TxnOffsetCommit Request (Version: 0) => transactional_id group_id producer_id producer_epoch [topics] 
+  transactional_id => STRING
+  group_id => STRING
+  producer_id => INT64
+  producer_epoch => INT16
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition offset metadata 
+      partition => INT32
+      offset => INT64
+      metadata => NULLABLE_STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>transactional_id</td><td>The transactional id corresponding to the transaction.</td></tr>
+<tr>
+<td>group_id</td><td>The unique group identifier</td></tr>
+<tr>
+<td>producer_id</td><td>Current producer id in use by the transactional id.</td></tr>
+<tr>
+<td>producer_epoch</td><td>Current epoch associated with the producer id.</td></tr>
+<tr>
+<td>topics</td><td>The partitions to write markers for.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>offset</td><td>null</td></tr>
+<tr>
+<td>metadata</td><td>null</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>TxnOffsetCommit Response (Version: 0) => throttle_time_ms [topics] 
+  throttle_time_ms => INT32
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition error_code 
+      partition => INT32
+      error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>topics</td><td>Errors per partition from writing markers.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_DescribeAcls">DescribeAcls API (Key: 29):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>DescribeAcls Request (Version: 0) => resource_type resource_name principal host operation permission_type 
+  resource_type => INT8
+  resource_name => NULLABLE_STRING
+  principal => NULLABLE_STRING
+  host => NULLABLE_STRING
+  operation => INT8
+  permission_type => INT8
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>resource_type</td><td>The resource type</td></tr>
+<tr>
+<td>resource_name</td><td>The resource name filter</td></tr>
+<tr>
+<td>principal</td><td>The ACL principal filter</td></tr>
+<tr>
+<td>host</td><td>The ACL host filter</td></tr>
+<tr>
+<td>operation</td><td>The ACL operation</td></tr>
+<tr>
+<td>permission_type</td><td>The ACL permission type</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>DescribeAcls Response (Version: 0) => throttle_time_ms error_code error_message [resources] 
+  throttle_time_ms => INT32
+  error_code => INT16
+  error_message => NULLABLE_STRING
+  resources => resource_type resource_name [acls] 
+    resource_type => INT8
+    resource_name => STRING
+    acls => principal host operation permission_type 
+      principal => STRING
+      host => STRING
+      operation => INT8
+      permission_type => INT8
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>error_message</td><td>Response error message</td></tr>
+<tr>
+<td>resources</td><td>The resources and their associated ACLs.</td></tr>
+<tr>
+<td>resource_type</td><td>The resource type</td></tr>
+<tr>
+<td>resource_name</td><td>The resource name</td></tr>
+<tr>
+<td>acls</td><td>null</td></tr>
+<tr>
+<td>principal</td><td>The ACL principal</td></tr>
+<tr>
+<td>host</td><td>The ACL host</td></tr>
+<tr>
+<td>operation</td><td>The ACL operation</td></tr>
+<tr>
+<td>permission_type</td><td>The ACL permission type</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_CreateAcls">CreateAcls API (Key: 30):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>CreateAcls Request (Version: 0) => [creations] 
+  creations => resource_type resource_name principal host operation permission_type 
+    resource_type => INT8
+    resource_name => STRING
+    principal => STRING
+    host => STRING
+    operation => INT8
+    permission_type => INT8
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>creations</td><td>null</td></tr>
+<tr>
+<td>resource_type</td><td>The resource type</td></tr>
+<tr>
+<td>resource_name</td><td>The resource name</td></tr>
+<tr>
+<td>principal</td><td>The ACL principal</td></tr>
+<tr>
+<td>host</td><td>The ACL host</td></tr>
+<tr>
+<td>operation</td><td>The ACL operation</td></tr>
+<tr>
+<td>permission_type</td><td>The ACL permission type</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>CreateAcls Response (Version: 0) => throttle_time_ms [creation_responses] 
+  throttle_time_ms => INT32
+  creation_responses => error_code error_message 
+    error_code => INT16
+    error_message => NULLABLE_STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>creation_responses</td><td>null</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>error_message</td><td>Response error message</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_DeleteAcls">DeleteAcls API (Key: 31):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>DeleteAcls Request (Version: 0) => [filters] 
+  filters => resource_type resource_name principal host operation permission_type 
+    resource_type => INT8
+    resource_name => NULLABLE_STRING
+    principal => NULLABLE_STRING
+    host => NULLABLE_STRING
+    operation => INT8
+    permission_type => INT8
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>filters</td><td>null</td></tr>
+<tr>
+<td>resource_type</td><td>The resource type</td></tr>
+<tr>
+<td>resource_name</td><td>The resource name filter</td></tr>
+<tr>
+<td>principal</td><td>The ACL principal filter</td></tr>
+<tr>
+<td>host</td><td>The ACL host filter</td></tr>
+<tr>
+<td>operation</td><td>The ACL operation</td></tr>
+<tr>
+<td>permission_type</td><td>The ACL permission type</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>DeleteAcls Response (Version: 0) => throttle_time_ms [filter_responses] 
+  throttle_time_ms => INT32
+  filter_responses => error_code error_message [matching_acls] 
+    error_code => INT16
+    error_message => NULLABLE_STRING
+    matching_acls => error_code error_message resource_type resource_name principal host operation permission_type 
+      error_code => INT16
+      error_message => NULLABLE_STRING
+      resource_type => INT8
+      resource_name => STRING
+      principal => STRING
+      host => STRING
+      operation => INT8
+      permission_type => INT8
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>filter_responses</td><td>null</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>error_message</td><td>Response error message</td></tr>
+<tr>
+<td>matching_acls</td><td>The matching ACLs</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>error_message</td><td>Response error message</td></tr>
+<tr>
+<td>resource_type</td><td>The resource type</td></tr>
+<tr>
+<td>resource_name</td><td>The resource name</td></tr>
+<tr>
+<td>principal</td><td>The ACL principal</td></tr>
+<tr>
+<td>host</td><td>The ACL host</td></tr>
+<tr>
+<td>operation</td><td>The ACL operation</td></tr>
+<tr>
+<td>permission_type</td><td>The ACL permission type</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_DescribeConfigs">DescribeConfigs API (Key: 32):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>DescribeConfigs Request (Version: 0) => [resources] 
+  resources => resource_type resource_name [config_names] 
+    resource_type => INT8
+    resource_name => STRING
+    config_names => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>resources</td><td>An array of config resources to be returned.</td></tr>
+<tr>
+<td>resource_type</td><td>null</td></tr>
+<tr>
+<td>resource_name</td><td>null</td></tr>
+<tr>
+<td>config_names</td><td>null</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>DescribeConfigs Response (Version: 0) => throttle_time_ms [resources] 
+  throttle_time_ms => INT32
+  resources => error_code error_message resource_type resource_name [config_entries] 
+    error_code => INT16
+    error_message => NULLABLE_STRING
+    resource_type => INT8
+    resource_name => STRING
+    config_entries => config_name config_value read_only is_default is_sensitive 
+      config_name => STRING
+      config_value => NULLABLE_STRING
+      read_only => BOOLEAN
+      is_default => BOOLEAN
+      is_sensitive => BOOLEAN
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>resources</td><td>null</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>error_message</td><td>Response error message</td></tr>
+<tr>
+<td>resource_type</td><td>null</td></tr>
+<tr>
+<td>resource_name</td><td>null</td></tr>
+<tr>
+<td>config_entries</td><td>null</td></tr>
+<tr>
+<td>config_name</td><td>null</td></tr>
+<tr>
+<td>config_value</td><td>null</td></tr>
+<tr>
+<td>read_only</td><td>null</td></tr>
+<tr>
+<td>is_default</td><td>null</td></tr>
+<tr>
+<td>is_sensitive</td><td>null</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_AlterConfigs">AlterConfigs API (Key: 33):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>AlterConfigs Request (Version: 0) => [resources] validate_only 
+  resources => resource_type resource_name [config_entries] 
+    resource_type => INT8
+    resource_name => STRING
+    config_entries => config_name config_value 
+      config_name => STRING
+      config_value => NULLABLE_STRING
+  validate_only => BOOLEAN
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>resources</td><td>An array of resources to update with the provided configs.</td></tr>
+<tr>
+<td>resource_type</td><td>null</td></tr>
+<tr>
+<td>resource_name</td><td>null</td></tr>
+<tr>
+<td>config_entries</td><td>null</td></tr>
+<tr>
+<td>config_name</td><td>Configuration name</td></tr>
+<tr>
+<td>config_value</td><td>Configuration value</td></tr>
+<tr>
+<td>validate_only</td><td>null</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>AlterConfigs Response (Version: 0) => throttle_time_ms [resources] 
+  throttle_time_ms => INT32
+  resources => error_code error_message resource_type resource_name 
+    error_code => INT16
+    error_message => NULLABLE_STRING
+    resource_type => INT8
+    resource_name => STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>resources</td><td>null</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>error_message</td><td>Response error message</td></tr>
+<tr>
+<td>resource_type</td><td>null</td></tr>
+<tr>
+<td>resource_name</td><td>null</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_AlterReplicaLogDirs">AlterReplicaLogDirs API (Key: 34):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>AlterReplicaLogDirs Request (Version: 0) => [log_dirs] 
+  log_dirs => log_dir [topics] 
+    log_dir => STRING
+    topics => topic [partitions] 
+      topic => STRING
+      partitions => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>log_dirs</td><td>null</td></tr>
+<tr>
+<td>log_dir</td><td>The absolute log directory path.</td></tr>
+<tr>
+<td>topics</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>List of partition ids of the topic.</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>AlterReplicaLogDirs Response (Version: 0) => throttle_time_ms [topics] 
+  throttle_time_ms => INT32
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => partition error_code 
+      partition => INT32
+      error_code => INT16
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>topics</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_DescribeLogDirs">DescribeLogDirs API (Key: 35):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>DescribeLogDirs Request (Version: 0) => [topics] 
+  topics => topic [partitions] 
+    topic => STRING
+    partitions => INT32
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>topics</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>List of partition ids of the topic.</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>DescribeLogDirs Response (Version: 0) => throttle_time_ms [log_dirs] 
+  throttle_time_ms => INT32
+  log_dirs => error_code log_dir [topics] 
+    error_code => INT16
+    log_dir => STRING
+    topics => topic [partitions] 
+      topic => STRING
+      partitions => partition size offset_lag is_future 
+        partition => INT32
+        size => INT64
+        offset_lag => INT64
+        is_future => BOOLEAN
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>log_dirs</td><td>null</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>log_dir</td><td>The absolute log directory path.</td></tr>
+<tr>
+<td>topics</td><td>null</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>partitions</td><td>null</td></tr>
+<tr>
+<td>partition</td><td>Topic partition id</td></tr>
+<tr>
+<td>size</td><td>The size of the log segments of the partition in bytes.</td></tr>
+<tr>
+<td>offset_lag</td><td>The lag of the log's LEO w.r.t. partition's HW (if it is the current log for the partition) or current replica's LEO (if it is the future log for the partition)</td></tr>
+<tr>
+<td>is_future</td><td>True if this log is created by AlterReplicaLogDirsRequest and will replace the current log of the replica in the future.</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_SaslAuthenticate">SaslAuthenticate API (Key: 36):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>SaslAuthenticate Request (Version: 0) => sasl_auth_bytes 
+  sasl_auth_bytes => BYTES
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>sasl_auth_bytes</td><td>SASL authentication bytes from client as defined by the SASL mechanism.</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>SaslAuthenticate Response (Version: 0) => error_code error_message sasl_auth_bytes 
+  error_code => INT16
+  error_message => NULLABLE_STRING
+  sasl_auth_bytes => BYTES
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>error_message</td><td>Response error message</td></tr>
+<tr>
+<td>sasl_auth_bytes</td><td>SASL authentication bytes from server as defined by the SASL mechanism.</td></tr>
+</table>
+</p>
+<h5><a name="The_Messages_CreatePartitions">CreatePartitions API (Key: 37):</a></h5>
+
+<b>Requests:</b><br>
+<p><pre>CreatePartitions Request (Version: 0) => [topic_partitions] timeout validate_only 
+  topic_partitions => topic new_partitions 
+    topic => STRING
+    new_partitions => count [assignment] 
+      count => INT32
+      assignment => ARRAY(INT32)
+  timeout => INT32
+  validate_only => BOOLEAN
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>topic_partitions</td><td>List of topic and the corresponding new partitions.</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>new_partitions</td><td>null</td></tr>
+<tr>
+<td>count</td><td>The new partition count.</td></tr>
+<tr>
+<td>assignment</td><td>The assigned brokers.</td></tr>
+<tr>
+<td>timeout</td><td>The time in ms to wait for the partitions to be created.</td></tr>
+<tr>
+<td>validate_only</td><td>If true then validate the request, but don't actually increase the number of partitions.</td></tr>
+</table>
+</p>
+<b>Responses:</b><br>
+<p><pre>CreatePartitions Response (Version: 0) => throttle_time_ms [topic_errors] 
+  throttle_time_ms => INT32
+  topic_errors => topic error_code error_message 
+    topic => STRING
+    error_code => INT16
+    error_message => NULLABLE_STRING
+</pre><table class="data-table"><tbody>
+<tr><th>Field</th>
+<th>Description</th>
+</tr><tr>
+<td>throttle_time_ms</td><td>Duration in milliseconds for which the request was throttled due to quota violation (Zero if the request did not violate any quota)</td></tr>
+<tr>
+<td>topic_errors</td><td>Per topic results for the create partitions request</td></tr>
+<tr>
+<td>topic</td><td>Name of topic</td></tr>
+<tr>
+<td>error_code</td><td>Response error code</td></tr>
+<tr>
+<td>error_message</td><td>Response error message</td></tr>
+</table>
+</p>
+
