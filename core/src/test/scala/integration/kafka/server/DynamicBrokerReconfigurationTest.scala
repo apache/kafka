@@ -526,6 +526,9 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val adminClient = adminClients.head
     val externalAdminClient = createAdminClient(SecurityProtocol.SASL_SSL, SecureExternal)
 
+    // Ensure connections are made to brokers before external listener is made inaccessible
+    describeConfig(externalAdminClient)
+
     // Update broker keystore for external listener to use invalid listener address
     // any address other than localhost is sufficient to fail (either connection or host name verification failure)
     val invalidHost = "192.168.0.1"
@@ -930,8 +933,10 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
         assertTrue("Config not updated", externalListener.host == newHost)
       }
     }
-    TestUtils.waitUntilTrue(() => !serverEndpoints(externalAdminClient).contains(oldHost),
-      "Advertised listener update not propagated by controller")
+    val (endpoints, altered) = TestUtils.computeUntilTrue(serverEndpoints(externalAdminClient)) { endpoints =>
+      !endpoints.contains(oldHost)
+    }
+    assertTrue(s"Advertised listener update not propagated by controller: $endpoints", altered)
   }
 
   private def alterConfigs(adminClient: AdminClient, props: Properties, perBrokerConfig: Boolean): AlterConfigsResult = {
