@@ -241,7 +241,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifyProduceConsume(producer, consumer, 10, topic2)
 
     // Verify that all messages sent with retries=0 while keystores were being altered were consumed
-    stopAndVerifyProduceConsume(producerThread, consumerThread, mayFailRequests = false)
+    stopAndVerifyProduceConsume(producerThread, consumerThread)
   }
 
   @Test
@@ -282,7 +282,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 2)
 
     // Verify that produce/consume worked throughout this test without any retries in producer
-    stopAndVerifyProduceConsume(producerThread, consumerThread, mayFailRequests = false)
+    stopAndVerifyProduceConsume(producerThread, consumerThread)
   }
 
   @Test
@@ -370,7 +370,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     servers.tail.foreach { server => assertEquals(Defaults.LogIndexSizeMaxBytes, server.config.values.get(KafkaConfig.LogIndexSizeMaxBytesProp)) }
 
     // Verify that produce/consume worked throughout this test without any retries in producer
-    stopAndVerifyProduceConsume(producerThread, consumerThread, mayFailRequests = false)
+    stopAndVerifyProduceConsume(producerThread, consumerThread)
   }
 
   @Test
@@ -435,14 +435,14 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val config = servers.head.config
     verifyThreadPoolResize(KafkaConfig.NumIoThreadsProp, config.numIoThreads,
       requestHandlerPrefix, mayFailRequests = false)
-    verifyThreadPoolResize(KafkaConfig.NumNetworkThreadsProp, config.numNetworkThreads,
-      networkThreadPrefix, mayFailRequests = true)
     verifyThreadPoolResize(KafkaConfig.NumReplicaFetchersProp, config.numReplicaFetchers,
       fetcherThreadPrefix, mayFailRequests = false)
     verifyThreadPoolResize(KafkaConfig.BackgroundThreadsProp, config.backgroundThreads,
       "kafka-scheduler-", mayFailRequests = false)
     verifyThreadPoolResize(KafkaConfig.NumRecoveryThreadsPerDataDirProp, config.numRecoveryThreadsPerDataDir,
       "", mayFailRequests = false)
+    verifyThreadPoolResize(KafkaConfig.NumNetworkThreadsProp, config.numNetworkThreads,
+      networkThreadPrefix, mayFailRequests = true)
   }
 
   @Test
@@ -1055,17 +1055,14 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   private def stopAndVerifyProduceConsume(producerThread: ProducerThread, consumerThread: ConsumerThread,
-                                          mayFailRequests: Boolean = false): Unit = {
+                                          mayReceiveDuplicates: Boolean = false): Unit = {
     TestUtils.waitUntilTrue(() => producerThread.sent >= 10, "Messages not sent")
     producerThread.shutdown()
     consumerThread.initiateShutdown()
     consumerThread.awaitShutdown()
-    if (!mayFailRequests)
-      assertEquals(producerThread.sent, consumerThread.received)
-    else {
-      assertTrue(s"Some messages not received, sent=${producerThread.sent} received=${consumerThread.received}",
-        consumerThread.received >= producerThread.sent)
-    }
+    assertEquals(producerThread.sentKeys, consumerThread.receivedKeys)
+    if (!mayReceiveDuplicates)
+      assertEquals(consumerThread.received, consumerThread.receivedKeys.size)
   }
 
   private def verifyConnectionFailure(producer: KafkaProducer[String, String]): Future[_] = {
@@ -1128,32 +1125,38 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   private class ProducerThread(clientId: String, retries: Int) extends ShutdownableThread(clientId, isInterruptible = false) {
     private val producer = createProducer(trustStoreFile1, retries, clientId)
+    val sentKeys = new ConcurrentSkipListSet[String]()
     @volatile var sent = 0
     override def doWork(): Unit = {
-        try {
-            while (isRunning) {
-                sent += 1
-                val record = new ProducerRecord(topic, s"key$sent", s"value$sent")
-                producer.send(record).get(10, TimeUnit.SECONDS)
-              }
-          } finally {
-            producer.close()
-          }
+      try {
+        while (isRunning) {
+          sent += 1
+          val key = sent.toString
+          val record = new ProducerRecord(topic, key, s"value$sent")
+          producer.send(record).get(10, TimeUnit.SECONDS)
+          sentKeys.add(key)
+        }
+      } finally {
+        producer.close()
+      }
       }
   }
 
   private class ConsumerThread(producerThread: ProducerThread) extends ShutdownableThread("test-consumer", isInterruptible = false) {
     private val consumer = createConsumer("group1", trustStoreFile1)
+    val receivedKeys = new ConcurrentSkipListSet[String]()
     @volatile var lastBatch: ConsumerRecords[String, String] = _
     @volatile private var endTimeMs = Long.MaxValue
-    var received = 0
+    @volatile var received = 0
     override def doWork(): Unit = {
       try {
-        while (isRunning || (received < producerThread.sent && System.currentTimeMillis < endTimeMs)) {
+        while (isRunning || (receivedKeys != producerThread.sentKeys && System.currentTimeMillis < endTimeMs)) {
           val records = consumer.poll(50)
           received += records.count
-          if (!records.isEmpty)
+          if (!records.isEmpty) {
             lastBatch = records
+            records.asScala.foreach { record => receivedKeys.add(record.key) }
+          }
         }
       } finally {
         consumer.close()
