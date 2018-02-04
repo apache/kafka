@@ -71,6 +71,4 @@ case class EndPoint(host: String, port: Int, listenerName: ListenerName, securit
         Utils.formatAddress(host, port)
     listenerName.value + "://" + hostport
   }
-
-  override def toString: String = connectionString
 }

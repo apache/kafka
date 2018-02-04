@@ -718,7 +718,7 @@ object TestUtils extends Logging {
 
   def deleteBrokersInZk(zkClient: KafkaZkClient, ids: Seq[Int]): Seq[Broker] = {
     val brokers = ids.map(createBroker(_, "localhost", 6667, SecurityProtocol.PLAINTEXT))
-    brokers.foreach(b => zkClient.deletePath(BrokerIdsZNode.path + "/" + b))
+    ids.foreach(b => zkClient.deletePath(BrokerIdsZNode.path + "/" + b))
     brokers
   }
 
