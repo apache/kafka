@@ -133,7 +133,7 @@ public class PluginUtils {
     private static final DirectoryStream.Filter<Path> PLUGIN_PATH_FILTER = new DirectoryStream
             .Filter<Path>() {
         @Override
-        public boolean accept(Path path) throws IOException {
+        public boolean accept(Path path) {
             return Files.isDirectory(path) || isArchive(path) || isClassFile(path);
         }
     };
@@ -232,16 +232,29 @@ public class PluginUtils {
 
                 Path adjacent = neighbors.next();
                 if (Files.isSymbolicLink(adjacent)) {
-                    Path symlink = Files.readSymbolicLink(adjacent);
-                    // if symlink is absolute resolve() returns the absolute symlink itself
-                    Path parent = adjacent.getParent();
-                    if (parent == null) {
-                        continue;
-                    }
-                    Path absolute = parent.resolve(symlink).toRealPath();
-                    if (Files.exists(absolute)) {
-                        adjacent = absolute;
-                    } else {
+                    try {
+                        Path symlink = Files.readSymbolicLink(adjacent);
+                        // if symlink is absolute resolve() returns the absolute symlink itself
+                        Path parent = adjacent.getParent();
+                        if (parent == null) {
+                            continue;
+                        }
+                        Path absolute = parent.resolve(symlink).toRealPath();
+                        if (Files.exists(absolute)) {
+                            adjacent = absolute;
+                        } else {
+                            continue;
+                        }
+                    } catch (IOException e) {
+                        // See https://issues.apache.org/jira/browse/KAFKA-6288 for a reported
+                        // failure. Such a failure at this stage is not easily reproducible and
+                        // therefore an exception is caught and ignored after issuing a
+                        // warning. This allows class scanning to continue for non-broken plugins.
+                        log.warn(
+                                "Resolving symbolic link '{}' failed. Ignoring this path.",
+                                adjacent,
+                                e
+                        );
                         continue;
                     }
                 }
@@ -341,8 +354,8 @@ public class PluginUtils {
     }
 
     private static class DirectoryEntry {
-        DirectoryStream<Path> stream;
-        Iterator<Path> iterator;
+        final DirectoryStream<Path> stream;
+        final Iterator<Path> iterator;
 
         DirectoryEntry(DirectoryStream<Path> stream) {
             this.stream = stream;
