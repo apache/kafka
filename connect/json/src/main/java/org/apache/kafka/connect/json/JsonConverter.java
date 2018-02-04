@@ -673,7 +673,7 @@ public class JsonConverter implements Converter, HeaderConverter {
                 }
                 case STRUCT: {
                     Struct struct = (Struct) value;
-                    if (struct.schema() != schema)
+                    if (!struct.schema().equals(schema))
                         throw new DataException("Mismatching schema.");
                     ObjectNode obj = JsonNodeFactory.instance.objectNode();
                     for (Field field : schema.fields()) {
@@ -754,5 +754,15 @@ public class JsonConverter implements Converter, HeaderConverter {
 
     private interface LogicalTypeConverter {
         Object convert(Schema schema, Object value);
+    }
+    
+    //Exists for testing purposes
+    public boolean convertToJsonEqual(Schema schema, Struct value) {
+        try {
+            convertToJson(schema, value);
+        } catch (DataException exc) {
+            return false;
+        }
+        return true;
     }
 }
