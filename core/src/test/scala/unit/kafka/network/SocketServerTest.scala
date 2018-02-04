@@ -38,6 +38,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.security.scram.ScramMechanism
 import org.apache.kafka.common.utils.{LogContext, MockTime, Time}
 import org.apache.log4j.Level
 import org.junit.Assert._
@@ -61,7 +62,7 @@ class SocketServerTest extends JUnitSuite {
   props.put("connections.max.idle.ms", "60000")
   val config = KafkaConfig.fromProps(props)
   val metrics = new Metrics
-  val credentialProvider = new CredentialProvider(config.saslEnabledMechanisms, null)
+  val credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, null)
   val localAddress = InetAddress.getLoopbackAddress
 
   // Clean-up any metrics left around by previous tests
@@ -406,7 +407,7 @@ class SocketServerTest extends JUnitSuite {
     // the following sleep is necessary to reliably detect the connection close when we send data below
     Thread.sleep(200L)
     // make sure the sockets are open
-    server.acceptors.values.foreach(acceptor => assertFalse(acceptor.serverChannel.socket.isClosed))
+    server.acceptors.asScala.values.foreach(acceptor => assertFalse(acceptor.serverChannel.socket.isClosed))
     // then shutdown the server
     shutdownServerAndMetrics(server)
 

@@ -223,6 +223,11 @@ object Defaults {
   val DelegationTokenMaxLifeTimeMsDefault = 7 * 24 * 60 * 60 * 1000L
   val DelegationTokenExpiryTimeMsDefault = 24 * 60 * 60 * 1000L
   val DelegationTokenExpiryCheckIntervalMsDefault = 1 * 60 * 60 * 1000L
+
+  /** ********* Password encryption configuration for dynamic configs *********/
+  val PasswordEncoderCipherAlgorithm = "AES/CBC/PKCS5Padding"
+  val PasswordEncoderKeyLength = 128
+  val PasswordEncoderIterations = 4096
 }
 
 object KafkaConfig {
@@ -412,6 +417,7 @@ object KafkaConfig {
 
   /** ********* SASL Configuration ****************/
   val SaslMechanismInterBrokerProtocolProp = "sasl.mechanism.inter.broker.protocol"
+  val SaslJaasConfigProp = SaslConfigs.SASL_JAAS_CONFIG
   val SaslEnabledMechanismsProp = BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG
   val SaslKerberosServiceNameProp = SaslConfigs.SASL_KERBEROS_SERVICE_NAME
   val SaslKerberosKinitCmdProp = SaslConfigs.SASL_KERBEROS_KINIT_CMD
@@ -425,6 +431,14 @@ object KafkaConfig {
   val DelegationTokenMaxLifeTimeProp = "delegation.token.max.lifetime.ms"
   val DelegationTokenExpiryTimeMsProp = "delegation.token.expiry.time.ms"
   val DelegationTokenExpiryCheckIntervalMsProp = "delegation.token.expiry.check.interval.ms"
+
+  /** ********* Password encryption configuration for dynamic configs *********/
+  val PasswordEncoderSecretProp = "password.encoder.secret"
+  val PasswordEncoderOldSecretProp = "password.encoder.old.secret"
+  val PasswordEncoderKeyFactoryAlgorithmProp = "password.encoder.keyfactory.algorithm"
+  val PasswordEncoderCipherAlgorithmProp = "password.encoder.cipher.algorithm"
+  val PasswordEncoderKeyLengthProp =  "password.encoder.key.length"
+  val PasswordEncoderIterationsProp =  "password.encoder.iterations"
 
   /* Documentation */
   /** ********* Zookeeper Configuration ***********/
@@ -689,6 +703,7 @@ object KafkaConfig {
 
   /** ********* Sasl Configuration ****************/
   val SaslMechanismInterBrokerProtocolDoc = "SASL mechanism used for inter-broker communication. Default is GSSAPI."
+  val SaslJaasConfigDoc = SaslConfigs.SASL_JAAS_CONFIG_DOC
   val SaslEnabledMechanismsDoc = SaslConfigs.SASL_ENABLED_MECHANISMS_DOC
   val SaslKerberosServiceNameDoc = SaslConfigs.SASL_KERBEROS_SERVICE_NAME_DOC
   val SaslKerberosKinitCmdDoc = SaslConfigs.SASL_KERBEROS_KINIT_CMD_DOC
@@ -704,6 +719,16 @@ object KafkaConfig {
   val DelegationTokenExpiryTimeMsDoc = "The token validity time in seconds before the token needs to be renewed. Default value 1 day."
   val DelegationTokenExpiryCheckIntervalDoc = "Scan interval to remove expired delegation tokens."
 
+  /** ********* Password encryption configuration for dynamic configs *********/
+  val PasswordEncoderSecretDoc = "The secret used for encoding dynamically configured passwords for this broker."
+  val PasswordEncoderOldSecretDoc = "The old secret that was used for encoding dynamically configured passwords. " +
+    "This is required only when the secret is updated. If specified, all dynamically encoded passwords are " +
+    s"decoded using this old secret and re-encoded using $PasswordEncoderSecretProp when broker starts up."
+  val PasswordEncoderKeyFactoryAlgorithmDoc = "The SecretKeyFactory algorithm used for encoding dynamically configured passwords. " +
+    "Default is PBKDF2WithHmacSHA512 if available and PBKDF2WithHmacSHA1 otherwise."
+  val PasswordEncoderCipherAlgorithmDoc = "The Cipher algorithm used for encoding dynamically configured passwords."
+  val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
+  val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
   private val configDef = {
     import ConfigDef.Importance._
@@ -898,6 +923,7 @@ object KafkaConfig {
 
       /** ********* Sasl Configuration ****************/
       .define(SaslMechanismInterBrokerProtocolProp, STRING, Defaults.SaslMechanismInterBrokerProtocol, MEDIUM, SaslMechanismInterBrokerProtocolDoc)
+      .define(SaslJaasConfigProp, PASSWORD, null, MEDIUM, SaslJaasConfigDoc)
       .define(SaslEnabledMechanismsProp, LIST, Defaults.SaslEnabledMechanisms, MEDIUM, SaslEnabledMechanismsDoc)
       .define(SaslKerberosServiceNameProp, STRING, null, MEDIUM, SaslKerberosServiceNameDoc)
       .define(SaslKerberosKinitCmdProp, STRING, Defaults.SaslKerberosKinitCmd, MEDIUM, SaslKerberosKinitCmdDoc)
@@ -911,6 +937,13 @@ object KafkaConfig {
       .define(DelegationTokenExpiryTimeMsProp, LONG, Defaults.DelegationTokenExpiryTimeMsDefault, atLeast(1), MEDIUM, DelegationTokenExpiryTimeMsDoc)
       .define(DelegationTokenExpiryCheckIntervalMsProp, LONG, Defaults.DelegationTokenExpiryCheckIntervalMsDefault, atLeast(1), LOW, DelegationTokenExpiryCheckIntervalDoc)
 
+      /** ********* Password encryption configuration for dynamic configs *********/
+      .define(PasswordEncoderSecretProp, PASSWORD, null, MEDIUM, PasswordEncoderSecretDoc)
+      .define(PasswordEncoderOldSecretProp, PASSWORD, null, MEDIUM, PasswordEncoderOldSecretDoc)
+      .define(PasswordEncoderKeyFactoryAlgorithmProp, STRING, null, LOW, PasswordEncoderKeyFactoryAlgorithmDoc)
+      .define(PasswordEncoderCipherAlgorithmProp, STRING, Defaults.PasswordEncoderCipherAlgorithm, LOW, PasswordEncoderCipherAlgorithmDoc)
+      .define(PasswordEncoderKeyLengthProp, INT, Defaults.PasswordEncoderKeyLength, atLeast(8), LOW, PasswordEncoderKeyLengthDoc)
+      .define(PasswordEncoderIterationsProp, INT, Defaults.PasswordEncoderIterations, atLeast(1024), LOW, PasswordEncoderIterationsDoc)
   }
 
   def configNames() = configDef.names().asScala.toList.sorted
@@ -942,9 +975,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   def this(props: java.util.Map[_, _]) = this(props, true, None)
   def this(props: java.util.Map[_, _], doLog: Boolean) = this(props, doLog, None)
-  private[server] val dynamicConfig = dynamicConfigOverride.getOrElse(new DynamicBrokerConfig(this))
   // Cache the current config to avoid acquiring read lock to access from dynamicConfig
   @volatile private var currentConfig = this
+  private[server] val dynamicConfig = dynamicConfigOverride.getOrElse(new DynamicBrokerConfig(this))
 
   private[server] def updateCurrentConfig(newConfig: KafkaConfig): Unit = {
     this.currentConfig = newConfig
@@ -1076,8 +1109,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val leaderImbalanceCheckIntervalSeconds = getLong(KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp)
   def uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(KafkaConfig.UncleanLeaderElectionEnableProp)
 
-  val (interBrokerListenerName, interBrokerSecurityProtocol) = getInterBrokerListenerNameAndSecurityProtocol
-
   // We keep the user-provided String as `ApiVersion.apply` can choose a slightly different version (eg if `0.10.0`
   // is passed, `0.10.0-IV0` may be picked)
   val interBrokerProtocolVersionString = getString(KafkaConfig.InterBrokerProtocolVersionProp)
@@ -1120,32 +1151,21 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val metricSampleWindowMs = getLong(KafkaConfig.MetricSampleWindowMsProp)
   val metricRecordingLevel = getString(KafkaConfig.MetricRecordingLevelProp)
 
-  /** ********* SSL Configuration **************/
-  val principalBuilderClass = getClass(KafkaConfig.PrincipalBuilderClassProp)
-  val sslProtocol = getString(KafkaConfig.SslProtocolProp)
-  val sslProvider = getString(KafkaConfig.SslProviderProp)
-  val sslEnabledProtocols = getList(KafkaConfig.SslEnabledProtocolsProp)
-  def sslKeystoreType = getString(KafkaConfig.SslKeystoreTypeProp)
-  def sslKeystoreLocation = getString(KafkaConfig.SslKeystoreLocationProp)
-  def sslKeystorePassword = getPassword(KafkaConfig.SslKeystorePasswordProp)
-  def sslKeyPassword = getPassword(KafkaConfig.SslKeyPasswordProp)
-  val sslTruststoreType = getString(KafkaConfig.SslTruststoreTypeProp)
-  val sslTruststoreLocation = getString(KafkaConfig.SslTruststoreLocationProp)
-  val sslTruststorePassword = getPassword(KafkaConfig.SslTruststorePasswordProp)
-  val sslKeyManagerAlgorithm = getString(KafkaConfig.SslKeyManagerAlgorithmProp)
-  val sslTrustManagerAlgorithm = getString(KafkaConfig.SslTrustManagerAlgorithmProp)
-  val sslClientAuth = getString(KafkaConfig.SslClientAuthProp)
-  val sslCipher = getList(KafkaConfig.SslCipherSuitesProp)
+  /** ********* SSL/SASL Configuration **************/
+  // Security configs may be overridden for listeners, so it is not safe to use the base values
+  // Hence the base SSL/SASL configs are not fields of KafkaConfig, listener configs should be
+  // retrieved using KafkaConfig#valuesWithPrefixOverride
+  private def saslEnabledMechanisms(listenerName: ListenerName): Set[String] = {
+    val value = valuesWithPrefixOverride(listenerName.configPrefix).get(KafkaConfig.SaslEnabledMechanismsProp)
+    if (value != null)
+      value.asInstanceOf[util.List[String]].asScala.toSet
+    else
+      Set.empty[String]
+  }
 
-  /** ********* Sasl Configuration **************/
-  val saslMechanismInterBrokerProtocol = getString(KafkaConfig.SaslMechanismInterBrokerProtocolProp)
-  val saslEnabledMechanisms = getList(KafkaConfig.SaslEnabledMechanismsProp)
-  val saslKerberosServiceName = getString(KafkaConfig.SaslKerberosServiceNameProp)
-  val saslKerberosKinitCmd = getString(KafkaConfig.SaslKerberosKinitCmdProp)
-  val saslKerberosTicketRenewWindowFactor = getDouble(KafkaConfig.SaslKerberosTicketRenewWindowFactorProp)
-  val saslKerberosTicketRenewJitter = getDouble(KafkaConfig.SaslKerberosTicketRenewJitterProp)
-  val saslKerberosMinTimeBeforeRelogin = getLong(KafkaConfig.SaslKerberosMinTimeBeforeReloginProp)
-  val saslKerberosPrincipalToLocalRules = getList(KafkaConfig.SaslKerberosPrincipalToLocalRulesProp)
+  def interBrokerListenerName = getInterBrokerListenerNameAndSecurityProtocol._1
+  def interBrokerSecurityProtocol = getInterBrokerListenerNameAndSecurityProtocol._2
+  def saslMechanismInterBrokerProtocol = getString(KafkaConfig.SaslMechanismInterBrokerProtocolProp)
   val saslInterBrokerHandshakeRequestEnable = interBrokerProtocolVersion >= KAFKA_0_10_0_IV1
 
   /** ********* DelegationToken Configuration **************/
@@ -1154,6 +1174,14 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val delegationTokenMaxLifeMs = getLong(KafkaConfig.DelegationTokenMaxLifeTimeProp)
   val delegationTokenExpiryTimeMs = getLong(KafkaConfig.DelegationTokenExpiryTimeMsProp)
   val delegationTokenExpiryCheckIntervalMs = getLong(KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp)
+
+  /** ********* Password encryption configuration for dynamic configs *********/
+  def passwordEncoderSecret = Option(getPassword(KafkaConfig.PasswordEncoderSecretProp))
+  def passwordEncoderOldSecret = Option(getPassword(KafkaConfig.PasswordEncoderOldSecretProp))
+  def passwordEncoderCipherAlgorithm = getString(KafkaConfig.PasswordEncoderCipherAlgorithmProp)
+  def passwordEncoderKeyFactoryAlgorithm = Option(getString(KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp))
+  def passwordEncoderKeyLength = getInt(KafkaConfig.PasswordEncoderKeyLengthProp)
+  def passwordEncoderIterations = getInt(KafkaConfig.PasswordEncoderIterationsProp)
 
   /** ********* Quota Configuration **************/
   val producerQuotaBytesPerSecondDefault = getLong(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp)
@@ -1170,9 +1198,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   val deleteTopicEnable = getBoolean(KafkaConfig.DeleteTopicEnableProp)
   def compressionType = getString(KafkaConfig.CompressionTypeProp)
-  val listeners: Seq[EndPoint] = getListeners
-  val advertisedListeners: Seq[EndPoint] = getAdvertisedListeners
-  private[kafka] lazy val listenerSecurityProtocolMap = getListenerSecurityProtocolMap
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)
@@ -1203,7 +1228,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   // If the user did not define listeners but did define host or port, let's use them in backward compatible way
   // If none of those are defined, we default to PLAINTEXT://:9092
-  private def getListeners: Seq[EndPoint] = {
+  def listeners: Seq[EndPoint] = {
     Option(getString(KafkaConfig.ListenersProp)).map { listenerProp =>
       CoreUtils.listenerListToEndPoints(listenerProp, listenerSecurityProtocolMap)
     }.getOrElse(CoreUtils.listenerListToEndPoints("PLAINTEXT://" + hostName + ":" + port, listenerSecurityProtocolMap))
@@ -1212,14 +1237,14 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   // If the user defined advertised listeners, we use those
   // If he didn't but did define advertised host or port, we'll use those and fill in the missing value from regular host / port or defaults
   // If none of these are defined, we'll use the listeners
-  private def getAdvertisedListeners: Seq[EndPoint] = {
+  def advertisedListeners: Seq[EndPoint] = {
     val advertisedListenersProp = getString(KafkaConfig.AdvertisedListenersProp)
     if (advertisedListenersProp != null)
       CoreUtils.listenerListToEndPoints(advertisedListenersProp, listenerSecurityProtocolMap)
     else if (getString(KafkaConfig.AdvertisedHostNameProp) != null || getInt(KafkaConfig.AdvertisedPortProp) != null)
       CoreUtils.listenerListToEndPoints("PLAINTEXT://" + advertisedHostName + ":" + advertisedPort, listenerSecurityProtocolMap)
     else
-      getListeners
+      listeners
   }
 
   private def getInterBrokerListenerNameAndSecurityProtocol: (ListenerName, SecurityProtocol) = {
@@ -1248,7 +1273,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     }
   }
 
-  private def getListenerSecurityProtocolMap: Map[ListenerName, SecurityProtocol] = {
+  def listenerSecurityProtocolMap: Map[ListenerName, SecurityProtocol] = {
     getMap(KafkaConfig.ListenerSecurityProtocolMapProp, getString(KafkaConfig.ListenerSecurityProtocolMapProp))
       .map { case (listenerName, protocolName) =>
       ListenerName.normalised(listenerName) -> getSecurityProtocol(protocolName, KafkaConfig.ListenerSecurityProtocolMapProp)
@@ -1295,7 +1320,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     val interBrokerUsesSasl = interBrokerSecurityProtocol == SecurityProtocol.SASL_PLAINTEXT || interBrokerSecurityProtocol == SecurityProtocol.SASL_SSL
     require(!interBrokerUsesSasl || saslInterBrokerHandshakeRequestEnable || saslMechanismInterBrokerProtocol == SaslConfigs.GSSAPI_MECHANISM,
       s"Only GSSAPI mechanism is supported for inter-broker communication with SASL when inter.broker.protocol.version is set to $interBrokerProtocolVersionString")
-    require(!interBrokerUsesSasl || saslEnabledMechanisms.contains(saslMechanismInterBrokerProtocol),
+    require(!interBrokerUsesSasl || saslEnabledMechanisms(interBrokerListenerName).contains(saslMechanismInterBrokerProtocol),
       s"${KafkaConfig.SaslMechanismInterBrokerProtocolProp} must be included in ${KafkaConfig.SaslEnabledMechanismsProp} when SASL is used for inter-broker communication")
     require(queuedMaxBytes <= 0 || queuedMaxBytes >= socketRequestMaxBytes,
       s"${KafkaConfig.QueuedMaxBytesProp} must be larger or equal to ${KafkaConfig.SocketRequestMaxBytesProp}")
