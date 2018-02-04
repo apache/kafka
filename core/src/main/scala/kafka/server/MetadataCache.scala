@@ -103,12 +103,15 @@ class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
-  def getAliveEndpoint(brokerId: Int, listenerName: ListenerName): Option[Node] =
+  private def getAliveEndpoint(brokerId: Int, listenerName: ListenerName): Option[Node] =
     inReadLock(partitionMetadataLock) {
+      // Returns None if broker is not alive or if the broker does not have a listener named `listenerName`.
+      // Since listeners can be added dynamically, a broker with a missing listener could be a transient error.
       aliveNodes.get(brokerId).map { nodeMap =>
-        nodeMap.getOrElse(listenerName,
-          throw new BrokerEndPointNotAvailableException(s"Broker `$brokerId` does not have listener with name `$listenerName`"))
-      }
+        val node = nodeMap.get(listenerName)
+        warn(s"Broker endpoint not found for broker $brokerId listenerName $listenerName")
+        node
+      }.getOrElse(None)
     }
 
   // errorUnavailableEndpoints exists to support v0 MetadataResponses

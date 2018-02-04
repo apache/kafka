@@ -742,6 +742,7 @@ private[kafka] class Processor(val id: Int,
       close(channel.id)
     }
     selector.close()
+    removeMetric("IdlePercent", Map("networkProcessor" -> id.toString))
   }
 
   // 'protected` to allow override for testing
