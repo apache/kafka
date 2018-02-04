@@ -799,14 +799,14 @@ public class JsonConverterTest {
     }
     
     private boolean convertStructEqual(Schema schema, Struct struct) {
-    	    try {
-    	    		converter.fromConnectData(TOPIC, schema, struct);
-    	    } catch (DataException exc) {
-    	    	    if (!exc.getMessage().contains("serialization")) {
-    	    	    		return false;
-    	    	    }
-    	    	    return true;
-    	    }
-    	    return true;
+        try {
+            converter.fromConnectData(TOPIC, schema, struct);
+        } catch (DataException exc) {
+            if (!exc.getMessage().contains("serialization")) {
+                return false;
+            }
+            return true;
+        }
+        return true;
     }
 }
