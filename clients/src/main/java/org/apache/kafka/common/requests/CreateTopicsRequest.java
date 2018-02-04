@@ -34,7 +34,8 @@ import java.util.Set;
 
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
+import static org.apache.kafka.common.protocol.CommonFields.VALIDATE_ONLY;
+import static org.apache.kafka.common.protocol.CommonFields.TIMEOUT;
 import static org.apache.kafka.common.protocol.types.Type.INT16;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
@@ -43,8 +44,6 @@ import static org.apache.kafka.common.protocol.types.Type.STRING;
 public class CreateTopicsRequest extends AbstractRequest {
     private static final String REQUESTS_KEY_NAME = "create_topic_requests";
 
-    private static final String TIMEOUT_KEY_NAME = "timeout";
-    private static final String VALIDATE_ONLY_KEY_NAME = "validate_only";
     private static final String NUM_PARTITIONS_KEY_NAME = "num_partitions";
     private static final String REPLICATION_FACTOR_KEY_NAME = "replication_factor";
     private static final String REPLICA_ASSIGNMENT_KEY_NAME = "replica_assignment";
@@ -77,16 +76,13 @@ public class CreateTopicsRequest extends AbstractRequest {
     private static final Schema CREATE_TOPICS_REQUEST_V0 = new Schema(
             new Field(REQUESTS_KEY_NAME, new ArrayOf(SINGLE_CREATE_TOPIC_REQUEST_V0),
                     "An array of single topic creation requests. Can not have multiple entries for the same topic."),
-            new Field(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for a topic to be completely created on the " +
-                    "controller node. Values <= 0 will trigger topic creation and return immediately"));
+            TIMEOUT);
 
     private static final Schema CREATE_TOPICS_REQUEST_V1 = new Schema(
             new Field(REQUESTS_KEY_NAME, new ArrayOf(SINGLE_CREATE_TOPIC_REQUEST_V1), "An array of single " +
                     "topic creation requests. Can not have multiple entries for the same topic."),
-            new Field(TIMEOUT_KEY_NAME, INT32, "The time in ms to wait for a topic to be completely created on the " +
-                    "controller node. Values <= 0 will trigger topic creation and return immediately"),
-            new Field(VALIDATE_ONLY_KEY_NAME, BOOLEAN, "If this is true, the request will be validated, but the " +
-                    "topic won't be created."));
+            TIMEOUT,
+            VALIDATE_ONLY);
 
     /* v2 request is the same as v1. Throttle time has been added to the response */
     private static final Schema CREATE_TOPICS_REQUEST_V2 = CREATE_TOPICS_REQUEST_V1;
@@ -249,11 +245,8 @@ public class CreateTopicsRequest extends AbstractRequest {
         }
 
         this.topics = topics;
-        this.timeout = struct.getInt(TIMEOUT_KEY_NAME);
-        if (struct.hasField(VALIDATE_ONLY_KEY_NAME))
-            this.validateOnly = struct.getBoolean(VALIDATE_ONLY_KEY_NAME);
-        else
-            this.validateOnly = false;
+        this.timeout = struct.get(TIMEOUT);
+        this.validateOnly = struct.getOrElse(VALIDATE_ONLY, false);
         this.duplicateTopics = duplicateTopics;
     }
 
@@ -338,9 +331,9 @@ public class CreateTopicsRequest extends AbstractRequest {
             createTopicRequestStructs.add(singleRequestStruct);
         }
         struct.set(REQUESTS_KEY_NAME, createTopicRequestStructs.toArray());
-        struct.set(TIMEOUT_KEY_NAME, timeout);
+        struct.set(TIMEOUT, timeout);
         if (version >= 1)
-            struct.set(VALIDATE_ONLY_KEY_NAME, validateOnly);
+            struct.set(VALIDATE_ONLY, validateOnly);
         return struct;
 
     }

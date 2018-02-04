@@ -75,19 +75,19 @@ public class Struct {
         return getFieldOrDefault(field);
     }
 
-    public Byte get(Field.Int8 field) {
+    public byte get(Field.Int8 field) {
         return getByte(field.name);
     }
 
-    public Integer get(Field.Int32 field) {
+    public int get(Field.Int32 field) {
         return getInt(field.name);
     }
 
-    public Long get(Field.Int64 field) {
+    public long get(Field.Int64 field) {
         return getLong(field.name);
     }
 
-    public Short get(Field.Int16 field) {
+    public short get(Field.Int16 field) {
         return getShort(field.name);
     }
 
@@ -99,13 +99,17 @@ public class Struct {
         return getString(field.name);
     }
 
-    public Long getOrElse(Field.Int64 field, long alternative) {
+    public boolean get(Field.Boolean field) {
+        return getBoolean(field.name);
+    }
+
+    public long getOrElse(Field.Int64 field, long alternative) {
         if (hasField(field.name))
             return getLong(field.name);
         return alternative;
     }
 
-    public Integer getOrElse(Field.Int32 field, int alternative) {
+    public int getOrElse(Field.Int32 field, int alternative) {
         if (hasField(field.name))
             return getInt(field.name);
         return alternative;
@@ -120,6 +124,12 @@ public class Struct {
     public String getOrElse(Field.Str field, String alternative) {
         if (hasField(field.name))
             return getString(field.name);
+        return alternative;
+    }
+
+    public boolean getOrElse(Field.Boolean field, boolean alternative) {
+        if (hasField(field.name))
+            return getBoolean(field.name);
         return alternative;
     }
 
@@ -158,44 +168,44 @@ public class Struct {
         return (Struct) get(name);
     }
 
-    public Byte getByte(BoundField field) {
-        return (Byte) get(field);
+    public byte getByte(BoundField field) {
+        return (byte) get(field);
     }
 
     public byte getByte(String name) {
-        return (Byte) get(name);
+        return (byte) get(name);
     }
 
     public Records getRecords(String name) {
         return (Records) get(name);
     }
 
-    public Short getShort(BoundField field) {
-        return (Short) get(field);
+    public short getShort(BoundField field) {
+        return (short) get(field);
     }
 
-    public Short getShort(String name) {
-        return (Short) get(name);
+    public short getShort(String name) {
+        return (short) get(name);
     }
 
-    public Integer getInt(BoundField field) {
-        return (Integer) get(field);
+    public int getInt(BoundField field) {
+        return (int) get(field);
     }
 
-    public Integer getInt(String name) {
-        return (Integer) get(name);
+    public int getInt(String name) {
+        return (int) get(name);
     }
 
-    public Long getUnsignedInt(String name) {
-        return (Long) get(name);
+    public long getUnsignedInt(String name) {
+        return (long) get(name);
     }
 
-    public Long getLong(BoundField field) {
-        return (Long) get(field);
+    public long getLong(BoundField field) {
+        return (long) get(field);
     }
 
-    public Long getLong(String name) {
-        return (Long) get(name);
+    public long getLong(String name) {
+        return (long) get(name);
     }
 
     public Object[] getArray(BoundField field) {
@@ -214,12 +224,12 @@ public class Struct {
         return (String) get(name);
     }
 
-    public Boolean getBoolean(BoundField field) {
-        return (Boolean) get(field);
+    public boolean getBoolean(BoundField field) {
+        return (boolean) get(field);
     }
 
-    public Boolean getBoolean(String name) {
-        return (Boolean) get(name);
+    public boolean getBoolean(String name) {
+        return (boolean) get(name);
     }
 
     public ByteBuffer getBytes(BoundField field) {
@@ -285,6 +295,10 @@ public class Struct {
     }
 
     public Struct set(Field.Int16 def, short value) {
+        return set(def.name, value);
+    }
+
+    public Struct set(Field.Boolean def, boolean value) {
         return set(def.name, value);
     }
 

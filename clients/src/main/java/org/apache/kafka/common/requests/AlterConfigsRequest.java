@@ -30,7 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
+import static org.apache.kafka.common.protocol.CommonFields.VALIDATE_ONLY;
 import static org.apache.kafka.common.protocol.types.Type.INT8;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
@@ -40,7 +40,6 @@ public class AlterConfigsRequest extends AbstractRequest {
     private static final String RESOURCES_KEY_NAME = "resources";
     private static final String RESOURCE_TYPE_KEY_NAME = "resource_type";
     private static final String RESOURCE_NAME_KEY_NAME = "resource_name";
-    private static final String VALIDATE_ONLY_KEY_NAME = "validate_only";
 
     private static final String CONFIG_ENTRIES_KEY_NAME = "config_entries";
     private static final String CONFIG_NAME = "config_name";
@@ -58,7 +57,7 @@ public class AlterConfigsRequest extends AbstractRequest {
     private static final Schema ALTER_CONFIGS_REQUEST_V0 = new Schema(
             new Field(RESOURCES_KEY_NAME, new ArrayOf(ALTER_CONFIGS_REQUEST_RESOURCE_V0),
                     "An array of resources to update with the provided configs."),
-            new Field(VALIDATE_ONLY_KEY_NAME, BOOLEAN));
+            VALIDATE_ONLY);
 
     public static Schema[] schemaVersions() {
         return new Schema[] {ALTER_CONFIGS_REQUEST_V0};
@@ -123,7 +122,7 @@ public class AlterConfigsRequest extends AbstractRequest {
 
     public AlterConfigsRequest(Struct struct, short version) {
         super(version);
-        validateOnly = struct.getBoolean(VALIDATE_ONLY_KEY_NAME);
+        validateOnly = struct.get(VALIDATE_ONLY);
         Object[] resourcesArray = struct.getArray(RESOURCES_KEY_NAME);
         configs = new HashMap<>(resourcesArray.length);
         for (Object resourcesObj : resourcesArray) {
@@ -157,7 +156,7 @@ public class AlterConfigsRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.ALTER_CONFIGS.requestSchema(version()));
-        struct.set(VALIDATE_ONLY_KEY_NAME, validateOnly);
+        struct.set(VALIDATE_ONLY, validateOnly);
         List<Struct> resourceStructs = new ArrayList<>(configs.size());
         for (Map.Entry<Resource, Config> entry : configs.entrySet()) {
             Struct resourceStruct = struct.instance(RESOURCES_KEY_NAME);

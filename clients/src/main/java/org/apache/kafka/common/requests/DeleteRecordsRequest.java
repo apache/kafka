@@ -34,7 +34,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.types.Type.INT32;
+import static org.apache.kafka.common.protocol.CommonFields.TIMEOUT;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 
 public class DeleteRecordsRequest extends AbstractRequest {
@@ -43,7 +43,6 @@ public class DeleteRecordsRequest extends AbstractRequest {
 
     // request level key names
     private static final String TOPICS_KEY_NAME = "topics";
-    private static final String TIMEOUT_KEY_NAME = "timeout";
 
     // topic level key names
     private static final String PARTITIONS_KEY_NAME = "partitions";
@@ -62,7 +61,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
 
     private static final Schema DELETE_RECORDS_REQUEST_V0 = new Schema(
             new Field(TOPICS_KEY_NAME, new ArrayOf(DELETE_RECORDS_REQUEST_TOPIC_V0)),
-            new Field(TIMEOUT_KEY_NAME, INT32, "The maximum time to await a response in ms."));
+            TIMEOUT);
 
     public static Schema[] schemaVersions() {
         return new Schema[]{DELETE_RECORDS_REQUEST_V0};
@@ -111,7 +110,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
                 partitionOffsets.put(new TopicPartition(topic, partition), offset);
             }
         }
-        timeout = struct.getInt(TIMEOUT_KEY_NAME);
+        timeout = struct.get(TIMEOUT);
     }
 
     public DeleteRecordsRequest(int timeout, Map<TopicPartition, Long> partitionOffsets, short version) {
@@ -123,7 +122,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.DELETE_RECORDS.requestSchema(version()));
         Map<String, Map<Integer, Long>> offsetsByTopic = CollectionUtils.groupDataByTopic(partitionOffsets);
-        struct.set(TIMEOUT_KEY_NAME, timeout);
+        struct.set(TIMEOUT, timeout);
         List<Struct> topicStructArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, Long>> offsetsByTopicEntry : offsetsByTopic.entrySet()) {
             Struct topicStruct = struct.instance(TOPICS_KEY_NAME);

@@ -89,4 +89,10 @@ public class Field {
             super(name, Type.NULLABLE_STRING, docString, false, null);
         }
     }
+
+    public static class Boolean extends Field {
+        public Boolean(String name, String docString) {
+            super(name, Type.BOOLEAN, docString, false, null);
+        }
+    }
 }

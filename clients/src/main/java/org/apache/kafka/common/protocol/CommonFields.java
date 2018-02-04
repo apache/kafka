@@ -26,6 +26,10 @@ public class CommonFields {
     public static final Field.Int32 PARTITION_ID = new Field.Int32("partition", "Topic partition id");
     public static final Field.Int16 ERROR_CODE = new Field.Int16("error_code", "Response error code");
     public static final Field.NullableStr ERROR_MESSAGE = new Field.NullableStr("error_message", "Response error message");
+    public static final Field.Boolean VALIDATE_ONLY = new Field.Boolean("validate_only",
+            "If this is true, the request will be only validated, but no action will be taken.");
+    public static final Field.Int32 TIMEOUT = new Field.Int32("timeout",
+            "The maximum time to await a response in ms. Values <= 0 will trigger the request and return immediately");
 
     // Group APIs
     public static final Field.Str GROUP_ID = new Field.Str("group_id", "The unique group identifier");
