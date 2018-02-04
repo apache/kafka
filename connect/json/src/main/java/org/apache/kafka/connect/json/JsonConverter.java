@@ -755,14 +755,4 @@ public class JsonConverter implements Converter, HeaderConverter {
     private interface LogicalTypeConverter {
         Object convert(Schema schema, Object value);
     }
-    
-    //Exists for testing purposes
-    public boolean convertToJsonEqual(Schema schema, Struct value) {
-        try {
-            convertToJson(schema, value);
-        } catch (DataException exc) {
-            return false;
-        }
-        return true;
-    }
 }
