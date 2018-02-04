@@ -674,12 +674,22 @@ class KafkaConfigTest {
         case KafkaConfig.SaslKerberosTicketRenewJitterProp =>
         case KafkaConfig.SaslKerberosMinTimeBeforeReloginProp =>
         case KafkaConfig.SaslKerberosPrincipalToLocalRulesProp => // ignore string
+        case KafkaConfig.SaslJaasConfigProp =>
+
+        // Password encoder configs
+        case KafkaConfig.PasswordEncoderSecretProp =>
+        case KafkaConfig.PasswordEncoderOldSecretProp =>
+        case KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp =>
+        case KafkaConfig.PasswordEncoderCipherAlgorithmProp =>
+        case KafkaConfig.PasswordEncoderKeyLengthProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
+        case KafkaConfig.PasswordEncoderIterationsProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
 
         //delegation token configs
         case KafkaConfig.DelegationTokenMasterKeyProp => // ignore
         case KafkaConfig.DelegationTokenMaxLifeTimeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryTimeMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+
         case _ => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }
     })

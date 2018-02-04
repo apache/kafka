@@ -64,7 +64,7 @@ public class LoginManager {
      * shut it down when the broker or clients are closed. It's straightforward to do the former, but it's more
      * complicated to do the latter without making the consumer API more complex.
      */
-    public static LoginManager acquireLoginManager(JaasContext jaasContext, boolean hasKerberos,
+    public static LoginManager acquireLoginManager(JaasContext jaasContext, String saslMechanism, boolean hasKerberos,
                                                    Map<String, ?> configs) throws IOException, LoginException {
         synchronized (LoginManager.class) {
             // SASL_JAAS_CONFIG is only supported by clients
@@ -73,7 +73,7 @@ public class LoginManager {
             if (jaasContext.type() == JaasContext.Type.CLIENT && jaasConfigValue != null) {
                 loginManager = DYNAMIC_INSTANCES.get(jaasConfigValue);
                 if (loginManager == null) {
-                    loginManager = new LoginManager(jaasContext, hasKerberos, configs, jaasConfigValue);
+                    loginManager = new LoginManager(jaasContext, saslMechanism.equals(SaslConfigs.GSSAPI_MECHANISM), configs, jaasConfigValue);
                     DYNAMIC_INSTANCES.put(jaasConfigValue, loginManager);
                 }
             } else {

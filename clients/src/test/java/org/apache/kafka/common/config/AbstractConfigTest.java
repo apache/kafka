@@ -19,6 +19,7 @@ package org.apache.kafka.common.config;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metrics.FakeMetricsReporter;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -137,6 +138,54 @@ public class AbstractConfigTest {
         assertFalse(config.unused().contains("ssl.key.password"));
         assertNull(valuesWithPrefixOverride.get("ssl.key.password"));
         assertFalse(config.unused().contains("ssl.key.password"));
+    }
+
+    @Test
+    public void testValuesWithSecondaryPrefix() {
+        String prefix = "listener.name.listener1.";
+        Password saslJaasConfig1 =  new Password("test.myLoginModule1 required;");
+        Password saslJaasConfig2 =  new Password("test.myLoginModule2 required;");
+        Password saslJaasConfig3 =  new Password("test.myLoginModule3 required;");
+        Properties props = new Properties();
+        props.put("listener.name.listener1.test-mechanism.sasl.jaas.config", saslJaasConfig1.value());
+        props.put("test-mechanism.sasl.jaas.config", saslJaasConfig2.value());
+        props.put("sasl.jaas.config", saslJaasConfig3.value());
+        props.put("listener.name.listener1.gssapi.sasl.kerberos.kinit.cmd", "/usr/bin/kinit2");
+        props.put("listener.name.listener1.gssapi.sasl.kerberos.service.name", "testkafka");
+        props.put("listener.name.listener1.gssapi.sasl.kerberos.min.time.before.relogin", "60000");
+        props.put("ssl.provider", "TEST");
+        TestSecurityConfig config = new TestSecurityConfig(props);
+        Map<String, Object> valuesWithPrefixOverride = config.valuesWithPrefixOverride(prefix);
+
+        // prefix with mechanism overrides global
+        assertTrue(config.unused().contains("listener.name.listener1.test-mechanism.sasl.jaas.config"));
+        assertTrue(config.unused().contains("test-mechanism.sasl.jaas.config"));
+        assertEquals(saslJaasConfig1, valuesWithPrefixOverride.get("test-mechanism.sasl.jaas.config"));
+        assertEquals(saslJaasConfig3, valuesWithPrefixOverride.get("sasl.jaas.config"));
+        assertFalse(config.unused().contains("listener.name.listener1.test-mechanism.sasl.jaas.config"));
+        assertFalse(config.unused().contains("test-mechanism.sasl.jaas.config"));
+        assertFalse(config.unused().contains("sasl.jaas.config"));
+
+        // prefix with mechanism overrides default
+        assertFalse(config.unused().contains("sasl.kerberos.kinit.cmd"));
+        assertTrue(config.unused().contains("listener.name.listener1.gssapi.sasl.kerberos.kinit.cmd"));
+        assertFalse(config.unused().contains("gssapi.sasl.kerberos.kinit.cmd"));
+        assertFalse(config.unused().contains("sasl.kerberos.kinit.cmd"));
+        assertEquals("/usr/bin/kinit2", valuesWithPrefixOverride.get("gssapi.sasl.kerberos.kinit.cmd"));
+        assertFalse(config.unused().contains("listener.name.listener1.sasl.kerberos.kinit.cmd"));
+
+        // prefix override for mechanism with no default
+        assertFalse(config.unused().contains("sasl.kerberos.service.name"));
+        assertTrue(config.unused().contains("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
+        assertFalse(config.unused().contains("gssapi.sasl.kerberos.service.name"));
+        assertFalse(config.unused().contains("sasl.kerberos.service.name"));
+        assertEquals("testkafka", valuesWithPrefixOverride.get("gssapi.sasl.kerberos.service.name"));
+        assertFalse(config.unused().contains("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
+
+        // unset with no default
+        assertTrue(config.unused().contains("ssl.provider"));
+        assertNull(valuesWithPrefixOverride.get("gssapi.ssl.provider"));
+        assertTrue(config.unused().contains("ssl.provider"));
     }
 
     @Test

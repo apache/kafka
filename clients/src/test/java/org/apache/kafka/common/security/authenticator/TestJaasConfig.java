@@ -54,6 +54,20 @@ public class TestJaasConfig extends Configuration {
         return new Password(loginModule(mechanism) + " required username=" + username + " password=" + password + ";");
     }
 
+    public static Password jaasConfigProperty(String mechanism, Map<String, Object> options) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(loginModule(mechanism));
+        builder.append(" required");
+        for (Map.Entry<String, Object> option : options.entrySet()) {
+            builder.append(' ');
+            builder.append(option.getKey());
+            builder.append('=');
+            builder.append(option.getValue());
+        }
+        builder.append(';');
+        return new Password(builder.toString());
+    }
+
     public void setClientOptions(String saslMechanism, String clientUsername, String clientPassword) {
         Map<String, Object> options = new HashMap<>();
         if (clientUsername != null)
