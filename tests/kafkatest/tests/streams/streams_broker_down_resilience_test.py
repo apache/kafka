@@ -140,11 +140,13 @@ class StreamsBrokerDownResilience(Test):
 
         # now start broker
         self.kafka.start_node(node)
-        # give broker time to start up
-        time.sleep(20)
 
         # assert streams can process when starting with broker down
         self.assert_produce_consume("running_with_broker_down_initially", num_messages=9)
+
+        self.wait_until_verify(processor, "processed3messages")
+        self.wait_until_verify(processor_2, "processed3messages")
+        self.wait_until_verify(processor_3, "processed3messages")
 
         self.kafka.stop()
 
@@ -163,8 +165,8 @@ class StreamsBrokerDownResilience(Test):
         processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor_3.start()
 
-        # give time for rebalance to finish
-        time.sleep(30)
+        # assert streams can process when starting with broker down
+        self.assert_produce_consume("waiting for rebalance to complete", num_messages=9)
 
         node = self.kafka.leader(self.inputTopic)
         self.kafka.stop_node(node)
@@ -172,12 +174,14 @@ class StreamsBrokerDownResilience(Test):
         processor.stop()
         processor_2.stop()
 
-        time.sleep(20)
-
         self.kafka.start_node(node)
-
-        time.sleep(20)
 
         self.assert_produce_consume("sending_message_after_stopping_streams_instance_bouncing_broker", num_messages=9)
 
         self.kafka.stop()
+
+    def wait_until_verify(self, processor, message):
+        with processor.account.monitor_log(processor.STDOUT_FILE) as monitor:
+            monitor.wait_until(message,
+                               timeout_sec=60,
+                               err_msg=("Never saw message '%s'  on " % message) + str(processor.account))
