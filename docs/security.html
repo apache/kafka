@@ -666,7 +666,7 @@
         <p>Delegation token based authentication is a lightweight authentication mechanism to complement existing SASL/SSL
             methods. Delegation tokens are shared secrets between kafka brokers and clients. Delegation tokens will help processing
             frameworks to distribute the workload to available workers in a secure environment without the added cost of distributing
-            Kerberos TGT or keytabs. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-48+Delegation+token+support+for+Kafka">KIP-48</a>
+            Kerberos TGT/keytabs or keystores when 2-way SSL is used. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-48+Delegation+token+support+for+Kafka">KIP-48</a>
             for more details.</p>
 
         <p>Typical steps for delegation token usage are:</p>
@@ -758,7 +758,7 @@
         <li><h5><a id="security_token_notes" href="#security_token_notes">Notes on Delegation Tokens</a></h5>
             <ul>
             <li>Currently, we only allow a user to create delegation token for that user only. Owner/Renewers can renew or expire tokens.
-                Owner/renewers can always describe their own tokens. To describe others tokens, we need add DESCRIBE permission on Token Resource.</li>
+                Owner/renewers can always describe their own tokens. To describe others tokens, we need to add DESCRIBE permission on Token Resource.</li>
             </ul>
         </li>
         </ol>
