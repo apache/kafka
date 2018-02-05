@@ -229,6 +229,63 @@
   Deletion of requested consumer groups ('my-group', 'my-other-group') was successful.
   </pre>
 
+  <p>
+  To reset offsets of a consumer group to latest offset, first make sure the instances are inactive, then:
+
+  <pre class="brush: bash;">
+  &gt; bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --reset-offsets --group consumergroup1 --topic topic1 --to-latest
+
+  TOPIC                          PARTITION  NEW-OFFSET
+  topic1                         0          0
+  </pre>
+
+  --reset-offsets supports one consumer group at the time.
+  <p>
+  It has 3 execution options:
+  <ul>
+    <li>
+      (default) to plan which offsets to reset.
+    </li>
+    <li>
+      --execute : to execute --reset-offsets process.
+    </li>
+    <li>
+      --export : to export the results to a CSV format.
+    </li>
+  </ul>
+
+  --reset-offsets also has following scenarios to choose from (atleast one scenario must be choosen):
+  <ul>
+    <li>
+      --to-datetime &lt;String: datetime&gt; : Reset offsets to offsets from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'
+    </li>
+    <li>
+      --to-earliest : Reset offsets to earliest offset.
+    </li>
+    <li>
+      --to-latest : Reset offsets to latest offset.
+    </li>
+    <li>
+      --shift-by &lt;Long: number-of-offsets&gt; : Reset offsets shifting current offset by 'n', where 'n' can be positive or negative.
+    </li>
+    <li>
+      --from-file : Reset offsets to values defined in CSV file.
+    </li>
+    <li>
+      --to-current : Resets offsets to current offset.
+    </li>
+    <li>
+      --by-duration &lt;String: duration&gt; : Reset offsets to offset by duration from current timestamp. Format: 'PnDTnHnMnS'
+    </li>
+    <li>
+      --to-offset : Reset offsets to a specific offset.
+    </li>
+  </ul>
+
+  --reset-offsets also requires defining following scopes: --all-topics or --topic. One scope must be choosen, unless you use '--from-file' scenario.
+
+  <p>
+
   If you are using the old high-level consumer and storing the group metadata in ZooKeeper (i.e. <code>offsets.storage=zookeeper</code>), pass
   <code>--zookeeper</code> instead of <code>bootstrap-server</code>:
 
