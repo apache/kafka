@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -98,7 +99,7 @@ public class FetcherMetricsRegistry {
                 "The maximum throttle time in ms", tags);
 
         /***** Topic level *****/
-        Set<String> topicTags = new HashSet<>(tags);
+        Set<String> topicTags = new LinkedHashSet<>(tags);
         topicTags.add("topic");
 
         this.topicFetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName, 
