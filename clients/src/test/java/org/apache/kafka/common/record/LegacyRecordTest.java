@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -93,7 +94,7 @@ public class LegacyRecordTest {
             try {
                 copy.ensureValid();
                 fail("Should fail the above test.");
-            } catch (InvalidRecordException e) {
+            } catch (CorruptRecordException e) {
                 // this is good
             }
         }

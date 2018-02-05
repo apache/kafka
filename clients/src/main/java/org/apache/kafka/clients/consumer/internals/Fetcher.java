@@ -30,6 +30,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -1003,9 +1004,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             if (checkCrcs && currentBatch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
                 try {
                     batch.ensureValid();
-                } catch (InvalidRecordException e) {
+                } catch (CorruptRecordException e) {
                     throw new KafkaException("Record batch for partition " + partition + " at offset " +
-                            batch.baseOffset() + " is invalid, cause: " + e.getMessage());
+                            batch.baseOffset() + " is invalid, cause: " + e.getMessage(), e);
                 }
             }
         }
@@ -1014,9 +1015,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             if (checkCrcs) {
                 try {
                     record.ensureValid();
-                } catch (InvalidRecordException e) {
+                } catch (CorruptRecordException e) {
                     throw new KafkaException("Record for partition " + partition + " at offset " + record.offset()
-                            + " is invalid, cause: " + e.getMessage());
+                            + " is invalid, cause: " + e.getMessage(), e);
                 }
             }
         }
