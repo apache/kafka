@@ -29,21 +29,21 @@ public class ConsumerGroupDescription {
     private final String groupId;
     private final boolean isSimpleConsumerGroup;
     private final List<MemberDescription> members;
-    private final String protocol;
+    private final String partitionAssignor;
 
     /**
      * Creates an instance with the specified parameters.
      *
      * @param groupId               The consumer group id
-     * @param isSimpleConsumerGroup if Consumer Group is simple
+     * @param isSimpleConsumerGroup If Consumer Group is simple
      * @param members               The consumer group members
-     * @param protocol              The consumer group protocol
+     * @param partitionAssignor     The consumer group partition assignor
      */
-    public ConsumerGroupDescription(String groupId, boolean isSimpleConsumerGroup, List<MemberDescription> members, String protocol) {
+    public ConsumerGroupDescription(String groupId, boolean isSimpleConsumerGroup, List<MemberDescription> members, String partitionAssignor) {
         this.groupId = groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.members = members;
-        this.protocol = protocol;
+        this.partitionAssignor = partitionAssignor;
     }
 
     @Override
@@ -56,7 +56,7 @@ public class ConsumerGroupDescription {
         if (isSimpleConsumerGroup != that.isSimpleConsumerGroup) return false;
         if (groupId != null ? !groupId.equals(that.groupId) : that.groupId != null) return false;
         if (members != null ? !members.equals(that.members) : that.members != null) return false;
-        return protocol != null ? protocol.equals(that.protocol) : that.protocol == null;
+        return partitionAssignor != null ? partitionAssignor.equals(that.partitionAssignor) : that.partitionAssignor == null;
     }
 
     @Override
@@ -64,7 +64,7 @@ public class ConsumerGroupDescription {
         int result = groupId != null ? groupId.hashCode() : 0;
         result = 31 * result + (isSimpleConsumerGroup ? 1 : 0);
         result = 31 * result + (members != null ? members.hashCode() : 0);
-        result = 31 * result + (protocol != null ? protocol.hashCode() : 0);
+        result = 31 * result + (partitionAssignor != null ? partitionAssignor.hashCode() : 0);
         return result;
     }
 
@@ -90,15 +90,15 @@ public class ConsumerGroupDescription {
     }
 
     /**
-     * The consumer group protocol.
+     * The consumer group partition assignor.
      */
-    public String protocol() {
-        return protocol;
+    public String partitionAssignor() {
+        return partitionAssignor;
     }
 
     @Override
     public String toString() {
         return "(groupId=" + groupId + ", isSimpleConsumerGroup=" + isSimpleConsumerGroup + ", members=" +
-            Utils.join(members, ",") + ", protocol=" + protocol + ")";
+            Utils.join(members, ",") + ", partitionAssignor=" + partitionAssignor + ")";
     }
 }
