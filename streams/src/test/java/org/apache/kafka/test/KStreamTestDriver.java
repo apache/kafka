@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsBuilderTest;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -192,7 +193,23 @@ public class KStreamTestDriver extends ExternalResource {
         return topicNode;
     }
 
-    public void punctuate(final long timestamp) {
+    public void punctuate(final long timestamp, Punctuator punctuator) {
+        final ProcessorNode prevNode = context.currentNode();
+        for (final ProcessorNode processor : topology.processors()) {
+            if (processor.processor() != null) {
+                context.setRecordContext(createRecordContext(timestamp));
+                context.setCurrentNode(processor);
+                try {
+                    processor.punctuate(timestamp, punctuator);
+                } finally {
+                    context.setCurrentNode(prevNode);
+                }
+            }
+        }
+    }
+
+    @Deprecated
+    public void punctuateDeprecated(final long timestamp) {
         final ProcessorNode prevNode = context.currentNode();
         for (final ProcessorNode processor : topology.processors()) {
             if (processor.processor() != null) {
