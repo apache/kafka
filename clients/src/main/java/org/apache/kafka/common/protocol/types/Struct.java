@@ -105,6 +105,12 @@ public class Struct {
         return alternative;
     }
 
+    public Short getOrElse(Field.Int16 field, short alternative) {
+        if (hasField(field.name))
+            return getShort(field.name);
+        return alternative;
+    }
+
     public Integer getOrElse(Field.Int32 field, int alternative) {
         if (hasField(field.name))
             return getInt(field.name);
