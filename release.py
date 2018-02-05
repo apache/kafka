@@ -45,8 +45,8 @@ CAPITALIZED_PROJECT_NAME = "kafka".upper()
 SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
 # Location of the local git repository
 REPO_HOME = os.environ.get("%s_HOME" % CAPITALIZED_PROJECT_NAME, SCRIPT_DIR)
-# Remote name which points to Apache git
-PUSH_REMOTE_NAME = os.environ.get("PUSH_REMOTE_NAME", "apache")
+# Remote name, which points to Github by default
+PUSH_REMOTE_NAME = os.environ.get("PUSH_REMOTE_NAME", "apache-github")
 PREFS_FILE = os.path.join(SCRIPT_DIR, '.release-settings.json')
 
 delete_gitrefs = False
