@@ -16,6 +16,7 @@
  */
 package kafka.admin
 
+import java.util
 import java.util.Properties
 
 import kafka.admin.ConfigCommand.ConfigCommandOptions
@@ -23,6 +24,10 @@ import kafka.common.InvalidConfigException
 import kafka.server.ConfigEntityName
 import kafka.utils.Logging
 import kafka.zk.{AdminZkClient, KafkaZkClient, ZooKeeperTestHarness}
+import org.apache.kafka.clients.admin._
+import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.internals.KafkaFutureImpl
+import org.apache.kafka.common.Node
 import org.apache.kafka.common.security.scram.ScramCredentialUtils
 import org.apache.kafka.common.utils.Sanitizer
 import org.easymock.EasyMock
@@ -137,22 +142,79 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldAddBrokerConfig(): Unit = {
-    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+  def shouldAddBrokerQuotaConfig(): Unit = {
+    val alterOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1",
       "--entity-type", "brokers",
       "--alter",
-      "--add-config", "a=b,c=d"))
+      "--add-config", "leader.replication.throttled.rate=10,follower.replication.throttled.rate=20"))
 
     case class TestAdminZkClient(val zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
       override def changeBrokerConfig(brokerIds: Seq[Int], configChange: Properties): Unit = {
         assertEquals(Seq(1), brokerIds)
-        assertEquals("b", configChange.get("a"))
-        assertEquals("d", configChange.get("c"))
+        assertEquals("10", configChange.get("leader.replication.throttled.rate"))
+        assertEquals("20", configChange.get("follower.replication.throttled.rate"))
       }
     }
 
-    ConfigCommand.alterConfig(null, createOpts, new TestAdminZkClient(zkClient))
+    ConfigCommand.alterConfig(null, alterOpts, new TestAdminZkClient(zkClient))
+  }
+
+  @Test
+  def shouldAddBrokerDynamicConfig(): Unit = {
+    val node = new Node(1, "localhost", 9092)
+    verifyAlterBrokerConfig(node, "1", List("--entity-name", "1"))
+  }
+
+  @Test
+  def shouldAddDefaultBrokerDynamicConfig(): Unit = {
+    val node = new Node(1, "localhost", 9092)
+    verifyAlterBrokerConfig(node, "", List("--entity-default"))
+  }
+
+  def verifyAlterBrokerConfig(node: Node, resourceName: String, resourceOpts: List[String]): Unit = {
+    val optsList = List("--bootstrap-server", "localhost:9092",
+      "--entity-type", "brokers",
+      "--alter",
+      "--add-config", "message.max.bytes=10") ++ resourceOpts
+    val alterOpts = new ConfigCommandOptions(optsList.toArray)
+    val brokerConfigs = mutable.Map[String, String]("num.io.threads" -> "5")
+
+    val resource = new ConfigResource(ConfigResource.Type.BROKER, resourceName)
+    val configEntries = util.Collections.singletonList(new ConfigEntry("num.io.threads", "5"))
+    val future = new KafkaFutureImpl[util.Map[ConfigResource, Config]]
+    future.complete(util.Collections.singletonMap(resource, new Config(configEntries)))
+    val describeResult = EasyMock.createNiceMock(classOf[DescribeConfigsResult])
+    EasyMock.expect(describeResult.all()).andReturn(future).once()
+
+    val alterFuture = new KafkaFutureImpl[Void]
+    alterFuture.complete(null)
+    val alterResult = EasyMock.createNiceMock(classOf[AlterConfigsResult])
+    EasyMock.expect(alterResult.all()).andReturn(alterFuture)
+
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
+      override def describeConfigs(resources: util.Collection[ConfigResource], options: DescribeConfigsOptions): DescribeConfigsResult = {
+        assertEquals(1, resources.size)
+        val resource = resources.iterator.next
+        assertEquals(ConfigResource.Type.BROKER, resource.`type`)
+        assertEquals(resourceName, resource.name)
+        describeResult
+      }
+
+      override def alterConfigs(configs: util.Map[ConfigResource, Config], options: AlterConfigsOptions): AlterConfigsResult = {
+        assertEquals(1, configs.size)
+        val entry = configs.entrySet.iterator.next
+        val resource = entry.getKey
+        val config = entry.getValue
+        assertEquals(ConfigResource.Type.BROKER, resource.`type`)
+        config.entries.asScala.foreach { e => brokerConfigs.put(e.name, e.value) }
+        alterResult
+      }
+    }
+    EasyMock.replay(alterResult, describeResult)
+    ConfigCommand.alterBrokerConfig(mockAdminClient, alterOpts, resourceName)
+    assertEquals(Map("message.max.bytes" -> "10", "num.io.threads" -> "5"), brokerConfigs.toMap)
+    EasyMock.reset(alterResult, describeResult)
   }
 
   @Test
@@ -183,7 +245,17 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--entity-name", "1,2,3", //Don't support multiple brokers currently
       "--entity-type", "brokers",
       "--alter",
-      "--add-config", "a=b"))
+      "--add-config", "leader.replication.throttled.rate=10"))
+    ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
+  }
+
+  @Test (expected = classOf[IllegalArgumentException])
+  def shouldNotUpdateDynamicBrokerConfigUsingZooKeeper(): Unit = {
+    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "1",
+      "--entity-type", "brokers",
+      "--alter",
+      "--add-config", "message.max.size=100000"))
     ConfigCommand.alterConfig(null, createOpts, new DummyAdminZkClient(zkClient))
   }
 

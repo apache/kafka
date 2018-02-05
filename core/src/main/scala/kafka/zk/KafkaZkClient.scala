@@ -82,6 +82,13 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     info(s"Registered broker ${brokerInfo.broker.id} at path $path with addresses: ${brokerInfo.broker.endPoints}")
   }
 
+  def updateBrokerInfoInZk(brokerInfo: BrokerInfo): Unit = {
+    val brokerIdPath = brokerInfo.path
+    val setDataRequest = SetDataRequest(brokerIdPath, brokerInfo.toJsonBytes, ZkVersion.NoVersion)
+    retryRequestUntilConnected(setDataRequest)
+    info("Updated broker %d at path %s with addresses: %s".format(brokerInfo.broker.id, brokerIdPath, brokerInfo.broker.endPoints))
+  }
+
   /**
    * Gets topic partition states for the given partitions.
    * @param partitions the partitions for which we want ot get states.
