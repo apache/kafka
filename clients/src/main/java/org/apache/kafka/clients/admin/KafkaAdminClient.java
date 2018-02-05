@@ -48,6 +48,7 @@ import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -92,6 +93,8 @@ import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -1993,7 +1996,8 @@ public class KafkaAdminClient extends AdminClient {
         return new DeleteRecordsResult(new HashMap<TopicPartition, KafkaFuture<DeletedRecords>>(futures));
     }
     @Override
-    public DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds, DescribeConsumerGroupsOptions options) {
+    public DescribeConsumerGroupsResult describeConsumerGroups(final Collection<String> groupIds,
+                                                               final DescribeConsumerGroupsOptions options) {
         final Map<String, KafkaFutureImpl<ConsumerGroupDescription>> consumerGroupFutures = new HashMap<>(groupIds.size());
         final ArrayList<String> groupIdList = new ArrayList<>();
         for (String groupId : groupIds) {
@@ -2003,64 +2007,95 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
         final long now = time.milliseconds();
-        runnable.call(new Call("describeConsumerGroups", calcDeadlineMs(now, options.timeoutMs()),
-            new ControllerNodeProvider()) {
 
-            @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new DescribeGroupsRequest.Builder(groupIdList);
-            }
+        for (final String groupId : groupIdList) {
+            runnable.call(new Call("findCoordinator", calcDeadlineMs(now, options.timeoutMs()), new ControllerNodeProvider()) {
+                @Override
+                AbstractRequest.Builder createRequest(int timeoutMs) {
+                    return new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, groupId);
+                }
 
-            @Override
-            void handleResponse(AbstractResponse abstractResponse) {
-                DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
-                // Handle server responses for particular groupId.
-                for (Map.Entry<String, KafkaFutureImpl<ConsumerGroupDescription>> entry : consumerGroupFutures.entrySet()) {
-                    final String groupId = entry.getKey();
-                    final KafkaFutureImpl<ConsumerGroupDescription> future = entry.getValue();
-                    final DescribeGroupsResponse.GroupMetadata groupMetadata = response.groups().get(groupId);
-                    final Errors groupError = groupMetadata.error();
-                    if (groupError != Errors.NONE) {
-                        future.completeExceptionally(groupError.exception());
-                        continue;
-                    }
+                @Override
+                void handleResponse(AbstractResponse abstractResponse) {
+                    final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
 
-                    final String protocolType = groupMetadata.protocolType();
-                    if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
-                        final List<DescribeGroupsResponse.GroupMember> members = groupMetadata.members();
-                        final List<MemberDescription> consumers = new ArrayList<>(members.size());
+                    runnable.call(new Call("describeConsumerGroups", calcDeadlineMs(now, options.timeoutMs()),
+                        new NodeProvider() {
+                            @Override
+                            public Node provide() {
+                                return response.node();
+                            }
+                        }) {
 
-                        for (DescribeGroupsResponse.GroupMember groupMember : members) {
-                            final PartitionAssignor.Assignment assignment =
-                                ConsumerProtocol.deserializeAssignment(
-                                    ByteBuffer.wrap(Utils.readBytes(groupMember.memberAssignment())));
-
-                            final MemberDescription memberDescription =
-                                new MemberDescription(
-                                    groupMember.clientId(),
-                                    groupMember.memberId(),
-                                    groupMember.clientHost(),
-                                    new MemberAssignment(assignment.partitions()));
-                            consumers.add(memberDescription);
+                        @Override
+                        AbstractRequest.Builder createRequest(int timeoutMs) {
+                            return new DescribeGroupsRequest.Builder(groupIdList);
                         }
-                        final String protocol = groupMetadata.protocol();
-                        final ConsumerGroupDescription consumerGroupDescription =
-                            new ConsumerGroupDescription(groupId, protocolType.isEmpty(), consumers, protocol);
-                        future.complete(consumerGroupDescription);
+
+                        @Override
+                        void handleResponse(AbstractResponse abstractResponse) {
+                            final DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
+                            // Handle server responses for particular groupId.
+                            for (Map.Entry<String, KafkaFutureImpl<ConsumerGroupDescription>> entry : consumerGroupFutures.entrySet()) {
+                                final String groupId = entry.getKey();
+                                final KafkaFutureImpl<ConsumerGroupDescription> future = entry.getValue();
+                                final DescribeGroupsResponse.GroupMetadata groupMetadata = response.groups().get(groupId);
+                                final Errors groupError = groupMetadata.error();
+                                if (groupError != Errors.NONE) {
+                                    future.completeExceptionally(groupError.exception());
+                                    continue;
+                                }
+
+                                final String protocolType = groupMetadata.protocolType();
+                                if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
+                                    final List<DescribeGroupsResponse.GroupMember> members = groupMetadata.members();
+                                    final List<MemberDescription> consumers = new ArrayList<>(members.size());
+
+                                    for (DescribeGroupsResponse.GroupMember groupMember : members) {
+                                        final PartitionAssignor.Assignment assignment =
+                                            ConsumerProtocol.deserializeAssignment(
+                                                ByteBuffer.wrap(Utils.readBytes(groupMember.memberAssignment())));
+
+                                        final MemberDescription memberDescription =
+                                            new MemberDescription(
+                                                groupMember.clientId(),
+                                                groupMember.memberId(),
+                                                groupMember.clientHost(),
+                                                new MemberAssignment(assignment.partitions()));
+                                        consumers.add(memberDescription);
+                                    }
+                                    final String protocol = groupMetadata.protocol();
+                                    final ConsumerGroupDescription consumerGroupDescription =
+                                        new ConsumerGroupDescription(groupId, protocolType.isEmpty(), consumers, protocol);
+                                    future.complete(consumerGroupDescription);
+                                }
+                            }
+                        }
+
+                        @Override
+                        boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
+                            return false;
+                        }
+
+                        @Override
+                        void handleFailure(Throwable throwable) {
+                            completeAllExceptionally(consumerGroupFutures.values(), throwable);
+                        }
+                    }, now);
+                }
+
+                @Override
+                void handleFailure(Throwable throwable) {
+                    if (throwable instanceof NotCoordinatorException) {
+                        fail(now, throwable);
+                    } else {
+                        completeAllExceptionally(consumerGroupFutures.values(), throwable);
                     }
                 }
-            }
+            }, now);
+        }
 
-            @Override
-            boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
-                return false;
-            }
 
-            @Override
-            void handleFailure(Throwable throwable) {
-                completeAllExceptionally(consumerGroupFutures.values(), throwable);
-            }
-        }, now);
         return new DescribeConsumerGroupsResult(new HashMap<String, KafkaFuture<ConsumerGroupDescription>>(consumerGroupFutures));
     }
 
@@ -2069,7 +2104,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<Map<String, ConsumerGroupListing>> groupListingFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("listConsumerGroups", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new ControllerNodeProvider()) {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -2104,7 +2139,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> groupOffsetListingFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("listConsumerGroupOffsets", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new ControllerNodeProvider()) {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
