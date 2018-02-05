@@ -592,19 +592,17 @@ class SocketServerTest extends JUnitSuite {
 
       TestUtils.waitUntilTrue(() => openChannel.nonEmpty, "Channel not found")
 
-      // Send 2 requests to `channel` so that `channel` is
-      // closed with staged receives and is in Selector.closingChannels
+      // Setup channel to client with staged receives so when client disconnects
+      // it will be stored in Selector.closingChannels
       val serializedBytes = producerRequestBytes(1)
-      (1 to 2).foreach(_ => sendRequest(socket, serializedBytes))
-      val channel = overrideServer.requestChannel
-      val request = receiveRequest(channel)
+      val request = sendRequestsUntilStagedReceive(overrideServer, socket, serializedBytes)
 
       // Set SoLinger to 0 to force a hard disconnect via TCP RST
       socket.setSoLinger(true, 0)
       socket.close()
 
-      // Complete request with socket exception so that `channel1` is removed from Selector.closingChannels
-      processRequest(channel, request)
+      // Complete request with socket exception so that the channel is removed from Selector.closingChannels
+      processRequest(overrideServer.requestChannel, request)
       TestUtils.waitUntilTrue(() => openOrClosingChannel.isEmpty, "Channel not closed after failed send")
       assertTrue("Unexpected completed send", selector.completedSends.isEmpty)
     } finally {
