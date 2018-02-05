@@ -144,9 +144,9 @@ class StreamsBrokerDownResilience(Test):
         # assert streams can process when starting with broker down
         self.assert_produce_consume("running_with_broker_down_initially", num_messages=9)
 
-        self.wait_until_verify(processor, "processed3messages")
-        self.wait_until_verify(processor_2, "processed3messages")
-        self.wait_until_verify(processor_3, "processed3messages")
+        wait_until(lambda: self.verify_log_statement(processor, "processed3messages") > 0,
+                   timeout_sec=60,
+                   err_msg="Did expect to read 'produced.")
 
         self.kafka.stop()
 
@@ -180,8 +180,8 @@ class StreamsBrokerDownResilience(Test):
 
         self.kafka.stop()
 
-    def wait_until_verify(self, processor, message):
-        with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
-            monitor.wait_until(message,
-                               timeout_sec=60,
-                               err_msg=("Never saw message '%s'  on " % message) + str(processor.node.account))
+    def verify_log_statement(self, processor, message):
+
+        result = processor.node.account.ssh_output("grep '%s' %s | wc -l" % (message, processor.STDOUT_FILE), allow_fail=False)
+
+        return int(result)
