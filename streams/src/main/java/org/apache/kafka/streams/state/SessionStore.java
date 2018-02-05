@@ -65,7 +65,8 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
     /**
      * Write the aggregated value for the provided key to the store
      * @param sessionKey key of the session to write
-     * @param aggregate  the aggregated value for the session; can be null
+     * @param aggregate  the aggregated value for the session, it can be null;
+     *                   if the serialized bytes are also null it is interpreted as deletes
      * @throws NullPointerException If null is used for sessionKey.
      */
     void put(final Windowed<K> sessionKey, final AGG aggregate);

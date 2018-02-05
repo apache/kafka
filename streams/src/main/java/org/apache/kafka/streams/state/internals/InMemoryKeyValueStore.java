@@ -63,7 +63,7 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public void init(ProcessorContext context, StateStore root) {
+    public void init(final ProcessorContext context, final StateStore root) {
         // construct the serde
         this.serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name),
@@ -99,20 +99,21 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized V get(K key) {
+    public synchronized V get(final K key) {
         return this.map.get(key);
     }
 
     @Override
-    public synchronized void put(K key, V value) {
-        if (value == null)
+    public synchronized void put(final K key, final V value) {
+        if (value == null) {
             this.map.remove(key);
-        else
+        } else {
             this.map.put(key, value);
+        }
     }
 
     @Override
-    public synchronized V putIfAbsent(K key, V value) {
+    public synchronized V putIfAbsent(final K key, final V value) {
         V originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
@@ -121,18 +122,18 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized void putAll(List<KeyValue<K, V>> entries) {
+    public synchronized void putAll(final List<KeyValue<K, V>> entries) {
         for (KeyValue<K, V> entry : entries)
             put(entry.key, entry.value);
     }
 
     @Override
-    public synchronized V delete(K key) {
+    public synchronized V delete(final K key) {
         return this.map.remove(key);
     }
 
     @Override
-    public synchronized KeyValueIterator<K, V> range(K from, K to) {
+    public synchronized KeyValueIterator<K, V> range(final K from, final K to) {
         return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueIterator<>(this.map.subMap(from, true, to, true).entrySet().iterator()));
     }
 
@@ -161,7 +162,7 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private static class InMemoryKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
         private final Iterator<Map.Entry<K, V>> iter;
 
-        private InMemoryKeyValueIterator(Iterator<Map.Entry<K, V>> iter) {
+        private InMemoryKeyValueIterator(final Iterator<Map.Entry<K, V>> iter) {
             this.iter = iter;
         }
 
