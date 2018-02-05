@@ -77,6 +77,7 @@ def print_output(output):
 def cmd(action, cmd, *args, **kwargs):
     if isinstance(cmd, basestring) and not kwargs.get("shell", False):
         cmd = cmd.split()
+    allow_failure = kwargs.pop("allow_failure", False)
 
     stdin_log = ""
     if "stdin" in kwargs and isinstance(kwargs["stdin"], basestring):
@@ -92,6 +93,9 @@ def cmd(action, cmd, *args, **kwargs):
         print_output(output)
     except subprocess.CalledProcessError as e:
         print_output(e.output)
+
+        if allow_failure:
+            return
 
         print("*************************************************")
         print("*** First command failure occurred here.      ***")
@@ -128,7 +132,7 @@ def sftp_mkdir(dir):
 cd %s
 mkdir %s
 """ % (basedir, dirname)
-       cmd("Creating '%s' in '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % (dirname, basedir), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str)
+       cmd("Creating '%s' in '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % (dirname, basedir), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True)
     except subprocess.CalledProcessError:
         # This is ok. The command fails if the directory already exists
         pass
