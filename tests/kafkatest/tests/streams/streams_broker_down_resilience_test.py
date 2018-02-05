@@ -181,7 +181,7 @@ class StreamsBrokerDownResilience(Test):
         self.kafka.stop()
 
     def wait_until_verify(self, processor, message):
-        with processor.account.monitor_log(processor.STDOUT_FILE) as monitor:
+        with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
             monitor.wait_until(message,
                                timeout_sec=60,
-                               err_msg=("Never saw message '%s'  on " % message) + str(processor.account))
+                               err_msg=("Never saw message '%s'  on " % message) + str(processor.node.account))
