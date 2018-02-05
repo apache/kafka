@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.utils.Time;
+
 import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
-
-import org.apache.kafka.common.utils.Time;
 
 /**
  * Interface for accessing the records contained in a log. The log itself is represented as a sequence of record
@@ -59,6 +59,16 @@ public interface Records {
      * @return The size in bytes of the records
      */
     int sizeInBytes();
+
+    /**
+     * Create a Send for the records. This is abstracted to enable lazy conversion in
+     * {@link LazyDownConvertingRecords} and potentially future cases where we need to process
+     * the fetched records before returning them.
+     *
+     * @param destination the target of the send
+     * @return the send
+     */
+    RecordsSend toSend(String destination);
 
     /**
      * Attempts to write the contents of this buffer to a channel.

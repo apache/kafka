@@ -28,6 +28,7 @@ import com.yammer.metrics.core.Gauge
 import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
+import kafka.network.RequestChannel.{AbstractSendResponse, CloseConnectionResponse, NoOpResponse}
 import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig
 import kafka.utils._
@@ -562,7 +563,7 @@ private[kafka] class Processor(val id: Int,
 
   private def processChannelException(channelId: String, errorMessage: String, throwable: Throwable) {
     if (openOrClosingChannel(channelId).isDefined) {
-      error(s"Closing socket for ${channelId} because of error", throwable)
+      error(s"Closing socket for $channelId because of error", throwable)
       close(channelId)
     }
     processException(errorMessage, throwable)
@@ -573,21 +574,20 @@ private[kafka] class Processor(val id: Int,
     while ({curr = requestChannel.receiveResponse(id); curr != null}) {
       val channelId = curr.request.context.connectionId
       try {
-        curr.responseAction match {
-          case RequestChannel.NoOpAction =>
+        curr match {
+          case _: CloseConnectionResponse =>
+            updateRequestMetrics(curr)
+            trace("Closing socket connection actively according to the response code.")
+            close(channelId)
+          case _: NoOpResponse =>
             // There is no response to send to the client, we need to read more pipelined requests
             // that are sitting in the server's socket buffer
             updateRequestMetrics(curr)
             trace("Socket server received empty response to send, registering for read: " + curr)
             openOrClosingChannel(channelId).foreach(c => selector.unmute(c.id))
-          case RequestChannel.SendAction =>
-            val responseSend = curr.responseSend.getOrElse(
-              throw new IllegalStateException(s"responseSend must be defined for SendAction, response: $curr"))
-            sendResponse(curr, responseSend)
-          case RequestChannel.CloseConnectionAction =>
-            updateRequestMetrics(curr)
-            trace("Closing socket connection actively according to the response code.")
-            close(channelId)
+
+          case response: AbstractSendResponse =>
+            sendResponse(response)
         }
       } catch {
         case e: Throwable =>
@@ -597,7 +597,8 @@ private[kafka] class Processor(val id: Int,
   }
 
   /* `protected` for test usage */
-  protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send) {
+  protected[network] def sendResponse(response: AbstractSendResponse) {
+    val responseSend = response.buildSend()
     val connectionId = response.request.context.connectionId
     trace(s"Socket server received response to send to $connectionId, registering for write and sending data: $response")
     // `channel` can be None if the connection was closed remotely or if selector closed it for being idle for too long

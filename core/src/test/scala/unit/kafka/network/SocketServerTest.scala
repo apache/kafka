@@ -26,7 +26,7 @@ import javax.net.ssl._
 
 import com.yammer.metrics.core.{Gauge, Meter}
 import com.yammer.metrics.{Metrics => YammerMetrics}
-import kafka.network.RequestChannel.SendAction
+import kafka.network.RequestChannel.AbstractSendResponse
 import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -121,7 +121,7 @@ class SocketServerTest extends JUnitSuite {
     }
   }
 
-  /* A simple request handler that just echos back the response */
+  /* A simple request handler that just echos back the request as the response */
   def processRequest(channel: RequestChannel) {
     processRequest(channel, receiveRequest(channel))
   }
@@ -129,9 +129,9 @@ class SocketServerTest extends JUnitSuite {
   def processRequest(channel: RequestChannel, request: RequestChannel.Request) {
     val byteBuffer = request.body[AbstractRequest].serialize(request.header)
     byteBuffer.rewind()
-
     val send = new NetworkSend(request.context.connectionId, byteBuffer)
-    channel.sendResponse(new RequestChannel.Response(request, Some(send), SendAction, Some(request.header.toString)))
+    val response = new InitializedSendResponse(request, send)
+    channel.sendResponse(response)
   }
 
   def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
@@ -215,7 +215,7 @@ class SocketServerTest extends JUnitSuite {
     for (_ <- 0 until 10) {
       val request = receiveRequest(server.requestChannel)
       assertNotNull("receiveRequest timed out", request)
-      server.requestChannel.sendResponse(new RequestChannel.Response(request, None, RequestChannel.NoOpAction, None))
+      server.requestChannel.sendResponse(new RequestChannel.NoOpResponse(request))
     }
   }
 
@@ -229,7 +229,7 @@ class SocketServerTest extends JUnitSuite {
     for (_ <- 0 until 3) {
       val request = receiveRequest(server.requestChannel)
       assertNotNull("receiveRequest timed out", request)
-      server.requestChannel.sendResponse(new RequestChannel.Response(request, None, RequestChannel.NoOpAction, None))
+      server.requestChannel.sendResponse(new RequestChannel.NoOpResponse(request))
     }
   }
 
@@ -530,9 +530,9 @@ class SocketServerTest extends JUnitSuite {
                                 protocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
           config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider, MemoryPool.NONE, new LogContext()) {
-          override protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send) {
+          override protected[network] def sendResponse(response: RequestChannel.AbstractSendResponse) {
             conn.close()
-            super.sendResponse(response, responseSend)
+            super.sendResponse(response)
           }
         }
       }
@@ -556,7 +556,7 @@ class SocketServerTest extends JUnitSuite {
       // detected. If the buffer is larger than 102400 bytes, a second write is attempted and it fails with an
       // IOException.
       val send = new NetworkSend(request.context.connectionId, ByteBuffer.allocate(550000))
-      channel.sendResponse(new RequestChannel.Response(request, Some(send), SendAction, None))
+      channel.sendResponse(new InitializedSendResponse(request, send))
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
         s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
 
@@ -1125,5 +1125,9 @@ class SocketServerTest extends JUnitSuite {
       val failedConnectionId = allFailedChannels.head
       sockets.filterNot(socket => isSocketConnectionId(failedConnectionId, socket))
     }
+  }
+
+  class InitializedSendResponse(request: RequestChannel.Request, send: Send) extends AbstractSendResponse(request) {
+    override def buildSend(): Send = send
   }
 }
