@@ -72,9 +72,10 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public abstract class AbstractResetIntegrationTest {
     static String testId;
     static EmbeddedKafkaCluster cluster;
-    static Map<String, Object> sslConfig = null;
-    private static KafkaStreams streams;
+    static Map<String, Object> sslConfig;
+
     private static MockTime mockTime;
+    private static KafkaStreams streams;
     private static AdminClient adminClient = null;
     private static KafkaAdminClient kafkaAdminClient = null;
 

@@ -41,6 +41,8 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     private static final String TEST_ID = "reset-integration-test";
 
     static {
+        sslConfig = null;
+
         final Properties brokerProps = new Properties();
         // we double the value passed to `time.sleep` in each iteration in one of the map functions, so we disable
         // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
