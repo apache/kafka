@@ -54,7 +54,6 @@ import scala.util.control.ControlThrowable
  */
 class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time, val credentialProvider: CredentialProvider) extends Logging with KafkaMetricsGroup {
 
-  private val endpoints = config.listeners.map(l => l.listenerName -> l).toMap
   private val maxQueuedRequests = config.queuedMaxRequests
 
   private val maxConnectionsPerIp = config.maxConnectionsPerIp
@@ -72,7 +71,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   private val processors = new ConcurrentHashMap[Int, Processor]()
   private var nextProcessorId = 0
 
-  private[network] val acceptors = mutable.Map[EndPoint, Acceptor]()
+  private[network] val acceptors = new ConcurrentHashMap[EndPoint, Acceptor]()
   private var connectionQuotas: ConnectionQuotas = _
   private var stoppedProcessingRequests = false
 
@@ -82,7 +81,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   def startup() {
     this.synchronized {
       connectionQuotas = new ConnectionQuotas(maxConnectionsPerIp, maxConnectionsPerIpOverrides)
-      createProcessors(config.numNetworkThreads)
+      createProcessors(config.numNetworkThreads, config.listeners)
     }
 
     newGauge("NetworkProcessorAvgIdlePercent",
@@ -111,14 +110,17 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     info("Started " + acceptors.size + " acceptor threads")
   }
 
-  private def createProcessors(newProcessorsPerListener: Int): Unit = synchronized {
+  private def endpoints = config.listeners.map(l => l.listenerName -> l).toMap
+
+  private def createProcessors(newProcessorsPerListener: Int,
+                               endpoints: Seq[EndPoint]): Unit = synchronized {
 
     val sendBufferSize = config.socketSendBufferBytes
     val recvBufferSize = config.socketReceiveBufferBytes
     val brokerId = config.brokerId
 
     val numProcessorThreads = config.numNetworkThreads
-    config.listeners.foreach { endpoint =>
+    endpoints.foreach { endpoint =>
       val listenerName = endpoint.listenerName
       val securityProtocol = endpoint.securityProtocol
       val listenerProcessors = new ArrayBuffer[Processor]()
@@ -130,12 +132,10 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       }
       listenerProcessors.foreach(p => processors.put(p.id, p))
 
-      val acceptor = acceptors.getOrElseUpdate(endpoint, {
-        val acceptor = new Acceptor(endpoint, sendBufferSize, recvBufferSize, brokerId, connectionQuotas)
-        KafkaThread.nonDaemon(s"kafka-socket-acceptor-$listenerName-$securityProtocol-${endpoint.port}", acceptor).start()
-        acceptor.awaitStartup()
-        acceptor
-      })
+      val acceptor = new Acceptor(endpoint, sendBufferSize, recvBufferSize, brokerId, connectionQuotas)
+      KafkaThread.nonDaemon(s"kafka-socket-acceptor-$listenerName-$securityProtocol-${endpoint.port}", acceptor).start()
+      acceptor.awaitStartup()
+      acceptors.put(endpoint, acceptor)
       acceptor.addProcessors(listenerProcessors)
     }
   }
@@ -153,7 +153,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   def stopProcessingRequests() = {
     info("Stopping socket server request processors")
     this.synchronized {
-      acceptors.values.foreach(_.shutdown)
+      acceptors.asScala.values.foreach(_.shutdown)
       processors.asScala.values.foreach(_.shutdown)
       requestChannel.clear()
       stoppedProcessingRequests = true
@@ -161,12 +161,12 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     info("Stopped socket server request processors")
   }
 
-  def resizeThreadPool(oldNumNetworkThreads: Int, newNumNetworkThreads: Int): Unit = {
+  def resizeThreadPool(oldNumNetworkThreads: Int, newNumNetworkThreads: Int): Unit = synchronized {
     info(s"Resizing network thread pool size for each listener from $oldNumNetworkThreads to $newNumNetworkThreads")
     if (newNumNetworkThreads > oldNumNetworkThreads)
-      createProcessors(newNumNetworkThreads - oldNumNetworkThreads)
+      createProcessors(newNumNetworkThreads - oldNumNetworkThreads, config.listeners)
     else if (newNumNetworkThreads < oldNumNetworkThreads)
-      acceptors.values.foreach(_.removeProcessors(oldNumNetworkThreads - newNumNetworkThreads, requestChannel))
+      acceptors.asScala.values.foreach(_.removeProcessors(oldNumNetworkThreads - newNumNetworkThreads, requestChannel))
   }
 
   /**
@@ -185,9 +185,22 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
   def boundPort(listenerName: ListenerName): Int = {
     try {
-      acceptors(endpoints(listenerName)).serverChannel.socket.getLocalPort
+      acceptors.get(endpoints(listenerName)).serverChannel.socket.getLocalPort
     } catch {
-      case e: Exception => throw new KafkaException("Tried to check server's port before server was started or checked for port of non-existing protocol", e)
+      case e: Exception =>
+        throw new KafkaException("Tried to check server's port before server was started or checked for port of non-existing protocol", e)
+    }
+  }
+
+  def addListeners(listenersAdded: Seq[EndPoint]): Unit = synchronized {
+    info(s"Adding listeners for endpoints $listenersAdded")
+    createProcessors(config.numNetworkThreads, listenersAdded)
+  }
+
+  def removeListeners(listenersRemoved: Seq[EndPoint]): Unit = synchronized {
+    info(s"Removing listeners for endpoints $listenersRemoved")
+    listenersRemoved.foreach { endpoint =>
+      acceptors.asScala.remove(endpoint).foreach(_.shutdown())
     }
   }
 
@@ -239,8 +252,8 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
    * Initiates a graceful shutdown by signaling to stop and waiting for the shutdown to complete
    */
   def shutdown(): Unit = {
-    alive.set(false)
-    wakeup()
+    if (alive.getAndSet(false))
+      wakeup()
     shutdownLatch.await()
   }
 
@@ -310,6 +323,11 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
     processors.remove(processors.size - removeCount, removeCount)
     toRemove.foreach(_.shutdown())
     toRemove.foreach(processor => requestChannel.removeProcessor(processor.id))
+  }
+
+  override def shutdown(): Unit = {
+    super.shutdown()
+    processors.foreach(_.shutdown())
   }
 
   /**

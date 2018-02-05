@@ -256,9 +256,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Connector connector = getConnector(connType);
         ClassLoader savedLoader = plugins().compareAndSwapLoaders(connector);
         try {
-            ConfigDef baseConfigDef = (connector instanceof SourceConnector)
-                    ? SourceConnectorConfig.configDef()
-                    : SinkConnectorConfig.configDef();
+            ConfigDef baseConfigDef;
+            if (connector instanceof SourceConnector) {
+                baseConfigDef = SourceConnectorConfig.configDef();
+            } else {
+                baseConfigDef = SinkConnectorConfig.configDef();
+                SinkConnectorConfig.validate(connectorProps);
+            }
             ConfigDef enrichedConfigDef = ConnectorConfig.enrich(plugins(), baseConfigDef, connectorProps, false);
             Map<String, ConfigValue> validatedConnectorConfig = validateBasicConnectorConfig(
                     connector,

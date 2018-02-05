@@ -65,14 +65,17 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.test.TestUtils.toBuffer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -95,6 +98,13 @@ public class RequestResponseTest {
         checkErrorResponse(createControlledShutdownRequest(0), new UnknownServerException());
         checkRequest(createFetchRequest(4));
         checkResponse(createFetchResponse(), 4);
+        List<TopicPartition> toForgetTopics = new ArrayList<>();
+        toForgetTopics.add(new TopicPartition("foo", 0));
+        toForgetTopics.add(new TopicPartition("foo", 2));
+        toForgetTopics.add(new TopicPartition("bar", 0));
+        checkRequest(createFetchRequest(7, new FetchMetadata(123, 456), toForgetTopics));
+        checkResponse(createFetchResponse(123), 7);
+        checkResponse(createFetchResponse(Errors.FETCH_SESSION_ID_NOT_FOUND, 123), 7);
         checkErrorResponse(createFetchRequest(4), new UnknownServerException());
         checkRequest(createHeartBeatRequest());
         checkErrorResponse(createHeartBeatRequest(), new UnknownServerException());
@@ -253,6 +263,7 @@ public class RequestResponseTest {
         checkRequest(createDescribeConfigsRequestWithConfigEntries(1));
         checkErrorResponse(createDescribeConfigsRequest(1), new UnknownServerException());
         checkResponse(createDescribeConfigsResponse(), 1);
+        checkDescribeConfigsResponseVersions();
         checkRequest(createCreatePartitionsRequest());
         checkRequest(createCreatePartitionsRequestWithAssignments());
         checkErrorResponse(createCreatePartitionsRequest(), new InvalidTopicException());
@@ -286,6 +297,36 @@ public class RequestResponseTest {
             checkRequest(createFetchRequest(i));
             checkResponse(createFetchResponse(), i);
         }
+    }
+
+    private void verifyDescribeConfigsResponse(DescribeConfigsResponse expected, DescribeConfigsResponse actual, int version) throws Exception {
+        for (org.apache.kafka.common.requests.Resource resource : expected.configs().keySet()) {
+            Collection<DescribeConfigsResponse.ConfigEntry> deserializedEntries1 = actual.config(resource).entries();
+            Iterator<DescribeConfigsResponse.ConfigEntry> expectedEntries = expected.config(resource).entries().iterator();
+            for (DescribeConfigsResponse.ConfigEntry entry : deserializedEntries1) {
+                DescribeConfigsResponse.ConfigEntry expectedEntry = expectedEntries.next();
+                assertEquals(expectedEntry.name(), entry.name());
+                assertEquals(expectedEntry.value(), entry.value());
+                assertEquals(expectedEntry.isReadOnly(), entry.isReadOnly());
+                assertEquals(expectedEntry.isSensitive(), entry.isSensitive());
+                if (version == 1 || (expectedEntry.source() != DescribeConfigsResponse.ConfigSource.DYNAMIC_BROKER_CONFIG &&
+                        expectedEntry.source() != DescribeConfigsResponse.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG))
+                    assertEquals(expectedEntry.source(), entry.source());
+                else
+                    assertEquals(DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG, entry.source());
+            }
+        }
+    }
+
+    private void checkDescribeConfigsResponseVersions() throws Exception {
+        DescribeConfigsResponse response = createDescribeConfigsResponse();
+        DescribeConfigsResponse deserialized0 = (DescribeConfigsResponse) deserialize(response,
+                response.toStruct((short) 0), (short) 0);
+        verifyDescribeConfigsResponse(response, deserialized0, 0);
+
+        DescribeConfigsResponse deserialized1 = (DescribeConfigsResponse) deserialize(response,
+                response.toStruct((short) 1), (short) 1);
+        verifyDescribeConfigsResponse(response, deserialized1, 1);
     }
 
     private void checkErrorResponse(AbstractRequest req, Throwable e) throws Exception {
@@ -426,8 +467,8 @@ public class RequestResponseTest {
         responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE, 1000000,
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, null, records));
 
-        FetchResponse v0Response = new FetchResponse(responseData, 0);
-        FetchResponse v1Response = new FetchResponse(responseData, 10);
+        FetchResponse v0Response = new FetchResponse(Errors.NONE, responseData, 0, INVALID_SESSION_ID);
+        FetchResponse v1Response = new FetchResponse(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
         assertEquals("Throttle time must be zero", 0, v0Response.throttleTimeMs());
         assertEquals("Throttle time must be 10", 10, v1Response.throttleTimeMs());
         assertEquals("Should use schema version 0", ApiKeys.FETCH.responseSchema((short) 0),
@@ -455,15 +496,22 @@ public class RequestResponseTest {
         responseData.put(new TopicPartition("foo", 0), new FetchResponse.PartitionData(Errors.NONE, 70000,
                 6, FetchResponse.INVALID_LOG_START_OFFSET, Collections.<FetchResponse.AbortedTransaction>emptyList(), records));
 
-        FetchResponse response = new FetchResponse(responseData, 10);
+        FetchResponse response = new FetchResponse(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
         FetchResponse deserialized = FetchResponse.parse(toBuffer(response.toStruct((short) 4)), (short) 4);
         assertEquals(responseData, deserialized.responseData());
     }
 
     @Test
-    public void verifyFetchResponseFullWrite() throws Exception {
-        FetchResponse fetchResponse = createFetchResponse();
-        short apiVersion = ApiKeys.FETCH.latestVersion();
+    public void verifyFetchResponseFullWrites() throws Exception {
+        verifyFetchResponseFullWrite(ApiKeys.FETCH.latestVersion(), createFetchResponse(123));
+        verifyFetchResponseFullWrite(ApiKeys.FETCH.latestVersion(),
+            createFetchResponse(Errors.FETCH_SESSION_ID_NOT_FOUND, 123));
+        for (short version = 0; version <= ApiKeys.FETCH.latestVersion(); version++) {
+            verifyFetchResponseFullWrite(version, createFetchResponse());
+        }
+    }
+
+    private void verifyFetchResponseFullWrite(short apiVersion, FetchResponse fetchResponse) throws Exception {
         int correlationId = 15;
 
         Send send = fetchResponse.toSend("1", new ResponseHeader(correlationId), apiVersion);
@@ -526,6 +574,19 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testFetchRequestWithMetadata() throws Exception {
+        FetchRequest request = createFetchRequest(4, IsolationLevel.READ_COMMITTED);
+        Struct struct = request.toStruct();
+        FetchRequest deserialized = (FetchRequest) deserialize(request, struct, request.version());
+        assertEquals(request.isolationLevel(), deserialized.isolationLevel());
+
+        request = createFetchRequest(4, IsolationLevel.READ_UNCOMMITTED);
+        struct = request.toStruct();
+        deserialized = (FetchRequest) deserialize(request, struct, request.version());
+        assertEquals(request.isolationLevel(), deserialized.isolationLevel());
+    }
+
+    @Test
     public void testJoinGroupRequestVersion0RebalanceTimeout() throws Exception {
         final short version = 0;
         JoinGroupRequest jgr = createJoinGroupRequest(version);
@@ -556,11 +617,20 @@ public class RequestResponseTest {
         return new FindCoordinatorResponse(Errors.NONE, new Node(10, "host1", 2014));
     }
 
+    private FetchRequest createFetchRequest(int version, FetchMetadata metadata, List<TopicPartition> toForget) {
+        LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
+        fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 0L, 1000000));
+        fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 0L, 1000000));
+        return FetchRequest.Builder.forConsumer(100, 100000, fetchData).
+            metadata(metadata).setMaxBytes(1000).toForget(toForget).build((short) version);
+    }
+
     private FetchRequest createFetchRequest(int version, IsolationLevel isolationLevel) {
         LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
         fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 0L, 1000000));
         fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 0L, 1000000));
-        return FetchRequest.Builder.forConsumer(100, 100000, fetchData, isolationLevel).setMaxBytes(1000).build((short) version);
+        return FetchRequest.Builder.forConsumer(100, 100000, fetchData).
+            isolationLevel(isolationLevel).setMaxBytes(1000).build((short) version);
     }
 
     private FetchRequest createFetchRequest(int version) {
@@ -568,6 +638,23 @@ public class RequestResponseTest {
         fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 0L, 1000000));
         fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 0L, 1000000));
         return FetchRequest.Builder.forConsumer(100, 100000, fetchData).setMaxBytes(1000).build((short) version);
+    }
+
+    private FetchResponse createFetchResponse(Errors error, int sessionId) {
+        return new FetchResponse(error, new LinkedHashMap<TopicPartition, FetchResponse.PartitionData>(),
+            25, sessionId);
+    }
+
+    private FetchResponse createFetchResponse(int sessionId) {
+        LinkedHashMap<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
+        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
+        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE,
+            1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, null, records));
+        List<FetchResponse.AbortedTransaction> abortedTransactions = Collections.singletonList(
+            new FetchResponse.AbortedTransaction(234L, 999L));
+        responseData.put(new TopicPartition("test", 1), new FetchResponse.PartitionData(Errors.NONE,
+            1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, abortedTransactions, MemoryRecords.EMPTY));
+        return new FetchResponse(Errors.NONE, responseData, 25, sessionId);
     }
 
     private FetchResponse createFetchResponse() {
@@ -581,7 +668,7 @@ public class RequestResponseTest {
         responseData.put(new TopicPartition("test", 1), new FetchResponse.PartitionData(Errors.NONE,
                 1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, abortedTransactions, MemoryRecords.EMPTY));
 
-        return new FetchResponse(responseData, 25);
+        return new FetchResponse(Errors.NONE, responseData, 25, INVALID_SESSION_ID);
     }
 
     private HeartbeatRequest createHeartBeatRequest() {

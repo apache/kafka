@@ -28,6 +28,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{Record, RecordBatch}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
+import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
 import org.junit.Assert._
 import org.junit.Test
@@ -292,6 +293,60 @@ class FetchRequestTest extends BaseRequestTest {
     // offset of the first record in the batch
     check(fetchOffset = 10, expectedOffset = 10, requestVersion = 4, expectedNumBatches = 1,
       expectedMagic = RecordBatch.MAGIC_VALUE_V2)
+  }
+
+  /**
+    * Test that when an incremental fetch session contains partitions with an error,
+    * those partitions are returned in all incremental fetch requests.
+    */
+  @Test
+  def testCreateIncrementalFetchWithPartitionsInError(): Unit = {
+    def createFetchRequest(topicPartitions: Seq[TopicPartition],
+                           metadata: JFetchMetadata,
+                           toForget: Seq[TopicPartition]): FetchRequest =
+      FetchRequest.Builder.forConsumer(Int.MaxValue, 0,
+        createPartitionMap(Integer.MAX_VALUE, topicPartitions, Map.empty))
+          .toForget(toForget.asJava)
+          .metadata(metadata)
+          .build()
+    val foo0 = new TopicPartition("foo", 0)
+    val foo1 = new TopicPartition("foo", 1)
+    createTopic("foo", Map(0 -> List(0, 1), 1 -> List(0, 2)))
+    val bar0 = new TopicPartition("bar", 0)
+    val req1 = createFetchRequest(List(foo0, foo1, bar0), JFetchMetadata.INITIAL, Nil)
+    val resp1 = sendFetchRequest(0, req1)
+    assertEquals(Errors.NONE, resp1.error())
+    assertTrue("Expected the broker to create a new incremental fetch session", resp1.sessionId() > 0)
+    debug(s"Test created an incremental fetch session ${resp1.sessionId}")
+    assertTrue(resp1.responseData().containsKey(foo0))
+    assertTrue(resp1.responseData().containsKey(foo1))
+    assertTrue(resp1.responseData().containsKey(bar0))
+    assertEquals(Errors.NONE, resp1.responseData().get(foo0).error)
+    assertEquals(Errors.NONE, resp1.responseData().get(foo1).error)
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, resp1.responseData().get(bar0).error)
+    val req2 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 1), Nil)
+    val resp2 = sendFetchRequest(0, req2)
+    assertEquals(Errors.NONE, resp2.error())
+    assertEquals("Expected the broker to continue the incremental fetch session",
+      resp1.sessionId(), resp2.sessionId())
+    assertFalse(resp2.responseData().containsKey(foo0))
+    assertFalse(resp2.responseData().containsKey(foo1))
+    assertTrue(resp2.responseData().containsKey(bar0))
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, resp2.responseData().get(bar0).error)
+    createTopic("bar", Map(0 -> List(0, 1)))
+    val req3 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 2), Nil)
+    val resp3 = sendFetchRequest(0, req3)
+    assertEquals(Errors.NONE, resp3.error())
+    assertFalse(resp3.responseData().containsKey(foo0))
+    assertFalse(resp3.responseData().containsKey(foo1))
+    assertTrue(resp3.responseData().containsKey(bar0))
+    assertEquals(Errors.NONE, resp3.responseData().get(bar0).error)
+    val req4 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 3), Nil)
+    val resp4 = sendFetchRequest(0, req4)
+    assertEquals(Errors.NONE, resp4.error())
+    assertFalse(resp4.responseData().containsKey(foo0))
+    assertFalse(resp4.responseData().containsKey(foo1))
+    assertFalse(resp4.responseData().containsKey(bar0))
   }
 
   private def records(partitionData: FetchResponse.PartitionData): Seq[Record] = {

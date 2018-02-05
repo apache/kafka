@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.config.ConfigException;
+
 import java.util.Map;
 import java.util.Set;
 
@@ -33,9 +35,12 @@ public interface Reconfigurable extends Configurable {
      * Validates the provided configuration. The provided map contains
      * all configs including any reconfigurable configs that may be different
      * from the initial configuration. Reconfiguration will be not performed
-     * if this method returns false or throws any exception.
+     * if this method throws any exception.
+     * @throws ConfigException if the provided configs are not valid. The exception
+     *         message from ConfigException will be returned to the client in
+     *         the AlterConfigs response.
      */
-    boolean validateReconfiguration(Map<String, ?> configs);
+    void validateReconfiguration(Map<String, ?> configs) throws ConfigException;
 
     /**
      * Reconfigures this instance with the given key-value pairs. The provided

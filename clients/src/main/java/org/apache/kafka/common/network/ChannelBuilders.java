@@ -29,6 +29,9 @@ import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
 import org.apache.kafka.common.utils.Utils;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class ChannelBuilders {
@@ -105,9 +108,20 @@ public class ChannelBuilders {
             case SASL_SSL:
             case SASL_PLAINTEXT:
                 requireNonNullMode(mode, securityProtocol);
-                JaasContext jaasContext = JaasContext.load(contextType, listenerName, configs);
+                Map<String, JaasContext> jaasContexts;
+                if (mode == Mode.SERVER) {
+                    List<String> enabledMechanisms = (List<String>) configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
+                    jaasContexts = new HashMap<>(enabledMechanisms.size());
+                    for (String mechanism : enabledMechanisms)
+                        jaasContexts.put(mechanism, JaasContext.loadServerContext(listenerName, mechanism, configs));
+                } else {
+                    // Use server context for inter-broker client connections and client context for other clients
+                    JaasContext jaasContext = contextType == JaasContext.Type.CLIENT ? JaasContext.loadClientContext(configs) :
+                            JaasContext.loadServerContext(listenerName, clientSaslMechanism, configs);
+                    jaasContexts = Collections.singletonMap(clientSaslMechanism, jaasContext);
+                }
                 channelBuilder = new SaslChannelBuilder(mode,
-                        jaasContext,
+                        jaasContexts,
                         securityProtocol,
                         listenerName,
                         isInterBrokerListener,

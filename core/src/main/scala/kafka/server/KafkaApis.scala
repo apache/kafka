@@ -80,6 +80,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val metrics: Metrics,
                 val authorizer: Option[Authorizer],
                 val quotas: QuotaManagers,
+                val fetchManager: FetchManager,
                 brokerTopicStats: BrokerTopicStats,
                 val clusterId: String,
                 time: Time,
@@ -481,35 +482,52 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Handle a fetch request
    */
   def handleFetchRequest(request: RequestChannel.Request) {
-    val fetchRequest = request.body[FetchRequest]
     val versionId = request.header.apiVersion
     val clientId = request.header.clientId
+    val fetchRequest = request.body[FetchRequest]
+    val fetchContext = fetchManager.newContext(fetchRequest.metadata(),
+          fetchRequest.fetchData(),
+          fetchRequest.toForget(),
+          fetchRequest.isFromFollower())
 
-    val unauthorizedTopicResponseData = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData)]()
-    val nonExistingTopicResponseData = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData)]()
-    val authorizedRequestInfo = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
-
-    if (fetchRequest.isFromFollower() && !authorize(request.session, ClusterAction, Resource.ClusterResource))
-      for (topicPartition <- fetchRequest.fetchData.asScala.keys)
-        unauthorizedTopicResponseData += topicPartition -> new FetchResponse.PartitionData(Errors.CLUSTER_AUTHORIZATION_FAILED,
-          FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-          FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
-    else
-      for ((topicPartition, partitionData) <- fetchRequest.fetchData.asScala) {
-        if (!authorize(request.session, Read, new Resource(Topic, topicPartition.topic)))
-          unauthorizedTopicResponseData += topicPartition -> new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
+    val erroneous = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData)]()
+    val interesting = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
+    if (fetchRequest.isFromFollower()) {
+      // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
+      if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
+        fetchContext.foreachPartition((part, data) => {
+          if (!metadataCache.contains(part.topic)) {
+            erroneous += part -> new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+              FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+              FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
+          } else {
+            interesting += (part -> data)
+          }
+        })
+      } else {
+        fetchContext.foreachPartition((part, data) => {
+          erroneous += part -> new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
             FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
             FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
-        else if (!metadataCache.contains(topicPartition.topic))
-          nonExistingTopicResponseData += topicPartition -> new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+        })
+      }
+    } else {
+      // Regular Kafka consumers need READ permission on each partition they are fetching.
+      fetchContext.foreachPartition((part, data) => {
+        if (!authorize(request.session, Read, new Resource(Topic, part.topic)))
+          erroneous += part -> new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
+            FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+            FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
+        else if (!metadataCache.contains(part.topic))
+          erroneous += part -> new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
             FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
             FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
         else
-          authorizedRequestInfo += (topicPartition -> partitionData)
-      }
+          interesting += (part -> data)
+      })
+    }
 
     def convertedPartitionData(tp: TopicPartition, data: FetchResponse.PartitionData) = {
-
       // Down-conversion of the fetched records is needed when the stored magic version is
       // greater than that supported by the client (as indicated by the fetch request version). If the
       // configured magic version for the topic is less than or equal to that supported by the version of the
@@ -529,7 +547,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         downConvertMagic.map { magic =>
           trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
-          val converted = data.records.downConvert(magic, fetchRequest.fetchData.get(tp).fetchOffset, time)
+          val converted = data.records.downConvert(magic, fetchContext.getFetchOffset(tp).get, time)
           updateRecordsProcessingStats(request, tp, converted.recordsProcessingStats)
           new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
             data.logStartOffset, data.abortedTransactions, converted.records)
@@ -540,40 +558,37 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // the callback for process a fetch response, invoked before throttling
     def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]) {
-      val partitionData = {
-        responsePartitionData.map { case (tp, data) =>
-          val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
-          val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-          tp -> new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
-            data.logStartOffset, abortedTransactions, data.records)
-        }
+      val partitions = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
+      responsePartitionData.foreach{ case (tp, data) =>
+        val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
+        val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+        partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
+          data.logStartOffset, abortedTransactions, data.records))
       }
-
-      val mergedPartitionData = partitionData ++ unauthorizedTopicResponseData ++ nonExistingTopicResponseData
-      val fetchedPartitionData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]()
-
-      mergedPartitionData.foreach { case (topicPartition, data) =>
-        if (data.error != Errors.NONE)
-          debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
-            s"on partition $topicPartition failed due to ${data.error.exceptionName}")
-
-        fetchedPartitionData.put(topicPartition, data)
-      }
+      erroneous.foreach{case (tp, data) => partitions.put(tp, data)}
+      val unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
 
       // fetch response callback invoked after any throttling
       def fetchResponseCallback(bandwidthThrottleTimeMs: Int) {
         def createResponse(requestThrottleTimeMs: Int): FetchResponse = {
           val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
-          fetchedPartitionData.asScala.foreach { case (tp, partitionData) =>
+          unconvertedFetchResponse.responseData().asScala.foreach { case (tp, partitionData) =>
+            if (partitionData.error != Errors.NONE)
+              debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
+                s"on partition $tp failed due to ${partitionData.error.exceptionName}")
             convertedData.put(tp, convertedPartitionData(tp, partitionData))
           }
-          val response = new FetchResponse(convertedData, bandwidthThrottleTimeMs + requestThrottleTimeMs)
+          val response = new FetchResponse(unconvertedFetchResponse.error(), convertedData,
+            bandwidthThrottleTimeMs + requestThrottleTimeMs, unconvertedFetchResponse.sessionId())
           response.responseData.asScala.foreach { case (topicPartition, data) =>
             // record the bytes out metrics only when the response is being sent
             brokerTopicStats.updateBytesOut(topicPartition.topic, fetchRequest.isFromFollower, data.records.sizeInBytes)
           }
           response
         }
+
+        trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.responseData().size()}, " +
+          s"metadata=${unconvertedFetchResponse.sessionId()}")
 
         if (fetchRequest.isFromFollower)
           sendResponseExemptThrottle(request, createResponse(0))
@@ -587,21 +602,20 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       if (fetchRequest.isFromFollower) {
         // We've already evaluated against the quota and are good to go. Just need to record it now.
-        val responseSize = sizeOfThrottledPartitions(versionId, fetchRequest, mergedPartitionData, quotas.leader)
+        val responseSize = sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader)
         quotas.leader.record(responseSize)
         fetchResponseCallback(bandwidthThrottleTimeMs = 0)
       } else {
         // Fetch size used to determine throttle time is calculated before any down conversions.
         // This may be slightly different from the actual response size. But since down conversions
         // result in data being loaded into memory, it is better to do this after throttling to avoid OOM.
-        val response = new FetchResponse(fetchedPartitionData, 0)
-        val responseStruct = response.toStruct(versionId)
+        val responseStruct = unconvertedFetchResponse.toStruct(versionId)
         quotas.fetch.maybeRecordAndThrottle(request.session.sanitizedUser, clientId, responseStruct.sizeOf,
           fetchResponseCallback)
       }
     }
 
-    if (authorizedRequestInfo.isEmpty)
+    if (interesting.isEmpty)
       processResponseCallback(Seq.empty)
     else {
       // call the replica manager to fetch messages from the local replica
@@ -611,23 +625,45 @@ class KafkaApis(val requestChannel: RequestChannel,
         fetchRequest.minBytes,
         fetchRequest.maxBytes,
         versionId <= 2,
-        authorizedRequestInfo,
+        interesting,
         replicationQuota(fetchRequest),
         processResponseCallback,
         fetchRequest.isolationLevel)
     }
   }
 
-  private def sizeOfThrottledPartitions(versionId: Short,
-                                        fetchRequest: FetchRequest,
-                                        mergedPartitionData: Seq[(TopicPartition, FetchResponse.PartitionData)],
-                                        quota: ReplicationQuotaManager): Int = {
-    val partitionData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
-    mergedPartitionData.foreach { case (tp, data) =>
-      if (quota.isThrottled(tp))
-        partitionData.put(tp, data)
+  class SelectingIterator(val partitions: util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData],
+                          val quota: ReplicationQuotaManager)
+                          extends util.Iterator[util.Map.Entry[TopicPartition, FetchResponse.PartitionData]] {
+    val iter = partitions.entrySet().iterator()
+
+    var nextElement: util.Map.Entry[TopicPartition, FetchResponse.PartitionData] = null
+
+    override def hasNext: Boolean = {
+      while ((nextElement == null) && iter.hasNext()) {
+        val element = iter.next()
+        if (quota.isThrottled(element.getKey)) {
+          nextElement = element
+        }
+      }
+      nextElement != null
     }
-    FetchResponse.sizeOf(versionId, partitionData)
+
+    override def next(): util.Map.Entry[TopicPartition, FetchResponse.PartitionData] = {
+      if (!hasNext()) throw new NoSuchElementException()
+      val element = nextElement
+      nextElement = null
+      element
+    }
+
+    override def remove() = throw new UnsupportedOperationException()
+  }
+
+  private def sizeOfThrottledPartitions(versionId: Short,
+                                        unconvertedResponse: FetchResponse,
+                                        quota: ReplicationQuotaManager): Int = {
+    val iter = new SelectingIterator(unconvertedResponse.responseData(), quota)
+    FetchResponse.sizeOf(versionId, iter)
   }
 
   def replicationQuota(fetchRequest: FetchRequest): ReplicaQuota =
@@ -1291,7 +1327,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleSaslHandshakeRequest(request: RequestChannel.Request) {
-    sendResponseMaybeThrottle(request, _ => new SaslHandshakeResponse(Errors.ILLEGAL_SASL_STATE, config.saslEnabledMechanisms))
+    sendResponseMaybeThrottle(request, _ => new SaslHandshakeResponse(Errors.ILLEGAL_SASL_STATE, Collections.emptySet()))
   }
 
   def handleSaslAuthenticateRequest(request: RequestChannel.Request) {
