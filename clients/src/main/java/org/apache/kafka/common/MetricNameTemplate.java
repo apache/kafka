@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common;
 
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 
@@ -26,27 +26,45 @@ import org.apache.kafka.common.utils.Utils;
  * A template for a MetricName. It contains a name, group, and description, as
  * well as all the tags that will be used to create the mBean name. Tag values
  * are omitted from the template, but are filled in at runtime with their
- * specified values.
+ * specified values. The order of the tags is maintained, if an ordered set
+ * is provided, so that the mBean names can be compared and sorted lexicographically.
  */
 public class MetricNameTemplate {
     private final String name;
     private final String group;
     private final String description;
-    private Set<String> tags;
+    private LinkedHashSet<String> tags;
 
-    public MetricNameTemplate(String name, String group, String description, Set<String> tags) {
+    /**
+     * Create a new template. Note that the order of the tags will be preserved if the supplied
+     * {@code tagsNames} set has an order.
+     *
+     * @param name the name of the metric; may not be null
+     * @param group the name of the group; may not be null
+     * @param description the description of the metric; may not be null
+     * @param tagsNames the set of metric tag names, which can/should be a set that maintains order; may not be null
+     */
+    public MetricNameTemplate(String name, String group, String description, Set<String> tagsNames) {
         this.name = Utils.notNull(name);
         this.group = Utils.notNull(group);
         this.description = Utils.notNull(description);
-        this.tags = Utils.notNull(tags);
-    }
-    
-    public MetricNameTemplate(String name, String group, String description, String... keys) {
-        this(name, group, description, getTags(keys));
+        this.tags = new LinkedHashSet<>(Utils.notNull(tagsNames));
     }
 
-    private static Set<String> getTags(String... keys) {
-        Set<String> tags = new HashSet<String>();
+    /**
+     * Create a new template. Note that the order of the tags will be preserved.
+     *
+     * @param name the name of the metric; may not be null
+     * @param group the name of the group; may not be null
+     * @param description the description of the metric; may not be null
+     * @param tagsNames the names of the metric tags in the preferred order; none of the tag names should be null
+     */
+    public MetricNameTemplate(String name, String group, String description, String... tagsNames) {
+        this(name, group, description, getTags(tagsNames));
+    }
+
+    private static LinkedHashSet<String> getTags(String... keys) {
+        LinkedHashSet<String> tags = new LinkedHashSet<>();
         
         for (int i = 0; i < keys.length; i++)
             tags.add(keys[i]);
@@ -54,18 +72,38 @@ public class MetricNameTemplate {
         return tags;
     }
 
+    /**
+     * Get the name of the metric.
+     *
+     * @return the metric name; never null
+     */
     public String name() {
         return this.name;
     }
 
+    /**
+     * Get the name of the group.
+     *
+     * @return the group name; never null
+     */
     public String group() {
         return this.group;
     }
 
+    /**
+     * Get the description of the metric.
+     *
+     * @return the metric description; never null
+     */
     public String description() {
         return this.description;
     }
 
+    /**
+     * Get the set of tag names for the metric.
+     *
+     * @return the ordered set of tag names; never null but possibly empty
+     */
     public Set<String> tags() {
         return tags;
     }
