@@ -91,7 +91,7 @@ class StreamsBrokerDownResilience(Test):
     def wait_for_verification(self, processor, message, file, num_lines=1):
         wait_until(lambda: self.verify_from_file(processor, message, file) >= num_lines,
                    timeout_sec=60,
-                   err_msg="Did expect to read '%s' from %s" % (message, processor.node))
+                   err_msg="Did expect to read '%s' from %s" % (message, processor.node.account))
 
     @staticmethod
     def verify_from_file(processor, message, file):
@@ -184,6 +184,9 @@ class StreamsBrokerDownResilience(Test):
 
         processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor_3.start()
+
+        # need to wait for rebalance
+        time.sleep(10)
 
         # assert streams can process when starting with broker down
         self.assert_produce_consume("waiting for rebalance to complete", num_messages=9)
