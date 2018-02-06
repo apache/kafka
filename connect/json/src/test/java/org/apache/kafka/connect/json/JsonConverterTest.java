@@ -755,6 +755,11 @@ public class JsonConverterTest {
         assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toConnectHeader(TOPIC, "headerName", "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes()));
     }
 
+    @Test
+    public void nullTestconvertToJsonWithEnvelope() {
+        assertNull(new JsonConverter().convertToJsonWithEnvelope(Schema.STRING_SCHEMA, null));
+    }
+
 
     private JsonNode parse(byte[] json) {
         try {

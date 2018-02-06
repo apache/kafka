@@ -563,8 +563,12 @@ public class JsonConverter implements Converter, HeaderConverter {
      * @param value the value
      * @return JsonNode-encoded version
      */
-    private JsonNode convertToJsonWithEnvelope(Schema schema, Object value) {
-        return new JsonSchema.Envelope(asJsonSchema(schema), convertToJson(schema, value)).toJsonNode();
+    protected JsonNode convertToJsonWithEnvelope(Schema schema, Object value) {
+        if (value == null){
+            return null;
+        } else {
+            return new JsonSchema.Envelope(asJsonSchema(schema), convertToJson(schema, value)).toJsonNode();
+        }
     }
 
     private JsonNode convertToJsonWithoutEnvelope(Schema schema, Object value) {
