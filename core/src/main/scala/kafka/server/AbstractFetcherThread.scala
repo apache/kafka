@@ -312,6 +312,12 @@ abstract class AbstractFetcherThread(name: String,
     finally partitionMapLock.unlock()
   }
 
+  private[server] def partitionsAndOffsets: Map[TopicPartition, BrokerAndInitialOffset] = inLock(partitionMapLock) {
+    partitionStates.partitionStates.asScala.map { case state =>
+      state.topicPartition -> new BrokerAndInitialOffset(sourceBroker, state.value.fetchOffset)
+    }.toMap
+  }
+
 }
 
 object AbstractFetcherThread {
