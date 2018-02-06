@@ -255,7 +255,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 throw new TaskMigratedException(task, topicPartition, endOffset, pos);
             }
 
-            // not a KTable changelog topic but state store
+            // need to check for changelog topic
             if (restorer.offsetLimit() == Long.MAX_VALUE) {
                 final Long updatedEndOffset = restoreConsumer.endOffsets(Collections.singletonList(topicPartition)).get(topicPartition);
                 if (!restorer.hasCompleted(pos, updatedEndOffset)) {
