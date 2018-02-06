@@ -124,14 +124,12 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         if (topic.equals(""))
             throw new ConfigException("Must specify topic for connector status.");
 
-        Map<String, Object> producerProps = new HashMap<>();
-        producerProps.putAll(config.originals());
+        Map<String, Object> producerProps = new HashMap<>(config.originals());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.RETRIES_CONFIG, 0); // we handle retries in this class
 
-        Map<String, Object> consumerProps = new HashMap<>();
-        consumerProps.putAll(config.originals());
+        Map<String, Object> consumerProps = new HashMap<>(config.originals());
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
