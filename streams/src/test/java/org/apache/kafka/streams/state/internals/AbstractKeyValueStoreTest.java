@@ -36,6 +36,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 
 public abstract class AbstractKeyValueStoreTest {
 
@@ -70,13 +71,45 @@ public abstract class AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void testDelete() {
+    public void shouldNotIncludeDeletedFromRangeResult() {
+        store.close();
+
+        final Serializer<String> serializer = new StringSerializer() {
+            private int numCalls = 0;
+
+            @Override
+            public byte[] serialize(final String topic, final String data) {
+                if (++numCalls > 3) {
+                    fail("Value serializer is called; it should never happen");
+                }
+
+                return super.serialize(topic, data);
+            }
+        };
+
+        context.setValueSerde(Serdes.serdeFrom(serializer, new StringDeserializer()));
+        store = createKeyValueStore(driver.context());
+
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(2, "two");
+        store.delete(0);
+        store.delete(1);
+
+        // should not include deleted records in iterator
+        final Map<Integer, String> expectedContents = Collections.singletonMap(2, "two");
+        assertEquals(expectedContents, getContents(store.all()));
+    }
+
+    @Test
+    public void shouldDeleteIfSerializedValueIsNull() {
         store.close();
 
         final Serializer<String> serializer = new StringSerializer() {
             @Override
             public byte[] serialize(final String topic, final String data) {
                 if (data.equals("null")) {
+                    // will be serialized to null bytes, indicating deletes
                     return null;
                 }
                 return super.serialize(topic, data);
@@ -89,8 +122,8 @@ public abstract class AbstractKeyValueStoreTest {
         store.put(0, "zero");
         store.put(1, "one");
         store.put(2, "two");
-        store.delete(0);
-        store.put(1, "null"); // will be serialized to null bytes, indicating deletes
+        store.put(0, "null");
+        store.put(1, "null");
 
         // should not include deleted records in iterator
         final Map<Integer, String> expectedContents = Collections.singletonMap(2, "two");
