@@ -185,8 +185,11 @@ class StreamsBrokerDownResilience(Test):
         processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor_3.start()
 
-        # need to wait for rebalance
-        time.sleep(10)
+        # need to wait for rebalance  once
+        with processor_3.node.account.monitor_log(processor_3.LOG_FILE) as monitor:
+            monitor.wait_until('State transition from REBALANCING to RUNNING',
+                               timeout_sec=60,
+                               err_msg="Never saw 'State transition from REBALANCING to RUNNING ' error message " + str(processor_3.node.account))
 
         # assert streams can process when starting with broker down
         self.assert_produce_consume("waiting for rebalance to complete", num_messages=9)
