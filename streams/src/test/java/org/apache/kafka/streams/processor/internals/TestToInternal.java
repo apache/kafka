@@ -20,7 +20,7 @@ import org.apache.kafka.streams.processor.To;
 
 import java.util.List;
 
-public class TestToInternal extends  ToInternal {
+public class TestToInternal extends ToInternal {
     public TestToInternal(final To to, final List<ProcessorNode> children) {
         super(to, children);
     }

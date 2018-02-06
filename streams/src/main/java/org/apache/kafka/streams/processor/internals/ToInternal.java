@@ -43,6 +43,10 @@ class ToInternal extends To {
     }
 
     boolean hasChild(final String childName) {
-        return this.childName == null || this.childName.equals(childName);
+        return sendToAllChildren() || this.childName.equals(childName);
+    }
+
+    private boolean sendToAllChildren() {
+        return childName == null;
     }
 }
