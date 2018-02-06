@@ -755,9 +755,9 @@ public class StreamThread extends Thread {
             try {
                 recordsProcessedBeforeCommit = runOnce(recordsProcessedBeforeCommit);
             } catch (final TaskMigratedException ignoreAndRejoinGroup) {
-                log.warn("Detected {} that got migrated to another thread. " +
+                log.warn("Detected task {} that got migrated to another thread. " +
                     "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
-                    "Trying to rejoin the consumer group now:\n{}", ignoreAndRejoinGroup.migratedTask().id(), ignoreAndRejoinGroup.migratedTask());
+                    "Trying to rejoin the consumer group now. Below is the detailed description of the task:\n{}", ignoreAndRejoinGroup.migratedTask().id(), ignoreAndRejoinGroup.migratedTask().toString(">"));
             }
         }
     }

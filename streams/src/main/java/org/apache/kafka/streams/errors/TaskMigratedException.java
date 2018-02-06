@@ -38,7 +38,7 @@ public class TaskMigratedException extends StreamsException {
                                  final TopicPartition topicPartition,
                                  final long endOffset,
                                  final long pos) {
-        super(String.format("Log end offset of %s should not change while restoring: old end offset %d, current offset %d\n%s",
+        super(String.format("Log end offset of %s should not change while restoring: old end offset %d, current offset %d%n%s",
                             topicPartition,
                             endOffset,
                             pos,
