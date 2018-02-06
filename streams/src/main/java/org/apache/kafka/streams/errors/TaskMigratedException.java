@@ -28,6 +28,8 @@ public class TaskMigratedException extends StreamsException {
 
     private final static long serialVersionUID = 1L;
 
+    private final Task task;
+
     public TaskMigratedException(final Task task) {
         this(task, null);
     }
@@ -42,11 +44,19 @@ public class TaskMigratedException extends StreamsException {
                             pos,
                             task.toString("> ")),
             null);
+
+        this.task = task;
     }
 
     public TaskMigratedException(final Task task,
                                  final Throwable throwable) {
         super(task.toString(), throwable);
+
+        this.task = task;
+    }
+
+    public Task migratedTask() {
+        return task;
     }
 
 }
