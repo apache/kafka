@@ -45,8 +45,8 @@ CAPITALIZED_PROJECT_NAME = "kafka".upper()
 SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
 # Location of the local git repository
 REPO_HOME = os.environ.get("%s_HOME" % CAPITALIZED_PROJECT_NAME, SCRIPT_DIR)
-# Remote name which points to Apache git
-PUSH_REMOTE_NAME = os.environ.get("PUSH_REMOTE_NAME", "apache")
+# Remote name, which points to Github by default
+PUSH_REMOTE_NAME = os.environ.get("PUSH_REMOTE_NAME", "apache-github")
 PREFS_FILE = os.path.join(SCRIPT_DIR, '.release-settings.json')
 
 delete_gitrefs = False
@@ -77,6 +77,7 @@ def print_output(output):
 def cmd(action, cmd, *args, **kwargs):
     if isinstance(cmd, basestring) and not kwargs.get("shell", False):
         cmd = cmd.split()
+    allow_failure = kwargs.pop("allow_failure", False)
 
     stdin_log = ""
     if "stdin" in kwargs and isinstance(kwargs["stdin"], basestring):
@@ -92,6 +93,9 @@ def cmd(action, cmd, *args, **kwargs):
         print_output(output)
     except subprocess.CalledProcessError as e:
         print_output(e.output)
+
+        if allow_failure:
+            return
 
         print("*************************************************")
         print("*** First command failure occurred here.      ***")
@@ -128,7 +132,7 @@ def sftp_mkdir(dir):
 cd %s
 mkdir %s
 """ % (basedir, dirname)
-       cmd("Creating '%s' in '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % (dirname, basedir), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str)
+       cmd("Creating '%s' in '%s' in your Apache home directory if it does not exist (errors are ok if the directory already exists)" % (dirname, basedir), "sftp -b - %s@home.apache.org" % apache_id, stdin=cmd_str, allow_failure=True)
     except subprocess.CalledProcessError:
         # This is ok. The command fails if the directory already exists
         pass
@@ -389,7 +393,7 @@ if not user_ok("Going to build and upload mvn artifacts based on these settings:
     fail("Retry again later")
 cmd("Building and uploading archives", "./gradlew uploadArchivesAll", cwd=kafka_dir, env=jdk7_env)
 cmd("Building and uploading archives", "./gradlew uploadCoreArchives_2_12 -PscalaVersion=2.12", cwd=kafka_dir, env=jdk8_env)
-cmd("Building and uploading archives", "mvn deploy", cwd=streams_quickstart_dir, env=jdk7_env)
+cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=streams_quickstart_dir, env=jdk7_env)
 
 release_notification_props = { 'release_version': release_version,
                                'rc': rc,
