@@ -133,8 +133,6 @@ class StreamsBrokerDownResilience(Test):
         node = self.kafka.leader(self.inputTopic)
         self.kafka.stop_node(node)
 
-        broker_down_initially_in_seconds = 60
-
         configs = self.get_configs(extra_configs=",application.id=starting_wo_broker_id")
 
         # start streams with broker down initially
@@ -147,15 +145,12 @@ class StreamsBrokerDownResilience(Test):
         processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor_3.start()
 
-        # wait for broker downtime beyond timeouts
-        time.sleep(broker_down_initially_in_seconds)
-
         broker_unavailable_message = "Broker may not be available"
 
         # verify streams instances unable to connect to broker, kept trying
-        self.wait_for_verification(processor, broker_unavailable_message, processor.LOG_FILE, 100)
-        self.wait_for_verification(processor_2, broker_unavailable_message, processor_2.LOG_FILE, 100)
-        self.wait_for_verification(processor_3, broker_unavailable_message, processor_3.LOG_FILE, 100)
+        self.wait_for_verification(processor, broker_unavailable_message, processor.LOG_FILE, 300)
+        self.wait_for_verification(processor_2, broker_unavailable_message, processor_2.LOG_FILE, 300)
+        self.wait_for_verification(processor_3, broker_unavailable_message, processor_3.LOG_FILE, 300)
 
         # now start broker
         self.kafka.start_node(node)
