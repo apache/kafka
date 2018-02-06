@@ -1457,37 +1457,14 @@ public class KafkaConsumerTest {
                 rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, true, autoCommitIntervalMs);
 
         consumer.subscribe(Collections.singleton(topic));
-
         callConsumerApisAndExpectAnAuthenticationError(consumer, tp0);
 
         time.sleep(30); // wait less than the blackout period
-        client.authenticationSucceeded(node);
-
+        assertTrue(client.connectionFailed(node));
         callConsumerApisAndExpectAnAuthenticationError(consumer, tp0);
 
         time.sleep(300); // wait until the blackout period is elapsed
-        client.authenticationSucceeded(node);
-
-        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp0, 0L), Errors.NONE));
-        consumer.beginningOffsets(Collections.singleton(tp0));
-
-        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp0, 10L), Errors.NONE));
-        consumer.endOffsets(Collections.singleton(tp0));
-
-        Node coordinator = prepareRebalance(client, node, assignor, Arrays.asList(tp0), null);
-        client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, 10L), Errors.NONE), coordinator);
-        client.prepareResponse(fetchResponse(tp0, 10L, 100));
-
-        consumer.poll(10);
-
-        AtomicBoolean commitReceived = prepareOffsetCommitResponse(client, coordinator, tp0, 10L);
-        Map<TopicPartition, OffsetAndMetadata> offset = new HashMap<>();
-        offset.put(tp0, new OffsetAndMetadata(10L));
-        consumer.commitSync(offset);
-        assertTrue(commitReceived.get());
-
-        client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, 110L), Errors.NONE), coordinator);
-        assertEquals(110L, consumer.committed(tp0).offset());
+        assertTrue(!client.connectionFailed(node));
 
         client.requests().clear();
         consumer.close(0, TimeUnit.MILLISECONDS);

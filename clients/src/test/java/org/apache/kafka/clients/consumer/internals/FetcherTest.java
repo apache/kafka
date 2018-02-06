@@ -2050,7 +2050,7 @@ public class FetcherTest {
         }
 
         time.sleep(30); // wait less than the blackout period
-        client.authenticationSucceeded(node);
+        assertTrue(client.connectionFailed(node));
 
         try {
             fetcher.beginningOffsets(Collections.singleton(tp0), 1000);
@@ -2059,13 +2059,7 @@ public class FetcherTest {
         }
 
         time.sleep(300); // wait until the blackout period is elapsed
-        client.authenticationSucceeded(node);
-
-        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
-        fetcher.sendFetches();
-        consumerClient.poll(0);
-        assertTrue(fetcher.hasCompletedFetches());
-        assertEquals(1, fetcher.fetchedRecords().size());
+        assertTrue(!client.connectionFailed(node));
     }
 
     private int appendTransactionalRecords(ByteBuffer buffer, long pid, long baseOffset, int baseSequence, SimpleRecord... records) {

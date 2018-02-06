@@ -254,25 +254,20 @@ public class KafkaAdminClientTest {
         AdminClientUnitTestEnv env = mockClientEnv();
         Node node = env.cluster().controller();
         env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-        env.kafkaClient().setNode(env.cluster().controller());
-        env.kafkaClient().authenticationFailed(env.cluster().controller(), 300);
+        env.kafkaClient().setNode(node);
+        env.kafkaClient().authenticationFailed(node, 300);
 
         callAdminClientApisAndExpectAnAuthenticationError(env);
 
-        env.time().sleep(30); // wait less than the blackout period
-        env.kafkaClient().authenticationSucceeded(node);
-
+        // wait less than the blackout period, the connection should fail and the authentication error should remain
+        env.time().sleep(30);
+        assertTrue(env.kafkaClient().connectionFailed(node));
         callAdminClientApisAndExpectAnAuthenticationError(env);
 
-        env.time().sleep(300); // wait until the blackout period is elapsed
-        env.kafkaClient().authenticationSucceeded(node);
-
-        // try one of the apis to verify authentication error is gone
-        env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
-        env.kafkaClient().prepareResponse(new CreateTopicsResponse(Collections.singletonMap("myTopic", new ApiError(Errors.NONE, ""))));
-        env.adminClient().createTopics(
-                Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(Integer.valueOf(0), asList(new Integer[]{0, 1, 2})))),
-                new CreateTopicsOptions().timeoutMs(10000)).all().get();
+        // wait until the blackout period is elapsed, the connection should succeed but the authentication error should remain
+        env.time().sleep(300);
+        assertTrue(!env.kafkaClient().connectionFailed(node));
+        callAdminClientApisAndExpectAnAuthenticationError(env);
 
         env.close();
     }

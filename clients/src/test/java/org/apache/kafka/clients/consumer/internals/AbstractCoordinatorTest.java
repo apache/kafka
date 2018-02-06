@@ -534,7 +534,7 @@ public class AbstractCoordinatorTest {
         }
 
         mockTime.sleep(30); // wait less than the blackout period
-        mockClient.authenticationSucceeded(node);
+        assertTrue(mockClient.connectionFailed(node));
 
         try {
             coordinator.ensureCoordinatorReady();
@@ -544,10 +544,7 @@ public class AbstractCoordinatorTest {
         }
 
         mockTime.sleep(300); // wait until the blackout period is elapsed
-        mockClient.authenticationSucceeded(node);
-
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady();
+        assertTrue(!mockClient.connectionFailed(node));
     }
 
     private AtomicBoolean prepareFirstHeartbeat() {

@@ -1516,7 +1516,7 @@ public class ConsumerCoordinatorTest {
         }
 
         time.sleep(30); // wait less than the blackout period
-        client.authenticationSucceeded(node);
+        assertTrue(client.connectionFailed(node));
 
         try {
             coordinator.ensureActiveGroup();
@@ -1526,10 +1526,7 @@ public class ConsumerCoordinatorTest {
         }
 
         time.sleep(300); // wait until the blackout period is elapsed
-        client.authenticationSucceeded(node);
-
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureActiveGroup();
+        assertTrue(!client.connectionFailed(node));
     }
 
     @Test
