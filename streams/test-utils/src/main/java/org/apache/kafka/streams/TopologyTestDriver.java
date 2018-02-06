@@ -311,7 +311,6 @@ public class TopologyTestDriver {
      *
      * @param consumerRecord the record to be processed
      */
-    @SuppressWarnings("deprecation")
     public void pipeInput(final ConsumerRecord<byte[], byte[]> consumerRecord) {
         final String topicName = consumerRecord.topic();
 
@@ -324,7 +323,7 @@ public class TopologyTestDriver {
                 offset,
                 consumerRecord.timestamp(),
                 consumerRecord.timestampType(),
-                consumerRecord.checksum(),
+                ConsumerRecord.NULL_CHECKSUM,
                 consumerRecord.serializedKeySize(),
                 consumerRecord.serializedValueSize(),
                 consumerRecord.key(),
@@ -377,7 +376,7 @@ public class TopologyTestDriver {
                 offset,
                 consumerRecord.timestamp(),
                 consumerRecord.timestampType(),
-                consumerRecord.checksum(),
+                ConsumerRecord.NULL_CHECKSUM,
                 consumerRecord.serializedKeySize(),
                 consumerRecord.serializedValueSize(),
                 consumerRecord.key(),
