@@ -1264,8 +1264,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private final Sensor recordsFetchLead;
 
         private Set<TopicPartition> assignedPartitions;
-        // partitions whose lead metrics have been already added into the sensor
-        private final Set<TopicPartition> leadMetricAddedPartitions = new HashSet<>();
 
         private FetchManagerMetrics(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
             this.metrics = metrics;
