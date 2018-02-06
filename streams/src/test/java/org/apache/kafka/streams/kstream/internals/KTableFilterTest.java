@@ -53,8 +53,10 @@ public class KTableFilterTest {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
-    private void doTestKTable(final StreamsBuilder builder, final KTable<String, Integer> table2,
-                              final KTable<String, Integer> table3, final String topic1) {
+    private void doTestKTable(final StreamsBuilder builder,
+                              final KTable<String, Integer> table2,
+                              final KTable<String, Integer> table3,
+                              final String topic) {
         MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
         MockProcessorSupplier<String, Integer> proc3 = new MockProcessorSupplier<>();
         table2.toStream().process(proc2);
@@ -62,13 +64,13 @@ public class KTableFilterTest {
 
         driver.setUp(builder, stateDir, Serdes.String(), Serdes.Integer());
 
-        driver.process(topic1, "A", 1);
-        driver.process(topic1, "B", 2);
-        driver.process(topic1, "C", 3);
-        driver.process(topic1, "D", 4);
+        driver.process(topic, "A", 1);
+        driver.process(topic, "B", 2);
+        driver.process(topic, "C", 3);
+        driver.process(topic, "D", 4);
         driver.flushState();
-        driver.process(topic1, "A", null);
-        driver.process(topic1, "B", null);
+        driver.process(topic, "A", null);
+        driver.process(topic, "B", null);
         driver.flushState();
 
         proc2.checkAndClearProcessResult("A:null", "B:2", "C:null", "D:4", "A:null", "B:null");
