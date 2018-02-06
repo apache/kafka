@@ -1,0 +1,436 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Running Streams Applications &mdash; Apache Kafka 4.0.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../search.html"/>
+    <link rel="top" title="Apache Kafka 4.0.0 documentation" href="../../../index.html"/>
+        <link rel="up" title="Developer Guide for Kafka Streams" href="index.html"/>
+        <link rel="next" title="Managing Streams Application Topics" href="manage-topics.html"/>
+        <link rel="prev" title="Interactive Queries" href="interactive-queries.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home"> Apache Kafka
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                4.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../uses.html">Use Cases</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../../index.html">Apache Kafka Documentation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../../introduction.html">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../api.html">Kafka APIs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../configuration.html">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../design.html">Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../implementation.html">Implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../ops.html">Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../security.html">Security</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../connect.html">Kafka Connect</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="../index.html">Kafka Streams</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="../quickstart.html">Run Kafka Streams Demo Application</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../tutorial.html">Tutorial: Write a Kafka Streams Application</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../core-concepts.html">Core Concepts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../architecture.html">Architecture</a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="index.html">Developer Guide for Kafka Streams</a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="config-streams.html">Configuring a Streams Application</a></li>
+<li class="toctree-l4"><a class="reference internal" href="dsl-api.html">Streams DSL</a></li>
+<li class="toctree-l4"><a class="reference internal" href="processor-api.html">Processor API</a></li>
+<li class="toctree-l4"><a class="reference internal" href="datatypes.html">Data Types and Serialization</a></li>
+<li class="toctree-l4"><a class="reference internal" href="interactive-queries.html">Interactive Queries</a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#">Running Streams Applications</a></li>
+<li class="toctree-l4"><a class="reference internal" href="manage-topics.html">Managing Streams Application Topics</a></li>
+<li class="toctree-l4"><a class="reference internal" href="app-reset-tool.html">Application Reset Tool</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../upgrade-guide.html">Upgrade Guide and API Changes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../index.html#why-you-ll-love-using-kafka-streams">Why you&#8217;ll love using Kafka Streams!</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../index.html#kafka-streams-use-cases">Kafka Streams use cases</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../index.html#hello-kafka-streams">Hello Kafka Streams</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">Apache Kafka</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../index.html">Apache Kafka Documentation</a> &raquo;</li>
+        
+          <li><a href="../index.html">Kafka Streams</a> &raquo;</li>
+        
+          <li><a href="index.html">Developer Guide for Kafka Streams</a> &raquo;</li>
+        
+      <li>Running Streams Applications</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../../../_sources/documentation/streams/developer-guide/running-app.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="running-streams-applications">
+<span id="streams-developer-guide-execution"></span><h1><a class="reference external" href="#running-streams-applications">Running Streams Applications</a><a class="headerlink" href="#running-streams-applications" title="Permalink to this headline">¶</a></h1>
+<p>You can run Java applications that use the Kafka Streams library without
+any additional configuration or requirements. Kafka Streams also
+provides the ability to receive notification of the various states of
+the application. The ability to monitor the runtime status is discussed
+in <a class="reference external" href="../monitoring.html#streams-monitoring">the monitoring guide</a>.</p>
+<div class="contents local topic" id="table-of-contents">
+<p class="topic-title first">Table of Contents</p>
+<ul class="simple">
+<li><a class="reference internal" href="#starting-a-kafka-streams" id="id1">Starting a Kafka Streams</a></li>
+<li><a class="reference internal" href="#elastic-scaling-of-your-application" id="id2">Elastic scaling of your application</a></li>
+<li><a class="reference internal" href="#adding-capacity-to-your-application" id="id3">Adding capacity to your application</a></li>
+<li><a class="reference internal" href="#removing-capacity-from-your-application" id="id4">Removing capacity from your application</a></li>
+<li><a class="reference internal" href="#state-restoration-during-workload-rebalance" id="id5">State restoration during workload rebalance</a></li>
+<li><a class="reference internal" href="#determining-how-many-application-instances-to-run" id="id6">Determining how many application instances to run</a></li>
+</ul>
+</div>
+<div class="section" id="starting-a-kafka-streams">
+<span id="streams-developer-guide-execution-starting"></span><h2><a class="reference external" href="#starting-a-kafka-streams-application">Starting a Kafka Streams</a><a class="headerlink" href="#starting-a-kafka-streams" title="Permalink to this headline">¶</a></h2>
+<p>You can package your Java application as a fat JAR file and then start
+the application like this:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span># Start the application in class `com.example.MyStreamsApp`
+# from the fat JAR named `path-to-app-fatjar.jar`.
+$ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
+</pre></div>
+</div>
+<p>For more information about how you can package your application in this
+way, see the <a class="reference external" href="../code-examples.html#streams-code-examples">Streams code
+examples</a>.</p>
+<p>When you start your application you are launching a Kafka Streams
+instance of your application. You can run multiple instances of your
+application. A common scenario is that there are multiple instances of
+your application running in parallel. For more information, see
+<a class="reference external" href="../architecture.html#streams-architecture-parallelism-model">Parallelism
+Model</a>.</p>
+<p>When the application instance starts running, the defined processor
+topology will be initialized as one or more stream tasks. If the
+processor topology defines any state stores, these are also constructed
+during the initialization period. For more information, see the <a class="reference external" href="#streams-developer-guide-execution-scaling-state-restoration">State
+restoration during workload
+rebalance</a>
+section).</p>
+</div>
+<div class="section" id="elastic-scaling-of-your-application">
+<h2><a class="reference external" href="#elastic-scaling-of-your-application">Elastic scaling of your application</a><a class="headerlink" href="#elastic-scaling-of-your-application" title="Permalink to this headline">¶</a></h2>
+<p>Kafka Streams makes your stream processing applications elastic and
+scalable. You can add and remove processing capacity dynamically during
+application runtime without any downtime or data loss. This makes your
+applications resilient in the face of failures and for allows you to
+perform maintenance as needed (e.g. rolling upgrades).</p>
+<p>For more information about this elasticity, see the <a class="reference external" href="../architecture.html#streams-architecture-parallelism-model">Parallelism
+Model</a>
+section. Kafka Streams leverages the Kafka group management
+functionality, which is built right into the <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol">Kafka wire
+protocol</a>.
+It is the foundation that enables the elasticity of Kafka Streams
+applications: members of a group coordinate and collaborate jointly on
+the consumption and processing of data in Kafka. Additionally, Kafka
+Streams provides stateful processing and allows for fault-tolerant state
+in environments where application instances may come and go at any time.</p>
+</div>
+<div class="section" id="adding-capacity-to-your-application">
+<h2><a class="reference external" href="#adding-capacity-to-your-application">Adding capacity to your application</a><a class="headerlink" href="#adding-capacity-to-your-application" title="Permalink to this headline">¶</a></h2>
+<p>If you need more processing capacity for your stream processing
+application, you can simply start another instance of your stream
+processing application, e.g. on another machine, in order to scale out.
+The instances of your application will become aware of each other and
+automatically begin to share the processing work. More specifically,
+what will be handed over from the existing instances to the new
+instances is (some of) the stream tasks that have been run by the
+existing instances. Moving stream tasks from one instance to another
+results in moving the processing work plus any internal state of these
+stream tasks (the state of a stream task will be re-created in the
+target instance by restoring the state from its corresponding changelog
+topic).</p>
+<p>The various instances of your application each run in their own JVM
+process, which means that each instance can leverage all the processing
+capacity that is available to their respective JVM process (minus the
+capacity that any non-Kafka-Streams part of your application may be
+using). This explains why running additional instances will grant your
+application additional processing capacity. The exact capacity you will
+be adding by running a new instance depends of course on the environment
+in which the new instance runs: available CPU cores, available main
+memory and Java heap space, local storage, network bandwidth, and so on.
+Similarly, if you stop any of the running instances of your application,
+then you are removing and freeing up the respective processing capacity.</p>
+<a class="reference internal image-reference" href="../../../_images/streams-elastic-scaling-1.png"><img alt="../../../_images/streams-elastic-scaling-1.png" class="align-center" src="../../../_images/streams-elastic-scaling-1.png" style="width: 400px;" /></a>
+<p>Before adding capacity: only a single instance of your Kafka Streams
+application is running. At this point the corresponding Kafka consumer
+group of your application contains only a single member (this instance).
+All data is being read and processed by this single instance.</p>
+<a class="reference internal image-reference" href="../../../_images/streams-elastic-scaling-2.png"><img alt="../../../_images/streams-elastic-scaling-2.png" class="align-center" src="../../../_images/streams-elastic-scaling-2.png" style="width: 400px;" /></a>
+<p>After adding capacity: now two additional instances of your Kafka
+Streams application are running, and they have automatically joined the
+application’s Kafka consumer group for a total of three current members.
+These three instances are automatically splitting the processing work
+between each other. The splitting is based on the Kafka topic partitions
+from which data is being read.</p>
+</div>
+<div class="section" id="removing-capacity-from-your-application">
+<h2><a class="reference external" href="#removing-capacity-from-your-application">Removing capacity from your application</a><a class="headerlink" href="#removing-capacity-from-your-application" title="Permalink to this headline">¶</a></h2>
+<p>To remove processing capacity, you can stop running stream processing
+application instances (e.g., shut down two of the four instances), it
+will automatically leave the application’s consumer group, and the
+remaining instances of your application will automatically take over the
+processing work. The remaining instances take over the stream tasks that
+were run by the stopped instances. Moving stream tasks from one instance
+to another results in moving the processing work plus any internal state
+of these stream tasks. The state of a stream task is recreated in the
+target instance from its changelog topic.</p>
+<a class="reference internal image-reference" href="../../../_images/streams-elastic-scaling-3.png"><img alt="../../../_images/streams-elastic-scaling-3.png" class="align-center" src="../../../_images/streams-elastic-scaling-3.png" style="width: 400px;" /></a>
+</div>
+<div class="section" id="state-restoration-during-workload-rebalance">
+<h2><a class="reference external" href="#state-restoration-during-workload-rebalance">State restoration during workload rebalance</a><a class="headerlink" href="#state-restoration-during-workload-rebalance" title="Permalink to this headline">¶</a></h2>
+<p>When a task is migrated, the task processing state is fully restored
+before the application instance resumes processing. This guarantees the
+correct processing results. In Kafka Streams, state restoration is
+usually done by replaying the corresponding changelog topic to
+reconstruct the state store. To minimize changelog-based restoration
+latency by using replicated local state stores, you can specify
+<code class="docutils literal"><span class="pre">num.standby.replicas</span></code>. When a stream task is initialized or
+re-initialized on the application instance, its state store is restored
+like this:</p>
+<ul class="simple">
+<li>If no local state store exists, the changelog is replayed from the
+earliest to the current offset. This reconstructs the local state
+store to the most recent snapshot.</li>
+<li>If a local state store exists, the changelog is replayed from the
+previously checkpointed offset. The changes are applied and the state
+is restored to the most recent snapshot. This method takes less time
+because it is applying a smaller portion of the changelog.</li>
+</ul>
+<p>For more information, see <a class="reference external" href="config-streams.html#streams-developer-guide-standby-replicas">Standby
+Replicas</a>.</p>
+</div>
+<div class="section" id="determining-how-many-application-instances-to-run">
+<h2><a class="reference external" href="#determining-how-many-application-instances-to-run">Determining how many application instances to run</a><a class="headerlink" href="#determining-how-many-application-instances-to-run" title="Permalink to this headline">¶</a></h2>
+<p>The parallelism of a Kafka Streams application is primarily determined
+by how many partitions the input topics have. For example, if your
+application reads from a single topic that has ten partitions, then you
+can run up to ten instances of your applications. You can run further
+instances, but these will be idle.</p>
+<p>The number of topic partitions is the upper limit for the parallelism of
+your Kafka Streams application and for the number of running instances
+of your application.</p>
+<p>To achieve balanced workload processing across application instances and
+to prevent processing hotpots, you should distribute data and processing
+workloads:</p>
+<ul class="simple">
+<li>Data should be equally distributed across topic partitions. For
+example, if two topic partitions each have 1 million messages, this
+is better than a single partition with 2 million messages and none in
+the other.</li>
+<li>Processing workload should be equally distributed across topic
+partitions. For example, if the time to process messages varies
+widely, then it is better to spread the processing-intensive messages
+across partitions rather than storing these messages within the same
+partition.</li>
+</ul>
+</div>
+</div>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="manage-topics.html" class="btn btn-neutral float-right" title="Managing Streams Application Topics" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="interactive-queries.html" class="btn btn-neutral" title="Interactive Queries" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Apache Software Foundation.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'4.0.0',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: ''
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

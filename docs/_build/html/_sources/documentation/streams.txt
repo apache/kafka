@@ -3,8 +3,8 @@
 Kafka Streams
 =============
 
-Kafka Streams </11/documentation/streams>`__
---------------------------------------------
+Kafka Streams
+-------------
 
 Kafka Streams is a client library for processing and analyzing data
 stored in Kafka. It builds upon important stream processing concepts

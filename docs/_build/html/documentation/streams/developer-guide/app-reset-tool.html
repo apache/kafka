@@ -1,0 +1,416 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Application Reset Tool &mdash; Apache Kafka 4.0.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../../../genindex.html"/>
+        <link rel="search" title="Search" href="../../../search.html"/>
+    <link rel="top" title="Apache Kafka 4.0.0 documentation" href="../../../index.html"/>
+        <link rel="up" title="Developer Guide for Kafka Streams" href="index.html"/>
+        <link rel="next" title="Upgrade Guide and API Changes" href="../upgrade-guide.html"/>
+        <link rel="prev" title="Data Types and Serialization" href="datatypes.html"/> 
+
+  
+  <script src="../../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home"> Apache Kafka
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                4.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../uses.html">Use Cases</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../../index.html">Apache Kafka Documentation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../../introduction.html">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../api.html">Kafka APIs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../configuration.html">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../design.html">Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../implementation.html">Implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../ops.html">Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../security.html">Security</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../connect.html">Kafka Connect</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="../index.html">Kafka Streams</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="../quickstart.html">Run Kafka Streams Demo Application</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../tutorial.html">Tutorial: Write a Kafka Streams Application</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../core-concepts.html">Core Concepts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../architecture.html">Architecture</a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="index.html">Developer Guide for Kafka Streams</a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="config-streams.html">Configuring a Streams Application</a></li>
+<li class="toctree-l4"><a class="reference internal" href="dsl-api.html">Streams DSL</a></li>
+<li class="toctree-l4"><a class="reference internal" href="datatypes.html">Data Types and Serialization</a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#">Application Reset Tool</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../upgrade-guide.html">Upgrade Guide and API Changes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../index.html#why-you-ll-love-using-kafka-streams">Why you&#8217;ll love using Kafka Streams!</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../index.html#kafka-streams-use-cases">Kafka Streams use cases</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../index.html#hello-kafka-streams">Hello Kafka Streams</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">Apache Kafka</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../index.html">Apache Kafka Documentation</a> &raquo;</li>
+        
+          <li><a href="../index.html">Kafka Streams</a> &raquo;</li>
+        
+          <li><a href="index.html">Developer Guide for Kafka Streams</a> &raquo;</li>
+        
+      <li>Application Reset Tool</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../../../_sources/documentation/streams/developer-guide/app-reset-tool.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="application-reset-tool">
+<span id="streams-developer-guide-app-reset"></span><h1><a class="reference external" href="#application-reset-tool">Application Reset Tool</a><a class="headerlink" href="#application-reset-tool" title="Permalink to this headline">¶</a></h1>
+<p>You can reset an application and force it to reprocess its data from
+scratch by using the application reset tool. This can be useful for
+development and testing, or when fixing bugs.</p>
+<p>The application reset tool handles the Kafka Streams <a class="reference external" href="manage-topics.html#streams-developer-guide-topics-user">user
+topics</a>
+(input, output, and intermediate topics) and <a class="reference external" href="manage-topics.html#streams-developer-guide-topics-internal">internal
+topics</a>
+differently when resetting the application.</p>
+<p>Here’s what the application reset tool does for each topic type:</p>
+<ul class="simple">
+<li>Input topics: Reset offsets to specified position (by default to the
+beginning of the topic).</li>
+<li>Intermediate topics: Skip to the end of the topic, i.e., set the
+application’s committed consumer offsets for all partitions to each
+partition’s <code class="docutils literal"><span class="pre">logSize</span></code> (for consumer group <code class="docutils literal"><span class="pre">application.id</span></code>).</li>
+<li>Internal topics: Delete the internal topic (this automatically
+deletes any committed offsets).</li>
+</ul>
+<p>The application reset tool does not:</p>
+<ul class="simple">
+<li>Reset output topics of an application. If any output (or
+intermediate) topics are consumed by downstream applications, it is
+your responsibility to adjust those downstream applications as
+appropriate when you reset the upstream application.</li>
+<li>Reset the local environment of your application instances. It is your
+responsibility to delete the local state on any machine on which an
+application instance was run. See the instructions in section <a class="reference external" href="#streams-developer-guide-reset-local-environment">Step
+2: Reset the local environments of your application
+instances</a> on
+how to do this.</li>
+</ul>
+<dl class="docutils">
+<dt>Prerequisites</dt>
+<dd><ul class="first last">
+<li><p class="first">All instances of your application must be stopped. Otherwise, the
+application may enter an invalid state, crash, or produce
+incorrect results. You can verify whether the consumer group with
+ID <code class="docutils literal"><span class="pre">application.id</span></code> is still active by using
+<code class="docutils literal"><span class="pre">bin/kafka-consumer-groups</span></code>.</p>
+</li>
+<li><p class="first">Use this tool with care and double-check its parameters: If you
+provide wrong parameter values (e.g., typos in
+<code class="docutils literal"><span class="pre">application.id</span></code>) or specify parameters inconsistently (e.g.,
+specify the wrong input topics for the application), this tool
+might invalidate the application’s state or even impact other
+applications, consumer groups, or your Kafka topics.</p>
+</li>
+<li><p class="first">You should manually delete and re-create any intermediate topics
+before running the application reset tool. This will free up disk
+space in Kafka brokers.</p>
+</li>
+<li><p class="first">You should delete and recreate intermediate topics before running
+the application reset tool, unless the following applies:</p>
+<blockquote>
+<div><div><ul class="simple">
+<li>You have external downstream consumers for the
+application’s intermediate topics.</li>
+<li>You are in a development environment where manually
+deleting and re-creating intermediate topics is
+unnecessary.</li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+</dd>
+</dl>
+<div class="section" id="step-1-run-the-application-reset-tool">
+<h2><a class="reference external" href="#step-1-run-the-application-reset-tool">Step 1: Run the application reset tool</a><a class="headerlink" href="#step-1-run-the-application-reset-tool" title="Permalink to this headline">¶</a></h2>
+<p>Invoke the application reset tool from the command line</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">path</span><span class="o">-</span><span class="n">to</span><span class="o">-</span><span class="n">kafka</span><span class="o">&gt;/</span><span class="nb">bin</span><span class="o">/</span><span class="n">kafka</span><span class="o">-</span><span class="n">streams</span><span class="o">-</span><span class="n">application</span><span class="o">-</span><span class="n">reset</span>
+</pre></div>
+</div>
+<p>The tool accepts the following parameters:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">Option</span> <span class="p">(</span><span class="o">*</span> <span class="o">=</span> <span class="n">required</span><span class="p">)</span>                 <span class="n">Description</span>
+<span class="o">---------------------</span>                 <span class="o">-----------</span>
+<span class="o">*</span> <span class="o">--</span><span class="n">application</span><span class="o">-</span><span class="nb">id</span> <span class="o">&lt;</span><span class="n">String</span><span class="p">:</span> <span class="nb">id</span><span class="o">&gt;</span>       <span class="n">The</span> <span class="n">Kafka</span> <span class="n">Streams</span> <span class="n">application</span> <span class="n">ID</span>
+                                        <span class="p">(</span><span class="n">application</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">.</span>
+<span class="o">--</span><span class="n">bootstrap</span><span class="o">-</span><span class="n">servers</span> <span class="o">&lt;</span><span class="n">String</span><span class="p">:</span> <span class="n">urls</span><span class="o">&gt;</span>    <span class="n">Comma</span><span class="o">-</span><span class="n">separated</span> <span class="nb">list</span> <span class="n">of</span> <span class="n">broker</span> <span class="n">urls</span> <span class="k">with</span>
+                                        <span class="nb">format</span><span class="p">:</span> <span class="n">HOST1</span><span class="p">:</span><span class="n">PORT1</span><span class="p">,</span><span class="n">HOST2</span><span class="p">:</span><span class="n">PORT2</span>
+                                        <span class="p">(</span><span class="n">default</span><span class="p">:</span> <span class="n">localhost</span><span class="p">:</span><span class="mi">9092</span><span class="p">)</span>
+<span class="o">--</span><span class="n">by</span><span class="o">-</span><span class="n">duration</span> <span class="o">&lt;</span><span class="n">String</span><span class="p">:</span> <span class="n">urls</span><span class="o">&gt;</span>      <span class="n">Reset</span> <span class="n">offsets</span> <span class="n">to</span> <span class="n">offset</span> <span class="n">by</span> <span class="n">duration</span> <span class="kn">from</span>
+                                        <span class="nn">current</span> <span class="n">timestamp</span><span class="o">.</span> <span class="n">Format</span><span class="p">:</span> <span class="s1">&#39;PnDTnHnMnS&#39;</span>
+<span class="o">--</span><span class="n">config</span><span class="o">-</span><span class="n">file</span> <span class="o">&lt;</span><span class="n">String</span><span class="p">:</span> <span class="n">file</span> <span class="n">name</span><span class="o">&gt;</span>     <span class="n">Property</span> <span class="n">file</span> <span class="n">containing</span> <span class="n">configs</span> <span class="n">to</span> <span class="n">be</span>
+                                        <span class="n">passed</span> <span class="n">to</span> <span class="n">admin</span> <span class="n">clients</span> <span class="ow">and</span> <span class="n">embedded</span>
+                                        <span class="n">consumer</span><span class="o">.</span>
+<span class="o">--</span><span class="n">dry</span><span class="o">-</span><span class="n">run</span>                             <span class="n">Display</span> <span class="n">the</span> <span class="n">actions</span> <span class="n">that</span> <span class="n">would</span> <span class="n">be</span>
+                                        <span class="n">performed</span> <span class="n">without</span> <span class="n">executing</span> <span class="n">the</span> <span class="n">reset</span>
+                                        <span class="n">commands</span><span class="o">.</span>
+<span class="o">--</span><span class="n">from</span><span class="o">-</span><span class="n">file</span> <span class="o">&lt;</span><span class="n">String</span><span class="p">:</span> <span class="n">urls</span><span class="o">&gt;</span>        <span class="n">Reset</span> <span class="n">offsets</span> <span class="n">to</span> <span class="n">values</span> <span class="n">defined</span> <span class="ow">in</span> <span class="n">CSV</span>
+                                        <span class="n">file</span><span class="o">.</span>
+<span class="o">--</span><span class="nb">input</span><span class="o">-</span><span class="n">topics</span> <span class="o">&lt;</span><span class="n">String</span><span class="p">:</span> <span class="nb">list</span><span class="o">&gt;</span>         <span class="n">Comma</span><span class="o">-</span><span class="n">separated</span> <span class="nb">list</span> <span class="n">of</span> <span class="n">user</span> <span class="nb">input</span>
+                                        <span class="n">topics</span><span class="o">.</span> <span class="n">For</span> <span class="n">these</span> <span class="n">topics</span><span class="p">,</span> <span class="n">the</span> <span class="n">tool</span> <span class="n">will</span>
+                                        <span class="n">reset</span> <span class="n">the</span> <span class="n">offset</span> <span class="n">to</span> <span class="n">the</span> <span class="n">earliest</span>
+                                        <span class="n">available</span> <span class="n">offset</span><span class="o">.</span>
+<span class="o">--</span><span class="n">intermediate</span><span class="o">-</span><span class="n">topics</span> <span class="o">&lt;</span><span class="n">String</span><span class="p">:</span> <span class="nb">list</span><span class="o">&gt;</span>  <span class="n">Comma</span><span class="o">-</span><span class="n">separated</span> <span class="nb">list</span> <span class="n">of</span> <span class="n">intermediate</span> <span class="n">user</span>
+                                        <span class="n">topics</span> <span class="p">(</span><span class="n">topics</span> <span class="n">used</span> <span class="ow">in</span> <span class="n">the</span> <span class="n">through</span><span class="p">()</span>
+                                        <span class="n">method</span><span class="p">)</span><span class="o">.</span> <span class="n">For</span> <span class="n">these</span> <span class="n">topics</span><span class="p">,</span> <span class="n">the</span> <span class="n">tool</span>
+                                        <span class="n">will</span> <span class="n">skip</span> <span class="n">to</span> <span class="n">the</span> <span class="n">end</span><span class="o">.</span>
+<span class="o">--</span><span class="n">shift</span><span class="o">-</span><span class="n">by</span> <span class="o">&lt;</span><span class="n">Long</span><span class="p">:</span> <span class="n">number</span><span class="o">-</span><span class="n">of</span><span class="o">-</span><span class="n">offsets</span><span class="o">&gt;</span> <span class="n">Reset</span> <span class="n">offsets</span> <span class="n">shifting</span> <span class="n">current</span> <span class="n">offset</span> <span class="n">by</span>
+                                        <span class="s1">&#39;n&#39;</span><span class="p">,</span> <span class="n">where</span> <span class="s1">&#39;n&#39;</span> <span class="n">can</span> <span class="n">be</span> <span class="n">positive</span> <span class="ow">or</span>
+                                        <span class="n">negative</span>
+<span class="o">--</span><span class="n">to</span><span class="o">-</span><span class="n">datetime</span> <span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span>                <span class="n">Reset</span> <span class="n">offsets</span> <span class="n">to</span> <span class="n">offset</span> <span class="kn">from</span> <span class="nn">datetime.</span>
+                                        <span class="n">Format</span><span class="p">:</span> <span class="s1">&#39;YYYY-MM-DDTHH:mm:SS.sss&#39;</span>
+<span class="o">--</span><span class="n">to</span><span class="o">-</span><span class="n">earliest</span>                         <span class="n">Reset</span> <span class="n">offsets</span> <span class="n">to</span> <span class="n">earliest</span> <span class="n">offset</span><span class="o">.</span>
+<span class="o">--</span><span class="n">to</span><span class="o">-</span><span class="n">latest</span>                           <span class="n">Reset</span> <span class="n">offsets</span> <span class="n">to</span> <span class="n">latest</span> <span class="n">offset</span><span class="o">.</span>
+<span class="o">--</span><span class="n">to</span><span class="o">-</span><span class="n">offset</span> <span class="o">&lt;</span><span class="n">Long</span><span class="o">&gt;</span>                    <span class="n">Reset</span> <span class="n">offsets</span> <span class="n">to</span> <span class="n">a</span> <span class="n">specific</span> <span class="n">offset</span><span class="o">.</span>
+<span class="o">--</span><span class="n">zookeeper</span>                           <span class="n">Zookeeper</span> <span class="n">option</span> <span class="ow">is</span> <span class="n">deprecated</span> <span class="n">by</span>
+                                        <span class="n">bootstrap</span><span class="o">.</span><span class="n">servers</span><span class="p">,</span> <span class="k">as</span> <span class="n">the</span> <span class="n">reset</span> <span class="n">tool</span>
+                                        <span class="n">would</span> <span class="n">no</span> <span class="n">longer</span> <span class="n">access</span> <span class="n">Zookeeper</span>
+                                        <span class="n">directly</span><span class="o">.</span>
+</pre></div>
+</div>
+<p>Consider the following as reset-offset scenarios for <code class="docutils literal"><span class="pre">input-topics</span></code>:</p>
+<ul class="simple">
+<li>by-duration</li>
+<li>from-file</li>
+<li>shift-by</li>
+<li>to-datetime</li>
+<li>to-earliest</li>
+<li>to-latest</li>
+<li>to-offset</li>
+</ul>
+<p>Only one of these scenarios can be defined. If not, <code class="docutils literal"><span class="pre">to-earliest</span></code> will
+be executed by default</p>
+<p>All the other parameters can be combined as needed. For example, if you
+want to restart an application from an empty internal state, but not
+reprocess previous data, simply omit the parameters <code class="docutils literal"><span class="pre">--input-topics</span></code>
+and <code class="docutils literal"><span class="pre">--intermediate-topics</span></code>.</p>
+</div>
+<div class="section" id="step-2-reset-the-local-environments-of-your-application-instances">
+<h2><a class="reference external" href="#step-2-reset-the-local-environments-of-your-application-instances">Step 2: Reset the local environments of your application instances</a><a class="headerlink" href="#step-2-reset-the-local-environments-of-your-application-instances" title="Permalink to this headline">¶</a></h2>
+<p>For a complete application reset, you must delete the application’s
+local state directory on any machines where the application instance was
+run. You must do this before restarting an application instance on the
+same machine. You can use either of these methods:</p>
+<ul class="simple">
+<li>The API method <code class="docutils literal"><span class="pre">KafkaStreams#cleanUp()</span></code> in your application code.</li>
+<li>Manually delete the corresponding local state directory (default
+location: <code class="docutils literal"><span class="pre">/var/lib/kafka-streams/&lt;application.id&gt;</span></code>). For more
+information, see <a class="reference external" href="../javadocs.html#streams-javadocs">state.dir</a>
+StreamsConfig class.</li>
+</ul>
+</div>
+</div>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../upgrade-guide.html" class="btn btn-neutral float-right" title="Upgrade Guide and API Changes" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="datatypes.html" class="btn btn-neutral" title="Data Types and Serialization" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Apache Software Foundation.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'4.0.0',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: ''
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

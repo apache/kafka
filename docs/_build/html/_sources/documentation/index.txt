@@ -14,4 +14,4 @@ Apache Kafka Documentation
     ops
     security
     connect
-    streams
+    streams/index

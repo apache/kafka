@@ -1,0 +1,410 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Architecture &mdash; Apache Kafka 4.0.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../../genindex.html"/>
+        <link rel="search" title="Search" href="../../search.html"/>
+    <link rel="top" title="Apache Kafka 4.0.0 documentation" href="../../index.html"/>
+        <link rel="up" title="Kafka Streams" href="index.html"/>
+        <link rel="next" title="Developer Guide for Kafka Streams" href="developer-guide/index.html"/>
+        <link rel="prev" title="Core Concepts" href="core-concepts.html"/> 
+
+  
+  <script src="../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> Apache Kafka
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                4.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../uses.html">Use Cases</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../index.html">Apache Kafka Documentation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api.html">Kafka APIs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../configuration.html">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../design.html">Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../implementation.html">Implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ops.html">Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../security.html">Security</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../connect.html">Kafka Connect</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="index.html">Kafka Streams</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="quickstart.html">Run Kafka Streams Demo Application</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tutorial.html">Tutorial: Write a Kafka Streams Application</a></li>
+<li class="toctree-l3"><a class="reference internal" href="core-concepts.html">Core Concepts</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">Architecture</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#stream-partitions-and-tasks">Stream Partitions and Tasks</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#threading-model">Threading Model</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#local-state-stores">Local State Stores</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#fault-tolerance">Fault Tolerance</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="developer-guide/index.html">Developer Guide for Kafka Streams</a></li>
+<li class="toctree-l3"><a class="reference internal" href="upgrade-guide.html">Upgrade Guide and API Changes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#why-you-ll-love-using-kafka-streams">Why you&#8217;ll love using Kafka Streams!</a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#kafka-streams-use-cases">Kafka Streams use cases</a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#hello-kafka-streams">Hello Kafka Streams</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Apache Kafka</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../index.html">Apache Kafka Documentation</a> &raquo;</li>
+        
+          <li><a href="index.html">Kafka Streams</a> &raquo;</li>
+        
+      <li>Architecture</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../../_sources/documentation/streams/architecture.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="architecture">
+<h1>Architecture<a class="headerlink" href="#architecture" title="Permalink to this headline">¶</a></h1>
+<div class="contents local topic" id="contents">
+<ul class="simple">
+<li><a class="reference internal" href="#stream-partitions-and-tasks" id="id1">Stream Partitions and Tasks</a></li>
+<li><a class="reference internal" href="#threading-model" id="id2">Threading Model</a></li>
+<li><a class="reference internal" href="#local-state-stores" id="id3">Local State Stores</a></li>
+<li><a class="reference internal" href="#fault-tolerance" id="id4">Fault Tolerance</a></li>
+</ul>
+</div>
+<p>Kafka Streams simplifies application development by building on the
+Kafka producer and consumer libraries and leveraging the native
+capabilities of Kafka to offer data parallelism, distributed
+coordination, fault tolerance, and operational simplicity. In this
+section, we describe how Kafka Streams works underneath the covers.</p>
+<p>The picture below shows the anatomy of an application that uses the
+Kafka Streams library. Let&#8217;s walk through some details.</p>
+<a class="reference internal image-reference" href="../../_images/streams-architecture-overview.jpg"><img alt="../../_images/streams-architecture-overview.jpg" class="align-center" src="../../_images/streams-architecture-overview.jpg" style="width: 400px;" /></a>
+<div class="section" id="stream-partitions-and-tasks">
+<h2><a class="reference external" href="#streams_architecture_tasks">Stream Partitions and Tasks</a><a class="headerlink" href="#stream-partitions-and-tasks" title="Permalink to this headline">¶</a></h2>
+<p>The messaging layer of Kafka partitions data for storing and
+transporting it. Kafka Streams partitions data for processing it. In
+both cases, this partitioning is what enables data locality, elasticity,
+scalability, high performance, and fault tolerance. Kafka Streams uses
+the concepts of <strong>partitions</strong> and <strong>tasks</strong> as logical units of its
+parallelism model based on Kafka topic partitions. There are close links
+between Kafka Streams and Kafka in the context of parallelism:</p>
+<ul class="simple">
+<li>Each <strong>stream partition</strong> is a totally ordered sequence of data
+records and maps to a Kafka <strong>topic partition</strong>.</li>
+<li>A <strong>data record</strong> in the stream maps to a Kafka <strong>message</strong> from that
+topic.</li>
+<li>The <strong>keys</strong> of data records determine the partitioning of data in
+both Kafka and Kafka Streams, i.e., how data is routed to specific
+partitions within topics.</li>
+</ul>
+<p>An application&#8217;s processor topology is scaled by breaking it into
+multiple tasks. More specifically, Kafka Streams creates a fixed number
+of tasks based on the input stream partitions for the application, with
+each task assigned a list of partitions from the input streams (i.e.,
+Kafka topics). The assignment of partitions to tasks never changes so
+that each task is a fixed unit of parallelism of the application. Tasks
+can then instantiate their own processor topology based on the assigned
+partitions; they also maintain a buffer for each of its assigned
+partitions and process messages one-at-a-time from these record buffers.
+As a result stream tasks can be processed independently and in parallel
+without manual intervention.</p>
+<p>It is important to understand that Kafka Streams is not a resource
+manager, but a library that &#8220;runs&#8221; anywhere its stream processing
+application runs. Multiple instances of the application are executed
+either on the same machine, or spread across multiple machines and tasks
+can be distributed automatically by the library to those running
+application instances. The assignment of partitions to tasks never
+changes; if an application instance fails, all its assigned tasks will
+be automatically restarted on other instances and continue to consume
+from the same stream partitions.</p>
+<p>The following diagram shows two tasks each assigned with one partition
+of the input streams.</p>
+<a class="reference internal image-reference" href="../../_images/streams-architecture-tasks.jpg"><img alt="../../_images/streams-architecture-tasks.jpg" class="align-center" src="../../_images/streams-architecture-tasks.jpg" style="width: 400px;" /></a>
+</div>
+<div class="section" id="threading-model">
+<h2><a class="reference external" href="#streams_architecture_threads">Threading Model</a><a class="headerlink" href="#threading-model" title="Permalink to this headline">¶</a></h2>
+<p>Kafka Streams allows the user to configure the number of <strong>threads</strong>
+that the library can use to parallelize processing within an application
+instance. Each thread can execute one or more tasks with their processor
+topologies independently. For example, the following diagram shows one
+stream thread running two stream tasks.</p>
+<a class="reference internal image-reference" href="../../_images/streams-architecture-threads.jpg"><img alt="../../_images/streams-architecture-threads.jpg" class="align-center" src="../../_images/streams-architecture-threads.jpg" style="width: 400px;" /></a>
+<p>Starting more stream threads or more instances of the application merely
+amounts to replicating the topology and having it process a different
+subset of Kafka partitions, effectively parallelizing processing. It is
+worth noting that there is no shared state amongst the threads, so no
+inter-thread coordination is necessary. This makes it very simple to run
+topologies in parallel across the application instances and threads. The
+assignment of Kafka topic partitions amongst the various stream threads
+is transparently handled by Kafka Streams leveraging <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Client-side+Assignment+Proposal">Kafka&#8217;s
+coordination</a>
+functionality.</p>
+<p>As we described above, scaling your stream processing application with
+Kafka Streams is easy: you merely need to start additional instances of
+your application, and Kafka Streams takes care of distributing
+partitions amongst tasks that run in the application instances. You can
+start as many threads of the application as there are input Kafka topic
+partitions so that, across all running instances of an application,
+every thread (or rather, the tasks it runs) has at least one input
+partition to process.</p>
+</div>
+<div class="section" id="local-state-stores">
+<h2><a class="reference external" href="#streams_architecture_state">Local State Stores</a><a class="headerlink" href="#local-state-stores" title="Permalink to this headline">¶</a></h2>
+<p>Kafka Streams provides so-called <strong>state stores</strong>, which can be used by
+stream processing applications to store and query data, which is an
+important capability when implementing stateful operations. The <a class="reference external" href="/%7B%7Bversion%7D%7D/documentation/streams/developer-guide#streams_dsl">Kafka
+Streams
+DSL</a>,
+for example, automatically creates and manages such state stores when
+you are calling stateful operators such as <code class="docutils literal"><span class="pre">join()</span></code> or
+<code class="docutils literal"><span class="pre">aggregate()</span></code>, or when you are windowing a stream.</p>
+<p>Every stream task in a Kafka Streams application may embed one or more
+local state stores that can be accessed via APIs to store and query data
+required for processing. Kafka Streams offers fault-tolerance and
+automatic recovery for such local state stores.</p>
+<p>The following diagram shows two stream tasks with their dedicated local
+state stores.</p>
+<a class="reference internal image-reference" href="../../_images/streams-architecture-states.jpg"><img alt="../../_images/streams-architecture-states.jpg" class="align-center" src="../../_images/streams-architecture-states.jpg" style="width: 400px;" /></a>
+</div>
+<div class="section" id="fault-tolerance">
+<h2><a class="reference external" href="#streams_architecture_recovery">Fault Tolerance</a><a class="headerlink" href="#fault-tolerance" title="Permalink to this headline">¶</a></h2>
+<p>Kafka Streams builds on fault-tolerance capabilities integrated natively
+within Kafka. Kafka partitions are highly available and replicated; so
+when stream data is persisted to Kafka it is available even if the
+application fails and needs to re-process it. Tasks in Kafka Streams
+leverage the fault-tolerance capability offered by the Kafka consumer
+client to handle failures. If a task runs on a machine that fails, Kafka
+Streams automatically restarts the task in one of the remaining running
+instances of the application.</p>
+<p>In addition, Kafka Streams makes sure that the local state stores are
+robust to failures, too. For each state store, it maintains a replicated
+changelog Kafka topic in which it tracks any state updates. These
+changelog topics are partitioned as well so that each local state store
+instance, and hence the task accessing the store, has its own dedicated
+changelog topic partition. <a class="reference external" href="/%7B%7Bversion%7D%7D/documentation/#compaction">Log
+compaction</a> is
+enabled on the changelog topics so that old data can be purged safely to
+prevent the topics from growing indefinitely. If tasks run on a machine
+that fails and are restarted on another machine, Kafka Streams
+guarantees to restore their associated state stores to the content
+before the failure by replaying the corresponding changelog topics prior
+to resuming the processing on the newly started tasks. As a result,
+failure handling is completely transparent to the end user.</p>
+<p>Note that the cost of task (re)initialization typically depends
+primarily on the time for restoring the state by replaying the state
+stores&#8217; associated changelog topics. To minimize this restoration time,
+users can configure their applications to have <strong>standby replicas</strong> of
+local states (i.e. fully replicated copies of the state). When a task
+migration happens, Kafka Streams then attempts to assign a task to an
+application instance where such a standby replica already exists in
+order to minimize the task (re)initialization cost. See
+<code class="docutils literal"><span class="pre">num.standby.replicas</span></code> in the <a class="reference external" href="/%7B%7Bversion%7D%7D/documentation/#streamsconfigs">Kafka Streams
+Configs</a>
+section.</p>
+</div>
+</div>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="developer-guide/index.html" class="btn btn-neutral float-right" title="Developer Guide for Kafka Streams" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="core-concepts.html" class="btn btn-neutral" title="Core Concepts" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Apache Software Foundation.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'4.0.0',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: ''
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

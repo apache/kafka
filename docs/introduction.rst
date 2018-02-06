@@ -60,7 +60,7 @@ Kafka has four core APIs:
    to existing applications or data systems. For example, a connector to
    a relational database might capture every change to a table.
 
-.. images:: /images/kafka-apis.png
+.. image:: /images/kafka-apis.png
 
 In Kafka the communication between the clients and the servers is done
 with a simple, high-performance, language agnostic `TCP
@@ -84,7 +84,7 @@ zero, one, or many consumers that subscribe to the data written to it.
 For each topic, the Kafka cluster maintains a partitioned log that looks
 like this:
 
-.. images:: /images/log_anatomy.png
+.. image:: /images/log_anatomy.png
 
 Each partition is an ordered, immutable sequence of records that is
 continually appended to—a structured commit log. The records in the
@@ -99,7 +99,7 @@ which it will be discarded to free up space. Kafka's performance is
 effectively constant with respect to data size so storing data for a
 long time is not a problem.
 
-.. images:: /images/log_consumer.png
+.. image:: /images/log_consumer.png
 
 In fact, the only metadata retained on a per-consumer basis is the
 offset or position of that consumer in the log. This offset is
@@ -179,7 +179,7 @@ records will effectively be load balanced over the consumer instances.
 If all the consumer instances have different consumer groups, then each
 record will be broadcast to all the consumer processes.
 
-.. images:: /images/consumer-groups.png
+.. image:: /images/consumer-groups.png
 
 A two server Kafka cluster hosting four partitions (P0-P3) with two
 consumer groups. Consumer group A has two consumer instances and group B

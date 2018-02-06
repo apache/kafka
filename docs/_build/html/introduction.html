@@ -242,6 +242,7 @@ and running reusable producers or consumers that connect Kafka topics
 to existing applications or data systems. For example, a connector to
 a relational database might capture every change to a table.</li>
 </ul>
+<img alt="_images/kafka-apis.png" src="_images/kafka-apis.png" />
 <p>In Kafka the communication between the clients and the servers is done
 with a simple, high-performance, language agnostic <a class="reference external" href="https://kafka.apache.org/protocol.html">TCP
 protocol</a>. This protocol is
@@ -257,6 +258,7 @@ Topics in Kafka are always multi-subscriber; that is, a topic can have
 zero, one, or many consumers that subscribe to the data written to it.</p>
 <p>For each topic, the Kafka cluster maintains a partitioned log that looks
 like this:</p>
+<img alt="_images/log_anatomy.png" src="_images/log_anatomy.png" />
 <p>Each partition is an ordered, immutable sequence of records that is
 continually appended to—a structured commit log. The records in the
 partitions are each assigned a sequential id number called the <em>offset</em>
@@ -268,6 +270,7 @@ days after a record is published, it is available for consumption, after
 which it will be discarded to free up space. Kafka&#8217;s performance is
 effectively constant with respect to data size so storing data for a
 long time is not a problem.</p>
+<img alt="_images/log_consumer.png" src="_images/log_consumer.png" />
 <p>In fact, the only metadata retained on a per-consumer basis is the
 offset or position of that consumer in the log. This offset is
 controlled by the consumer: normally a consumer will advance its offset
@@ -328,6 +331,7 @@ processes or on separate machines.</p>
 records will effectively be load balanced over the consumer instances.</p>
 <p>If all the consumer instances have different consumer groups, then each
 record will be broadcast to all the consumer processes.</p>
+<img alt="_images/consumer-groups.png" src="_images/consumer-groups.png" />
 <p>A two server Kafka cluster hosting four partitions (P0-P3) with two
 consumer groups. Consumer group A has two consumer instances and group B
 has four.</p>

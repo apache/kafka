@@ -1,0 +1,812 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Tutorial: Write a Kafka Streams Application &mdash; Apache Kafka 4.0.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../../genindex.html"/>
+        <link rel="search" title="Search" href="../../search.html"/>
+    <link rel="top" title="Apache Kafka 4.0.0 documentation" href="../../index.html"/>
+        <link rel="up" title="Kafka Streams" href="index.html"/>
+        <link rel="next" title="Core Concepts" href="core-concepts.html"/>
+        <link rel="prev" title="Run Kafka Streams Demo Application" href="quickstart.html"/> 
+
+  
+  <script src="../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> Apache Kafka
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                4.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../uses.html">Use Cases</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../index.html">Apache Kafka Documentation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api.html">Kafka APIs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../configuration.html">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../design.html">Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../implementation.html">Implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ops.html">Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../security.html">Security</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../connect.html">Kafka Connect</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="index.html">Kafka Streams</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="quickstart.html">Run Kafka Streams Demo Application</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">Tutorial: Write a Kafka Streams Application</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#setting-up-a-maven-project">Setting up a Maven Project</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#writing-a-first-streams-application-pipe">Writing a first Streams application: Pipe</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#writing-a-second-streams-application-line-split">Writing a second Streams application: Line Split</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#writing-a-third-streams-application-wordcount">Writing a third Streams application: Wordcount</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="core-concepts.html">Core Concepts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="architecture.html">Architecture</a></li>
+<li class="toctree-l3"><a class="reference internal" href="developer-guide/index.html">Developer Guide for Kafka Streams</a></li>
+<li class="toctree-l3"><a class="reference internal" href="upgrade-guide.html">Upgrade Guide and API Changes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#why-you-ll-love-using-kafka-streams">Why you&#8217;ll love using Kafka Streams!</a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#kafka-streams-use-cases">Kafka Streams use cases</a></li>
+<li class="toctree-l3"><a class="reference internal" href="index.html#hello-kafka-streams">Hello Kafka Streams</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Apache Kafka</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../index.html">Apache Kafka Documentation</a> &raquo;</li>
+        
+          <li><a href="index.html">Kafka Streams</a> &raquo;</li>
+        
+      <li>Tutorial: Write a Kafka Streams Application</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../../_sources/documentation/streams/tutorial.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="tutorial-write-a-kafka-streams-application">
+<h1>Tutorial: Write a Kafka Streams Application<a class="headerlink" href="#tutorial-write-a-kafka-streams-application" title="Permalink to this headline">¶</a></h1>
+<div class="contents local topic" id="contents">
+<ul class="simple">
+<li><a class="reference internal" href="#setting-up-a-maven-project" id="id1">Setting up a Maven Project</a></li>
+<li><a class="reference internal" href="#writing-a-first-streams-application-pipe" id="id2">Writing a first Streams application: Pipe</a></li>
+<li><a class="reference internal" href="#writing-a-second-streams-application-line-split" id="id3">Writing a second Streams application: Line Split</a></li>
+<li><a class="reference internal" href="#writing-a-third-streams-application-wordcount" id="id4">Writing a third Streams application: Wordcount</a></li>
+</ul>
+</div>
+<p>In this guide we will start from scratch on setting up your own project
+to write a stream processing application using Kafka Streams. It is
+highly recommended to read the
+<a class="reference external" href="/%7B%7Bversion%7D%7D/documentation/streams/quickstart">quickstart</a>
+first on how to run a Streams application written in Kafka Streams if
+you have not done so.</p>
+<div class="section" id="setting-up-a-maven-project">
+<h2><a class="reference external" href="#tutorial_maven_setup">Setting up a Maven Project</a><a class="headerlink" href="#setting-up-a-maven-project" title="Permalink to this headline">¶</a></h2>
+<p>We are going to use a Kafka Streams Maven Archetype for creating a
+Streams project structure with the following commands:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">mvn</span> <span class="n">archetype</span><span class="p">:</span><span class="n">generate</span> \
+    <span class="o">-</span><span class="n">DarchetypeGroupId</span><span class="o">=</span><span class="n">org</span><span class="o">.</span><span class="n">apache</span><span class="o">.</span><span class="n">kafka</span> \
+    <span class="o">-</span><span class="n">DarchetypeArtifactId</span><span class="o">=</span><span class="n">streams</span><span class="o">-</span><span class="n">quickstart</span><span class="o">-</span><span class="n">java</span> \
+    <span class="o">-</span><span class="n">DarchetypeVersion</span><span class="o">=</span><span class="p">{{</span><span class="n">fullDotVersion</span><span class="p">}}</span> \
+    <span class="o">-</span><span class="n">DgroupId</span><span class="o">=</span><span class="n">streams</span><span class="o">.</span><span class="n">examples</span> \
+    <span class="o">-</span><span class="n">DartifactId</span><span class="o">=</span><span class="n">streams</span><span class="o">.</span><span class="n">examples</span> \
+    <span class="o">-</span><span class="n">Dversion</span><span class="o">=</span><span class="mf">0.1</span> \
+    <span class="o">-</span><span class="n">Dpackage</span><span class="o">=</span><span class="n">myapps</span>
+</pre></div>
+</div>
+<p>You can use a different value for <code class="docutils literal"><span class="pre">groupId</span></code>, <code class="docutils literal"><span class="pre">artifactId</span></code> and
+<code class="docutils literal"><span class="pre">package</span></code> parameters if you like. Assuming the above parameter values
+are used, this command will create a project structure that looks like
+this:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="n">tree</span> <span class="n">streams</span><span class="o">.</span><span class="n">examples</span>
+<span class="n">streams</span><span class="o">-</span><span class="n">quickstart</span>
+<span class="o">|--</span> <span class="n">pom</span><span class="o">.</span><span class="n">xml</span>
+<span class="o">|--</span> <span class="n">src</span>
+    <span class="o">|--</span> <span class="n">main</span>
+        <span class="o">|--</span> <span class="n">java</span>
+        <span class="o">|</span>   <span class="o">|--</span> <span class="n">myapps</span>
+        <span class="o">|</span>       <span class="o">|--</span> <span class="n">LineSplit</span><span class="o">.</span><span class="n">java</span>
+        <span class="o">|</span>       <span class="o">|--</span> <span class="n">Pipe</span><span class="o">.</span><span class="n">java</span>
+        <span class="o">|</span>       <span class="o">|--</span> <span class="n">WordCount</span><span class="o">.</span><span class="n">java</span>
+        <span class="o">|--</span> <span class="n">resources</span>
+            <span class="o">|--</span> <span class="n">log4j</span><span class="o">.</span><span class="n">properties</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">pom.xml</span></code> file included in the project already has the Streams
+dependency defined, and there are already several example programs
+written with Streams library under <code class="docutils literal"><span class="pre">src/main/java</span></code>. Since we are going
+to start writing such programs from scratch, we can now delete these
+examples:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="n">cd</span> <span class="n">streams</span><span class="o">-</span><span class="n">quickstart</span>
+<span class="o">&gt;</span> <span class="n">rm</span> <span class="n">src</span><span class="o">/</span><span class="n">main</span><span class="o">/</span><span class="n">java</span><span class="o">/</span><span class="n">myapps</span><span class="o">/*.</span><span class="n">java</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="writing-a-first-streams-application-pipe">
+<h2><a class="reference external" href="#tutorial_code_pipe">Writing a first Streams application: Pipe</a><a class="headerlink" href="#writing-a-first-streams-application-pipe" title="Permalink to this headline">¶</a></h2>
+<p>It&#8217;s coding time now! Feel free to open your favorite IDE and import
+this Maven project, or simply open a text editor and create a java file
+under <code class="docutils literal"><span class="pre">src/main/java</span></code>. Let&#8217;s name it <code class="docutils literal"><span class="pre">Pipe.java</span></code>:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">package</span> <span class="n">myapps</span><span class="p">;</span>
+
+<span class="n">public</span> <span class="k">class</span> <span class="nc">Pipe</span> <span class="p">{</span>
+
+    <span class="n">public</span> <span class="n">static</span> <span class="n">void</span> <span class="n">main</span><span class="p">(</span><span class="n">String</span><span class="p">[]</span> <span class="n">args</span><span class="p">)</span> <span class="n">throws</span> <span class="ne">Exception</span> <span class="p">{</span>
+
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>We are going to fill in the <code class="docutils literal"><span class="pre">main</span></code> function to write this pipe
+program. Note that we will not list the import statements as we go since
+IDEs can usually add them automatically. However if you are using a text
+editor you need to manually add the imports, and at the end of this
+section we&#8217;ll show the complete code snippet with import statement for
+you.</p>
+<p>The first step to write a Streams application is to create a
+<code class="docutils literal"><span class="pre">java.util.Properties</span></code> map to specify different Streams execution
+configuration values as defined in <code class="docutils literal"><span class="pre">StreamsConfig</span></code>. A couple of
+important configuration values you need to set are:
+<code class="docutils literal"><span class="pre">StreamsConfig.BOOTSTRAP_SERVERS_CONFIG</span></code>, which specifies a list of
+host/port pairs to use for establishing the initial connection to the
+Kafka cluster, and <code class="docutils literal"><span class="pre">StreamsConfig.APPLICATION_ID_CONFIG</span></code>, which gives
+the unique identifier of your Streams application to distinguish itself
+with other applications talking to the same Kafka cluster:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">Properties</span> <span class="n">props</span> <span class="o">=</span> <span class="n">new</span> <span class="n">Properties</span><span class="p">();</span>
+<span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">APPLICATION_ID_CONFIG</span><span class="p">,</span> <span class="s2">&quot;streams-pipe&quot;</span><span class="p">);</span>
+<span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">BOOTSTRAP_SERVERS_CONFIG</span><span class="p">,</span> <span class="s2">&quot;localhost:9092&quot;</span><span class="p">);</span>    <span class="o">//</span> <span class="n">assuming</span> <span class="n">that</span> <span class="n">the</span> <span class="n">Kafka</span> <span class="n">broker</span> <span class="n">this</span> <span class="n">application</span> <span class="ow">is</span> <span class="n">talking</span> <span class="n">to</span> <span class="n">runs</span> <span class="n">on</span> <span class="n">local</span> <span class="n">machine</span> <span class="k">with</span> <span class="n">port</span> <span class="mi">9092</span>
+</pre></div>
+</div>
+<p>In addition, you can customize other configurations in the same map, for
+example, default serialization and deserialization libraries for the
+record key-value pairs:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">DEFAULT_KEY_SERDE_CLASS_CONFIG</span><span class="p">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">()</span><span class="o">.</span><span class="n">getClass</span><span class="p">());</span>
+<span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">DEFAULT_VALUE_SERDE_CLASS_CONFIG</span><span class="p">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">()</span><span class="o">.</span><span class="n">getClass</span><span class="p">());</span>
+</pre></div>
+</div>
+<p>For a full list of configurations of Kafka Streams please refer to this
+<a class="reference external" href="/%7B%7Bversion%7D%7D/documentation/#streamsconfigs">table</a>.</p>
+<p>Next we will define the computational logic of our Streams application.
+In Kafka Streams this computational logic is defined as a <code class="docutils literal"><span class="pre">topology</span></code>
+of connected processor nodes. We can use a topology builder to construct
+such a topology,</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">final</span> <span class="n">StreamsBuilder</span> <span class="n">builder</span> <span class="o">=</span> <span class="n">new</span> <span class="n">StreamsBuilder</span><span class="p">();</span>
+</pre></div>
+</div>
+<p>And then create a source stream from a Kafka topic named
+<code class="docutils literal"><span class="pre">streams-plaintext-input</span></code> using this topology builder:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">source</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="s2">&quot;streams-plaintext-input&quot;</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>Now we get a <code class="docutils literal"><span class="pre">KStream</span></code> that is continuously generating records from
+its source Kafka topic <code class="docutils literal"><span class="pre">streams-plaintext-input</span></code>. The records are
+organized as <code class="docutils literal"><span class="pre">String</span></code> typed key-value pairs. The simplest thing we can
+do with this stream is to write it into another Kafka topic, say it&#8217;s
+named <code class="docutils literal"><span class="pre">streams-pipe-output</span></code>:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">source</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;streams-pipe-output&quot;</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>Note that we can also concatenate the above two lines into a single line
+as:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">builder</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="s2">&quot;streams-plaintext-input&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;streams-pipe-output&quot;</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>We can inspect what kind of <code class="docutils literal"><span class="pre">topology</span></code> is created from this builder by
+doing the following:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">final</span> <span class="n">Topology</span> <span class="n">topology</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">build</span><span class="p">();</span>
+</pre></div>
+</div>
+<p>And print its description to standard output as:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">System</span><span class="o">.</span><span class="n">out</span><span class="o">.</span><span class="n">println</span><span class="p">(</span><span class="n">topology</span><span class="o">.</span><span class="n">describe</span><span class="p">());</span>
+</pre></div>
+</div>
+<p>If we just stop here, compile and run the program, it will output the
+following information:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="n">mvn</span> <span class="n">clean</span> <span class="n">package</span>
+<span class="o">&gt;</span> <span class="n">mvn</span> <span class="n">exec</span><span class="p">:</span><span class="n">java</span> <span class="o">-</span><span class="n">Dexec</span><span class="o">.</span><span class="n">mainClass</span><span class="o">=</span><span class="n">myapps</span><span class="o">.</span><span class="n">Pipe</span>
+<span class="n">Sub</span><span class="o">-</span><span class="n">topologies</span><span class="p">:</span>
+  <span class="n">Sub</span><span class="o">-</span><span class="n">topology</span><span class="p">:</span> <span class="mi">0</span>
+    <span class="n">Source</span><span class="p">:</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">SOURCE</span><span class="o">-</span><span class="mi">0000000000</span><span class="p">(</span><span class="n">topics</span><span class="p">:</span> <span class="n">streams</span><span class="o">-</span><span class="n">plaintext</span><span class="o">-</span><span class="nb">input</span><span class="p">)</span> <span class="o">--&gt;</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">SINK</span><span class="o">-</span><span class="mi">0000000001</span>
+    <span class="n">Sink</span><span class="p">:</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">SINK</span><span class="o">-</span><span class="mi">0000000001</span><span class="p">(</span><span class="n">topic</span><span class="p">:</span> <span class="n">streams</span><span class="o">-</span><span class="n">pipe</span><span class="o">-</span><span class="n">output</span><span class="p">)</span> <span class="o">&lt;--</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">SOURCE</span><span class="o">-</span><span class="mi">0000000000</span>
+<span class="n">Global</span> <span class="n">Stores</span><span class="p">:</span>
+  <span class="n">none</span>
+</pre></div>
+</div>
+<p>As shown above, it illustrates that the constructed topology has two
+processor nodes, a source node <code class="docutils literal"><span class="pre">KSTREAM-SOURCE-0000000000</span></code> and a sink
+node <code class="docutils literal"><span class="pre">KSTREAM-SINK-0000000001</span></code>. <code class="docutils literal"><span class="pre">KSTREAM-SOURCE-0000000000</span></code>
+continuously read records from Kafka topic <code class="docutils literal"><span class="pre">streams-plaintext-input</span></code>
+and pipe them to its downstream node <code class="docutils literal"><span class="pre">KSTREAM-SINK-0000000001</span></code>;
+<code class="docutils literal"><span class="pre">KSTREAM-SINK-0000000001</span></code> will write each of its received record in
+order to another Kafka topic <code class="docutils literal"><span class="pre">streams-pipe-output</span></code> (the <code class="docutils literal"><span class="pre">--&gt;</span></code> and
+<code class="docutils literal"><span class="pre">&lt;--</span></code> arrows dictates the downstream and upstream processor nodes of
+this node, i.e. &#8220;children&#8221; and &#8220;parents&#8221; within the topology graph). It
+also illustrates that this simple topology has no global state stores
+associated with it (we will talk about state stores more in the
+following sections).</p>
+<p>Note that we can always describe the topology as we did above at any
+given point while we are building it in the code, so as a user you can
+interactively &#8220;try and taste&#8221; your computational logic defined in the
+topology until you are happy with it. Suppose we are already done with
+this simple topology that just pipes data from one Kafka topic to
+another in an endless streaming manner, we can now construct the Streams
+client with the two components we have just constructed above: the
+configuration map and the topology object (one can also construct a
+<code class="docutils literal"><span class="pre">StreamsConfig</span></code> object from the <code class="docutils literal"><span class="pre">props</span></code> map and then pass that
+object to the constructor, <code class="docutils literal"><span class="pre">KafkaStreams</span></code> have overloaded constructor
+functions to takes either type).</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">final</span> <span class="n">KafkaStreams</span> <span class="n">streams</span> <span class="o">=</span> <span class="n">new</span> <span class="n">KafkaStreams</span><span class="p">(</span><span class="n">topology</span><span class="p">,</span> <span class="n">props</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>By calling its <code class="docutils literal"><span class="pre">start()</span></code> function we can trigger the execution of this
+client. The execution won&#8217;t stop until <code class="docutils literal"><span class="pre">close()</span></code> is called on this
+client. We can, for example, add a shutdown hook with a countdown latch
+to capture a user interrupt and close the client upon terminating this
+program:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">final</span> <span class="n">CountDownLatch</span> <span class="n">latch</span> <span class="o">=</span> <span class="n">new</span> <span class="n">CountDownLatch</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+
+<span class="o">//</span> <span class="n">attach</span> <span class="n">shutdown</span> <span class="n">handler</span> <span class="n">to</span> <span class="n">catch</span> <span class="n">control</span><span class="o">-</span><span class="n">c</span>
+<span class="n">Runtime</span><span class="o">.</span><span class="n">getRuntime</span><span class="p">()</span><span class="o">.</span><span class="n">addShutdownHook</span><span class="p">(</span><span class="n">new</span> <span class="n">Thread</span><span class="p">(</span><span class="s2">&quot;streams-shutdown-hook&quot;</span><span class="p">)</span> <span class="p">{</span>
+    <span class="nd">@Override</span>
+    <span class="n">public</span> <span class="n">void</span> <span class="n">run</span><span class="p">()</span> <span class="p">{</span>
+        <span class="n">streams</span><span class="o">.</span><span class="n">close</span><span class="p">();</span>
+        <span class="n">latch</span><span class="o">.</span><span class="n">countDown</span><span class="p">();</span>
+    <span class="p">}</span>
+<span class="p">});</span>
+
+<span class="k">try</span> <span class="p">{</span>
+    <span class="n">streams</span><span class="o">.</span><span class="n">start</span><span class="p">();</span>
+    <span class="n">latch</span><span class="o">.</span><span class="k">await</span><span class="p">();</span>
+<span class="p">}</span> <span class="n">catch</span> <span class="p">(</span><span class="n">Throwable</span> <span class="n">e</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">System</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="p">}</span>
+<span class="n">System</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>The complete code so far looks like this:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">package</span> <span class="n">myapps</span><span class="p">;</span>
+
+<span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization.Serdes</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.KafkaStreams</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsBuilder</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsConfig</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.Topology</span><span class="p">;</span>
+
+<span class="kn">import</span> <span class="nn">java.util.Properties</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">java.util.concurrent.CountDownLatch</span><span class="p">;</span>
+
+<span class="n">public</span> <span class="k">class</span> <span class="nc">Pipe</span> <span class="p">{</span>
+
+    <span class="n">public</span> <span class="n">static</span> <span class="n">void</span> <span class="n">main</span><span class="p">(</span><span class="n">String</span><span class="p">[]</span> <span class="n">args</span><span class="p">)</span> <span class="n">throws</span> <span class="ne">Exception</span> <span class="p">{</span>
+        <span class="n">Properties</span> <span class="n">props</span> <span class="o">=</span> <span class="n">new</span> <span class="n">Properties</span><span class="p">();</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">APPLICATION_ID_CONFIG</span><span class="p">,</span> <span class="s2">&quot;streams-pipe&quot;</span><span class="p">);</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">BOOTSTRAP_SERVERS_CONFIG</span><span class="p">,</span> <span class="s2">&quot;localhost:9092&quot;</span><span class="p">);</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">DEFAULT_KEY_SERDE_CLASS_CONFIG</span><span class="p">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">()</span><span class="o">.</span><span class="n">getClass</span><span class="p">());</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">DEFAULT_VALUE_SERDE_CLASS_CONFIG</span><span class="p">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">()</span><span class="o">.</span><span class="n">getClass</span><span class="p">());</span>
+
+        <span class="n">final</span> <span class="n">StreamsBuilder</span> <span class="n">builder</span> <span class="o">=</span> <span class="n">new</span> <span class="n">StreamsBuilder</span><span class="p">();</span>
+
+        <span class="n">builder</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="s2">&quot;streams-plaintext-input&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;streams-pipe-output&quot;</span><span class="p">);</span>
+
+        <span class="n">final</span> <span class="n">Topology</span> <span class="n">topology</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">build</span><span class="p">();</span>
+
+        <span class="n">final</span> <span class="n">KafkaStreams</span> <span class="n">streams</span> <span class="o">=</span> <span class="n">new</span> <span class="n">KafkaStreams</span><span class="p">(</span><span class="n">topology</span><span class="p">,</span> <span class="n">props</span><span class="p">);</span>
+        <span class="n">final</span> <span class="n">CountDownLatch</span> <span class="n">latch</span> <span class="o">=</span> <span class="n">new</span> <span class="n">CountDownLatch</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+
+        <span class="o">//</span> <span class="n">attach</span> <span class="n">shutdown</span> <span class="n">handler</span> <span class="n">to</span> <span class="n">catch</span> <span class="n">control</span><span class="o">-</span><span class="n">c</span>
+        <span class="n">Runtime</span><span class="o">.</span><span class="n">getRuntime</span><span class="p">()</span><span class="o">.</span><span class="n">addShutdownHook</span><span class="p">(</span><span class="n">new</span> <span class="n">Thread</span><span class="p">(</span><span class="s2">&quot;streams-shutdown-hook&quot;</span><span class="p">)</span> <span class="p">{</span>
+            <span class="nd">@Override</span>
+            <span class="n">public</span> <span class="n">void</span> <span class="n">run</span><span class="p">()</span> <span class="p">{</span>
+                <span class="n">streams</span><span class="o">.</span><span class="n">close</span><span class="p">();</span>
+                <span class="n">latch</span><span class="o">.</span><span class="n">countDown</span><span class="p">();</span>
+            <span class="p">}</span>
+        <span class="p">});</span>
+
+        <span class="k">try</span> <span class="p">{</span>
+            <span class="n">streams</span><span class="o">.</span><span class="n">start</span><span class="p">();</span>
+            <span class="n">latch</span><span class="o">.</span><span class="k">await</span><span class="p">();</span>
+        <span class="p">}</span> <span class="n">catch</span> <span class="p">(</span><span class="n">Throwable</span> <span class="n">e</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">System</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+        <span class="p">}</span>
+        <span class="n">System</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>If you already have the Kafka broker up and running at
+<code class="docutils literal"><span class="pre">localhost:9092</span></code>, and the topics <code class="docutils literal"><span class="pre">streams-plaintext-input</span></code> and
+<code class="docutils literal"><span class="pre">streams-pipe-output</span></code> created on that broker, you can run this code in
+your IDE or on the command line, using Maven:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="n">mvn</span> <span class="n">clean</span> <span class="n">package</span>
+<span class="o">&gt;</span> <span class="n">mvn</span> <span class="n">exec</span><span class="p">:</span><span class="n">java</span> <span class="o">-</span><span class="n">Dexec</span><span class="o">.</span><span class="n">mainClass</span><span class="o">=</span><span class="n">myapps</span><span class="o">.</span><span class="n">Pipe</span>
+</pre></div>
+</div>
+<p>For detailed instructions on how to run a Streams application and
+observe its computing results, please read the <a class="reference external" href="/%7B%7Bversion%7D%7D/documentation/streams/quickstart">Play with a Streams
+Application</a>
+section. We will not talk about this in the rest of this section.</p>
+</div>
+<div class="section" id="writing-a-second-streams-application-line-split">
+<h2><a class="reference external" href="#tutorial_code_linesplit">Writing a second Streams application: Line Split</a><a class="headerlink" href="#writing-a-second-streams-application-line-split" title="Permalink to this headline">¶</a></h2>
+<p>We have learned how to construct a Streams client with its two key
+components: the <code class="docutils literal"><span class="pre">StreamsConfig</span></code> and <code class="docutils literal"><span class="pre">Topology</span></code>. Now let&#8217;s move on to
+add some real processing logic by augmenting the current topology. We
+can first create another program by first copy the existing
+<code class="docutils literal"><span class="pre">Pipe.java</span></code> class:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="n">cp</span> <span class="n">src</span><span class="o">/</span><span class="n">main</span><span class="o">/</span><span class="n">java</span><span class="o">/</span><span class="n">myapps</span><span class="o">/</span><span class="n">Pipe</span><span class="o">.</span><span class="n">java</span> <span class="n">src</span><span class="o">/</span><span class="n">main</span><span class="o">/</span><span class="n">java</span><span class="o">/</span><span class="n">myapps</span><span class="o">/</span><span class="n">LineSplit</span><span class="o">.</span><span class="n">java</span>
+</pre></div>
+</div>
+<p>And change its class name as well as the application id config to
+distinguish with the original program:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">public</span> <span class="k">class</span> <span class="nc">LineSplit</span> <span class="p">{</span>
+
+    <span class="n">public</span> <span class="n">static</span> <span class="n">void</span> <span class="n">main</span><span class="p">(</span><span class="n">String</span><span class="p">[]</span> <span class="n">args</span><span class="p">)</span> <span class="n">throws</span> <span class="ne">Exception</span> <span class="p">{</span>
+        <span class="n">Properties</span> <span class="n">props</span> <span class="o">=</span> <span class="n">new</span> <span class="n">Properties</span><span class="p">();</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">APPLICATION_ID_CONFIG</span><span class="p">,</span> <span class="s2">&quot;streams-linesplit&quot;</span><span class="p">);</span>
+        <span class="o">//</span> <span class="o">...</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Since each of the source stream&#8217;s record is a <code class="docutils literal"><span class="pre">String</span></code> typed key-value
+pair, let&#8217;s treat the value string as a text line and split it into
+words with a <code class="docutils literal"><span class="pre">FlatMapValues</span></code> operator:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">source</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="s2">&quot;streams-plaintext-input&quot;</span><span class="p">);</span>
+<span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">words</span> <span class="o">=</span> <span class="n">source</span><span class="o">.</span><span class="n">flatMapValues</span><span class="p">(</span><span class="n">new</span> <span class="n">ValueMapper</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">Iterable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;&gt;</span><span class="p">()</span> <span class="p">{</span>
+            <span class="nd">@Override</span>
+            <span class="n">public</span> <span class="n">Iterable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">apply</span><span class="p">(</span><span class="n">String</span> <span class="n">value</span><span class="p">)</span> <span class="p">{</span>
+                <span class="k">return</span> <span class="n">Arrays</span><span class="o">.</span><span class="n">asList</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">W+&quot;</span><span class="p">));</span>
+            <span class="p">}</span>
+        <span class="p">});</span>
+</pre></div>
+</div>
+<p>The operator will take the <code class="docutils literal"><span class="pre">source</span></code> stream as its input, and generate
+a new stream named <code class="docutils literal"><span class="pre">words</span></code> by processing each record from its source
+stream in order and breaking its value string into a list of words, and
+producing each word as a new record to the output <code class="docutils literal"><span class="pre">words</span></code> stream. This
+is a stateless operator that does not need to keep track of any
+previously received records or processed results. Note if you are using
+JDK 8 you can use lambda expression and simplify the above code as:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">source</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="s2">&quot;streams-plaintext-input&quot;</span><span class="p">);</span>
+<span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">words</span> <span class="o">=</span> <span class="n">source</span><span class="o">.</span><span class="n">flatMapValues</span><span class="p">(</span><span class="n">value</span> <span class="o">-&gt;</span> <span class="n">Arrays</span><span class="o">.</span><span class="n">asList</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">W+&quot;</span><span class="p">)));</span>
+</pre></div>
+</div>
+<p>And finally we can write the word stream back into another Kafka topic,
+say <code class="docutils literal"><span class="pre">streams-linesplit-output</span></code>. Again, these two steps can be
+concatenated as the following (assuming lambda expression is used):</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">source</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="s2">&quot;streams-plaintext-input&quot;</span><span class="p">);</span>
+<span class="n">source</span><span class="o">.</span><span class="n">flatMapValues</span><span class="p">(</span><span class="n">value</span> <span class="o">-&gt;</span> <span class="n">Arrays</span><span class="o">.</span><span class="n">asList</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">W+&quot;</span><span class="p">)))</span>
+      <span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;streams-linesplit-output&quot;</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>If we now describe this augmented topology as
+<code class="docutils literal"><span class="pre">System.out.println(topology.describe())</span></code>, we will get the following:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="n">mvn</span> <span class="n">clean</span> <span class="n">package</span>
+<span class="o">&gt;</span> <span class="n">mvn</span> <span class="n">exec</span><span class="p">:</span><span class="n">java</span> <span class="o">-</span><span class="n">Dexec</span><span class="o">.</span><span class="n">mainClass</span><span class="o">=</span><span class="n">myapps</span><span class="o">.</span><span class="n">LineSplit</span>
+<span class="n">Sub</span><span class="o">-</span><span class="n">topologies</span><span class="p">:</span>
+  <span class="n">Sub</span><span class="o">-</span><span class="n">topology</span><span class="p">:</span> <span class="mi">0</span>
+    <span class="n">Source</span><span class="p">:</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">SOURCE</span><span class="o">-</span><span class="mi">0000000000</span><span class="p">(</span><span class="n">topics</span><span class="p">:</span> <span class="n">streams</span><span class="o">-</span><span class="n">plaintext</span><span class="o">-</span><span class="nb">input</span><span class="p">)</span> <span class="o">--&gt;</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">FLATMAPVALUES</span><span class="o">-</span><span class="mi">0000000001</span>
+    <span class="n">Processor</span><span class="p">:</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">FLATMAPVALUES</span><span class="o">-</span><span class="mi">0000000001</span><span class="p">(</span><span class="n">stores</span><span class="p">:</span> <span class="p">[])</span> <span class="o">--&gt;</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">SINK</span><span class="o">-</span><span class="mi">0000000002</span> <span class="o">&lt;--</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">SOURCE</span><span class="o">-</span><span class="mi">0000000000</span>
+    <span class="n">Sink</span><span class="p">:</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">SINK</span><span class="o">-</span><span class="mi">0000000002</span><span class="p">(</span><span class="n">topic</span><span class="p">:</span> <span class="n">streams</span><span class="o">-</span><span class="n">linesplit</span><span class="o">-</span><span class="n">output</span><span class="p">)</span> <span class="o">&lt;--</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">FLATMAPVALUES</span><span class="o">-</span><span class="mi">0000000001</span>
+  <span class="n">Global</span> <span class="n">Stores</span><span class="p">:</span>
+    <span class="n">none</span>
+</pre></div>
+</div>
+<p>As we can see above, a new processor node
+<code class="docutils literal"><span class="pre">KSTREAM-FLATMAPVALUES-0000000001</span></code> is injected into the topology
+between the original source and sink nodes. It takes the source node as
+its parent and the sink node as its child. In other words, each record
+fetched by the source node will first traverse to the newly added
+<code class="docutils literal"><span class="pre">KSTREAM-FLATMAPVALUES-0000000001</span></code> node to be processed, and one or
+more new records will be generated as a result. They will continue
+traverse down to the sink node to be written back to Kafka. Note this
+processor node is &#8220;stateless&#8221; as it is not associated with any stores
+(i.e. <code class="docutils literal"><span class="pre">(stores:</span> <span class="pre">[])</span></code>).</p>
+<p>The complete code looks like this (assuming lambda expression is used):</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">package</span> <span class="n">myapps</span><span class="p">;</span>
+
+<span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization.Serdes</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.KafkaStreams</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsBuilder</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsConfig</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.Topology</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.KStream</span><span class="p">;</span>
+
+<span class="kn">import</span> <span class="nn">java.util.Arrays</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">java.util.Properties</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">java.util.concurrent.CountDownLatch</span><span class="p">;</span>
+
+<span class="n">public</span> <span class="k">class</span> <span class="nc">LineSplit</span> <span class="p">{</span>
+
+    <span class="n">public</span> <span class="n">static</span> <span class="n">void</span> <span class="n">main</span><span class="p">(</span><span class="n">String</span><span class="p">[]</span> <span class="n">args</span><span class="p">)</span> <span class="n">throws</span> <span class="ne">Exception</span> <span class="p">{</span>
+        <span class="n">Properties</span> <span class="n">props</span> <span class="o">=</span> <span class="n">new</span> <span class="n">Properties</span><span class="p">();</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">APPLICATION_ID_CONFIG</span><span class="p">,</span> <span class="s2">&quot;streams-linesplit&quot;</span><span class="p">);</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">BOOTSTRAP_SERVERS_CONFIG</span><span class="p">,</span> <span class="s2">&quot;localhost:9092&quot;</span><span class="p">);</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">DEFAULT_KEY_SERDE_CLASS_CONFIG</span><span class="p">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">()</span><span class="o">.</span><span class="n">getClass</span><span class="p">());</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">DEFAULT_VALUE_SERDE_CLASS_CONFIG</span><span class="p">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">()</span><span class="o">.</span><span class="n">getClass</span><span class="p">());</span>
+
+        <span class="n">final</span> <span class="n">StreamsBuilder</span> <span class="n">builder</span> <span class="o">=</span> <span class="n">new</span> <span class="n">StreamsBuilder</span><span class="p">();</span>
+
+        <span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">source</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="s2">&quot;streams-plaintext-input&quot;</span><span class="p">);</span>
+        <span class="n">source</span><span class="o">.</span><span class="n">flatMapValues</span><span class="p">(</span><span class="n">value</span> <span class="o">-&gt;</span> <span class="n">Arrays</span><span class="o">.</span><span class="n">asList</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">W+&quot;</span><span class="p">)))</span>
+              <span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;streams-linesplit-output&quot;</span><span class="p">);</span>
+
+        <span class="n">final</span> <span class="n">Topology</span> <span class="n">topology</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">build</span><span class="p">();</span>
+        <span class="n">final</span> <span class="n">KafkaStreams</span> <span class="n">streams</span> <span class="o">=</span> <span class="n">new</span> <span class="n">KafkaStreams</span><span class="p">(</span><span class="n">topology</span><span class="p">,</span> <span class="n">props</span><span class="p">);</span>
+        <span class="n">final</span> <span class="n">CountDownLatch</span> <span class="n">latch</span> <span class="o">=</span> <span class="n">new</span> <span class="n">CountDownLatch</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+
+        <span class="o">//</span> <span class="o">...</span> <span class="n">same</span> <span class="k">as</span> <span class="n">Pipe</span><span class="o">.</span><span class="n">java</span> <span class="n">above</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="writing-a-third-streams-application-wordcount">
+<h2><a class="reference external" href="#tutorial_code_wordcount">Writing a third Streams application: Wordcount</a><a class="headerlink" href="#writing-a-third-streams-application-wordcount" title="Permalink to this headline">¶</a></h2>
+<p>Let&#8217;s now take a step further to add some &#8220;stateful&#8221; computations to the
+topology by counting the occurrence of the words split from the source
+text stream. Following similar steps let&#8217;s create another program based
+on the <code class="docutils literal"><span class="pre">LineSplit.java</span></code> class:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">public</span> <span class="k">class</span> <span class="nc">WordCount</span> <span class="p">{</span>
+
+    <span class="n">public</span> <span class="n">static</span> <span class="n">void</span> <span class="n">main</span><span class="p">(</span><span class="n">String</span><span class="p">[]</span> <span class="n">args</span><span class="p">)</span> <span class="n">throws</span> <span class="ne">Exception</span> <span class="p">{</span>
+        <span class="n">Properties</span> <span class="n">props</span> <span class="o">=</span> <span class="n">new</span> <span class="n">Properties</span><span class="p">();</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">APPLICATION_ID_CONFIG</span><span class="p">,</span> <span class="s2">&quot;streams-wordcount&quot;</span><span class="p">);</span>
+        <span class="o">//</span> <span class="o">...</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>In order to count the words we can first modify the <code class="docutils literal"><span class="pre">flatMapValues</span></code>
+operator to treat all of them as lower case (assuming lambda expression
+is used):</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">source</span><span class="o">.</span><span class="n">flatMapValues</span><span class="p">(</span><span class="n">new</span> <span class="n">ValueMapper</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">Iterable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;&gt;</span><span class="p">()</span> <span class="p">{</span>
+            <span class="nd">@Override</span>
+            <span class="n">public</span> <span class="n">Iterable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">apply</span><span class="p">(</span><span class="n">String</span> <span class="n">value</span><span class="p">)</span> <span class="p">{</span>
+                <span class="k">return</span> <span class="n">Arrays</span><span class="o">.</span><span class="n">asList</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">toLowerCase</span><span class="p">(</span><span class="n">Locale</span><span class="o">.</span><span class="n">getDefault</span><span class="p">())</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">W+&quot;</span><span class="p">));</span>
+            <span class="p">}</span>
+        <span class="p">});</span>
+</pre></div>
+</div>
+<p>In order to do the counting aggregation we have to first specify that we
+want to key the stream on the value string, i.e. the lower cased word,
+with a <code class="docutils literal"><span class="pre">groupBy</span></code> operator. This operator generate a new grouped
+stream, which can then be aggregated by a <code class="docutils literal"><span class="pre">count</span></code> operator, which
+generates a running count on each of the grouped keys:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">counts</span> <span class="o">=</span>
+<span class="n">source</span><span class="o">.</span><span class="n">flatMapValues</span><span class="p">(</span><span class="n">new</span> <span class="n">ValueMapper</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">Iterable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;&gt;</span><span class="p">()</span> <span class="p">{</span>
+            <span class="nd">@Override</span>
+            <span class="n">public</span> <span class="n">Iterable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">apply</span><span class="p">(</span><span class="n">String</span> <span class="n">value</span><span class="p">)</span> <span class="p">{</span>
+                <span class="k">return</span> <span class="n">Arrays</span><span class="o">.</span><span class="n">asList</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">toLowerCase</span><span class="p">(</span><span class="n">Locale</span><span class="o">.</span><span class="n">getDefault</span><span class="p">())</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">W+&quot;</span><span class="p">));</span>
+            <span class="p">}</span>
+        <span class="p">})</span>
+      <span class="o">.</span><span class="n">groupBy</span><span class="p">(</span><span class="n">new</span> <span class="n">KeyValueMapper</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">String</span><span class="p">,</span> <span class="n">String</span><span class="o">&gt;</span><span class="p">()</span> <span class="p">{</span>
+           <span class="nd">@Override</span>
+           <span class="n">public</span> <span class="n">String</span> <span class="n">apply</span><span class="p">(</span><span class="n">String</span> <span class="n">key</span><span class="p">,</span> <span class="n">String</span> <span class="n">value</span><span class="p">)</span> <span class="p">{</span>
+               <span class="k">return</span> <span class="n">value</span><span class="p">;</span>
+           <span class="p">}</span>
+        <span class="p">})</span>
+      <span class="o">//</span> <span class="n">Materialize</span> <span class="n">the</span> <span class="n">result</span> <span class="n">into</span> <span class="n">a</span> <span class="n">KeyValueStore</span> <span class="n">named</span> <span class="s2">&quot;counts-store&quot;</span><span class="o">.</span>
+      <span class="o">//</span> <span class="n">The</span> <span class="n">Materialized</span> <span class="n">store</span> <span class="ow">is</span> <span class="n">always</span> <span class="n">of</span> <span class="nb">type</span> <span class="o">&lt;</span><span class="n">Bytes</span><span class="p">,</span> <span class="n">byte</span><span class="p">[]</span><span class="o">&gt;</span> <span class="k">as</span> <span class="n">this</span> <span class="ow">is</span> <span class="n">the</span> <span class="nb">format</span> <span class="n">of</span> <span class="n">the</span> <span class="n">inner</span> <span class="n">most</span> <span class="n">store</span><span class="o">.</span>
+      <span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">Materialized</span><span class="o">.&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">Long</span><span class="p">,</span> <span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">Bytes</span><span class="p">,</span> <span class="n">byte</span><span class="p">[]</span><span class="o">&gt;&gt;</span> <span class="k">as</span><span class="p">(</span><span class="s2">&quot;counts-store&quot;</span><span class="p">));</span>
+</pre></div>
+</div>
+<p>Note that the <code class="docutils literal"><span class="pre">count</span></code> operator has a <code class="docutils literal"><span class="pre">Materialized</span></code> parameter that
+specifies that the running count should be stored in a state store named
+<code class="docutils literal"><span class="pre">counts-store</span></code>. This <code class="docutils literal"><span class="pre">Counts</span></code> store can be queried in real-time,
+with details described in the <a class="reference external" href="/%7B%7Bversion%7D%7D/documentation/streams/developer-guide#streams_interactive_queries">Developer
+Manual</a>.</p>
+<p>We can also write the <code class="docutils literal"><span class="pre">counts</span></code> KTable&#8217;s changelog stream back into
+another Kafka topic, say <code class="docutils literal"><span class="pre">streams-wordcount-output</span></code>. Because the
+result is a changelog stream, the output topic
+<code class="docutils literal"><span class="pre">streams-wordcount-output</span></code> should be configured with log compaction
+enabled. Note that this time the value type is no longer <code class="docutils literal"><span class="pre">String</span></code> but
+<code class="docutils literal"><span class="pre">Long</span></code>, so the default serialization classes are not viable for
+writing it to Kafka anymore. We need to provide overridden serialization
+methods for <code class="docutils literal"><span class="pre">Long</span></code> types, otherwise a runtime exception will be
+thrown:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">counts</span><span class="o">.</span><span class="n">toStream</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;streams-wordcount-output&quot;</span><span class="p">,</span> <span class="n">Produced</span><span class="o">.</span><span class="k">with</span><span class="p">(</span><span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">(),</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">Long</span><span class="p">());</span>
+</pre></div>
+</div>
+<p>Note that in order to read the changelog stream from topic
+<code class="docutils literal"><span class="pre">streams-wordcount-output</span></code>, one needs to set the value deserialization
+as <code class="docutils literal"><span class="pre">org.apache.kafka.common.serialization.LongDeserializer</span></code>. Details
+of this can be found in the <a class="reference external" href="/%7B%7Bversion%7D%7D/documentation/streams/quickstart">Play with a Streams
+Application</a>
+section. Assuming lambda expression from JDK 8 can be used, the above
+code can be simplified as:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">source</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="s2">&quot;streams-plaintext-input&quot;</span><span class="p">);</span>
+<span class="n">source</span><span class="o">.</span><span class="n">flatMapValues</span><span class="p">(</span><span class="n">value</span> <span class="o">-&gt;</span> <span class="n">Arrays</span><span class="o">.</span><span class="n">asList</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">toLowerCase</span><span class="p">(</span><span class="n">Locale</span><span class="o">.</span><span class="n">getDefault</span><span class="p">())</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">W+&quot;</span><span class="p">)))</span>
+      <span class="o">.</span><span class="n">groupBy</span><span class="p">((</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">value</span><span class="p">)</span>
+      <span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">Materialized</span><span class="o">.&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">Long</span><span class="p">,</span> <span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">Bytes</span><span class="p">,</span> <span class="n">byte</span><span class="p">[]</span><span class="o">&gt;&gt;</span><span class="k">as</span><span class="p">(</span><span class="s2">&quot;counts-store&quot;</span><span class="p">))</span>
+      <span class="o">.</span><span class="n">toStream</span><span class="p">()</span>
+      <span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;streams-wordcount-output&quot;</span><span class="p">,</span> <span class="n">Produced</span><span class="o">.</span><span class="k">with</span><span class="p">(</span><span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">(),</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">Long</span><span class="p">());</span>
+</pre></div>
+</div>
+<p>If we again describe this augmented topology as
+<code class="docutils literal"><span class="pre">System.out.println(topology.describe())</span></code>, we will get the following:</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="n">mvn</span> <span class="n">clean</span> <span class="n">package</span>
+<span class="o">&gt;</span> <span class="n">mvn</span> <span class="n">exec</span><span class="p">:</span><span class="n">java</span> <span class="o">-</span><span class="n">Dexec</span><span class="o">.</span><span class="n">mainClass</span><span class="o">=</span><span class="n">myapps</span><span class="o">.</span><span class="n">WordCount</span>
+<span class="n">Sub</span><span class="o">-</span><span class="n">topologies</span><span class="p">:</span>
+  <span class="n">Sub</span><span class="o">-</span><span class="n">topology</span><span class="p">:</span> <span class="mi">0</span>
+    <span class="n">Source</span><span class="p">:</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">SOURCE</span><span class="o">-</span><span class="mi">0000000000</span><span class="p">(</span><span class="n">topics</span><span class="p">:</span> <span class="n">streams</span><span class="o">-</span><span class="n">plaintext</span><span class="o">-</span><span class="nb">input</span><span class="p">)</span> <span class="o">--&gt;</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">FLATMAPVALUES</span><span class="o">-</span><span class="mi">0000000001</span>
+    <span class="n">Processor</span><span class="p">:</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">FLATMAPVALUES</span><span class="o">-</span><span class="mi">0000000001</span><span class="p">(</span><span class="n">stores</span><span class="p">:</span> <span class="p">[])</span> <span class="o">--&gt;</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">KEY</span><span class="o">-</span><span class="n">SELECT</span><span class="o">-</span><span class="mi">0000000002</span> <span class="o">&lt;--</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">SOURCE</span><span class="o">-</span><span class="mi">0000000000</span>
+    <span class="n">Processor</span><span class="p">:</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">KEY</span><span class="o">-</span><span class="n">SELECT</span><span class="o">-</span><span class="mi">0000000002</span><span class="p">(</span><span class="n">stores</span><span class="p">:</span> <span class="p">[])</span> <span class="o">--&gt;</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">FILTER</span><span class="o">-</span><span class="mi">0000000005</span> <span class="o">&lt;--</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">FLATMAPVALUES</span><span class="o">-</span><span class="mi">0000000001</span>
+    <span class="n">Processor</span><span class="p">:</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">FILTER</span><span class="o">-</span><span class="mi">0000000005</span><span class="p">(</span><span class="n">stores</span><span class="p">:</span> <span class="p">[])</span> <span class="o">--&gt;</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">SINK</span><span class="o">-</span><span class="mi">0000000004</span> <span class="o">&lt;--</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">KEY</span><span class="o">-</span><span class="n">SELECT</span><span class="o">-</span><span class="mi">0000000002</span>
+    <span class="n">Sink</span><span class="p">:</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">SINK</span><span class="o">-</span><span class="mi">0000000004</span><span class="p">(</span><span class="n">topic</span><span class="p">:</span> <span class="n">Counts</span><span class="o">-</span><span class="n">repartition</span><span class="p">)</span> <span class="o">&lt;--</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">FILTER</span><span class="o">-</span><span class="mi">0000000005</span>
+  <span class="n">Sub</span><span class="o">-</span><span class="n">topology</span><span class="p">:</span> <span class="mi">1</span>
+    <span class="n">Source</span><span class="p">:</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">SOURCE</span><span class="o">-</span><span class="mi">0000000006</span><span class="p">(</span><span class="n">topics</span><span class="p">:</span> <span class="n">Counts</span><span class="o">-</span><span class="n">repartition</span><span class="p">)</span> <span class="o">--&gt;</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">AGGREGATE</span><span class="o">-</span><span class="mi">0000000003</span>
+    <span class="n">Processor</span><span class="p">:</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">AGGREGATE</span><span class="o">-</span><span class="mi">0000000003</span><span class="p">(</span><span class="n">stores</span><span class="p">:</span> <span class="p">[</span><span class="n">Counts</span><span class="p">])</span> <span class="o">--&gt;</span> <span class="n">KTABLE</span><span class="o">-</span><span class="n">TOSTREAM</span><span class="o">-</span><span class="mi">0000000007</span> <span class="o">&lt;--</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">SOURCE</span><span class="o">-</span><span class="mi">0000000006</span>
+    <span class="n">Processor</span><span class="p">:</span> <span class="n">KTABLE</span><span class="o">-</span><span class="n">TOSTREAM</span><span class="o">-</span><span class="mi">0000000007</span><span class="p">(</span><span class="n">stores</span><span class="p">:</span> <span class="p">[])</span> <span class="o">--&gt;</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">SINK</span><span class="o">-</span><span class="mi">0000000008</span> <span class="o">&lt;--</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">AGGREGATE</span><span class="o">-</span><span class="mi">0000000003</span>
+    <span class="n">Sink</span><span class="p">:</span> <span class="n">KSTREAM</span><span class="o">-</span><span class="n">SINK</span><span class="o">-</span><span class="mi">0000000008</span><span class="p">(</span><span class="n">topic</span><span class="p">:</span> <span class="n">streams</span><span class="o">-</span><span class="n">wordcount</span><span class="o">-</span><span class="n">output</span><span class="p">)</span> <span class="o">&lt;--</span> <span class="n">KTABLE</span><span class="o">-</span><span class="n">TOSTREAM</span><span class="o">-</span><span class="mi">0000000007</span>
+<span class="n">Global</span> <span class="n">Stores</span><span class="p">:</span>
+  <span class="n">none</span>
+</pre></div>
+</div>
+<p>As we can see above, the topology now contains two disconnected
+sub-topologies. The first sub-topology&#8217;s sink node
+<code class="docutils literal"><span class="pre">KSTREAM-SINK-0000000004</span></code> will write to a repartition topic
+<code class="docutils literal"><span class="pre">Counts-repartition</span></code>, which will be read by the second sub-topology&#8217;s
+source node <code class="docutils literal"><span class="pre">KSTREAM-SOURCE-0000000006</span></code>. The repartition topic is used
+to &#8220;shuffle&#8221; the source stream by its aggregation key, which is in this
+case the value string. In addition, inside the first sub-topology a
+stateless <code class="docutils literal"><span class="pre">KSTREAM-FILTER-0000000005</span></code> node is injected between the
+grouping <code class="docutils literal"><span class="pre">KSTREAM-KEY-SELECT-0000000002</span></code> node and the sink node to
+filter out any intermediate record whose aggregate key is empty.</p>
+<p>In the second sub-topology, the aggregation node
+<code class="docutils literal"><span class="pre">KSTREAM-AGGREGATE-0000000003</span></code> is associated with a state store named
+<code class="docutils literal"><span class="pre">Counts</span></code> (the name is specified by the user in the <code class="docutils literal"><span class="pre">count</span></code>
+operator). Upon receiving each record from its upcoming stream source
+node, the aggregation processor will first query its associated
+<code class="docutils literal"><span class="pre">Counts</span></code> store to get the current count for that key, augment by one,
+and then write the new count back to the store. Each updated count for
+the key will also be piped downstream to the
+<code class="docutils literal"><span class="pre">KTABLE-TOSTREAM-0000000007</span></code> node, which interpret this update stream
+as a record stream before further piping to the sink node
+<code class="docutils literal"><span class="pre">KSTREAM-SINK-0000000008</span></code> for writing back to Kafka.</p>
+<p>The complete code looks like this (assuming lambda expression is used):</p>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="n">package</span> <span class="n">myapps</span><span class="p">;</span>
+
+<span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization.Serdes</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.KafkaStreams</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsBuilder</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsConfig</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.Topology</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.KStream</span><span class="p">;</span>
+
+<span class="kn">import</span> <span class="nn">java.util.Arrays</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">java.util.Locale</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">java.util.Properties</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">java.util.concurrent.CountDownLatch</span><span class="p">;</span>
+
+<span class="n">public</span> <span class="k">class</span> <span class="nc">WordCount</span> <span class="p">{</span>
+
+    <span class="n">public</span> <span class="n">static</span> <span class="n">void</span> <span class="n">main</span><span class="p">(</span><span class="n">String</span><span class="p">[]</span> <span class="n">args</span><span class="p">)</span> <span class="n">throws</span> <span class="ne">Exception</span> <span class="p">{</span>
+        <span class="n">Properties</span> <span class="n">props</span> <span class="o">=</span> <span class="n">new</span> <span class="n">Properties</span><span class="p">();</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">APPLICATION_ID_CONFIG</span><span class="p">,</span> <span class="s2">&quot;streams-wordcount&quot;</span><span class="p">);</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">BOOTSTRAP_SERVERS_CONFIG</span><span class="p">,</span> <span class="s2">&quot;localhost:9092&quot;</span><span class="p">);</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">DEFAULT_KEY_SERDE_CLASS_CONFIG</span><span class="p">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">()</span><span class="o">.</span><span class="n">getClass</span><span class="p">());</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">DEFAULT_VALUE_SERDE_CLASS_CONFIG</span><span class="p">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">()</span><span class="o">.</span><span class="n">getClass</span><span class="p">());</span>
+
+        <span class="n">final</span> <span class="n">StreamsBuilder</span> <span class="n">builder</span> <span class="o">=</span> <span class="n">new</span> <span class="n">StreamsBuilder</span><span class="p">();</span>
+
+        <span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">source</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="s2">&quot;streams-plaintext-input&quot;</span><span class="p">);</span>
+        <span class="n">source</span><span class="o">.</span><span class="n">flatMapValues</span><span class="p">(</span><span class="n">value</span> <span class="o">-&gt;</span> <span class="n">Arrays</span><span class="o">.</span><span class="n">asList</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">toLowerCase</span><span class="p">(</span><span class="n">Locale</span><span class="o">.</span><span class="n">getDefault</span><span class="p">())</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">W+&quot;</span><span class="p">)))</span>
+              <span class="o">.</span><span class="n">groupBy</span><span class="p">((</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">value</span><span class="p">)</span>
+              <span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">Materialized</span><span class="o">.&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">Long</span><span class="p">,</span> <span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">Bytes</span><span class="p">,</span> <span class="n">byte</span><span class="p">[]</span><span class="o">&gt;&gt;</span><span class="k">as</span><span class="p">(</span><span class="s2">&quot;counts-store&quot;</span><span class="p">))</span>
+              <span class="o">.</span><span class="n">toStream</span><span class="p">()</span>
+              <span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;streams-wordcount-output&quot;</span><span class="p">,</span> <span class="n">Produced</span><span class="o">.</span><span class="k">with</span><span class="p">(</span><span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">(),</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">Long</span><span class="p">());</span>
+
+        <span class="n">final</span> <span class="n">Topology</span> <span class="n">topology</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">build</span><span class="p">();</span>
+        <span class="n">final</span> <span class="n">KafkaStreams</span> <span class="n">streams</span> <span class="o">=</span> <span class="n">new</span> <span class="n">KafkaStreams</span><span class="p">(</span><span class="n">topology</span><span class="p">,</span> <span class="n">props</span><span class="p">);</span>
+        <span class="n">final</span> <span class="n">CountDownLatch</span> <span class="n">latch</span> <span class="o">=</span> <span class="n">new</span> <span class="n">CountDownLatch</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+
+        <span class="o">//</span> <span class="o">...</span> <span class="n">same</span> <span class="k">as</span> <span class="n">Pipe</span><span class="o">.</span><span class="n">java</span> <span class="n">above</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="core-concepts.html" class="btn btn-neutral float-right" title="Core Concepts" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="quickstart.html" class="btn btn-neutral" title="Run Kafka Streams Demo Application" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Apache Software Foundation.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'4.0.0',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: ''
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

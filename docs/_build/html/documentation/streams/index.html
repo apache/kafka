@@ -1,0 +1,511 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Kafka Streams &mdash; Apache Kafka 4.0.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../../genindex.html"/>
+        <link rel="search" title="Search" href="../../search.html"/>
+    <link rel="top" title="Apache Kafka 4.0.0 documentation" href="../../index.html"/>
+        <link rel="up" title="Apache Kafka Documentation" href="../index.html"/>
+        <link rel="next" title="Run Kafka Streams Demo Application" href="quickstart.html"/>
+        <link rel="prev" title="Kafka Connect" href="../connect.html"/> 
+
+  
+  <script src="../../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> Apache Kafka
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                4.0
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../uses.html">Use Cases</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../index.html">Apache Kafka Documentation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api.html">Kafka APIs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../configuration.html">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../design.html">Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../implementation.html">Implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../ops.html">Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../security.html">Security</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../connect.html">Kafka Connect</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Kafka Streams</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="quickstart.html">Run Kafka Streams Demo Application</a></li>
+<li class="toctree-l3"><a class="reference internal" href="tutorial.html">Tutorial: Write a Kafka Streams Application</a></li>
+<li class="toctree-l3"><a class="reference internal" href="core-concepts.html">Core Concepts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="architecture.html">Architecture</a></li>
+<li class="toctree-l3"><a class="reference internal" href="developer-guide/index.html">Developer Guide for Kafka Streams</a></li>
+<li class="toctree-l3"><a class="reference internal" href="upgrade-guide.html">Upgrade Guide and API Changes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#why-you-ll-love-using-kafka-streams">Why you&#8217;ll love using Kafka Streams!</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#kafka-streams-use-cases">Kafka Streams use cases</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#hello-kafka-streams">Hello Kafka Streams</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#java-8">Java 8+</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#java-7">Java 7</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#scala">Scala</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Apache Kafka</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../index.html">Apache Kafka Documentation</a> &raquo;</li>
+        
+      <li>Kafka Streams</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../../_sources/documentation/streams/index.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="kafka-streams">
+<h1>Kafka Streams<a class="headerlink" href="#kafka-streams" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Run Kafka Streams Demo Application</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial: Write a Kafka Streams Application</a></li>
+<li class="toctree-l1"><a class="reference internal" href="core-concepts.html">Core Concepts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="developer-guide/index.html">Developer Guide for Kafka Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="upgrade-guide.html">Upgrade Guide and API Changes</a></li>
+</ul>
+</div>
+<p><em>The easiest way to write mission-critical real-time applications and microservices</em></p>
+<p>Kafka Streams is a client library for building applications and
+microservices, where the input and output data are stored in Kafka
+clusters. It combines the simplicity of writing and deploying standard
+Java and Scala applications on the client side with the benefits of
+Kafka&#8217;s server-side cluster technology.</p>
+<p>Click here to watch a screencast of the <a class="reference external" href="https://www.youtube.com/embed/Z3JKCLG3VP4">Intro to Streams on YouTube</a>.</p>
+<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
+    <iframe src="https://www.youtube.com/embed/Z3JKCLG3VP4" frameborder="0" allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe>
+</div><p>This video is the first in a series of Streams tutorial videos:</p>
+<ol class="arabic simple">
+<li><a class="reference external" href="https://www.youtube.com/watch?v=LxxeXI1mPKo">Creating a Streams Application</a></li>
+<li><a class="reference external" href="https://www.youtube.com/watch?v=7JYEEx7SBuE">Transforming Data Pt. 1</a></li>
+<li><a class="reference external" href="https://www.youtube.com/watch?v=3kJgYIkAeHs">Transforming Data Pt. 2</a></li>
+</ol>
+<div class="section" id="why-you-ll-love-using-kafka-streams">
+<h2>Why you&#8217;ll love using Kafka Streams!<a class="headerlink" href="#why-you-ll-love-using-kafka-streams" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>Elastic, highly scalable, fault-tolerant</li>
+<li>Deploy to containers, VMs, bare metal, cloud</li>
+<li>Equally viable for small, medium, &amp; large use cases</li>
+<li>Fully integrated with Kafka security</li>
+<li>Write standard Java applications</li>
+<li>Exactly-once processing semantics</li>
+<li>No separate processing cluster required</li>
+<li>Develop on Mac, Linux, Windows</li>
+</ul>
+<div class="first__app__cta">
+    <a href="/{{version}}/documentation/streams/tutorial" class="first__app__btn">Write your first app</a>
+</div></div>
+<hr class="docutils" />
+<div class="section" id="kafka-streams-use-cases">
+<h2>Kafka Streams use cases<a class="headerlink" href="#kafka-streams-use-cases" title="Permalink to this headline">¶</a></h2>
+<a class="reference external image-reference" href="https://open.nytimes.com/publishing-with-apache-kafka-at-the-new-york-times-7f0e3b7d2077"><img alt="documentation/streams/../../images/powered-by/NYT.jpg" class="align-center" src="documentation/streams/../../images/powered-by/NYT.jpg" /></a>
+<p><a class="reference external" href="https://open.nytimes.com/publishing-with-apache-kafka-at-the-new-york-times-7f0e3b7d2077">The New York Times uses Apache
+Kafka</a> and
+the Kafka Streams to store and distribute, in real-time, published
+content to the various applications and systems that make it available
+to the readers.</p>
+<a class="reference external image-reference" href="https://www.confluent.io/blog/ranking-websites-real-time-apache-kafkas-streams-api/"><img alt="documentation/streams/../../images/powered-by/zalando.jpg" class="align-center" src="documentation/streams/../../images/powered-by/zalando.jpg" /></a>
+<p>As the leading online fashion retailer in Europe, Zalando uses Kafka as
+an ESB (Enterprise Service Bus), which helps us in transitioning from a
+monolithic to a micro services architecture. Using Kafka for processing
+<a class="reference external" href="https://www.confluent.io/blog/ranking-websites-real-time-apache-kafkas-streams-api/">event
+streams</a>
+enables our technical team to do near-real time business intelligence.</p>
+<a class="reference external image-reference" href="https://engineering.linecorp.com/en/blog/detail/80"><img alt="documentation/streams/../../images/powered-by/line.png" class="align-center" src="documentation/streams/../../images/powered-by/line.png" /></a>
+<p><a class="reference external" href="https://engineering.linecorp.com/en/blog/detail/80">LINE uses Apache
+Kafka</a> as a
+central datahub for our services to communicate to one another. Hundreds
+of billions of messages are produced daily and are used to execute
+various business logic, threat detection, search indexing and data
+analysis. LINE leverages Kafka Streams to reliably transform and filter
+topics enabling sub topics consumers can efficiently consume, meanwhile
+retaining easy maintainability thanks to its sophisticated yet minimal
+code base.</p>
+<a class="reference external image-reference" href="https://medium.com/&#64;Pinterest_Engineering/using-kafka-streams-api-for-predictive-budgeting-9f58d206c996"><img alt="documentation/streams/../../images/powered-by/pinterest.png" class="align-center" src="documentation/streams/../../images/powered-by/pinterest.png" /></a>
+<p><a class="reference external" href="https://medium.com/&#64;Pinterest_Engineering/using-kafka-streams-api-for-predictive-budgeting-9f58d206c996">Pinterest uses Apache Kafka and the Kafka
+Streams</a>
+at large scale to power the real-time, predictive budgeting system of
+their advertising infrastructure. With Kafka Streams, spend predictions
+are more accurate than ever.</p>
+<a class="reference external image-reference" href="https://www.confluent.io/blog/real-time-financial-alerts-rabobank-apache-kafkas-streams-api/"><img alt="documentation/streams/../../images/powered-by/rabobank.jpg" class="align-center" src="documentation/streams/../../images/powered-by/rabobank.jpg" /></a>
+<p>Rabobank is
+one of the 3 largest banks in the Netherlands. Its digital
+nervous system, the Business Event Bus, is powered by Apache Kafka. It
+is used by an increasing amount of financial processes and services, one
+of which is Rabo Alerts. This service alerts customers in real-time upon
+financial events and is <a class="reference external" href="https://www.confluent.io/blog/real-time-financial-alerts-rabobank-apache-kafkas-streams-api/">built using Kafka
+Streams.</a></p>
+<a class="reference external image-reference" href="https://speakerdeck.com/xenji/kafka-and-debezium-at-trivago-code-dot-talks-2017-edition"><img alt="documentation/streams/../../images/powered-by/trivago.png" class="align-center" src="documentation/streams/../../images/powered-by/trivago.png" /></a>
+<p>Trivago is a global hotel search platform. We are focused on reshaping
+the way travelers search for and compare hotels, while enabling hotel
+advertisers to grow their businesses by providing access to a broad
+audience of travelers via our websites and apps. As of 2017, we offer
+access to approximately 1.8 million hotels and other accommodations in
+over 190 countries. We use Kafka, Kafka Connect, and Kafka Streams to
+<a class="reference external" href="https://speakerdeck.com/xenji/kafka-and-debezium-at-trivago-code-dot-talks-2017-edition">enable our
+developers</a>
+to access data freely in the company. Kafka Streams powers parts of our
+analytics pipeline and delivers endless options to explore and operate
+on the data sources we have at hand.</p>
+</div>
+<div class="section" id="hello-kafka-streams">
+<h2>Hello Kafka Streams<a class="headerlink" href="#hello-kafka-streams" title="Permalink to this headline">¶</a></h2>
+<p>The code example below implements a WordCount application that is
+elastic, highly scalable, fault-tolerant, stateful, and ready to run in
+production at large scale.</p>
+<div class="contents local topic" id="contents">
+<ul class="simple">
+<li><a class="reference internal" href="#java-8" id="id1">Java 8+</a></li>
+<li><a class="reference internal" href="#java-7" id="id2">Java 7</a></li>
+<li><a class="reference internal" href="#scala" id="id3">Scala</a></li>
+</ul>
+</div>
+<div class="section" id="java-8">
+<h3><a class="toc-backref" href="#id1">Java 8+</a><a class="headerlink" href="#java-8" title="Permalink to this headline">¶</a></h3>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization.Serdes</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.KafkaStreams</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsBuilder</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsConfig</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.Topology</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.Materialized</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.Produced</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.KeyValueStore</span><span class="p">;</span>
+
+<span class="kn">import</span> <span class="nn">java.util.Arrays</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">java.util.Properties</span><span class="p">;</span>
+
+<span class="n">public</span> <span class="k">class</span> <span class="nc">WordCountApplication</span> <span class="p">{</span>
+
+    <span class="n">public</span> <span class="n">static</span> <span class="n">void</span> <span class="n">main</span><span class="p">(</span><span class="n">final</span> <span class="n">String</span><span class="p">[]</span> <span class="n">args</span><span class="p">)</span> <span class="n">throws</span> <span class="ne">Exception</span> <span class="p">{</span>
+        <span class="n">Properties</span> <span class="n">config</span> <span class="o">=</span> <span class="n">new</span> <span class="n">Properties</span><span class="p">();</span>
+        <span class="n">config</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">APPLICATION_ID_CONFIG</span><span class="p">,</span> <span class="s2">&quot;wordcount-application&quot;</span><span class="p">);</span>
+        <span class="n">config</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">BOOTSTRAP_SERVERS_CONFIG</span><span class="p">,</span> <span class="s2">&quot;kafka-broker1:9092&quot;</span><span class="p">);</span>
+        <span class="n">config</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">DEFAULT_KEY_SERDE_CLASS_CONFIG</span><span class="p">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">()</span><span class="o">.</span><span class="n">getClass</span><span class="p">());</span>
+        <span class="n">config</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">DEFAULT_VALUE_SERDE_CLASS_CONFIG</span><span class="p">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">()</span><span class="o">.</span><span class="n">getClass</span><span class="p">());</span>
+
+        <span class="n">StreamsBuilder</span> <span class="n">builder</span> <span class="o">=</span> <span class="n">new</span> <span class="n">StreamsBuilder</span><span class="p">();</span>
+        <span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">textLines</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="s2">&quot;TextLinesTopic&quot;</span><span class="p">);</span>
+        <span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">wordCounts</span> <span class="o">=</span> <span class="n">textLines</span>
+            <span class="o">.</span><span class="n">flatMapValues</span><span class="p">(</span><span class="n">textLine</span> <span class="o">-&gt;</span> <span class="n">Arrays</span><span class="o">.</span><span class="n">asList</span><span class="p">(</span><span class="n">textLine</span><span class="o">.</span><span class="n">toLowerCase</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">W+&quot;</span><span class="p">)))</span>
+            <span class="o">.</span><span class="n">groupBy</span><span class="p">((</span><span class="n">key</span><span class="p">,</span> <span class="n">word</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">word</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">Materialized</span><span class="o">.&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">Long</span><span class="p">,</span> <span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">Bytes</span><span class="p">,</span> <span class="n">byte</span><span class="p">[]</span><span class="o">&gt;&gt;</span><span class="k">as</span><span class="p">(</span><span class="s2">&quot;counts-store&quot;</span><span class="p">));</span>
+        <span class="n">wordCounts</span><span class="o">.</span><span class="n">toStream</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;WordsWithCountsTopic&quot;</span><span class="p">,</span> <span class="n">Produced</span><span class="o">.</span><span class="k">with</span><span class="p">(</span><span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">(),</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">Long</span><span class="p">()));</span>
+
+        <span class="n">KafkaStreams</span> <span class="n">streams</span> <span class="o">=</span> <span class="n">new</span> <span class="n">KafkaStreams</span><span class="p">(</span><span class="n">builder</span><span class="o">.</span><span class="n">build</span><span class="p">(),</span> <span class="n">config</span><span class="p">);</span>
+        <span class="n">streams</span><span class="o">.</span><span class="n">start</span><span class="p">();</span>
+    <span class="p">}</span>
+
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="java-7">
+<h3><a class="toc-backref" href="#id2">Java 7</a><a class="headerlink" href="#java-7" title="Permalink to this headline">¶</a></h3>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization.Serdes</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.KafkaStreams</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsBuilder</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsConfig</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.Topology</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.KeyValueMapper</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.Materialized</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.Produced</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.ValueMapper</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.KeyValueStore</span><span class="p">;</span>
+
+<span class="kn">import</span> <span class="nn">java.util.Arrays</span><span class="p">;</span>
+<span class="kn">import</span> <span class="nn">java.util.Properties</span><span class="p">;</span>
+
+<span class="n">public</span> <span class="k">class</span> <span class="nc">WordCountApplication</span> <span class="p">{</span>
+
+    <span class="n">public</span> <span class="n">static</span> <span class="n">void</span> <span class="n">main</span><span class="p">(</span><span class="n">final</span> <span class="n">String</span><span class="p">[]</span> <span class="n">args</span><span class="p">)</span> <span class="n">throws</span> <span class="ne">Exception</span> <span class="p">{</span>
+        <span class="n">Properties</span> <span class="n">config</span> <span class="o">=</span> <span class="n">new</span> <span class="n">Properties</span><span class="p">();</span>
+        <span class="n">config</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">APPLICATION_ID_CONFIG</span><span class="p">,</span> <span class="s2">&quot;wordcount-application&quot;</span><span class="p">);</span>
+        <span class="n">config</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">BOOTSTRAP_SERVERS_CONFIG</span><span class="p">,</span> <span class="s2">&quot;kafka-broker1:9092&quot;</span><span class="p">);</span>
+        <span class="n">config</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">DEFAULT_KEY_SERDE_CLASS_CONFIG</span><span class="p">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">()</span><span class="o">.</span><span class="n">getClass</span><span class="p">());</span>
+        <span class="n">config</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">DEFAULT_VALUE_SERDE_CLASS_CONFIG</span><span class="p">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">()</span><span class="o">.</span><span class="n">getClass</span><span class="p">());</span>
+
+        <span class="n">StreamsBuilder</span> <span class="n">builder</span> <span class="o">=</span> <span class="n">new</span> <span class="n">StreamsBuilder</span><span class="p">();</span>
+        <span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">textLines</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="s2">&quot;TextLinesTopic&quot;</span><span class="p">);</span>
+        <span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">wordCounts</span> <span class="o">=</span> <span class="n">textLines</span>
+            <span class="o">.</span><span class="n">flatMapValues</span><span class="p">(</span><span class="n">new</span> <span class="n">ValueMapper</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">Iterable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;&gt;</span><span class="p">()</span> <span class="p">{</span>
+                <span class="nd">@Override</span>
+                <span class="n">public</span> <span class="n">Iterable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;</span> <span class="n">apply</span><span class="p">(</span><span class="n">String</span> <span class="n">textLine</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="k">return</span> <span class="n">Arrays</span><span class="o">.</span><span class="n">asList</span><span class="p">(</span><span class="n">textLine</span><span class="o">.</span><span class="n">toLowerCase</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">W+&quot;</span><span class="p">));</span>
+                <span class="p">}</span>
+            <span class="p">})</span>
+            <span class="o">.</span><span class="n">groupBy</span><span class="p">(</span><span class="n">new</span> <span class="n">KeyValueMapper</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">String</span><span class="p">,</span> <span class="n">String</span><span class="o">&gt;</span><span class="p">()</span> <span class="p">{</span>
+                <span class="nd">@Override</span>
+                <span class="n">public</span> <span class="n">String</span> <span class="n">apply</span><span class="p">(</span><span class="n">String</span> <span class="n">key</span><span class="p">,</span> <span class="n">String</span> <span class="n">word</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="k">return</span> <span class="n">word</span><span class="p">;</span>
+                <span class="p">}</span>
+            <span class="p">})</span>
+            <span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">Materialized</span><span class="o">.&lt;</span><span class="n">String</span><span class="p">,</span> <span class="n">Long</span><span class="p">,</span> <span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">Bytes</span><span class="p">,</span> <span class="n">byte</span><span class="p">[]</span><span class="o">&gt;&gt;</span><span class="k">as</span><span class="p">(</span><span class="s2">&quot;counts-store&quot;</span><span class="p">));</span>
+
+
+        <span class="n">wordCounts</span><span class="o">.</span><span class="n">toStream</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;WordsWithCountsTopic&quot;</span><span class="p">,</span> <span class="n">Produced</span><span class="o">.</span><span class="k">with</span><span class="p">(</span><span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">(),</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">Long</span><span class="p">()));</span>
+
+        <span class="n">KafkaStreams</span> <span class="n">streams</span> <span class="o">=</span> <span class="n">new</span> <span class="n">KafkaStreams</span><span class="p">(</span><span class="n">builder</span><span class="o">.</span><span class="n">build</span><span class="p">(),</span> <span class="n">config</span><span class="p">);</span>
+        <span class="n">streams</span><span class="o">.</span><span class="n">start</span><span class="p">();</span>
+    <span class="p">}</span>
+
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="scala">
+<h3><a class="toc-backref" href="#id3">Scala</a><a class="headerlink" href="#scala" title="Permalink to this headline">¶</a></h3>
+<div class="code bash highlight-default"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.lang.Long</span>
+<span class="kn">import</span> <span class="nn">java.util.Properties</span>
+<span class="kn">import</span> <span class="nn">java.util.concurrent.TimeUnit</span>
+
+<span class="kn">import</span> <span class="nn">org.apache.kafka.common.serialization._</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams._</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.</span><span class="p">{</span><span class="n">KeyValueMapper</span><span class="p">,</span> <span class="n">Materialized</span><span class="p">,</span> <span class="n">Produced</span><span class="p">,</span> <span class="n">ValueMapper</span><span class="p">}</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.KeyValueStore</span><span class="p">;</span>
+
+<span class="kn">import</span> <span class="nn">scala.collection.JavaConverters.asJavaIterableConverter</span>
+
+<span class="nb">object</span> <span class="n">WordCountApplication</span> <span class="p">{</span>
+
+    <span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="p">:</span> <span class="n">Array</span><span class="p">[</span><span class="n">String</span><span class="p">])</span> <span class="p">{</span>
+        <span class="n">val</span> <span class="n">config</span><span class="p">:</span> <span class="n">Properties</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">val</span> <span class="n">p</span> <span class="o">=</span> <span class="n">new</span> <span class="n">Properties</span><span class="p">()</span>
+            <span class="n">p</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">APPLICATION_ID_CONFIG</span><span class="p">,</span> <span class="s2">&quot;wordcount-application&quot;</span><span class="p">)</span>
+            <span class="n">p</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">BOOTSTRAP_SERVERS_CONFIG</span><span class="p">,</span> <span class="s2">&quot;kafka-broker1:9092&quot;</span><span class="p">)</span>
+            <span class="n">p</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">DEFAULT_KEY_SERDE_CLASS_CONFIG</span><span class="p">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">()</span><span class="o">.</span><span class="n">getClass</span><span class="p">)</span>
+            <span class="n">p</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="n">DEFAULT_VALUE_SERDE_CLASS_CONFIG</span><span class="p">,</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">()</span><span class="o">.</span><span class="n">getClass</span><span class="p">)</span>
+            <span class="n">p</span>
+        <span class="p">}</span>
+
+        <span class="n">val</span> <span class="n">builder</span><span class="p">:</span> <span class="n">StreamsBuilder</span> <span class="o">=</span> <span class="n">new</span> <span class="n">StreamsBuilder</span><span class="p">()</span>
+        <span class="n">val</span> <span class="n">textLines</span><span class="p">:</span> <span class="n">KStream</span><span class="p">[</span><span class="n">String</span><span class="p">,</span> <span class="n">String</span><span class="p">]</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="s2">&quot;TextLinesTopic&quot;</span><span class="p">)</span>
+        <span class="n">val</span> <span class="n">wordCounts</span><span class="p">:</span> <span class="n">KTable</span><span class="p">[</span><span class="n">String</span><span class="p">,</span> <span class="n">Long</span><span class="p">]</span> <span class="o">=</span> <span class="n">textLines</span>
+            <span class="o">.</span><span class="n">flatMapValues</span><span class="p">(</span><span class="n">textLine</span> <span class="o">=&gt;</span> <span class="n">textLine</span><span class="o">.</span><span class="n">toLowerCase</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">W+&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">toIterable</span><span class="o">.</span><span class="n">asJava</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">groupBy</span><span class="p">((</span><span class="n">_</span><span class="p">,</span> <span class="n">word</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="n">word</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">Materialized</span><span class="o">.</span><span class="k">as</span><span class="p">(</span><span class="s2">&quot;counts-store&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">asInstanceOf</span><span class="p">[</span><span class="n">Materialized</span><span class="p">[</span><span class="n">String</span><span class="p">,</span> <span class="n">Long</span><span class="p">,</span> <span class="n">KeyValueStore</span><span class="p">[</span><span class="n">Bytes</span><span class="p">,</span> <span class="n">Array</span><span class="p">[</span><span class="n">Byte</span><span class="p">]]]])</span>
+        <span class="n">wordCounts</span><span class="o">.</span><span class="n">toStream</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="s2">&quot;WordsWithCountsTopic&quot;</span><span class="p">,</span> <span class="n">Produced</span><span class="o">.</span><span class="k">with</span><span class="p">(</span><span class="n">Serdes</span><span class="o">.</span><span class="n">String</span><span class="p">(),</span> <span class="n">Serdes</span><span class="o">.</span><span class="n">Long</span><span class="p">()))</span>
+
+        <span class="n">val</span> <span class="n">streams</span><span class="p">:</span> <span class="n">KafkaStreams</span> <span class="o">=</span> <span class="n">new</span> <span class="n">KafkaStreams</span><span class="p">(</span><span class="n">builder</span><span class="o">.</span><span class="n">build</span><span class="p">(),</span> <span class="n">config</span><span class="p">)</span>
+        <span class="n">streams</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+
+        <span class="n">Runtime</span><span class="o">.</span><span class="n">getRuntime</span><span class="o">.</span><span class="n">addShutdownHook</span><span class="p">(</span><span class="n">new</span> <span class="n">Thread</span><span class="p">(()</span> <span class="o">=&gt;</span> <span class="p">{</span>
+            <span class="n">streams</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="n">TimeUnit</span><span class="o">.</span><span class="n">SECONDS</span><span class="p">)</span>
+        <span class="p">}))</span>
+    <span class="p">}</span>
+
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+</div>
+</div>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="quickstart.html" class="btn btn-neutral float-right" title="Run Kafka Streams Demo Application" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../connect.html" class="btn btn-neutral" title="Kafka Connect" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Apache Software Foundation.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'4.0.0',
+            LANGUAGE:'None',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: ''
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
