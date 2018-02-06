@@ -97,13 +97,13 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        ToInternal toInternal = new ToInternal(to, (List<ProcessorNode>) currentNode().children());
+        final ToInternal toInternal = new ToInternal(to, (List<ProcessorNode>) currentNode().children());
         if (toInternal.hasTimestamp()) {
             recordContext.setTimestamp(toInternal.timestamp());
         }
-        ProcessorNode previousNode = currentNode();
+        final ProcessorNode previousNode = currentNode();
         try {
-            for (ProcessorNode child : (List<ProcessorNode<K, V>>) currentNode().children()) {
+            for (final ProcessorNode child : (List<ProcessorNode<K, V>>) currentNode().children()) {
                 if (toInternal.hasChild(child.name())) {
                     setCurrentNode(child);
                     child.process(key, value);
