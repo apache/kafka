@@ -51,7 +51,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private final Map<String, List<PartitionInfo>> partitions;
     private final SubscriptionState subscriptions;
     private final Map<TopicPartition, Long> beginningOffsets;
-    private final Map<TopicPartition, Long> endOffsets;
+    private final Map<TopicPartition, List<Long>> endOffsets;
     private final Map<TopicPartition, OffsetAndMetadata> committed;
     private final Queue<Runnable> pollTasks;
     private final Set<TopicPartition> paused;
@@ -290,8 +290,28 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             subscriptions.requestOffsetReset(tp, OffsetResetStrategy.LATEST);
     }
 
+    // needed for cases where you make a second call to end offsets
+    public synchronized void addEndOffsets(Map<TopicPartition, Long> newOffsets) {
+        innerUpdateEndOffsets(newOffsets, false);
+    }
+
     public synchronized void updateEndOffsets(Map<TopicPartition, Long> newOffsets) {
-        endOffsets.putAll(newOffsets);
+        innerUpdateEndOffsets(newOffsets, true);
+    }
+
+    private void innerUpdateEndOffsets(Map<TopicPartition, Long> newOffsets, boolean replace) {
+        for (Map.Entry<TopicPartition, Long> entry : newOffsets.entrySet()) {
+            List<Long> offsets = endOffsets.get(entry.getKey());
+            if (offsets == null) {
+                offsets = new ArrayList<>();
+            }
+            if (replace) {
+                offsets.add(0, entry.getValue());
+            } else {
+                offsets.add(entry.getValue());
+            }
+            endOffsets.put(entry.getKey(), offsets);
+        }
     }
 
     @Override
@@ -354,7 +374,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public synchronized Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
         Map<TopicPartition, Long> result = new HashMap<>();
         for (TopicPartition tp : partitions) {
-            Long endOffset = endOffsets.get(tp);
+            List<Long> offsets = endOffsets.get(tp);
+            offsets = offsets == null ? new ArrayList<Long>() : offsets;
+            Long endOffset = offsets.size() > 1 ? offsets.remove(0) : offsets.get(0);
             if (endOffset == null)
                 throw new IllegalStateException("The partition " + tp + " does not have an end offset.");
             result.put(tp, endOffset);
@@ -430,7 +452,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             if (offset == null)
                 throw new IllegalStateException("MockConsumer didn't have beginning offset specified, but tried to seek to beginning");
         } else if (strategy == OffsetResetStrategy.LATEST) {
-            offset = endOffsets.get(tp);
+            List<Long> offsets = endOffsets.get(tp);
+            offset = offsets.size() > 1 ? offsets.remove(0) : offsets.get(0);
             if (offset == null)
                 throw new IllegalStateException("MockConsumer didn't have end offset specified, but tried to seek to end");
         } else {
