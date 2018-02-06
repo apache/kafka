@@ -148,9 +148,9 @@ class StreamsBrokerDownResilience(Test):
         broker_unavailable_message = "Broker may not be available"
 
         # verify streams instances unable to connect to broker, kept trying
-        self.wait_for_verification(processor, broker_unavailable_message, processor.LOG_FILE, 300)
-        self.wait_for_verification(processor_2, broker_unavailable_message, processor_2.LOG_FILE, 300)
-        self.wait_for_verification(processor_3, broker_unavailable_message, processor_3.LOG_FILE, 300)
+        self.wait_for_verification(processor, broker_unavailable_message, processor.LOG_FILE, 100)
+        self.wait_for_verification(processor_2, broker_unavailable_message, processor_2.LOG_FILE, 100)
+        self.wait_for_verification(processor_3, broker_unavailable_message, processor_3.LOG_FILE, 100)
 
         # now start broker
         self.kafka.start_node(node)
