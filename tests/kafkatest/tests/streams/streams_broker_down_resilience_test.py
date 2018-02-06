@@ -88,6 +88,17 @@ class StreamsBrokerDownResilience(Test):
 
         return updated_configs
 
+    def wait_for_verification(self, processor, message, file, num_lines=1):
+        wait_until(lambda: self.verify_from_file(processor, message, file) >= num_lines,
+                   timeout_sec=60,
+                   err_msg="Did expect to read '%s' from %s" % (message, processor.node))
+
+    @staticmethod
+    def verify_from_file(processor, message, file):
+        result = processor.node.account.ssh_output("grep '%s' %s | wc -l" % (message, file), allow_fail=False)
+        return int(result)
+
+
     def setUp(self):
         self.zk.start()
 
@@ -136,7 +147,15 @@ class StreamsBrokerDownResilience(Test):
         processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor_3.start()
 
+        # wait for broker downtime beyond timeouts
         time.sleep(broker_down_initially_in_seconds)
+
+        broker_unavailable_message = "Broker may not be available"
+
+        # verify streams instances unable to connect to broker, kept trying
+        self.wait_for_verification(processor, broker_unavailable_message, processor.LOG_FILE, 100)
+        self.wait_for_verification(processor_2, broker_unavailable_message, processor_2.LOG_FILE, 100)
+        self.wait_for_verification(processor_3, broker_unavailable_message, processor_3.LOG_FILE, 100)
 
         # now start broker
         self.kafka.start_node(node)
@@ -144,18 +163,19 @@ class StreamsBrokerDownResilience(Test):
         # assert streams can process when starting with broker down
         self.assert_produce_consume("running_with_broker_down_initially", num_messages=9)
 
-        wait_until(lambda: self.verify_log_statement(processor, "processed3messages") > 0,
-                   timeout_sec=60,
-                   err_msg="Did expect to read 'produced.")
+        message = "processed3messages"
+        # need to show all 3 instances processed messages
+        self.wait_for_verification(processor, message, processor.STDOUT_FILE)
+        self.wait_for_verification(processor_2, message, processor_2.STDOUT_FILE)
+        self.wait_for_verification(processor_3, message, processor_3.STDOUT_FILE)
 
         self.kafka.stop()
 
-    def test_streams_shuts_down_clean_with_broker_down(self):
+    def test_streams_should_scale_in_while_brokers_down(self):
         self.kafka.start()
 
         configs = self.get_configs(extra_configs=",application.id=shutdown_with_broker_down")
 
-        # start streams with broker down initially
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor.start()
 
@@ -168,20 +188,27 @@ class StreamsBrokerDownResilience(Test):
         # assert streams can process when starting with broker down
         self.assert_produce_consume("waiting for rebalance to complete", num_messages=9)
 
+        message = "processed3messages"
+
+        self.wait_for_verification(processor, message, processor.STDOUT_FILE)
+        self.wait_for_verification(processor_2, message, processor_2.STDOUT_FILE)
+        self.wait_for_verification(processor_3, message, processor_3.STDOUT_FILE)
+
         node = self.kafka.leader(self.inputTopic)
         self.kafka.stop_node(node)
 
         processor.stop()
         processor_2.stop()
 
+        shutdown_message = "Shutting down streams"
+        self.wait_for_verification(processor, shutdown_message, processor.STDOUT_FILE)
+        self.wait_for_verification(processor_2, shutdown_message, processor_2.STDOUT_FILE)
+
         self.kafka.start_node(node)
 
         self.assert_produce_consume("sending_message_after_stopping_streams_instance_bouncing_broker", num_messages=9)
 
+        self.wait_for_verification(processor_3, "processed9messages", processor_3.STDOUT_FILE)
+
         self.kafka.stop()
 
-    def verify_log_statement(self, processor, message):
-
-        result = processor.node.account.ssh_output("grep '%s' %s | wc -l" % (message, processor.STDOUT_FILE), allow_fail=False)
-
-        return int(result)
