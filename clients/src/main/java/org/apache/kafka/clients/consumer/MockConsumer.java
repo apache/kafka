@@ -290,17 +290,19 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             subscriptions.requestOffsetReset(tp, OffsetResetStrategy.LATEST);
     }
 
-    // needed for cases where you make a second call to end offsets
-    public synchronized void addEndOffsets(Map<TopicPartition, Long> newOffsets) {
+    // needed for cases where you make a second call to endOffsets
+    public synchronized void addEndOffsets(final Map<TopicPartition, Long> newOffsets) {
         innerUpdateEndOffsets(newOffsets, false);
     }
 
-    public synchronized void updateEndOffsets(Map<TopicPartition, Long> newOffsets) {
+    public synchronized void updateEndOffsets(final Map<TopicPartition, Long> newOffsets) {
         innerUpdateEndOffsets(newOffsets, true);
     }
 
-    private void innerUpdateEndOffsets(Map<TopicPartition, Long> newOffsets, boolean replace) {
-        for (Map.Entry<TopicPartition, Long> entry : newOffsets.entrySet()) {
+    private void innerUpdateEndOffsets(final Map<TopicPartition, Long> newOffsets,
+                                       final boolean replace) {
+
+        for (final Map.Entry<TopicPartition, Long> entry : newOffsets.entrySet()) {
             List<Long> offsets = endOffsets.get(entry.getKey());
             if (offsets == null) {
                 offsets = new ArrayList<>();
