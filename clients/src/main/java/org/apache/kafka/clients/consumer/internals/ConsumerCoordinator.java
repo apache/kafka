@@ -313,7 +313,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         }
 
-        maybeAutoCommitOffsetsAsync(now, subscriptions.allConsumed());
+        maybeAutoCommitOffsetsAsync(now);
     }
 
     /**
@@ -528,6 +528,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 public void onSuccess(Void value) {
                     pendingAsyncCommits.decrementAndGet();
                     doCommitOffsetsAsync(offsets, callback);
+                    client.pollNoWakeup();
                 }
 
                 @Override
@@ -623,15 +624,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return false;
     }
 
-    public void maybeAutoCommitOffsetsAsync(long now, Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {
-        if (autoCommitEnabled) {
-            if (now >= nextAutoCommitDeadline) {
-                doAutoCommitOffsetsAsync(allConsumedOffsets);
-            }
+    // visible only for testing
+    public void maybeAutoCommitOffsetsAsync(long now) {
+        if (autoCommitEnabled && now >= nextAutoCommitDeadline) {
+            doAutoCommitOffsetsAsync();
         }
     }
 
-    private void doAutoCommitOffsetsAsync(Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {
+    private void doAutoCommitOffsetsAsync() {
+        Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
         log.debug("Sending asynchronous auto-commit of offsets {}", allConsumedOffsets);
 
         commitOffsetsAsync(allConsumedOffsets, new OffsetCommitCallback() {
@@ -641,6 +642,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     log.warn("Asynchronous auto-commit of offsets {} failed: {}", offsets, exception.getMessage());
                     if (exception instanceof RetriableException)
                         nextAutoCommitDeadline = Math.min(time.milliseconds() + retryBackoffMs, nextAutoCommitDeadline);
+                    else
+                        nextAutoCommitDeadline = time.milliseconds() + autoCommitIntervalMs;
                 } else {
                     log.debug("Completed asynchronous auto-commit of offsets {}", offsets);
                     nextAutoCommitDeadline = time.milliseconds() + autoCommitIntervalMs;

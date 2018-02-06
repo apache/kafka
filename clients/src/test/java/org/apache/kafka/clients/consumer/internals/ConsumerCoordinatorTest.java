@@ -33,7 +33,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
@@ -104,8 +103,7 @@ public class ConsumerCoordinatorTest {
     private MockPartitionAssignor partitionAssignor = new MockPartitionAssignor();
     private List<PartitionAssignor> assignors = Collections.<PartitionAssignor>singletonList(partitionAssignor);
     private MockTime time;
-    private MockClient client;
-    private Cluster cluster = TestUtils.clusterWith(1, new HashMap<String, Integer>() {
+    private MockClient client;    private Cluster cluster = TestUtils.clusterWith(1, new HashMap<String, Integer>() {
         {
             put(topic1, 1);
             put(topic2, 1);
@@ -1628,30 +1626,19 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testAsyncOffsetCommitAfterCoordinatorBackToService() {
-        // Make coordinator dead
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.COORDINATOR_NOT_AVAILABLE));
+        subscriptions.assignFromUser(Collections.singleton(t1p));
+        subscriptions.committed(t1p, new OffsetAndMetadata(0));
+        subscriptions.seek(t1p, 100L);
+
         coordinator.coordinatorDead();
-
-        MockCommitCallback cb = new MockCommitCallback();
-        MockCommitCallback cb2 = new MockCommitCallback();
-
-        // Async commit offset with non-available coordinator should fail
-        coordinator.commitOffsetsAsync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), cb);
         assertTrue(coordinator.coordinatorUnknown());
-        coordinator.invokeCompletedOffsetCommitCallbacks();
-        assertEquals(cb.invoked, 1);
-        assertTrue(cb.exception instanceof RetriableCommitFailedException);
-        assertTrue(cb.exception.getCause() instanceof CoordinatorNotAvailableException);
-
-        // Make coordinator back to service again and async commit offset again
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)));
 
-        coordinator.commitOffsetsAsync(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)), cb2);
-        consumerClient.pollNoWakeup();
-        coordinator.invokeCompletedOffsetCommitCallbacks();
-        assertEquals(cb2.invoked, 1);
-        assertNull(cb2.exception);
+        // Async commit offset should find coordinator
+        coordinator.maybeAutoCommitOffsetsAsync(time.nanoseconds() + autoCommitIntervalMs); //make sure it does happen
+        assertFalse(coordinator.coordinatorUnknown());
+        assertEquals(subscriptions.committed(t1p).offset(), 100L);
     }
 
     private ConsumerCoordinator prepareCoordinatorForCloseTest(final boolean useGroupManagement,
