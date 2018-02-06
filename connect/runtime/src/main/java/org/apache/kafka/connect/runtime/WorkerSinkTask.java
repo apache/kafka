@@ -25,7 +25,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -38,10 +37,13 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
+import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.SinkUtils;
@@ -70,6 +72,7 @@ class WorkerSinkTask extends WorkerTask {
     private final Time time;
     private final Converter keyConverter;
     private final Converter valueConverter;
+    private final HeaderConverter headerConverter;
     private final TransformationChain<SinkRecord> transformationChain;
     private final SinkTaskMetricsGroup sinkTaskMetricsGroup;
     private KafkaConsumer<byte[], byte[]> consumer;
@@ -94,6 +97,7 @@ class WorkerSinkTask extends WorkerTask {
                           ConnectMetrics connectMetrics,
                           Converter keyConverter,
                           Converter valueConverter,
+                          HeaderConverter headerConverter,
                           TransformationChain<SinkRecord> transformationChain,
                           ClassLoader loader,
                           Time time) {
@@ -103,6 +107,7 @@ class WorkerSinkTask extends WorkerTask {
         this.task = task;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
+        this.headerConverter = headerConverter;
         this.transformationChain = transformationChain;
         this.time = time;
         this.messageBatch = new ArrayList<>();
@@ -259,27 +264,14 @@ class WorkerSinkTask extends WorkerTask {
      * Initializes and starts the SinkTask.
      */
     protected void initializeAndStart() {
-        String topicsStr = taskConfig.get(SinkTask.TOPICS_CONFIG);
-        boolean topicsStrPresent = topicsStr != null && !topicsStr.trim().isEmpty();
+        SinkConnectorConfig.validate(taskConfig);
 
-        String topicsRegexStr = taskConfig.get(SinkTask.TOPICS_REGEX_CONFIG);
-        boolean topicsRegexStrPresent = topicsRegexStr != null && !topicsRegexStr.trim().isEmpty();
-
-        if (topicsStrPresent && topicsRegexStrPresent) {
-            throw new ConfigException(SinkTask.TOPICS_CONFIG + " and " + SinkTask.TOPICS_REGEX_CONFIG +
-                " are mutually exclusive options, but both are set.");
-        }
-
-        if (!topicsStrPresent && !topicsRegexStrPresent) {
-            throw new ConfigException("Must configure one of " +
-                SinkTask.TOPICS_CONFIG + " or " + SinkTask.TOPICS_REGEX_CONFIG);
-        }
-
-        if (topicsStrPresent) {
-            String[] topics = topicsStr.split(",");
+        if (SinkConnectorConfig.hasTopicsConfig(taskConfig)) {
+            String[] topics = taskConfig.get(SinkTask.TOPICS_CONFIG).split(",");
             consumer.subscribe(Arrays.asList(topics), new HandleRebalance());
             log.debug("{} Initializing and starting task for topics {}", this, topics);
         } else {
+            String topicsRegexStr = taskConfig.get(SinkTask.TOPICS_REGEX_CONFIG);
             Pattern pattern = Pattern.compile(topicsRegexStr);
             consumer.subscribe(pattern, new HandleRebalance());
             log.debug("{} Initializing and starting task for topics regex {}", this, topicsRegexStr);
@@ -474,13 +466,15 @@ class WorkerSinkTask extends WorkerTask {
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
             SchemaAndValue keyAndSchema = keyConverter.toConnectData(msg.topic(), msg.key());
             SchemaAndValue valueAndSchema = valueConverter.toConnectData(msg.topic(), msg.value());
+            Headers headers = convertHeadersFor(msg);
             Long timestamp = ConnectUtils.checkAndConvertTimestamp(msg.timestamp());
             SinkRecord origRecord = new SinkRecord(msg.topic(), msg.partition(),
                     keyAndSchema.schema(), keyAndSchema.value(),
                     valueAndSchema.schema(), valueAndSchema.value(),
                     msg.offset(),
                     timestamp,
-                    msg.timestampType());
+                    msg.timestampType(),
+                    headers);
             log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
                     this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
             SinkRecord transRecord = transformationChain.apply(origRecord);
@@ -496,6 +490,19 @@ class WorkerSinkTask extends WorkerTask {
             }
         }
         sinkTaskMetricsGroup.recordConsumedOffsets(origOffsets);
+    }
+
+    private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {
+        Headers result = new ConnectHeaders();
+        org.apache.kafka.common.header.Headers recordHeaders = record.headers();
+        if (recordHeaders != null) {
+            String topic = record.topic();
+            for (org.apache.kafka.common.header.Header recordHeader : recordHeaders) {
+                SchemaAndValue schemaAndValue = headerConverter.toConnectHeader(topic, recordHeader.key(), recordHeader.value());
+                result.add(recordHeader.key(), schemaAndValue);
+            }
+        }
+        return result;
     }
 
     private void resumeAll() {
@@ -677,34 +684,34 @@ class WorkerSinkTask extends WorkerTask {
             // prevent collisions by removing any previously created metrics in this group.
             metricGroup.close();
 
-            sinkRecordRead = metricGroup.metrics().sensor("sink-record-read");
+            sinkRecordRead = metricGroup.sensor("sink-record-read");
             sinkRecordRead.add(metricGroup.metricName(registry.sinkRecordReadRate), new Rate());
             sinkRecordRead.add(metricGroup.metricName(registry.sinkRecordReadTotal), new Total());
 
-            sinkRecordSend = metricGroup.metrics().sensor("sink-record-send");
+            sinkRecordSend = metricGroup.sensor("sink-record-send");
             sinkRecordSend.add(metricGroup.metricName(registry.sinkRecordSendRate), new Rate());
             sinkRecordSend.add(metricGroup.metricName(registry.sinkRecordSendTotal), new Total());
 
-            sinkRecordActiveCount = metricGroup.metrics().sensor("sink-record-active-count");
+            sinkRecordActiveCount = metricGroup.sensor("sink-record-active-count");
             sinkRecordActiveCount.add(metricGroup.metricName(registry.sinkRecordActiveCount), new Value());
             sinkRecordActiveCount.add(metricGroup.metricName(registry.sinkRecordActiveCountMax), new Max());
             sinkRecordActiveCount.add(metricGroup.metricName(registry.sinkRecordActiveCountAvg), new Avg());
 
-            partitionCount = metricGroup.metrics().sensor("partition-count");
+            partitionCount = metricGroup.sensor("partition-count");
             partitionCount.add(metricGroup.metricName(registry.sinkRecordPartitionCount), new Value());
 
-            offsetSeqNum = metricGroup.metrics().sensor("offset-seq-number");
+            offsetSeqNum = metricGroup.sensor("offset-seq-number");
             offsetSeqNum.add(metricGroup.metricName(registry.sinkRecordOffsetCommitSeqNum), new Value());
 
-            offsetCompletion = metricGroup.metrics().sensor("offset-commit-completion");
+            offsetCompletion = metricGroup.sensor("offset-commit-completion");
             offsetCompletion.add(metricGroup.metricName(registry.sinkRecordOffsetCommitCompletionRate), new Rate());
             offsetCompletion.add(metricGroup.metricName(registry.sinkRecordOffsetCommitCompletionTotal), new Total());
 
-            offsetCompletionSkip = metricGroup.metrics().sensor("offset-commit-completion-skip");
+            offsetCompletionSkip = metricGroup.sensor("offset-commit-completion-skip");
             offsetCompletionSkip.add(metricGroup.metricName(registry.sinkRecordOffsetCommitSkipRate), new Rate());
             offsetCompletionSkip.add(metricGroup.metricName(registry.sinkRecordOffsetCommitSkipTotal), new Total());
 
-            putBatchTime = metricGroup.metrics().sensor("put-batch-time");
+            putBatchTime = metricGroup.sensor("put-batch-time");
             putBatchTime.add(metricGroup.metricName(registry.sinkRecordPutBatchTimeMax), new Max());
             putBatchTime.add(metricGroup.metricName(registry.sinkRecordPutBatchTimeAvg), new Avg());
         }

@@ -102,19 +102,30 @@ public interface ProcessorContext {
      * <ul>
      *   <li>{@link PunctuationType#STREAM_TIME} - uses "stream time", which is advanced by the processing of messages
      *   in accordance with the timestamp as extracted by the {@link TimestampExtractor} in use.
+     *   The first punctuation will be triggered by the first record that is processed.
      *   <b>NOTE:</b> Only advanced if messages arrive</li>
      *   <li>{@link PunctuationType#WALL_CLOCK_TIME} - uses system time (the wall-clock time),
      *   which is advanced at the polling interval ({@link org.apache.kafka.streams.StreamsConfig#POLL_MS_CONFIG})
-     *   independent of whether new messages arrive. <b>NOTE:</b> This is best effort only as its granularity is limited
-     *   by how long an iteration of the processing loop takes to complete</li>
+     *   independent of whether new messages arrive.
+     *   The first punctuation will be triggered after interval has elapsed.
+     *   <b>NOTE:</b> This is best effort only as its granularity is limited by how long an iteration of the
+     *   processing loop takes to complete</li>
      * </ul>
      *
-     * @param interval the time interval between punctuations
+     * <b>Skipping punctuations:</b> Punctuations will not be triggered more than once at any given timestamp.
+     * This means that "missed" punctuation will be skipped.
+     * It's possible to "miss" a punctuation if:
+     * <ul>
+     *   <li>with {@link PunctuationType#STREAM_TIME}, when stream time advances more than interval</li>
+     *   <li>with {@link PunctuationType#WALL_CLOCK_TIME}, on GC pause, too short interval, ...</li>
+     * </ul>
+     *
+     * @param intervalMs the time interval between punctuations in milliseconds
      * @param type one of: {@link PunctuationType#STREAM_TIME}, {@link PunctuationType#WALL_CLOCK_TIME}
      * @param callback a function consuming timestamps representing the current stream or system time
      * @return a handle allowing cancellation of the punctuation schedule established by this method
      */
-    Cancellable schedule(long interval, PunctuationType type, Punctuator callback);
+    Cancellable schedule(long intervalMs, PunctuationType type, Punctuator callback);
 
     /**
      * Schedules a periodic operation for processors. A processor may call this method during

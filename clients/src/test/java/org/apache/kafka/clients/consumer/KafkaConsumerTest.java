@@ -99,6 +99,7 @@ import java.util.regex.Pattern;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -1578,7 +1579,7 @@ public class KafkaConsumerTest {
             tpResponses.put(partition, new FetchResponse.PartitionData(Errors.NONE, 0, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L,
                     null, records));
         }
-        return new FetchResponse(tpResponses, 0);
+        return new FetchResponse(Errors.NONE, tpResponses, 0, INVALID_SESSION_ID);
     }
 
     private FetchResponse fetchResponse(TopicPartition partition, long fetchOffset, int count) {
@@ -1615,7 +1616,7 @@ public class KafkaConsumerTest {
 
         OffsetResetStrategy autoResetStrategy = OffsetResetStrategy.EARLIEST;
         List<PartitionAssignor> assignors = Arrays.asList(assignor);
-        ConsumerInterceptors<String, String> interceptors = null;
+        ConsumerInterceptors<String, String> interceptors = new ConsumerInterceptors<>(Collections.<ConsumerInterceptor<String, String>>emptyList());
 
         Metrics metrics = new Metrics();
         ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricGroupPrefix);

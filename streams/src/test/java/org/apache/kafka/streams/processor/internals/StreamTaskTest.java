@@ -318,73 +318,185 @@ public class StreamTaskTest {
     @Test
     public void testMaybePunctuateStreamTime() {
         task = createStatelessTask(false);
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
 
         task.addRecords(partition1, records(
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 30, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 40, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 32, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 40, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 60, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
         ));
 
         task.addRecords(partition2, records(
                 new ConsumerRecord<>(partition2.topic(), partition2.partition(), 25, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
                 new ConsumerRecord<>(partition2.topic(), partition2.partition(), 35, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
-                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 45, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 45, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 61, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
         ));
 
         assertTrue(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
+        assertEquals(8, task.numBuffered());
+        assertEquals(1, source1.numReceived);
+        assertEquals(0, source2.numReceived);
+
+        assertTrue(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(7, task.numBuffered());
+        assertEquals(2, source1.numReceived);
+        assertEquals(0, source2.numReceived);
+
+        assertFalse(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(6, task.numBuffered());
+        assertEquals(2, source1.numReceived);
+        assertEquals(1, source2.numReceived);
+
+        assertTrue(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
         assertEquals(5, task.numBuffered());
+        assertEquals(3, source1.numReceived);
+        assertEquals(1, source2.numReceived);
+
+        assertFalse(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(4, task.numBuffered());
+        assertEquals(3, source1.numReceived);
+        assertEquals(2, source2.numReceived);
+
+        assertTrue(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(3, task.numBuffered());
+        assertEquals(4, source1.numReceived);
+        assertEquals(2, source2.numReceived);
+
+        assertFalse(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(2, task.numBuffered());
+        assertEquals(4, source1.numReceived);
+        assertEquals(3, source2.numReceived);
+
+        assertTrue(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(1, task.numBuffered());
+        assertEquals(5, source1.numReceived);
+        assertEquals(3, source2.numReceived);
+
+        assertFalse(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(0, task.numBuffered());
+        assertEquals(5, source1.numReceived);
+        assertEquals(4, source2.numReceived);
+
+        assertFalse(task.process());
+        assertFalse(task.maybePunctuateStreamTime());
+
+        processorStreamTime.supplier.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 0L, 20L, 32L, 40L, 60L);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldPunctuateOnceStreamTimeAfterGap() {
+        task = createStatelessTask(false);
+        task.initializeStateStores();
+        task.initializeTopology();
+
+        task.addRecords(partition1, records(
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 142, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 155, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition1.topic(), partition1.partition(), 160, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+        ));
+
+        task.addRecords(partition2, records(
+                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 25, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 145, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 159, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
+                new ConsumerRecord<>(partition2.topic(), partition2.partition(), 161, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
+        ));
+
+        assertTrue(task.maybePunctuateStreamTime()); // punctuate at 20
+
+        assertTrue(task.process());
+        assertEquals(7, task.numBuffered());
         assertEquals(1, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
         assertFalse(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
-        assertEquals(4, task.numBuffered());
+        assertEquals(6, task.numBuffered());
         assertEquals(1, source1.numReceived);
         assertEquals(1, source2.numReceived);
 
-        assertTrue(task.maybePunctuateStreamTime());
+        assertTrue(task.maybePunctuateStreamTime()); // punctuate at 142
+
+        // only one punctuation after 100ms gap
+        assertFalse(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(5, task.numBuffered());
+        assertEquals(2, source1.numReceived);
+        assertEquals(1, source2.numReceived);
+
+        assertFalse(task.maybePunctuateStreamTime());
+
+        assertTrue(task.process());
+        assertEquals(4, task.numBuffered());
+        assertEquals(2, source1.numReceived);
+        assertEquals(2, source2.numReceived);
+
+        assertTrue(task.maybePunctuateStreamTime()); // punctuate at 155
 
         assertTrue(task.process());
         assertEquals(3, task.numBuffered());
-        assertEquals(2, source1.numReceived);
-        assertEquals(1, source2.numReceived);
+        assertEquals(3, source1.numReceived);
+        assertEquals(2, source2.numReceived);
 
         assertFalse(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
         assertEquals(2, task.numBuffered());
-        assertEquals(2, source1.numReceived);
-        assertEquals(2, source2.numReceived);
+        assertEquals(3, source1.numReceived);
+        assertEquals(3, source2.numReceived);
 
-        assertTrue(task.maybePunctuateStreamTime());
+        assertTrue(task.maybePunctuateStreamTime()); // punctuate at 160, still aligned on the initial punctuation
 
         assertTrue(task.process());
         assertEquals(1, task.numBuffered());
-        assertEquals(3, source1.numReceived);
-        assertEquals(2, source2.numReceived);
+        assertEquals(4, source1.numReceived);
+        assertEquals(3, source2.numReceived);
 
         assertFalse(task.maybePunctuateStreamTime());
 
         assertTrue(task.process());
         assertEquals(0, task.numBuffered());
-        assertEquals(3, source1.numReceived);
-        assertEquals(3, source2.numReceived);
+        assertEquals(4, source1.numReceived);
+        assertEquals(4, source2.numReceived);
 
         assertFalse(task.process());
         assertFalse(task.maybePunctuateStreamTime());
 
-        processorStreamTime.supplier.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 20L, 30L, 40L);
+        processorStreamTime.supplier.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 20L, 142L, 155L, 160L);
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void testCancelPunctuateStreamTime() {
         task = createStatelessTask(false);
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
 
         task.addRecords(partition1, records(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
@@ -416,32 +528,65 @@ public class StreamTaskTest {
     @Test
     public void shouldPunctuateSystemTimeWhenIntervalElapsed() {
         task = createStatelessTask(false);
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
         long now = time.milliseconds();
         time.sleep(10);
         assertTrue(task.maybePunctuateSystemTime());
         time.sleep(10);
         assertTrue(task.maybePunctuateSystemTime());
-        time.sleep(10);
+        time.sleep(9);
+        assertFalse(task.maybePunctuateSystemTime());
+        time.sleep(1);
         assertTrue(task.maybePunctuateSystemTime());
-        processorSystemTime.supplier.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 10, now + 20, now + 30);
+        time.sleep(20);
+        assertTrue(task.maybePunctuateSystemTime());
+        assertFalse(task.maybePunctuateSystemTime());
+        processorSystemTime.supplier.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 10, now + 20, now + 30, now + 50);
     }
 
     @Test
     public void shouldNotPunctuateSystemTimeWhenIntervalNotElapsed() {
         task = createStatelessTask(false);
-        task.initialize();
-        long now = time.milliseconds();
-        assertTrue(task.maybePunctuateSystemTime()); // first time we always punctuate
+        task.initializeStateStores();
+        task.initializeTopology();
+        assertFalse(task.maybePunctuateSystemTime());
         time.sleep(9);
         assertFalse(task.maybePunctuateSystemTime());
-        processorSystemTime.supplier.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now);
+        processorSystemTime.supplier.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME);
+    }
+
+    @Test
+    public void shouldPunctuateOnceSystemTimeAfterGap() {
+        task = createStatelessTask(false);
+        task.initializeStateStores();
+        task.initializeTopology();
+        long now = time.milliseconds();
+        time.sleep(100);
+        assertTrue(task.maybePunctuateSystemTime());
+        assertFalse(task.maybePunctuateSystemTime());
+        time.sleep(10);
+        assertTrue(task.maybePunctuateSystemTime());
+        time.sleep(12);
+        assertTrue(task.maybePunctuateSystemTime());
+        time.sleep(7);
+        assertFalse(task.maybePunctuateSystemTime());
+        time.sleep(1); // punctuate at now + 130
+        assertTrue(task.maybePunctuateSystemTime());
+        time.sleep(105); // punctuate at now + 235
+        assertTrue(task.maybePunctuateSystemTime());
+        assertFalse(task.maybePunctuateSystemTime());
+        time.sleep(5); // punctuate at now + 240, still aligned on the initial punctuation
+        assertTrue(task.maybePunctuateSystemTime());
+        assertFalse(task.maybePunctuateSystemTime());
+        processorSystemTime.supplier.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 100, now + 110, now + 122, now + 130, now + 235, now + 240);
     }
 
     @Test
     public void testCancelPunctuateSystemTime() {
         task = createStatelessTask(false);
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
         long now = time.milliseconds();
         time.sleep(10);
         assertTrue(task.maybePunctuateSystemTime());
@@ -454,7 +599,8 @@ public class StreamTaskTest {
     @Test
     public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContext() {
         task = createTaskThatThrowsException();
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
         task.addRecords(partition2, Collections.singletonList(
                 new ConsumerRecord<>(partition2.topic(), partition2.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
 
@@ -469,7 +615,8 @@ public class StreamTaskTest {
     @Test
     public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingStreamTime() {
         task = createStatelessTask(false);
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
 
         try {
             task.punctuate(processorStreamTime, 1, PunctuationType.STREAM_TIME, new Punctuator() {
@@ -489,7 +636,8 @@ public class StreamTaskTest {
     @Test
     public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingWallClockTimeTime() {
         task = createStatelessTask(false);
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
 
         try {
             task.punctuate(processorSystemTime, 1, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
@@ -531,7 +679,8 @@ public class StreamTaskTest {
     @Test
     public void shouldCheckpointOffsetsOnCommit() throws IOException {
         task = createStatefulTask(false, true);
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
         task.commit();
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId00),
                                                                           ProcessorStateManager.CHECKPOINT_FILE_NAME));
@@ -542,7 +691,8 @@ public class StreamTaskTest {
     @Test
     public void shouldNotCheckpointOffsetsOnCommitIfEosIsEnabled() {
         task = createStatefulTask(true, true);
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
         task.commit();
         final File checkpointFile = new File(stateDirectory.directoryForTask(taskId00),
                                              ProcessorStateManager.CHECKPOINT_FILE_NAME);
@@ -553,7 +703,8 @@ public class StreamTaskTest {
     @Test
     public void shouldThrowIllegalStateExceptionIfCurrentNodeIsNotNullWhenPunctuateCalled() {
         task = createStatelessTask(false);
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
         task.processorContext.setCurrentNode(processorStreamTime);
         try {
             task.punctuate(processorStreamTime, 10, PunctuationType.STREAM_TIME, punctuator);
@@ -566,7 +717,8 @@ public class StreamTaskTest {
     @Test
     public void shouldCallPunctuateOnPassedInProcessorNode() {
         task = createStatelessTask(false);
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
         task.punctuate(processorStreamTime, 5, PunctuationType.STREAM_TIME, punctuator);
         assertThat(punctuatedAt, equalTo(5L));
         task.punctuate(processorStreamTime, 10, PunctuationType.STREAM_TIME, punctuator);
@@ -576,7 +728,8 @@ public class StreamTaskTest {
     @Test
     public void shouldSetProcessorNodeOnContextBackToNullAfterSuccesfullPunctuate() {
         task = createStatelessTask(false);
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
         task.punctuate(processorStreamTime, 5, PunctuationType.STREAM_TIME, punctuator);
         assertThat(((ProcessorContextImpl) task.context()).currentNode(), nullValue());
     }
@@ -607,7 +760,8 @@ public class StreamTaskTest {
     @Test
     public void shouldThrowExceptionIfAnyExceptionsRaisedDuringCloseButStillCloseAllProcessorNodesTopology() {
         task = createTaskThatThrowsException();
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
         try {
             task.close(true, false);
             fail("should have thrown runtime exception");
@@ -760,7 +914,8 @@ public class StreamTaskTest {
     @Test
     public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringFlushing() {
         task = createTaskThatThrowsException();
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
 
         try {
             task.commit();
@@ -774,7 +929,8 @@ public class StreamTaskTest {
     public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringTaskSuspension() {
         final StreamTask task = createTaskThatThrowsException();
 
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
         try {
             task.suspend();
             fail("should have thrown an exception");
@@ -786,7 +942,8 @@ public class StreamTaskTest {
     @Test
     public void shouldCloseStateManagerIfFailureOnTaskClose() {
         task = createStatefulTaskThatThrowsExceptionOnClose(true, false);
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
 
         try {
             task.close(true, false);
@@ -813,14 +970,14 @@ public class StreamTaskTest {
     public void shouldBeInitializedIfChangelogPartitionsIsEmpty() {
         final StreamTask task = createStatefulTask(false, false);
 
-        assertTrue(task.initialize());
+        assertTrue(task.initializeStateStores());
     }
 
     @Test
     public void shouldNotBeInitializedIfChangelogPartitionsIsNonEmpty() {
         final StreamTask task = createStatefulTask(false, true);
 
-        assertFalse(task.initialize());
+        assertFalse(task.initializeStateStores());
     }
 
     @Test
@@ -840,7 +997,8 @@ public class StreamTaskTest {
 
         task = new StreamTask(taskId00, Utils.mkSet(partition1, repartition), topology, consumer, changelogReader, config,
                 streamsMetrics, stateDirectory, null, time, producer);
-        task.initialize();
+        task.initializeStateStores();
+        task.initializeTopology();
 
         task.addRecords(partition1, Collections.singletonList(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 5L, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));

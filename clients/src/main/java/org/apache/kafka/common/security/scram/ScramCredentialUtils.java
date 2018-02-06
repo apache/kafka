@@ -76,9 +76,9 @@ public final class ScramCredentialUtils {
         return props;
     }
 
-    public static void createCache(CredentialCache cache, Collection<String> enabledMechanisms) {
+    public static void createCache(CredentialCache cache, Collection<String> mechanisms) {
         for (String mechanism : ScramMechanism.mechanismNames()) {
-            if (enabledMechanisms.contains(mechanism))
+            if (mechanisms.contains(mechanism))
                 cache.createCache(mechanism, ScramCredential.class);
         }
     }

@@ -16,14 +16,16 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
-public abstract class AbstractKTableKTableJoinValueGetterSupplier<K, R, V1, V2> implements KTableValueGetterSupplier<K, R> {
-    final protected KTableValueGetterSupplier<K, V1> valueGetterSupplier1;
-    final protected KTableValueGetterSupplier<K, V2> valueGetterSupplier2;
+public abstract class KTableKTableAbstractJoinValueGetterSupplier<K, R, V1, V2> implements KTableValueGetterSupplier<K, R> {
+    final KTableValueGetterSupplier<K, V1> valueGetterSupplier1;
+    final KTableValueGetterSupplier<K, V2> valueGetterSupplier2;
 
-    public AbstractKTableKTableJoinValueGetterSupplier(final KTableValueGetterSupplier<K, V1> valueGetterSupplier1,
-                                                       final KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
+    KTableKTableAbstractJoinValueGetterSupplier(final KTableValueGetterSupplier<K, V1> valueGetterSupplier1,
+                                                final KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
         this.valueGetterSupplier1 = valueGetterSupplier1;
         this.valueGetterSupplier2 = valueGetterSupplier2;
     }
@@ -32,13 +34,9 @@ public abstract class AbstractKTableKTableJoinValueGetterSupplier<K, R, V1, V2> 
     public String[] storeNames() {
         final String[] storeNames1 = valueGetterSupplier1.storeNames();
         final String[] storeNames2 = valueGetterSupplier2.storeNames();
-        final ArrayList<String> stores = new ArrayList<>(storeNames1.length + storeNames2.length);
-        for (final String storeName : storeNames1) {
-            stores.add(storeName);
-        }
-        for (final String storeName : storeNames2) {
-            stores.add(storeName);
-        }
+        final Set<String> stores = new HashSet<>(storeNames1.length + storeNames2.length);
+        Collections.addAll(stores, storeNames1);
+        Collections.addAll(stores, storeNames2);
         return stores.toArray(new String[stores.size()]);
     }
 

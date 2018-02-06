@@ -59,12 +59,7 @@ trait SaslSetup {
       case _ => false
     })
     if (hasKerberos) {
-      val (serverKeytabFile, clientKeytabFile) = maybeCreateEmptyKeytabFiles()
-      kdc = new MiniKdc(kdcConf, workDir)
-      kdc.start()
-      kdc.createPrincipal(serverKeytabFile, JaasTestUtils.KafkaServerPrincipalUnqualifiedName + "/localhost")
-      kdc.createPrincipal(clientKeytabFile,
-        JaasTestUtils.KafkaClientPrincipalUnqualifiedName, JaasTestUtils.KafkaClientPrincipalUnqualifiedName2)
+      initializeKerberos()
     }
     writeJaasConfigurationToFile(jaasSections)
     val hasZk = jaasSections.exists(_.modules.exists {
@@ -73,6 +68,15 @@ trait SaslSetup {
     })
     if (hasZk)
       System.setProperty("zookeeper.authProvider.1", "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
+  }
+
+  protected def initializeKerberos(): Unit = {
+    val (serverKeytabFile, clientKeytabFile) = maybeCreateEmptyKeytabFiles()
+    kdc = new MiniKdc(kdcConf, workDir)
+    kdc.start()
+    kdc.createPrincipal(serverKeytabFile, JaasTestUtils.KafkaServerPrincipalUnqualifiedName + "/localhost")
+    kdc.createPrincipal(clientKeytabFile,
+      JaasTestUtils.KafkaClientPrincipalUnqualifiedName, JaasTestUtils.KafkaClientPrincipalUnqualifiedName2)
   }
 
   /** Return a tuple with the path to the server keytab file and client keytab file */

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -92,6 +93,7 @@ import static org.apache.kafka.common.serialization.ExtendedDeserializer.Wrapper
  */
 public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private final Logger log;
+    private final LogContext logContext;
     private final ConsumerNetworkClient client;
     private final Time time;
     private final int minBytes;
@@ -110,6 +112,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private final ExtendedDeserializer<K> keyDeserializer;
     private final ExtendedDeserializer<V> valueDeserializer;
     private final IsolationLevel isolationLevel;
+    private final Map<Integer, FetchSessionHandler> sessionHandlers;
 
     private PartitionRecords nextInLineRecords = null;
 
@@ -131,6 +134,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                    long retryBackoffMs,
                    IsolationLevel isolationLevel) {
         this.log = logContext.logger(Fetcher.class);
+        this.logContext = logContext;
         this.time = time;
         this.client = client;
         this.metadata = metadata;
@@ -147,6 +151,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         this.sensors = new FetchManagerMetrics(metrics, metricsRegistry);
         this.retryBackoffMs = retryBackoffMs;
         this.isolationLevel = isolationLevel;
+        this.sessionHandlers = new HashMap<>();
 
         subscriptions.addListener(this);
     }
@@ -181,36 +186,37 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         return !completedFetches.isEmpty();
     }
 
-    private boolean matchesRequestedPartitions(FetchRequest.Builder request, FetchResponse response) {
-        Set<TopicPartition> requestedPartitions = request.fetchData().keySet();
-        Set<TopicPartition> fetchedPartitions = response.responseData().keySet();
-        return fetchedPartitions.equals(requestedPartitions);
-    }
-
     /**
      * Set-up a fetch request for any node that we have assigned partitions for which doesn't already have
      * an in-flight fetch or pending fetch data.
      * @return number of fetches sent
      */
     public int sendFetches() {
-        Map<Node, FetchRequest.Builder> fetchRequestMap = createFetchRequests();
-        for (Map.Entry<Node, FetchRequest.Builder> fetchEntry : fetchRequestMap.entrySet()) {
-            final FetchRequest.Builder request = fetchEntry.getValue();
-            final Node fetchTarget = fetchEntry.getKey();
-
-            log.debug("Sending {} fetch for partitions {} to broker {}", isolationLevel, request.fetchData().keySet(),
-                    fetchTarget);
+        Map<Node, FetchSessionHandler.FetchRequestData> fetchRequestMap = prepareFetchRequests();
+        for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
+            final Node fetchTarget = entry.getKey();
+            final FetchSessionHandler.FetchRequestData data = entry.getValue();
+            final FetchRequest.Builder request = FetchRequest.Builder.
+                forConsumer(this.maxWaitMs, this.minBytes, data.toSend())
+                .isolationLevel(isolationLevel)
+                .setMaxBytes(this.maxBytes)
+                .metadata(data.metadata())
+                .toForget(data.toForget());
+            if (log.isDebugEnabled()) {
+                log.debug("Sending {} {} to broker {}", isolationLevel, data.toString(), fetchTarget);
+            }
             client.send(fetchTarget, request)
                     .addListener(new RequestFutureListener<ClientResponse>() {
                         @Override
                         public void onSuccess(ClientResponse resp) {
                             FetchResponse response = (FetchResponse) resp.responseBody();
-                            if (!matchesRequestedPartitions(request, response)) {
-                                // obviously we expect the broker to always send us valid responses, so this check
-                                // is mainly for test cases where mock fetch responses must be manually crafted.
-                                log.warn("Ignoring fetch response containing partitions {} since it does not match " +
-                                        "the requested partitions {}", response.responseData().keySet(),
-                                        request.fetchData().keySet());
+                            FetchSessionHandler handler = sessionHandlers.get(fetchTarget.id());
+                            if (handler == null) {
+                                log.error("Unable to find FetchSessionHandler for node {}. Ignoring fetch response.",
+                                    fetchTarget.id());
+                                return;
+                            }
+                            if (!handler.handleResponse(response)) {
                                 return;
                             }
 
@@ -219,7 +225,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                             for (Map.Entry<TopicPartition, FetchResponse.PartitionData> entry : response.responseData().entrySet()) {
                                 TopicPartition partition = entry.getKey();
-                                long fetchOffset = request.fetchData().get(partition).fetchOffset;
+                                long fetchOffset = data.sessionPartitions().get(partition).fetchOffset;
                                 FetchResponse.PartitionData fetchData = entry.getValue();
 
                                 log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
@@ -233,7 +239,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                         @Override
                         public void onFailure(RuntimeException e) {
-                            log.debug("Fetch request {} to {} failed", request.fetchData(), fetchTarget, e);
+                            FetchSessionHandler handler = sessionHandlers.get(fetchTarget.id());
+                            if (handler != null) {
+                                handler.handleError(e);
+                            }
                         }
                     });
         }
@@ -604,11 +613,14 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             final Map<TopicPartition, Long> timestampsToSearch) {
         // Group the partitions by node.
         final Map<Node, Map<TopicPartition, Long>> timestampsToSearchByNode = new HashMap<>();
+        // Add the topics to the metadata to do a single metadata fetch.
+        for (TopicPartition tp : timestampsToSearch.keySet())
+            metadata.add(tp.topic());
+
         for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
             PartitionInfo info = metadata.fetch().partition(tp);
             if (info == null) {
-                metadata.add(tp.topic());
                 log.debug("Partition {} is unknown for fetching offset, wait for metadata refresh", tp);
                 return RequestFuture.staleMetadata();
             } else if (info.leader() == null) {
@@ -769,42 +781,41 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * Create fetch requests for all nodes for which we have assigned partitions
      * that have no existing requests in flight.
      */
-    private Map<Node, FetchRequest.Builder> createFetchRequests() {
+    private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
         // create the fetch info
         Cluster cluster = metadata.fetch();
-        Map<Node, LinkedHashMap<TopicPartition, FetchRequest.PartitionData>> fetchable = new LinkedHashMap<>();
+        Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
         for (TopicPartition partition : fetchablePartitions()) {
             Node node = cluster.leaderFor(partition);
             if (node == null) {
                 metadata.requestUpdate();
             } else if (!this.client.hasPendingRequests(node)) {
                 // if there is a leader and no in-flight requests, issue a new fetch
-                LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetch = fetchable.get(node);
-                if (fetch == null) {
-                    fetch = new LinkedHashMap<>();
-                    fetchable.put(node, fetch);
+                FetchSessionHandler.Builder builder = fetchable.get(node);
+                if (builder == null) {
+                    FetchSessionHandler handler = sessionHandlers.get(node.id());
+                    if (handler == null) {
+                        handler = new FetchSessionHandler(logContext, node.id());
+                        sessionHandlers.put(node.id(), handler);
+                    }
+                    builder = handler.newBuilder();
+                    fetchable.put(node, builder);
                 }
 
                 long position = this.subscriptions.position(partition);
-                fetch.put(partition, new FetchRequest.PartitionData(position, FetchRequest.INVALID_LOG_START_OFFSET,
-                        this.fetchSize));
+                builder.add(partition, new FetchRequest.PartitionData(position, FetchRequest.INVALID_LOG_START_OFFSET,
+                    this.fetchSize));
                 log.debug("Added {} fetch request for partition {} at offset {} to node {}", isolationLevel,
-                        partition, position, node);
+                    partition, position, node);
             } else {
                 log.trace("Skipping fetch for partition {} because there is an in-flight request to {}", partition, node);
             }
         }
-
-        // create the fetches
-        Map<Node, FetchRequest.Builder> requests = new HashMap<>();
-        for (Map.Entry<Node, LinkedHashMap<TopicPartition, FetchRequest.PartitionData>> entry : fetchable.entrySet()) {
-            Node node = entry.getKey();
-            FetchRequest.Builder fetch = FetchRequest.Builder.forConsumer(this.maxWaitMs, this.minBytes,
-                    entry.getValue(), isolationLevel)
-                    .setMaxBytes(this.maxBytes);
-            requests.put(node, fetch);
+        Map<Node, FetchSessionHandler.FetchRequestData> reqs = new LinkedHashMap<>();
+        for (Map.Entry<Node, FetchSessionHandler.Builder> entry : fetchable.entrySet()) {
+            reqs.put(entry.getKey(), entry.getValue().build());
         }
-        return requests;
+        return reqs;
     }
 
     /**

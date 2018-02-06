@@ -26,9 +26,10 @@ import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class SaslChannelBuilderTest {
@@ -37,20 +38,20 @@ public class SaslChannelBuilderTest {
     public void testCloseBeforeConfigureIsIdempotent() {
         SaslChannelBuilder builder = createChannelBuilder(SecurityProtocol.SASL_PLAINTEXT);
         builder.close();
-        assertNull(builder.loginManager());
+        assertTrue(builder.loginManagers().isEmpty());
         builder.close();
-        assertNull(builder.loginManager());
+        assertTrue(builder.loginManagers().isEmpty());
     }
 
     @Test
     public void testCloseAfterConfigIsIdempotent() {
         SaslChannelBuilder builder = createChannelBuilder(SecurityProtocol.SASL_PLAINTEXT);
         builder.configure(new HashMap<String, Object>());
-        assertNotNull(builder.loginManager());
+        assertNotNull(builder.loginManagers().get("PLAIN"));
         builder.close();
-        assertNull(builder.loginManager());
+        assertTrue(builder.loginManagers().isEmpty());
         builder.close();
-        assertNull(builder.loginManager());
+        assertTrue(builder.loginManagers().isEmpty());
     }
 
     @Test
@@ -61,18 +62,19 @@ public class SaslChannelBuilderTest {
             builder.configure(Collections.singletonMap(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, "1"));
             fail("Exception should have been thrown");
         } catch (KafkaException e) {
-            assertNull(builder.loginManager());
+            assertTrue(builder.loginManagers().isEmpty());
         }
         builder.close();
-        assertNull(builder.loginManager());
+        assertTrue(builder.loginManagers().isEmpty());
     }
 
     private SaslChannelBuilder createChannelBuilder(SecurityProtocol securityProtocol) {
         TestJaasConfig jaasConfig = new TestJaasConfig();
         jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<String, Object>());
         JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig);
-        return new SaslChannelBuilder(Mode.CLIENT, jaasContext, securityProtocol, new ListenerName("PLAIN"),
-                "PLAIN", true, null, null);
+        Map<String, JaasContext> jaasContexts = Collections.singletonMap("PLAIN", jaasContext);
+        return new SaslChannelBuilder(Mode.CLIENT, jaasContexts, securityProtocol, new ListenerName("PLAIN"),
+                false, "PLAIN", true, null, null);
     }
 
 }

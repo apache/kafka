@@ -232,12 +232,22 @@ public class Metrics implements Closeable {
         return tags;
     }
 
-    public static String toHtmlTable(String domain, List<MetricNameTemplate> allMetrics) {
+    /**
+     * Use the specified domain and metric name templates to generate an HTML table documenting the metrics. A separate table section
+     * will be generated for each of the MBeans and the associated attributes. The MBean names are lexicographically sorted to
+     * determine the order of these sections. This order is therefore dependent upon the order of the
+     * tags in each {@link MetricNameTemplate}.
+     *
+     * @param domain the domain or prefix for the JMX MBean names; may not be null
+     * @param allMetrics the collection of all {@link MetricNameTemplate} instances each describing one metric; may not be null
+     * @return the string containing the HTML table; never null
+     */
+    public static String toHtmlTable(String domain, Iterable<MetricNameTemplate> allMetrics) {
         Map<String, Map<String, String>> beansAndAttributes = new TreeMap<String, Map<String, String>>();
     
         try (Metrics metrics = new Metrics()) {
             for (MetricNameTemplate template : allMetrics) {
-                Map<String, String> tags = new TreeMap<String, String>();
+                Map<String, String> tags = new LinkedHashMap<>();
                 for (String s : template.tags()) {
                     tags.put(s, "{" + s + "}");
                 }
@@ -526,6 +536,15 @@ public class Metrics implements Closeable {
         this.reporters.add(reporter);
     }
 
+    /**
+     * Remove a MetricReporter
+     */
+    public synchronized void removeReporter(MetricsReporter reporter) {
+        if (this.reporters.remove(reporter)) {
+            reporter.close();
+        }
+    }
+
     synchronized void registerMetric(KafkaMetric metric) {
         MetricName metricName = metric.metricName();
         if (this.metrics.containsKey(metricName))
@@ -591,7 +610,7 @@ public class Metrics implements Closeable {
         Set<String> templateTagKeys = template.tags();
         
         if (!runtimeTagKeys.equals(templateTagKeys)) {
-            throw new IllegalArgumentException("For '" + template.name() + "', runtime-defined metric tags do not match the tags in the template. " + ""
+            throw new IllegalArgumentException("For '" + template.name() + "', runtime-defined metric tags do not match the tags in the template. "
                     + "Runtime = " + runtimeTagKeys.toString() + " Template = " + templateTagKeys.toString());
         }
                 

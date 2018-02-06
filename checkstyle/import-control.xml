@@ -50,6 +50,7 @@
     <disallow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.common" exact-match="true" />
     <allow pkg="org.apache.kafka.common.annotation" />
+    <allow pkg="org.apache.kafka.common.config" exact-match="true" />
     <allow pkg="org.apache.kafka.common.internals" exact-match="true" />
     <allow pkg="org.apache.kafka.test" />
 
@@ -279,6 +280,7 @@
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.connect.data" />
     <allow pkg="org.apache.kafka.connect.errors" />
+    <allow pkg="org.apache.kafka.connect.header" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.test"/>
 

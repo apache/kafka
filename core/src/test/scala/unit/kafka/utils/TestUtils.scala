@@ -49,7 +49,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
@@ -613,16 +613,18 @@ object TestUtils extends Logging {
   /**
    * Create a new consumer with a few pre-configured properties.
    */
-  def createNewConsumer(brokerList: String,
-                        groupId: String = "group",
-                        autoOffsetReset: String = "earliest",
-                        partitionFetchSize: Long = 4096L,
-                        partitionAssignmentStrategy: String = classOf[RangeAssignor].getName,
-                        sessionTimeout: Int = 30000,
-                        securityProtocol: SecurityProtocol,
-                        trustStoreFile: Option[File] = None,
-                        saslProperties: Option[Properties] = None,
-                        props: Option[Properties] = None) : KafkaConsumer[Array[Byte],Array[Byte]] = {
+  def createNewConsumer[K, V](brokerList: String,
+                              groupId: String = "group",
+                              autoOffsetReset: String = "earliest",
+                              partitionFetchSize: Long = 4096L,
+                              partitionAssignmentStrategy: String = classOf[RangeAssignor].getName,
+                              sessionTimeout: Int = 30000,
+                              securityProtocol: SecurityProtocol,
+                              trustStoreFile: Option[File] = None,
+                              saslProperties: Option[Properties] = None,
+                              keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
+                              valueDeserializer: Deserializer[V] =new ByteArrayDeserializer,
+                              props: Option[Properties] = None) : KafkaConsumer[K, V] = {
     import org.apache.kafka.clients.consumer.ConsumerConfig
 
     val consumerProps = props.getOrElse(new Properties())
@@ -633,8 +635,6 @@ object TestUtils extends Logging {
     val defaultProps = Map(
       ConsumerConfig.RETRY_BACKOFF_MS_CONFIG -> "100",
       ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG -> "200",
-      ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArrayDeserializer",
-      ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArrayDeserializer",
       ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG -> partitionAssignmentStrategy,
       ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG -> sessionTimeout.toString,
       ConsumerConfig.GROUP_ID_CONFIG -> groupId)
@@ -652,7 +652,7 @@ object TestUtils extends Logging {
     if(!consumerProps.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG))
       consumerProps ++= consumerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
 
-    new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
+    new KafkaConsumer[K, V](consumerProps, keyDeserializer, valueDeserializer)
   }
 
   /**
@@ -718,7 +718,7 @@ object TestUtils extends Logging {
 
   def deleteBrokersInZk(zkClient: KafkaZkClient, ids: Seq[Int]): Seq[Broker] = {
     val brokers = ids.map(createBroker(_, "localhost", 6667, SecurityProtocol.PLAINTEXT))
-    brokers.foreach(b => zkClient.deletePath(BrokerIdsZNode.path + "/" + b))
+    ids.foreach(b => zkClient.deletePath(BrokerIdsZNode.path + "/" + b))
     brokers
   }
 
@@ -1022,9 +1022,9 @@ object TestUtils extends Logging {
     new LogManager(logDirs = logDirs,
                    initialOfflineDirs = Array.empty[File],
                    topicConfigs = Map(),
-                   defaultConfig = defaultConfig,
+                   initialDefaultConfig = defaultConfig,
                    cleanerConfig = cleanerConfig,
-                   ioThreads = 4,
+                   recoveryThreadsPerDataDir = 4,
                    flushCheckMs = 1000L,
                    flushRecoveryOffsetCheckpointMs = 10000L,
                    flushStartOffsetCheckpointMs = 10000L,

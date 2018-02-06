@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -56,9 +57,9 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
 
 /**
  * Configuration for a {@link KafkaStreams} instance.
- * Can also be used to configure the Kafka Streams internal {@link KafkaConsumer} and {@link KafkaProducer}.
- * To avoid consumer/producer property conflicts, you should prefix those properties using
- * {@link #consumerPrefix(String)} and {@link #producerPrefix(String)}, respectively.
+ * Can also be used to configure the Kafka Streams internal {@link KafkaConsumer}, {@link KafkaProducer} and {@link AdminClient}.
+ * To avoid consumer/producer/admin property conflicts, you should prefix those properties using
+ * {@link #consumerPrefix(String)}, {@link #producerPrefix(String)} and {@link #adminClientPrefix(String)}, respectively.
  * <p>
  * Example:
  * <pre>{@code
@@ -78,8 +79,26 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
  * StreamsConfig streamsConfig = new StreamsConfig(streamsProperties);
  * }</pre>
  *
+ * This instance can also be used to pass in custom configurations to different modules (e.g. passing a special config in your customized serde class).
+ * The consumer/producer/admin prefix can also be used to distinguish these custom config values passed to different clients with the same config name.
+ * * Example:
+ * <pre>{@code
+ * Properties streamsProperties = new Properties();
+ * // sets "my.custom.config" to "foo" for consumer only
+ * streamsProperties.put(StreamsConfig.consumerPrefix("my.custom.config"), "foo");
+ * // sets "my.custom.config" to "bar" for producer only
+ * streamsProperties.put(StreamsConfig.producerPrefix("my.custom.config"), "bar");
+ * // sets "my.custom.config2" to "boom" for all clients universally
+ * streamsProperties.put("my.custom.config2", "boom");
+ *
+ * // as a result, inside producer's serde class configure(..) function,
+ * // users can now read both key-value pairs "my.custom.config" -> "foo"
+ * // and "my.custom.config2" -> "boom" from the config map
+ * StreamsConfig streamsConfig = new StreamsConfig(streamsProperties);
+ * }</pre>
+ *
  * When increasing both {@link ProducerConfig#RETRIES_CONFIG} and {@link ProducerConfig#MAX_BLOCK_MS_CONFIG} to be more resilient to non-available brokers you should also
- * consider increasing {@link ConsumerConfig#MAX_POLL_INTERVAL_MS_CONFIG}  using the following guidance:
+ * consider increasing {@link ConsumerConfig#MAX_POLL_INTERVAL_MS_CONFIG} using the following guidance:
  * <pre>
  *     max.poll.interval.ms > min ( max.block.ms, (retries +1) * request.timeout.ms )
  * </pre>
@@ -693,6 +712,7 @@ public class StreamsConfig extends AbstractConfig {
         checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
 
         final Map<String, Object> consumerProps = new HashMap<>(eosEnabled ? CONSUMER_EOS_OVERRIDES : CONSUMER_DEFAULT_OVERRIDES);
+        consumerProps.putAll(getClientCustomProps());
         consumerProps.putAll(clientProvidedProps);
 
         // bootstrap.servers should be from StreamsConfig
@@ -832,6 +852,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // generate producer configs from original properties and overridden maps
         final Map<String, Object> props = new HashMap<>(eosEnabled ? PRODUCER_EOS_OVERRIDES : PRODUCER_DEFAULT_OVERRIDES);
+        props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
 
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
@@ -847,7 +868,11 @@ public class StreamsConfig extends AbstractConfig {
      * @return Map of the admin client configuration.
      */
     public Map<String, Object> getAdminConfigs(final String clientId) {
-        final Map<String, Object> props = getClientPropsWithPrefix(ADMIN_CLIENT_PREFIX, AdminClientConfig.configNames());
+        final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(ADMIN_CLIENT_PREFIX, AdminClientConfig.configNames());
+
+        final Map<String, Object> props = new HashMap<>();
+        props.putAll(getClientCustomProps());
+        props.putAll(clientProvidedProps);
 
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-admin");
@@ -859,6 +884,26 @@ public class StreamsConfig extends AbstractConfig {
                                                          final Set<String> configNames) {
         final Map<String, Object> props = clientProps(configNames, originals());
         props.putAll(originalsWithPrefix(prefix));
+        return props;
+    }
+
+    /**
+     * Get a map of custom configs by removing from the originals all the Streams, Consumer, Producer, and AdminClient configs.
+     * Prefixed properties are also removed because they are already added by {@link #getClientPropsWithPrefix(String, Set)}.
+     * This allows to set a custom property for a specific client alone if specified using a prefix, or for all
+     * when no prefix is used.
+     *
+     * @return a map with the custom properties
+     */
+    private Map<String, Object> getClientCustomProps() {
+        final Map<String, Object> props = originals();
+        props.keySet().removeAll(CONFIG.names());
+        props.keySet().removeAll(ConsumerConfig.configNames());
+        props.keySet().removeAll(ProducerConfig.configNames());
+        props.keySet().removeAll(AdminClientConfig.configNames());
+        props.keySet().removeAll(originalsWithPrefix(CONSUMER_PREFIX, false).keySet());
+        props.keySet().removeAll(originalsWithPrefix(PRODUCER_PREFIX, false).keySet());
+        props.keySet().removeAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX, false).keySet());
         return props;
     }
 

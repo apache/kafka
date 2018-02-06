@@ -18,6 +18,7 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -39,40 +40,49 @@ import java.lang.reflect.Method;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.security.auth.Subject;
 
-public class SaslChannelBuilder implements ChannelBuilder {
+public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurable {
     private static final Logger log = LoggerFactory.getLogger(SaslChannelBuilder.class);
 
     private final SecurityProtocol securityProtocol;
     private final ListenerName listenerName;
+    private final boolean isInterBrokerListener;
     private final String clientSaslMechanism;
     private final Mode mode;
-    private final JaasContext jaasContext;
+    private final Map<String, JaasContext> jaasContexts;
     private final boolean handshakeRequestEnable;
     private final CredentialCache credentialCache;
     private final DelegationTokenCache tokenCache;
+    private final Map<String, LoginManager> loginManagers;
+    private final Map<String, Subject> subjects;
 
-    private LoginManager loginManager;
     private SslFactory sslFactory;
     private Map<String, ?> configs;
     private KerberosShortNamer kerberosShortNamer;
 
     public SaslChannelBuilder(Mode mode,
-                              JaasContext jaasContext,
+                              Map<String, JaasContext> jaasContexts,
                               SecurityProtocol securityProtocol,
                               ListenerName listenerName,
+                              boolean isInterBrokerListener,
                               String clientSaslMechanism,
                               boolean handshakeRequestEnable,
                               CredentialCache credentialCache,
                               DelegationTokenCache tokenCache) {
         this.mode = mode;
-        this.jaasContext = jaasContext;
+        this.jaasContexts = jaasContexts;
+        this.loginManagers = new HashMap<>(jaasContexts.size());
+        this.subjects = new HashMap<>(jaasContexts.size());
         this.securityProtocol = securityProtocol;
         this.listenerName = listenerName;
+        this.isInterBrokerListener = isInterBrokerListener;
         this.handshakeRequestEnable = handshakeRequestEnable;
         this.clientSaslMechanism = clientSaslMechanism;
         this.credentialCache = credentialCache;
@@ -83,14 +93,7 @@ public class SaslChannelBuilder implements ChannelBuilder {
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
             this.configs = configs;
-            boolean hasKerberos;
-            if (mode == Mode.SERVER) {
-                @SuppressWarnings("unchecked")
-                List<String> enabledMechanisms = (List<String>) this.configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
-                hasKerberos = enabledMechanisms == null || enabledMechanisms.contains(SaslConfigs.GSSAPI_MECHANISM);
-            } else {
-                hasKerberos = clientSaslMechanism.equals(SaslConfigs.GSSAPI_MECHANISM);
-            }
+            boolean hasKerberos = jaasContexts.containsKey(SaslConfigs.GSSAPI_MECHANISM);
 
             if (hasKerberos) {
                 String defaultRealm;
@@ -104,11 +107,17 @@ public class SaslChannelBuilder implements ChannelBuilder {
                 if (principalToLocalRules != null)
                     kerberosShortNamer = KerberosShortNamer.fromUnparsedRules(defaultRealm, principalToLocalRules);
             }
-            this.loginManager = LoginManager.acquireLoginManager(jaasContext, hasKerberos, configs);
-
+            for (Map.Entry<String, JaasContext> entry : jaasContexts.entrySet()) {
+                String mechanism = entry.getKey();
+                // With static JAAS configuration, use KerberosLogin if Kerberos is enabled. With dynamic JAAS configuration,
+                // use KerberosLogin only for the LoginContext corresponding to GSSAPI
+                LoginManager loginManager = LoginManager.acquireLoginManager(entry.getValue(), mechanism, hasKerberos, configs);
+                loginManagers.put(mechanism, loginManager);
+                subjects.put(mechanism, loginManager.subject());
+            }
             if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
                 // Disable SSL client authentication as we are using SASL authentication
-                this.sslFactory = new SslFactory(mode, "none");
+                this.sslFactory = new SslFactory(mode, "none", isInterBrokerListener);
                 this.sslFactory.configure(configs);
             }
         } catch (Exception e) {
@@ -118,17 +127,41 @@ public class SaslChannelBuilder implements ChannelBuilder {
     }
 
     @Override
+    public Set<String> reconfigurableConfigs() {
+        return securityProtocol == SecurityProtocol.SASL_SSL ? SslConfigs.RECONFIGURABLE_CONFIGS : Collections.<String>emptySet();
+    }
+
+    @Override
+    public void validateReconfiguration(Map<String, ?> configs) {
+        if (this.securityProtocol == SecurityProtocol.SASL_SSL)
+            sslFactory.validateReconfiguration(configs);
+    }
+
+    @Override
+    public void reconfigure(Map<String, ?> configs) {
+        if (this.securityProtocol == SecurityProtocol.SASL_SSL)
+            sslFactory.reconfigure(configs);
+    }
+
+    @Override
+    public ListenerName listenerName() {
+        return listenerName;
+    }
+
+    @Override
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException {
         try {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             Socket socket = socketChannel.socket();
             TransportLayer transportLayer = buildTransportLayer(id, key, socketChannel);
             Authenticator authenticator;
-            if (mode == Mode.SERVER)
-                authenticator = buildServerAuthenticator(configs, id, transportLayer, loginManager.subject());
-            else
+            if (mode == Mode.SERVER) {
+                authenticator = buildServerAuthenticator(configs, id, transportLayer, subjects);
+            } else {
+                LoginManager loginManager = loginManagers.get(clientSaslMechanism);
                 authenticator = buildClientAuthenticator(configs, id, socket.getInetAddress().getHostName(),
                         loginManager.serviceName(), transportLayer, loginManager.subject());
+            }
             return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize, memoryPool != null ? memoryPool : MemoryPool.NONE);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);
@@ -138,10 +171,9 @@ public class SaslChannelBuilder implements ChannelBuilder {
 
     @Override
     public void close()  {
-        if (loginManager != null) {
+        for (LoginManager loginManager : loginManagers.values())
             loginManager.release();
-            loginManager = null;
-        }
+        loginManagers.clear();
     }
 
     private TransportLayer buildTransportLayer(String id, SelectionKey key, SocketChannel socketChannel) throws IOException {
@@ -155,8 +187,8 @@ public class SaslChannelBuilder implements ChannelBuilder {
 
     // Visible to override for testing
     protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs, String id,
-            TransportLayer transportLayer, Subject subject) throws IOException {
-        return new SaslServerAuthenticator(configs, id, jaasContext, subject,
+            TransportLayer transportLayer, Map<String, Subject> subjects) throws IOException {
+        return new SaslServerAuthenticator(configs, id, jaasContexts, subjects,
                 kerberosShortNamer, credentialCache, listenerName, securityProtocol, transportLayer, tokenCache);
     }
 
@@ -168,8 +200,8 @@ public class SaslChannelBuilder implements ChannelBuilder {
     }
 
     // Package private for testing
-    LoginManager loginManager() {
-        return loginManager;
+    Map<String, LoginManager> loginManagers() {
+        return loginManagers;
     }
 
     private static String defaultKerberosRealm() throws ClassNotFoundException, NoSuchMethodException,

@@ -739,6 +739,23 @@ public class JsonConverterTest {
     }
 
 
+    // Note: the header conversion methods delegates to the data conversion methods, which are tested above.
+    // The following simply verify that the delegation works.
+
+    @Test
+    public void testStringHeaderToJson() throws UnsupportedEncodingException {
+        JsonNode converted = parse(converter.fromConnectHeader(TOPIC, "headerName", Schema.STRING_SCHEMA, "test-string"));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"string\", \"optional\": false }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals("test-string", converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).textValue());
+    }
+
+    @Test
+    public void stringHeaderToConnect() {
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toConnectHeader(TOPIC, "headerName", "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes()));
+    }
+
+
     private JsonNode parse(byte[] json) {
         try {
             return objectMapper.readTree(json);

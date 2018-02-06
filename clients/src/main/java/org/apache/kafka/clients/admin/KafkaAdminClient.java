@@ -1091,19 +1091,33 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
+    /**
+     * Returns true if a topic name cannot be represented in an RPC.  This function does NOT check
+     * whether the name is too long, contains invalid characters, etc.  It is better to enforce
+     * those policies on the server, so that they can be changed in the future if needed.
+     */
+    private static boolean topicNameIsUnrepresentable(String topicName) {
+        return (topicName == null) || topicName.isEmpty();
+    }
+
     @Override
     public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(newTopics.size());
         final Map<String, CreateTopicsRequest.TopicDetails> topicsMap = new HashMap<>(newTopics.size());
         for (NewTopic newTopic : newTopics) {
-            if (topicFutures.get(newTopic.name()) == null) {
+            if (topicNameIsUnrepresentable(newTopic.name())) {
+                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new InvalidTopicException("The given topic name '" +
+                    newTopic.name() + "' cannot be represented in a request."));
+                topicFutures.put(newTopic.name(), future);
+            } else if (!topicFutures.containsKey(newTopic.name())) {
                 topicFutures.put(newTopic.name(), new KafkaFutureImpl<Void>());
                 topicsMap.put(newTopic.name(), newTopic.convertToTopicDetails());
             }
         }
         final long now = time.milliseconds();
-        runnable.call(new Call("createTopics", calcDeadlineMs(now, options.timeoutMs()),
+        Call call = new Call("createTopics", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
             @Override
@@ -1142,7 +1156,10 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
-        }, now);
+        };
+        if (!topicsMap.isEmpty()) {
+            runnable.call(call, now);
+        }
         return new CreateTopicsResult(new HashMap<String, KafkaFuture<Void>>(topicFutures));
     }
 
@@ -1151,12 +1168,17 @@ public class KafkaAdminClient extends AdminClient {
                                            DeleteTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
         for (String topicName : topicNames) {
-            if (topicFutures.get(topicName) == null) {
+            if (topicNameIsUnrepresentable(topicName)) {
+                KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new InvalidTopicException("The given topic name '" +
+                    topicName + "' cannot be represented in a request."));
+                topicFutures.put(topicName, future);
+            } else if (!topicFutures.containsKey(topicName)) {
                 topicFutures.put(topicName, new KafkaFutureImpl<Void>());
             }
         }
         final long now = time.milliseconds();
-        runnable.call(new Call("deleteTopics", calcDeadlineMs(now, options.timeoutMs()),
+        Call call = new Call("deleteTopics", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
             @Override
@@ -1195,7 +1217,10 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
-        }, now);
+        };
+        if (!topicNames.isEmpty()) {
+            runnable.call(call, now);
+        }
         return new DeleteTopicsResult(new HashMap<String, KafkaFuture<Void>>(topicFutures));
     }
 
@@ -1237,13 +1262,18 @@ public class KafkaAdminClient extends AdminClient {
         final Map<String, KafkaFutureImpl<TopicDescription>> topicFutures = new HashMap<>(topicNames.size());
         final ArrayList<String> topicNamesList = new ArrayList<>();
         for (String topicName : topicNames) {
-            if (!topicFutures.containsKey(topicName)) {
+            if (topicNameIsUnrepresentable(topicName)) {
+                KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<TopicDescription>();
+                future.completeExceptionally(new InvalidTopicException("The given topic name '" +
+                    topicName + "' cannot be represented in a request."));
+                topicFutures.put(topicName, future);
+            } else if (!topicFutures.containsKey(topicName)) {
                 topicFutures.put(topicName, new KafkaFutureImpl<TopicDescription>());
                 topicNamesList.add(topicName);
             }
         }
         final long now = time.milliseconds();
-        runnable.call(new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
+        Call call = new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
             private boolean supportsDisablingTopicCreation = true;
@@ -1312,7 +1342,10 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
-        }, now);
+        };
+        if (!topicNamesList.isEmpty()) {
+            runnable.call(call, now);
+        }
         return new DescribeTopicsResult(new HashMap<String, KafkaFuture<TopicDescription>>(topicFutures));
     }
 
@@ -1508,7 +1541,7 @@ public class KafkaAdminClient extends AdminClient {
         final Collection<Resource> unifiedRequestResources = new ArrayList<>(configResources.size());
 
         for (ConfigResource resource : configResources) {
-            if (resource.type() == ConfigResource.Type.BROKER) {
+            if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
                 brokerFutures.put(resource, new KafkaFutureImpl<Config>());
                 brokerResources.add(configResourceToResource(resource));
             } else {
@@ -1524,7 +1557,8 @@ public class KafkaAdminClient extends AdminClient {
 
                 @Override
                 AbstractRequest.Builder createRequest(int timeoutMs) {
-                    return new DescribeConfigsRequest.Builder(unifiedRequestResources);
+                    return new DescribeConfigsRequest.Builder(unifiedRequestResources)
+                            .includeSynonyms(options.includeSynonyms());
                 }
 
                 @Override
@@ -1545,8 +1579,10 @@ public class KafkaAdminClient extends AdminClient {
                         }
                         List<ConfigEntry> configEntries = new ArrayList<>();
                         for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
-                            configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value(),
-                                configEntry.isDefault(), configEntry.isSensitive(), configEntry.isReadOnly()));
+                            configEntries.add(new ConfigEntry(configEntry.name(),
+                                    configEntry.value(), configSource(configEntry.source()),
+                                    configEntry.isSensitive(), configEntry.isReadOnly(),
+                                    configSynonyms(configEntry)));
                         }
                         future.complete(new Config(configEntries));
                     }
@@ -1568,7 +1604,8 @@ public class KafkaAdminClient extends AdminClient {
 
                 @Override
                 AbstractRequest.Builder createRequest(int timeoutMs) {
-                    return new DescribeConfigsRequest.Builder(Collections.singleton(resource));
+                    return new DescribeConfigsRequest.Builder(Collections.singleton(resource))
+                            .includeSynonyms(options.includeSynonyms());
                 }
 
                 @Override
@@ -1587,7 +1624,8 @@ public class KafkaAdminClient extends AdminClient {
                         List<ConfigEntry> configEntries = new ArrayList<>();
                         for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
                             configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value(),
-                                configEntry.isDefault(), configEntry.isSensitive(), configEntry.isReadOnly()));
+                                configSource(configEntry.source()), configEntry.isSensitive(), configEntry.isReadOnly(),
+                                configSynonyms(configEntry)));
                         }
                         brokerFuture.complete(new Config(configEntries));
                     }
@@ -1620,24 +1658,74 @@ public class KafkaAdminClient extends AdminClient {
         return new Resource(resourceType, configResource.name());
     }
 
+    private List<ConfigEntry.ConfigSynonym> configSynonyms(DescribeConfigsResponse.ConfigEntry configEntry) {
+        List<ConfigEntry.ConfigSynonym> synonyms = new ArrayList<>(configEntry.synonyms().size());
+        for (DescribeConfigsResponse.ConfigSynonym synonym : configEntry.synonyms()) {
+            synonyms.add(new ConfigEntry.ConfigSynonym(synonym.name(), synonym.value(), configSource(synonym.source())));
+        }
+        return synonyms;
+    }
+
+    private ConfigEntry.ConfigSource configSource(DescribeConfigsResponse.ConfigSource source) {
+        ConfigEntry.ConfigSource configSource;
+        switch (source) {
+            case TOPIC_CONFIG:
+                configSource = ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG;
+                break;
+            case DYNAMIC_BROKER_CONFIG:
+                configSource = ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG;
+                break;
+            case DYNAMIC_DEFAULT_BROKER_CONFIG:
+                configSource = ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG;
+                break;
+            case STATIC_BROKER_CONFIG:
+                configSource = ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG;
+                break;
+            case DEFAULT_CONFIG:
+                configSource = ConfigEntry.ConfigSource.DEFAULT_CONFIG;
+                break;
+            default:
+                throw new IllegalArgumentException("Unexpected config source " + source);
+        }
+        return configSource;
+    }
+
     @Override
     public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, final AlterConfigsOptions options) {
-        final Map<ConfigResource, KafkaFutureImpl<Void>> futures = new HashMap<>(configs.size());
-        for (ConfigResource configResource : configs.keySet()) {
-            futures.put(configResource, new KafkaFutureImpl<Void>());
+        final Map<ConfigResource, KafkaFutureImpl<Void>> allFutures = new HashMap<>();
+        // We must make a separate AlterConfigs request for every BROKER resource we want to alter
+        // and send the request to that specific broker. Other resources are grouped together into
+        // a single request that may be sent to any broker.
+        final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>();
+
+        for (ConfigResource resource : configs.keySet()) {
+            if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
+                NodeProvider nodeProvider = new ConstantNodeIdProvider(Integer.parseInt(resource.name()));
+                allFutures.putAll(alterConfigs(configs, options, Collections.singleton(resource), nodeProvider));
+            } else
+                unifiedRequestResources.add(resource);
         }
-        final Map<Resource, AlterConfigsRequest.Config> requestMap = new HashMap<>(configs.size());
-        for (Map.Entry<ConfigResource, Config> entry : configs.entrySet()) {
+        if (!unifiedRequestResources.isEmpty())
+          allFutures.putAll(alterConfigs(configs, options, unifiedRequestResources, new LeastLoadedNodeProvider()));
+        return new AlterConfigsResult(new HashMap<ConfigResource, KafkaFuture<Void>>(allFutures));
+    }
+
+    private Map<ConfigResource, KafkaFutureImpl<Void>> alterConfigs(Map<ConfigResource, Config> configs,
+                                                                    final AlterConfigsOptions options,
+                                                                    Collection<ConfigResource> resources,
+                                                                    NodeProvider nodeProvider) {
+        final Map<ConfigResource, KafkaFutureImpl<Void>> futures = new HashMap<>();
+        final Map<Resource, AlterConfigsRequest.Config> requestMap = new HashMap<>(resources.size());
+        for (ConfigResource resource : resources) {
             List<AlterConfigsRequest.ConfigEntry> configEntries = new ArrayList<>();
-            for (ConfigEntry configEntry: entry.getValue().entries())
+            for (ConfigEntry configEntry: configs.get(resource).entries())
                 configEntries.add(new AlterConfigsRequest.ConfigEntry(configEntry.name(), configEntry.value()));
-            ConfigResource resource = entry.getKey();
             requestMap.put(configResourceToResource(resource), new AlterConfigsRequest.Config(configEntries));
+            futures.put(resource, new KafkaFutureImpl<Void>());
         }
 
         final long now = time.milliseconds();
-        runnable.call(new Call("alterConfigs", calcDeadlineMs(now, options.timeoutMs()),
-                new LeastLoadedNodeProvider()) {
+        runnable.call(new Call("alterConfigs", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
 
             @Override
             public AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -1663,7 +1751,7 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(futures.values(), throwable);
             }
         }, now);
-        return new AlterConfigsResult(new HashMap<ConfigResource, KafkaFuture<Void>>(futures));
+        return futures;
     }
 
     @Override

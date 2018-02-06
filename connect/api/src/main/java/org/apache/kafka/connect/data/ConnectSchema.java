@@ -319,7 +319,7 @@ public class ConnectSchema implements Schema {
      * Get the {@link Schema.Type} associated with the given class.
      *
      * @param klass the Class to
-     * @return the corresponding type, nor null if there is no matching type
+     * @return the corresponding type, or null if there is no matching type
      */
     public static Type schemaType(Class<?> klass) {
         synchronized (JAVA_CLASS_SCHEMA_TYPES) {

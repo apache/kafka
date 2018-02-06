@@ -248,7 +248,8 @@ public class ProcessorTopologyTestDriver {
                                   cache,
                                   new MockTime(),
                                   producer);
-            task.initialize();
+            task.initializeStateStores();
+            task.initializeTopology();
         }
     }
 
@@ -261,9 +262,9 @@ public class ProcessorTopologyTestDriver {
      * @param timestamp the raw message timestamp
      */
     public void process(final String topicName,
-                         final byte[] key,
-                         final byte[] value,
-                         final long timestamp) {
+                        final byte[] key,
+                        final byte[] value,
+                        final long timestamp) {
 
         final TopicPartition tp = partitionsByTopic.get(topicName);
         if (tp != null) {

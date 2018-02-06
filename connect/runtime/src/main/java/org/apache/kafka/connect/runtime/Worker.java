@@ -36,6 +36,9 @@ import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.ConverterConfig;
+import org.apache.kafka.connect.storage.ConverterType;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
@@ -383,29 +386,29 @@ public class Worker {
             // search for converters within the connector dependencies, and if not found the
             // plugin class loader delegates loading to the delegating classloader.
             Converter keyConverter = connConfig.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
-            if (keyConverter != null)
-                keyConverter.configure(connConfig.originalsWithPrefix("key.converter."), true);
-            else {
-                Converter defaultKeyConverter = plugins.newConverter(
-                        config.getClass(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG).getName(),
-                        config
-                );
-                defaultKeyConverter.configure(config.originalsWithPrefix("key.converter."), true);
-                keyConverter = defaultKeyConverter;
+            if (keyConverter == null) {
+                String className = config.getClass(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG).getName();
+                keyConverter = plugins.newConverter(className, config);
             }
-            Converter valueConverter = connConfig.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
-            if (valueConverter != null)
-                valueConverter.configure(connConfig.originalsWithPrefix("value.converter."), false);
-            else {
-                Converter defaultValueConverter = plugins.newConverter(
-                        config.getClass(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG).getName(),
-                        config
-                );
-                defaultValueConverter.configure(config.originalsWithPrefix("value.converter."), false);
-                valueConverter = defaultValueConverter;
-            }
+            keyConverter.configure(connConfig.originalsWithPrefix("key.converter."), true);
 
-            workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, connectorLoader);
+            Converter valueConverter = connConfig.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
+            if (valueConverter == null) {
+                String className = config.getClass(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG).getName();
+                valueConverter = plugins.newConverter(className, config);
+            }
+            valueConverter.configure(connConfig.originalsWithPrefix("value.converter."), false);
+
+            HeaderConverter headerConverter = connConfig.getConfiguredInstance(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, HeaderConverter.class);
+            if (headerConverter == null) {
+                String className = config.getClass(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG).getName();
+                headerConverter = plugins.newHeaderConverter(className, config);
+            }
+            Map<String, Object> converterConfig = connConfig.originalsWithPrefix("header.converter.");
+            converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName());
+            headerConverter.configure(converterConfig);
+
+            workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, connectorLoader);
             workerTask.initialize(taskConfig);
             Plugins.compareAndSwapLoaders(savedLoader);
         } catch (Throwable t) {
@@ -437,6 +440,7 @@ public class Worker {
                                        TargetState initialState,
                                        Converter keyConverter,
                                        Converter valueConverter,
+                                       HeaderConverter headerConverter,
                                        ClassLoader loader) {
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
@@ -446,12 +450,12 @@ public class Worker {
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
-            return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter,
-                    valueConverter, transformationChain, producer, offsetReader, offsetWriter, config, metrics, loader, time);
+            return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
+                    headerConverter, transformationChain, producer, offsetReader, offsetWriter, config, metrics, loader, time);
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations());
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, metrics, keyConverter,
-                    valueConverter, transformationChain, loader, time);
+                    valueConverter, headerConverter, transformationChain, loader, time);
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");

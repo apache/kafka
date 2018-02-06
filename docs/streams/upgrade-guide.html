@@ -34,7 +34,9 @@
     </div>
 
     <p>
-        If you want to upgrade from 1.0.x to 1.1.0 you don't need to make any code changes as the public API is fully backward compatible.
+        If you are using Java 7 and want to upgrade from 1.0.x to 1.1.0 you don't need to make any code changes as the public API is fully backward compatible.
+        If you are using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguties.
+	Hot-swaping the jar-file only might not work for this case.
         See <a href="#streams_api_changes_110">below</a> for a complete list of 1.1.0 API and semantic changes that allow you to advance your application and/or simplify your code base.
     </p>
 
@@ -67,6 +69,12 @@
 	We have added support for methods in <code>ReadOnlyWindowStore</code> which allows for querying <code>WindowStore</code>s without the neccesity of providing keys.
     </p>
 
+
+    <p>
+	There is a new artifact <code>kafka-streams-test-utils</code> providing a <code>TopologyTestDriver</code>, <code>ConsumerRecordFactory</code>, and <code>OutputVerifier</code> class.
+	You can include the new artifact as a regular dependency to your unit tests and use the test driver to test your business logic of your Kafka Streams application.
+	For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-247%3A+Add+public+test+utils+for+Kafka+Streams">KIP-247</a>.
+    </p>
 
     <p>
         The introduction of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-220%3A+Add+AdminClient+into+Kafka+Streams%27+ClientSupplier">KIP-220</a>

@@ -327,6 +327,7 @@ class TaskManager {
         standby.initializeNewTasks();
 
         final Collection<TopicPartition> restored = changelogReader.restore(active);
+
         resumed.addAll(active.updateRestored(restored));
 
         if (!resumed.isEmpty()) {
