@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockProcessorContext;
 import org.junit.After;
@@ -84,22 +86,14 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @SuppressWarnings("unchecked")
     @Override
-    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context,
-                                                             final Class<K> keyClass,
-                                                             final Class<V> valueClass,
-                                                             final boolean useContextSerdes) {
-        final String storeName = "cache-store";
+    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context) {
+        final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(
+                Stores.persistentKeyValueStore("cache-store"),
+                (Serde<K>) context.keySerde(),
+                (Serde<V>) context.valueSerde())
+                .withCachingEnabled();
 
-
-        final Stores.PersistentKeyValueFactory<K, V> factory = Stores
-                .create(storeName)
-                .withKeys(Serdes.serdeFrom(keyClass))
-                .withValues(Serdes.serdeFrom(valueClass))
-                .persistent()
-                .enableCaching();
-
-
-        final KeyValueStore<K, V> store = (KeyValueStore<K, V>) factory.build().get();
+        final KeyValueStore<K, V> store = (KeyValueStore<K, V>) storeBuilder.build();
         final CacheFlushListenerStub<K, V> cacheFlushListener = new CacheFlushListenerStub<>();
 
         final CachedStateStore inner = (CachedStateStore) ((WrappedStateStore) store).wrappedStore();
