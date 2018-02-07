@@ -129,7 +129,8 @@
 <h5><a id="upgrade_100_streams" href="#upgrade_100_streams">Upgrading a 1.0.0 Kafka Streams Application</a></h5>
 <ul>
     <li> Upgrading your Streams application from 0.11.0 to 1.0.0 does not require a broker upgrade.
-        A Kafka Streams 1.0.0 application can connect to 0.11.0, 0.10.2 and 0.10.1 brokers (it is not possible to connect to 0.10.0 brokers though). </li>
+        A Kafka Streams 1.0.0 application can connect to 0.11.0, 0.10.2 and 0.10.1 brokers (it is not possible to connect to 0.10.0 brokers though).
+        However, Kafka Streams 1.0 requires 0.10 message format or newer and does not work with older message formats. </li>
     <li> If you are monitoring on streams metrics, you will need make some changes to the metrics names in your reporting and monitoring code, because the metrics sensor hierarchy was changed. </li>
     <li> There are a few public APIs including <code>ProcessorContext#schedule()</code>, <code>Processor#punctuate()</code> and <code>KStreamBuilder</code>, <code>TopologyBuilder</code> are being deprecated by new APIs.
         We recommend making corresponding code changes, which should be very minor since the new APIs look quite similar, when you upgrade.
