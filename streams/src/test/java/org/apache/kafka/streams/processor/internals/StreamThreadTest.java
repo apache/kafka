@@ -774,7 +774,7 @@ public class StreamThreadTest {
         final TopicPartition partition1 = new TopicPartition(changelogName, 1);
         final TopicPartition partition2 = t2p1;
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
-                .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count-one"));
+                .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as(storeName1));
         internalStreamsBuilder.table(topic2, new ConsumedInternal(), new MaterializedInternal(Materialized.as(storeName2), internalStreamsBuilder, ""));
 
         final StreamThread thread = createStreamThread(clientId, config, false);
