@@ -53,6 +53,7 @@ import org.apache.kafka.common.security.auth.SaslAuthenticationContext;
 import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.security.scram.ScramMechanism;
 import org.apache.kafka.common.security.scram.ScramServerCallbackHandler;
 import org.apache.kafka.common.utils.Utils;
@@ -297,7 +298,11 @@ public class SaslServerAuthenticator implements Authenticator {
     @Override
     public KafkaPrincipal principal() {
         SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer, securityProtocol, clientAddress());
-        return principalBuilder.build(context);
+        KafkaPrincipal principal = principalBuilder.build(context);
+        if (ScramMechanism.isScram(saslMechanism) && Boolean.parseBoolean((String) saslServer.getNegotiatedProperty(ScramLoginModule.TOKEN_AUTH_CONFIG))) {
+            principal.tokenAuthenticated(true);
+        }
+        return principal;
     }
 
     @Override
