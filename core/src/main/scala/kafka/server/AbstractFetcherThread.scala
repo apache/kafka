@@ -47,8 +47,7 @@ abstract class AbstractFetcherThread(name: String,
                                      val sourceBroker: BrokerEndPoint,
                                      fetchBackOffMs: Int = 0,
                                      isInterruptible: Boolean = true,
-                                     includeLogTruncation: Boolean
-                                    )
+                                     includeLogTruncation: Boolean)
   extends ShutdownableThread(name, isInterruptible) {
 
   type REQ <: FetchRequest
@@ -143,12 +142,12 @@ abstract class AbstractFetcherThread(name: String,
     var responseData: Seq[(TopicPartition, PD)] = Seq.empty
 
     try {
-      trace(s"Issuing fetch to broker ${sourceBroker.id}, request: $fetchRequest")
+      trace(s"Sending fetch request $fetchRequest")
       responseData = fetch(fetchRequest)
     } catch {
       case t: Throwable =>
         if (isRunning) {
-          warn(s"Error in fetch to broker ${sourceBroker.id}, request $fetchRequest", t)
+          warn(s"Error in response for fetch request $fetchRequest", t)
           inLock(partitionMapLock) {
             partitionsWithError ++= partitionStates.partitionSet.asScala
             // there is an error occurred while fetching partitions, sleep a while
@@ -214,17 +213,18 @@ abstract class AbstractFetcherThread(name: String,
                   } catch {
                     case e: FatalExitError => throw e
                     case e: Throwable =>
-                      error(s"Error getting offset for partition $topicPartition from broker ${sourceBroker.id}", e)
+                      error(s"Error getting offset for partition $topicPartition", e)
                       partitionsWithError += topicPartition
                   }
 
                 case Errors.NOT_LEADER_FOR_PARTITION =>
-                  info(s"Broker ${sourceBroker.id} is not the leader for partition $topicPartition, which could indicate " +
+                  info(s"Remote broker is not the leader for partition $topicPartition, which could indicate " +
                     "that the partition is being moved")
                   partitionsWithError += topicPartition
 
                 case _ =>
-                  error(s"Error for partition $topicPartition from broker ${sourceBroker.id}", partitionData.exception.get)
+                  error(s"Error for partition $topicPartition at offset ${currentPartitionFetchState.fetchOffset}",
+                    partitionData.exception.get)
                   partitionsWithError += topicPartition
               }
             })
@@ -232,7 +232,7 @@ abstract class AbstractFetcherThread(name: String,
       }
     }
 
-    if (isRunning && partitionsWithError.nonEmpty) {
+    if (partitionsWithError.nonEmpty) {
       debug(s"Handling errors for partitions $partitionsWithError")
       handlePartitionsWithErrors(partitionsWithError)
     }
