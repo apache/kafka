@@ -32,7 +32,7 @@ import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.TestUtils.createBroker
 import kafka.utils.timer.MockTimer
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
-import kafka.zk.KafkaZkClient
+import kafka.zk.{IsrChangeNotificationSequenceZNode, KafkaZkClient}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -46,8 +46,9 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, LeaderAndIsrRequest}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.easymock.EasyMock
+import org.easymock.{Capture, EasyMock}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.mockito.Mockito
@@ -78,6 +79,44 @@ class ReplicaManagerTest {
   @After
   def tearDown(): Unit = {
     metrics.close()
+  }
+
+  @Test
+  def testBatchIsrChanges() : Unit = {
+    val time = new org.apache.kafka.common.utils.MockTime(ReplicaManager.IsrChangePropagationInterval)
+
+    kafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
+    val capturedIsrChangeNotifications: Capture[collection.Set[TopicPartition]] = EasyMock.newCapture()
+    EasyMock.expect(kafkaZkClient.propagateIsrChanges(EasyMock.capture(capturedIsrChangeNotifications)))
+        .andAnswer(() => {
+          // Ensure that each serialized ISR change notification is well under the 1MiB limit in ZooKeeper.
+          val serializedSize = {
+            IsrChangeNotificationSequenceZNode.encode(capturedIsrChangeNotifications.getValue).length
+          }
+
+          // Just make sure the size never exceeds around 900KiB.
+          assertTrue(serializedSize < (900 * 1024));
+        }).times(2)
+    EasyMock.replay(kafkaZkClient)
+
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
+    val config = KafkaConfig.fromProps(props)
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
+    val rm = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
+      new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size))
+
+    // Topic name which is the maximum length of 249.
+    val largeTopicName = "topic-".padTo(249, "x").mkString
+
+    // 5000 partitions. Large partition numbers chosen to make the serialized values as long as possible.
+    (10000 to 15000)
+      .map(n => new TopicPartition(largeTopicName, n))
+      .foreach(rm.recordIsrChange)
+
+    // Trigger sending of ISR notifications.
+    rm.maybePropagateIsrChanges()
+    EasyMock.verify(kafkaZkClient)
   }
 
   @Test

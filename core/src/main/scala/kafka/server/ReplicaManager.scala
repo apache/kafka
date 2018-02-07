@@ -211,6 +211,7 @@ class ReplicaManager(val config: KafkaConfig,
   this.logIdent = s"[ReplicaManager broker=$localBrokerId] "
   private val stateChangeLogger = new StateChangeLogger(localBrokerId, inControllerContext = false, None)
 
+  private val isrChangeNotificationBatchSize = 3000
   private val isrChangeSet: mutable.Set[TopicPartition] = new mutable.HashSet[TopicPartition]()
   private val lastIsrChangeMs = new AtomicLong(System.currentTimeMillis())
   private val lastIsrPropagationMs = new AtomicLong(System.currentTimeMillis())
@@ -281,23 +282,29 @@ class ReplicaManager(val config: KafkaConfig,
   def recordIsrChange(topicPartition: TopicPartition): Unit = {
     isrChangeSet synchronized {
       isrChangeSet += topicPartition
-      lastIsrChangeMs.set(System.currentTimeMillis())
+      lastIsrChangeMs.set(time.milliseconds())
     }
   }
+
   /**
    * This function periodically runs to see if ISR needs to be propagated. It propagates ISR when:
    * 1. There is ISR change not propagated yet.
    * 2. There is no ISR Change in the last five seconds, or it has been more than 60 seconds since the last ISR propagation.
    * This allows an occasional ISR change to be propagated within a few seconds, and avoids overwhelming controller and
    * other brokers when large amount of ISR change occurs.
+   *
+   * ISR changes are batched into chunks of isrChangeNotificationBatchSize TopicPartitions to avoid writing ZNodes which
+   * exceed the default jute.maxbuffer size of 1MB in ZooKeeper. With this batch size, the worst case data size is about
+   * 820k, which gives about 203k of head room for the rest of the ZooKeeper CreateRequest. Since we have no idea what
+   * ACLs or other metadata could be included we need to leave lots of extra room. See KAFKA-6469.
    */
   def maybePropagateIsrChanges(): Unit = {
-    val now = System.currentTimeMillis()
+    val now = time.milliseconds()
     isrChangeSet synchronized {
       if (isrChangeSet.nonEmpty &&
         (lastIsrChangeMs.get() + ReplicaManager.IsrChangePropagationBlackOut < now ||
           lastIsrPropagationMs.get() + ReplicaManager.IsrChangePropagationInterval < now)) {
-        zkClient.propagateIsrChanges(isrChangeSet)
+        isrChangeSet.grouped(isrChangeNotificationBatchSize).foreach(zkClient.propagateIsrChanges)
         isrChangeSet.clear()
         lastIsrPropagationMs.set(now)
       }
