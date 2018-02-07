@@ -82,9 +82,9 @@ public class SaslClientCallbackHandler implements AuthCallbackHandler {
                 if (ac.isAuthorized())
                     ac.setAuthorizedID(authzId);
             } else if (callback instanceof ScramExtensionsCallback) {
-                ScramExtensionsCallback tc = (ScramExtensionsCallback) callback;
+                ScramExtensionsCallback sc = (ScramExtensionsCallback) callback;
                 if (!isKerberos && subject != null && !subject.getPublicCredentials(Map.class).isEmpty()) {
-                    tc.extensions((Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next());
+                    sc.extensions((Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next());
                 }
             }  else {
                 throw new UnsupportedCallbackException(callback, "Unrecognized SASL ClientCallback");

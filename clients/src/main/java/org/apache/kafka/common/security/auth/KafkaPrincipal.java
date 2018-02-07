@@ -47,7 +47,7 @@ public class KafkaPrincipal implements Principal {
 
     private final String principalType;
     private final String name;
-    private boolean tokenAuthenticated;
+    private volatile boolean tokenAuthenticated;
 
     public KafkaPrincipal(String principalType, String name) {
         this.principalType = requireNonNull(principalType, "Principal type cannot be null");
