@@ -33,6 +33,7 @@ import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManagerFactory;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -71,6 +72,7 @@ public class SslFactory implements Reconfigurable {
     private SSLContext sslContext;
     private boolean needClientAuth;
     private boolean wantClientAuth;
+    private long lastTruststoreReload = 0L;
 
     public SslFactory(Mode mode) {
         this(mode, null, false);
@@ -203,7 +205,8 @@ public class SslFactory implements Reconfigurable {
 
         String tmfAlgorithm = this.tmfAlgorithm != null ? this.tmfAlgorithm : TrustManagerFactory.getDefaultAlgorithm();
         TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
-        KeyStore ts = truststore == null ? null : truststore.load();
+        KeyStore ts = loadTruststore();
+
         tmf.init(ts);
 
         sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
@@ -220,7 +223,33 @@ public class SslFactory implements Reconfigurable {
     }
 
     public SSLEngine createSslEngine(String peerHost, int peerPort) {
+        maybeReloadTruststore();
         return createSslEngine(sslContext, peerHost, peerPort);
+    }
+
+    private KeyStore loadTruststore() throws GeneralSecurityException, IOException {
+        if (truststore == null)
+            return null;
+        else {
+            KeyStore ts = truststore.load();
+            File storeFile = new File(truststore.path);
+            lastTruststoreReload = storeFile.lastModified();
+            return ts;
+        }
+    }
+
+    private void maybeReloadTruststore() {
+        if ((wantClientAuth || needClientAuth) && truststore != null && mode == Mode.SERVER) {
+            File storeFile = new File(truststore.path);
+            long lastModified = storeFile.lastModified();
+            if (lastModified > lastTruststoreReload) {
+                try {
+                    this.sslContext = createSSLContext(this.keystore);
+                } catch (Exception e) {
+                    throw new KafkaException("Reload of SSL truststore failed", e);
+                }
+            }
+        }
     }
 
     private SSLEngine createSslEngine(SSLContext sslContext, String peerHost, int peerPort) {
@@ -274,11 +303,17 @@ public class SslFactory implements Reconfigurable {
     }
 
     // package access for testing
+    SecurityStore getTruststore() {
+        return truststore;
+    }
+
+    // package access for testing
     static class SecurityStore {
         private final String type;
         private final String path;
         private final Password password;
         private final Password keyPassword;
+        private KeyStore ks;
 
         SecurityStore(String type, String path, Password password, Password keyPassword) {
             Objects.requireNonNull(type, "type must not be null");
@@ -288,10 +323,14 @@ public class SslFactory implements Reconfigurable {
             this.keyPassword = keyPassword;
         }
 
+        KeyStore getKeyStore() {
+            return ks;
+        }
+
         KeyStore load() throws GeneralSecurityException, IOException {
             FileInputStream in = null;
             try {
-                KeyStore ks = KeyStore.getInstance(type);
+                ks = KeyStore.getInstance(type);
                 in = new FileInputStream(path);
                 // If a password is not set access to the truststore is still available, but integrity checking is disabled.
                 char[] passwordChars = password != null ? password.value().toCharArray() : null;

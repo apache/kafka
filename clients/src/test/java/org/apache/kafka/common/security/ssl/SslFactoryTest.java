@@ -17,7 +17,10 @@
 package org.apache.kafka.common.security.ssl;
 
 import java.io.File;
+import java.security.KeyPair;
 import java.security.KeyStore;
+import java.security.cert.X509Certificate;
+import java.util.HashMap;
 import java.util.Map;
 
 import javax.net.ssl.SSLContext;
@@ -25,6 +28,7 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLHandshakeException;
 
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.common.network.Mode;
@@ -93,6 +97,36 @@ public class SslFactoryTest {
     }
 
     @Test
+    public void testDynamicTrustStore() throws Exception {
+        Password truststorePassword = new Password("TrustStorePassword");
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Map<String, X509Certificate> certs = new HashMap<>();
+        KeyPair cKP = TestSslUtils.generateKeyPair("RSA");
+        X509Certificate cCert1 = TestSslUtils.generateCertificate("CN=localhost, O=client1", cKP, 30, "SHA1withRSA");
+        certs.put("client1", cCert1);
+
+        TestSslUtils.createTrustStore(trustStoreFile.getPath(), truststorePassword, certs);
+        trustStoreFile.deleteOnExit();
+
+        Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(true, true,
+                Mode.SERVER, trustStoreFile, "server");
+
+        serverSslConfig.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        sslFactory.configure(serverSslConfig);
+        assertTrue("Truststore should trust client1", sslFactory.getTruststore().getKeyStore().containsAlias("client1"));
+
+        Thread.sleep(1000L);
+        X509Certificate cCert2 = TestSslUtils.generateCertificate("CN=localhost, O=client2", cKP, 30, "SHA1withRSA");
+        certs.put("client2", cCert2);
+        TestSslUtils.createTrustStore(trustStoreFile.getPath(), truststorePassword, certs);
+        trustStoreFile.deleteOnExit();
+
+        sslFactory.createSslEngine("localhost", 3000);
+        assertTrue("Truststore should trust client2", sslFactory.getTruststore().getKeyStore().containsAlias("client2"));
+    }
+
+    @Test
     public void testUntrustedKeyStoreValidation() throws Exception {
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(false, true,
@@ -136,5 +170,4 @@ public class SslFactoryTest {
                 (Password) sslConfig.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG)
         );
     }
-
 }
