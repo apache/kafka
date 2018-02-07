@@ -149,8 +149,9 @@ class WindowStoreIteratorWrapper<K, V> {
         final StateSerdes<K, V> serdes;
         final long windowSize;
 
-        WrappedKeyValueIterator(
-            KeyValueIterator<Bytes, byte[]> bytesIterator, StateSerdes<K, V> serdes, long windowSize) {
+        WrappedKeyValueIterator(final KeyValueIterator<Bytes, byte[]> bytesIterator,
+                                final StateSerdes<K, V> serdes,
+                                final long windowSize) {
             this.bytesIterator = bytesIterator;
             this.serdes = serdes;
             this.windowSize = windowSize;

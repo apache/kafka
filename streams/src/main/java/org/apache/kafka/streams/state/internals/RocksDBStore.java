@@ -229,11 +229,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public synchronized V get(K key) {
         validateStoreOpen();
         byte[] byteValue = getInternal(serdes.rawKey(key));
-        if (byteValue == null) {
-            return null;
-        } else {
-            return serdes.valueFrom(byteValue);
-        }
+        return byteValue  == null ? null : serdes.valueFrom(byteValue);
     }
 
     private void validateStoreOpen() {
@@ -341,11 +337,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             for (KeyValue<K, V> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
                 final byte[] rawKey = serdes.rawKey(entry.key);
-                if (entry.value == null) {
+                final byte[] rawValue = serdes.rawValue(entry.value);
+                if (rawValue == null) {
                     batch.remove(rawKey);
                 } else {
-                    final byte[] value = serdes.rawValue(entry.value);
-                    batch.put(rawKey, value);
+                    batch.put(rawKey, rawValue);
                 }
             }
             db.write(wOptions, batch);
