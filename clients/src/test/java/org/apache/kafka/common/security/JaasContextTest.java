@@ -188,8 +188,8 @@ public class JaasContextTest {
                 "KafkaServer { test.LoginModuleDefault required; };",
                 "plaintext.KafkaServer { test.LoginModuleOverride requisite; };"
         ));
-        JaasContext context = JaasContext.load(JaasContext.Type.SERVER, new ListenerName("plaintext"),
-                Collections.<String, Object>emptyMap());
+        JaasContext context = JaasContext.loadServerContext(new ListenerName("plaintext"),
+                "SOME-MECHANISM", Collections.<String, Object>emptyMap());
         assertEquals("plaintext.KafkaServer", context.name());
         assertEquals(JaasContext.Type.SERVER, context.type());
         assertEquals(1, context.configurationEntries().size());
@@ -203,8 +203,8 @@ public class JaasContextTest {
                 "KafkaServer { test.LoginModule required; };",
                 "other.KafkaServer { test.LoginModuleOther requisite; };"
         ));
-        JaasContext context = JaasContext.load(JaasContext.Type.SERVER, new ListenerName("plaintext"),
-                Collections.<String, Object>emptyMap());
+        JaasContext context = JaasContext.loadServerContext(new ListenerName("plaintext"),
+                "SOME-MECHANISM", Collections.<String, Object>emptyMap());
         assertEquals("KafkaServer", context.name());
         assertEquals(JaasContext.Type.SERVER, context.type());
         assertEquals(1, context.configurationEntries().size());
@@ -215,24 +215,13 @@ public class JaasContextTest {
     @Test(expected = IllegalArgumentException.class)
     public void testLoadForServerWithWrongListenerName() throws IOException {
         writeConfiguration("Server", "test.LoginModule required;");
-        JaasContext.load(JaasContext.Type.SERVER, new ListenerName("plaintext"),
-                Collections.<String, Object>emptyMap());
-    }
-
-    /**
-     * ListenerName can only be used with Type.SERVER.
-     */
-    @Test(expected = IllegalArgumentException.class)
-    public void testLoadForClientWithListenerName() {
-        JaasContext.load(JaasContext.Type.CLIENT, new ListenerName("foo"),
+        JaasContext.loadServerContext(new ListenerName("plaintext"), "SOME-MECHANISM",
                 Collections.<String, Object>emptyMap());
     }
 
     private AppConfigurationEntry configurationEntry(JaasContext.Type contextType, String jaasConfigProp) {
-        Map<String, Object> configs = new HashMap<>();
-        if (jaasConfigProp != null)
-            configs.put(SaslConfigs.SASL_JAAS_CONFIG, new Password(jaasConfigProp));
-        JaasContext context = JaasContext.load(contextType, null, contextType.name(), configs);
+        Password saslJaasConfig = jaasConfigProp == null ? null : new Password(jaasConfigProp);
+        JaasContext context = JaasContext.load(contextType, null, contextType.name(), saslJaasConfig);
         List<AppConfigurationEntry> entries = context.configurationEntries();
         assertEquals(1, entries.size());
         return entries.get(0);

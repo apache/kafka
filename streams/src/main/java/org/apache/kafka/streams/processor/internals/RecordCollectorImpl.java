@@ -121,7 +121,7 @@ public class RecordCollectorImpl implements RecordCollector {
             errorLogMessage += PARAMETER_HINT;
             errorMessage += PARAMETER_HINT;
         }
-        log.error(errorLogMessage, key, value, timestamp, topic, exception);
+        log.error(errorLogMessage, key, value, timestamp, topic, exception.toString());
         sendException = new StreamsException(
             String.format(errorMessage,
                           logPrefix,

@@ -74,7 +74,7 @@ public class DescribeConfigsResponse extends AbstractResponse {
             new Field(CONFIG_NAME_KEY_NAME, STRING),
             new Field(CONFIG_VALUE_KEY_NAME, NULLABLE_STRING),
             new Field(READ_ONLY_KEY_NAME, BOOLEAN),
-            new Field(IS_DEFAULT_KEY_NAME, BOOLEAN),
+            new Field(CONFIG_SOURCE_KEY_NAME, INT8),
             new Field(IS_SENSITIVE_KEY_NAME, BOOLEAN),
             new Field(CONFIG_SYNONYMS_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_SYNONYM_V1)));
 

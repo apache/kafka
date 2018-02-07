@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.DelegationTokenDisabledException;
 import org.apache.kafka.common.errors.DelegationTokenExpiredException;
 import org.apache.kafka.common.errors.DelegationTokenNotFoundException;
 import org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException;
+import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
@@ -38,6 +39,7 @@ import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidCommitOffsetSizeException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.InvalidFetchSessionEpochException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
@@ -608,6 +610,20 @@ public enum Errors {
         public ApiException build(String message) {
             return new GroupIdNotFoundException(message);
         }
+    }),
+    FETCH_SESSION_ID_NOT_FOUND(70, "The fetch session ID was not found",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new FetchSessionIdNotFoundException(message);
+            }
+    }),
+    INVALID_FETCH_SESSION_EPOCH(71, "The fetch session epoch is invalid",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new InvalidFetchSessionEpochException(message);
+            }
     });
 
     private interface ApiExceptionBuilder {

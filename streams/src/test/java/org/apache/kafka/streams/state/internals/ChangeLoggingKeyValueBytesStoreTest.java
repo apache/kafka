@@ -109,9 +109,10 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    public void shouldPutNullOnDelete() {
+    public void shouldPropagateDelete() {
         store.put(hi, there);
         store.delete(hi);
+        assertThat(inner.approximateNumEntries(), equalTo(0L));
         assertThat(inner.get(hi), nullValue());
     }
 
@@ -125,6 +126,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     public void shouldLogKeyNullOnDelete() {
         store.put(hi, there);
         store.delete(hi);
+        assertThat(sent.containsKey(hi), is(true));
         assertThat(sent.get(hi), nullValue());
     }
 
