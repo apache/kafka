@@ -108,7 +108,7 @@ public class StreamsBrokerDownResilienceTest {
             @Override
             public void run() {
                 streams.close(30, TimeUnit.SECONDS);
-                System.out.println("Shutting down streams resilience test app now");
+                System.out.println("Complete shutdown of streams resilience test app now");
                 System.out.flush();
             }
         }));
