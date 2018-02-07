@@ -19,7 +19,6 @@ package org.apache.kafka.common.security.scram;
 import org.apache.kafka.common.utils.Base64;
 
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -77,7 +76,7 @@ public class ScramMessages {
         private final String saslName;
         private final String nonce;
         private final String authorizationId;
-        private final String extensions;
+        private final ScramExtensions extensions;
         public ClientFirstMessage(byte[] messageBytes) throws SaslException {
             String message = toMessage(messageBytes);
             Matcher matcher = PATTERN.matcher(message);
@@ -88,12 +87,13 @@ public class ScramMessages {
             this.saslName = matcher.group("saslname");
             this.nonce = matcher.group("nonce");
             String extString = matcher.group("extensions");
-            this.extensions = extString.startsWith(",") ? extString.substring(1) : extString;
+
+            this.extensions = extString.startsWith(",") ? new ScramExtensions(extString.substring(1)) : new ScramExtensions();
         }
-        public ClientFirstMessage(String saslName, String nonce, String extensions) {
+        public ClientFirstMessage(String saslName, String nonce, Map<String, String> extensions) {
             this.saslName = saslName;
             this.nonce = nonce;
-            this.extensions = extensions;
+            this.extensions = new ScramExtensions(extensions);
             this.authorizationId = ""; // Optional authzid not specified in gs2-header
         }
         public String saslName() {
@@ -108,29 +108,16 @@ public class ScramMessages {
         public String gs2Header() {
             return "n," + authorizationId + ",";
         }
-        public String extensions() {
+        public ScramExtensions extensions() {
             return extensions;
         }
 
-        public Map<String, String> extensionsAsMap() {
-            Map<String, String> map = new HashMap<>();
-
-            if (extensions.isEmpty())
-                return map;
-
-            String[] attrvals = extensions.split(",");
-            for (String attrval: attrvals) {
-                String[] array = attrval.split("=", 2);
-                map.put(array[0], array[1]);
-            }
-            return map;
-        }
-
         public String clientFirstMessageBare() {
-            if (extensions.isEmpty())
+            String extensionStr = extensions.toString();
+            if (extensionStr.isEmpty())
                 return String.format("n=%s,r=%s", saslName, nonce);
             else
-                return String.format("n=%s,r=%s,%s", saslName, nonce, extensions);
+                return String.format("n=%s,r=%s,%s", saslName, nonce, extensionStr);
         }
         String toMessage() {
             return gs2Header() + clientFirstMessageBare();
