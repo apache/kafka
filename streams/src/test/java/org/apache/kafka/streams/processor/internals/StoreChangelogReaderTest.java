@@ -390,7 +390,10 @@ public class StoreChangelogReaderTest {
         try {
             changelogReader.restore(active);
             fail("Should have thrown TaskMigratedException");
-        } catch (final TaskMigratedException expected) { /* ignore */ }
+        } catch (final TaskMigratedException expected) {
+            // verifies second block threw exception with updated end offset
+            assertTrue(expected.getMessage().contains("end offset 15, current offset 10"));
+        }
     }
 
 

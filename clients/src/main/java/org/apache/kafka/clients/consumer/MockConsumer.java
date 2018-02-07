@@ -308,7 +308,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
                 offsets = new ArrayList<>();
             }
             if (replace) {
-                offsets.add(0, entry.getValue());
+                offsets = new ArrayList<>();
+                offsets.add(entry.getValue());
             } else {
                 offsets.add(entry.getValue());
             }
@@ -376,9 +377,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public synchronized Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
         Map<TopicPartition, Long> result = new HashMap<>();
         for (TopicPartition tp : partitions) {
-            List<Long> offsets = endOffsets.get(tp);
-            offsets = offsets == null ? new ArrayList<Long>() : offsets;
-            Long endOffset = offsets.size() > 1 ? offsets.remove(0) : offsets.get(0);
+            Long endOffset = getEndOffset(endOffsets.get(tp));
             if (endOffset == null)
                 throw new IllegalStateException("The partition " + tp + " does not have an end offset.");
             result.put(tp, endOffset);
@@ -454,13 +453,20 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             if (offset == null)
                 throw new IllegalStateException("MockConsumer didn't have beginning offset specified, but tried to seek to beginning");
         } else if (strategy == OffsetResetStrategy.LATEST) {
-            List<Long> offsets = endOffsets.get(tp);
-            offset = offsets.size() > 1 ? offsets.remove(0) : offsets.get(0);
+            offset = getEndOffset(endOffsets.get(tp));
             if (offset == null)
                 throw new IllegalStateException("MockConsumer didn't have end offset specified, but tried to seek to end");
         } else {
             throw new NoOffsetForPartitionException(tp);
         }
         seek(tp, offset);
+    }
+
+    private Long getEndOffset(List<Long> offsets) {
+
+        if(offsets == null || offsets.isEmpty()) {
+            return null;
+        }
+        return offsets.size() > 1 ? offsets.remove(0) : offsets.get(0);
     }
 }
