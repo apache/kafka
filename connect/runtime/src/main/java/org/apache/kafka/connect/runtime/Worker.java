@@ -31,6 +31,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -102,8 +103,16 @@ public class Worker {
         this.workerMetricsGroup = new WorkerMetricsGroup(metrics);
 
         // Internal converters are required properties, thus getClass won't return null.
-        this.internalKeyConverter = plugins.newConverter(config, WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, true);
-        this.internalValueConverter = plugins.newConverter(config, WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, false);
+        this.internalKeyConverter = plugins.newConverter(
+                config,
+                WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG,
+                ClassLoaderUsage.PLUGINS
+        );
+        this.internalValueConverter = plugins.newConverter(
+                config,
+                WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG,
+                ClassLoaderUsage.PLUGINS
+        );
 
         this.offsetBackingStore = offsetBackingStore;
         this.offsetBackingStore.configure(config);
@@ -368,11 +377,33 @@ public class Worker {
             log.info("Instantiated task {} with version {} of type {}", id, task.version(), taskClass.getName());
 
             // By maintaining connector's specific class loader for this thread here, we first
-            // search for converters within the connector dependencies, and if not found the
-            // plugin class loader delegates loading to the delegating classloader.
-            Converter keyConverter = plugins.newConverter(config, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, true);
-            Converter valueConverter = plugins.newConverter(config, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, false);
-            HeaderConverter headerConverter = plugins.newHeaderConverter(config, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG);
+            // search for converters within the connector dependencies.
+            // If any of these aren't found, that means the connector didn't configure specific converters,
+            // so we should instantiate based upon the worker configuration
+            Converter keyConverter = plugins.newConverter(
+                    connConfig,
+                    WorkerConfig.KEY_CONVERTER_CLASS_CONFIG,
+                   ClassLoaderUsage.CURRENT_CLASSLOADER
+            );
+            Converter valueConverter = plugins.newConverter(
+                    connConfig,
+                    WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG,
+                    ClassLoaderUsage.CURRENT_CLASSLOADER
+            );
+            HeaderConverter headerConverter = plugins.newHeaderConverter(
+                    connConfig,
+                    WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
+                    ClassLoaderUsage.CURRENT_CLASSLOADER
+            );
+            if (keyConverter == null) {
+                keyConverter = plugins.newConverter(config, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.PLUGINS);
+            }
+            if (valueConverter == null) {
+                valueConverter = plugins.newConverter(config, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.PLUGINS);
+            }
+            if (headerConverter == null) {
+                headerConverter = plugins.newHeaderConverter(config, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.PLUGINS);
+            }
 
             workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, connectorLoader);
             workerTask.initialize(taskConfig);

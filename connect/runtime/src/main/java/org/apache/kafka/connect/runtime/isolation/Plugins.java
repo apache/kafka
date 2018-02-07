@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.utils.Utils;
@@ -42,6 +41,12 @@ import java.util.Map;
 import java.util.Set;
 
 public class Plugins {
+
+    public enum ClassLoaderUsage {
+        CURRENT_CLASSLOADER,
+        PLUGINS
+    }
+
     private static final Logger log = LoggerFactory.getLogger(Plugins.class);
     private final DelegatingClassLoader delegatingLoader;
 
@@ -181,6 +186,113 @@ public class Plugins {
     }
 
     /**
+     * If the given configuration defines a {@link Converter} using the named configuration property, return a new configured instance.
+     *
+     * @param config             the configuration containing the {@link Converter}'s configuration; may not be null
+     * @param classPropertyName  the name of the property that contains the name of the {@link Converter} class; may not be null
+     * @param classLoaderUsage   which classloader should be used
+     * @return the instantiated and configured {@link Converter}; null if the configuration did not define the specified property
+     * @throws ConnectException if the {@link Converter} implementation class could not be found
+     */
+    public Converter newConverter(AbstractConfig config, String classPropertyName, ClassLoaderUsage classLoaderUsage) {
+        if (!config.originals().containsKey(classPropertyName)) {
+            // This configuration does not define the converter via the specified property name
+            return null;
+        }
+        Converter plugin = null;
+        switch (classLoaderUsage) {
+            case CURRENT_CLASSLOADER:
+                // Attempt to load first with the current classloader, and plugins as a fallback.
+                // Note: we can't use config.getConfiguredInstance because Converter doesn't implement Configurable, and even if it did
+                // we have to remove the property prefixes before calling config(...) and we still always want to call Converter.config.
+                plugin = getInstance(config, classPropertyName, Converter.class);
+                break;
+            case PLUGINS:
+                // Attempt to load with the plugin class loader, which uses the current classloader as a fallback
+                String converterClassOrAlias = config.getClass(classPropertyName).getName();
+                Class<? extends Converter> klass;
+                try {
+                    klass = pluginClass(delegatingLoader, converterClassOrAlias, Converter.class);
+                } catch (ClassNotFoundException e) {
+                    throw new ConnectException(
+                            "Failed to find any class that implements Converter and which name matches "
+                            + converterClassOrAlias + ", available converters are: "
+                            + pluginNames(delegatingLoader.converters())
+                    );
+                }
+                plugin = newPlugin(klass);
+                break;
+        }
+        if (plugin == null) {
+            throw new ConnectException("Unable to instantiate the Converter specified in '" + classPropertyName + "'");
+        }
+
+        // Determine whether this is a key or value converter based upon the supplied property name ...
+        final boolean isKeyConverter = WorkerConfig.KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName)
+                                     || WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName);
+
+        // Configure the Converter using only the old configuration mechanism ...
+        String configPrefix = classPropertyName + ".";
+        Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
+        plugin.configure(converterConfig, isKeyConverter);
+        return plugin;
+    }
+
+    /**
+     * If the given configuration defines a {@link HeaderConverter} using the named configuration property, return a new configured
+     * instance.
+     *
+     * @param config             the configuration containing the {@link Converter}'s configuration; may not be null
+     * @param classPropertyName  the name of the property that contains the name of the {@link Converter} class; may not be null
+     * @param classLoaderUsage   which classloader should be used
+     * @return the instantiated and configured {@link HeaderConverter}; null if the configuration did not define the specified property
+     * @throws ConnectException if the {@link HeaderConverter} implementation class could not be found
+     */
+    public HeaderConverter newHeaderConverter(AbstractConfig config, String classPropertyName, ClassLoaderUsage classLoaderUsage) {
+        if (!config.originals().containsKey(classPropertyName)) {
+            // This configuration does not define the header converter via the specified property name
+            return null;
+        }
+        HeaderConverter plugin = null;
+        switch (classLoaderUsage) {
+            case CURRENT_CLASSLOADER:
+                // Attempt to load first with the current classloader, and plugins as a fallback.
+                // Note: we can't use config.getConfiguredInstance because we have to remove the property prefixes
+                // before calling config(...)
+                plugin = getInstance(config, classPropertyName, HeaderConverter.class);
+                break;
+            case PLUGINS:
+                // Attempt to load with the plugin class loader, which uses the current classloader as a fallback
+                String converterClassOrAlias = config.getClass(classPropertyName).getName();
+                Class<? extends HeaderConverter> klass;
+                try {
+                    klass = pluginClass(
+                            delegatingLoader,
+                            converterClassOrAlias,
+                            HeaderConverter.class
+                    );
+                } catch (ClassNotFoundException e) {
+                    throw new ConnectException(
+                            "Failed to find any class that implements HeaderConverter and which name matches "
+                                    + converterClassOrAlias
+                                    + ", available header converters are: "
+                                    + pluginNames(delegatingLoader.headerConverters())
+                    );
+                }
+                plugin = newPlugin(klass);
+        }
+        if (plugin == null) {
+            throw new ConnectException("Unable to instantiate the Converter specified in '" + classPropertyName + "'");
+        }
+
+        String configPrefix = classPropertyName + ".";
+        Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
+        converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName());
+        plugin.configure(converterConfig);
+        return plugin;
+    }
+
+    /**
      * Get an instance of the give class specified by the given configuration key.
      *
      * @param key The configuration key for the class
@@ -189,96 +301,15 @@ public class Plugins {
      */
     private <T> T getInstance(AbstractConfig config, String key, Class<T> t) {
         Class<?> c = config.getClass(key);
-        if (c == null)
+        if (c == null) {
             return null;
+        }
+        // Instantiate the class, but we don't know if the class extends the supplied type
         Object o = Utils.newInstance(c);
-        if (!t.isInstance(o))
+        if (!t.isInstance(o)) {
             throw new KafkaException(c.getName() + " is not an instance of " + t.getName());
+        }
         return t.cast(o);
-    }
-
-    /**
-     * Instantiate and configure a {@link Converter} identified in the supplied configuration with the given configuration property name.
-     * This method first attempts to find the specified class using the current class loader, and if that's not available it looks for
-     * a plugin with the class.
-     *
-     * @param config            the configuration containing the {@link Converter}'s configuration; may not be null
-     * @param classPropertyName the name of the property that contains the name of the {@link Converter} class; may not be null
-     * @param isKeyConverter    true if this converter is a key converter, or false otherwise
-     * @return the instantiated and configured {@link Converter}; never null
-     * @throws ConnectException if the {@link Converter} implementation class could not be found
-     */
-    public Converter newConverter(AbstractConfig config, String classPropertyName, boolean isKeyConverter) {
-        // First see if we can instantiate the instance using the current classloader ...
-        Converter plugin = getInstance(config, classPropertyName, Converter.class);
-        if (plugin == null) {
-            // Not found on the current classloader, so look in other plugins ...
-            String converterClassOrAlias = config.getClass(classPropertyName).getName();
-            Class<? extends Converter> klass;
-            try {
-                klass = pluginClass(
-                        delegatingLoader,
-                        converterClassOrAlias,
-                        Converter.class
-                );
-            } catch (ClassNotFoundException e) {
-                throw new ConnectException(
-                        "Failed to find any class that implements Converter and which name matches "
-                                + converterClassOrAlias
-                                + ", available converters are: "
-                                + pluginNames(delegatingLoader.converters())
-                );
-            }
-            plugin = newPlugin(klass);
-        }
-        if (plugin instanceof Configurable) {
-            String configPrefix = classPropertyName + ".";
-            Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
-            ConverterType type = isKeyConverter ? ConverterType.KEY : ConverterType.VALUE;
-            converterConfig.put(ConverterConfig.TYPE_CONFIG, type.getName());
-            ((Configurable) plugin).configure(converterConfig);
-        }
-        return plugin;
-    }
-
-    /**
-     * Instantiate and configure a {@link HeaderConverter} identified in the supplied configuration with the given configuration
-     * property name.
-     *
-     * @param config            the configuration containing the {@link HeaderConverter}'s configuration; may not be null
-     * @param classPropertyName the name of the property that contains the name of the {@link HeaderConverter} class;
-     *                          may not be null
-     * @return the instantiated and configured {@link HeaderConverter}; never null
-     * @throws ConnectException if the {@link HeaderConverter} implementation class could not be found
-     */
-    public HeaderConverter newHeaderConverter(AbstractConfig config, String classPropertyName) {
-        // First see if we can instantiate the instance using the current classloader ...
-        HeaderConverter plugin = getInstance(config, classPropertyName, HeaderConverter.class);
-        if (plugin == null) {
-            // Not found on the current classloader, so look in other plugins ...
-            String converterClassOrAlias = config.getClass(classPropertyName).getName();
-            Class<? extends HeaderConverter> klass;
-            try {
-                klass = pluginClass(
-                        delegatingLoader,
-                        converterClassOrAlias,
-                        HeaderConverter.class
-                );
-            } catch (ClassNotFoundException e) {
-                throw new ConnectException(
-                        "Failed to find any class that implements HeaderConverter and which name matches "
-                                + converterClassOrAlias
-                                + ", available header converters are: "
-                                + pluginNames(delegatingLoader.headerConverters())
-                );
-            }
-            plugin = newPlugin(klass);
-        }
-        String configPrefix = classPropertyName + ".";
-        Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
-        converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName());
-        plugin.configure(converterConfig);
-        return plugin;
     }
 
     public <R extends ConnectRecord<R>> Transformation<R> newTranformations(

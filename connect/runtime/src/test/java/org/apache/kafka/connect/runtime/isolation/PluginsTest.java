@@ -24,6 +24,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.ConverterConfig;
 import org.apache.kafka.connect.storage.ConverterType;
@@ -78,30 +79,26 @@ public class PluginsTest {
 
     @Test
     public void shouldInstantiateAndConfigureConverters() {
-        instantiateAndConfigureConverter(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, true);
+        instantiateAndConfigureConverter(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.CURRENT_CLASSLOADER);
         // Validate extra configs got passed through to overridden converters
-        assertConverterType(ConverterType.KEY, converter.configs);
         assertEquals("true", converter.configs.get(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG));
         assertEquals("foo1", converter.configs.get("extra.config"));
 
-        instantiateAndConfigureConverter(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, false);
+        instantiateAndConfigureConverter(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.PLUGINS);
         // Validate extra configs got passed through to overridden converters
-        assertConverterType(ConverterType.VALUE, converter.configs);
         assertEquals("true", converter.configs.get(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG));
         assertEquals("foo2", converter.configs.get("extra.config"));
     }
 
     @Test
     public void shouldInstantiateAndConfigureInternalConverters() {
-        instantiateAndConfigureConverter(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, true);
+        instantiateAndConfigureConverter(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.CURRENT_CLASSLOADER);
         // Validate extra configs got passed through to overridden converters
-        assertConverterType(ConverterType.KEY, converter.configs);
         assertEquals("false", converter.configs.get(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG));
         assertEquals("bar1", converter.configs.get("extra.config"));
 
-        instantiateAndConfigureConverter(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, false);
+        instantiateAndConfigureConverter(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.PLUGINS);
         // Validate extra configs got passed through to overridden converters
-        assertConverterType(ConverterType.VALUE, converter.configs);
         assertEquals("false", converter.configs.get(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG));
         assertEquals("bar2", converter.configs.get("extra.config"));
     }
@@ -114,13 +111,13 @@ public class PluginsTest {
         assertEquals("baz", headerConverter.configs.get("extra.config"));
     }
 
-    protected void instantiateAndConfigureConverter(String configPropName, boolean isKeyConverter) {
-        converter = (TestConverter) plugins.newConverter(config, configPropName, isKeyConverter);
+    protected void instantiateAndConfigureConverter(String configPropName, ClassLoaderUsage classLoaderUsage) {
+        converter = (TestConverter) plugins.newConverter(config, configPropName, classLoaderUsage);
         assertNotNull(converter);
     }
 
     protected void instantiateAndConfigureHeaderConverter(String configPropName) {
-        headerConverter = (TestHeaderConverter) plugins.newHeaderConverter(config, configPropName);
+        headerConverter = (TestHeaderConverter) plugins.newHeaderConverter(config, configPropName, ClassLoaderUsage.CURRENT_CLASSLOADER);
         assertNotNull(headerConverter);
     }
 
