@@ -14,18 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.scram;
 
 import javax.security.auth.callback.Callback;
+import java.util.Collections;
+import java.util.Map;
 
-public class ScramCredentialCallback implements Callback {
-    private ScramCredential scramCredential;
+public class ScramExtensionsCallback implements Callback {
+    private Map<String, String> extensions = Collections.emptyMap();
 
-    public ScramCredential scramCredential() {
-        return scramCredential;
+    public Map<String, String> extensions() {
+        return extensions;
     }
 
-    public void scramCredential(ScramCredential scramCredential) {
-        this.scramCredential = scramCredential;
+    public void extensions(Map<String, String> extensions) {
+        this.extensions = extensions;
     }
 }
