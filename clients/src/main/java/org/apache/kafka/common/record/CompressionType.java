@@ -20,6 +20,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.invoke.MethodHandle;
@@ -50,7 +52,7 @@ public enum CompressionType {
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
             try {
                 // GZIPOutputStream has a default buffer size of 512 bytes, which is too small
-                return new GZIPOutputStream(buffer, 8 * 1024);
+                return new BufferedOutputStream(new GZIPOutputStream(buffer, 8 * 1024), 1 << 14);
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
@@ -59,7 +61,7 @@ public enum CompressionType {
         @Override
         public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
             try {
-                return new GZIPInputStream(new ByteBufferInputStream(buffer));
+                return new BufferedInputStream(new GZIPInputStream(new ByteBufferInputStream(buffer)), 1 << 14);
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
