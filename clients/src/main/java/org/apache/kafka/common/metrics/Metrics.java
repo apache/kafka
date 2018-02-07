@@ -461,7 +461,7 @@ public class Metrics implements Closeable {
      * This is a way to expose existing values as metrics.
      *
      * This method is kept for binary compatibility purposes, it has the same behaviour as
-     * {@link #addMetric(MetricName, MetricValue)}.
+     * {@link #addMetric(MetricName, MetricValueProvider)}.
      *
      * @param metricName The name of the metric
      * @param measurable The measurable that will be measured by this metric

@@ -121,19 +121,20 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
     @Override
     public void configure(final WorkerConfig config) {
         this.topic = config.getString(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG);
-        if (topic.equals(""))
+        if (this.topic == null || this.topic.trim().length() == 0)
             throw new ConfigException("Must specify topic for connector status.");
 
-        Map<String, Object> producerProps = new HashMap<>(config.originals());
+        Map<String, Object> originals = config.originals();
+        Map<String, Object> producerProps = new HashMap<>(originals);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.RETRIES_CONFIG, 0); // we handle retries in this class
 
-        Map<String, Object> consumerProps = new HashMap<>(config.originals());
+        Map<String, Object> consumerProps = new HashMap<>(originals);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
-        Map<String, Object> adminProps = new HashMap<>(config.originals());
+        Map<String, Object> adminProps = new HashMap<>(originals);
         NewTopic topicDescription = TopicAdmin.defineTopic(topic).
                 compacted().
                 partitions(config.getInt(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG)).
@@ -203,7 +204,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
     }
 
     private void sendConnectorStatus(final ConnectorStatus status, boolean safeWrite) {
-        String connector  = status.id();
+        String connector = status.id();
         CacheEntry<ConnectorStatus> entry = getOrAdd(connector);
         String key = CONNECTOR_STATUS_PREFIX + connector;
         send(key, status, entry, safeWrite);
@@ -233,18 +234,17 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         kafkaLog.send(key, value, new org.apache.kafka.clients.producer.Callback() {
             @Override
             public void onCompletion(RecordMetadata metadata, Exception exception) {
-                if (exception != null) {
-                    if (exception instanceof RetriableException) {
-                        synchronized (KafkaStatusBackingStore.this) {
-                            if (entry.isDeleted()
-                                    || status.generation() != generation
-                                    || (safeWrite && !entry.canWriteSafely(status, sequence)))
-                                return;
-                        }
-                        kafkaLog.send(key, value, this);
-                    } else {
-                        log.error("Failed to write status update", exception);
+                if (exception == null) return;
+                if (exception instanceof RetriableException) {
+                    synchronized (KafkaStatusBackingStore.this) {
+                        if (entry.isDeleted()
+                            || status.generation() != generation
+                            || (safeWrite && !entry.canWriteSafely(status, sequence)))
+                            return;
                     }
+                    kafkaLog.send(key, value, this);
+                } else {
+                    log.error("Failed to write status update", exception);
                 }
             }
         });
