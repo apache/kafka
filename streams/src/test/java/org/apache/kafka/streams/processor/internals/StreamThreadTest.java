@@ -767,7 +767,7 @@ public class StreamThreadTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldUpdateStandbyTask() throws InterruptedException {
+    public void shouldUpdateStandbyTask() {
         final String storeName1 = "count-one";
         final String storeName2 = "table-two";
         final String changelogName = applicationId + "-" + storeName1 + "-changelog";
@@ -816,10 +816,10 @@ public class StreamThreadTest {
 
         thread.runOnce(-1);
 
-        StandbyTask standbyTask1 = thread.taskManager().standbyTask(partition1);
-        StandbyTask standbyTask2 = thread.taskManager().standbyTask(partition2);
-        KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.getStore(storeName1);
-        KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.getStore(storeName2);
+        final StandbyTask standbyTask1 = thread.taskManager().standbyTask(partition1);
+        final StandbyTask standbyTask2 = thread.taskManager().standbyTask(partition2);
+        final KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.getStore(storeName1);
+        final KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.getStore(storeName2);
 
         assertEquals(10L, store1.approximateNumEntries());
         assertEquals(5L, store2.approximateNumEntries());
@@ -829,7 +829,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldPunctuateActiveTask() throws InterruptedException {
+    public void shouldPunctuateActiveTask() {
         final List<Long> punctuatedStreamTime = new ArrayList<>();
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
         final ProcessorSupplier<Object, Object> punctuateProcessor = new ProcessorSupplier<Object, Object>() {
