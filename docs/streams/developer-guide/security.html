@@ -67,13 +67,13 @@
             <p>When applications are run against a secured Kafka cluster, the principal running the application must have the ACL
                 <code class="docutils literal"><span class="pre">--cluster</span> <span class="pre">--operation</span> <span class="pre">Create</span></code> set so that the application has the permissions to create
                 <a class="reference internal" href="manage-topics.html#streams-developer-guide-topics-internal"><span class="std std-ref">internal topics</span></a>.</p>
-	    <p>If you don't want to provide this permission to your application you can create the required internal topics manually.
-               If the expected internal topics exist, Kafka Streams will not try to re-create them, but use them right away.
+	    <p>To avoid providing this permission to your application, you can create the required internal topics manually.
+               If the internal topics exist, Kafka Streams will not try to recreate them.
                Note, that the internal repartition and changelog topics must be created with the correct number of partitions&mdash;otherwise, Kafka Streams will fail on startup.
-               As a rule of thumb, the topics need to be created with the same number of partitions as your input topic (or max number of partitions over all input topics if there are multiple).
+	       The topics must be created with the same number of partitions as your input topic, or if there are multiple topics, the maximum number of partitions across all input topics.
                Additionally, changelog topics <emph>must</emph> be created with log compaction enabled&mdash;otherwise, your application might lose data.
-               You can learn about the names of the required internal topics via <code>Topology#describe()</code>.
-	       All internal topics follow the naming pattern <code>&lt;application.id&gt;-&lt;operatorName&gt;-&lt;suffix&gt;</code> with <code>suffix</code> is either <code>repartition</code> or <code>changelog</code>.
+               You can find out more about the names of the required internal topics via <code>Topology#describe()</code>.
+	       All internal topics follow the naming pattern <code>&lt;application.id&gt;-&lt;operatorName&gt;-&lt;suffix&gt;</code> where the <code>suffix</code> is either <code>repartition</code> or <code>changelog</code>.
                Note, that there is no guarantee about this naming pattern in future releases&mdash;it's not part of the public API.</p>
         </div>
         <div class="section" id="security-example">
