@@ -87,8 +87,8 @@ object ConsoleConsumer extends Logging {
     } finally {
       if (!conf.useOldConsumer) {
         val newConsumer = consumer.asInstanceOf[NewShinyConsumer]
-
-        while (consumer.asInstanceOf[NewShinyConsumer].recordIter.hasNext) {
+        // store the real offsets to honor --max-messages instead of max.poll.records
+        while (newConsumer.recordIter.hasNext) {
           val record = newConsumer.recordIter.next()
           if (!consumedOffsets.exists(tp => tp._1.topic() == record.topic() && tp._1.partition() == record.partition())) {
             val tp = new TopicPartition(record.topic(), record.partition())
