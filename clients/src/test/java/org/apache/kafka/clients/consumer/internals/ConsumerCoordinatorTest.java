@@ -98,12 +98,13 @@ public class ConsumerCoordinatorTest {
     private int sessionTimeoutMs = 10000;
     private int heartbeatIntervalMs = 5000;
     private long retryBackoffMs = 100;
-    private boolean autoCommitEnabled = true;
+    private boolean autoCommitEnabled = false;
     private int autoCommitIntervalMs = 2000;
     private MockPartitionAssignor partitionAssignor = new MockPartitionAssignor();
     private List<PartitionAssignor> assignors = Collections.<PartitionAssignor>singletonList(partitionAssignor);
     private MockTime time;
-    private MockClient client;    private Cluster cluster = TestUtils.clusterWith(1, new HashMap<String, Integer>() {
+    private MockClient client;
+    private Cluster cluster = TestUtils.clusterWith(1, new HashMap<String, Integer>() {
         {
             put(topic1, 1);
             put(topic2, 1);
@@ -1625,7 +1626,9 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testAsyncOffsetCommitAfterCoordinatorBackToService() {
+    public void testAutoCommitAfterCoordinatorBackToService() {
+        ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
+                ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true, true);
         subscriptions.assignFromUser(Collections.singleton(t1p));
         subscriptions.committed(t1p, new OffsetAndMetadata(0));
         subscriptions.seek(t1p, 100L);

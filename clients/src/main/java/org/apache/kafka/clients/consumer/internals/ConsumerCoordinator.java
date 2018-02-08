@@ -624,7 +624,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return false;
     }
 
-    // visible only for testing
     public void maybeAutoCommitOffsetsAsync(long now) {
         if (autoCommitEnabled && now >= nextAutoCommitDeadline) {
             doAutoCommitOffsetsAsync();
