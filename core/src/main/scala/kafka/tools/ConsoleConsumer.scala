@@ -140,6 +140,7 @@ object ConsoleConsumer extends Logging {
   }
 
   def process(maxMessages: Integer, formatter: MessageFormatter, consumer: BaseConsumer, output: PrintStream, skipMessageOnError: Boolean) {
+    lazy val tps = collection.mutable.Set[TopicPartition]() // avoid creating too many TopicPartition objects
     while (messageCount < maxMessages || maxMessages == -1) {
       val msg: BaseConsumerRecord = try {
         consumer.receive()
@@ -158,7 +159,6 @@ object ConsoleConsumer extends Logging {
           return
       }
       messageCount += 1
-      val tps = collection.mutable.Set[TopicPartition]() // avoid creating too many TopicPartition objects
       try {
         formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp,
                                              msg.timestampType, 0, 0, 0, msg.key, msg.value, msg.headers), output)
