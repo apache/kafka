@@ -317,6 +317,28 @@ class ConsoleConsumerTest {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
+  def shouldExitOnInvalidConfigWithSmallMaxMessagesInNewConsumer(): Unit = {
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
+
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--consumer-property", "max.poll.records=500",
+      "--max-messages", "400")
+
+    try {
+      val config = new ConsoleConsumer.ConsumerConfig(args)
+      val props = ConsoleConsumer.getNewConsumerProps(config)
+      ConsoleConsumer.checkAndMaybeThrowException(config, props)
+    } finally {
+      Exit.resetExitProcedure()
+    }
+
+    fail("Expected consumer property construction to fail due to ineffectively small max messages option")
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
   def shouldExitOnInvalidConfigWithAutoOffsetResetAndConflictingFromBeginningNewConsumer() {
 
     // Override exit procedure to throw an exception instead of exiting, so we can catch the exit

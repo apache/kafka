@@ -72,10 +72,13 @@ object ConsoleConsumer extends Logging {
         new OldConsumer(conf.filterSpec, props)
       } else {
         val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
+        val props = getNewConsumerProps(conf)
+        checkAndMaybeThrowException(conf, props)
+
         if (conf.partitionArg.isDefined)
-          new NewShinyConsumer(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, getNewConsumerProps(conf), timeoutMs)
+          new NewShinyConsumer(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, props, timeoutMs)
         else
-          new NewShinyConsumer(Option(conf.topicArg), None, None, Option(conf.whitelistArg), getNewConsumerProps(conf), timeoutMs)
+          new NewShinyConsumer(Option(conf.topicArg), None, None, Option(conf.whitelistArg), props, timeoutMs)
       }
 
     addShutdownHook(consumer, conf)
@@ -213,6 +216,15 @@ object ConsoleConsumer extends Logging {
     props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, config.isolationLevel)
     props
+  }
+
+  def checkAndMaybeThrowException(config: ConsumerConfig, props: Properties) {
+    if (config.maxMessages > 0) {
+      val maxPollRecords = new org.apache.kafka.clients.consumer.ConsumerConfig(props).getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG)
+      if (config.maxMessages < maxPollRecords)
+        throw new IllegalArgumentException(s"max messages(${config.maxMessages}) cannot be " +
+          s"lower than ${ConsumerConfig.MAX_POLL_RECORDS_CONFIG}($maxPollRecords)")
+    }
   }
 
   /**
