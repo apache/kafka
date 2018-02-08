@@ -641,7 +641,7 @@ public interface KGroupedTable<K, V> {
      * Aggregating is a generalization of {@link #reduce(Reducer, Reducer) combining via reduce(...)} as it,
      * for example, allows the result to have a different type than the input values.
      * If the result value type does not match the {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value
-     * serde} you should use {@link #aggregate(Initializer, Aggregator, Aggregator, Serde)}.
+     * serde} you should use {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized)}.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * provided by the given {@code storeSupplier}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
