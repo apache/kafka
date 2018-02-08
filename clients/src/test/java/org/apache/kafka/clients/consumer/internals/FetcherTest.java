@@ -2037,7 +2037,7 @@ public class FetcherTest {
     }
 
     @Test
-    public void testFetcherWithAuthenticationFailure() {
+    public void testFetcherWithinBlackoutPeriodAfterAuthenticationFailure() {
         client.authenticationFailed(node, 300);
 
         subscriptions.assignFromUser(singleton(tp0));
@@ -2057,9 +2057,6 @@ public class FetcherTest {
         } catch (SaslAuthenticationException e) {
             // OK
         }
-
-        time.sleep(300); // wait until the blackout period is elapsed
-        assertTrue(!client.connectionFailed(node));
     }
 
     private int appendTransactionalRecords(ByteBuffer buffer, long pid, long baseOffset, int baseSequence, SimpleRecord... records) {

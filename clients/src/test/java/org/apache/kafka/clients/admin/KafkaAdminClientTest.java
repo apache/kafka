@@ -250,7 +250,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testAdminClientApisWithAuthenticationFailure() throws Exception {
+    public void testAdminClientApisWithinBlackoutPeriodAfterAuthenticationFailure() throws Exception {
         AdminClientUnitTestEnv env = mockClientEnv();
         Node node = env.cluster().controller();
         env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -262,11 +262,6 @@ public class KafkaAdminClientTest {
         // wait less than the blackout period, the connection should fail and the authentication error should remain
         env.time().sleep(30);
         assertTrue(env.kafkaClient().connectionFailed(node));
-        callAdminClientApisAndExpectAnAuthenticationError(env);
-
-        // wait until the blackout period is elapsed, the connection should succeed but the authentication error should remain
-        env.time().sleep(300);
-        assertTrue(!env.kafkaClient().connectionFailed(node));
         callAdminClientApisAndExpectAnAuthenticationError(env);
 
         env.close();

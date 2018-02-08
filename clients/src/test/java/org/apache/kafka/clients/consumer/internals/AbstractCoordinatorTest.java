@@ -521,7 +521,7 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
-    public void testEnsureCoordinatorReadyWithAuthenticationFailure() {
+    public void testEnsureCoordinatorReadyWithinBlackoutPeriodAfterAuthenticationFailure() {
         setupCoordinator(RETRY_BACKOFF_MS);
 
         mockClient.authenticationFailed(node, 300);
@@ -542,9 +542,6 @@ public class AbstractCoordinatorTest {
         } catch (AuthenticationException e) {
             // OK
         }
-
-        mockTime.sleep(300); // wait until the blackout period is elapsed
-        assertTrue(!mockClient.connectionFailed(node));
     }
 
     private AtomicBoolean prepareFirstHeartbeat() {

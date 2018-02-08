@@ -1505,7 +1505,7 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testEnsureActiveGroupWithAuthenticationFailure() {
+    public void testEnsureActiveGroupWithinBlackoutPeriodAfterAuthenticationFailure() {
         client.authenticationFailed(node, 300);
 
         try {
@@ -1524,9 +1524,6 @@ public class ConsumerCoordinatorTest {
         } catch (AuthenticationException e) {
             // OK
         }
-
-        time.sleep(300); // wait until the blackout period is elapsed
-        assertTrue(!client.connectionFailed(node));
     }
 
     @Test

@@ -125,11 +125,6 @@ public class MockClient implements KafkaClient {
         blackout(node, duration);
     }
 
-//    public void authenticationSucceeded(Node node) {
-//        if (!isBlackedOut(node))
-//            authenticationException.remove(node);
-//    }
-
     private boolean isBlackedOut(Node node) {
         if (blackedOut.containsKey(node)) {
             long expiration = blackedOut.get(node);

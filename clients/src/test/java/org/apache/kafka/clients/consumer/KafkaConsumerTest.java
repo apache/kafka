@@ -1433,7 +1433,7 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    public void testConsumerWithAuthenticationFailure() {
+    public void testConsumerWithinBlackoutPeriodAfterAuthenticationFailure() {
         int rebalanceTimeoutMs = 60000;
         int sessionTimeoutMs = 30000;
         int heartbeatIntervalMs = 3000;
@@ -1462,9 +1462,6 @@ public class KafkaConsumerTest {
         time.sleep(30); // wait less than the blackout period
         assertTrue(client.connectionFailed(node));
         callConsumerApisAndExpectAnAuthenticationError(consumer, tp0);
-
-        time.sleep(300); // wait until the blackout period is elapsed
-        assertTrue(!client.connectionFailed(node));
 
         client.requests().clear();
         consumer.close(0, TimeUnit.MILLISECONDS);

@@ -72,7 +72,7 @@ public class ConsumerNetworkClientTest {
     }
 
     @Test
-    public void sendWithAuthenticationFailure() throws InterruptedException {
+    public void sendWithinBlackoutPeriodAfterAuthenticationFailure() throws InterruptedException {
         client.authenticationFailed(node, 300);
         client.prepareResponse(heartbeatResponse(Errors.NONE));
         final RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
@@ -99,19 +99,6 @@ public class ConsumerNetworkClientTest {
         }, 3000, "Future was not completed in time.");
         assertTrue(future2.failed());
         assertTrue("Expected only an authentication error.", future2.exception() instanceof AuthenticationException);
-
-        time.sleep(300); // wait until the blackout period is elapsed
-        assertTrue(!client.connectionFailed(node));
-
-        final RequestFuture<ClientResponse> future3 = consumerClient.send(node, heartbeat());
-        consumerClient.poll(future3);
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return future3.isDone();
-            }
-        }, 3000, "Future was not completed in time.");
-        assertTrue(future3.failed());
     }
 
     @Test
