@@ -174,7 +174,7 @@ public class QueryableStateIntegrationTest {
             "kafka streams",
             "the cat in the hat",
             "green eggs and ham",
-            "that sam i am",
+            "that Sam i am",
             "up the creek without a paddle",
             "run forest run",
             "a tank full of gas",
