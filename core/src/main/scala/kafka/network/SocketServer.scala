@@ -119,15 +119,15 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     val recvBufferSize = config.socketReceiveBufferBytes
     val brokerId = config.brokerId
 
-    val numProcessorThreads = config.numNetworkThreads
     endpoints.foreach { endpoint =>
       val listenerName = endpoint.listenerName
       val securityProtocol = endpoint.securityProtocol
       val listenerProcessors = new ArrayBuffer[Processor]()
 
       for (i <- 0 until newProcessorsPerListener) {
-        listenerProcessors += newProcessor(nextProcessorId, connectionQuotas, listenerName, securityProtocol, memoryPool)
-        requestChannel.addProcessor(nextProcessorId)
+        val processor = newProcessor(nextProcessorId, connectionQuotas, listenerName, securityProtocol, memoryPool)
+        listenerProcessors += processor
+        requestChannel.addProcessor(processor)
         nextProcessorId += 1
       }
       listenerProcessors.foreach(p => processors.put(p.id, p))
@@ -140,21 +140,14 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     }
   }
 
-  // register the processor threads for notification of responses
-  requestChannel.addResponseListener(id => {
-    val processor = processors.get(id)
-    if (processor != null)
-      processor.wakeup()
-  })
-
   /**
     * Stop processing requests and new connections.
     */
   def stopProcessingRequests() = {
     info("Stopping socket server request processors")
     this.synchronized {
-      acceptors.asScala.values.foreach(_.shutdown)
-      processors.asScala.values.foreach(_.shutdown)
+      acceptors.asScala.values.foreach(_.shutdown())
+      processors.asScala.values.foreach(_.shutdown())
       requestChannel.clear()
       stoppedProcessingRequests = true
     }
@@ -475,10 +468,19 @@ private[kafka] class Processor(val id: Int,
 
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
   private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
+  private val responseQueue = new LinkedBlockingDeque[RequestChannel.Response]()
+
   private[kafka] val metricTags = mutable.LinkedHashMap(
     "listener" -> listenerName.value,
     "networkProcessor" -> id.toString
   ).asJava
+
+  newGauge("ResponseQueueSize",
+    new Gauge[Int] {
+      def value = responseQueue.size()
+    },
+    Map("processor" -> id.toString)
+  )
 
   newGauge("IdlePercent",
     new Gauge[Double] {
@@ -562,7 +564,7 @@ private[kafka] class Processor(val id: Int,
 
   private def processChannelException(channelId: String, errorMessage: String, throwable: Throwable) {
     if (openOrClosingChannel(channelId).isDefined) {
-      error(s"Closing socket for ${channelId} because of error", throwable)
+      error(s"Closing socket for $channelId because of error", throwable)
       close(channelId)
     }
     processException(errorMessage, throwable)
@@ -570,7 +572,7 @@ private[kafka] class Processor(val id: Int,
 
   private def processNewResponses() {
     var curr: RequestChannel.Response = null
-    while ({curr = requestChannel.receiveResponse(id); curr != null}) {
+    while ({curr = dequeueResponse(); curr != null}) {
       val channelId = curr.request.context.connectionId
       try {
         curr.responseAction match {
@@ -753,6 +755,20 @@ private[kafka] class Processor(val id: Int,
     connId
   }
 
+  private[network] def enqueueResponse(response: RequestChannel.Response): Unit = {
+    responseQueue.put(response)
+    wakeup()
+  }
+
+  private def dequeueResponse(): RequestChannel.Response = {
+    val response = responseQueue.poll()
+    if (response != null)
+      response.request.responseDequeueTimeNanos = Time.SYSTEM.nanoseconds
+    response
+  }
+
+  private[network] def responseQueueSize = responseQueue.size
+
   // Only for testing
   private[network] def inflightResponseCount: Int = inflightResponses.size
 
@@ -772,8 +788,13 @@ private[kafka] class Processor(val id: Int,
   /**
    * Wakeup the thread for selection.
    */
-  @Override
-  def wakeup = selector.wakeup()
+  override def wakeup() = selector.wakeup()
+
+  override def shutdown(): Unit = {
+    super.shutdown()
+    removeMetric("ResponseQueueSize", Map("processor" -> id.toString))
+    removeMetric("IdlePercent", Map("networkProcessor" -> id.toString))
+  }
 
 }
 
