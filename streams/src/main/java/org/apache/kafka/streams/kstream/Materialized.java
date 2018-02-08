@@ -153,7 +153,26 @@ public class Materialized<K, V, S extends StateStore> {
      */
     public static <K, V, S extends StateStore> Materialized<K, V, S> with(final Serde<K> keySerde,
                                                                           final Serde<V> valueSerde) {
-        return new Materialized<K, V, S>((String) null).withKeySerde(keySerde).withValueSerde(valueSerde);
+        return Materialized.with(null, keySerde, valueSerde);
+    }
+
+    /**
+     * Materialize a {@link StateStore} with the provided store name and key and value {@link Serde}s.
+     *
+     * @param storeName     the name of the underlying {@link KTable} state store; valid characters are ASCII
+     * @param keySerde      the key {@link Serde} to use. If the {@link Serde} is null, then the default key
+     *                      serde from configs will be used
+     * @param valueSerde    the value {@link Serde} to use. If the {@link Serde} is null, then the default value
+     *                      serde from configs will be used
+     * @param <K>           key type
+     * @param <V>           value type
+     * @param <S>           store type
+     * @return a new {@link Materialized} instance with the given key and value serdes
+     */
+    public static <K, V, S extends StateStore> Materialized<K, V, S> with(final String storeName,
+                                                                          final Serde<K> keySerde,
+                                                                          final Serde<V> valueSerde) {
+        return new Materialized<K, V, S>(storeName).withKeySerde(keySerde).withValueSerde(valueSerde);
     }
 
     /**
