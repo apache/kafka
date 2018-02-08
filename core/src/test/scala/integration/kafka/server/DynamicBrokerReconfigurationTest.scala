@@ -33,7 +33,7 @@ import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.coordinator.group.OffsetConfig
 import kafka.log.LogConfig
 import kafka.message.ProducerCompressionCodec
-import kafka.network.Processor
+import kafka.network.{Processor, RequestChannel}
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.{ConfigEntityChangeNotificationZNode, ZooKeeperTestHarness}
@@ -464,7 +464,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   private def isProcessorMetric(metricName: MetricName): Boolean = {
     val mbeanName = metricName.getMBeanName
-    mbeanName.contains(s"${Processor.NetworkProcessorMetricTag}=") || mbeanName.contains("processor=")
+    mbeanName.contains(s"${Processor.NetworkProcessorMetricTag}=") || mbeanName.contains(s"${RequestChannel.ProcessorMetricTag}=")
   }
 
   private def clearLeftOverProcessorMetrics(): Unit = {

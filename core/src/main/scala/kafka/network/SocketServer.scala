@@ -482,13 +482,6 @@ private[kafka] class Processor(val id: Int,
     NetworkProcessorMetricTag -> id.toString
   ).asJava
 
-  newGauge("ResponseQueueSize",
-    new Gauge[Int] {
-      def value = responseQueue.size()
-    },
-    Map("processor" -> id.toString)
-  )
-
   newGauge(IdlePercentMetricName,
     new Gauge[Double] {
       def value = {
@@ -800,7 +793,6 @@ private[kafka] class Processor(val id: Int,
 
   override def shutdown(): Unit = {
     super.shutdown()
-    removeMetric("ResponseQueueSize", Map("processor" -> id.toString))
     removeMetric("IdlePercent", Map("networkProcessor" -> id.toString))
   }
 

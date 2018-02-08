@@ -107,12 +107,7 @@ class MetadataCache(brokerId: Int) extends Logging {
     inReadLock(partitionMetadataLock) {
       // Returns None if broker is not alive or if the broker does not have a listener named `listenerName`.
       // Since listeners can be added dynamically, a broker with a missing listener could be a transient error.
-      aliveNodes.get(brokerId).flatMap { nodeMap =>
-        val node = nodeMap.get(listenerName)
-        if (node.isEmpty)
-          error(s"Broker endpoint not found for broker $brokerId listenerName $listenerName")
-        node
-      }
+      aliveNodes.get(brokerId).flatMap(_.get(listenerName))
     }
 
   // errorUnavailableEndpoints exists to support v0 MetadataResponses
@@ -206,6 +201,11 @@ class MetadataCache(brokerId: Int) extends Logging {
         }
         aliveBrokers(broker.id) = Broker(broker.id, endPoints, Option(broker.rack))
         aliveNodes(broker.id) = nodes.asScala
+      }
+      aliveNodes.get(brokerId).foreach { listenerMap =>
+        val listeners = listenerMap.keySet
+        if (!aliveNodes.values.forall(_.keySet == listeners))
+          error(s"Listeners are not identical across brokers: $aliveNodes")
       }
 
       val deletedPartitions = new mutable.ArrayBuffer[TopicPartition]
