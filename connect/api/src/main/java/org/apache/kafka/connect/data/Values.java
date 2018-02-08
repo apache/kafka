@@ -749,10 +749,10 @@ public class Values {
                 Schema elementSchema = null;
                 while (parser.hasNext()) {
                     if (parser.canConsume(ARRAY_END_DELIMITER)) {
-                        if (elementSchema == null) {
-                            throw new DataException("Unable to parse as list without common element type: " + parser.original());
+                        Schema listSchema = null;
+                        if (elementSchema != null) {
+                            listSchema = SchemaBuilder.array(elementSchema).schema();
                         }
-                        Schema listSchema = SchemaBuilder.array(elementSchema).schema();
                         result = alignListEntriesWithSchema(listSchema, result);
                         return new SchemaAndValue(listSchema, result);
                     }
@@ -777,10 +777,10 @@ public class Values {
                 Schema valueSchema = null;
                 while (parser.hasNext()) {
                     if (parser.canConsume(MAP_END_DELIMITER)) {
-                        if (keySchema == null || valueSchema == null) {
-                            throw new DataException("Unable to parse as map without common key and value types: " + parser.original());
+                        Schema mapSchema = null;
+                        if (keySchema != null && valueSchema != null) {
+                            mapSchema = SchemaBuilder.map(keySchema, valueSchema).schema();
                         }
-                        Schema mapSchema = SchemaBuilder.map(keySchema, valueSchema).schema();
                         result = alignMapKeysAndValuesWithSchema(mapSchema, result);
                         return new SchemaAndValue(mapSchema, result);
                     }

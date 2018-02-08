@@ -175,14 +175,32 @@ public class ValuesTest {
     }
 
     /**
-     * We can't infer or successfully parse into a different type, so this returns the same string.
+     * The parsed array has byte values and one int value, so we should return list with single unified type of integers.
      */
     @Test
-    public void shouldParseStringListWithMultipleElementTypesAndReturnString() {
-        String str = "[1, 2, 3, \"four\",,]";
+    public void shouldConvertStringOfListWithMixedElementTypesIntoListWithDifferentElementTypes() {
+        String str = "[1, 2, \"three\"]";
+        List<?> list = Values.convertToList(Schema.STRING_SCHEMA, str);
+        assertEquals(3, list.size());
+        assertEquals(1, ((Number) list.get(0)).intValue());
+        assertEquals(2, ((Number) list.get(1)).intValue());
+        assertEquals("three", list.get(2));
+    }
+
+    /**
+     * We parse into different element types, but cannot infer a common element schema.
+     */
+    @Test
+    public void shouldParseStringListWithMultipleElementTypesAndReturnListWithNoSchema() {
+        String str = "[1, 2, 3, \"four\"]";
         SchemaAndValue result = Values.parseString(str);
-        assertEquals(Type.STRING, result.schema().type());
-        assertEquals(str, result.value());
+        assertNull(result.schema());
+        List<?> list = (List<?>) result.value();
+        assertEquals(4, list.size());
+        assertEquals(1, ((Number) list.get(0)).intValue());
+        assertEquals(2, ((Number) list.get(1)).intValue());
+        assertEquals(3, ((Number) list.get(2)).intValue());
+        assertEquals("four", list.get(3));
     }
 
     /**
@@ -209,8 +227,8 @@ public class ValuesTest {
      * Therefore, we can't represent this.
      */
     @Test(expected = DataException.class)
-    public void shouldFailToConvertToListFromStringWithNonCommonElementType() {
-        Values.convertToList(Schema.STRING_SCHEMA, "[1, 2, 3, \"four\"]");
+    public void shouldFailToConvertToListFromStringWithNonCommonElementTypeAndBlankElement() {
+        Values.convertToList(Schema.STRING_SCHEMA, "[1, 2, 3, \"four\",,,]");
     }
 
     /**
