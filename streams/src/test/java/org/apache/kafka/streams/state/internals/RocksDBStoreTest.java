@@ -17,7 +17,12 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
@@ -54,13 +59,15 @@ import static org.junit.Assert.fail;
 public class RocksDBStoreTest {
     private final File tempDir = TestUtils.tempDirectory();
 
-    private RocksDBStore<String, String> subject;
+    private Serializer<String> stringSerializer = new StringSerializer();
+    private Deserializer<String> stringDeserializer = new StringDeserializer();
+    private RocksDBStore subject;
     private MockProcessorContext context;
     private File dir;
 
     @Before
     public void setUp() {
-        subject = new RocksDBStore<>("test", Serdes.String(), Serdes.String());
+        subject = new RocksDBStore("test");
         dir = TestUtils.tempDirectory();
         context = new MockProcessorContext(dir,
             Serdes.String(),
@@ -81,7 +88,8 @@ public class RocksDBStoreTest {
         final String message = "how can a 4 ounce bird carry a 2lb coconut";
         int intKey = 1;
         for (int i = 0; i < 2000000; i++) {
-            subject.put("theKeyIs" + intKey++, message);
+            subject.put(new Bytes(stringSerializer.serialize(null, "theKeyIs" + intKey++)),
+                stringSerializer.serialize(null, message));
         }
 
         final List<KeyValue<byte[], byte[]>> restoreBytes = new ArrayList<>();
@@ -92,7 +100,11 @@ public class RocksDBStoreTest {
 
         context.restore("test", restoreBytes);
 
-        assertThat(subject.get("restoredKey"), equalTo("restoredValue"));
+        assertThat(
+            stringDeserializer.deserialize(
+                null,
+                subject.get(new Bytes(stringSerializer.serialize(null, "restoredKey")))),
+            equalTo("restoredValue"));
     }
 
     @Test
@@ -122,18 +134,36 @@ public class RocksDBStoreTest {
 
     @Test
     public void shouldPutAll() {
-        List<KeyValue<String, String>> entries = new ArrayList<>();
-        entries.add(new KeyValue<>("1", "a"));
-        entries.add(new KeyValue<>("2", "b"));
-        entries.add(new KeyValue<>("3", "c"));
+        List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "1")),
+            stringSerializer.serialize(null, "a")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "2")),
+            stringSerializer.serialize(null, "b")));
+        entries.add(new KeyValue<>(
+            new Bytes(stringSerializer.serialize(null, "3")),
+            stringSerializer.serialize(null, "c")));
 
         subject.init(context, subject);
         subject.putAll(entries);
         subject.flush();
 
-        assertEquals(subject.get("1"), "a");
-        assertEquals(subject.get("2"), "b");
-        assertEquals(subject.get("3"), "c");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                subject.get(new Bytes(stringSerializer.serialize(null, "1")))),
+            "a");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                subject.get(new Bytes(stringSerializer.serialize(null, "2")))),
+            "b");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                subject.get(new Bytes(stringSerializer.serialize(null, "3")))),
+            "c");
     }
 
     @Test
@@ -173,9 +203,21 @@ public class RocksDBStoreTest {
         subject.init(context, subject);
         context.restore(subject.name(), entries);
 
-        assertEquals(subject.get("1"), "a");
-        assertEquals(subject.get("2"), "b");
-        assertEquals(subject.get("3"), "c");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                subject.get(new Bytes(stringSerializer.serialize(null, "1")))),
+            "a");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                subject.get(new Bytes(stringSerializer.serialize(null, "2")))),
+            "b");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                subject.get(new Bytes(stringSerializer.serialize(null, "3")))),
+            "c");
     }
 
 
@@ -187,11 +229,11 @@ public class RocksDBStoreTest {
         subject.init(context, subject);
         context.restore(subject.name(), entries);
 
-        final KeyValueIterator<String, String> iterator = subject.all();
+        final KeyValueIterator<Bytes, byte[]> iterator = subject.all();
         final Set<String> keys = new HashSet<>();
 
         while (iterator.hasNext()) {
-            keys.add(iterator.next().key);
+            keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
         }
 
         assertThat(keys, equalTo(Utils.mkSet("2", "3")));
@@ -211,18 +253,30 @@ public class RocksDBStoreTest {
         subject.init(context, subject);
         context.restore(subject.name(), entries);
 
-        final KeyValueIterator<String, String> iterator = subject.all();
+        final KeyValueIterator<Bytes, byte[]> iterator = subject.all();
         final Set<String> keys = new HashSet<>();
 
         while (iterator.hasNext()) {
-            keys.add(iterator.next().key);
+            keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
         }
 
         assertThat(keys, equalTo(Utils.mkSet("1", "2", "3")));
 
-        assertEquals(subject.get("1"), "restored");
-        assertEquals(subject.get("2"), "b");
-        assertEquals(subject.get("3"), "c");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                subject.get(new Bytes(stringSerializer.serialize(null, "1")))),
+            "restored");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                subject.get(new Bytes(stringSerializer.serialize(null, "2")))),
+            "b");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                subject.get(new Bytes(stringSerializer.serialize(null, "3")))),
+            "c");
     }
 
     @Test
@@ -233,9 +287,21 @@ public class RocksDBStoreTest {
 
         context.restore(subject.name(), entries);
 
-        assertEquals(subject.get("1"), "a");
-        assertEquals(subject.get("2"), "b");
-        assertEquals(subject.get("3"), "c");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                subject.get(new Bytes(stringSerializer.serialize(null, "1")))),
+            "a");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                subject.get(new Bytes(stringSerializer.serialize(null, "2")))),
+            "b");
+        assertEquals(
+            stringDeserializer.deserialize(
+                null,
+                subject.get(new Bytes(stringSerializer.serialize(null, "3")))),
+            "c");
 
         entries.clear();
 
@@ -245,11 +311,11 @@ public class RocksDBStoreTest {
 
         context.restore(subject.name(), entries);
 
-        final KeyValueIterator<String, String> iterator = subject.all();
+        final KeyValueIterator<Bytes, byte[]> iterator = subject.all();
         final Set<String> keys = new HashSet<>();
 
         while (iterator.hasNext()) {
-            keys.add(iterator.next().key);
+            keys.add(stringDeserializer.deserialize(null, iterator.next().key.get()));
         }
 
         assertThat(keys, equalTo(Utils.mkSet("2", "3")));
@@ -261,7 +327,7 @@ public class RocksDBStoreTest {
     public void shouldThrowNullPointerExceptionOnNullPut() {
         subject.init(context, subject);
         try {
-            subject.put(null, "someVal");
+            subject.put(null, stringSerializer.serialize(null, "someVal"));
             fail("Should have thrown NullPointerException on null put()");
         } catch (NullPointerException e) { }
     }
@@ -270,7 +336,7 @@ public class RocksDBStoreTest {
     public void shouldThrowNullPointerExceptionOnNullPutAll() {
         subject.init(context, subject);
         try {
-            subject.put(null, "someVal");
+            subject.put(null, stringSerializer.serialize(null, "someVal"));
             fail("Should have thrown NullPointerException on null put()");
         } catch (NullPointerException e) { }
     }
@@ -297,7 +363,7 @@ public class RocksDBStoreTest {
     public void shouldThrowNullPointerExceptionOnRange() {
         subject.init(context, subject);
         try {
-            subject.range(null, "2");
+            subject.range(null, new Bytes(stringSerializer.serialize(null, "2")));
             fail("Should have thrown NullPointerException on deleting null key");
         } catch (NullPointerException e) { }
     }
@@ -306,7 +372,9 @@ public class RocksDBStoreTest {
     public void shouldThrowProcessorStateExceptionOnPutDeletedDir() throws IOException {
         subject.init(context, subject);
         Utils.delete(dir);
-        subject.put("anyKey", "anyValue");
+        subject.put(
+            new Bytes(stringSerializer.serialize(null, "anyKey")),
+            stringSerializer.serialize(null, "anyValue"));
         subject.flush();
     }
 
