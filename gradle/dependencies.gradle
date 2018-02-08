@@ -52,7 +52,7 @@ versions += [
   argparse4j: "0.7.0",
   bcpkix: "1.58",
   easymock: "3.5.1",
-  jackson: "2.9.3",
+  jackson: "2.9.4",
   jetty: "9.2.22.v20170606",
   jersey: "2.25.1",
   jmh: "1.19",
