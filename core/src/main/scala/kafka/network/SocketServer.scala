@@ -572,7 +572,7 @@ private[kafka] class Processor(val id: Int,
 
   private def processNewResponses() {
     var curr: RequestChannel.Response = null
-    while ({curr = receiveResponse(); curr != null}) {
+    while ({curr = dequeueResponse(); curr != null}) {
       val channelId = curr.request.context.connectionId
       try {
         curr.responseAction match {
@@ -760,7 +760,7 @@ private[kafka] class Processor(val id: Int,
     wakeup()
   }
 
-  private def receiveResponse(): RequestChannel.Response = {
+  private def dequeueResponse(): RequestChannel.Response = {
     val response = responseQueue.poll()
     if (response != null)
       response.request.responseDequeueTimeNanos = Time.SYSTEM.nanoseconds
