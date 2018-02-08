@@ -304,15 +304,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
         for (final Map.Entry<TopicPartition, Long> entry : newOffsets.entrySet()) {
             List<Long> offsets = endOffsets.get(entry.getKey());
-            if (offsets == null) {
+            if (replace || offsets == null) {
                 offsets = new ArrayList<>();
             }
-            if (replace) {
-                offsets = new ArrayList<>();
-                offsets.add(entry.getValue());
-            } else {
-                offsets.add(entry.getValue());
-            }
+            offsets.add(entry.getValue());
             endOffsets.put(entry.getKey(), offsets);
         }
     }
@@ -463,8 +458,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     private Long getEndOffset(List<Long> offsets) {
-
-        if(offsets == null || offsets.isEmpty()) {
+        if (offsets == null || offsets.isEmpty()) {
             return null;
         }
         return offsets.size() > 1 ? offsets.remove(0) : offsets.get(0);
