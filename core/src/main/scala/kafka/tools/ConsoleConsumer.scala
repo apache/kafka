@@ -32,6 +32,7 @@ import kafka.metrics.KafkaMetricsReporter
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{AuthenticationException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.Deserializer
@@ -47,6 +48,7 @@ object ConsoleConsumer extends Logging {
   var messageCount = 0
 
   private val shutdownLatch = new CountDownLatch(1)
+  private lazy val consumedOffsets = collection.mutable.Map[TopicPartition, Long]()
 
   def main(args: Array[String]) {
     val conf = new ConsumerConfig(args)
@@ -72,13 +74,10 @@ object ConsoleConsumer extends Logging {
         new OldConsumer(conf.filterSpec, props)
       } else {
         val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
-        val props = getNewConsumerProps(conf)
-        checkAndMaybeThrowException(conf, props)
-
         if (conf.partitionArg.isDefined)
-          new NewShinyConsumer(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, props, timeoutMs)
+          new NewShinyConsumer(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, getNewConsumerProps(conf), timeoutMs)
         else
-          new NewShinyConsumer(Option(conf.topicArg), None, None, Option(conf.whitelistArg), props, timeoutMs)
+          new NewShinyConsumer(Option(conf.topicArg), None, None, Option(conf.whitelistArg), getNewConsumerProps(conf), timeoutMs)
       }
 
     addShutdownHook(consumer, conf)
@@ -86,6 +85,20 @@ object ConsoleConsumer extends Logging {
     try {
       process(conf.maxMessages, conf.formatter, consumer, System.out, conf.skipMessageOnError)
     } finally {
+      if (!conf.useOldConsumer) {
+        val newConsumer = consumer.asInstanceOf[NewShinyConsumer]
+
+        while (consumer.asInstanceOf[NewShinyConsumer].recordIter.hasNext) {
+          val record = newConsumer.recordIter.next()
+          if (!consumedOffsets.exists(tp => tp._1.topic() == record.topic() && tp._1.partition() == record.partition())) {
+            val tp = new TopicPartition(record.topic(), record.partition())
+            consumedOffsets += tp -> record.offset()
+          }
+        }
+
+        consumedOffsets.foreach { case (tp, offset) => newConsumer.consumer.seek(tp, offset) }
+      }
+
       consumer.cleanup()
       conf.formatter.close()
       reportRecordCount()
@@ -145,9 +158,18 @@ object ConsoleConsumer extends Logging {
           return
       }
       messageCount += 1
+      val tps = collection.mutable.Set[TopicPartition]() // avoid creating too many TopicPartition objects
       try {
         formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp,
                                              msg.timestampType, 0, 0, 0, msg.key, msg.value, msg.headers), output)
+        if (consumer.isInstanceOf[NewShinyConsumer]) {
+          val partition = tps.find(tp => tp.topic() == msg.topic && tp.partition() == msg.partition).getOrElse {
+            val tp = new TopicPartition(msg.topic, msg.partition)
+            tps += tp
+            tp
+          }
+          consumedOffsets += partition -> (msg.offset + 1L)
+        }
       } catch {
         case e: Throwable =>
           if (skipMessageOnError) {
@@ -216,15 +238,6 @@ object ConsoleConsumer extends Logging {
     props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, config.isolationLevel)
     props
-  }
-
-  def checkAndMaybeThrowException(config: ConsumerConfig, props: Properties) {
-    if (config.maxMessages > 0) {
-      val maxPollRecords = new org.apache.kafka.clients.consumer.ConsumerConfig(props).getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG)
-      if (config.maxMessages < maxPollRecords)
-        throw new IllegalArgumentException(s"max messages(${config.maxMessages}) cannot be " +
-          s"lower than ${ConsumerConfig.MAX_POLL_RECORDS_CONFIG}($maxPollRecords)")
-    }
   }
 
   /**
