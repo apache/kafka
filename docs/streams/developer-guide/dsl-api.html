@@ -95,7 +95,7 @@
             </ol>
             <p>After the application is run, the defined processor topologies are continuously executed (i.e., the processing plan is put into
                 action). A step-by-step guide for writing a stream processing application using the DSL is provided below.</p>
-            <p>For a complete list of available API functionality, see also the <a class="reference internal" href="../javadocs.html#streams-javadocs"><span class="std std-ref">Kafka Streams Javadocs</span></a>.</p>
+            <p>For a complete list of available API functionality, see also the <a href="../../../javadoc/org/apache/kafka/streams/package-summary.html">Streams</a> API docs.</p>
         </div>
         <div class="section" id="creating-source-streams-from-kafka">
             <span id="streams-developer-guide-dsl-sources"></span><h2><a class="toc-backref" href="#id8">Creating source streams from Kafka</a><a class="headerlink" href="#creating-source-streams-from-kafka" title="Permalink to this headline"></a></h2>
@@ -119,7 +119,7 @@
                     <td><p class="first">Creates a <a class="reference internal" href="../concepts.html#streams-concepts-kstream"><span class="std std-ref">KStream</span></a> from the specified Kafka input topics and interprets the data
                         as a <a class="reference internal" href="../concepts.html#streams-concepts-kstream"><span class="std std-ref">record stream</span></a>.
                         A <code class="docutils literal"><span class="pre">KStream</span></code> represents a <em>partitioned</em> record stream.
-                        <a class="reference external" href="../javadocs/org/apache/kafka/streams/StreamsBuilder.html#stream(java.lang.String)">(details)</a></p>
+                        <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/StreamsBuilder.html#stream(java.lang.String)">(details)</a></p>
                         <p>In the case of a KStream, the local KStream instance of every application instance will
                             be populated with data from only <strong>a subset</strong> of the partitions of the input topic.  Collectively, across
                             all application instances, all input topic partitions are read and processed.</p>
@@ -153,7 +153,7 @@
                     <td><p class="first">Reads the specified Kafka input topic into a <a class="reference internal" href="../concepts.html#streams-concepts-ktable"><span class="std std-ref">KTable</span></a>.  The topic is
                         interpreted as a changelog stream, where records with the same key are interpreted as UPSERT aka INSERT/UPDATE
                         (when the record value is not <code class="docutils literal"><span class="pre">null</span></code>) or as DELETE (when the value is <code class="docutils literal"><span class="pre">null</span></code>) for that key.
-                        <a class="reference external" href="../javadocs/org/apache/kafka/streams/StreamsBuilder.html#table-java.lang.String(java.lang.String)">(details)</a></p>
+                        <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/StreamsBuilder.html#table-java.lang.String(java.lang.String)">(details)</a></p>
                         <p>In the case of a KStream, the local KStream instance of every application instance will
                             be populated with data from only <strong>a subset</strong> of the partitions of the input topic.  Collectively, across
                             all application instances, all input topic partitions are read and processed.</p>
@@ -178,7 +178,7 @@
                     <td><p class="first">Reads the specified Kafka input topic into a <a class="reference internal" href="../concepts.html#streams-concepts-globalktable"><span class="std std-ref">GlobalKTable</span></a>.  The topic is
                         interpreted as a changelog stream, where records with the same key are interpreted as UPSERT aka INSERT/UPDATE
                         (when the record value is not <code class="docutils literal"><span class="pre">null</span></code>) or as DELETE (when the value is <code class="docutils literal"><span class="pre">null</span></code>) for that key.
-                        <a class="reference external" href="../javadocs/org/apache/kafka/streams/StreamsBuilder.html#globalTable-java.lang.String(java.lang.String)">(details)</a></p>
+                        <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/StreamsBuilder.html#globalTable-java.lang.String(java.lang.String)">(details)</a></p>
                         <p>In the case of a GlobalKTable, the local GlobalKTable instance of every application instance will
                             be populated with data from only <strong>a subset</strong> of the partitions of the input topic.  Collectively, across
                             all application instances, all input topic partitions are read and processed.</p>
@@ -250,7 +250,7 @@
                         </ul>
                     </td>
                         <td><p class="first">Branch (or split) a <code class="docutils literal"><span class="pre">KStream</span></code> based on the supplied predicates into one or more <code class="docutils literal"><span class="pre">KStream</span></code> instances.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#branch-org.apache.kafka.streams.kstream.Predicate...-">details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#branch-org.apache.kafka.streams.kstream.Predicate...-">details</a>)</p>
                             <p>Predicates are evaluated in order.  A record is placed to one and only one output stream on the first match:
                                 if the n-th predicate evaluates to true, the record is placed to n-th stream.  If no predicate matches, the
                                 the record is dropped.</p>
@@ -278,8 +278,8 @@
                         </ul>
                     </td>
                         <td><p class="first">Evaluates a boolean function for each element and retains those for which the function returns true.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#filter-org.apache.kafka.streams.kstream.Predicate-">KStream details</a>,
-                            <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KTable.html#filter-org.apache.kafka.streams.kstream.Predicate-">KTable details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#filter-org.apache.kafka.streams.kstream.Predicate-">KStream details</a>,
+                            <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KTable.html#filter-org.apache.kafka.streams.kstream.Predicate-">KTable details</a>)</p>
                             <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
 
 <span class="c1">// A filter that selects (keeps) only positive numbers</span>
@@ -305,8 +305,8 @@
                         </ul>
                     </td>
                         <td><p class="first">Evaluates a boolean function for each element and drops those for which the function returns true.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#filterNot-org.apache.kafka.streams.kstream.Predicate-">KStream details</a>,
-                            <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KTable.html#filterNot-org.apache.kafka.streams.kstream.Predicate-">KTable details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#filterNot-org.apache.kafka.streams.kstream.Predicate-">KStream details</a>,
+                            <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KTable.html#filterNot-org.apache.kafka.streams.kstream.Predicate-">KTable details</a>)</p>
                             <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
 
 <span class="c1">// An inverse filter that discards any negative numbers or zero</span>
@@ -332,7 +332,7 @@
                     </td>
                         <td><p class="first">Takes one record and produces zero, one, or more records.  You can modify the record keys and values, including
                             their types.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#flatMap-org.apache.kafka.streams.kstream.KeyValueMapper-">details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#flatMap-org.apache.kafka.streams.kstream.KeyValueMapper-">details</a>)</p>
                             <p><strong>Marks the stream for data re-partitioning:</strong>
                                 Applying a grouping or a join after <code class="docutils literal"><span class="pre">flatMap</span></code> will result in re-partitioning of the records.
                                 If possible use <code class="docutils literal"><span class="pre">flatMapValues</span></code> instead, which will not cause data re-partitioning.</p>
@@ -361,7 +361,7 @@
                     </td>
                         <td><p class="first">Takes one record and produces zero, one, or more records, while retaining the key of the original record.
                             You can modify the record values and the value type.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#flatMapValues-org.apache.kafka.streams.kstream.ValueMapper-">details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#flatMapValues-org.apache.kafka.streams.kstream.ValueMapper-">details</a>)</p>
                             <p><code class="docutils literal"><span class="pre">flatMapValues</span></code> is preferable to <code class="docutils literal"><span class="pre">flatMap</span></code> because it will not cause data re-partitioning.  However, you
                                 cannot modify the key or key type like <code class="docutils literal"><span class="pre">flatMap</span></code> does.</p>
                             <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Split a sentence into words.</span>
@@ -381,7 +381,7 @@
                         </ul>
                     </td>
                         <td><p class="first"><strong>Terminal operation.</strong>  Performs a stateless action on each record.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#foreach-org.apache.kafka.streams.kstream.ForeachAction-">details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#foreach-org.apache.kafka.streams.kstream.ForeachAction-">details</a>)</p>
                             <p>You would use <code class="docutils literal"><span class="pre">foreach</span></code> to cause <em>side effects</em> based on the input data (similar to <code class="docutils literal"><span class="pre">peek</span></code>) and then <em>stop</em>
                                 <em>further processing</em> of the input data (unlike <code class="docutils literal"><span class="pre">peek</span></code>, which is not a terminal operation).</p>
                             <p><strong>Note on processing guarantees:</strong> Any side effects of an action (such as writing to external systems) are not
@@ -410,7 +410,7 @@
                         </ul>
                     </td>
                         <td><p class="first">Groups the records by the existing key.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#groupByKey--">details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#groupByKey--">details</a>)</p>
                             <p>Grouping is a prerequisite for <a class="reference internal" href="#streams-developer-guide-dsl-aggregating"><span class="std std-ref">aggregating a stream or a table</span></a>
                                 and ensures that data is properly partitioned (&#8220;keyed&#8221;) for subsequent operations.</p>
                             <p><strong>When to set explicit SerDes:</strong>
@@ -455,8 +455,8 @@
                         <td><p class="first">Groups the records by a <em>new</em> key, which may be of a different key type.
                             When grouping a table, you may also specify a new value and value type.
                             <code class="docutils literal"><span class="pre">groupBy</span></code> is a shorthand for <code class="docutils literal"><span class="pre">selectKey(...).groupByKey()</span></code>.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#groupBy-org.apache.kafka.streams.kstream.KeyValueMapper-">KStream details</a>,
-                            <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KTable.html#groupBy-org.apache.kafka.streams.kstream.KeyValueMapper-">KTable details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#groupBy-org.apache.kafka.streams.kstream.KeyValueMapper-">KStream details</a>,
+                            <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KTable.html#groupBy-org.apache.kafka.streams.kstream.KeyValueMapper-">KTable details</a>)</p>
                             <p>Grouping is a prerequisite for <a class="reference internal" href="#streams-developer-guide-dsl-aggregating"><span class="std std-ref">aggregating a stream or a table</span></a>
                                 and ensures that data is properly partitioned (&#8220;keyed&#8221;) for subsequent operations.</p>
                             <p><strong>When to set explicit SerDes:</strong>
@@ -532,7 +532,7 @@
                         </ul>
                     </td>
                         <td><p class="first">Takes one record and produces one record.  You can modify the record key and value, including their types.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#map-org.apache.kafka.streams.kstream.KeyValueMapper-">details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#map-org.apache.kafka.streams.kstream.KeyValueMapper-">details</a>)</p>
                             <p><strong>Marks the stream for data re-partitioning:</strong>
                                 Applying a grouping or a join after <code class="docutils literal"><span class="pre">map</span></code> will result in re-partitioning of the records.
                                 If possible use <code class="docutils literal"><span class="pre">mapValues</span></code> instead, which will not cause data re-partitioning.</p>
@@ -564,8 +564,8 @@
                     </td>
                         <td><p class="first">Takes one record and produces one record, while retaining the key of the original record.
                             You can modify the record value and the value type.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#mapValues-org.apache.kafka.streams.kstream.ValueMapper-">KStream details</a>,
-                            <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KTable.html#mapValues-org.apache.kafka.streams.kstream.ValueMapper-">KTable details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#mapValues-org.apache.kafka.streams.kstream.ValueMapper-">KStream details</a>,
+                            <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KTable.html#mapValues-org.apache.kafka.streams.kstream.ValueMapper-">KTable details</a>)</p>
                             <p><code class="docutils literal"><span class="pre">mapValues</span></code> is preferable to <code class="docutils literal"><span class="pre">map</span></code> because it will not cause data re-partitioning.  However, it does not
                                 allow you to modify the key or key type like <code class="docutils literal"><span class="pre">map</span></code> does.</p>
                             <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
@@ -591,7 +591,7 @@
                         </ul>
                     </td>
                         <td><p class="first">Performs a stateless action on each record, and returns an unchanged stream.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#peek-org.apache.kafka.streams.kstream.ForeachAction-">details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#peek-org.apache.kafka.streams.kstream.ForeachAction-">details</a>)</p>
                             <p>You would use <code class="docutils literal"><span class="pre">peek</span></code> to cause <em>side effects</em> based on the input data (similar to <code class="docutils literal"><span class="pre">foreach</span></code>) and <em>continue</em>
                                 <em>processing</em> the input data (unlike <code class="docutils literal"><span class="pre">foreach</span></code>, which is a terminal operation).  <code class="docutils literal"><span class="pre">peek</span></code> returns the input
                                 stream as-is;  if you need to modify the input stream, use <code class="docutils literal"><span class="pre">map</span></code> or <code class="docutils literal"><span class="pre">mapValues</span></code> instead.</p>
@@ -623,7 +623,7 @@
                     </td>
                         <td><p class="first"><strong>Terminal operation.</strong>  Prints the records to <code class="docutils literal"><span class="pre">System.out</span></code>.  See Javadocs for serde and <code class="docutils literal"><span class="pre">toString()</span></code>
                             caveats.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#print--">details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#print--">details</a>)</p>
                             <p>Calling <code class="docutils literal"><span class="pre">print()</span></code> is the same as calling <code class="docutils literal"><span class="pre">foreach((key,</span> <span class="pre">value)</span> <span class="pre">-&gt;</span> <span class="pre">System.out.println(key</span> <span class="pre">+</span> <span class="pre">&quot;,</span> <span class="pre">&quot;</span> <span class="pre">+</span> <span class="pre">value))</span></code></p>
                             <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
 <span class="c1">// print to sysout</span>
@@ -641,7 +641,7 @@
                         </ul>
                     </td>
                         <td><p class="first">Assigns a new key &#8211; possibly of a new key type &#8211; to each record.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#selectKey-org.apache.kafka.streams.kstream.KeyValueMapper-">details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#selectKey-org.apache.kafka.streams.kstream.KeyValueMapper-">details</a>)</p>
                             <p>Calling <code class="docutils literal"><span class="pre">selectKey(mapper)</span></code> is the same as calling <code class="docutils literal"><span class="pre">map((key,</span> <span class="pre">value)</span> <span class="pre">-&gt;</span> <span class="pre">mapper(key,</span> <span class="pre">value),</span> <span class="pre">value)</span></code>.</p>
                             <p><strong>Marks the stream for data re-partitioning:</strong>
                                 Applying a grouping or a join after <code class="docutils literal"><span class="pre">selectKey</span></code> will result in re-partitioning of the records.</p>
@@ -669,7 +669,7 @@
                         </ul>
                     </td>
                         <td><p class="first">Get the changelog stream of this table.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KTable.html#toStream--">details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KTable.html#toStream--">details</a>)</p>
                             <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KTable</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">table</span> <span class="o">=</span> <span class="o">...;</span>
 
 <span class="c1">// Also, a variant of `toStream` exists that allows you</span>
@@ -773,8 +773,8 @@
                             <td><p class="first"><strong>Rolling aggregation.</strong> Aggregates the values of (non-windowed) records by the grouped key.
                                 Aggregating is a generalization of <code class="docutils literal"><span class="pre">reduce</span></code> and allows, for example, the aggregate value to have a different
                                 type than the input values.
-                                (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KGroupedStream.html">KGroupedStream details</a>,
-                                <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>)</p>
+                                (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html">KGroupedStream details</a>,
+                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>)</p>
                                 <p>When aggregating a <em>grouped stream</em>, you must provide an initializer (e.g., <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">=</span> <span class="pre">0</span></code>) and an &#8220;adder&#8221;
                                     aggregator (e.g., <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">+</span> <span class="pre">curValue</span></code>).  When aggregating a <em>grouped table</em>, you must provide a
                                     &#8220;subtractor&#8221; aggregator (think: <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">-</span> <span class="pre">oldValue</span></code>).</p>
@@ -876,8 +876,8 @@
                                 Aggregates the values of records, <a class="reference internal" href="#streams-developer-guide-dsl-windowing"><span class="std std-ref">per window</span></a>, by the grouped key.
                                 Aggregating is a generalization of <code class="docutils literal"><span class="pre">reduce</span></code> and allows, for example, the aggregate value to have a different
                                 type than the input values.
-                                (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/TimeWindowedKStream.html">TimeWindowedKStream details</a>,
-                                <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/SessionWindowedKStream.html">SessionWindowedKStream details</a>)</p>
+                                (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/TimeWindowedKStream.html">TimeWindowedKStream details</a>,
+                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/SessionWindowedKStream.html">SessionWindowedKStream details</a>)</p>
                                 <p>You must provide an initializer (e.g.,  <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">=</span> <span class="pre">0</span></code>), &#8220;adder&#8221; aggregator (e.g.,  <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">+</span> <span class="pre">curValue</span></code>),
                                     and a window.  When windowing based on sessions, you must additionally provide a &#8220;session merger&#8221; aggregator
                                     (e.g.,  <code class="docutils literal"><span class="pre">mergedAggValue</span> <span class="pre">=</span> <span class="pre">leftAggValue</span> <span class="pre">+</span> <span class="pre">rightAggValue</span></code>).</p>
@@ -971,8 +971,8 @@
                             </ul>
                         </td>
                             <td><p class="first"><strong>Rolling aggregation.</strong> Counts the number of records by the grouped key.
-                                (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KGroupedStream.html">KGroupedStream details</a>,
-                                <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>)</p>
+                                (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html">KGroupedStream details</a>,
+                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>)</p>
                                 <p>Several variants of <code class="docutils literal"><span class="pre">count</span></code> exist, see Javadocs for details.</p>
                                 <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">KGroupedStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">groupedStream</span> <span class="o">=</span> <span class="o">...;</span>
 <span class="n">KGroupedTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">groupedTable</span> <span class="o">=</span> <span class="o">...;</span>
@@ -1002,8 +1002,8 @@
                         </td>
                             <td><p class="first"><strong>Windowed aggregation.</strong>
                                 Counts the number of records, <a class="reference internal" href="#streams-developer-guide-dsl-windowing"><span class="std std-ref">per window</span></a>, by the grouped key.
-                                (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/TimeWindowedKStream.html">TimeWindowedKStream details</a>,
-                                <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/SessionWindowedKStream.html">SessionWindowedKStream details</a>)</p>
+                                (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/TimeWindowedKStream.html">TimeWindowedKStream details</a>,
+                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/SessionWindowedKStream.html">SessionWindowedKStream details</a>)</p>
                                 <p>The windowed <code class="docutils literal"><span class="pre">count</span></code> turns a <code class="docutils literal"><span class="pre">TimeWindowedKStream&lt;K,</span> <span class="pre">V&gt;</span></code> or <code class="docutils literal"><span class="pre">SessionWindowedKStream&lt;K,</span> <span class="pre">V&gt;</span></code>
                                     into a windowed <code class="docutils literal"><span class="pre">KTable&lt;Windowed&lt;K&gt;,</span> <span class="pre">V&gt;</span></code>.</p>
                                 <p>Several variants of <code class="docutils literal"><span class="pre">count</span></code> exist, see Javadocs for details.</p>
@@ -1036,8 +1036,8 @@
                             <td><p class="first"><strong>Rolling aggregation.</strong> Combines the values of (non-windowed) records by the grouped key.
                                 The current record value is combined with the last reduced value, and a new reduced value is returned.
                                 The result value type cannot be changed, unlike <code class="docutils literal"><span class="pre">aggregate</span></code>.
-                                (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KGroupedStream.html">KGroupedStream details</a>,
-                                <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>)</p>
+                                (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html">KGroupedStream details</a>,
+                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>)</p>
                                 <p>When reducing a <em>grouped stream</em>, you must provide an &#8220;adder&#8221; reducer (e.g.,  <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">+</span> <span class="pre">curValue</span></code>).
                                     When reducing a <em>grouped table</em>, you must additionally provide a &#8220;subtractor&#8221; reducer (e.g.,
                                     <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">-</span> <span class="pre">oldValue</span></code>).</p>
@@ -1120,8 +1120,8 @@
                                 The current record value is combined with the last reduced value, and a new reduced value is returned.
                                 Records with <code class="docutils literal"><span class="pre">null</span></code> key or value are ignored.
                                 The result value type cannot be changed, unlike <code class="docutils literal"><span class="pre">aggregate</span></code>.
-                                (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/TimeWindowedKStream.html">TimeWindowedKStream details</a>,
-                                <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/SessionWindowedKStream.html">SessionWindowedKStream details</a>)</p>
+                                (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/TimeWindowedKStream.html">TimeWindowedKStream details</a>,
+                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/SessionWindowedKStream.html">SessionWindowedKStream details</a>)</p>
                                 <p>The windowed <code class="docutils literal"><span class="pre">reduce</span></code> turns a turns a <code class="docutils literal"><span class="pre">TimeWindowedKStream&lt;K,</span> <span class="pre">V&gt;</span></code> or a <code class="docutils literal"><span class="pre">SessionWindowedKStream&lt;K,</span> <span class="pre">V&gt;</span></code>
                                     into a windowed <code class="docutils literal"><span class="pre">KTable&lt;Windowed&lt;K&gt;,</span> <span class="pre">V&gt;</span></code>.</p>
                                 <p>Several variants of <code class="docutils literal"><span class="pre">reduce</span></code> exist, see Javadocs for details.</p>
@@ -1646,7 +1646,7 @@
                             </td>
                                 <td><p class="first">Performs an INNER JOIN of this stream with another stream.
                                     Even though this operation is windowed, the joined stream will be of type <code class="docutils literal"><span class="pre">KStream&lt;K,</span> <span class="pre">...&gt;</span></code> rather than <code class="docutils literal"><span class="pre">KStream&lt;Windowed&lt;K&gt;,</span> <span class="pre">...&gt;</span></code>.
-                                    <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-">(details)</a></p>
+                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <p><strong>Causes data re-partitioning of a stream if and only if the stream was marked for re-partitioning (if both are marked, both are re-partitioned).</strong></p>
                                     <p>Several variants of <code class="docutils literal"><span class="pre">join</span></code> exists, see the Javadocs for details.</p>
@@ -1705,7 +1705,7 @@
                             </td>
                                 <td><p class="first">Performs a LEFT JOIN of this stream with another stream.
                                     Even though this operation is windowed, the joined stream will be of type <code class="docutils literal"><span class="pre">KStream&lt;K,</span> <span class="pre">...&gt;</span></code> rather than <code class="docutils literal"><span class="pre">KStream&lt;Windowed&lt;K&gt;,</span> <span class="pre">...&gt;</span></code>.
-                                    <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-">(details)</a></p>
+                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <p><strong>Causes data re-partitioning of a stream if and only if the stream was marked for re-partitioning (if both are marked, both are re-partitioned).</strong></p>
                                     <p>Several variants of <code class="docutils literal"><span class="pre">leftJoin</span></code> exists, see the Javadocs for details.</p>
@@ -1767,7 +1767,7 @@
                             </td>
                                 <td><p class="first">Performs an OUTER JOIN of this stream with another stream.
                                     Even though this operation is windowed, the joined stream will be of type <code class="docutils literal"><span class="pre">KStream&lt;K,</span> <span class="pre">...&gt;</span></code> rather than <code class="docutils literal"><span class="pre">KStream&lt;Windowed&lt;K&gt;,</span> <span class="pre">...&gt;</span></code>.
-                                    <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#outerJoin-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-">(details)</a></p>
+                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#outerJoin-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <p><strong>Causes data re-partitioning of a stream if and only if the stream was marked for re-partitioning (if both are marked, both are re-partitioned).</strong></p>
                                     <p>Several variants of <code class="docutils literal"><span class="pre">outerJoin</span></code> exists, see the Javadocs for details.</p>
@@ -1828,7 +1828,7 @@
                             The semantics of the various stream-stream join variants are explained below.
                             To improve the readability of the table, assume that (1) all records have the same key (and thus the key in the table is omitted), (2) all records belong to a single join window, and (3) all records are processed in timestamp order.
                             The columns INNER JOIN, LEFT JOIN, and OUTER JOIN denote what is passed as arguments to the user-supplied
-                            <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/ValueJoiner.html">ValueJoiner</a> for the <code class="docutils literal"><span class="pre">join</span></code>, <code class="docutils literal"><span class="pre">leftJoin</span></code>, and
+                            <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html">ValueJoiner</a> for the <code class="docutils literal"><span class="pre">join</span></code>, <code class="docutils literal"><span class="pre">leftJoin</span></code>, and
                             <code class="docutils literal"><span class="pre">outerJoin</span></code> methods, respectively, whenever a new input record is received on either side of the join.  An empty table
                             cell denotes that the <code class="docutils literal"><span class="pre">ValueJoiner</span></code> is not called at all.</p>
                         <table border="1" class="docutils">
@@ -1994,7 +1994,7 @@
                             </td>
                                 <td><p class="first">Performs an INNER JOIN of this table with another table.
                                     The result is an ever-updating KTable that represents the &#8220;current&#8221; result of the join.
-                                    <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KTable.html#join-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
+                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KTable.html#join-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">left</span> <span class="o">=</span> <span class="o">...;</span>
 <span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Double</span><span class="o">&gt;</span> <span class="n">right</span> <span class="o">=</span> <span class="o">...;</span>
@@ -2040,7 +2040,7 @@
                                 </ul>
                             </td>
                                 <td><p class="first">Performs a LEFT JOIN of this table with another table.
-                                    <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KTable.html#leftJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
+                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KTable.html#leftJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">left</span> <span class="o">=</span> <span class="o">...;</span>
 <span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Double</span><span class="o">&gt;</span> <span class="n">right</span> <span class="o">=</span> <span class="o">...;</span>
@@ -2089,7 +2089,7 @@
                                 </ul>
                             </td>
                                 <td><p class="first">Performs an OUTER JOIN of this table with another table.
-                                    <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KTable.html#outerJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
+                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KTable.html#outerJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">left</span> <span class="o">=</span> <span class="o">...;</span>
 <span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Double</span><span class="o">&gt;</span> <span class="n">right</span> <span class="o">=</span> <span class="o">...;</span>
@@ -2138,7 +2138,7 @@
                             The semantics of the various table-table join variants are explained below.
                             To improve the readability of the table, you can assume that (1) all records have the same key (and thus the key in the table is omitted) and that (2) all records are processed in timestamp order.
                             The columns INNER JOIN, LEFT JOIN, and OUTER JOIN denote what is passed as arguments to the user-supplied
-                            <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/ValueJoiner.html">ValueJoiner</a> for the <code class="docutils literal"><span class="pre">join</span></code>, <code class="docutils literal"><span class="pre">leftJoin</span></code>, and
+                            <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html">ValueJoiner</a> for the <code class="docutils literal"><span class="pre">join</span></code>, <code class="docutils literal"><span class="pre">leftJoin</span></code>, and
                             <code class="docutils literal"><span class="pre">outerJoin</span></code> methods, respectively, whenever a new input record is received on either side of the join.  An empty table
                             cell denotes that the <code class="docutils literal"><span class="pre">ValueJoiner</span></code> is not called at all.</p>
                         <table border="1" class="docutils">
@@ -2302,7 +2302,7 @@
                                 </ul>
                             </td>
                                 <td><p class="first">Performs an INNER JOIN of this stream with the table, effectively doing a table lookup.
-                                    <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
+                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <p><strong>Causes data re-partitioning of the stream if and only if the stream was marked for re-partitioning.</strong></p>
                                     <p>Several variants of <code class="docutils literal"><span class="pre">join</span></code> exists, see the Javadocs for details.</p>
@@ -2355,7 +2355,7 @@
                                 </ul>
                             </td>
                                 <td><p class="first">Performs a LEFT JOIN of this stream with the table, effectively doing a table lookup.
-                                    <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
+                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <p><strong>Causes data re-partitioning of the stream if and only if the stream was marked for re-partitioning.</strong></p>
                                     <p>Several variants of <code class="docutils literal"><span class="pre">leftJoin</span></code> exists, see the Javadocs for details.</p>
@@ -2411,7 +2411,7 @@
                             To improve the readability of the table we assume that (1) all records have the same key (and thus we omit the key in
                             the table) and that (2) all records are processed in timestamp order.
                             The columns INNER JOIN and LEFT JOIN denote what is passed as arguments to the user-supplied
-                            <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/ValueJoiner.html">ValueJoiner</a> for the <code class="docutils literal"><span class="pre">join</span></code> and <code class="docutils literal"><span class="pre">leftJoin</span></code>
+                            <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html">ValueJoiner</a> for the <code class="docutils literal"><span class="pre">join</span></code> and <code class="docutils literal"><span class="pre">leftJoin</span></code>
                             methods, respectively, whenever a new input record is received on either side of the join.  An empty table
                             cell denotes that the <code class="docutils literal"><span class="pre">ValueJoiner</span></code> is not called at all.</p>
                         <table border="1" class="docutils">
@@ -2573,7 +2573,7 @@
                                 </ul>
                             </td>
                                 <td><p class="first">Performs an INNER JOIN of this stream with the global table, effectively doing a table lookup.
-                                    <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.GlobalKTable-org.apache.kafka.streams.kstream.KeyValueMapper-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
+                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.GlobalKTable-org.apache.kafka.streams.kstream.KeyValueMapper-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
                                     <p>The <code class="docutils literal"><span class="pre">GlobalKTable</span></code> is fully bootstrapped upon (re)start of a <code class="docutils literal"><span class="pre">KafkaStreams</span></code> instance, which means the table is fully populated with all the data in the underlying topic that is
                                         available at the time of the startup.  The actual data processing begins only once the bootstrapping has completed.</p>
                                     <p><strong>Causes data re-partitioning of the stream if and only if the stream was marked for re-partitioning.</strong></p>
@@ -2627,7 +2627,7 @@
                                 </ul>
                             </td>
                                 <td><p class="first">Performs a LEFT JOIN of this stream with the global table, effectively doing a table lookup.
-                                    <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.GlobalKTable-org.apache.kafka.streams.kstream.KeyValueMapper-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
+                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.GlobalKTable-org.apache.kafka.streams.kstream.KeyValueMapper-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
                                     <p>The <code class="docutils literal"><span class="pre">GlobalKTable</span></code> is fully bootstrapped upon (re)start of a <code class="docutils literal"><span class="pre">KafkaStreams</span></code> instance, which means the table is fully populated with all the data in the underlying topic that is
                                         available at the time of the startup.  The actual data processing begins only once the bootstrapping has completed.</p>
                                     <p><strong>Causes data re-partitioning of the stream if and only if the stream was marked for re-partitioning.</strong></p>
@@ -2903,11 +2903,11 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                     </td>
                         <td><p class="first"><strong>Terminal operation.</strong>  Applies a <code class="docutils literal"><span class="pre">Processor</span></code> to each record.
                             <code class="docutils literal"><span class="pre">process()</span></code> allows you to leverage the <a class="reference internal" href="processor-api.html#streams-developer-guide-processor-api"><span class="std std-ref">Processor API</span></a> from the DSL.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#process-org.apache.kafka.streams.processor.ProcessorSupplier-java.lang.String...-">details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#process-org.apache.kafka.streams.processor.ProcessorSupplier-java.lang.String...-">details</a>)</p>
                             <p>This is essentially equivalent to adding the <code class="docutils literal"><span class="pre">Processor</span></code> via <code class="docutils literal"><span class="pre">Topology#addProcessor()</span></code> to your
                                 <a class="reference internal" href="../concepts.html#streams-concepts-processor-topology"><span class="std std-ref">processor topology</span></a>.</p>
                             <p class="last">An example is available in the
-                                <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#process-org.apache.kafka.streams.processor.ProcessorSupplier-java.lang.String...-">javadocs</a>.</p>
+                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#process-org.apache.kafka.streams.processor.ProcessorSupplier-java.lang.String...-">javadocs</a>.</p>
                         </td>
                     </tr>
                     <tr class="row-odd"><td><p class="first"><strong>Transform</strong></p>
@@ -2917,7 +2917,7 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                     </td>
                         <td><p class="first">Applies a <code class="docutils literal"><span class="pre">Transformer</span></code> to each record.
                             <code class="docutils literal"><span class="pre">transform()</span></code> allows you to leverage the <a class="reference internal" href="processor-api.html#streams-developer-guide-processor-api"><span class="std std-ref">Processor API</span></a> from the DSL.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#transform-org.apache.kafka.streams.kstream.TransformerSupplier-java.lang.String...-">details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#transform-org.apache.kafka.streams.kstream.TransformerSupplier-java.lang.String...-">details</a>)</p>
                             <p>Each input record is transformed into zero, one, or more output records (similar to the stateless <code class="docutils literal"><span class="pre">flatMap</span></code>).
                                 The <code class="docutils literal"><span class="pre">Transformer</span></code> must return <code class="docutils literal"><span class="pre">null</span></code> for zero output.
                                 You can modify the record&#8217;s key and value, including their types.</p>
@@ -2927,7 +2927,7 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                             <p><code class="docutils literal"><span class="pre">transform</span></code> is essentially equivalent to adding the <code class="docutils literal"><span class="pre">Transformer</span></code> via <code class="docutils literal"><span class="pre">Topology#addProcessor()</span></code> to your
                                 <a class="reference internal" href="../concepts.html#streams-concepts-processor-topology"><span class="std std-ref">processor topology</span></a>.</p>
                             <p class="last">An example is available in the
-                                <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#transform-org.apache.kafka.streams.kstream.TransformerSupplier-java.lang.String...-">javadocs</a>.
+                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#transform-org.apache.kafka.streams.kstream.TransformerSupplier-java.lang.String...-">javadocs</a>.
                                </p>
                         </td>
                     </tr>
@@ -2938,14 +2938,14 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                     </td>
                         <td><p class="first">Applies a <code class="docutils literal"><span class="pre">ValueTransformer</span></code> to each record, while retaining the key of the original record.
                             <code class="docutils literal"><span class="pre">transformValues()</span></code> allows you to leverage the <a class="reference internal" href="processor-api.html#streams-developer-guide-processor-api"><span class="std std-ref">Processor API</span></a> from the DSL.
-                            (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#transformValues-org.apache.kafka.streams.kstream.ValueTransformerSupplier-java.lang.String...-">details</a>)</p>
+                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#transformValues-org.apache.kafka.streams.kstream.ValueTransformerSupplier-java.lang.String...-">details</a>)</p>
                             <p>Each input record is transformed into exactly one output record (zero output records or multiple output records are not possible).
                                 The <code class="docutils literal"><span class="pre">ValueTransformer</span></code> may return <code class="docutils literal"><span class="pre">null</span></code> as the new value for a record.</p>
                             <p><code class="docutils literal"><span class="pre">transformValues</span></code> is preferable to <code class="docutils literal"><span class="pre">transform</span></code> because it will not cause data re-partitioning.</p>
                             <p><code class="docutils literal"><span class="pre">transformValues</span></code> is essentially equivalent to adding the <code class="docutils literal"><span class="pre">ValueTransformer</span></code> via <code class="docutils literal"><span class="pre">Topology#addProcessor()</span></code> to your
                                 <a class="reference internal" href="../concepts.html#streams-concepts-processor-topology"><span class="std std-ref">processor topology</span></a>.</p>
                             <p class="last">An example is available in the
-                                <a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#transformValues-org.apache.kafka.streams.kstream.ValueTransformerSupplier-java.lang.String...-">javadocs</a>.</p>
+                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#transformValues-org.apache.kafka.streams.kstream.ValueTransformerSupplier-java.lang.String...-">javadocs</a>.</p>
                         </td>
                     </tr>
                     </tbody>
@@ -3051,7 +3051,7 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                     </ul>
                 </td>
                     <td><p class="first"><strong>Terminal operation.</strong>  Write the records to a Kafka topic.
-                        (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#to(java.lang.String)">KStream details</a>)</p>
+                        (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#to(java.lang.String)">KStream details</a>)</p>
                         <p>When to provide serdes explicitly:</p>
                         <ul class="simple">
                             <li>If you do not specify SerDes explicitly, the default SerDes from the
@@ -3098,7 +3098,7 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                 </td>
                     <td><p class="first">Write the records to a Kafka topic and create a new stream/table from that topic.
                         Essentially a shorthand for <code class="docutils literal"><span class="pre">KStream#to()</span></code> followed by <code class="docutils literal"><span class="pre">StreamsBuilder#stream()</span></code>, same for tables.
-                        (<a class="reference external" href="../javadocs/org/apache/kafka/streams/kstream/KStream.html#through(java.lang.String)">KStream details</a>)</p>
+                        (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#through(java.lang.String)">KStream details</a>)</p>
                         <p>When to provide SerDes explicitly:</p>
                         <ul class="simple">
                             <li>If you do not specify SerDes explicitly, the default SerDes from the

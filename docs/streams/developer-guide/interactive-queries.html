@@ -371,7 +371,7 @@ interactive queries</span></p>
                 <p>To enable remote state store discovery in a distributed Kafka Streams application, you must set the <a class="reference internal" href="config-streams.html#streams-developer-guide-required-configs"><span class="std std-ref">configuration property</span></a> in <code class="docutils literal"><span class="pre">StreamsConfig</span></code>.
                     The <code class="docutils literal"><span class="pre">application.server</span></code> property defines a unique <code class="docutils literal"><span class="pre">host:port</span></code> pair that points to the RPC endpoint of the respective instance of a Kafka Streams application.
                     The value of this configuration property will vary across the instances of your application.
-                    When this property is set, Kafka Streams will keep track of the RPC endpoint information for every instance of an application, its state stores, and assigned stream partitions through instances of <a class="reference external" href="../javadocs/org/apache/kafka/streams/state/StreamsMetadata.html">StreamsMetadata</a>.</p>
+                    When this property is set, Kafka Streams will keep track of the RPC endpoint information for every instance of an application, its state stores, and assigned stream partitions through instances of <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/state/StreamsMetadata.html">StreamsMetadata</a>.</p>
                 <div class="admonition tip">
                     <p><b>Tip</b></p>
                     <p class="last">Consider leveraging the exposed RPC endpoints of your application for further functionality, such as
@@ -417,7 +417,7 @@ interactive queries</span></p>
             </div>
             <div class="section" id="discovering-and-accessing-application-instances-and-their-local-state-stores">
                 <span id="streams-developer-guide-interactive-queries-discover-app-instances-and-stores"></span><h3><a class="toc-backref" href="#id10">Discovering and accessing application instances and their local state stores</a><a class="headerlink" href="#discovering-and-accessing-application-instances-and-their-local-state-stores" title="Permalink to this headline"></a></h3>
-                <p>The following methods return <a class="reference external" href="../javadocs/org/apache/kafka/streams/state/StreamsMetadata.html">StreamsMetadata</a> objects, which provide meta-information about application instances such as their RPC endpoint and locally available state stores.</p>
+                <p>The following methods return <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/state/StreamsMetadata.html">StreamsMetadata</a> objects, which provide meta-information about application instances such as their RPC endpoint and locally available state stores.</p>
                 <ul class="simple">
                     <li><code class="docutils literal"><span class="pre">KafkaStreams#allMetadata()</span></code>: find all instances of this application</li>
                     <li><code class="docutils literal"><span class="pre">KafkaStreams#allMetadataForStore(String</span> <span class="pre">storeName)</span></code>: find those applications instances that manage local instances of the state store &#8220;storeName&#8221;</li>
@@ -426,7 +426,7 @@ interactive queries</span></p>
                 </ul>
                 <div class="admonition attention">
                     <p class="first admonition-title">Attention</p>
-                    <p class="last">If <code class="docutils literal"><span class="pre">application.server</span></code> is not configured for an application instance, then the above methods will not find any <a class="reference external" href="../javadocs/org/apache/kafka/streams/state/StreamsMetadata.html">StreamsMetadata</a> for it.</p>
+                    <p class="last">If <code class="docutils literal"><span class="pre">application.server</span></code> is not configured for an application instance, then the above methods will not find any <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/state/StreamsMetadata.html">StreamsMetadata</a> for it.</p>
                 </div>
                 <p>For example, we can now find the <code class="docutils literal"><span class="pre">StreamsMetadata</span></code> for the state store named &#8220;word-count&#8221; that we defined in the
                     code example shown in the previous section:</p>
