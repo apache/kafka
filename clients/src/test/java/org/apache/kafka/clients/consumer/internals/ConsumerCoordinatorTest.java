@@ -1630,7 +1630,6 @@ public class ConsumerCoordinatorTest {
         ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
                 ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true, true);
         subscriptions.assignFromUser(Collections.singleton(t1p));
-        subscriptions.committed(t1p, new OffsetAndMetadata(0));
         subscriptions.seek(t1p, 100L);
 
         coordinator.coordinatorDead();
@@ -1638,8 +1637,9 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)));
 
-        // Async commit offset should find coordinator
-        coordinator.maybeAutoCommitOffsetsAsync(time.nanoseconds() + autoCommitIntervalMs); //make sure it does happen
+        // async commit offset should find coordinator
+        time.sleep(autoCommitIntervalMs); // sleep for a while to ensure auto commit does happen
+        coordinator.maybeAutoCommitOffsetsAsync(time.milliseconds());
         assertFalse(coordinator.coordinatorUnknown());
         assertEquals(subscriptions.committed(t1p).offset(), 100L);
     }
