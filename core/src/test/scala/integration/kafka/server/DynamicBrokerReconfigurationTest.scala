@@ -27,6 +27,7 @@ import java.util.concurrent._
 import javax.management.ObjectName
 
 import com.yammer.metrics.Metrics
+import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.coordinator.group.OffsetConfig
@@ -93,6 +94,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   override def setUp(): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism)))
     super.setUp()
+
+    clearLeftOverProcessorMetrics() // clear metrics left over from other tests so that new ones can be tested
 
     (0 until numServers).foreach { brokerId =>
 
@@ -459,6 +462,16 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifyMarkPartitionsForTruncation()
   }
 
+  private def isProcessorMetric(metricName: MetricName): Boolean = {
+    val mbeanName = metricName.getMBeanName
+    mbeanName.contains(s"${Processor.NetworkProcessorMetricTag}=") || mbeanName.contains("processor=")
+  }
+
+  private def clearLeftOverProcessorMetrics(): Unit = {
+    val metricsFromOldTests = Metrics.defaultRegistry.allMetrics.keySet.asScala.filter(isProcessorMetric)
+    metricsFromOldTests.foreach(Metrics.defaultRegistry.removeMetric)
+  }
+
   // Verify that metrics from processors that were removed have been deleted.
   // Since processor ids are not reused, it is sufficient to check metrics count
   // based on the current number of processors
@@ -471,10 +484,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     assertEquals(numProcessors, kafkaMetrics.size)
 
     Metrics.defaultRegistry.allMetrics.keySet.asScala
-      .filter { metric =>
-        val mbeanName = metric.getMBeanName
-        mbeanName.contains(s"${Processor.NetworkProcessorMetricTag}=") || mbeanName.contains("processor=")
-      }
+      .filter(isProcessorMetric)
       .groupBy(_.getName)
       .foreach { case (name, set) => assertEquals(s"Metrics not deleted $name", numProcessors, set.size) }
   }
