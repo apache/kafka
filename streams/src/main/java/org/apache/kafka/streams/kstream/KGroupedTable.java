@@ -210,13 +210,13 @@ public interface KGroupedTable<K, V> {
      * The specified {@link Reducer adder} is applied for each update record and computes a new aggregate using the
      * current aggregate (first argument) and the record's value (second argument) by adding the new record to the
      * aggregate.
-     * The specified {@link Reducer substractor} is applied for each "replaced" record of the original {@link KTable}
+     * The specified {@link Reducer subtractor} is applied for each "replaced" record of the original {@link KTable}
      * and computes a new aggregate using the current aggregate (first argument) and the record's value (second
      * argument) by "removing" the "replaced" record from the aggregate.
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, Reducer, String)} can be used to compute aggregate functions like sum.
-     * For sum, the adder and substractor would work as follows:
+     * For sum, the adder and subtractor would work as follows:
      * <pre>{@code
      * public class SumAdder implements Reducer<Integer> {
      *   public Integer apply(Integer currentAgg, Integer newValue) {
@@ -284,13 +284,13 @@ public interface KGroupedTable<K, V> {
      * The specified {@link Reducer adder} is applied for each update record and computes a new aggregate using the
      * current aggregate (first argument) and the record's value (second argument) by adding the new record to the
      * aggregate.
-     * The specified {@link Reducer substractor} is applied for each "replaced" record of the original {@link KTable}
+     * The specified {@link Reducer subtractor} is applied for each "replaced" record of the original {@link KTable}
      * and computes a new aggregate using the current aggregate (first argument) and the record's value (second
      * argument) by "removing" the "replaced" record from the aggregate.
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, Reducer, String)} can be used to compute aggregate functions like sum.
-     * For sum, the adder and substractor would work as follows:
+     * For sum, the adder and subtractor would work as follows:
      * <pre>{@code
      * public class SumAdder implements Reducer<Integer> {
      *   public Integer apply(Integer currentAgg, Integer newValue) {
@@ -353,13 +353,13 @@ public interface KGroupedTable<K, V> {
      * Each update to the original {@link KTable} results in a two step update of the result {@link KTable}.
      * The specified {@link Reducer adder} is applied for each update record and computes a new aggregate using the
      * current aggregate and the record's value by adding the new record to the aggregate.
-     * The specified {@link Reducer substractor} is applied for each "replaced" record of the original {@link KTable}
+     * The specified {@link Reducer subtractor} is applied for each "replaced" record of the original {@link KTable}
      * and computes a new aggregate using the current aggregate and the record's value by "removing" the "replaced"
      * record from the aggregate.
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, Reducer, String)} can be used to compute aggregate functions like sum.
-     * For sum, the adder and substractor would work as follows:
+     * For sum, the adder and subtractor would work as follows:
      * <pre>{@code
      * public class SumAdder implements Reducer<Integer> {
      *   public Integer apply(Integer currentAgg, Integer newValue) {
@@ -410,13 +410,13 @@ public interface KGroupedTable<K, V> {
      * The specified {@link Reducer adder} is applied for each update record and computes a new aggregate using the
      * current aggregate (first argument) and the record's value (second argument) by adding the new record to the
      * aggregate.
-     * The specified {@link Reducer substractor} is applied for each "replaced" record of the original {@link KTable}
+     * The specified {@link Reducer subtractor} is applied for each "replaced" record of the original {@link KTable}
      * and computes a new aggregate using the current aggregate (first argument) and the record's value (second
      * argument) by "removing" the "replaced" record from the aggregate.
      * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
      * value as-is.
      * Thus, {@code reduce(Reducer, Reducer, String)} can be used to compute aggregate functions like sum.
-     * For sum, the adder and substractor would work as follows:
+     * For sum, the adder and subtractor would work as follows:
      * <pre>{@code
      * public class SumAdder implements Reducer<Integer> {
      *   public Integer apply(Integer currentAgg, Integer newValue) {
@@ -487,12 +487,12 @@ public interface KGroupedTable<K, V> {
      * The specified {@link Aggregator adder} is applied for each update record and computes a new aggregate using the
      * current aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value by adding the new record to the aggregate.
-     * The specified {@link Aggregator substractor} is applied for each "replaced" record of the original {@link KTable}
+     * The specified {@link Aggregator subtractor} is applied for each "replaced" record of the original {@link KTable}
      * and computes a new aggregate using the current aggregate and the record's value by "removing" the "replaced"
      * record from the aggregate.
      * Thus, {@code aggregate(Initializer, Aggregator, Aggregator, String)} can be used to compute aggregate functions
      * like sum.
-     * For sum, the initializer, adder, and substractor would work as follows:
+     * For sum, the initializer, adder, and subtractor would work as follows:
      * <pre>{@code
      * // in this example, LongSerde.class must be set as default value serde in StreamsConfig
      * public class SumInitializer implements Initializer<Long> {
@@ -570,12 +570,12 @@ public interface KGroupedTable<K, V> {
      * The specified {@link Aggregator adder} is applied for each update record and computes a new aggregate using the
      * current aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value by adding the new record to the aggregate.
-     * The specified {@link Aggregator substractor} is applied for each "replaced" record of the original {@link KTable}
+     * The specified {@link Aggregator subtractor} is applied for each "replaced" record of the original {@link KTable}
      * and computes a new aggregate using the current aggregate and the record's value by "removing" the "replaced"
      * record from the aggregate.
      * Thus, {@code aggregate(Initializer, Aggregator, Aggregator, String)} can be used to compute aggregate functions
      * like sum.
-     * For sum, the initializer, adder, and substractor would work as follows:
+     * For sum, the initializer, adder, and subtractor would work as follows:
      * <pre>{@code
      * // in this example, LongSerde.class must be set as default value serde in StreamsConfig
      * public class SumInitializer implements Initializer<Long> {
@@ -652,12 +652,12 @@ public interface KGroupedTable<K, V> {
      * The specified {@link Aggregator adder} is applied for each update record and computes a new aggregate using the
      * current aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value by adding the new record to the aggregate.
-     * The specified {@link Aggregator substractor} is applied for each "replaced" record of the original {@link KTable}
+     * The specified {@link Aggregator subtractor} is applied for each "replaced" record of the original {@link KTable}
      * and computes a new aggregate using the current aggregate and the record's value by "removing" the "replaced"
      * record from the aggregate.
      * Thus, {@code aggregate(Initializer, Aggregator, Aggregator, String)} can be used to compute aggregate functions
      * like sum.
-     * For sum, the initializer, adder, and substractor would work as follows:
+     * For sum, the initializer, adder, and subtractor would work as follows:
      * <pre>{@code
      * // in this example, LongSerde.class must be set as default value serde in StreamsConfig
      * public class SumInitializer implements Initializer<Long> {
@@ -720,12 +720,12 @@ public interface KGroupedTable<K, V> {
      * The specified {@link Aggregator adder} is applied for each update record and computes a new aggregate using the
      * current aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value by adding the new record to the aggregate.
-     * The specified {@link Aggregator substractor} is applied for each "replaced" record of the original {@link KTable}
+     * The specified {@link Aggregator subtractor} is applied for each "replaced" record of the original {@link KTable}
      * and computes a new aggregate using the current aggregate and the record's value by "removing" the "replaced"
      * record from the aggregate.
      * Thus, {@code aggregate(Initializer, Aggregator, Aggregator, String)} can be used to compute aggregate functions
      * like sum.
-     * For sum, the initializer, adder, and substractor would work as follows:
+     * For sum, the initializer, adder, and subtractor would work as follows:
      * <pre>{@code
      * public class SumInitializer implements Initializer<Long> {
      *   public Long apply() {
@@ -807,12 +807,12 @@ public interface KGroupedTable<K, V> {
      * The specified {@link Aggregator adder} is applied for each update record and computes a new aggregate using the
      * current aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value by adding the new record to the aggregate.
-     * The specified {@link Aggregator substractor} is applied for each "replaced" record of the original {@link KTable}
+     * The specified {@link Aggregator subtractor} is applied for each "replaced" record of the original {@link KTable}
      * and computes a new aggregate using the current aggregate and the record's value by "removing" the "replaced"
      * record from the aggregate.
      * Thus, {@code aggregate(Initializer, Aggregator, Aggregator, String)} can be used to compute aggregate functions
      * like sum.
-     * For sum, the initializer, adder, and substractor would work as follows:
+     * For sum, the initializer, adder, and subtractor would work as follows:
      * <pre>{@code
      * public class SumInitializer implements Initializer<Long> {
      *   public Long apply() {
@@ -880,12 +880,12 @@ public interface KGroupedTable<K, V> {
      * The specified {@link Aggregator adder} is applied for each update record and computes a new aggregate using the
      * current aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value by adding the new record to the aggregate.
-     * The specified {@link Aggregator substractor} is applied for each "replaced" record of the original {@link KTable}
+     * The specified {@link Aggregator subtractor} is applied for each "replaced" record of the original {@link KTable}
      * and computes a new aggregate using the current aggregate and the record's value by "removing" the "replaced"
      * record from the aggregate.
      * Thus, {@code aggregate(Initializer, Aggregator, Aggregator, String)} can be used to compute aggregate functions
      * like sum.
-     * For sum, the initializer, adder, and substractor would work as follows:
+     * For sum, the initializer, adder, and subtractor would work as follows:
      * <pre>{@code
      * public class SumInitializer implements Initializer<Long> {
      *   public Long apply() {
