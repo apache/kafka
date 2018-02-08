@@ -757,12 +757,7 @@ public class Values {
                         return new SchemaAndValue(listSchema, result);
                     }
                     if (parser.canConsume(COMMA_DELIMITER)) {
-                        if (elementSchema == null || elementSchema.type() == Type.STRING) {
-                            // blank value ...
-                            result.add("");
-                            continue;
-                        }
-                        throw new DataException("Array of non-string values may not contain a blank element: " + parser.original());
+                        throw new DataException("Unable to parse an empty array element: " + parser.original());
                     }
                     SchemaAndValue element = parse(parser, true);
                     elementSchema = commonSchemaFor(elementSchema, element);
@@ -790,7 +785,7 @@ public class Values {
                         return new SchemaAndValue(mapSchema, result);
                     }
                     if (parser.canConsume(COMMA_DELIMITER)) {
-                        throw new DataException("Map entry has no key or value: " + parser.original());
+                        throw new DataException("Unable to parse a map entry has no key or value: " + parser.original());
                     }
                     SchemaAndValue key = parse(parser, true);
                     if (key == null || key.value() == null) {
