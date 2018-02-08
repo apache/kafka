@@ -540,6 +540,7 @@ project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
 
   apply plugin: 'scala'
+  apply from: file("$rootDir/gradle/scalastyle.gradle")
   apply plugin: "org.scoverage"
   archivesBaseName = "kafka_${versions.baseScala}"
 
