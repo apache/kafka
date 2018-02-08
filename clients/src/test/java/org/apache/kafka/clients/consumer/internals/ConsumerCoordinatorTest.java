@@ -1625,6 +1625,25 @@ public class ConsumerCoordinatorTest {
             assertFalse("Heartbeat thread active after close", threads[i].getName().contains(groupId));
     }
 
+    @Test
+    public void testAutoCommitAfterCoordinatorBackToService() {
+        ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
+                ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true, true);
+        subscriptions.assignFromUser(Collections.singleton(t1p));
+        subscriptions.seek(t1p, 100L);
+
+        coordinator.coordinatorDead();
+        assertTrue(coordinator.coordinatorUnknown());
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)));
+
+        // async commit offset should find coordinator
+        time.sleep(autoCommitIntervalMs); // sleep for a while to ensure auto commit does happen
+        coordinator.maybeAutoCommitOffsetsAsync(time.milliseconds());
+        assertFalse(coordinator.coordinatorUnknown());
+        assertEquals(subscriptions.committed(t1p).offset(), 100L);
+    }
+
     private ConsumerCoordinator prepareCoordinatorForCloseTest(final boolean useGroupManagement,
                                                                final boolean autoCommit,
                                                                final boolean leaveGroup) {
