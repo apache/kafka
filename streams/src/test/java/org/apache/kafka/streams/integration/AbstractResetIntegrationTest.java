@@ -49,6 +49,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
 
@@ -72,12 +73,13 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public abstract class AbstractResetIntegrationTest {
     static String testId;
     static EmbeddedKafkaCluster cluster;
-    static Map<String, Object> sslConfig;
 
     private static MockTime mockTime;
     private static KafkaStreams streams;
     private static AdminClient adminClient = null;
     private static KafkaAdminClient kafkaAdminClient = null;
+
+    abstract Map<String, Object> getClientSslConfig();
 
     @AfterClass
     public static void afterClassCleanup() {
@@ -113,6 +115,7 @@ public abstract class AbstractResetIntegrationTest {
         commonClientConfig = new Properties();
         commonClientConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
 
+        Map<String, Object> sslConfig = getClientSslConfig();
         if (sslConfig != null) {
             commonClientConfig.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, sslConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
             commonClientConfig.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
@@ -232,6 +235,7 @@ public abstract class AbstractResetIntegrationTest {
         streams.close();
     }
 
+    @Test
     public void shouldNotAllowToResetWhenInputTopicAbsent() throws Exception {
         appID = testId + "-not-reset-without-input-topic";
         final String[] parameters = new String[] {
@@ -550,6 +554,8 @@ public abstract class AbstractResetIntegrationTest {
             parameterList.add("--intermediate-topics");
             parameterList.add(INTERMEDIATE_USER_TOPIC);
         }
+
+        Map<String, Object> sslConfig = getClientSslConfig();
         if (sslConfig != null) {
             final File configFile = TestUtils.tempFile();
             final BufferedWriter writer = new BufferedWriter(new FileWriter(configFile));

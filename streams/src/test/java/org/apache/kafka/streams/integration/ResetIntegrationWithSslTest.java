@@ -28,6 +28,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -40,6 +41,8 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER;
 
     private static final String TEST_ID = "reset-with-ssl-integration-test";
+
+    private static Map<String, Object> sslConfig;
 
     static {
         final Properties brokerProps = new Properties();
@@ -59,6 +62,14 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         }
 
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
+
+        System.out.println(Thread.currentThread().getName() + ": SSL Executed Static");
+        System.out.flush();
+    }
+
+    @Override
+    Map<String, Object> getClientSslConfig() {
+        return sslConfig;
     }
 
     @Before
@@ -66,11 +77,17 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         testId = TEST_ID;
         cluster = CLUSTER;
         prepareTest();
+
+        System.out.println(Thread.currentThread().getName() + ": SSL Executed Before");
+        System.out.flush();
     }
 
     @After
     public void after() throws Exception {
         cleanupTest();
+
+        System.out.println(Thread.currentThread().getName() + ": SSL Executed After");
+        System.out.flush();
     }
 
     @Test
