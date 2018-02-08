@@ -565,8 +565,14 @@ public class JsonConverterTest {
 
     @Test
     public void structSchemaIdentical() {
-        Schema schema = SchemaBuilder.struct().field("field1", Schema.BOOLEAN_SCHEMA).field("field2", Schema.STRING_SCHEMA).field("field3", Schema.STRING_SCHEMA).field("field4", Schema.BOOLEAN_SCHEMA).build();
-        Schema inputSchema = SchemaBuilder.struct().field("field1", Schema.BOOLEAN_SCHEMA).field("field2", Schema.STRING_SCHEMA).field("field3", Schema.STRING_SCHEMA).field("field4", Schema.BOOLEAN_SCHEMA).build();
+        Schema schema = SchemaBuilder.struct().field("field1", Schema.BOOLEAN_SCHEMA)
+                                              .field("field2", Schema.STRING_SCHEMA)
+                                              .field("field3", Schema.STRING_SCHEMA)
+                                              .field("field4", Schema.BOOLEAN_SCHEMA).build();
+        Schema inputSchema = SchemaBuilder.struct().field("field1", Schema.BOOLEAN_SCHEMA)
+                                                   .field("field2", Schema.STRING_SCHEMA)
+                                                   .field("field3", Schema.STRING_SCHEMA)
+                                                   .field("field4", Schema.BOOLEAN_SCHEMA).build();
         Struct input = new Struct(inputSchema).put("field1", true).put("field2", "string2").put("field3", "string3").put("field4", false);
         assertStructSchemaEqual(schema, input);
     }
