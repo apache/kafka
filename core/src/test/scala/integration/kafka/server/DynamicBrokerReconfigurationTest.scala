@@ -32,6 +32,7 @@ import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.coordinator.group.OffsetConfig
 import kafka.log.LogConfig
 import kafka.message.ProducerCompressionCodec
+import kafka.network.Processor
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.{ConfigEntityChangeNotificationZNode, ZooKeeperTestHarness}
@@ -465,12 +466,15 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val numProcessors = servers.head.config.numNetworkThreads * 2 // 2 listeners
 
     val kafkaMetrics = servers.head.metrics.metrics().keySet.asScala
-      .filter(_.tags.containsKey("networkProcessor"))
-      .groupBy(_.tags.get("networkProcessor"))
+      .filter(_.tags.containsKey(Processor.NetworkProcessorMetricTag))
+      .groupBy(_.tags.get(Processor.NetworkProcessorMetricTag))
     assertEquals(numProcessors, kafkaMetrics.size)
 
     Metrics.defaultRegistry.allMetrics.keySet.asScala
-      .filter(_.getMBeanName.contains("networkProcessor="))
+      .filter { metric =>
+        val mbeanName = metric.getMBeanName
+        mbeanName.contains(s"${Processor.NetworkProcessorMetricTag}=") || mbeanName.contains("processor=")
+      }
       .groupBy(_.getName)
       .foreach { case (name, set) => assertEquals(s"Metrics not deleted $name", numProcessors, set.size) }
   }

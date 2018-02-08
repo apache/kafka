@@ -433,6 +433,12 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
 
 }
 
+private[kafka] object Processor {
+  val IdlePercentMetricName = "IdlePercent"
+  val NetworkProcessorMetricTag = "networkProcessor"
+  val ListenerMetricTag = "listener"
+}
+
 /**
  * Thread that processes all requests from a single connection. There are N of these running in parallel
  * each of which has its own selector
@@ -451,6 +457,7 @@ private[kafka] class Processor(val id: Int,
                                memoryPool: MemoryPool,
                                logContext: LogContext) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
+  import Processor._
   private object ConnectionId {
     def fromString(s: String): Option[ConnectionId] = s.split("-") match {
       case Array(local, remote, index) => BrokerEndPoint.parseHostPort(local).flatMap { case (localHost, localPort) =>
@@ -471,8 +478,8 @@ private[kafka] class Processor(val id: Int,
   private val responseQueue = new LinkedBlockingDeque[RequestChannel.Response]()
 
   private[kafka] val metricTags = mutable.LinkedHashMap(
-    "listener" -> listenerName.value,
-    "networkProcessor" -> id.toString
+    ListenerMetricTag -> listenerName.value,
+    NetworkProcessorMetricTag -> id.toString
   ).asJava
 
   newGauge("ResponseQueueSize",
@@ -482,7 +489,7 @@ private[kafka] class Processor(val id: Int,
     Map("processor" -> id.toString)
   )
 
-  newGauge("IdlePercent",
+  newGauge(IdlePercentMetricName,
     new Gauge[Double] {
       def value = {
         Option(metrics.metric(metrics.metricName("io-wait-ratio", "socket-server-metrics", metricTags))).fold(0.0)(_.value)
@@ -490,7 +497,7 @@ private[kafka] class Processor(val id: Int,
     },
     // for compatibility, only add a networkProcessor tag to the Yammer Metrics alias (the equivalent Selector metric
     // also includes the listener name)
-    Map("networkProcessor" -> id.toString)
+    Map(NetworkProcessorMetricTag -> id.toString)
   )
 
   private val selector = createSelector(
@@ -742,7 +749,7 @@ private[kafka] class Processor(val id: Int,
       close(channel.id)
     }
     selector.close()
-    removeMetric("IdlePercent", Map("networkProcessor" -> id.toString))
+    removeMetric(IdlePercentMetricName, Map(NetworkProcessorMetricTag -> id.toString))
   }
 
   // 'protected` to allow override for testing
