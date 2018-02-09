@@ -325,9 +325,9 @@ public class Selector implements Selectable, AutoCloseable {
             } catch (Exception e) {
                 // update the state for consistency, the channel will be discarded after `close`
                 channel.state(ChannelState.FAILED_SEND);
-                // ensure notification via `disconnected`
+                // ensure notification via `disconnected` when `failedSends` are processed in the next poll
                 this.failedSends.add(connectionId);
-                close(channel, false);
+                close(channel, false, false);
                 if (!(e instanceof CancelledKeyException)) {
                     log.error("Unexpected exception during send, closing connection {} and rethrowing exception {}",
                             connectionId, e);
@@ -450,6 +450,7 @@ public class Selector implements Selectable, AutoCloseable {
             if (idleExpiryManager != null)
                 idleExpiryManager.update(channel.id(), currentTimeNanos);
 
+            boolean sendFailed = false;
             try {
 
                 /* complete any connections that have finished their handshake (either normally or immediately) */
@@ -491,7 +492,13 @@ public class Selector implements Selectable, AutoCloseable {
 
                 /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
                 if (channel.ready() && key.isWritable()) {
-                    Send send = channel.write();
+                    Send send = null;
+                    try {
+                        send = channel.write();
+                    } catch (Exception e) {
+                        sendFailed = true;
+                        throw e;
+                    }
                     if (send != null) {
                         this.completedSends.add(send);
                         this.sensors.recordBytesSent(channel.id(), send.size());
@@ -500,7 +507,7 @@ public class Selector implements Selectable, AutoCloseable {
 
                 /* cancel any defunct sockets */
                 if (!key.isValid())
-                    close(channel, true);
+                    close(channel, true, true);
 
             } catch (Exception e) {
                 String desc = channel.socketDescription();
@@ -510,7 +517,7 @@ public class Selector implements Selectable, AutoCloseable {
                     log.debug("Connection with {} disconnected due to authentication exception", desc, e);
                 else
                     log.warn("Unexpected error from {}; closing connection", desc, e);
-                close(channel, true);
+                close(channel, !sendFailed, true);
             } finally {
                 maybeRecordTimePerConnection(channel, channelStartTimeNanos);
             }
@@ -620,7 +627,7 @@ public class Selector implements Selectable, AutoCloseable {
                     log.trace("About to close the idle connection from {} due to being idle for {} millis",
                             connectionId, (currentTimeNanos - expiredConnection.getValue()) / 1000 / 1000);
                 channel.state(ChannelState.EXPIRED);
-                close(channel, true);
+                close(channel, true, true);
             }
         }
     }
@@ -674,7 +681,7 @@ public class Selector implements Selectable, AutoCloseable {
             // There is no disconnect notification for local close, but updating
             // channel state here anyway to avoid confusion.
             channel.state(ChannelState.LOCAL_CLOSE);
-            close(channel, false);
+            close(channel, false, false);
         } else {
             KafkaChannel closingChannel = this.closingChannels.remove(id);
             // Close any closing channel, leave the channel in the state in which closing was triggered
@@ -694,7 +701,10 @@ public class Selector implements Selectable, AutoCloseable {
      * closed immediately. The channel will not be added to disconnected list and it is the
      * responsibility of the caller to handle disconnect notifications.
      */
-    private void close(KafkaChannel channel, boolean processOutstanding) {
+    private void close(KafkaChannel channel, boolean processOutstanding, boolean notifyDisconnect) {
+
+        if (processOutstanding && !notifyDisconnect)
+            throw new IllegalStateException("Disconnect notification required for remote disconnect after processing outstanding requests");
 
         channel.disconnect();
 
@@ -712,8 +722,9 @@ public class Selector implements Selectable, AutoCloseable {
         if (processOutstanding && deque != null && !deque.isEmpty()) {
             // stagedReceives will be moved to completedReceives later along with receives from other channels
             closingChannels.put(channel.id(), channel);
+            log.debug("Tracking closing connection {} to process outstanding requests", channel.id());
         } else
-            doClose(channel, processOutstanding);
+            doClose(channel, notifyDisconnect);
         this.channels.remove(channel.id());
 
         if (idleExpiryManager != null)
