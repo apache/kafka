@@ -87,21 +87,6 @@ public class Selector implements Selectable, AutoCloseable {
 
     public static final long NO_IDLE_TIMEOUT_MS = -1;
 
-    private enum CloseMode {
-        LOCAL_CLOSE(false, false),
-        DISCONNECTED(true, true),
-        DISCONNECTED_AND_FAILED_SEND(false, true),
-        FAILED_SEND(false, false),
-        EXPIRED(true, true);
-
-        boolean processOutstanding;
-        boolean notifyDisconnect;
-        private CloseMode(boolean processOutstanding, boolean notifyDisconnect) {
-            this.processOutstanding = processOutstanding;
-            this.notifyDisconnect = notifyDisconnect;
-        }
-    }
-
     private final Logger log;
     private final java.nio.channels.Selector nioSelector;
     private final Map<String, KafkaChannel> channels;
@@ -342,7 +327,7 @@ public class Selector implements Selectable, AutoCloseable {
                 channel.state(ChannelState.FAILED_SEND);
                 // ensure notification via `disconnected` when `failedSends` are processed in the next poll
                 this.failedSends.add(connectionId);
-                close(channel, CloseMode.FAILED_SEND);
+                close(channel, false, false);
                 if (!(e instanceof CancelledKeyException)) {
                     log.error("Unexpected exception during send, closing connection {} and rethrowing exception {}",
                             connectionId, e);
@@ -522,7 +507,7 @@ public class Selector implements Selectable, AutoCloseable {
 
                 /* cancel any defunct sockets */
                 if (!key.isValid())
-                    close(channel, CloseMode.DISCONNECTED);
+                    close(channel, true, true);
 
             } catch (Exception e) {
                 String desc = channel.socketDescription();
@@ -532,7 +517,7 @@ public class Selector implements Selectable, AutoCloseable {
                     log.debug("Connection with {} disconnected due to authentication exception", desc, e);
                 else
                     log.warn("Unexpected error from {}; closing connection", desc, e);
-                close(channel, sendFailed ? CloseMode.DISCONNECTED_AND_FAILED_SEND : CloseMode.DISCONNECTED);
+                close(channel, !sendFailed, true);
             } finally {
                 maybeRecordTimePerConnection(channel, channelStartTimeNanos);
             }
@@ -642,7 +627,7 @@ public class Selector implements Selectable, AutoCloseable {
                     log.trace("About to close the idle connection from {} due to being idle for {} millis",
                             connectionId, (currentTimeNanos - expiredConnection.getValue()) / 1000 / 1000);
                 channel.state(ChannelState.EXPIRED);
-                close(channel, CloseMode.EXPIRED);
+                close(channel, true, true);
             }
         }
     }
@@ -696,7 +681,7 @@ public class Selector implements Selectable, AutoCloseable {
             // There is no disconnect notification for local close, but updating
             // channel state here anyway to avoid confusion.
             channel.state(ChannelState.LOCAL_CLOSE);
-            close(channel, CloseMode.LOCAL_CLOSE);
+            close(channel, false, false);
         } else {
             KafkaChannel closingChannel = this.closingChannels.remove(id);
             // Close any closing channel, leave the channel in the state in which closing was triggered
@@ -707,17 +692,20 @@ public class Selector implements Selectable, AutoCloseable {
 
     /**
      * Begin closing this connection.
-     * <p>
-     * If 'closeMode.processOutstanding' is true, the channel is disconnected here, but staged receives
-     * are processed. The channel is closed when there are no outstanding receives or if a send is
-     * requested. The channel will be added to disconnect list when it is actually closed.
-     * </p><p>
-     * If 'closeMode.processOutstanding' is false, outstanding receives are discarded and the channel is
-     * closed immediately. The channel will be added to disconnected list if `closeMode.notifyDisconnect`
-     * is true. Otherwise it is the responsibility of the caller to handle disconnect notifications.
-     * </p>
+     *
+     * If 'processOutstanding' is true, the channel is disconnected here, but staged receives are
+     * processed. The channel is closed when there are no outstanding receives or if a send
+     * is requested. The channel will be added to disconnect list when it is actually closed.
+     *
+     * If 'processOutstanding' is false, outstanding receives are discarded and the channel is
+     * closed immediately. The channel will not be added to disconnected list and it is the
+     * responsibility of the caller to handle disconnect notifications.
      */
-    private void close(KafkaChannel channel, CloseMode closeMode) {
+    private void close(KafkaChannel channel, boolean processOutstanding, boolean notifyDisconnect) {
+
+        if (processOutstanding && !notifyDisconnect)
+            throw new IllegalStateException("Disconnect notification required for remote disconnect after processing outstanding requests");
+
         channel.disconnect();
 
         // Ensure that `connected` does not have closed channels. This could happen if `prepare` throws an exception
@@ -731,12 +719,12 @@ public class Selector implements Selectable, AutoCloseable {
         // a send fails or all outstanding receives are processed. Mute state of disconnected channels
         // are tracked to ensure that requests are processed one-by-one by the broker to preserve ordering.
         Deque<NetworkReceive> deque = this.stagedReceives.get(channel);
-        if (closeMode.processOutstanding && deque != null && !deque.isEmpty()) {
+        if (processOutstanding && deque != null && !deque.isEmpty()) {
             // stagedReceives will be moved to completedReceives later along with receives from other channels
             closingChannels.put(channel.id(), channel);
             log.debug("Tracking closing connection {} to process outstanding requests", channel.id());
         } else
-            doClose(channel, closeMode.notifyDisconnect);
+            doClose(channel, notifyDisconnect);
         this.channels.remove(channel.id());
 
         if (idleExpiryManager != null)
