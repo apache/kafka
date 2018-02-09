@@ -235,7 +235,6 @@ public abstract class AbstractResetIntegrationTest {
         streams.close();
     }
 
-    @Test
     public void shouldNotAllowToResetWhenInputTopicAbsent() throws Exception {
         appID = testId + "-not-reset-without-input-topic";
         final String[] parameters = new String[] {
