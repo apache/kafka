@@ -66,7 +66,10 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -132,6 +135,21 @@ public class QueryableStateIntegrationTest {
         CLUSTER.createTopics(outputTopic, outputTopicConcurrent, outputTopicConcurrentWindowed, outputTopicThree);
     }
 
+    private List<String> readInputValues(String resourceFileName, int headerLinesToSkip) throws Exception {
+        List<String> input = new ArrayList<>();
+        ClassLoader classLoader = getClass().getClassLoader();
+        try (BufferedReader reader = new BufferedReader(new FileReader(classLoader.getResource(resourceFileName).getFile()))) {
+            int linesSkipped = 0;
+            for (String line = reader.readLine(); line != null; line = reader.readLine()) {
+                if (linesSkipped < headerLinesToSkip) {
+                    linesSkipped += 1;
+                } else {
+                    input.add(line);
+                }
+            }
+        }
+        return input;
+    }
 
     @Before
     public void before() throws Exception {
@@ -167,20 +185,7 @@ public class QueryableStateIntegrationTest {
                 return o1.key.compareTo(o2.key);
             }
         };
-        inputValues = Arrays.asList(
-            "hello world",
-            "all streams lead to kafka",
-            "streams",
-            "kafka streams",
-            "the cat in the hat",
-            "green eggs and ham",
-            "that Sam i am",
-            "up the creek without a paddle",
-            "run forest run",
-            "a tank full of gas",
-            "eat sleep rave repeat",
-            "one jolly sailor",
-            "king of the world");
+        inputValues = readInputValues("data/sampleText.txt", 15);
         inputValuesKeys = new HashSet<>();
         for (final String sentence : inputValues) {
             final String[] words = sentence.split("\\W+");
