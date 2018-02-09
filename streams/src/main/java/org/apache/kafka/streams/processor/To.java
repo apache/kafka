@@ -22,18 +22,14 @@ package org.apache.kafka.streams.processor;
  */
 public class To {
     protected final String childName;
-    protected final int childIndex;
     protected long timestamp = -1;
 
-    private To(final String childName,
-               final int childIndex) {
+    private To(final String childName) {
         this.childName = childName;
-        this.childIndex = childIndex;
     }
 
     protected To(final To to) {
         childName = to.childName;
-        childIndex = to.childIndex;
         timestamp = to.timestamp;
     }
 
@@ -43,16 +39,7 @@ public class To {
      * @return a new {@link To} instance configured with {@code childName}
      */
     public static To child(final String childName) {
-        return new To(childName, -1);
-    }
-
-    /**
-     * Forward the key/value pair to one of the downstream processors designated by childIndex
-     * @param childIndex index in list of children of this node
-     * @return a new {@link To} instance configured with {@code childIndex}
-     */
-    public static To child(final int childIndex) {
-        return new To(null, childIndex);
+        return new To(childName);
     }
 
     /**
@@ -60,7 +47,7 @@ public class To {
      * @return a new {@link To} instance configured for all downstream processor
      */
     public static To all() {
-        return new To(null, -1);
+        return new To((String) null);
     }
 
     /**

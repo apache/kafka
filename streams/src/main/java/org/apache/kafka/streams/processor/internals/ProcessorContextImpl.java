@@ -85,7 +85,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @SuppressWarnings({"unchecked", "deprecation"})
     @Override
     public <K, V> void forward(final K key, final V value, final int childIndex) {
-        forward(key, value, To.child(childIndex));
+        forward(key, value, To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
     }
 
     @SuppressWarnings({"unchecked", "deprecation"})
@@ -97,7 +97,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        final ToInternal toInternal = new ToInternal(to, (List<ProcessorNode>) currentNode().children());
+        final ToInternal toInternal = new ToInternal(to);
         if (toInternal.hasTimestamp()) {
             recordContext.setTimestamp(toInternal.timestamp());
         }

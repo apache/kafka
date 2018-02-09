@@ -18,20 +18,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.To;
 
-import java.util.List;
-
 class ToInternal extends To {
-    private final String childName;
-
-    ToInternal(final To to, List<ProcessorNode> children) {
+    ToInternal(final To to) {
         super(to);
-        if (super.childName != null) {
-            childName = super.childName;
-        } else if (super.childIndex != -1) {
-            childName = children.get(super.childIndex).name();
-        } else {
-            childName = null;
-        }
     }
 
     boolean hasTimestamp() {

@@ -187,7 +187,7 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(final K key, final V value, final int childIndex) {
-        forward(key, value, To.child(childIndex));
+        forward(key, value, To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
     }
 
     @Override
@@ -199,7 +199,7 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        TestToInternal testToInternal = new TestToInternal(to, (List<ProcessorNode>) currentNode.children());
+        TestToInternal testToInternal = new TestToInternal(to);
         if (testToInternal.hasTimestamp()) {
             setTime(testToInternal.timestamp());
         }
