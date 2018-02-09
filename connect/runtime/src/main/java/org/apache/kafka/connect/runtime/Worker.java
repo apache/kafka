@@ -58,6 +58,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 
 /**
@@ -86,6 +87,9 @@ public class Worker {
 
     private final ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
     private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ConnectorTaskId, Future<?>> futures = new ConcurrentHashMap<>();
+    private final Object taskAndFutureLock = new Object();
+
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
 
     public Worker(
@@ -421,11 +425,14 @@ public class Worker {
             return false;
         }
 
-        WorkerTask existing = tasks.putIfAbsent(id, workerTask);
-        if (existing != null)
-            throw new ConnectException("Task already exists in this worker: " + id);
+        synchronized (taskAndFutureLock) {
+            WorkerTask existing = tasks.putIfAbsent(id, workerTask);
+            if (existing != null)
+                throw new ConnectException("Task already exists in this worker: " + id);
 
-        executor.submit(workerTask);
+            futures.put(id, executor.submit(workerTask));
+        }
+
         if (workerTask instanceof WorkerSourceTask) {
             sourceTaskOffsetCommitter.schedule(id, (WorkerSourceTask) workerTask);
         }
@@ -491,16 +498,39 @@ public class Worker {
     }
 
     private void awaitStopTask(ConnectorTaskId taskId, long timeout) {
-        WorkerTask task = tasks.remove(taskId);
+        WorkerTask task;
+        Future<?> future;
+
+        synchronized (taskAndFutureLock) {
+            task = tasks.remove(taskId);
+            future = futures.remove(taskId);
+        }
+
         if (task == null) {
             log.warn("Ignoring await stop request for non-present task {}", taskId);
             return;
         }
 
         if (!task.awaitStop(timeout)) {
-            log.error("Graceful stop of task {} failed.", task.id());
+            log.error("Graceful stop of task {} failed. Cancelling and forcibly interrupting.", task.id());
             task.cancel();
+
+            if (future == null) {
+                log.warn("No associated Future found for task {}", taskId);
+                return;
+            }
+
+            // Interrupt the thread that the task is running in since it hasn't stopped on its
+            // own by this point. This prevents scenarios where a task runs indefinitely because
+            // it's blocked on something (lock, network I/O, etc.).
+            future.cancel(true);
         }
+    }
+
+    // Visible for testing
+    boolean isTaskFutureRunning(ConnectorTaskId taskId) {
+        final Future<?> future = futures.get(taskId);
+        return future != null && !future.isDone();
     }
 
     private void awaitStopTasks(Collection<ConnectorTaskId> ids) {

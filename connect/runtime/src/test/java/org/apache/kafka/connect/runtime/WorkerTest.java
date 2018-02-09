@@ -34,6 +34,8 @@ import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
@@ -58,14 +60,18 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
@@ -772,6 +778,71 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testStopHungConnectorTask() throws Exception {
+        expectConverters(true);
+        expectStartStorage();
+
+        EasyMock.expect(plugins.currentThreadLoader()).andReturn(delegatingLoader).times(2);
+
+        Map<String, String> taskProps = new HashMap<>();
+        taskProps.put(TaskConfig.TASK_CLASS_CONFIG, TestHangSinkTask.class.getName());
+        taskProps.put(SinkTask.TOPICS_CONFIG, "foo,bar");
+
+        Map<String, String> connectorProps = new HashMap<>();
+        connectorProps.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
+        connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, WorkerHangTestConnector.class.getName());
+        connectorProps.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
+
+        CountDownLatch started = new CountDownLatch(1);
+        SinkTask task = new TestHangSinkTask(started);
+        EasyMock.expect(plugins.newTask(TestHangSinkTask.class)).andReturn(task);
+
+        EasyMock.expect(plugins.delegatingLoader()).andReturn(delegatingLoader);
+        EasyMock.expect(delegatingLoader.connectorLoader(WorkerHangTestConnector.class.getName()))
+                .andReturn(pluginLoader);
+
+        EasyMock.expect(Plugins.compareAndSwapLoaders(pluginLoader)).andReturn(delegatingLoader)
+                .times(3);
+
+        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader)).andReturn(pluginLoader)
+                .times(3);
+
+        taskStatusListener.onStartup(TASK_ID);
+        EasyMock.expectLastCall();
+
+        taskStatusListener.onShutdown(TASK_ID);
+        EasyMock.expectLastCall();
+
+        expectStopStorage();
+
+        PowerMock.replayAll();
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
+        worker.start();
+
+        assertEquals(Collections.emptySet(), worker.taskIds());
+        assertFalse(worker.isTaskFutureRunning(TASK_ID));
+
+        // Start running the task in an executor and attempt to wait a little while until
+        // it starts to block indefinitely. This ensures that our call to .stopAndAwaitTask()
+        // will have to force the task to stop by interrupting the thread.
+        worker.startTask(TASK_ID, connectorProps, taskProps, taskStatusListener, TargetState.STARTED);
+        started.await(10, TimeUnit.SECONDS);
+
+        assertEquals(Collections.singleton(TASK_ID), worker.taskIds());
+        assertTrue(worker.isTaskFutureRunning(TASK_ID));
+
+        worker.stopAndAwaitTask(TASK_ID);
+
+        assertEquals(Collections.emptySet(), worker.taskIds());
+        assertFalse(worker.isTaskFutureRunning(TASK_ID));
+
+        worker.stop();
+
+        PowerMock.verifyAll();
+    }
+
     private void assertStatistics(Worker worker, int connectors, int tasks) {
         MetricGroup workerMetrics = worker.workerMetricsGroup().metricGroup();
         assertEquals(connectors, MockConnectMetrics.currentMetricValueAsDouble(worker.metrics(), workerMetrics, "connector-count"), 0.0001d);
@@ -953,6 +1024,70 @@ public class WorkerTest extends ThreadedTest {
         @Override
         public SchemaAndValue toConnectData(String topic, byte[] value) {
             return null;
+        }
+    }
+
+    static class WorkerHangTestConnector extends SinkConnector {
+
+        @Override
+        public String version() {
+            return "1.0";
+        }
+
+        @Override
+        public void start(Map<String, String> props) {
+        }
+
+        @Override
+        public Class<? extends Task> taskClass() {
+            return TestHangSinkTask.class;
+        }
+
+        @Override
+        public List<Map<String, String>> taskConfigs(int maxTasks) {
+            return null;
+        }
+
+        @Override
+        public void stop() {
+        }
+
+        @Override
+        public ConfigDef config() {
+            return new ConfigDef();
+        }
+    }
+
+    static class TestHangSinkTask extends SinkTask {
+        private CountDownLatch hung;
+        private CountDownLatch started;
+
+        TestHangSinkTask(CountDownLatch started) {
+            this.started = started;
+        }
+
+        @Override
+        public String version() {
+            return "1.0";
+        }
+
+        @Override
+        public void start(Map<String, String> props) {
+            this.hung = new CountDownLatch(1);
+        }
+
+        @Override
+        public void put(Collection<SinkRecord> records) {
+            try {
+                started.countDown();
+                hung.await();
+            } catch (InterruptedException e) {
+                // nothing
+            }
+        }
+
+        @Override
+        public void stop() {
         }
     }
 }
