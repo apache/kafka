@@ -2191,34 +2191,43 @@ public class KafkaAdminClient extends AdminClient {
     public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         final KafkaFutureImpl<Map<String, ConsumerGroupListing>> groupListingFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
-        runnable.call(new Call("listConsumerGroups", calcDeadlineMs(now, options.timeoutMs()),
-            new ControllerNodeProvider()) {
 
-            @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new ListGroupsRequest.Builder();
-            }
-
-            @Override
-            void handleResponse(AbstractResponse abstractResponse) {
-                final ListGroupsResponse response = (ListGroupsResponse) abstractResponse;
-                final Map<String, ConsumerGroupListing> groupsListing = new HashMap<>();
-                for (ListGroupsResponse.Group group : response.groups()) {
-                    if (group.protocolType().equals(ConsumerProtocol.PROTOCOL_TYPE) || group.protocolType().isEmpty()) {
-                        final String groupId = group.groupId();
-                        final String protocolType = group.protocolType();
-                        final ConsumerGroupListing groupListing = new ConsumerGroupListing(protocolType.isEmpty());
-                        groupsListing.put(groupId, groupListing);
+        for (final Node node : metadata.fetch().nodes()) {
+            runnable.call(new Call("listConsumerGroups", calcDeadlineMs(now, options.timeoutMs()),
+                new NodeProvider() {
+                    @Override
+                    public Node provide() {
+                        return node;
                     }
-                }
-                groupListingFuture.complete(groupsListing);
-            }
+                }) {
 
-            @Override
-            void handleFailure(Throwable throwable) {
-                groupListingFuture.completeExceptionally(throwable);
-            }
-        }, now);
+                @Override
+                AbstractRequest.Builder createRequest(int timeoutMs) {
+                    return new ListGroupsRequest.Builder();
+                }
+
+                @Override
+                void handleResponse(AbstractResponse abstractResponse) {
+                    final ListGroupsResponse response = (ListGroupsResponse) abstractResponse;
+                    final Map<String, ConsumerGroupListing> groupsListing = new HashMap<>();
+                    for (ListGroupsResponse.Group group : response.groups()) {
+                        if (group.protocolType().equals(ConsumerProtocol.PROTOCOL_TYPE) || group.protocolType().isEmpty()) {
+                            final String groupId = group.groupId();
+                            final String protocolType = group.protocolType();
+                            final ConsumerGroupListing groupListing = new ConsumerGroupListing(protocolType.isEmpty());
+                            groupsListing.put(groupId, groupListing);
+                        }
+                    }
+                    groupListingFuture.complete(groupsListing);
+                }
+
+                @Override
+                void handleFailure(Throwable throwable) {
+                    groupListingFuture.completeExceptionally(throwable);
+                }
+            }, now);
+
+        }
         return new ListConsumerGroupsResult(groupListingFuture);
     }
 
@@ -2226,33 +2235,63 @@ public class KafkaAdminClient extends AdminClient {
     public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
         final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> groupOffsetListingFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
-        runnable.call(new Call("listConsumerGroupOffsets", calcDeadlineMs(now, options.timeoutMs()),
-            new ControllerNodeProvider()) {
 
+        runnable.call(new Call("findCoordinator", calcDeadlineMs(now, options.timeoutMs()), new ControllerNodeProvider()) {
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new OffsetFetchRequest.Builder(groupId, options.topicPartitions());
+                return new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, groupId);
             }
 
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
-                final OffsetFetchResponse response = (OffsetFetchResponse) abstractResponse;
-                final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
-                for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry :
-                    response.responseData().entrySet()) {
-                    final TopicPartition topicPartition = entry.getKey();
-                    final Long offset = entry.getValue().offset;
-                    final String metadata = entry.getValue().metadata;
-                    groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, metadata));
-                }
-                groupOffsetListingFuture.complete(groupOffsetsListing);
+                final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
+
+
+                runnable.call(new Call("listConsumerGroupOffsets", calcDeadlineMs(now, options.timeoutMs()),
+                    new NodeProvider() {
+                        @Override
+                        public Node provide() {
+                            return response.node();
+                        }
+                    }) {
+
+                    @Override
+                    AbstractRequest.Builder createRequest(int timeoutMs) {
+                        return new OffsetFetchRequest.Builder(groupId, options.topicPartitions());
+                    }
+
+                    @Override
+                    void handleResponse(AbstractResponse abstractResponse) {
+                        final OffsetFetchResponse response = (OffsetFetchResponse) abstractResponse;
+                        final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
+                        for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry :
+                            response.responseData().entrySet()) {
+                            final TopicPartition topicPartition = entry.getKey();
+                            final Long offset = entry.getValue().offset;
+                            final String metadata = entry.getValue().metadata;
+                            groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, metadata));
+                        }
+                        groupOffsetListingFuture.complete(groupOffsetsListing);
+                    }
+
+                    @Override
+                    void handleFailure(Throwable throwable) {
+                        groupOffsetListingFuture.completeExceptionally(throwable);
+                    }
+                }, now);
+
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                groupOffsetListingFuture.completeExceptionally(throwable);
+                if (throwable instanceof NotCoordinatorException) {
+                    fail(now, throwable);
+                } else {
+                    groupOffsetListingFuture.completeExceptionally(throwable);
+                }
             }
         }, now);
+
         return new ListConsumerGroupOffsetsResult(groupOffsetListingFuture);
     }
 
