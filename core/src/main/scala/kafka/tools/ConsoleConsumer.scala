@@ -32,7 +32,6 @@ import kafka.metrics.KafkaMetricsReporter
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord}
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{AuthenticationException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.Deserializer
@@ -48,7 +47,6 @@ object ConsoleConsumer extends Logging {
   var messageCount = 0
 
   private val shutdownLatch = new CountDownLatch(1)
-  private lazy val consumedOffsets = collection.mutable.Map[TopicPartition, Long]()
 
   def main(args: Array[String]) {
     val conf = new ConsumerConfig(args)
@@ -85,20 +83,6 @@ object ConsoleConsumer extends Logging {
     try {
       process(conf.maxMessages, conf.formatter, consumer, System.out, conf.skipMessageOnError)
     } finally {
-      if (!conf.useOldConsumer) {
-        val newConsumer = consumer.asInstanceOf[NewShinyConsumer]
-        // store the real offsets to honor --max-messages instead of max.poll.records
-        while (newConsumer.recordIter.hasNext) {
-          val record = newConsumer.recordIter.next()
-          if (!consumedOffsets.exists(tp => tp._1.topic() == record.topic() && tp._1.partition() == record.partition())) {
-            val tp = new TopicPartition(record.topic(), record.partition())
-            consumedOffsets += tp -> record.offset()
-          }
-        }
-
-        consumedOffsets.foreach { case (tp, offset) => newConsumer.consumer.seek(tp, offset) }
-      }
-
       consumer.cleanup()
       conf.formatter.close()
       reportRecordCount()
@@ -140,48 +124,49 @@ object ConsoleConsumer extends Logging {
   }
 
   def process(maxMessages: Integer, formatter: MessageFormatter, consumer: BaseConsumer, output: PrintStream, skipMessageOnError: Boolean) {
-    lazy val tps = collection.mutable.Set[TopicPartition]() // avoid creating too many TopicPartition objects
-    while (messageCount < maxMessages || maxMessages == -1) {
-      val msg: BaseConsumerRecord = try {
-        consumer.receive()
-      } catch {
-        case _: StreamEndException =>
-          trace("Caught StreamEndException because consumer is shutdown, ignore and terminate.")
-          // Consumer is already closed
-          return
-        case _: WakeupException =>
-          trace("Caught WakeupException because consumer is shutdown, ignore and terminate.")
-          // Consumer will be closed
-          return
-        case e: Throwable =>
-          error("Error processing message, terminating consumer process: ", e)
-          // Consumer will be closed
-          return
-      }
-      messageCount += 1
-      try {
-        formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp,
-                                             msg.timestampType, 0, 0, 0, msg.key, msg.value, msg.headers), output)
-        if (consumer.isInstanceOf[NewShinyConsumer]) {
-          val partition = tps.find(tp => tp.topic() == msg.topic && tp.partition() == msg.partition).getOrElse {
-            val tp = new TopicPartition(msg.topic, msg.partition)
-            tps += tp
-            tp
-          }
-          consumedOffsets += partition -> (msg.offset + 1L)
-        }
-      } catch {
-        case e: Throwable =>
-          if (skipMessageOnError) {
-            error("Error processing message, skipping this message: ", e)
-          } else {
+    try {
+      while (messageCount < maxMessages || maxMessages == -1) {
+        val msg: BaseConsumerRecord = try {
+          consumer.receive()
+        } catch {
+          case _: StreamEndException =>
+            trace("Caught StreamEndException because consumer is shutdown, ignore and terminate.")
+            // Consumer is already closed
+            return
+          case _: WakeupException =>
+            trace("Caught WakeupException because consumer is shutdown, ignore and terminate.")
             // Consumer will be closed
-            throw e
+            return
+          case e: Throwable =>
+            error("Error processing message, terminating consumer process: ", e)
+            // Consumer will be closed
+            return
+        }
+        messageCount += 1
+        try {
+          formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp,
+            msg.timestampType, 0, 0, 0, msg.key, msg.value, msg.headers), output)
+          if (consumer.isInstanceOf[NewShinyConsumer]) {
+            consumer.asInstanceOf[NewShinyConsumer].updateOffsetForPartition(msg)
           }
+        } catch {
+          case e: Throwable =>
+            if (skipMessageOnError) {
+              error("Error processing message, skipping this message: ", e)
+            } else {
+              // Consumer will be closed
+              throw e
+            }
+        }
+
+        if (checkErr(output, formatter)) {
+          // Consumer will be closed
+          return
+        }
       }
-      if (checkErr(output, formatter)) {
-        // Consumer will be closed
-        return
+    } finally {
+      if (consumer.isInstanceOf[NewShinyConsumer]) {
+        consumer.asInstanceOf[NewShinyConsumer].seekToRealPositionsBeforeExit()
       }
     }
   }

@@ -20,7 +20,7 @@ package kafka.tools
 import java.io.{PrintStream, FileOutputStream}
 
 import kafka.common.MessageFormatter
-import kafka.consumer.{BaseConsumer, BaseConsumerRecord}
+import kafka.consumer.{BaseConsumer, BaseConsumerRecord, NewShinyConsumer}
 import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.easymock.EasyMock
@@ -489,5 +489,36 @@ class ConsoleConsumerTest {
     assertEquals("group-from-arguments", props.getProperty("group.id"))
 
     Exit.resetExitProcedure()
+  }
+
+  @Test
+  def shouldUpdateOffsetsAndSeekWithMaxMessageLimit() {
+    //Mocks
+    val consumer = EasyMock.createNiceMock(classOf[NewShinyConsumer])
+    val formatter = EasyMock.createNiceMock(classOf[MessageFormatter])
+    val printStream = EasyMock.createNiceMock(classOf[PrintStream])
+
+    //Stubs
+    val record = new BaseConsumerRecord(topic = "foo", partition = 0, offset = 1, key = Array[Byte](), value = Array[Byte]())
+
+    //Expectations
+    val messageLimit: Int = 10
+    ConsoleConsumer.messageCount = 0 // reset message count to zero
+    EasyMock.expect(formatter.writeTo(EasyMock.anyObject(), EasyMock.eq(printStream))).times(messageLimit)
+    EasyMock.expect(consumer.receive()).andReturn(record).times(messageLimit)
+    EasyMock.expect(consumer.updateOffsetForPartition(record))
+    EasyMock.expectLastCall().times(messageLimit)
+    EasyMock.expect(printStream.checkError()).andReturn(false).times(messageLimit)
+    EasyMock.expect(consumer.seekToRealPositionsBeforeExit())
+    EasyMock.expectLastCall().once()
+
+    EasyMock.replay(consumer)
+    EasyMock.replay(formatter)
+    EasyMock.replay(printStream)
+
+    // Test
+    ConsoleConsumer.process(messageLimit, formatter, consumer, printStream, true)
+
+    EasyMock.verify(consumer, formatter, printStream)
   }
 }
