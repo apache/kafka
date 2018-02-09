@@ -605,6 +605,14 @@ private[kafka] class Processor(val id: Int,
   private[network] def channel(connectionId: String): Option[KafkaChannel] =
     Option(selector.channel(connectionId))
 
+  /* For test usage */
+  private[network] def openOrClosingChannel(connectionId: String): Option[KafkaChannel] =
+    channel(connectionId).orElse(Option(selector.closingChannel(connectionId)))
+
+  // Visible for testing
+  private[network] def numStagedReceives(connectionId: String): Int =
+    openOrClosingChannel(connectionId).map(c => selector.numStagedReceives(c)).getOrElse(0)
+
   /**
    * Wakeup the thread for selection.
    */

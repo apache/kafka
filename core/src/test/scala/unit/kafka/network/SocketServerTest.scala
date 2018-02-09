@@ -65,7 +65,7 @@ class SocketServerTest extends JUnitSuite {
   server.startup()
   val sockets = new ArrayBuffer[Socket]
 
-  def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None) {
+  def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None, flush: Boolean = true) {
     val outgoing = new DataOutputStream(socket.getOutputStream)
     id match {
       case Some(id) =>
@@ -75,7 +75,8 @@ class SocketServerTest extends JUnitSuite {
         outgoing.writeInt(request.length)
     }
     outgoing.write(request)
-    outgoing.flush()
+    if (flush)
+      outgoing.flush()
   }
 
   def receiveResponse(socket: Socket): Array[Byte] = {
@@ -86,10 +87,15 @@ class SocketServerTest extends JUnitSuite {
     response
   }
 
+  private def receiveRequest(channel: RequestChannel, timeout: Long = 2000L): RequestChannel.Request = {
+    val request = channel.receiveRequest(timeout)
+    assertNotNull("receiveRequest timed out", request)
+    request
+  }
+
   /* A simple request handler that just echos back the response */
   def processRequest(channel: RequestChannel) {
-    val request = channel.receiveRequest(2000)
-    assertNotNull("receiveRequest timed out", request)
+    val request = receiveRequest(channel)
     processRequest(channel, request)
   }
 
@@ -115,12 +121,11 @@ class SocketServerTest extends JUnitSuite {
     sockets.clear()
   }
 
-  private def producerRequestBytes: Array[Byte] = {
+  private def producerRequestBytes(ack: Short = 0): Array[Byte] = {
     val apiKey: Short = 0
     val correlationId = -1
     val clientId = ""
     val ackTimeoutMs = 10000
-    val ack = 0: Short
 
     val emptyRequest = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, ack, ackTimeoutMs,
       new HashMap[TopicPartition, MemoryRecords]()).build()
@@ -133,11 +138,30 @@ class SocketServerTest extends JUnitSuite {
     serializedBytes
   }
 
+  private def sendRequestsUntilStagedReceive(server: SocketServer, socket: Socket, requestBytes: Array[Byte]): RequestChannel.Request = {
+    def sendTwoRequestsReceiveOne(): RequestChannel.Request = {
+      sendRequest(socket, requestBytes, flush = false)
+      sendRequest(socket, requestBytes, flush = true)
+      receiveRequest(server.requestChannel)
+    }
+    val (request, hasStagedReceives) = TestUtils.computeUntilTrue(sendTwoRequestsReceiveOne()) { req =>
+      val connectionId = req.connectionId
+      val hasStagedReceives = server.processor(0).numStagedReceives(connectionId) > 0
+      if (!hasStagedReceives) {
+        processRequest(server.requestChannel, req)
+        processRequest(server.requestChannel)
+      }
+      hasStagedReceives
+    }
+    assertTrue(s"Receives not staged for ${org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS} ms", hasStagedReceives)
+    request
+  }
+
   @Test
   def simpleRequest() {
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
     val traceSocket = connect(protocol = SecurityProtocol.TRACE)
-    val serializedBytes = producerRequestBytes
+    val serializedBytes = producerRequestBytes()
 
     // Test PLAINTEXT socket
     sendRequest(plainSocket, serializedBytes)
@@ -171,7 +195,7 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def testGracefulClose() {
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
-    val serializedBytes = producerRequestBytes
+    val serializedBytes = producerRequestBytes()
 
     for (_ <- 0 until 10)
       sendRequest(plainSocket, serializedBytes)
@@ -236,7 +260,7 @@ class SocketServerTest extends JUnitSuite {
     TestUtils.waitUntilTrue(() => server.connectionCount(address) < conns.length,
       "Failed to decrement connection count after close")
     val conn2 = connect()
-    val serializedBytes = producerRequestBytes
+    val serializedBytes = producerRequestBytes()
     sendRequest(conn2, serializedBytes)
     val request = server.requestChannel.receiveRequest(2000)
     assertNotNull(request)
@@ -255,7 +279,7 @@ class SocketServerTest extends JUnitSuite {
       val conns = (0 until overrideNum).map(_ => connect(overrideServer))
 
       // it should succeed
-      val serializedBytes = producerRequestBytes
+      val serializedBytes = producerRequestBytes()
       sendRequest(conns.last, serializedBytes)
       val request = overrideServer.requestChannel.receiveRequest(2000)
       assertNotNull(request)
@@ -341,7 +365,7 @@ class SocketServerTest extends JUnitSuite {
     try {
       overrideServer.startup()
       conn = connect(overrideServer)
-      val serializedBytes = producerRequestBytes
+      val serializedBytes = producerRequestBytes()
       sendRequest(conn, serializedBytes)
 
       val channel = overrideServer.requestChannel
@@ -367,6 +391,26 @@ class SocketServerTest extends JUnitSuite {
     }
   }
 
+  @Test
+  def testClientDisconnectionWithStagedReceivesFullyProcessed() {
+    val socket = connect(server)
+
+    // Setup channel to client with staged receives so when client disconnects
+    // it will be stored in Selector.closingChannels
+    val serializedBytes = producerRequestBytes(1)
+    val request = sendRequestsUntilStagedReceive(server, socket, serializedBytes)
+    val connectionId = request.connectionId
+
+    // Set SoLinger to 0 to force a hard disconnect via TCP RST
+    socket.setSoLinger(true, 0)
+    socket.close()
+
+    // Complete request with socket exception so that the channel is removed from Selector.closingChannels
+    processRequest(server.requestChannel, request)
+    TestUtils.waitUntilTrue(() => server.processor(0).openOrClosingChannel(connectionId).isEmpty,
+      "Channel not closed after failed send")
+  }
+
   /*
    * Test that we update request metrics if the channel has been removed from the selector when the broker calls
    * `selector.send` (selector closes old connections, for example).
@@ -381,7 +425,7 @@ class SocketServerTest extends JUnitSuite {
     try {
       overrideServer.startup()
       conn = connect(overrideServer)
-      val serializedBytes = producerRequestBytes
+      val serializedBytes = producerRequestBytes()
       sendRequest(conn, serializedBytes)
       val channel = overrideServer.requestChannel
       val request = channel.receiveRequest(2000)
