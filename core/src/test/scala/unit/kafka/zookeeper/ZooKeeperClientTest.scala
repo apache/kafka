@@ -392,10 +392,10 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     */
   @Test
   def testSessionExpiry(): Unit = {
-    val requestThreadSemaphore = new Semaphore(0)
-    val sessionExpireSemaphore = new Semaphore(0)
     val maxInflightRequests = 2
-    val sendSize = maxInflightRequests * 20
+    val requestThreadSemaphore = new Semaphore(0)
+    val sessionExpireSemaphore = new Semaphore(maxInflightRequests + 1) // expire after a few requests
+    val sendSize = maxInflightRequests * 50
     @volatile var resultCodes: Seq[Code] = null
     val zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, maxInflightRequests,
       time, "testGroupType", "testGroupName") {
@@ -414,7 +414,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       }
       requestThread.start()
       requestThreadSemaphore.acquire() // Wait for request thread to start processng requests
-      sessionExpireSemaphore.release(Integer.MAX_VALUE) // Resume request thread before expiring session
+      sessionExpireSemaphore.release(sendSize) // Resume request thread before expiring session
 
       // Trigger session expiry by reusing the session id in another client
       val dummyWatcher = new Watcher {
