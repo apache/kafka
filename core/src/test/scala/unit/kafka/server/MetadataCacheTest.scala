@@ -19,7 +19,6 @@ package kafka.server
 import java.util
 import util.Arrays.asList
 
-import kafka.common.BrokerEndPointNotAvailableException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -289,14 +288,10 @@ class MetadataCacheTest {
       brokers.asJava).build()
     cache.updateCache(15, updateMetadataRequest)
 
-    try {
-      val result = cache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.SSL))
-      fail(s"Exception should be thrown by `getTopicMetadata` with non-supported SecurityProtocol, $result was returned instead")
-    }
-    catch {
-      case _: BrokerEndPointNotAvailableException => //expected
-    }
-
+    val topicMetadata = cache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.SSL))
+    assertEquals(1, topicMetadata.size)
+    assertEquals(1, topicMetadata.head.partitionMetadata.size)
+    assertEquals(-1, topicMetadata.head.partitionMetadata.get(0).leaderId)
   }
 
   @Test

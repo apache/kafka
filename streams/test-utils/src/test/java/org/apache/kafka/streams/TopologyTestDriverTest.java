@@ -190,6 +190,7 @@ public class TopologyTestDriverTest {
             context.forward(key, value);
         }
 
+        @SuppressWarnings("deprecation")
         @Override
         public void punctuate(long timestamp) {} // deprecated
 

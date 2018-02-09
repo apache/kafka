@@ -24,7 +24,6 @@ import java.util.concurrent._
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.metrics.KafkaMetricsGroup
-import kafka.network.RequestChannel.{BaseRequest, SendAction, ShutdownRequest, NoOpAction, CloseConnectionAction}
 import kafka.utils.{Logging, NotNothing}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.network.Send
@@ -39,6 +38,10 @@ import scala.reflect.ClassTag
 
 object RequestChannel extends Logging {
   private val requestLogger = Logger("kafka.request.logger")
+
+  val RequestQueueSizeMetric = "RequestQueueSize"
+  val ResponseQueueSizeMetric = "ResponseQueueSize"
+  val ProcessorMetricTag = "processor"
 
   def isRequestLoggingEnabled: Boolean = requestLogger.underlying.isDebugEnabled
 
@@ -241,37 +244,36 @@ object RequestChannel extends Logging {
 }
 
 class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
+  import RequestChannel._
   val metrics = new RequestChannel.Metrics
-  private var responseListeners: List[(Int) => Unit] = Nil
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
-  private val responseQueues = new ConcurrentHashMap[Int, BlockingQueue[RequestChannel.Response]]()
+  private val processors = new ConcurrentHashMap[Int, Processor]()
 
-  newGauge(
-    "RequestQueueSize",
-    new Gauge[Int] {
+  newGauge(RequestQueueSizeMetric, new Gauge[Int] {
       def value = requestQueue.size
-    }
-  )
-
-  newGauge("ResponseQueueSize", new Gauge[Int]{
-    def value = responseQueues.values.asScala.foldLeft(0) {(total, q) => total + q.size()}
   })
 
-  def addProcessor(processorId: Int): Unit = {
-    val responseQueue = new LinkedBlockingQueue[RequestChannel.Response]()
-    if (responseQueues.putIfAbsent(processorId, responseQueue) != null)
-      warn(s"Unexpected processor with processorId $processorId")
-    newGauge("ResponseQueueSize",
+  newGauge(ResponseQueueSizeMetric, new Gauge[Int]{
+    def value = processors.values.asScala.foldLeft(0) {(total, processor) =>
+      total + processor.responseQueueSize
+    }
+  })
+
+  def addProcessor(processor: Processor): Unit = {
+    if (processors.putIfAbsent(processor.id, processor) != null)
+      warn(s"Unexpected processor with processorId ${processor.id}")
+
+    newGauge(ResponseQueueSizeMetric,
       new Gauge[Int] {
-        def value = responseQueue.size()
+        def value = processor.responseQueueSize
       },
-      Map("processor" -> processorId.toString)
+      Map(ProcessorMetricTag -> processor.id.toString)
     )
   }
 
   def removeProcessor(processorId: Int): Unit = {
-    removeMetric("ResponseQueueSize", Map("processor" -> processorId.toString))
-    responseQueues.remove(processorId)
+    processors.remove(processorId)
+    removeMetric(ResponseQueueSizeMetric, Map(ProcessorMetricTag -> processorId.toString))
   }
 
   /** Send a request to be handled, potentially blocking until there is room in the queue for the request */
@@ -294,13 +296,11 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
       trace(message)
     }
 
-    val responseQueue = responseQueues.get(response.processor)
-    // `responseQueue` may be null if the processor was shutdown. In this case, the connections
+    val processor = processors.get(response.processor)
+    // The processor may be null if it was shutdown. In this case, the connections
     // are closed, so the response is dropped.
-    if (responseQueue != null) {
-      responseQueue.put(response)
-      for (onResponse <- responseListeners)
-        onResponse(response.processor)
+    if (processor != null) {
+      processor.enqueueResponse(response)
     }
   }
 
@@ -311,21 +311,6 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
   /** Get the next request or block until there is one */
   def receiveRequest(): RequestChannel.BaseRequest =
     requestQueue.take()
-
-  /** Get a response for the given processor if there is one */
-  def receiveResponse(processor: Int): RequestChannel.Response = {
-    val responseQueue = responseQueues.get(processor)
-    if (responseQueue == null)
-      throw new IllegalStateException(s"receiveResponse with invalid processor $processor: processors=${responseQueues.keySet}")
-    val response = responseQueue.poll()
-    if (response != null)
-      response.request.responseDequeueTimeNanos = Time.SYSTEM.nanoseconds
-    response
-  }
-
-  def addResponseListener(onResponse: Int => Unit) {
-    responseListeners ::= onResponse
-  }
 
   def updateErrorMetrics(apiKey: ApiKeys, errors: collection.Map[Errors, Integer]) {
     errors.foreach { case (error, count) =>
