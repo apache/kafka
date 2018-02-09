@@ -121,7 +121,7 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingSimpleTopology() throws Exception {
+    public void testDrivingSimpleTopology() {
         final int partition = 10;
         driver = new ProcessorTopologyTestDriver(config, createSimpleTopology(partition).internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
@@ -143,7 +143,7 @@ public class ProcessorTopologyTest {
 
 
     @Test
-    public void testDrivingMultiplexingTopology() throws Exception {
+    public void testDrivingMultiplexingTopology() {
         driver = new ProcessorTopologyTestDriver(config, createMultiplexingTopology().internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1(1)");
@@ -165,7 +165,7 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingMultiplexByNameTopology() throws Exception {
+    public void testDrivingMultiplexByNameTopology() {
         driver = new ProcessorTopologyTestDriver(config, createMultiplexByNameTopology().internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1(1)");
@@ -187,7 +187,7 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingStatefulTopology() throws Exception {
+    public void testDrivingStatefulTopology() {
         final String storeName = "entries";
         driver = new ProcessorTopologyTestDriver(config, createStatefulTopology(storeName).internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
@@ -196,7 +196,7 @@ public class ProcessorTopologyTest {
         driver.process(INPUT_TOPIC_1, "key1", "value4", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNoOutputRecord(OUTPUT_TOPIC_1);
 
-        final KeyValueStore<String, String> store = driver.getKeyValueStore("entries");
+        final KeyValueStore<String, String> store = driver.getKeyValueStore(storeName);
         assertEquals("value4", store.get("key1"));
         assertEquals("value2", store.get("key2"));
         assertEquals("value3", store.get("key3"));
@@ -206,15 +206,16 @@ public class ProcessorTopologyTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldDriveGlobalStore() {
-        final StateStoreSupplier storeSupplier = Stores.create("my-store")
+        final String storeName = "my-store";
+        final StateStoreSupplier storeSupplier = Stores.create(storeName)
                 .withStringKeys().withStringValues().inMemory().disableLogging().build();
         final String global = "global";
         final String topic = "topic";
         final TopologyBuilder topologyBuilder = this.builder
-                .addGlobalStore(storeSupplier, global, STRING_DESERIALIZER, STRING_DESERIALIZER, topic, "processor", define(new StatefulProcessor("my-store")));
+                .addGlobalStore(storeSupplier, global, STRING_DESERIALIZER, STRING_DESERIALIZER, topic, "processor", define(new StatefulProcessor(storeName)));
 
         driver = new ProcessorTopologyTestDriver(config, topologyBuilder.internalTopologyBuilder);
-        final KeyValueStore<String, String> globalStore = (KeyValueStore<String, String>) topologyBuilder.globalStateStores().get("my-store");
+        final KeyValueStore<String, String> globalStore = (KeyValueStore<String, String>) topologyBuilder.globalStateStores().get(storeName);
         driver.process(topic, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(topic, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
         assertEquals("value1", globalStore.get("key1"));
@@ -222,7 +223,7 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingSimpleMultiSourceTopology() throws Exception {
+    public void testDrivingSimpleMultiSourceTopology() {
         final int partition = 10;
         driver = new ProcessorTopologyTestDriver(config, createSimpleMultiSourceTopology(partition).internalTopologyBuilder);
 
@@ -236,7 +237,7 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingForwardToSourceTopology() throws Exception {
+    public void testDrivingForwardToSourceTopology() {
         driver = new ProcessorTopologyTestDriver(config, createForwardToSourceTopology().internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
@@ -247,7 +248,7 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingInternalRepartitioningTopology() throws Exception {
+    public void testDrivingInternalRepartitioningTopology() {
         driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningTopology().internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
@@ -258,7 +259,7 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingInternalRepartitioningForwardingTimestampTopology() throws Exception {
+    public void testDrivingInternalRepartitioningForwardingTimestampTopology() {
         driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningWithValueTimestampTopology().internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1@1000", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key2", "value2@2000", STRING_SERIALIZER, STRING_SERIALIZER);
@@ -316,7 +317,7 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void shouldConsiderTimeStamps() throws Exception {
+    public void shouldConsiderTimeStamps() {
         final int partition = 10;
         driver = new ProcessorTopologyTestDriver(config, createSimpleTopology(partition).internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER, 10L);
@@ -328,7 +329,7 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void shouldConsiderModifiedTimeStamps() throws Exception {
+    public void shouldConsiderModifiedTimeStamps() {
         final int partition = 10;
         driver = new ProcessorTopologyTestDriver(config, createTimestampTopology(partition).internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER, 10L);
@@ -408,6 +409,14 @@ public class ProcessorTopologyTest {
             .addSink("sink1", OUTPUT_TOPIC_2, "processor");
     }
 
+    private TopologyBuilder createMultiplexByNameNewTopology() {
+        return builder
+            .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+            .addProcessor("processor", define(new MultiplexByNameProcessorNew(2)), "source")
+            .addSink("sink0", OUTPUT_TOPIC_1, "processor")
+            .addSink("sink1", OUTPUT_TOPIC_2, "processor");
+    }
+
     private TopologyBuilder createStatefulTopology(final String storeName) {
         return builder
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
@@ -459,7 +468,6 @@ public class ProcessorTopologyTest {
      * A processor that simply forwards all messages to all children.
      */
     protected static class ForwardingProcessor extends AbstractProcessor<String, String> {
-
         @Override
         public void process(final String key, final String value) {
             context().forward(key, value);
@@ -475,7 +483,6 @@ public class ProcessorTopologyTest {
      * A processor that simply forwards all messages to all children.
      */
     protected static class TimestampProcessor extends AbstractProcessor<String, String> {
-
         @Override
         public void process(final String key, final String value) {
             context().forward(key, value, To.all().withTimestamp(context().timestamp() + 10));
@@ -487,7 +494,6 @@ public class ProcessorTopologyTest {
      * A message contains custom timestamp information if the value is in ".*@[0-9]+" format.
      */
     protected static class ValueTimestampProcessor extends AbstractProcessor<String, String> {
-
         @Override
         public void process(final String key, final String value) {
             context().forward(key, value.split("@")[0]);
@@ -498,13 +504,13 @@ public class ProcessorTopologyTest {
      * A processor that forwards slightly-modified messages to each child.
      */
     protected static class MultiplexingProcessor extends AbstractProcessor<String, String> {
-
         private final int numChildren;
 
-        public MultiplexingProcessor(final int numChildren) {
+        MultiplexingProcessor(final int numChildren) {
             this.numChildren = numChildren;
         }
 
+        @SuppressWarnings("deprecation")
         @Override
         public void process(final String key, final String value) {
             for (int i = 0; i != numChildren; ++i) {
@@ -512,6 +518,7 @@ public class ProcessorTopologyTest {
             }
         }
 
+        @SuppressWarnings("deprecation")
         @Override
         public void punctuate(final long streamTime) {
             for (int i = 0; i != numChildren; ++i) {
@@ -525,20 +532,21 @@ public class ProcessorTopologyTest {
      * Note: the children are assumed to be named "sink{child number}", e.g., sink1, or sink2, etc.
      */
     protected static class MultiplexByNameProcessor extends AbstractProcessor<String, String> {
-
         private final int numChildren;
 
-        public MultiplexByNameProcessor(final int numChildren) {
+        MultiplexByNameProcessor(final int numChildren) {
             this.numChildren = numChildren;
         }
 
+        @SuppressWarnings("deprecation")
         @Override
         public void process(final String key, final String value) {
             for (int i = 0; i != numChildren; ++i) {
-                context().forward(key, value + "(" + (i + 1) + ")", "sink" + i);
+                context().forward(key, value + "(" + (i + 1) + ")",  "sink" + i);
             }
         }
 
+        @SuppressWarnings("deprecation")
         @Override
         public void punctuate(final long streamTime) {
             for (int i = 0; i != numChildren; ++i) {
@@ -548,15 +556,40 @@ public class ProcessorTopologyTest {
     }
 
     /**
+     * A processor that forwards slightly-modified messages to each named child.
+     * Note: the children are assumed to be named "sink{child number}", e.g., sink1, or sink2, etc.
+     */
+    protected static class MultiplexByNameProcessorNew extends AbstractProcessor<String, String> {
+        private final int numChildren;
+
+        MultiplexByNameProcessorNew(final int numChildren) {
+            this.numChildren = numChildren;
+        }
+
+        @Override
+        public void process(final String key, final String value) {
+            for (int i = 0; i != numChildren; ++i) {
+                context().forward(key, value + "(" + (i + 1) + ")",  To.child("sink" + i));
+            }
+        }
+
+        @Override
+        public void punctuate(final long streamTime) {
+            for (int i = 0; i != numChildren; ++i) {
+                context().forward(Long.toString(streamTime), "punctuate(" + (i + 1) + ")", To.child("sink" + i));
+            }
+        }
+    }
+
+    /**
      * A processor that stores each key-value pair in an in-memory key-value store registered with the context. When
      * {@link #punctuate(long)} is called, it outputs the total number of entries in the store.
      */
     protected static class StatefulProcessor extends AbstractProcessor<String, String> {
-
         private KeyValueStore<String, String> store;
         private final String storeName;
 
-        public StatefulProcessor(final String storeName) {
+        StatefulProcessor(final String storeName) {
             this.storeName = storeName;
         }
 

@@ -21,7 +21,7 @@ package org.apache.kafka.streams.processor;
  * using {@link ProcessorContext#forward(Object, Object, To)}.
  */
 public class To {
-    protected final String childName;
+    protected String childName;
     protected long timestamp = -1;
 
     private To(final String childName) {
@@ -29,6 +29,11 @@ public class To {
     }
 
     protected To(final To to) {
+        childName = to.childName;
+        timestamp = to.timestamp;
+    }
+
+    protected void update(final To to) {
         childName = to.childName;
         timestamp = to.timestamp;
     }

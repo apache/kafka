@@ -33,6 +33,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     private final StreamTask task;
     private final RecordCollector collector;
+    private final ToAccessor toAccessor = new ToAccessor();
 
     ProcessorContextImpl(final TaskId id,
                          final StreamTask task,
@@ -97,14 +98,14 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        final ToInternal toInternal = new ToInternal(to);
-        if (toInternal.hasTimestamp()) {
-            recordContext.setTimestamp(toInternal.timestamp());
+        toAccessor.update(to);
+        if (toAccessor.hasTimestamp()) {
+            recordContext.setTimestamp(toAccessor.timestamp());
         }
         final ProcessorNode previousNode = currentNode();
         try {
             for (final ProcessorNode child : (List<ProcessorNode<K, V>>) currentNode().children()) {
-                if (toInternal.hasChild(child.name())) {
+                if (toAccessor.hasChild(child.name())) {
                     setCurrentNode(child);
                     child.process(key, value);
                 }

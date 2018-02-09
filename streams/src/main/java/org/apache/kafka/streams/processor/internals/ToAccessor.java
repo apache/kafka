@@ -18,20 +18,28 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.To;
 
-public class TestToInternal extends ToInternal {
-    public TestToInternal(final To to) {
-        super(to);
+public class ToAccessor extends To {
+    public ToAccessor() {
+        super(To.all());
+    }
+
+    public void update(final To to) {
+        super.update(to);
     }
 
     public boolean hasTimestamp() {
-        return super.hasTimestamp();
+        return timestamp != -1;
     }
 
     public long timestamp() {
-        return super.timestamp();
+        return timestamp;
     }
 
     public boolean hasChild(final String childName) {
-        return super.hasChild(childName);
+        return sendToAllChildren() || this.childName.equals(childName);
+    }
+
+    private boolean sendToAllChildren() {
+        return childName == null;
     }
 }
