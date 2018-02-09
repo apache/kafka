@@ -430,7 +430,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
         else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_9_0) 1
         else 0
 
-      val updateMetadataRequest = {
+      lazy val updateMetadataRequest = {
         val liveBrokers = if (updateMetadataRequestVersion == 0) {
           // Version 0 of UpdateMetadataRequest only supports PLAINTEXT.
           controllerContext.liveOrShuttingDownBrokers.map { broker =>
