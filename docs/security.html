@@ -231,7 +231,9 @@
             <p><tt>KafkaServer</tt> is the section name in the JAAS file used by each
             KafkaServer/Broker. This section provides SASL configuration options
             for the broker including any SASL client connections made by the broker
-            for inter-broker communication.</p>
+            for inter-broker communication. If multiple listeners are configured to use
+            SASL, the section name may be prefixed with the listener name in lower-case
+            followed by a period, e.g. <tt>sasl_ssl.KafkaServer</tt>.</p>
 
             <p><tt>Client</tt> section is used to authenticate a SASL connection with
             zookeeper. It also allows the brokers to set SASL ACL on zookeeper
@@ -245,6 +247,35 @@
             want to change this, set the system property
             <tt>zookeeper.sasl.client.username</tt> to the appropriate name
             (<i>e.g.</i>, <tt>-Dzookeeper.sasl.client.username=zk</tt>).</p></li>
+
+            <p>Brokers may also configure JAAS using the broker configuration property <code>sasl.jaas.config</code>.
+            The property name must be prefixed with the listener prefix including the SASL mechanism,
+            i.e. <code>listener.name.{listenerName}.{saslMechanism}.sasl.jaas.config</code>. Only one
+            login module may be specified in the config value. If multiple mechanisms are configured on a
+            listener, configs must be provided for each mechanism using the listener and mechanism prefix.
+            For example,
+                    <pre class="brush: text;">
+        listener.name.sasl_ssl.scram-sha-256.sasl.jaas.config= org.apache.kafka.common.security.scram.ScramLoginModule required \
+            username="admin" \
+            password="admin-secret";
+        listener.name.sasl_ssl.plain.sasl.jaas.config= org.apache.kafka.common.security.plain.PlainLoginModule required \
+            username="admin" \
+            password="admin-secret" \
+            user_admin="admin-secret" \
+            user_alice="alice-secret";</pre>
+
+            If JAAS configuration is defined at different levels, the order of precedence used is:
+            <ul>
+              <li><code>listener.name.{listenerName}.{saslMechanism}.sasl.jaas.config</code></li>
+              <li><code>sasl.jaas.config</code></li>
+              <li>Static JAAS configuration</code></li>
+            </ul>
+            Note that ZooKeeper JAAS config may only be configured using static JAAS configuration.
+
+            <p>See <a href="#security_sasl_kerberos_brokerconfig">GSSAPI (Kerberos)</a>,
+            <a href="#security_sasl_plain_brokerconfig">PLAIN</a> or
+            <a href="#security_sasl_scram_brokerconfig">SCRAM</a> for example broker configurations.</p></li>
+
 
         <li><h5><a id="security_jaas_client"
             href="#security_jaas_client">JAAS configuration for Kafka clients</a></h5>
