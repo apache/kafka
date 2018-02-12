@@ -54,14 +54,17 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         try {
             sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
 
-            brokerProps.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:0");
+            brokerProps.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:9092");
             brokerProps.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(), "SSL");
             brokerProps.putAll(sslConfig);
         } catch (final Exception e) {
             throw new RuntimeException(e);
         }
 
-        CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
+        // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
+        // otherwise, input records could fall into different windows for different runs depending on the initial mock time
+        final long alignedTime = (System.currentTimeMillis() / 1000) * 1000;
+        CLUSTER = new EmbeddedKafkaCluster(1, brokerProps, alignedTime);
 
         System.out.println(Thread.currentThread().getName() + ": SSL Executed Static");
         System.out.flush();
