@@ -25,15 +25,10 @@ import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
 
@@ -50,6 +45,7 @@ public class StreamsStandByReplicaTest {
 
 
     static final String SOURCE_TOPIC = "standbyTaskSource1";
+    static final String SOURCE_TOPIC_2 = "standbyTaskSource2";
 
     private static final String SINK_TOPIC_1 = "standbyTaskSink1";
     private static final String SINK_TOPIC_2 = "standbyTaskSink2";
@@ -73,6 +69,7 @@ public class StreamsStandByReplicaTest {
         streamsProperties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         streamsProperties.put(StreamsConfig.STATE_DIR_CONFIG, stateDirStr);
         streamsProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        streamsProperties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
 
         // it is expected that max.poll.interval, retries, request.timeout and max.block.ms set
         // streams_broker_down_resilience_test and passed as args
@@ -94,23 +91,18 @@ public class StreamsStandByReplicaTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<String, String> streamOne = builder.stream(SOURCE_TOPIC, Consumed.with(stringSerde, stringSerde));
-
         String inMemoryStoreName = "in-memory-store";
         String persistentMemoryStoreName = "persistent-memory-store";
 
         KeyValueBytesStoreSupplier inMemoryStoreSupplier = Stores.inMemoryKeyValueStore(inMemoryStoreName);
-        StoreBuilder<KeyValueStore<String, String>> storeBuilder = Stores.keyValueStoreBuilder(inMemoryStoreSupplier, stringSerde, stringSerde);
-
         KeyValueBytesStoreSupplier persistentStoreSupplier = Stores.persistentKeyValueStore(persistentMemoryStoreName);
-        StoreBuilder<KeyValueStore<String, String>> persistentStoreBuilder = Stores.keyValueStoreBuilder(persistentStoreSupplier, stringSerde, stringSerde);
 
-        builder.addStateStore(storeBuilder);
-        builder.addStateStore(persistentStoreBuilder);
-
-        streamOne.transformValues(new StandbyTransformValuesSupplier(inMemoryStoreName), inMemoryStoreName)
+        builder.table(SOURCE_TOPIC, Consumed.with(stringSerde, stringSerde),
+                      Materialized.<String, String>as(inMemoryStoreSupplier).withKeySerde(stringSerde).withValueSerde(stringSerde)).toStream()
             .to(SINK_TOPIC_1, Produced.with(stringSerde, stringSerde));
-        streamOne.transformValues(new StandbyTransformValuesSupplier(persistentMemoryStoreName), persistentMemoryStoreName)
+
+        builder.table(SOURCE_TOPIC_2, Consumed.with(stringSerde, stringSerde),
+                      Materialized.<String, String>as(persistentStoreSupplier).withKeySerde(stringSerde).withValueSerde(stringSerde)).toStream()
             .to(SINK_TOPIC_2, Produced.with(stringSerde, stringSerde));
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
@@ -177,48 +169,6 @@ public class StreamsStandByReplicaTest {
             updatedConfigs.put(keyValue[KEY], keyValue[VALUE]);
         }
         return updatedConfigs;
-    }
-
-
-    private static final class StandbyTransformValuesSupplier implements ValueTransformerWithKeySupplier<String, String, String> {
-
-        private String storeName;
-
-        StandbyTransformValuesSupplier(String storeName) {
-            this.storeName = storeName;
-        }
-
-        @Override
-        public ValueTransformerWithKey<String, String, String> get() {
-            return new InnerTransformer();
-        }
-
-        private class InnerTransformer implements ValueTransformerWithKey<String, String, String> {
-
-            private int counter = 0;
-            private KeyValueStore<String, String> store;
-
-            @Override
-            @SuppressWarnings("unchecked")
-            public void init(ProcessorContext context) {
-                store = (KeyValueStore) context.getStateStore(storeName);
-            }
-
-            @Override
-            public String transform(String readOnlyKey, String value) {
-                String storedValue = store.get(readOnlyKey);
-                if (storedValue == null) {
-                    storedValue = value;
-                }
-                store.put(readOnlyKey, value + counter++);
-                return storedValue + "_" + storeName;
-            }
-
-            @Override
-            public void close() {
-
-            }
-        }
     }
 
 }

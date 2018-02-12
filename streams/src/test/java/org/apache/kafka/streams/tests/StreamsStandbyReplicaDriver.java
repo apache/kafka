@@ -49,13 +49,16 @@ public class StreamsStandbyReplicaDriver {
                 keepProducing = false;
             }
         }));
+        final String[] topics = new String[]{StreamsStandByReplicaTest.SOURCE_TOPIC, StreamsStandByReplicaTest.SOURCE_TOPIC_2};
 
         int messageCounter = 0;
         try (final KafkaProducer<String, String> kafkaProducer = new KafkaProducer<>(producerProps)) {
 
             while (keepProducing && messageCounter++ < numMessages) {
-                ProducerRecord<String, String> producerRecord = new ProducerRecord<>(StreamsStandByReplicaTest.SOURCE_TOPIC, key.toString(), value + key);
-                kafkaProducer.send(producerRecord);
+                for (String topic : topics) {
+                    ProducerRecord<String, String> producerRecord = new ProducerRecord<>(topic, key.toString(), value + key);
+                    kafkaProducer.send(producerRecord);
+                }
                 key += 1;
                 if (key % 1000 == 0) {
                     try {
