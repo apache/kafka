@@ -135,18 +135,35 @@ public class QueryableStateIntegrationTest {
         CLUSTER.createTopics(outputTopic, outputTopicConcurrent, outputTopicConcurrentWindowed, outputTopicThree);
     }
 
-    private List<String> readInputValues(String resourceFileName, int headerLinesToSkip) throws Exception {
+    /**
+     * Try to read inputValues from {@code resources/QueryableStateIntegrationTest/inputValues.txt}, which might be useful
+     * for larger scale testing. In case of exception, for instance if no such file can be read, return a small list
+     * which satisfies all the prerequisites of the tests.
+     */
+    private List<String> getInputValues() {
         List<String> input = new ArrayList<>();
         ClassLoader classLoader = getClass().getClassLoader();
-        try (BufferedReader reader = new BufferedReader(new FileReader(classLoader.getResource(resourceFileName).getFile()))) {
-            int linesSkipped = 0;
+        String fileName = "QueryableStateIntegrationTest/inputValues.txt";
+        try (BufferedReader reader = new BufferedReader(new FileReader(classLoader.getResource(fileName).getFile()))) {
             for (String line = reader.readLine(); line != null; line = reader.readLine()) {
-                if (linesSkipped < headerLinesToSkip) {
-                    linesSkipped += 1;
-                } else {
-                    input.add(line);
-                }
+                input.add(line);
             }
+        } catch (Exception e) {
+            input = Arrays.asList(
+                        "hello world",
+                        "all streams lead to kafka",
+                        "streams",
+                        "kafka streams",
+                        "the cat in the hat",
+                        "green eggs and ham",
+                        "that Sam i am",
+                        "up the creek without a paddle",
+                        "run forest run",
+                        "a tank full of gas",
+                        "eat sleep rave repeat",
+                        "one jolly sailor",
+                        "king of the world");
+
         }
         return input;
     }
@@ -185,7 +202,7 @@ public class QueryableStateIntegrationTest {
                 return o1.key.compareTo(o2.key);
             }
         };
-        inputValues = readInputValues("data/sampleText.txt", 15);
+        inputValues = getInputValues();
         inputValuesKeys = new HashSet<>();
         for (final String sentence : inputValues) {
             final String[] words = sentence.split("\\W+");
