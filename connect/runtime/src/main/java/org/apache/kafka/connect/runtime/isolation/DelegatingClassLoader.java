@@ -269,6 +269,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         ConfigurationBuilder builder = new ConfigurationBuilder();
         builder.setClassLoaders(new ClassLoader[]{loader});
         builder.addUrls(urls);
+        builder.useParallelExecutor();
         Reflections reflections = new Reflections(builder);
 
         return new PluginScanResult(
