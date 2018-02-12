@@ -32,6 +32,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
@@ -1428,6 +1429,88 @@ public class KafkaConsumerTest {
             }
         } finally {
             executor.shutdownNow();
+        }
+    }
+
+    @Test
+    public void testConsumerWithinBlackoutPeriodAfterAuthenticationFailure() {
+        int rebalanceTimeoutMs = 60000;
+        int sessionTimeoutMs = 30000;
+        int heartbeatIntervalMs = 3000;
+        int autoCommitIntervalMs = 1000;
+
+        Time time = new MockTime();
+        Map<String, Integer> tpCounts = new HashMap<>();
+        tpCounts.put(topic, 1);
+        Cluster cluster = TestUtils.singletonCluster(tpCounts);
+        Node node = cluster.nodes().get(0);
+
+        Metadata metadata = createMetadata();
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+        client.authenticationFailed(node, 300);
+        PartitionAssignor assignor = new RangeAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+                rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, true, autoCommitIntervalMs);
+
+        consumer.subscribe(Collections.singleton(topic));
+        callConsumerApisAndExpectAnAuthenticationError(consumer, tp0);
+
+        time.sleep(30); // wait less than the blackout period
+        assertTrue(client.connectionFailed(node));
+        callConsumerApisAndExpectAnAuthenticationError(consumer, tp0);
+
+        client.requests().clear();
+        consumer.close(0, TimeUnit.MILLISECONDS);
+    }
+
+    private void callConsumerApisAndExpectAnAuthenticationError(KafkaConsumer<?, ?> consumer, TopicPartition partition) {
+        try {
+            consumer.partitionsFor("some other topic");
+            fail("Expected an authentication error!");
+        } catch (AuthenticationException e) {
+            // OK
+        }
+
+        try {
+            consumer.beginningOffsets(Collections.singleton(partition));
+            fail("Expected an authentication error!");
+        } catch (AuthenticationException e) {
+            // OK
+        }
+
+        try {
+            consumer.endOffsets(Collections.singleton(partition));
+            fail("Expected an authentication error!");
+        } catch (AuthenticationException e) {
+            // OK
+        }
+
+        try {
+            consumer.poll(10);
+            fail("Expected an authentication error!");
+        } catch (AuthenticationException e) {
+            // OK
+        }
+
+        Map<TopicPartition, OffsetAndMetadata> offset = new HashMap<>();
+        offset.put(partition, new OffsetAndMetadata(10L));
+
+        try {
+            consumer.commitSync(offset);
+            fail("Expected an authentication error!");
+        } catch (AuthenticationException e) {
+            // OK
+        }
+
+        try {
+            consumer.committed(partition);
+            fail("Expected an authentication error!");
+        } catch (AuthenticationException e) {
+            // OK
         }
     }
 
