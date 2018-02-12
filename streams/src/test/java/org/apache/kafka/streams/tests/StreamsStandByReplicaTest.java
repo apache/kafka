@@ -109,9 +109,11 @@ public class StreamsStandByReplicaTest {
             }
         };
 
-        inputStream.groupByKey().count(Materialized.<String, Long>as(inMemoryStoreSupplier)).toStream().mapValues(countMapper).to(SINK_TOPIC_1, Produced.with(stringSerde,stringSerde));
+        inputStream.groupByKey().count(Materialized.<String, Long>as(inMemoryStoreSupplier)).toStream().mapValues(countMapper)
+            .to(SINK_TOPIC_1, Produced.with(stringSerde, stringSerde));
 
-        inputStream.groupByKey().count(Materialized.<String, Long>as(persistentStoreSupplier)).toStream().mapValues(countMapper).to(SINK_TOPIC_2, Produced.with(stringSerde,stringSerde));
+        inputStream.groupByKey().count(Materialized.<String, Long>as(persistentStoreSupplier)).toStream().mapValues(countMapper)
+            .to(SINK_TOPIC_2, Produced.with(stringSerde, stringSerde));
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
 
