@@ -89,9 +89,9 @@ class StreamsStandbyTask(Test):
 
     def setUp(self):
         self.zk.start()
+        self.kafka.start()
 
     def test_standby_tasks_rebalance(self):
-        self.kafka.start()
 
         driver = StreamsStandbyTaskDriverService(self.test_context, self.kafka, self.num_messages)
         driver.start()
