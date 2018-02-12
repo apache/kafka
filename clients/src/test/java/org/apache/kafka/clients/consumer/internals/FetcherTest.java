@@ -39,7 +39,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
-import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -2034,29 +2033,6 @@ public class FetcherTest {
         assertEquals(1L, subscriptions.position(tp1).longValue());
         assertEquals(4, records.get(0).offset());
         assertEquals(5, records.get(1).offset());
-    }
-
-    @Test
-    public void testFetcherWithinBlackoutPeriodAfterAuthenticationFailure() {
-        client.authenticationFailed(node, 300);
-
-        subscriptions.assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        try {
-            fetcher.beginningOffsets(Collections.singleton(tp0), 1000);
-        } catch (SaslAuthenticationException e) {
-            // OK
-        }
-
-        time.sleep(30); // wait less than the blackout period
-        assertTrue(client.connectionFailed(node));
-
-        try {
-            fetcher.beginningOffsets(Collections.singleton(tp0), 1000);
-        } catch (SaslAuthenticationException e) {
-            // OK
-        }
     }
 
     private int appendTransactionalRecords(ByteBuffer buffer, long pid, long baseOffset, int baseSequence, SimpleRecord... records) {

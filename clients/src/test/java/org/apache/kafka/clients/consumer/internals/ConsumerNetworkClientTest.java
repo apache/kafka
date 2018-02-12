@@ -30,7 +30,6 @@ import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.Test;
@@ -77,12 +76,6 @@ public class ConsumerNetworkClientTest {
         client.prepareResponse(heartbeatResponse(Errors.NONE));
         final RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
         consumerClient.poll(future);
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return future.isDone();
-            }
-        }, 3000, "Future was not completed in time.");
         assertTrue(future.failed());
         assertTrue("Expected only an authentication error.", future.exception() instanceof AuthenticationException);
 
@@ -91,12 +84,6 @@ public class ConsumerNetworkClientTest {
 
         final RequestFuture<ClientResponse> future2 = consumerClient.send(node, heartbeat());
         consumerClient.poll(future2);
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return future2.isDone();
-            }
-        }, 3000, "Future was not completed in time.");
         assertTrue(future2.failed());
         assertTrue("Expected only an authentication error.", future2.exception() instanceof AuthenticationException);
     }
