@@ -54,7 +54,7 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         try {
             sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
 
-            brokerProps.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:9092");
+            brokerProps.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:0");
             brokerProps.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(), "SSL");
             brokerProps.putAll(sslConfig);
         } catch (final Exception e) {
