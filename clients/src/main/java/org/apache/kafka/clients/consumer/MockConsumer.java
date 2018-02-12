@@ -170,8 +170,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         }
 
         // Handle seeks that need to wait for a poll() call to be processed
-        for (TopicPartition tp : subscriptions.missingFetchPositions())
-            updateFetchPosition(tp);
+        for (TopicPartition tp : subscriptions.assignedPartitions())
+            if (!subscriptions.hasValidPosition(tp))
+                updateFetchPosition(tp);
 
         // update the consumed offset
         final Map<TopicPartition, List<ConsumerRecord<K, V>>> results = new HashMap<>();
