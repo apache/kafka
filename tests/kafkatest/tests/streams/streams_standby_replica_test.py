@@ -30,7 +30,6 @@ class StreamsStandbyTask(Test):
     """
 
     input_topic = "standbyTaskSource1"
-    input_topic_2 = "standbyTaskSource2"
     output_topic_1 = "standbyTaskSink1"
     output_topic_2 = "standbyTaskSink2"
 
@@ -44,7 +43,6 @@ class StreamsStandbyTask(Test):
                                   zk=self.zk,
                                   topics={
                                       self.input_topic: {'partitions': 6, 'replication-factor': 1},
-                                      self.input_topic_2: {'partitions': 6, 'replication-factor': 1},
                                       self.output_topic_1: {'partitions': 1, 'replication-factor': 1},
                                       self.output_topic_2: {'partitions': 1, 'replication-factor': 1}
                                   })
@@ -106,54 +104,54 @@ class StreamsStandbyTask(Test):
 
         processor_1.start()
 
-        self.wait_for_verification(processor_1, "ACTIVE_TASKS:12 STANDBY_TASKS:0", processor_1.STDOUT_FILE)
+        self.wait_for_verification(processor_1, "ACTIVE_TASKS:6 STANDBY_TASKS:0", processor_1.STDOUT_FILE)
 
         processor_2.start()
 
-        self.wait_for_verification(processor_1, "ACTIVE_TASKS:6 STANDBY_TASKS:6", processor_1.STDOUT_FILE)
-        self.wait_for_verification(processor_2, "ACTIVE_TASKS:6 STANDBY_TASKS:6", processor_2.STDOUT_FILE)
+        self.wait_for_verification(processor_1, "ACTIVE_TASKS:3 STANDBY_TASKS:3", processor_1.STDOUT_FILE)
+        self.wait_for_verification(processor_2, "ACTIVE_TASKS:3 STANDBY_TASKS:3", processor_2.STDOUT_FILE)
 
         processor_3.start()
 
-        self.wait_for_verification(processor_1, "ACTIVE_TASKS:4 STANDBY_TASKS:4", processor_1.STDOUT_FILE)
-        self.wait_for_verification(processor_2, "ACTIVE_TASKS:4 STANDBY_TASKS:4", processor_2.STDOUT_FILE)
-        self.wait_for_verification(processor_3, "ACTIVE_TASKS:4 STANDBY_TASKS:4", processor_3.STDOUT_FILE)
+        self.wait_for_verification(processor_1, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_1.STDOUT_FILE)
+        self.wait_for_verification(processor_2, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_2.STDOUT_FILE)
+        self.wait_for_verification(processor_3, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_3.STDOUT_FILE)
 
         processor_1.stop()
 
-        self.wait_for_verification(processor_2, "ACTIVE_TASKS:6 STANDBY_TASKS:6", processor_2.STDOUT_FILE, num_lines=2)
-        self.wait_for_verification(processor_3, "ACTIVE_TASKS:6 STANDBY_TASKS:6", processor_3.STDOUT_FILE)
+        self.wait_for_verification(processor_2, "ACTIVE_TASKS:3 STANDBY_TASKS:3", processor_2.STDOUT_FILE, num_lines=2)
+        self.wait_for_verification(processor_3, "ACTIVE_TASKS:3 STANDBY_TASKS:3", processor_3.STDOUT_FILE)
 
         processor_2.stop()
 
-        self.wait_for_verification(processor_3, "ACTIVE_TASKS:12 STANDBY_TASKS:0", processor_3.STDOUT_FILE)
+        self.wait_for_verification(processor_3, "ACTIVE_TASKS:6 STANDBY_TASKS:0", processor_3.STDOUT_FILE)
 
         processor_1.start()
 
-        self.wait_for_verification(processor_1, "ACTIVE_TASKS:6 STANDBY_TASKS:6", processor_1.STDOUT_FILE)
-        self.wait_for_verification(processor_3, "ACTIVE_TASKS:6 STANDBY_TASKS:6", processor_3.STDOUT_FILE, num_lines=2)
+        self.wait_for_verification(processor_1, "ACTIVE_TASKS:3 STANDBY_TASKS:3", processor_1.STDOUT_FILE)
+        self.wait_for_verification(processor_3, "ACTIVE_TASKS:3 STANDBY_TASKS:3", processor_3.STDOUT_FILE, num_lines=2)
 
         processor_2.start()
 
-        self.wait_for_verification(processor_1, "ACTIVE_TASKS:4 STANDBY_TASKS:4", processor_1.STDOUT_FILE)
-        self.wait_for_verification(processor_2, "ACTIVE_TASKS:4 STANDBY_TASKS:4", processor_2.STDOUT_FILE)
-        self.wait_for_verification(processor_3, "ACTIVE_TASKS:4 STANDBY_TASKS:4", processor_3.STDOUT_FILE, num_lines=2)
+        self.wait_for_verification(processor_1, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_1.STDOUT_FILE)
+        self.wait_for_verification(processor_2, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_2.STDOUT_FILE)
+        self.wait_for_verification(processor_3, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_3.STDOUT_FILE, num_lines=2)
 
         processor_3.stop()
 
-        self.wait_for_verification(processor_1, "ACTIVE_TASKS:6 STANDBY_TASKS:6", processor_1.STDOUT_FILE, num_lines=2)
-        self.wait_for_verification(processor_2, "ACTIVE_TASKS:6 STANDBY_TASKS:6", processor_2.STDOUT_FILE)
+        self.wait_for_verification(processor_1, "ACTIVE_TASKS:3 STANDBY_TASKS:3", processor_1.STDOUT_FILE, num_lines=2)
+        self.wait_for_verification(processor_2, "ACTIVE_TASKS:3 STANDBY_TASKS:3", processor_2.STDOUT_FILE)
 
         processor_1.stop()
 
-        self.wait_for_verification(processor_2, "ACTIVE_TASKS:12 STANDBY_TASKS:0", processor_2.STDOUT_FILE)
+        self.wait_for_verification(processor_2, "ACTIVE_TASKS:6 STANDBY_TASKS:0", processor_2.STDOUT_FILE)
 
         processor_3.start()
         processor_1.start()
 
-        self.wait_for_verification(processor_1, "ACTIVE_TASKS:4 STANDBY_TASKS:4", processor_1.STDOUT_FILE)
-        self.wait_for_verification(processor_3, "ACTIVE_TASKS:4 STANDBY_TASKS:4", processor_3.STDOUT_FILE)
-        self.wait_for_verification(processor_2, "ACTIVE_TASKS:4 STANDBY_TASKS:4", processor_2.STDOUT_FILE, num_lines=2)
+        self.wait_for_verification(processor_1, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_1.STDOUT_FILE)
+        self.wait_for_verification(processor_3, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_3.STDOUT_FILE)
+        self.wait_for_verification(processor_2, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_2.STDOUT_FILE, num_lines=2)
 
         self.assert_consume("assert all messages consumed from %s" % self.output_topic_1, self.output_topic_1, self.num_messages)
         self.assert_consume("assert all messages consumed from %s" % self.output_topic_2, self.output_topic_2, self.num_messages)

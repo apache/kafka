@@ -25,8 +25,10 @@ import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.Stores;
@@ -60,6 +62,7 @@ public class StreamsStandByReplicaTest {
         final String additionalConfigs = args.length > 2 ? args[2] : null;
 
         final Serde<String> stringSerde = Serdes.String();
+        final Serde<Long> longSerde = Serdes.Long();
 
         final Properties streamsProperties = new Properties();
         streamsProperties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
@@ -97,13 +100,18 @@ public class StreamsStandByReplicaTest {
         KeyValueBytesStoreSupplier inMemoryStoreSupplier = Stores.inMemoryKeyValueStore(inMemoryStoreName);
         KeyValueBytesStoreSupplier persistentStoreSupplier = Stores.persistentKeyValueStore(persistentMemoryStoreName);
 
-        builder.table(SOURCE_TOPIC, Consumed.with(stringSerde, stringSerde),
-                      Materialized.<String, String>as(inMemoryStoreSupplier).withKeySerde(stringSerde).withValueSerde(stringSerde)).toStream()
-            .to(SINK_TOPIC_1, Produced.with(stringSerde, stringSerde));
+        KStream<String, String> inputStream = builder.stream(SOURCE_TOPIC, Consumed.with(stringSerde, stringSerde));
 
-        builder.table(SOURCE_TOPIC_2, Consumed.with(stringSerde, stringSerde),
-                      Materialized.<String, String>as(persistentStoreSupplier).withKeySerde(stringSerde).withValueSerde(stringSerde)).toStream()
-            .to(SINK_TOPIC_2, Produced.with(stringSerde, stringSerde));
+        ValueMapper<Long, String> countMapper = new ValueMapper<Long, String>() {
+            @Override
+            public String apply(Long value) {
+                return value.toString();
+            }
+        };
+
+        inputStream.groupByKey().count(Materialized.<String, Long>as(inMemoryStoreSupplier)).toStream().mapValues(countMapper).to(SINK_TOPIC_1, Produced.with(stringSerde,stringSerde));
+
+        inputStream.groupByKey().count(Materialized.<String, Long>as(persistentStoreSupplier)).toStream().mapValues(countMapper).to(SINK_TOPIC_2, Produced.with(stringSerde,stringSerde));
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
 
