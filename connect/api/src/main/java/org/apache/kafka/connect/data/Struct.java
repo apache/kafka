@@ -211,7 +211,9 @@ public class Struct {
      * @return the Struct, to allow chaining of {@link #put(String, Object)} calls
      */
     public Struct put(Field field, Object value) {
-        ConnectSchema.validateValue(field.schema(), value);
+        if (null == field)
+            throw new DataException("field cannot be null.");
+        ConnectSchema.validateValue(field.name(), field.schema(), value);
         values[field.index()] = value;
         return this;
     }
