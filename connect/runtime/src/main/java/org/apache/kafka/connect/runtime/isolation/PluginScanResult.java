@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 
 import java.util.Collection;
@@ -25,15 +26,18 @@ import java.util.Collection;
 public class PluginScanResult {
     private final Collection<PluginDesc<Connector>> connectors;
     private final Collection<PluginDesc<Converter>> converters;
+    private final Collection<PluginDesc<HeaderConverter>> headerConverters;
     private final Collection<PluginDesc<Transformation>> transformations;
 
     public PluginScanResult(
             Collection<PluginDesc<Connector>> connectors,
             Collection<PluginDesc<Converter>> converters,
+            Collection<PluginDesc<HeaderConverter>> headerConverters,
             Collection<PluginDesc<Transformation>> transformations
     ) {
         this.connectors = connectors;
         this.converters = converters;
+        this.headerConverters = headerConverters;
         this.transformations = transformations;
     }
 
@@ -45,11 +49,18 @@ public class PluginScanResult {
         return converters;
     }
 
+    public Collection<PluginDesc<HeaderConverter>> headerConverters() {
+        return headerConverters;
+    }
+
     public Collection<PluginDesc<Transformation>> transformations() {
         return transformations;
     }
 
     public boolean isEmpty() {
-        return connectors().isEmpty() && converters().isEmpty() && transformations().isEmpty();
+        return connectors().isEmpty()
+               && converters().isEmpty()
+               && headerConverters().isEmpty()
+               && transformations().isEmpty();
     }
 }
