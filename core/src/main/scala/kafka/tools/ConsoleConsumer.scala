@@ -124,49 +124,39 @@ object ConsoleConsumer extends Logging {
   }
 
   def process(maxMessages: Integer, formatter: MessageFormatter, consumer: BaseConsumer, output: PrintStream, skipMessageOnError: Boolean) {
-    try {
-      while (messageCount < maxMessages || maxMessages == -1) {
-        val msg: BaseConsumerRecord = try {
-          consumer.receive()
-        } catch {
-          case _: StreamEndException =>
-            trace("Caught StreamEndException because consumer is shutdown, ignore and terminate.")
-            // Consumer is already closed
-            return
-          case _: WakeupException =>
-            trace("Caught WakeupException because consumer is shutdown, ignore and terminate.")
-            // Consumer will be closed
-            return
-          case e: Throwable =>
-            error("Error processing message, terminating consumer process: ", e)
-            // Consumer will be closed
-            return
-        }
-        messageCount += 1
-        try {
-          formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp,
-            msg.timestampType, 0, 0, 0, msg.key, msg.value, msg.headers), output)
-          if (consumer.isInstanceOf[NewShinyConsumer]) {
-            consumer.asInstanceOf[NewShinyConsumer].updateOffsetForPartition(msg)
-          }
-        } catch {
-          case e: Throwable =>
-            if (skipMessageOnError) {
-              error("Error processing message, skipping this message: ", e)
-            } else {
-              // Consumer will be closed
-              throw e
-            }
-        }
-
-        if (checkErr(output, formatter)) {
+    while (messageCount < maxMessages || maxMessages == -1) {
+      val msg: BaseConsumerRecord = try {
+        consumer.receive()
+      } catch {
+        case _: StreamEndException =>
+          trace("Caught StreamEndException because consumer is shutdown, ignore and terminate.")
+          // Consumer is already closed
+          return
+        case _: WakeupException =>
+          trace("Caught WakeupException because consumer is shutdown, ignore and terminate.")
           // Consumer will be closed
           return
-        }
+        case e: Throwable =>
+          error("Error processing message, terminating consumer process: ", e)
+          // Consumer will be closed
+          return
       }
-    } finally {
-      if (consumer.isInstanceOf[NewShinyConsumer]) {
-        consumer.asInstanceOf[NewShinyConsumer].seekToRealPositionsBeforeExit()
+      messageCount += 1
+      try {
+        formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp,
+                                             msg.timestampType, 0, 0, 0, msg.key, msg.value, msg.headers), output)
+      } catch {
+        case e: Throwable =>
+          if (skipMessageOnError) {
+            error("Error processing message, skipping this message: ", e)
+          } else {
+            // Consumer will be closed
+            throw e
+          }
+      }
+      if (checkErr(output, formatter)) {
+        // Consumer will be closed
+        return
       }
     }
   }

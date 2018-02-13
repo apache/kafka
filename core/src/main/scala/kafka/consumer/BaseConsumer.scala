@@ -59,9 +59,6 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
   import org.apache.kafka.clients.consumer.KafkaConsumer
 
   val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
-  val consumedOffsets = collection.mutable.Map[TopicPartition, Long]()
-  val subscribedPartitions = collection.mutable.Set[TopicPartition]() // avoid creating too many TopicPartition objects
-
   consumerInit()
   var recordIter = consumer.poll(0).iterator
 
@@ -94,24 +91,21 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
     }
   }
 
-  def seekToRealPositionsBeforeExit() {
+  private def seekToRealPositionsBeforeExit() {
+    val smallestUnconsumedOffsets = collection.mutable.Map[TopicPartition, Long]()
     while (recordIter.hasNext) {
       val record = recordIter.next()
-      if (!consumedOffsets.exists(tp => tp._1.topic() == record.topic() && tp._1.partition() == record.partition())) {
-        val tp = new TopicPartition(record.topic(), record.partition())
-        consumedOffsets += tp -> record.offset()
+      val unconsumedPartition = new TopicPartition(record.topic(), record.partition())
+      // only insert the smallest offset for each partition
+      val currentOffset = smallestUnconsumedOffsets.getOrElse(unconsumedPartition, {
+        smallestUnconsumedOffsets += unconsumedPartition -> record.offset()
+        record.offset()
+      })
+      if (currentOffset > record.offset()) {
+        smallestUnconsumedOffsets += unconsumedPartition -> record.offset()
       }
     }
-    consumedOffsets.foreach { case (tp, offset) => consumer.seek(tp, offset) }
-  }
-
-  def updateOffsetForPartition(msg: BaseConsumerRecord) {
-    val partition = subscribedPartitions.find(tp => tp.topic() == msg.topic && tp.partition() == msg.partition).getOrElse {
-      val tp = new TopicPartition(msg.topic, msg.partition)
-      subscribedPartitions += tp
-      tp
-    }
-    consumedOffsets += partition -> (msg.offset + 1L)
+    smallestUnconsumedOffsets.foreach { case (tp, offset) => consumer.seek(tp, offset) }
   }
 
   override def receive(): BaseConsumerRecord = {
@@ -137,8 +131,7 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
   }
 
   override def cleanup() {
-    this.consumedOffsets.clear()
-    this.subscribedPartitions.clear()
+    seekToRealPositionsBeforeExit()
     this.consumer.close()
   }
 
