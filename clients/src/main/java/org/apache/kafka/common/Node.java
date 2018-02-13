@@ -100,13 +100,8 @@ public class Node {
 
     @Override
     public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + ((host == null) ? 0 : host.hashCode());
-        result = prime * result + id;
-        result = prime * result + port;
-        result = prime * result + ((rack == null) ? 0 : rack.hashCode());
-        return result;
+        // keep it cheap since this is called in performance sensitive parts of the code (e.g. RecordAccumulator.ready)
+        return id;
     }
 
     @Override
@@ -117,22 +112,9 @@ public class Node {
             return false;
         if (getClass() != obj.getClass())
             return false;
+        // keep it cheap since this is called in performance sensitive parts of the code (see `hashCode` comment)
         Node other = (Node) obj;
-        if (host == null) {
-            if (other.host != null)
-                return false;
-        } else if (!host.equals(other.host))
-            return false;
-        if (id != other.id)
-            return false;
-        if (port != other.port)
-            return false;
-        if (rack == null) {
-            if (other.rack != null)
-                return false;
-        } else if (!rack.equals(other.rack))
-            return false;
-        return true;
+        return id == other.id;
     }
 
     @Override
