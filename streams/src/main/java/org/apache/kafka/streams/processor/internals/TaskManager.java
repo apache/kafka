@@ -66,6 +66,7 @@ class TaskManager {
     private Map<TaskId, Set<TopicPartition>> assignedStandbyTasks;
 
     private Consumer<byte[], byte[]> consumer;
+    private final Set<TopicPartition> resumedPartitions;
 
     TaskManager(final ChangelogReader changelogReader,
                 final UUID processId,
@@ -92,6 +93,7 @@ class TaskManager {
         this.log = logContext.logger(getClass());
 
         this.adminClient = adminClient;
+        this.resumedPartitions = new HashSet<>();
     }
 
     /**
@@ -322,18 +324,19 @@ class TaskManager {
      * @throws TaskMigratedException if another thread wrote to the changelog topic that is currently restored
      */
     boolean updateNewAndRestoringTasks() {
-        final Set<TopicPartition> resumed = active.initializeNewTasks();
+        resumedPartitions.addAll(active.initializeNewTasks());
         standby.initializeNewTasks();
 
         final Collection<TopicPartition> restored = changelogReader.restore(active);
 
-        resumed.addAll(active.updateRestored(restored));
+        resumedPartitions.addAll(active.updateRestored(restored));
 
-        if (!resumed.isEmpty()) {
-            log.trace("Resuming partitions {}", resumed);
-            consumer.resume(resumed);
-        }
         if (active.allTasksRunning()) {
+            if (!resumedPartitions.isEmpty()) {
+                log.trace("Resuming partitions {}", resumedPartitions);
+                consumer.resume(resumedPartitions);
+                resumedPartitions.clear();
+            }
             assignStandbyPartitions();
             return true;
         }
