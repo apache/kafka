@@ -87,7 +87,17 @@ public class Selector implements Selectable, AutoCloseable {
 
     public static final long NO_IDLE_TIMEOUT_MS = -1;
 
-    private enum CloseMode { GRACEFUL, NOTIFY_ONLY, DISCARD_NO_NOTIFY }
+    private enum CloseMode {
+        GRACEFUL(true),            // process outstanding staged receives, notify disconnect
+        NOTIFY_ONLY(true),         // discard any outstanding receives, notify disconnect
+        DISCARD_NO_NOTIFY(false);  // discard any outstanding receives, no disconnect notification
+
+        boolean notifyDisconnect;
+
+        CloseMode(boolean notifyDisconnect) {
+            this.notifyDisconnect = notifyDisconnect;
+        }
+    }
 
     private final Logger log;
     private final java.nio.channels.Selector nioSelector;
@@ -699,8 +709,8 @@ public class Selector implements Selectable, AutoCloseable {
      * requested. For other values of `closeMode`, outstanding receives are discarded and the channel
      * is closed immediately.
      *
-     * The channel will be added to disconnect list when it is actually closed if `closeMode` is not
-     * `CloseMode.DISCARD_NO_NOTIFY`.
+     * The channel will be added to disconnect list when it is actually closed if `closeMode.notifyDisconnect`
+     * is true.
      */
     private void close(KafkaChannel channel, CloseMode closeMode) {
         channel.disconnect();
@@ -721,7 +731,7 @@ public class Selector implements Selectable, AutoCloseable {
             closingChannels.put(channel.id(), channel);
             log.debug("Tracking closing connection {} to process outstanding requests", channel.id());
         } else
-            doClose(channel, closeMode != CloseMode.DISCARD_NO_NOTIFY);
+            doClose(channel, closeMode.notifyDisconnect);
         this.channels.remove(channel.id());
 
         if (idleExpiryManager != null)
