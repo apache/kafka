@@ -46,8 +46,8 @@ public class LoginManager {
     private int refCount;
 
     private LoginManager(JaasContext jaasContext, boolean hasKerberos, Map<String, ?> configs,
-                         Password jaasConfigValue) throws IOException, LoginException {
-        this.cacheKey = jaasConfigValue != null ? jaasConfigValue : jaasContext.name();
+                         Object cacheKey) throws IOException, LoginException {
+        this.cacheKey = cacheKey;
         login = hasKerberos ? new KerberosLogin() : new DefaultLogin();
         login.configure(configs, jaasContext);
         login.login();
@@ -67,10 +67,9 @@ public class LoginManager {
     public static LoginManager acquireLoginManager(JaasContext jaasContext, String saslMechanism, boolean hasKerberos,
                                                    Map<String, ?> configs) throws IOException, LoginException {
         synchronized (LoginManager.class) {
-            // SASL_JAAS_CONFIG is only supported by clients
             LoginManager loginManager;
-            Password jaasConfigValue = (Password) configs.get(SaslConfigs.SASL_JAAS_CONFIG);
-            if (jaasContext.type() == JaasContext.Type.CLIENT && jaasConfigValue != null) {
+            Password jaasConfigValue = jaasContext.dynamicJaasConfig();
+            if (jaasConfigValue != null) {
                 loginManager = DYNAMIC_INSTANCES.get(jaasConfigValue);
                 if (loginManager == null) {
                     loginManager = new LoginManager(jaasContext, saslMechanism.equals(SaslConfigs.GSSAPI_MECHANISM), configs, jaasConfigValue);
@@ -79,7 +78,7 @@ public class LoginManager {
             } else {
                 loginManager = STATIC_INSTANCES.get(jaasContext.name());
                 if (loginManager == null) {
-                    loginManager = new LoginManager(jaasContext, hasKerberos, configs, jaasConfigValue);
+                    loginManager = new LoginManager(jaasContext, hasKerberos, configs, jaasContext.name());
                     STATIC_INSTANCES.put(jaasContext.name(), loginManager);
                 }
             }
@@ -93,6 +92,11 @@ public class LoginManager {
 
     public String serviceName() {
         return login.serviceName();
+    }
+
+    // Only for testing
+    Object cacheKey() {
+        return cacheKey;
     }
 
     private LoginManager acquire() {
