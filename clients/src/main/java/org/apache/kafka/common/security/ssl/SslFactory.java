@@ -72,7 +72,6 @@ public class SslFactory implements Reconfigurable {
     private SSLContext sslContext;
     private boolean needClientAuth;
     private boolean wantClientAuth;
-    private long lastTruststoreReload = 0L;
 
     public SslFactory(Mode mode) {
         this(mode, null, false);
@@ -204,8 +203,7 @@ public class SslFactory implements Reconfigurable {
 
         String tmfAlgorithm = this.tmfAlgorithm != null ? this.tmfAlgorithm : TrustManagerFactory.getDefaultAlgorithm();
         TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
-        KeyStore ts = loadTruststore();
-
+        KeyStore ts = truststore == null ? null : truststore.load();
         tmf.init(ts);
 
         sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
@@ -226,22 +224,9 @@ public class SslFactory implements Reconfigurable {
         return createSslEngine(sslContext, peerHost, peerPort);
     }
 
-    private KeyStore loadTruststore() throws GeneralSecurityException, IOException {
-        if (truststore == null)
-            return null;
-        else {
-            KeyStore ts = truststore.load();
-            File storeFile = new File(truststore.path);
-            lastTruststoreReload = storeFile.lastModified();
-            return ts;
-        }
-    }
-
     private void maybeReloadTruststore() {
         if ((wantClientAuth || needClientAuth) && truststore != null && mode == Mode.SERVER) {
-            File storeFile = new File(truststore.path);
-            long lastModified = storeFile.lastModified();
-            if (lastModified > lastTruststoreReload) {
+            if (truststore.getLastModified() > truststore.getLastReloaded()) {
                 try {
                     this.sslContext = createSSLContext(this.keystore);
                 } catch (Exception e) {
@@ -313,6 +298,7 @@ public class SslFactory implements Reconfigurable {
         private final Password password;
         private final Password keyPassword;
         private KeyStore ks;
+        private long lastReloaded;
 
         SecurityStore(String type, String path, Password password, Password keyPassword) {
             Objects.requireNonNull(type, "type must not be null");
@@ -326,17 +312,22 @@ public class SslFactory implements Reconfigurable {
             return ks;
         }
 
+        long getLastReloaded() { return lastReloaded; }
+
+        long getLastModified() {
+            File storeFile = new File(path);
+            return storeFile.lastModified();
+        }
+
         KeyStore load() throws GeneralSecurityException, IOException {
-            FileInputStream in = null;
-            try {
+            try (FileInputStream in = new FileInputStream(path)) {
                 ks = KeyStore.getInstance(type);
-                in = new FileInputStream(path);
                 // If a password is not set access to the truststore is still available, but integrity checking is disabled.
                 char[] passwordChars = password != null ? password.value().toCharArray() : null;
+                long modifiedTime = getLastModified();
                 ks.load(in, passwordChars);
+                lastReloaded = modifiedTime;
                 return ks;
-            } finally {
-                if (in != null) in.close();
             }
         }
     }
