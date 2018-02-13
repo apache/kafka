@@ -359,6 +359,7 @@ public class Sender implements Runnable {
                     client.send(clientRequest, now);
                     return true;
                 }
+                break; // break the loop if we failed to find a specific node
             } catch (IOException e) {
                 log.debug("Disconnect from {} while trying to send request {}. Going " +
                         "to back off and retry", targetNode, requestBuilder);

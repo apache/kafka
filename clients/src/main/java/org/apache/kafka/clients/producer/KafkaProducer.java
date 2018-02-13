@@ -561,12 +561,20 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
      *         transactional.id is not authorized. See the exception for more details
      * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
+     * @throws TimeoutException if the producer fails to initialize a transaction within the configured time interval
+     * @throws InterruptException if the thread is interrupted while blocked
      */
     public void initTransactions() {
         throwIfNoTransactionManager();
         TransactionalRequestResult result = transactionManager.initializeTransactions();
         sender.wakeup();
-        result.await();
+        try {
+            if (!result.await(requestTimeoutMs, TimeUnit.MILLISECONDS)) {
+                throw new TimeoutException("Timeout expired while initializing the transaction in " + requestTimeoutMs + "ms.");
+            }
+        } catch (InterruptedException e) {
+            throw new InterruptException("Initialize transactions interrupted.", e);
+        }
     }
 
     /**

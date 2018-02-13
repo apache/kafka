@@ -19,16 +19,16 @@ package kafka.api
 
 import java.lang.{Long => JLong}
 import java.util.Properties
-import java.util.concurrent.{ExecutionException, TimeUnit}
+import java.util.concurrent.TimeUnit
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.ProducerFencedException
+import org.apache.kafka.common.errors.{ProducerFencedException, TimeoutException}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
@@ -529,6 +529,22 @@ class TransactionsTest extends KafkaServerTestHarness {
     val expectedValues = Range(0, 11000).map(_.toString).toSet
     allRecords.foreach { record =>
       assertTrue(expectedValues.contains(TestUtils.recordValueAsString(record)))
+    }
+  }
+
+  @Test
+  def testInitTransactionThrowTimeoutExceptionWithBadBrokers() {
+    val props = new Properties()
+    props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "test-transaction-id")
+    val producer = TestUtils.createNewProducer(
+      brokerList = "192.168.1.1:9092", retries = Integer.MAX_VALUE, requestTimeoutMs = 1000L, props = Some(props))
+    try {
+      producer.initTransactions()
+      fail("should have raised a TimeoutException since initializing the transaction expired")
+    } catch {
+      case _: TimeoutException => // expected
+    } finally {
+      producer.close() // should successfully close the producer
     }
   }
 
