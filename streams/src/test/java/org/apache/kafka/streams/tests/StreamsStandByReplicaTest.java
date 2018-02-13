@@ -34,7 +34,6 @@ import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -42,12 +41,7 @@ import java.util.concurrent.TimeUnit;
 
 public class StreamsStandByReplicaTest {
 
-    private static final int KEY = 0;
-    private static final int VALUE = 1;
-
-
     static final String SOURCE_TOPIC = "standbyTaskSource1";
-    static final String SOURCE_TOPIC_2 = "standbyTaskSource2";
 
     private static final String SINK_TOPIC_1 = "standbyTaskSink1";
     private static final String SINK_TOPIC_2 = "standbyTaskSink2";
@@ -62,7 +56,6 @@ public class StreamsStandByReplicaTest {
         final String additionalConfigs = args.length > 2 ? args[2] : null;
 
         final Serde<String> stringSerde = Serdes.String();
-        final Serde<Long> longSerde = Serdes.Long();
 
         final Properties streamsProperties = new Properties();
         streamsProperties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
@@ -77,7 +70,7 @@ public class StreamsStandByReplicaTest {
         // it is expected that max.poll.interval, retries, request.timeout and max.block.ms set
         // streams_broker_down_resilience_test and passed as args
         if (additionalConfigs != null && !additionalConfigs.equalsIgnoreCase("none")) {
-            Map<String, String> updated = updatedConfigs(additionalConfigs);
+            Map<String, String> updated = SystemTestUtil.parseConfigs(additionalConfigs);
             System.out.println("Updating configs with " + updated);
             streamsProperties.putAll(updated);
         }
@@ -162,23 +155,6 @@ public class StreamsStandByReplicaTest {
                properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG)) &&
                properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG)) &&
                properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.MAX_BLOCK_MS_CONFIG));
-    }
-
-    /**
-     * Takes a string with keys and values separated by '=' and each key value pair
-     * separated by ',' for example max.block.ms=5000,retries=6,request.timeout.ms=6000
-     *
-     * @param formattedConfigs the formatted config string
-     * @return HashMap with keys and values inserted
-     */
-    private static Map<String, String> updatedConfigs(String formattedConfigs) {
-        String[] parts = formattedConfigs.split(",");
-        Map<String, String> updatedConfigs = new HashMap<>();
-        for (String part : parts) {
-            String[] keyValue = part.split("=");
-            updatedConfigs.put(keyValue[KEY], keyValue[VALUE]);
-        }
-        return updatedConfigs;
     }
 
 }

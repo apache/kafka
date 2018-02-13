@@ -22,9 +22,15 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
 
+import java.util.Map;
 import java.util.Properties;
 
-public class StreamsStandbyReplicaDriver {
+/**
+ * Utility class used to send messages with integer keys
+ * repeating in sequence every 1000 messages.  Multiple topics for publishing
+ * can be provided in the config map with key of 'topics' and ';' delimited list of output topics
+ */
+public class StreamsRepeatingIntegerKeyProducer {
 
     private static volatile boolean keepProducing = true;
 
@@ -32,7 +38,12 @@ public class StreamsStandbyReplicaDriver {
         System.out.println("StreamsTest instance started");
 
         final String kafka = args.length > 0 ? args[0] : "localhost:9092";
-        final int numMessages = args.length > 2 ? Integer.parseInt(args[2]) : Integer.MAX_VALUE;
+        final String configString = args.length > 2 ? args[2] : null;
+
+        Map<String, String> configs = SystemTestUtil.parseConfigs(configString);
+        System.out.println("Using provided configs " + configs);
+
+        final int numMessages = configs.containsKey("num_messages") ? Integer.parseInt(configs.get("num_messages")) : Integer.MAX_VALUE;
 
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "StandbyTaskTestsProducer");
@@ -49,9 +60,10 @@ public class StreamsStandbyReplicaDriver {
                 keepProducing = false;
             }
         }));
-        final String[] topics = new String[]{StreamsStandByReplicaTest.SOURCE_TOPIC, StreamsStandByReplicaTest.SOURCE_TOPIC_2};
+        final String[] topics = configs.get("topics").split(";");
 
         int messageCounter = 0;
+
         try (final KafkaProducer<String, String> kafkaProducer = new KafkaProducer<>(producerProps)) {
 
             while (keepProducing && messageCounter++ < numMessages) {
@@ -72,6 +84,7 @@ public class StreamsStandbyReplicaDriver {
             }
         }
         System.out.println("Producer shut down now, sent total [" + (messageCounter - 1) + "] of requested [" + numMessages + "]");
+        System.out.flush();
     }
 
 }

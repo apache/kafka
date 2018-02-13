@@ -18,7 +18,6 @@ import signal
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
-
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
 
@@ -246,9 +245,9 @@ class StreamsStandbyTaskService(StreamsTestBaseService):
                                                         configs)
 
 
-class StreamsStandbyTaskDriverService(StreamsTestBaseService):
-    def __init__(self, test_context, kafka, num_messages):
-        super(StreamsStandbyTaskDriverService, self).__init__(test_context,
-                                                              kafka,
-                                                              "org.apache.kafka.streams.tests.StreamsStandbyReplicaDriver",
-                                                              num_messages)
+class StreamsRepeatingIntegerKeyProducerService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka, configs):
+        super(StreamsRepeatingIntegerKeyProducerService, self).__init__(test_context,
+                                                                        kafka,
+                                                                        "org.apache.kafka.streams.tests.StreamsRepeatingIntegerKeyProducer",
+                                                                        configs)

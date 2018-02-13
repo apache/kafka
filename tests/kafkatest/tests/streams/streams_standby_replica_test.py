@@ -16,7 +16,7 @@
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.streams import StreamsStandbyTaskDriverService
+from kafkatest.services.streams import StreamsRepeatingIntegerKeyProducerService
 from kafkatest.services.streams import StreamsStandbyTaskService
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.zookeeper import ZookeeperService
@@ -29,9 +29,9 @@ class StreamsStandbyTask(Test):
     face of continual changes to streams code base
     """
 
-    input_topic = "standbyTaskSource1"
-    output_topic_1 = "standbyTaskSink1"
-    output_topic_2 = "standbyTaskSink2"
+    streams_source_topic = "standbyTaskSource1"
+    streams_sink_topic_1 = "standbyTaskSink1"
+    streams_sink_topic_2 = "standbyTaskSink2"
 
     num_messages = 60000
 
@@ -42,9 +42,9 @@ class StreamsStandbyTask(Test):
                                   num_nodes=3,
                                   zk=self.zk,
                                   topics={
-                                      self.input_topic: {'partitions': 6, 'replication-factor': 1},
-                                      self.output_topic_1: {'partitions': 1, 'replication-factor': 1},
-                                      self.output_topic_2: {'partitions': 1, 'replication-factor': 1}
+                                      self.streams_source_topic: {'partitions': 6, 'replication-factor': 1},
+                                      self.streams_sink_topic_1: {'partitions': 1, 'replication-factor': 1},
+                                      self.streams_sink_topic_2: {'partitions': 1, 'replication-factor': 1}
                                   })
 
     def get_consumer(self, topic, num_messages):
@@ -93,7 +93,9 @@ class StreamsStandbyTask(Test):
 
     def test_standby_tasks_rebalance(self):
 
-        driver = StreamsStandbyTaskDriverService(self.test_context, self.kafka, self.num_messages)
+        driver_configs = "num_messages=%s,topics=%s" % (str(self.num_messages), self.streams_source_topic)
+
+        driver = StreamsRepeatingIntegerKeyProducerService(self.test_context, self.kafka, driver_configs)
         driver.start()
 
         configs = self.get_configs()
@@ -153,7 +155,10 @@ class StreamsStandbyTask(Test):
         self.wait_for_verification(processor_3, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_3.STDOUT_FILE)
         self.wait_for_verification(processor_2, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_2.STDOUT_FILE, num_lines=2)
 
-        self.assert_consume("assert all messages consumed from %s" % self.output_topic_1, self.output_topic_1, self.num_messages)
-        self.assert_consume("assert all messages consumed from %s" % self.output_topic_2, self.output_topic_2, self.num_messages)
+        self.assert_consume("assert all messages consumed from %s" % self.streams_sink_topic_1, self.streams_sink_topic_1, self.num_messages)
+        self.assert_consume("assert all messages consumed from %s" % self.streams_sink_topic_2, self.streams_sink_topic_2, self.num_messages)
+
+        self.wait_for_verification(driver, "Producer shut down now, sent total [{0}] of requested [{0}]".format(str(self.num_messages)),
+                                   driver.STDOUT_FILE)
 
 
