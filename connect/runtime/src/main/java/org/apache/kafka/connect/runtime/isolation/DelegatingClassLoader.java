@@ -362,12 +362,13 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     private static class InternalReflections extends Reflections {
 
-        public InternalReflections(final Configuration configuration) {
+        public InternalReflections(Configuration configuration) {
             super(configuration);
         }
 
         // When Reflections is used for parallel scans, it has a bug where it propagates ReflectionsException
         // as RuntimeException.  Override the scan behavior to emulate the singled-threaded logic.
+        @Override
         protected void scan(URL url) {
             try {
                 super.scan(url);
