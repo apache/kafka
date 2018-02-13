@@ -177,9 +177,13 @@ class StreamsEosTestDriverService(StreamsEosTestBaseService):
 
 
 class StreamsEosTestJobRunnerService(StreamsEosTestBaseService):
+    clean_node_enabled = True
     def __init__(self, test_context, kafka):
         super(StreamsEosTestJobRunnerService, self).__init__(test_context, kafka, "process")
 
+    def clean_node(self, node):
+        if self.clean_node_enabled:
+            super.clean_node(self, node)
 
 class StreamsComplexEosTestJobRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
