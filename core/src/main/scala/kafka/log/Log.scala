@@ -624,7 +624,93 @@ class Log(@volatile var dir: File,
   }
 
   /**
-   * Append this message set to the active segment of the log, rolling over to a fresh segment if necessary.
+    * Append records to the active segment of the log.
+    *
+    * This method accepts a MemoryRecords with a buffer that contains one or more valid record sets and calls
+    * appendSingleBatch for each individually. This allows multiple batches to be aggregated in a single
+    * record_set, but still be processed without forcing offset assignment.
+    *
+    * @param records The log records to append
+    * @param isFromClient Whether or not this append is from a producer
+    * @param assignOffsets Should the log assign offsets to this batch or blindly apply what it is given
+    * @param leaderEpoch The partition's leader epoch which will be applied to records when offsets are assigned on the leader
+    * @throws KafkaStorageException If the append fails due to an I/O error.
+    * @return Information about the appended records including the first and last offset.
+    */
+  private def append(records: MemoryRecords, isFromClient: Boolean, assignOffsets: Boolean, leaderEpoch: Int): LogAppendInfo = {
+    maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
+      lock synchronized {
+        val batches = records.batches()
+
+        // Always check for an empty batch first, as we can't iterate an empty set below
+        if (batches.asScala.isEmpty) {
+          return analyzeAndValidateRecords(records, isFromClient = isFromClient)
+        }
+
+        val logAppendTime = time.milliseconds
+        val remainingBytes = records.buffer().duplicate()
+
+        // We use the batch iterator only to get the size of each batch. RecordBatch does not provide access to the
+        // underlying buffer (except using writeTo, which would be inefficient). Therefore, we build the individual
+        // batches to append using the overall records.buffer()
+        val appendInfo = batches.asScala.map(b => {
+          // Create the current record set using only the first batch
+          val batchSize = b.sizeInBytes()
+          val batchBuffer = remainingBytes.slice()
+          batchBuffer.limit(batchSize)
+          val batchRecords = MemoryRecords.readableRecords(batchBuffer)
+
+          // Advance the position in remaining bytes
+          remainingBytes.position(remainingBytes.position() + batchSize)
+
+          // Append the single record batch to the log
+          appendSingleBatch(batchRecords, isFromClient, assignOffsets, leaderEpoch, logAppendTime)
+        }).reduceLeft((info1, info2) => {
+          // Don't assume that the max timestamp is always in the later batch
+          var maxTimestamp = info1.maxTimestamp
+          var offsetofMaxTimestamp = info1.offsetOfMaxTimestamp
+          if (info2.maxTimestamp > info1.maxTimestamp) {
+            maxTimestamp = info2.maxTimestamp
+            offsetofMaxTimestamp = info2.offsetOfMaxTimestamp
+          }
+
+          // recordsProcessingStats is null if assignOffsets is false
+          var recordsProcessingStats = info1.recordsProcessingStats
+          if (assignOffsets) {
+            recordsProcessingStats = new RecordsProcessingStats(
+              info1.recordsProcessingStats.temporaryMemoryBytes() + info2.recordsProcessingStats.temporaryMemoryBytes(),
+              info1.recordsProcessingStats.numRecordsConverted() + info2.recordsProcessingStats.numRecordsConverted(),
+              info1.recordsProcessingStats.conversionTimeNanos() + info2.recordsProcessingStats.conversionTimeNanos()
+            )
+          }
+
+          // Combine the LogAppendInfo to maintain an overall result to return
+          LogAppendInfo(
+            info1.firstOffset,
+            info2.lastOffset,
+            maxTimestamp,
+            offsetofMaxTimestamp,
+            info1.logAppendTime,
+            info1.logStartOffset,
+            recordsProcessingStats,
+            info1.sourceCodec,
+            info1.targetCodec,
+            info1.shallowCount + info2.shallowCount,
+            info1.validBytes + info2.validBytes,
+            info1.offsetsMonotonic && info2.offsetsMonotonic
+          )
+        })
+
+        if (unflushedMessages >= config.flushInterval)
+          flush()
+
+        appendInfo
+      }
+    }
+  }
+
+  /**
+   * Append this MemoryRecords to the active segment of the log, rolling over to a fresh segment if necessary.
    *
    * This method will generally be responsible for assigning offsets to the messages,
    * however if the assignOffsets=false flag is passed we will only check that the existing offsets are valid.
@@ -636,140 +722,136 @@ class Log(@volatile var dir: File,
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @return Information about the appended messages including the first and last offset.
    */
-  private def append(records: MemoryRecords, isFromClient: Boolean, assignOffsets: Boolean, leaderEpoch: Int): LogAppendInfo = {
-    maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
-      val appendInfo = analyzeAndValidateRecords(records, isFromClient = isFromClient)
+   private def appendSingleBatch(records: MemoryRecords,
+                                 isFromClient: Boolean,
+                                 assignOffsets: Boolean,
+                                 leaderEpoch: Int,
+                                 logAppendTime: Long): LogAppendInfo = {
+     val appendInfo = analyzeAndValidateRecords(records, isFromClient = isFromClient)
 
-      // return if we have no valid messages or if this is a duplicate of the last appended entry
-      if (appendInfo.shallowCount == 0)
-        return appendInfo
+     // return if we have no valid messages or if this is a duplicate of the last appended entry
+     if (appendInfo.shallowCount == 0)
+       return appendInfo
 
-      // trim any invalid bytes or partial messages before appending it to the on-disk log
-      var validRecords = trimInvalidBytes(records, appendInfo)
+     // trim any invalid bytes or partial messages before appending it to the on-disk log
+     var validRecords = trimInvalidBytes(records, appendInfo)
 
-      // they are valid, insert them in the log
-      lock synchronized {
-        checkIfMemoryMappedBufferClosed()
-        if (assignOffsets) {
-          // assign offsets to the message set
-          val offset = new LongRef(nextOffsetMetadata.messageOffset)
-          appendInfo.firstOffset = offset.value
-          val now = time.milliseconds
-          val validateAndOffsetAssignResult = try {
-            LogValidator.validateMessagesAndAssignOffsets(validRecords,
-              offset,
-              time,
-              now,
-              appendInfo.sourceCodec,
-              appendInfo.targetCodec,
-              config.compact,
-              config.messageFormatVersion.messageFormatVersion,
-              config.messageTimestampType,
-              config.messageTimestampDifferenceMaxMs,
-              leaderEpoch,
-              isFromClient)
-          } catch {
-            case e: IOException => throw new KafkaException("Error in validating messages while appending to log '%s'".format(name), e)
-          }
-          validRecords = validateAndOffsetAssignResult.validatedRecords
-          appendInfo.maxTimestamp = validateAndOffsetAssignResult.maxTimestamp
-          appendInfo.offsetOfMaxTimestamp = validateAndOffsetAssignResult.shallowOffsetOfMaxTimestamp
-          appendInfo.lastOffset = offset.value - 1
-          appendInfo.recordsProcessingStats = validateAndOffsetAssignResult.recordsProcessingStats
-          if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
-            appendInfo.logAppendTime = now
+     // they are valid, insert them in the log
+     checkIfMemoryMappedBufferClosed()
+     if (assignOffsets) {
+       // assign offsets to the message set
+       val offset = new LongRef(nextOffsetMetadata.messageOffset)
+       appendInfo.firstOffset = offset.value
+       val validateAndOffsetAssignResult = try {
+         LogValidator.validateMessagesAndAssignOffsets(validRecords,
+           offset,
+           time,
+           logAppendTime,
+           appendInfo.sourceCodec,
+           appendInfo.targetCodec,
+           config.compact,
+           config.messageFormatVersion.messageFormatVersion,
+           config.messageTimestampType,
+           config.messageTimestampDifferenceMaxMs,
+           leaderEpoch,
+           isFromClient)
+       } catch {
+         case e: IOException => throw new KafkaException("Error in validating messages while appending to log '%s'".format(name), e)
+       }
+       validRecords = validateAndOffsetAssignResult.validatedRecords
+       appendInfo.maxTimestamp = validateAndOffsetAssignResult.maxTimestamp
+       appendInfo.offsetOfMaxTimestamp = validateAndOffsetAssignResult.shallowOffsetOfMaxTimestamp
+       appendInfo.lastOffset = offset.value - 1
+       appendInfo.recordsProcessingStats = validateAndOffsetAssignResult.recordsProcessingStats
+       if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
+         appendInfo.logAppendTime = logAppendTime
 
-          // re-validate message sizes if there's a possibility that they have changed (due to re-compression or message
-          // format conversion)
-          if (validateAndOffsetAssignResult.messageSizeMaybeChanged) {
-            for (batch <- validRecords.batches.asScala) {
-              if (batch.sizeInBytes > config.maxMessageSize) {
-                // we record the original message set size instead of the trimmed size
-                // to be consistent with pre-compression bytesRejectedRate recording
-                brokerTopicStats.topicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
-                brokerTopicStats.allTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
-                throw new RecordTooLargeException("Message batch size is %d bytes which exceeds the maximum configured size of %d."
-                  .format(batch.sizeInBytes, config.maxMessageSize))
-              }
-            }
-          }
-        } else {
-          // we are taking the offsets we are given
-          if (!appendInfo.offsetsMonotonic || appendInfo.firstOffset < nextOffsetMetadata.messageOffset)
-            throw new IllegalArgumentException("Out of order offsets found in " + records.records.asScala.map(_.offset))
-        }
+       // re-validate message sizes if there's a possibility that they have changed (due to re-compression or message
+       // format conversion)
+       if (validateAndOffsetAssignResult.messageSizeMaybeChanged) {
+         for (batch <- validRecords.batches.asScala) {
+           if (batch.sizeInBytes > config.maxMessageSize) {
+             // we record the original message set size instead of the trimmed size
+             // to be consistent with pre-compression bytesRejectedRate recording
+             brokerTopicStats.topicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
+             brokerTopicStats.allTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
+             throw new RecordTooLargeException("Message batch size is %d bytes which exceeds the maximum configured size of %d."
+               .format(batch.sizeInBytes, config.maxMessageSize))
+           }
+         }
+       }
+     } else {
+       // we are taking the offsets we are given
+       if (!appendInfo.offsetsMonotonic || appendInfo.firstOffset < nextOffsetMetadata.messageOffset)
+         throw new IllegalArgumentException("Out of order offsets found in " + records.records.asScala.map(_.offset))
+     }
 
-        // update the epoch cache with the epoch stamped onto the message by the leader
-        validRecords.batches.asScala.foreach { batch =>
-          if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-            _leaderEpochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset)
-        }
+     // update the epoch cache with the epoch stamped onto the message by the leader
+     validRecords.batches.asScala.foreach { batch =>
+       if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
+         _leaderEpochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset)
+     }
 
-        // check messages set size may be exceed config.segmentSize
-        if (validRecords.sizeInBytes > config.segmentSize) {
-          throw new RecordBatchTooLargeException("Message batch size is %d bytes which exceeds the maximum configured segment size of %d."
-            .format(validRecords.sizeInBytes, config.segmentSize))
-        }
+     // check messages set size may be exceed config.segmentSize
+     if (validRecords.sizeInBytes > config.segmentSize) {
+       throw new RecordBatchTooLargeException("Message batch size is %d bytes which exceeds the maximum configured segment size of %d."
+         .format(validRecords.sizeInBytes, config.segmentSize))
+     }
 
-        // now that we have valid records, offsets assigned, and timestamps updated, we need to
-        // validate the idempotent/transactional state of the producers and collect some metadata
-        val (updatedProducers, completedTxns, maybeDuplicate) = analyzeAndValidateProducerState(validRecords, isFromClient)
-        maybeDuplicate.foreach { duplicate =>
-          appendInfo.firstOffset = duplicate.firstOffset
-          appendInfo.lastOffset = duplicate.lastOffset
-          appendInfo.logAppendTime = duplicate.timestamp
-          appendInfo.logStartOffset = logStartOffset
-          return appendInfo
-        }
+     // now that we have valid records, offsets assigned, and timestamps updated, we need to
+     // validate the idempotent/transactional state of the producers and collect some metadata
+     val (updatedProducers, completedTxns, maybeDuplicate) = analyzeAndValidateProducerState(validRecords, isFromClient)
+     maybeDuplicate.foreach { duplicate =>
+       appendInfo.firstOffset = duplicate.firstOffset
+       appendInfo.lastOffset = duplicate.lastOffset
+       appendInfo.logAppendTime = duplicate.timestamp
+       appendInfo.logStartOffset = logStartOffset
+       return appendInfo
+     }
 
-        // maybe roll the log if this segment is full
-        val segment = maybeRoll(messagesSize = validRecords.sizeInBytes,
-          maxTimestampInMessages = appendInfo.maxTimestamp,
-          maxOffsetInMessages = appendInfo.lastOffset)
+     // maybe roll the log if this segment is full
+     val segment = maybeRoll(messagesSize = validRecords.sizeInBytes,
+       maxTimestampInMessages = appendInfo.maxTimestamp,
+       maxOffsetInMessages = appendInfo.lastOffset)
 
-        val logOffsetMetadata = LogOffsetMetadata(
-          messageOffset = appendInfo.firstOffset,
-          segmentBaseOffset = segment.baseOffset,
-          relativePositionInSegment = segment.size)
+     val logOffsetMetadata = LogOffsetMetadata(
+       messageOffset = appendInfo.firstOffset,
+       segmentBaseOffset = segment.baseOffset,
+       relativePositionInSegment = segment.size)
 
-        segment.append(firstOffset = appendInfo.firstOffset,
-          largestOffset = appendInfo.lastOffset,
-          largestTimestamp = appendInfo.maxTimestamp,
-          shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
-          records = validRecords)
+     segment.append(firstOffset = appendInfo.firstOffset,
+       largestOffset = appendInfo.lastOffset,
+       largestTimestamp = appendInfo.maxTimestamp,
+       shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
+       records = validRecords)
 
-        // update the producer state
-        for ((producerId, producerAppendInfo) <- updatedProducers) {
-          producerAppendInfo.maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata)
-          producerStateManager.update(producerAppendInfo)
-        }
+     // update the producer state
+     for ((producerId, producerAppendInfo) <- updatedProducers) {
+       producerAppendInfo.maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata)
+       producerStateManager.update(producerAppendInfo)
+     }
 
-        // update the transaction index with the true last stable offset. The last offset visible
-        // to consumers using READ_COMMITTED will be limited by this value and the high watermark.
-        for (completedTxn <- completedTxns) {
-          val lastStableOffset = producerStateManager.completeTxn(completedTxn)
-          segment.updateTxnIndex(completedTxn, lastStableOffset)
-        }
+     // update the transaction index with the true last stable offset. The last offset visible
+     // to consumers using READ_COMMITTED will be limited by this value and the high watermark.
+     for (completedTxn <- completedTxns) {
+       val lastStableOffset = producerStateManager.completeTxn(completedTxn)
+       segment.updateTxnIndex(completedTxn, lastStableOffset)
+     }
 
-        // always update the last producer id map offset so that the snapshot reflects the current offset
-        // even if there isn't any idempotent data being written
-        producerStateManager.updateMapEndOffset(appendInfo.lastOffset + 1)
+     // always update the last producer id map offset so that the snapshot reflects the current offset
+     // even if there isn't any idempotent data being written
+     producerStateManager.updateMapEndOffset(appendInfo.lastOffset + 1)
 
-        // increment the log end offset
-        updateLogEndOffset(appendInfo.lastOffset + 1)
+     // increment the log end offset
+     updateLogEndOffset(appendInfo.lastOffset + 1)
 
-        // update the first unstable offset (which is used to compute LSO)
-        updateFirstUnstableOffset()
+     // update the first unstable offset (which is used to compute LSO)
+     updateFirstUnstableOffset()
 
-        trace("Appended message set to log %s with first offset: %d, next offset: %d, and messages: %s"
-          .format(this.name, appendInfo.firstOffset, nextOffsetMetadata.messageOffset, validRecords))
+     trace("Appended message set to log %s with first offset: %d, next offset: %d, and messages: %s"
+       .format(this.name, appendInfo.firstOffset, nextOffsetMetadata.messageOffset, validRecords))
 
-        if (unflushedMessages >= config.flushInterval)
-          flush()
-
-        appendInfo
-      }
-    }
+     appendInfo
   }
 
   def onHighWatermarkIncremented(highWatermark: Long): Unit = {
