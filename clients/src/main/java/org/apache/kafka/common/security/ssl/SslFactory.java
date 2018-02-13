@@ -312,7 +312,9 @@ public class SslFactory implements Reconfigurable {
             return ks;
         }
 
-        long getLastReloaded() { return lastReloaded; }
+        long getLastReloaded() {
+            return lastReloaded;
+        }
 
         long getLastModified() {
             File storeFile = new File(path);
