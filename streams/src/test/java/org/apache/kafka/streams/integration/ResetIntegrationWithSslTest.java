@@ -61,10 +61,7 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
             throw new RuntimeException(e);
         }
 
-        // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
-        // otherwise, input records could fall into different windows for different runs depending on the initial mock time
-        final long alignedTime = (System.currentTimeMillis() / 1000) * 1000;
-        CLUSTER = new EmbeddedKafkaCluster(1, brokerProps, alignedTime);
+        CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
 
         System.out.println(Thread.currentThread().getName() + ": SSL Executed Static");
         System.out.flush();

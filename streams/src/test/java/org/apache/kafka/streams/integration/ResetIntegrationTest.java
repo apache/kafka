@@ -47,10 +47,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
         // very long sleep times
         brokerProps.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
-        // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
-        // otherwise, input records could fall into different windows for different runs depending on the initial mock time
-        final long alignedTime = (System.currentTimeMillis() / 1000) * 1000;
-        CLUSTER = new EmbeddedKafkaCluster(1, brokerProps, alignedTime);
+        CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
 
         System.out.println(Thread.currentThread().getName() + ": Normal Executed Static");
         System.out.flush();
