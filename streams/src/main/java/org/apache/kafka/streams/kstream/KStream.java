@@ -1323,7 +1323,7 @@ public interface KStream<K, V> {
      * and default serializers and deserializers.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
-     * The {@link KeyValueMapper} selects a new key (with should be of the same type) while preserving the original values.
+     * The {@link KeyValueMapper} selects a new key (which should be of the same type) while preserving the original values.
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}
      * <p>
      * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
@@ -1349,7 +1349,7 @@ public interface KStream<K, V> {
      * and {@link Serde}s as specified by {@link Serialized}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
-     * The {@link KeyValueMapper} selects a new key (with should be of the same type) while preserving the original values.
+     * The {@link KeyValueMapper} selects a new key (which should be of the same type) while preserving the original values.
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
      * <p>
      * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
