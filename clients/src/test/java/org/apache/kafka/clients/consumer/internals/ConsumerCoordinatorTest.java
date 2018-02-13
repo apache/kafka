@@ -33,6 +33,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
@@ -1504,6 +1505,28 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testEnsureActiveGroupWithinBlackoutPeriodAfterAuthenticationFailure() {
+        client.authenticationFailed(node, 300);
+
+        try {
+            coordinator.ensureActiveGroup();
+            fail("Expected an authentication error.");
+        } catch (AuthenticationException e) {
+            // OK
+        }
+
+        time.sleep(30); // wait less than the blackout period
+        assertTrue(client.connectionFailed(node));
+
+        try {
+            coordinator.ensureActiveGroup();
+            fail("Expected an authentication error.");
+        } catch (AuthenticationException e) {
+            // OK
+        }
+    }
+
+    @Test
     public void testProtocolMetadataOrder() {
         RoundRobinAssignor roundRobin = new RoundRobinAssignor();
         RangeAssignor range = new RangeAssignor();
@@ -1623,6 +1646,25 @@ public class ConsumerCoordinatorTest {
         int threadCount = Thread.enumerate(threads);
         for (int i = 0; i < threadCount; i++)
             assertFalse("Heartbeat thread active after close", threads[i].getName().contains(groupId));
+    }
+
+    @Test
+    public void testAutoCommitAfterCoordinatorBackToService() {
+        ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
+                ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true, true);
+        subscriptions.assignFromUser(Collections.singleton(t1p));
+        subscriptions.seek(t1p, 100L);
+
+        coordinator.coordinatorDead();
+        assertTrue(coordinator.coordinatorUnknown());
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)));
+
+        // async commit offset should find coordinator
+        time.sleep(autoCommitIntervalMs); // sleep for a while to ensure auto commit does happen
+        coordinator.maybeAutoCommitOffsetsAsync(time.milliseconds());
+        assertFalse(coordinator.coordinatorUnknown());
+        assertEquals(subscriptions.committed(t1p).offset(), 100L);
     }
 
     private ConsumerCoordinator prepareCoordinatorForCloseTest(final boolean useGroupManagement,

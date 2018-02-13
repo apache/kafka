@@ -157,7 +157,7 @@ public class TopologyTest {
     }
 
     @Test
-    public void shoudNotAllowToAddProcessorWithSameName() {
+    public void shouldNotAllowToAddProcessorWithSameName() {
         topology.addSource("source", "topic-1");
         topology.addProcessor("processor", new MockProcessorSupplier(), "source");
         try {
