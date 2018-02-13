@@ -180,7 +180,7 @@ class StreamsBrokerDownResilience(Test):
         processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor_3.start()
 
-        # need to wait for rebalance  once
+        # need to wait for rebalance once
         self.wait_for_verification(processor_3, "State transition from REBALANCING to RUNNING", processor_3.LOG_FILE)
 
         # assert streams can process when starting with broker up
@@ -224,7 +224,7 @@ class StreamsBrokerDownResilience(Test):
         processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor_3.start()
 
-        # need to wait for rebalance  once
+        # need to wait for rebalance once
         self.wait_for_verification(processor_3, "State transition from REBALANCING to RUNNING", processor_3.LOG_FILE)
 
         # assert streams can process when starting with broker up
