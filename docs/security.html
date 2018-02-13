@@ -255,10 +255,10 @@
             listener, configs must be provided for each mechanism using the listener and mechanism prefix.
             For example,
                     <pre class="brush: text;">
-        listener.name.sasl_ssl.scram-sha-256.sasl.jaas.config= org.apache.kafka.common.security.scram.ScramLoginModule required \
+        listener.name.sasl_ssl.scram-sha-256.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
             username="admin" \
             password="admin-secret";
-        listener.name.sasl_ssl.plain.sasl.jaas.config= org.apache.kafka.common.security.plain.PlainLoginModule required \
+        listener.name.sasl_ssl.plain.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
             username="admin" \
             password="admin-secret" \
             user_admin="admin-secret" \
@@ -266,8 +266,9 @@
 
             If JAAS configuration is defined at different levels, the order of precedence used is:
             <ul>
-              <li><code>listener.name.{listenerName}.{saslMechanism}.sasl.jaas.config</code></li>
-              <li>Static JAAS configuration</code></li>
+              <li>Broker configuration property <code>listener.name.{listenerName}.{saslMechanism}.sasl.jaas.config</code></li>
+              <li><code>{listenerName}.KafkaServer</code> section of static JAAS configuration</code></li>
+              <li><code>KafkaServer</code> section of static JAAS configuration</code></li>
             </ul>
             Note that ZooKeeper JAAS config may only be configured using static JAAS configuration.
 
