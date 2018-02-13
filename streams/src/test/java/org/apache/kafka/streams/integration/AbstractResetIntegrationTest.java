@@ -100,7 +100,7 @@ public abstract class AbstractResetIntegrationTest {
             adminClient = AdminClient.create(commonClientConfig);
         }
         if (kafkaAdminClient == null) {
-            kafkaAdminClient =  (KafkaAdminClient) org.apache.kafka.clients.admin.AdminClient.create(commonClientConfig);
+            kafkaAdminClient = (KafkaAdminClient) org.apache.kafka.clients.admin.AdminClient.create(commonClientConfig);
         }
 
         // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
@@ -171,8 +171,8 @@ public abstract class AbstractResetIntegrationTest {
     }
 
     private static final Properties STREAMS_CONFIG = new Properties();
-    private final static Properties PRODUCER_CONFIG = new Properties();
-    private final static Properties RESULT_CONSUMER_CONFIG = new Properties();
+    private static final Properties PRODUCER_CONFIG = new Properties();
+    private static final Properties RESULT_CONSUMER_CONFIG = new Properties();
 
     void prepareTest() throws Exception {
         prepareConfigs();
