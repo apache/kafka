@@ -300,7 +300,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     waitForPartitionState(tp, KafkaController.InitialControllerEpoch, controllerId, leaderEpoch + 1,
       "failed to get expected partition state upon broker shutdown")
     otherBroker.startup()
-    TestUtils.waitUntilTrue(() => zkClient.getInSyncReplicasForPartition(new TopicPartition(tp.topic, tp.partition)).toSet == replicas, "restarted broker failed to join in-sync replicas")
+    TestUtils.waitUntilTrue(() => zkClient.getInSyncReplicasForPartition(new TopicPartition(tp.topic, tp.partition)).get.toSet == replicas, "restarted broker failed to join in-sync replicas")
     zkClient.createPreferredReplicaElection(Set(tp))
     TestUtils.waitUntilTrue(() => !zkClient.preferredReplicaPathExists,
       "failed to remove preferred replica leader election path after completion")
