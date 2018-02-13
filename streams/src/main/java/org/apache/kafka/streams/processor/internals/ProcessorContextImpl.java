@@ -34,6 +34,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     private final StreamTask task;
     private final RecordCollector collector;
     private final ToAccessor toAccessor = new ToAccessor();
+    private final static To SEND_TO_ALL = To.all();
 
     ProcessorContextImpl(final TaskId id,
                          final StreamTask task,
@@ -80,7 +81,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value) {
-        forward(key, value, To.all());
+        forward(key, value, SEND_TO_ALL);
     }
 
     @SuppressWarnings({"unchecked", "deprecation"})
@@ -104,10 +105,22 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
         final ProcessorNode previousNode = currentNode();
         try {
-            for (final ProcessorNode child : (List<ProcessorNode<K, V>>) currentNode().children()) {
-                if (toAccessor.hasChild(child.name())) {
+            final List<ProcessorNode<K, V>> children = (List<ProcessorNode<K, V>>) currentNode().children();
+            final String sendTo = toAccessor.child();
+            if (sendTo != null) {
+                final ProcessorNode child = currentNode().getChild(sendTo);
+                setCurrentNode(child);
+                child.process(key, value);
+            } else {
+                if (children.size() == 1) {
+                    final ProcessorNode child = children.get(0);
                     setCurrentNode(child);
                     child.process(key, value);
+                } else {
+                    for (final ProcessorNode child : children) {
+                        setCurrentNode(child);
+                        child.process(key, value);
+                    }
                 }
             }
         } finally {

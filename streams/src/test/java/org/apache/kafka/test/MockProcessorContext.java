@@ -207,7 +207,7 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
         final ProcessorNode thisNode = currentNode;
         try {
             for (final ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-                if (toAccessor.hasChild(childNode.name())) {
+                if (toAccessor.child() == null || toAccessor.child().equals(childNode.name())) {
                     currentNode = childNode;
                     childNode.process(key, value);
                     toAccessor.update(to); // need to reset because MockProcessorContext is shared over multiple Processors and toAccessor might have been modified

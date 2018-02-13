@@ -35,11 +35,7 @@ public class ToAccessor extends To {
         return timestamp;
     }
 
-    public boolean hasChild(final String childName) {
-        return sendToAllChildren() || this.childName.equals(childName);
-    }
-
-    private boolean sendToAllChildren() {
-        return childName == null;
+    public String child() {
+        return childName;
     }
 }

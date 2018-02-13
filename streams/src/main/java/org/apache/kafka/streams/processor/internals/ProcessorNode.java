@@ -26,12 +26,15 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.Punctuator;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class ProcessorNode<K, V> {
 
     private final List<ProcessorNode<?, ?>> children;
+    private final Map<String, ProcessorNode<?, ?>> childByName;
 
     private final String name;
     private final Processor<K, V> processor;
@@ -75,6 +78,7 @@ public class ProcessorNode<K, V> {
         this.name = name;
         this.processor = processor;
         this.children = new ArrayList<>();
+        this.childByName = new HashMap<>();
         this.stateStores = stateStores;
         this.time = new SystemTime();
     }
@@ -92,10 +96,14 @@ public class ProcessorNode<K, V> {
         return children;
     }
 
-    public void addChild(ProcessorNode<?, ?> child) {
-        children.add(child);
+    public final ProcessorNode getChild(final String childName) {
+        return childByName.get(childName);
     }
 
+    public void addChild(ProcessorNode<?, ?> child) {
+        children.add(child);
+        childByName.put(child.name, child);
+    }
 
     public void init(ProcessorContext context) {
         this.context = context;
