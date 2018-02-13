@@ -192,7 +192,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             }
             transactionInFlight = true;
         }
-        initTopology();
     }
 
     /**
