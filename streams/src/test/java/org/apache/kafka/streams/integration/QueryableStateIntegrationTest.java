@@ -65,6 +65,8 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -92,6 +94,8 @@ import static org.junit.Assert.fail;
 
 @Category({IntegrationTest.class})
 public class QueryableStateIntegrationTest {
+    private static final Logger log = LoggerFactory.getLogger(QueryableStateIntegrationTest.class);
+
     private static final int NUM_BROKERS = 1;
 
     @ClassRule
@@ -149,6 +153,7 @@ public class QueryableStateIntegrationTest {
                 input.add(line);
             }
         } catch (Exception e) {
+            log.warn("Unable to read '{}'. Using default inputValues list", "resources/" + fileName);
             input = Arrays.asList(
                         "hello world",
                         "all streams lead to kafka",
