@@ -52,9 +52,9 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
     private final boolean useBrokenFlagDescriptorChecksum;
     private final FLG flg;
     private final BD bd;
-    private final byte[] buffer;
-    private final byte[] compressedBuffer;
     private final int maxBlockSize;
+    private byte[] buffer;
+    private byte[] compressedBuffer;
     private int bufferOffset;
     private boolean finished;
 
@@ -204,7 +204,6 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
     private void writeEndMark() throws IOException {
         ByteUtils.writeUnsignedIntLE(out, 0);
         // TODO implement content checksum, update flg.validate()
-        finished = true;
     }
 
     @Override
@@ -259,15 +258,23 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
 
     @Override
     public void close() throws IOException {
-        if (!finished) {
-            // basically flush the buffer writing the last block
-            writeBlock();
-            // write the end block and finish the stream
-            writeEndMark();
-        }
-        if (out != null) {
-            out.close();
-            out = null;
+        try {
+            if (!finished) {
+                // basically flush the buffer writing the last block
+                writeBlock();
+                // write the end block
+                writeEndMark();
+            }
+        } finally {
+            try {
+                if (out != null)
+                    out.close();
+            } finally {
+                out = null;
+                buffer = null;
+                compressedBuffer = null;
+                finished = true;
+            }
         }
     }
 
