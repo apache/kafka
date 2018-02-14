@@ -39,6 +39,7 @@ import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class ConfigDefTest {
@@ -365,6 +366,32 @@ public class ConfigDefTest {
         assertFalse(configDef.toHtmlTable().contains("my.config"));
         assertFalse(configDef.toEnrichedRst().contains("my.config"));
         assertFalse(configDef.toRst().contains("my.config"));
+    }
+
+    @Test
+    public void testDynamicUpdateModeInDocs() throws Exception {
+        final ConfigDef configDef = new ConfigDef()
+                .define("my.broker.config", Type.LONG, Importance.HIGH, "docs")
+                .define("my.cluster.config", Type.LONG, Importance.HIGH, "docs")
+                .define("my.readonly.config", Type.LONG, Importance.HIGH, "docs");
+        final Map<String, String> updateModes = new HashMap<>();
+        updateModes.put("my.broker.config", "per-broker");
+        updateModes.put("my.cluster.config", "cluster-wide");
+        final String html = configDef.toHtmlTable(updateModes);
+        Set<String> configsInHtml = new HashSet();
+        for (String line : html.split("\n")) {
+            if (line.contains("my.broker.config")) {
+                assertTrue(line.contains("per-broker"));
+                configsInHtml.add("my.broker.config");
+            } else if (line.contains("my.cluster.config")) {
+                assertTrue(line.contains("cluster-wide"));
+                configsInHtml.add("my.cluster.config");
+            } else if (line.contains("my.readonly.config")) {
+                assertTrue(line.contains("read-only"));
+                configsInHtml.add("my.readonly.config");
+            }
+        }
+        assertEquals(configDef.names(), configsInHtml);
     }
 
     @Test
