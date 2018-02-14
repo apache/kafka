@@ -25,8 +25,6 @@ import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -124,6 +122,7 @@ public class FetcherTest {
     private int maxWaitMs = 0;
     private int fetchSize = 1000;
     private long retryBackoffMs = 100;
+    private long requestTimeoutMs = 30000;
     private MockTime time = new MockTime(1);
     private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
     private MockClient client = new MockClient(time, metadata);
@@ -899,27 +898,12 @@ public class FetcherTest {
     }
 
     @Test
-    public void testUpdateFetchPositionsNoneCommittedNoResetStrategy() {
-        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(tp0, tp1));
-        subscriptionsNoAutoReset.assignFromUser(tps);
-        try {
-            fetcherNoAutoReset.updateFetchPositions(tps);
-            fail("Should have thrown NoOffsetForPartitionException");
-        } catch (NoOffsetForPartitionException e) {
-            // we expect the exception to be thrown for both TPs at the same time
-            Set<TopicPartition> partitions = e.partitions();
-            assertEquals(tps, partitions);
-        }
-    }
-
-    @Test
-    public void testUpdateFetchPositionToCommitted() {
-        // unless a specific reset is expected, the default behavior is to reset to the committed
-        // position if one is present
+    public void testUpdateFetchPositionNoOpWithPositionSet() {
         subscriptions.assignFromUser(singleton(tp0));
-        subscriptions.committed(tp0, new OffsetAndMetadata(5));
+        subscriptions.seek(tp0, 5L);
 
-        fetcher.updateFetchPositions(singleton(tp0));
+        fetcher.resetOffsetsIfNeeded();
+        assertFalse(client.hasInFlightRequests());
         assertTrue(subscriptions.isFetchable(tp0));
         assertEquals(5, subscriptions.position(tp0).longValue());
     }
@@ -927,11 +911,12 @@ public class FetcherTest {
     @Test
     public void testUpdateFetchPositionResetToDefaultOffset() {
         subscriptions.assignFromUser(singleton(tp0));
-        // with no commit position, we should reset using the default strategy defined above (EARLIEST)
+        subscriptions.requestOffsetReset(tp0);
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.EARLIEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, 1L, 5L));
-        fetcher.updateFetchPositions(singleton(tp0));
+                listOffsetResponse(Errors.NONE, 1L, 5L));
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
         assertEquals(5, subscriptions.position(tp0).longValue());
@@ -940,11 +925,12 @@ public class FetcherTest {
     @Test
     public void testUpdateFetchPositionResetToLatestOffset() {
         subscriptions.assignFromUser(singleton(tp0));
-        subscriptions.needOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, 1L, 5L));
-        fetcher.updateFetchPositions(singleton(tp0));
+                listOffsetResponse(Errors.NONE, 1L, 5L));
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
         assertEquals(5, subscriptions.position(tp0).longValue());
@@ -957,7 +943,7 @@ public class FetcherTest {
                     new ByteArrayDeserializer(), Integer.MAX_VALUE, isolationLevel);
 
             subscriptions.assignFromUser(singleton(tp0));
-            subscriptions.needOffsetReset(tp0, OffsetResetStrategy.LATEST);
+            subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
 
             client.prepareResponse(new MockClient.RequestMatcher() {
                 @Override
@@ -966,7 +952,9 @@ public class FetcherTest {
                     return request.isolationLevel() == isolationLevel;
                 }
             }, listOffsetResponse(Errors.NONE, 1L, 5L));
-            fetcher.updateFetchPositions(singleton(tp0));
+            fetcher.resetOffsetsIfNeeded();
+            consumerClient.pollNoWakeup();
+
             assertFalse(subscriptions.isOffsetResetNeeded(tp0));
             assertTrue(subscriptions.isFetchable(tp0));
             assertEquals(5, subscriptions.position(tp0).longValue());
@@ -976,11 +964,42 @@ public class FetcherTest {
     @Test
     public void testUpdateFetchPositionResetToEarliestOffset() {
         subscriptions.assignFromUser(singleton(tp0));
-        subscriptions.needOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.EARLIEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, 1L, 5L));
-        fetcher.updateFetchPositions(singleton(tp0));
+                listOffsetResponse(Errors.NONE, 1L, 5L));
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertTrue(subscriptions.isFetchable(tp0));
+        assertEquals(5, subscriptions.position(tp0).longValue());
+    }
+
+    @Test
+    public void testResetOffsetsMetadataRefresh() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+
+        // First fetch fails with stale metadata
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
+                listOffsetResponse(Errors.NOT_LEADER_FOR_PARTITION, 1L, 5L), false);
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.hasValidPosition(tp0));
+
+        // Expect a metadata refresh
+        client.prepareMetadataUpdate(cluster, Collections.<String>emptySet());
+        consumerClient.pollNoWakeup();
+        assertFalse(client.hasPendingMetadataUpdates());
+
+        // Next fetch succeeds
+        time.sleep(retryBackoffMs);
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
+                listOffsetResponse(Errors.NONE, 1L, 5L));
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
         assertEquals(5, subscriptions.position(tp0).longValue());
@@ -989,16 +1008,162 @@ public class FetcherTest {
     @Test
     public void testUpdateFetchPositionDisconnect() {
         subscriptions.assignFromUser(singleton(tp0));
-        subscriptions.needOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
 
         // First request gets a disconnect
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, 1L, 5L), true);
+                listOffsetResponse(Errors.NONE, 1L, 5L), true);
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.hasValidPosition(tp0));
+
+        // Expect a metadata refresh
+        client.prepareMetadataUpdate(cluster, Collections.<String>emptySet());
+        consumerClient.pollNoWakeup();
+        assertFalse(client.hasPendingMetadataUpdates());
+
+        // No retry until the backoff passes
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(client.hasInFlightRequests());
+        assertFalse(subscriptions.hasValidPosition(tp0));
 
         // Next one succeeds
+        time.sleep(retryBackoffMs);
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, 1L, 5L));
-        fetcher.updateFetchPositions(singleton(tp0));
+                listOffsetResponse(Errors.NONE, 1L, 5L));
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertTrue(subscriptions.isFetchable(tp0));
+        assertEquals(5, subscriptions.position(tp0).longValue());
+    }
+
+    @Test
+    public void testAssignmentChangeWithInFlightReset() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+
+        // Send the ListOffsets request to reset the position
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.hasValidPosition(tp0));
+        assertTrue(client.hasInFlightRequests());
+
+        // Now we have an assignment change
+        subscriptions.assignFromUser(singleton(tp1));
+
+        // The response returns and is discarded
+        client.respond(listOffsetResponse(Errors.NONE, 1L, 5L));
+        consumerClient.pollNoWakeup();
+
+        assertFalse(client.hasPendingResponses());
+        assertFalse(client.hasInFlightRequests());
+        assertFalse(subscriptions.isAssigned(tp0));
+    }
+
+    @Test
+    public void testSeekWithInFlightReset() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+
+        // Send the ListOffsets request to reset the position
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.hasValidPosition(tp0));
+        assertTrue(client.hasInFlightRequests());
+
+        // Now we get a seek from the user
+        subscriptions.seek(tp0, 237);
+
+        // The response returns and is discarded
+        client.respond(listOffsetResponse(Errors.NONE, 1L, 5L));
+        consumerClient.pollNoWakeup();
+
+        assertFalse(client.hasPendingResponses());
+        assertFalse(client.hasInFlightRequests());
+        assertEquals(237L, subscriptions.position(tp0).longValue());
+    }
+
+    @Test
+    public void testChangeResetWithInFlightReset() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+
+        // Send the ListOffsets request to reset the position
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.hasValidPosition(tp0));
+        assertTrue(client.hasInFlightRequests());
+
+        // Now we get a seek from the user
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+
+        // The response returns and is discarded
+        client.respond(listOffsetResponse(Errors.NONE, 1L, 5L));
+        consumerClient.pollNoWakeup();
+
+        assertFalse(client.hasPendingResponses());
+        assertFalse(client.hasInFlightRequests());
+        assertTrue(subscriptions.isOffsetResetNeeded(tp0));
+        assertEquals(OffsetResetStrategy.EARLIEST, subscriptions.resetStrategy(tp0));
+    }
+
+    @Test
+    public void testIdempotentResetWithInFlightReset() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+
+        // Send the ListOffsets request to reset the position
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.hasValidPosition(tp0));
+        assertTrue(client.hasInFlightRequests());
+
+        // Now we get a seek from the user
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+
+        client.respond(listOffsetResponse(Errors.NONE, 1L, 5L));
+        consumerClient.pollNoWakeup();
+
+        assertFalse(client.hasInFlightRequests());
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertEquals(5L, subscriptions.position(tp0).longValue());
+    }
+
+    @Test
+    public void testRestOffsetsAuthorizationFailure() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+
+        // First request gets a disconnect
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
+                listOffsetResponse(Errors.TOPIC_AUTHORIZATION_FAILED, -1, -1), false);
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.hasValidPosition(tp0));
+
+        try {
+            fetcher.resetOffsetsIfNeeded();
+            fail("Expected authorization error to be raised");
+        } catch (TopicAuthorizationException e) {
+            assertEquals(singleton(tp0.topic()), e.unauthorizedTopics());
+        }
+
+        // The exception should clear after being raised, but no retry until the backoff
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(client.hasInFlightRequests());
+        assertFalse(subscriptions.hasValidPosition(tp0));
+
+        // Next one succeeds
+        time.sleep(retryBackoffMs);
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
+                listOffsetResponse(Errors.NONE, 1L, 5L));
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
         assertEquals(5, subscriptions.position(tp0).longValue());
@@ -1007,58 +1172,41 @@ public class FetcherTest {
     @Test
     public void testUpdateFetchPositionOfPausedPartitionsRequiringOffsetReset() {
         subscriptions.assignFromUser(singleton(tp0));
-        subscriptions.committed(tp0, new OffsetAndMetadata(0));
         subscriptions.pause(tp0); // paused partition does not have a valid position
-        subscriptions.needOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, 1L, 10L));
-        fetcher.updateFetchPositions(singleton(tp0));
+                listOffsetResponse(Errors.NONE, 1L, 10L));
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
 
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertFalse(subscriptions.isFetchable(tp0)); // because tp is paused
         assertTrue(subscriptions.hasValidPosition(tp0));
         assertEquals(10, subscriptions.position(tp0).longValue());
-    }
-
-    @Test
-    public void testUpdateFetchPositionOfPausedPartitionsWithoutACommittedOffset() {
-        subscriptions.assignFromUser(singleton(tp0));
-        subscriptions.pause(tp0); // paused partition does not have a valid position
-
-        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.EARLIEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, 1L, 0L));
-        fetcher.updateFetchPositions(singleton(tp0));
-
-        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
-        assertFalse(subscriptions.isFetchable(tp0)); // because tp is paused
-        assertTrue(subscriptions.hasValidPosition(tp0));
-        assertEquals(0, subscriptions.position(tp0).longValue());
     }
 
     @Test
     public void testUpdateFetchPositionOfPausedPartitionsWithoutAValidPosition() {
         subscriptions.assignFromUser(singleton(tp0));
-        subscriptions.committed(tp0, new OffsetAndMetadata(0));
+        subscriptions.requestOffsetReset(tp0);
         subscriptions.pause(tp0); // paused partition does not have a valid position
-        subscriptions.seek(tp0, 10);
 
-        fetcher.updateFetchPositions(singleton(tp0));
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
 
-        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertTrue(subscriptions.isOffsetResetNeeded(tp0));
         assertFalse(subscriptions.isFetchable(tp0)); // because tp is paused
-        assertTrue(subscriptions.hasValidPosition(tp0));
-        assertEquals(10, subscriptions.position(tp0).longValue());
+        assertFalse(subscriptions.hasValidPosition(tp0));
     }
 
     @Test
     public void testUpdateFetchPositionOfPausedPartitionsWithAValidPosition() {
         subscriptions.assignFromUser(singleton(tp0));
-        subscriptions.committed(tp0, new OffsetAndMetadata(0));
         subscriptions.seek(tp0, 10);
         subscriptions.pause(tp0); // paused partition already has a valid position
 
-        fetcher.updateFetchPositions(singleton(tp0));
+        fetcher.resetOffsetsIfNeeded();
 
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertFalse(subscriptions.isFetchable(tp0)); // because tp is paused
@@ -1433,7 +1581,7 @@ public class FetcherTest {
     @Test
     public void testGetOffsetsForTimesTimeout() {
         try {
-            fetcher.getOffsetsByTimes(Collections.singletonMap(new TopicPartition(topicName, 2), 1000L), 100L);
+            fetcher.offsetsByTimes(Collections.singletonMap(new TopicPartition(topicName, 2), 1000L), 100L);
             fail("Should throw timeout exception.");
         } catch (TimeoutException e) {
             // let it go.
@@ -1443,7 +1591,7 @@ public class FetcherTest {
     @Test
     public void testGetOffsetsForTimes() {
         // Empty map
-        assertTrue(fetcher.getOffsetsByTimes(new HashMap<TopicPartition, Long>(), 100L).isEmpty());
+        assertTrue(fetcher.offsetsByTimes(new HashMap<TopicPartition, Long>(), 100L).isEmpty());
         // Unknown Offset
         testGetOffsetsForTimesWithUnknownOffset();
         // Error code none with unknown offset
@@ -1474,7 +1622,7 @@ public class FetcherTest {
         offsetsToSearch.put(tp0, ListOffsetRequest.EARLIEST_TIMESTAMP);
         offsetsToSearch.put(tp1, ListOffsetRequest.EARLIEST_TIMESTAMP);
 
-        fetcher.getOffsetsByTimes(offsetsToSearch, 0);
+        fetcher.offsetsByTimes(offsetsToSearch, 0);
     }
 
     @Test
@@ -2051,7 +2199,7 @@ public class FetcherTest {
         Map<TopicPartition, Long> timestampToSearch = new HashMap<>();
         timestampToSearch.put(t2p0, 0L);
         timestampToSearch.put(tp1, 0L);
-        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = fetcher.getOffsetsByTimes(timestampToSearch, Long.MAX_VALUE);
+        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = fetcher.offsetsByTimes(timestampToSearch, Long.MAX_VALUE);
 
         if (expectedOffsetForP0 == null)
             assertNull(offsetAndTimestampMap.get(t2p0));
@@ -2082,7 +2230,7 @@ public class FetcherTest {
 
         Map<TopicPartition, Long> timestampToSearch = new HashMap<>();
         timestampToSearch.put(tp0, 0L);
-        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = fetcher.getOffsetsByTimes(timestampToSearch, Long.MAX_VALUE);
+        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = fetcher.offsetsByTimes(timestampToSearch, Long.MAX_VALUE);
 
         assertTrue(offsetAndTimestampMap.containsKey(tp0));
         assertNull(offsetAndTimestampMap.get(tp0));
@@ -2192,6 +2340,7 @@ public class FetcherTest {
                 metricsRegistry,
                 time,
                 retryBackoffMs,
+                requestTimeoutMs,
                 isolationLevel);
     }
 

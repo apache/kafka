@@ -827,13 +827,17 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       keyDeserializer = new StringDeserializer,
       valueDeserializer = new StringDeserializer)
     consumer.subscribe(Collections.singleton(topic))
-    if (autoOffsetReset == "latest") {
-      do {
-        consumer.poll(1)
-      } while (consumer.assignment.isEmpty)
-    }
+    if (autoOffsetReset == "latest")
+      awaitInitialPositions(consumer)
     consumers += consumer
     consumer
+  }
+
+  private def awaitInitialPositions(consumer: KafkaConsumer[_, _]): Unit = {
+    do {
+      consumer.poll(1)
+    } while (consumer.assignment.isEmpty)
+    consumer.assignment.asScala.foreach(tp => consumer.position(tp))
   }
 
   private def clientProps(securityProtocol: SecurityProtocol, saslMechanism: String): Properties = {
@@ -875,9 +879,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       valueDeserializer = new StringDeserializer,
       props = Some(clientProps(securityProtocol, saslMechanism)))
     consumer.subscribe(Collections.singleton(topic))
-    do {
-      consumer.poll(1)
-    } while (consumer.assignment.isEmpty)
+    awaitInitialPositions(consumer)
     consumers += consumer
     consumer
   }
