@@ -1408,11 +1408,6 @@ public class KafkaConsumerTest {
 
     @Test
     public void testConsumerWithinBlackoutPeriodAfterAuthenticationFailure() {
-        int rebalanceTimeoutMs = 60000;
-        int sessionTimeoutMs = 30000;
-        int heartbeatIntervalMs = 3000;
-        int autoCommitIntervalMs = 1000;
-
         Time time = new MockTime();
         Map<String, Integer> tpCounts = new HashMap<>();
         tpCounts.put(topic, 1);
@@ -1427,9 +1422,7 @@ public class KafkaConsumerTest {
         client.authenticationFailed(node, 300);
         PartitionAssignor assignor = new RangeAssignor();
 
-        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
-                rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, true, autoCommitIntervalMs);
-
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
         consumer.subscribe(Collections.singleton(topic));
         callConsumerApisAndExpectAnAuthenticationError(consumer, tp0);
 
