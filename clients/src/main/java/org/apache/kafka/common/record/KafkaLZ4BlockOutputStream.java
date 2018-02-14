@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
@@ -34,7 +33,7 @@ import net.jpountz.xxhash.XXHashFactory;
  *
  * This class is not thread-safe.
  */
-public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
+public final class KafkaLZ4BlockOutputStream extends OutputStream {
 
     public static final int MAGIC = 0x184D2204;
     public static final int LZ4_MAX_HEADER_LENGTH = 19;
@@ -53,6 +52,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
     private final FLG flg;
     private final BD bd;
     private final int maxBlockSize;
+    private OutputStream out;
     private byte[] buffer;
     private byte[] compressedBuffer;
     private int bufferOffset;
@@ -71,7 +71,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
      * @throws IOException
      */
     public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize, boolean blockChecksum, boolean useBrokenFlagDescriptorChecksum) throws IOException {
-        super(out);
+        this.out = out;
         compressor = LZ4Factory.fastestInstance().fastCompressor();
         checksum = XXHashFactory.fastestInstance().hash32();
         this.useBrokenFlagDescriptorChecksum = useBrokenFlagDescriptorChecksum;
@@ -267,8 +267,11 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
             }
         } finally {
             try {
-                if (out != null)
-                    out.close();
+                if (out != null) {
+                    try (OutputStream outStream = out) {
+                        outStream.flush();
+                    }
+                }
             } finally {
                 out = null;
                 buffer = null;
