@@ -19,7 +19,7 @@ package kafka.zookeeper
 
 import java.util.Locale
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
-import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch, Semaphore, TimeUnit}
+import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch, Semaphore, SynchronousQueue, ThreadPoolExecutor, TimeUnit}
 
 import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.metrics.KafkaMetricsGroup
@@ -59,6 +59,7 @@ class ZooKeeperClient(connectString: String,
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]().asScala
   private val inFlightRequests = new Semaphore(maxInFlightRequests)
   private val stateChangeHandlers = new ConcurrentHashMap[String, StateChangeHandler]().asScala
+  private val expiryHandlerExecutor = new ThreadPoolExecutor(0, 1, 60L, TimeUnit.SECONDS, new SynchronousQueue)
 
   private val metricNames = Set[String]()
 
@@ -360,12 +361,16 @@ class ZooKeeperClient(connectString: String,
             error("Auth failed.")
             stateChangeHandlers.values.foreach(_.onAuthFailure())
           } else if (state == KeeperState.Expired) {
-            inWriteLock(initializationLock) {
-              info("Session expired.")
-              stateChangeHandlers.values.foreach(_.beforeInitializingSession())
-              initialize()
-              stateChangeHandlers.values.foreach(_.afterInitializingSession())
-            }
+            expiryHandlerExecutor.execute(new Runnable {
+              override def run(): Unit = {
+                inWriteLock(initializationLock) {
+                  info("Session expired.")
+                  stateChangeHandlers.values.foreach(_.beforeInitializingSession())
+                  initialize()
+                  stateChangeHandlers.values.foreach(_.afterInitializingSession())
+                }
+              }
+            })
           }
         case Some(path) =>
           (event.getType: @unchecked) match {
