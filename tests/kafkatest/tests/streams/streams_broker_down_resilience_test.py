@@ -180,10 +180,10 @@ class StreamsBrokerDownResilience(Test):
         processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor_3.start()
 
-        # need to wait for rebalance  once
+        # need to wait for rebalance once
         self.wait_for_verification(processor_3, "State transition from REBALANCING to RUNNING", processor_3.LOG_FILE)
 
-        # assert streams can process when starting with broker down
+        # assert streams can process when starting with broker up
         self.assert_produce_consume("waiting for rebalance to complete", num_messages=9)
 
         message = "processed3messages"
@@ -210,3 +210,41 @@ class StreamsBrokerDownResilience(Test):
 
         self.kafka.stop()
 
+    def test_streams_should_failover_while_brokers_down(self):
+        self.kafka.start()
+
+        configs = self.get_configs(extra_configs=",application.id=failover_with_broker_down")
+
+        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor.start()
+
+        processor_2 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor_2.start()
+
+        processor_3 = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
+        processor_3.start()
+
+        # need to wait for rebalance once
+        self.wait_for_verification(processor_3, "State transition from REBALANCING to RUNNING", processor_3.LOG_FILE)
+
+        # assert streams can process when starting with broker up
+        self.assert_produce_consume("waiting for rebalance to complete", num_messages=9)
+
+        message = "processed3messages"
+
+        self.wait_for_verification(processor, message, processor.STDOUT_FILE)
+        self.wait_for_verification(processor_2, message, processor_2.STDOUT_FILE)
+        self.wait_for_verification(processor_3, message, processor_3.STDOUT_FILE)
+
+        node = self.kafka.leader(self.inputTopic)
+        self.kafka.stop_node(node)
+
+        processor.abortThenRestart()
+        processor_2.abortThenRestart()
+        processor_3.abortThenRestart()
+
+        self.kafka.start_node(node)
+
+        self.assert_produce_consume("sending_message_after_hard_bouncing_streams_instance_bouncing_broker", num_messages=9)
+
+        self.kafka.stop()

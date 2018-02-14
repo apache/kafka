@@ -749,9 +749,15 @@ public class Values {
                 Schema elementSchema = null;
                 while (parser.hasNext()) {
                     if (parser.canConsume(ARRAY_END_DELIMITER)) {
-                        Schema listSchema = elementSchema == null ? null : SchemaBuilder.array(elementSchema).schema();
+                        Schema listSchema = null;
+                        if (elementSchema != null) {
+                            listSchema = SchemaBuilder.array(elementSchema).schema();
+                        }
                         result = alignListEntriesWithSchema(listSchema, result);
                         return new SchemaAndValue(listSchema, result);
+                    }
+                    if (parser.canConsume(COMMA_DELIMITER)) {
+                        throw new DataException("Unable to parse an empty array element: " + parser.original());
                     }
                     SchemaAndValue element = parse(parser, true);
                     elementSchema = commonSchemaFor(elementSchema, element);
@@ -760,9 +766,9 @@ public class Values {
                 }
                 // Missing either a comma or an end delimiter
                 if (COMMA_DELIMITER.equals(parser.previous())) {
-                    throw new DataException("Malformed array: missing element after ','");
+                    throw new DataException("Array is missing element after ',': " + parser.original());
                 }
-                throw new DataException("Malformed array: missing terminating ']'");
+                throw new DataException("Array is missing terminating ']': " + parser.original());
             }
 
             if (parser.canConsume(MAP_BEGIN_DELIMITER)) {
@@ -771,17 +777,22 @@ public class Values {
                 Schema valueSchema = null;
                 while (parser.hasNext()) {
                     if (parser.canConsume(MAP_END_DELIMITER)) {
-                        Schema mapSchema =
-                                keySchema == null || valueSchema == null ? null : SchemaBuilder.map(keySchema, valueSchema).schema();
+                        Schema mapSchema = null;
+                        if (keySchema != null && valueSchema != null) {
+                            mapSchema = SchemaBuilder.map(keySchema, valueSchema).schema();
+                        }
                         result = alignMapKeysAndValuesWithSchema(mapSchema, result);
                         return new SchemaAndValue(mapSchema, result);
                     }
+                    if (parser.canConsume(COMMA_DELIMITER)) {
+                        throw new DataException("Unable to parse a map entry has no key or value: " + parser.original());
+                    }
                     SchemaAndValue key = parse(parser, true);
                     if (key == null || key.value() == null) {
-                        throw new DataException("Malformed map entry: null key");
+                        throw new DataException("Map entry may not have a null key: " + parser.original());
                     }
                     if (!parser.canConsume(ENTRY_DELIMITER)) {
-                        throw new DataException("Malformed map entry: missing '='");
+                        throw new DataException("Map entry is missing '=': " + parser.original());
                     }
                     SchemaAndValue value = parse(parser, true);
                     Object entryValue = value != null ? value.value() : null;
@@ -792,9 +803,9 @@ public class Values {
                 }
                 // Missing either a comma or an end delimiter
                 if (COMMA_DELIMITER.equals(parser.previous())) {
-                    throw new DataException("Malformed map: missing element after ','");
+                    throw new DataException("Map is missing element after ',': " + parser.original());
                 }
-                throw new DataException("Malformed array: missing terminating ']'");
+                throw new DataException("Map is missing terminating ']': " + parser.original());
             }
         } catch (DataException e) {
             LOG.debug("Unable to parse the value as a map; reverting to string", e);

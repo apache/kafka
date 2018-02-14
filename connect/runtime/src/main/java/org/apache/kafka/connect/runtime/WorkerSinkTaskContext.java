@@ -104,8 +104,7 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
             throw new IllegalWorkerStateException("SinkTaskContext may not be used to resume consumption until the task is initialized");
         }
         try {
-            for (TopicPartition partition : partitions)
-                pausedPartitions.remove(partition);
+            pausedPartitions.removeAll(Arrays.asList(partitions));
             consumer.resume(Arrays.asList(partitions));
         } catch (IllegalStateException e) {
             throw new IllegalWorkerStateException("SinkTasks may not resume partitions that are not currently assigned to them.", e);

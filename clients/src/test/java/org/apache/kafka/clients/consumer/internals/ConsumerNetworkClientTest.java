@@ -22,6 +22,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
@@ -67,6 +68,24 @@ public class ConsumerNetworkClientTest {
         ClientResponse clientResponse = future.value();
         HeartbeatResponse response = (HeartbeatResponse) clientResponse.responseBody();
         assertEquals(Errors.NONE, response.error());
+    }
+
+    @Test
+    public void sendWithinBlackoutPeriodAfterAuthenticationFailure() throws InterruptedException {
+        client.authenticationFailed(node, 300);
+        client.prepareResponse(heartbeatResponse(Errors.NONE));
+        final RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
+        consumerClient.poll(future);
+        assertTrue(future.failed());
+        assertTrue("Expected only an authentication error.", future.exception() instanceof AuthenticationException);
+
+        time.sleep(30); // wait less than the blackout period
+        assertTrue(client.connectionFailed(node));
+
+        final RequestFuture<ClientResponse> future2 = consumerClient.send(node, heartbeat());
+        consumerClient.poll(future2);
+        assertTrue(future2.failed());
+        assertTrue("Expected only an authentication error.", future2.exception() instanceof AuthenticationException);
     }
 
     @Test
