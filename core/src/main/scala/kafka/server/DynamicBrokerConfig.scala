@@ -115,6 +115,13 @@ object DynamicBrokerConfig {
         config.displayName, config.dependents, config.recommender)
     }
   }
+
+  private[server] def dynamicConfigUpdateModes: util.Map[String, String] = {
+    AllDynamicConfigs.map { name =>
+      val mode = if (PerBrokerConfigs.contains(name)) "per-broker" else "cluster-wide"
+      (name -> mode)
+    }.toMap.asJava
+  }
 }
 
 class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging {
