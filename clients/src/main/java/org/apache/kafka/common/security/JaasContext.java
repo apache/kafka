@@ -65,7 +65,7 @@ public class JaasContext {
         String globalContextName = GLOBAL_CONTEXT_NAME_SERVER;
         String listenerContextName = listenerName.value().toLowerCase(Locale.ROOT) + "." + GLOBAL_CONTEXT_NAME_SERVER;
         Password jaasConfigArgs = (Password) configs.get(mechanism.toLowerCase(Locale.ROOT) + "." + SaslConfigs.SASL_JAAS_CONFIG);
-        if (jaasConfigArgs == null && configs.containsKey(SaslConfigs.SASL_JAAS_CONFIG))
+        if (jaasConfigArgs == null && configs.get(SaslConfigs.SASL_JAAS_CONFIG) != null)
             LOG.warn("Server config {} should be prefixed with SASL mechanism name, ignoring config", SaslConfigs.SASL_JAAS_CONFIG);
         return load(Type.SERVER, listenerContextName, globalContextName, jaasConfigArgs);
     }
