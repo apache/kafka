@@ -82,11 +82,11 @@
   <p>Password config values that are dynamically updated are encrypted before storing in ZooKeeper. The broker config
   <code>password.encoder.secret</code> must be configured in <code>server.properties</code> to enable dynamic update
   of password configs. The secret may be different on different brokers.</p>
-  <p>The secret used for password encoding may be rotated with rolling restart of brokers. The old secret used for encoding
+  <p>The secret used for password encoding may be rotated with a rolling restart of brokers. The old secret used for encoding
   passwords currently in ZooKeeper must be provided in the static broker config <code>password.encoder.old.secret</code> and
   the new secret must be provided in <code>password.encoder.secret</code>. All dynamic password configs stored in ZooKeeper
   will be re-encoded with the new secret when the broker starts up.</p>
-  <p>In Kafka 1.1.0, all dynamically updated password configs must be provided in every alter request when updating configs
+  <p>In Kafka 1.1.x, all dynamically updated password configs must be provided in every alter request when updating configs
   using <code>kafka-configs.sh</code> even if the password config is not being altered. This constraint will be removed in
   a future release.</p>
 
@@ -137,7 +137,7 @@
     <li><code>log.message.timestamp.difference.max.ms</code></li>
   </ul>
 
-  In Kafka version 1.1.0, changes to <code>unclean.leader.election.enable</code> take effect only when a new controller is elected.
+  In Kafka version 1.1.x, changes to <code>unclean.leader.election.enable</code> take effect only when a new controller is elected.
   Controller re-election may be forced by running:
 
   <pre class="brush: bash;">
@@ -176,7 +176,7 @@
   the JAAS configuration of the listener must be provided using the JAAS configuration property <code>sasl.jaas.config</code>
   with the listener and mechanism prefix. See <a href="#security_jaas_broker">JAAS configuration for Kafka brokers</a> for details.</p>
 
-  <p>In Kafka version 1.1.0, the listener used by the inter-broker listener may not be updated dynamically. To update the inter-broker
+  <p>In Kafka version 1.1.x, the listener used by the inter-broker listener may not be updated dynamically. To update the inter-broker
   listener to a new listener, the new listener may be added on all brokers without restarting the broker. A rolling restart is then
   required to update <code>inter.broker.listener.name</code>.</p>
 
@@ -186,7 +186,8 @@
     <li><code>advertised.listeners</code></li>
     <li><code>listener.security.protocol.map</code></li>
   </ul>
-
+  Inter-broker listener must be configured using the static broker configuration <code>inter.broker.listener.name</code>
+  or <code>inter.broker.security.protocol</code>.
 
   <h3><a id="topicconfigs" href="#topicconfigs">3.2 Topic-Level Configs</a></h3>
 
