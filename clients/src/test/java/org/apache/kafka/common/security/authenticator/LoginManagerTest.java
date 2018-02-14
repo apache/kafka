@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -46,6 +47,11 @@ public class LoginManagerTest {
                 Collections.singletonList("SCRAM-SHA-256"));
     }
 
+    @After
+    public void tearDown() {
+        LoginManager.closeAll();
+    }
+
     @Test
     public void testClientLoginManager() throws Exception {
         Map<String, ?> configs = Collections.singletonMap("sasl.jaas.config", dynamicPlainContext);
@@ -64,6 +70,9 @@ public class LoginManagerTest {
                 false, configs));
         assertSame(staticLogin, LoginManager.acquireLoginManager(staticContext, "SCRAM-SHA-256",
                 false, configs));
+
+        verifyLoginManagerRelease(dynamicLogin, 2, dynamicContext, configs);
+        verifyLoginManagerRelease(staticLogin, 2, staticContext, configs);
     }
 
     @Test
@@ -94,5 +103,27 @@ public class LoginManagerTest {
                 false, configs));
         assertSame(staticScramLogin, LoginManager.acquireLoginManager(scramJaasContext, "SCRAM-SHA-256",
                 false, configs));
+
+        verifyLoginManagerRelease(dynamicPlainLogin, 2, plainJaasContext, configs);
+        verifyLoginManagerRelease(dynamicDigestLogin, 2, digestJaasContext, configs);
+        verifyLoginManagerRelease(staticScramLogin, 2, scramJaasContext, configs);
+    }
+
+    private void verifyLoginManagerRelease(LoginManager loginManager, int acquireCount, JaasContext jaasContext,
+                                           Map<String, ?> configs) throws Exception {
+
+        // Release all except one reference and verify that the loginManager is still cached
+        for (int i = 0; i < acquireCount - 1; i++)
+            loginManager.release();
+        assertSame(loginManager, LoginManager.acquireLoginManager(jaasContext, "PLAIN",
+                false, configs));
+
+        // Release all references and verify that new LoginManager is created on next acquire
+        for (int i = 0; i < 2; i++) // release all references
+            loginManager.release();
+        LoginManager newLoginManager = LoginManager.acquireLoginManager(jaasContext, "PLAIN",
+                false, configs);
+        assertNotSame(loginManager, newLoginManager);
+        newLoginManager.release();
     }
 }
