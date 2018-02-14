@@ -189,6 +189,9 @@ class StreamsComplexEosTestJobRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsComplexEosTestJobRunnerService, self).__init__(test_context, kafka, "process-complex")
 
+    def clean_node(self, node):
+        if self.clean_node_enabled:
+            super.clean_node(self, node)
 
 class StreamsEosTestVerifyRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
