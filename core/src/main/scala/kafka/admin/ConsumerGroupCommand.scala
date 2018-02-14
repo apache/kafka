@@ -580,7 +580,9 @@ object ConsumerGroupCommand extends Logging {
                 }
               }
 
-            val rowsWithoutConsumer = offsets.filterKeys(!assignedTopicPartitions.contains(_)).flatMap {
+            val rowsWithoutConsumer = offsets.filterKeys(!assignedTopicPartitions.contains(_))
+              .toSeq.sortBy(offset => (offset._1.topic(), offset._1.partition()))
+              .flatMap {
               case (topicPartition, offset) =>
                 collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), Seq(topicPartition),
                     Map(topicPartition -> Some(offset)), Some(MISSING_COLUMN_VALUE),
