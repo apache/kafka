@@ -399,7 +399,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private ListOffsetResult fetchOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                  long timeout,
                                                  boolean requireTimestamps) {
-        ListOffsetResult result = ListOffsetResult.empty();
+        ListOffsetResult result = new ListOffsetResult();
         if (timestampsToSearch.isEmpty())
             return result;
 
@@ -764,7 +764,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     }
                 }
             } else if (error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) {
-                // The message format on the broker side is before 0.10.0, we simply put null in the response.
+                // The message format on the broker side is before 0.10.0, which means it does not
+                // support timestamps. We treat this case the same as if we weren't able to find an
+                // offset corresponding to the requested timestamp and leave it out of the result.
                 log.debug("Cannot search by timestamp for partition {} because the message format version " +
                         "is before 0.10.0", topicPartition);
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION) {
@@ -797,8 +799,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             this.partitionsToRetry = partitionsNeedingRetry;
         }
 
-        public static ListOffsetResult empty() {
-            return new ListOffsetResult(new HashMap<TopicPartition, OffsetData>(), new HashSet<TopicPartition>());
+        public ListOffsetResult() {
+            this.fetchedOffsets = new HashMap<>();
+            this.partitionsToRetry = new HashSet<>();
         }
     }
 
