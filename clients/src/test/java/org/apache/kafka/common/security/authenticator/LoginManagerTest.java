@@ -35,7 +35,6 @@ public class LoginManagerTest {
 
     private Password dynamicPlainContext;
     private Password dynamicDigestContext;
-    private TestJaasConfig staticContext;
 
     @Before
     public void setUp() {
@@ -43,7 +42,7 @@ public class LoginManagerTest {
                 " required user=\"plainuser\" password=\"plain-secret\";");
         dynamicDigestContext = new Password(TestDigestLoginModule.class.getName() +
                 " required user=\"digestuser\" password=\"digest-secret\";");
-        staticContext = TestJaasConfig.createConfiguration("SCRAM-SHA-256",
+        TestJaasConfig.createConfiguration("SCRAM-SHA-256",
                 Collections.singletonList("SCRAM-SHA-256"));
     }
 

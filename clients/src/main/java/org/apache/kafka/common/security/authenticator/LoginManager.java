@@ -57,12 +57,26 @@ public class LoginManager {
      * Returns an instance of `LoginManager` and increases its reference count.
      *
      * `release()` should be invoked when the `LoginManager` is no longer needed. This method will try to reuse an
-     * existing `LoginManager` for the provided context type and `SaslConfigs.SASL_JAAS_CONFIG` in `configs`,
-     * if available.
+     * existing `LoginManager` for the provided context type. If `jaasContext` was loaded from a dynamic config,
+     * login managers are reused for the same dynamic config value. For `jaasContext` loaded from static JAAS
+     * configuration, login managers are reused for static contexts with the same login context name.
      *
      * This is a bit ugly and it would be nicer if we could pass the `LoginManager` to `ChannelBuilders.create` and
      * shut it down when the broker or clients are closed. It's straightforward to do the former, but it's more
      * complicated to do the latter without making the consumer API more complex.
+     *
+     * @param jaasContext Static or dynamic JAAS context. `jaasContext.dynamicJaasConfig()` is non-null for dynamic context.
+     *                    For static contexts, this may contain multiple login modules if the context type is SERVER.
+     *                    For CLIENT static contexts and dynamic contexts of CLIENT and SERVER, 'jaasContext` contains
+     *                    only one login module.
+     * @param saslMechanism SASL mechanism for which login manager is being acquired. For dynamic contexts, the single
+     *                      login module in `jaasContext` corresponds to this SASL mechanism. Hence `Login` class is
+     *                      chosen based on this mechanism.
+     * @param hasKerberos Boolean flag that indicates if Kerberos is enabled for the server listener or client. Since
+     *                    static broker configuration may contain multiple login modules in a login context, KerberosLogin
+     *                    must be used if Kerberos is enabled on the listener, even if `saslMechanism` is not GSSAPI.
+     * @param configs Config options used to configure `Login` if a new login manager is created.
+     *
      */
     public static LoginManager acquireLoginManager(JaasContext jaasContext, String saslMechanism, boolean hasKerberos,
                                                    Map<String, ?> configs) throws IOException, LoginException {
