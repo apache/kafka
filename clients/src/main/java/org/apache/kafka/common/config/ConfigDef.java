@@ -877,7 +877,9 @@ public class ConfigDef {
         }
 
         public String toString() {
-            if (min == null)
+            if (min == null && max == null)
+                return "[...]";
+            else if (min == null)
                 return "[...," + max + "]";
             else if (max == null)
                 return "[" + min + ",...]";
