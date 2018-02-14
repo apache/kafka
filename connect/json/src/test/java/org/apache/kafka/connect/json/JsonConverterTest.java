@@ -806,11 +806,7 @@ public class JsonConverterTest {
     }
     
     private void assertStructSchemaEqual(Schema schema, Struct struct) {
-        try {
-            converter.fromConnectData(TOPIC, schema, struct);
-        } catch (DataException exc) {
-            assertTrue(exc.getMessage().contains("serialization"));
-        }
+        converter.fromConnectData(TOPIC, schema, struct);
         assertEquals(schema, struct.schema());
     }
 }
