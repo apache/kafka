@@ -48,9 +48,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // very long sleep times
         brokerProps.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
-
-        System.out.println(Thread.currentThread().getName() + ": Normal Executed Static");
-        System.out.flush();
     }
 
     @Override
@@ -63,17 +60,11 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         testId = TEST_ID;
         cluster = CLUSTER;
         prepareTest();
-
-        System.out.println(Thread.currentThread().getName() + ": Normal Executed Before");
-        System.out.flush();
     }
 
     @After
     public void after() throws Exception {
         cleanupTest();
-
-        System.out.println(Thread.currentThread().getName() + ": Normal Executed After");
-        System.out.flush();
     }
 
     @Test

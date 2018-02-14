@@ -555,7 +555,7 @@ public abstract class AbstractResetIntegrationTest {
             parameterList.add(INTERMEDIATE_USER_TOPIC);
         }
 
-        Map<String, Object> sslConfig = getClientSslConfig();
+        final Map<String, Object> sslConfig = getClientSslConfig();
         if (sslConfig != null) {
             final File configFile = TestUtils.tempFile();
             final BufferedWriter writer = new BufferedWriter(new FileWriter(configFile));

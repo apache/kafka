@@ -62,9 +62,6 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         }
 
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
-
-        System.out.println(Thread.currentThread().getName() + ": SSL Executed Static");
-        System.out.flush();
     }
 
     @Override
@@ -77,17 +74,11 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         testId = TEST_ID;
         cluster = CLUSTER;
         prepareTest();
-
-        System.out.println(Thread.currentThread().getName() + ": SSL Executed Before");
-        System.out.flush();
     }
 
     @After
     public void after() throws Exception {
         cleanupTest();
-
-        System.out.println(Thread.currentThread().getName() + ": SSL Executed After");
-        System.out.flush();
     }
 
     @Test
