@@ -95,15 +95,11 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
     val smallestUnconsumedOffsets = collection.mutable.Map[TopicPartition, Long]()
     while (recordIter.hasNext) {
       val record = recordIter.next()
-      val unconsumedPartition = new TopicPartition(record.topic(), record.partition())
+      val tp = new TopicPartition(record.topic(), record.partition())
       // only insert the smallest offset for each partition
-      val currentOffset = smallestUnconsumedOffsets.getOrElse(unconsumedPartition, {
-        smallestUnconsumedOffsets += unconsumedPartition -> record.offset()
-        record.offset()
+      smallestUnconsumedOffsets.getOrElse(tp, {
+        smallestUnconsumedOffsets += tp -> record.offset()
       })
-      if (currentOffset > record.offset()) {
-        smallestUnconsumedOffsets += unconsumedPartition -> record.offset()
-      }
     }
     smallestUnconsumedOffsets.foreach { case (tp, offset) => consumer.seek(tp, offset) }
   }
