@@ -28,7 +28,7 @@ import org.junit.{After, Before, Test}
 class ZkUtilsTest extends ZooKeeperTestHarness {
 
   val path = "/path"
-  var zkUtils: ZkUtils = null
+  var zkUtils: ZkUtils = _
 
   @Before
   override def setUp() {

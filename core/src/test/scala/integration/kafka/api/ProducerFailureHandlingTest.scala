@@ -188,7 +188,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   @Test
   def testInvalidPartition() {
     // create topic with a single partition
-    createTopic(topic1, replicationFactor = numServers)
+    createTopic(topic1, numPartitions = 1, replicationFactor = numServers)
 
     // create a record with incorrect partition id (higher than the number of partitions), send should fail
     val higherRecord = new ProducerRecord(topic1, 1, "key".getBytes, "value".getBytes)

@@ -21,7 +21,7 @@ import java.util.Properties
 import com.yammer.metrics.core.MetricName
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
-import kafka.common.{KafkaException, NoEpochForPartitionException}
+import kafka.common.KafkaException
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
@@ -872,14 +872,6 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   }
 
   /**
-   * Checks the PreferredReplicaElection path existence
-   * @return true if PreferredReplicaElection patj exists else false
-   */
-  def preferredReplicaPathExists(): Boolean = {
-    pathExists(PreferredReplicaElectionZNode.path)
-  }
-
-  /**
    * Gets the controller id.
    * @return optional integer that is Some if the controller znode exists and can be parsed and None otherwise.
    */
@@ -899,14 +891,6 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   def deleteController(): Unit = {
     val deleteRequest = DeleteRequest(ControllerZNode.path, ZkVersion.NoVersion)
     retryRequestUntilConnected(deleteRequest)
-  }
-
-  /**
-   * Checks the controller path existence
-   * @return true if controller exists else false
-   */
-  def controllerPathExists(): Boolean = {
-    pathExists(ControllerZNode.path)
   }
 
   /**
@@ -1323,14 +1307,6 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
       case e: NodeExistsException => getClusterId.getOrElse(
         throw new KafkaException("Failed to get cluster id from Zookeeper. This can happen if /cluster/id is deleted from Zookeeper."))
     }
-  }
-
-  /**
-   * Checks the clusterId path existence
-   * @return true if clusterId path exists else false
-   */
-  def clusterIdPathExists(): Boolean = {
-    pathExists(ClusterIdZNode.path)
   }
 
   /**

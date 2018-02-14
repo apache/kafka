@@ -22,7 +22,7 @@ import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import kafka.zk.{PreferredReplicaElectionZNode, ZooKeeperTestHarness}
 import org.junit.{After, Before, Test}
 import org.junit.Assert.assertTrue
 import org.apache.kafka.common.TopicPartition
@@ -47,30 +47,30 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   @Test
   def testEmptyCluster(): Unit = {
     servers = makeServers(1)
-    TestUtils.waitUntilTrue(() => zkClient.controllerPathExists(), "failed to elect a controller")
+    TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "failed to elect a controller")
     waitUntilControllerEpoch(KafkaController.InitialControllerEpoch, "broker failed to set controller epoch")
   }
 
   @Test
   def testControllerEpochPersistsWhenAllBrokersDown(): Unit = {
     servers = makeServers(1)
-    TestUtils.waitUntilTrue(() => zkClient.controllerPathExists(), "failed to elect a controller")
+    TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "failed to elect a controller")
     waitUntilControllerEpoch(KafkaController.InitialControllerEpoch, "broker failed to set controller epoch")
     servers.head.shutdown()
     servers.head.awaitShutdown()
-    TestUtils.waitUntilTrue(() => !zkClient.controllerPathExists(), "failed to kill controller")
+    TestUtils.waitUntilTrue(() => !zkClient.getControllerId.isDefined, "failed to kill controller")
     waitUntilControllerEpoch(KafkaController.InitialControllerEpoch, "controller epoch was not persisted after broker failure")
   }
 
   @Test
   def testControllerMoveIncrementsControllerEpoch(): Unit = {
     servers = makeServers(1)
-    TestUtils.waitUntilTrue(() => zkClient.controllerPathExists(), "failed to elect a controller")
+    TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "failed to elect a controller")
     waitUntilControllerEpoch(KafkaController.InitialControllerEpoch, "broker failed to set controller epoch")
     servers.head.shutdown()
     servers.head.awaitShutdown()
     servers.head.startup()
-    TestUtils.waitUntilTrue(() => zkClient.controllerPathExists(), "failed to elect a controller")
+    TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "failed to elect a controller")
     waitUntilControllerEpoch(KafkaController.InitialControllerEpoch + 1, "controller epoch was not incremented after controller move")
   }
 
@@ -230,7 +230,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
     zkClient.createPreferredReplicaElection(Set(tp))
-    TestUtils.waitUntilTrue(() => !zkClient.preferredReplicaPathExists,
+    TestUtils.waitUntilTrue(() => !zkClient.pathExists(PreferredReplicaElectionZNode.path),
       "failed to remove preferred replica leader election path after giving up")
     waitForPartitionState(tp, KafkaController.InitialControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch + 1,
       "failed to get expected partition state upon broker shutdown")
@@ -302,7 +302,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     otherBroker.startup()
     TestUtils.waitUntilTrue(() => zkClient.getInSyncReplicasForPartition(new TopicPartition(tp.topic, tp.partition)).get.toSet == replicas, "restarted broker failed to join in-sync replicas")
     zkClient.createPreferredReplicaElection(Set(tp))
-    TestUtils.waitUntilTrue(() => !zkClient.preferredReplicaPathExists,
+    TestUtils.waitUntilTrue(() => !zkClient.pathExists(PreferredReplicaElectionZNode.path),
       "failed to remove preferred replica leader election path after completion")
     waitForPartitionState(tp, KafkaController.InitialControllerEpoch, otherBroker.config.brokerId, leaderEpoch + 2,
       "failed to get expected partition state upon broker startup")
