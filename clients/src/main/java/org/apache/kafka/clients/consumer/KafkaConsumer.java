@@ -642,8 +642,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
         this(new ConsumerConfig(ConsumerConfig.addDeserializerToConfig(properties, keyDeserializer, valueDeserializer)),
-             keyDeserializer,
-             valueDeserializer);
+             keyDeserializer, valueDeserializer);
     }
 
     @SuppressWarnings("unchecked")
@@ -779,6 +778,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     metricsRegistry.fetcherMetrics,
                     this.time,
                     this.retryBackoffMs,
+                    this.requestTimeoutMs,
                     isolationLevel);
 
             config.logUnused();
@@ -1144,12 +1144,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
         client.maybeTriggerWakeup();
-        coordinator.poll(time.milliseconds(), timeout);
 
-        // fetch positions if we have partitions we're subscribed to that we
-        // don't know the offset for
-        if (!subscriptions.hasAllFetchPositions())
-            updateFetchPositions(this.subscriptions.missingFetchPositions());
+        long startMs = time.milliseconds();
+        coordinator.poll(startMs, timeout);
+
+        // Lookup positions of assigned partitions
+        boolean hasAllFetchPositions = updateFetchPositions();
 
         // if data is available already, return it immediately
         Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
@@ -1159,10 +1159,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // send any new fetches (won't resend pending fetches)
         fetcher.sendFetches();
 
-        long now = time.milliseconds();
-        long pollTimeout = Math.min(coordinator.timeToNextPoll(now), timeout);
+        long nowMs = time.milliseconds();
+        long remainingTimeMs = Math.max(0, timeout - (nowMs - startMs));
+        long pollTimeout = Math.min(coordinator.timeToNextPoll(nowMs), remainingTimeMs);
 
-        client.poll(pollTimeout, now, new PollCondition() {
+        // We do not want to be stuck blocking in poll if we are missing some positions
+        // since the offset lookup may be backing off after a failure
+        if (!hasAllFetchPositions && pollTimeout > retryBackoffMs)
+            pollTimeout = retryBackoffMs;
+
+        client.poll(pollTimeout, nowMs, new PollCondition() {
             @Override
             public boolean shouldBlock() {
                 // since a fetch might be completed by the background thread, we need this poll condition
@@ -1359,7 +1365,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
                 log.debug("Seeking to beginning of partition {}", tp);
-                subscriptions.needOffsetReset(tp, OffsetResetStrategy.EARLIEST);
+                subscriptions.requestOffsetReset(tp, OffsetResetStrategy.EARLIEST);
             }
         } finally {
             release();
@@ -1385,7 +1391,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
                 log.debug("Seeking to end of partition {}", tp);
-                subscriptions.needOffsetReset(tp, OffsetResetStrategy.LATEST);
+                subscriptions.requestOffsetReset(tp, OffsetResetStrategy.LATEST);
             }
         } finally {
             release();
@@ -1400,7 +1406,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * encountered (in which case it is thrown to the caller).
      *
      * @param partition The partition to get the position for
-     * @return The offset
+     * @return The current position of the consumer (that is, the offset of the next record to be fetched)
      * @throws IllegalArgumentException if the provided TopicPartition is not assigned to this consumer
      * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if no offset is currently defined for
      *             the partition
@@ -1419,9 +1425,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (!this.subscriptions.isAssigned(partition))
                 throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
             Long offset = this.subscriptions.position(partition);
-            if (offset == null) {
+            while (offset == null) {
                 // batch update fetch positions for any partitions without a valid position
-                updateFetchPositions(subscriptions.assignedPartitions());
+                updateFetchPositions();
+                client.poll(retryBackoffMs);
                 offset = this.subscriptions.position(partition);
             }
             return offset;
@@ -1611,7 +1618,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
                             entry.getValue() + ". The target time cannot be negative.");
             }
-            return fetcher.getOffsetsByTimes(timestampsToSearch, requestTimeoutMs);
+            return fetcher.offsetsByTimes(timestampsToSearch, requestTimeoutMs);
         } finally {
             release();
         }
@@ -1672,7 +1679,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         } finally {
             release();
         }
-
     }
 
     /**
@@ -1770,28 +1776,32 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Set the fetch position to the committed position (if there is one)
      * or reset it using the offset reset policy the user has configured.
      *
-     * @param partitions The partitions that needs updating fetch positions
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no offset reset policy is
      *             defined
+     * @return true if all assigned positions have a position, false otherwise
      */
-    private void updateFetchPositions(Set<TopicPartition> partitions) {
-        // lookup any positions for partitions which are awaiting reset (which may be the
-        // case if the user called seekToBeginning or seekToEnd. We do this check first to
-        // avoid an unnecessary lookup of committed offsets (which typically occurs when
-        // the user is manually assigning partitions and managing their own offsets).
-        fetcher.resetOffsetsIfNeeded(partitions);
+    private boolean updateFetchPositions() {
+        if (subscriptions.hasAllFetchPositions())
+            return true;
 
-        if (!subscriptions.hasAllFetchPositions(partitions)) {
-            // if we still don't have offsets for the given partitions, then we should either
-            // seek to the last committed position or reset using the auto reset policy
+        // If there are any partitions which do not have a valid position and are not
+        // awaiting reset, then we need to fetch committed offsets. We will only do a
+        // coordinator lookup if there are partitions which have missing positions, so
+        // a consumer with manually assigned partitions can avoid a coordinator dependence
+        // by always ensuring that assigned partitions have an initial position.
+        coordinator.refreshCommittedOffsetsIfNeeded();
 
-            // first refresh commits for all assigned partitions
-            coordinator.refreshCommittedOffsetsIfNeeded();
+        // If there are partitions still needing a position and a reset policy is defined,
+        // request reset using the default policy. If no reset strategy is defined and there
+        // are partitions with a missing position, then we will raise an exception.
+        subscriptions.resetMissingPositions();
 
-            // then do any offset lookups in case some positions are not known
-            fetcher.updateFetchPositions(partitions);
-        }
+        // Finally send an asynchronous request to lookup and update the positions of any
+        // partitions which are awaiting reset.
+        fetcher.resetOffsetsIfNeeded();
+
+        return false;
     }
 
     /**

@@ -358,6 +358,10 @@ public class MockClient implements KafkaClient {
         authenticationException.clear();
     }
 
+    public boolean hasPendingMetadataUpdates() {
+        return !metadataUpdates.isEmpty();
+    }
+
     public void prepareMetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
         metadataUpdates.add(new MetadataUpdate(cluster, unavailableTopics, false));
     }
@@ -384,6 +388,10 @@ public class MockClient implements KafkaClient {
     @Override
     public boolean hasInFlightRequests() {
         return !requests.isEmpty();
+    }
+
+    public boolean hasPendingResponses() {
+        return !responses.isEmpty();
     }
 
     @Override
