@@ -135,8 +135,7 @@ public class SegmentsTest {
     @Test
     public void shouldGetCorrectSegmentString() {
         final Segment segment = segments.getOrCreateSegment(0, context);
-        String expectedSegmentString = "Segment(id=0, name=test.0)";
-        assertTrue(segment.toString().equals(expectedSegmentString));
+        assertEquals("Segment(id=0, name=test.0)", segment.toString());
     }
 
     @Test

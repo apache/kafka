@@ -24,6 +24,9 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.test.KeyValueIteratorStub;
+import org.easymock.EasyMock;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -34,15 +37,17 @@ import java.util.List;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.hamcrest.core.IsNull.nullValue;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 
 public class InMemoryKeyValueLoggedStoreTest extends AbstractKeyValueStoreTest {
 
+
+    private KeyValueStore<Integer, String> innerKeyValueStore = EasyMock.createNiceMock(KeyValueStore.class);
+    private InMemoryKeyValueLoggedStore<Integer, String> inMemoryKeyValueLoggedStore;
+
     private final Serde<String> stringSerde = Serdes.String();
     private final Serde<Integer> integerSerde = Serdes.Integer();
+
 
     @SuppressWarnings("unchecked")
     @Override
@@ -59,66 +64,58 @@ public class InMemoryKeyValueLoggedStoreTest extends AbstractKeyValueStoreTest {
         return (KeyValueStore<K, V>) store;
     }
 
+    @Before
+    public void setUp() {
+        innerKeyValueStore.init(EasyMock.isA(ProcessorContext.class), EasyMock.isA(StateStore.class));
+        EasyMock.expect(innerKeyValueStore.name()).andReturn("inner-store").times(2);
+        inMemoryKeyValueLoggedStore = new InMemoryKeyValueLoggedStore<>(innerKeyValueStore, integerSerde, stringSerde);
+    }
+
     @Test
     public void shouldPutAll() {
         List<KeyValue<Integer, String>> entries = new ArrayList<>();
         entries.add(new KeyValue<>(1, "1"));
         entries.add(new KeyValue<>(2, "2"));
-        store.putAll(entries);
-        assertEquals(store.get(1), "1");
-        assertEquals(store.get(2), "2");
-    }
 
-    @Test
-    @SuppressWarnings("unchecked")
-    public void shouldRemoveLeastUsedEntry() {
+        innerKeyValueStore.putAll(entries);
+        EasyMock.replay(innerKeyValueStore);
 
-        final InMemoryKeyValueLoggedStore<Integer, String> inMemoryKeyValueLoggedStore = getInMemoryLoggedStore(2, integerSerde, stringSerde);
-
-        inMemoryKeyValueLoggedStore.put(1, "one");
-        inMemoryKeyValueLoggedStore.put(2, "two");
-        inMemoryKeyValueLoggedStore.get(1);
-        inMemoryKeyValueLoggedStore.put(3, "three");
-
-        assertThat(inMemoryKeyValueLoggedStore.get(2), nullValue());
-        assertThat(inMemoryKeyValueLoggedStore.get(1), is("one"));
-        assertThat(inMemoryKeyValueLoggedStore.get(3), is("three"));
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void shouldUseContextSerdeWhenNoneProvided() {
-
-        final InMemoryKeyValueLoggedStore<Integer, String> inMemoryKeyValueLoggedStore = getInMemoryLoggedStore(2, null, null);
-
-        inMemoryKeyValueLoggedStore.put(1, "one");
-        inMemoryKeyValueLoggedStore.put(2, "two");
-
-        // still able to access data in store and deserialize using context Serde
-        assertThat(inMemoryKeyValueLoggedStore.get(2), is("two"));
-        assertThat(inMemoryKeyValueLoggedStore.get(1), is("one"));
+        inMemoryKeyValueLoggedStore.init(context, innerKeyValueStore);
+        inMemoryKeyValueLoggedStore.putAll(entries);
+        EasyMock.verify(innerKeyValueStore);
     }
 
     @Test
     public void shouldReturnCorrectApproximateNumberOfEntries() {
-        final InMemoryKeyValueLoggedStore<Integer, String> inMemoryKeyValueLoggedStore = getInMemoryLoggedStore(3, integerSerde, stringSerde);
+        innerKeyValueStore.put(1, "one");
+        innerKeyValueStore.put(2, "two");
+        EasyMock.expect(innerKeyValueStore.approximateNumEntries()).andReturn(2L);
+        EasyMock.replay(innerKeyValueStore);
 
+        inMemoryKeyValueLoggedStore.init(context, innerKeyValueStore);
         inMemoryKeyValueLoggedStore.put(1, "one");
         inMemoryKeyValueLoggedStore.put(2, "two");
-        inMemoryKeyValueLoggedStore.put(3, "three");
 
-        assertThat(inMemoryKeyValueLoggedStore.approximateNumEntries(), is(3L));
+        assertThat(inMemoryKeyValueLoggedStore.approximateNumEntries(), is(2L));
+        EasyMock.verify(innerKeyValueStore);
     }
 
     @Test
     public void shouldReturnAll() {
-        final InMemoryKeyValueLoggedStore<Integer, String> inMemoryKeyValueLoggedStore = getInMemoryLoggedStore(3, integerSerde, stringSerde);
+        final KeyValueIteratorStub<Integer, String>
+            iteratorStub =
+            new KeyValueIteratorStub<>(Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two")).iterator());
+        innerKeyValueStore.put(1, "one");
+        innerKeyValueStore.put(2, "two");
+        EasyMock.expect(innerKeyValueStore.all()).andReturn(iteratorStub);
+        EasyMock.replay(innerKeyValueStore);
+
+        inMemoryKeyValueLoggedStore.init(context, innerKeyValueStore);
         inMemoryKeyValueLoggedStore.put(1, "one");
         inMemoryKeyValueLoggedStore.put(2, "two");
-        inMemoryKeyValueLoggedStore.put(3, "three");
 
         final List<KeyValue<Integer, String>> allReturned = new ArrayList<>();
-        final List<KeyValue<Integer, String>> expectedReturned = Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two"), KeyValue.pair(3, "three"));
+        final List<KeyValue<Integer, String>> expectedReturned = Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
         final Iterator<KeyValue<Integer, String>> iterator = inMemoryKeyValueLoggedStore.all();
 
         while (iterator.hasNext()) {
@@ -126,13 +123,22 @@ public class InMemoryKeyValueLoggedStoreTest extends AbstractKeyValueStoreTest {
         }
 
         assertThat(allReturned, equalTo(expectedReturned));
+        EasyMock.verify(innerKeyValueStore);
     }
 
     @Test
     public void shouldPutAllInLoggedStore() {
-        final InMemoryKeyValueLoggedStore<Integer, String> inMemoryKeyValueLoggedStore = getInMemoryLoggedStore(3, integerSerde, stringSerde);
+        final KeyValueIteratorStub<Integer, String>
+            iteratorStub =
+            new KeyValueIteratorStub<>(Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two")).iterator());
+        innerKeyValueStore.putAll(Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two")));
+        EasyMock.expect(innerKeyValueStore.all()).andReturn(iteratorStub);
+        EasyMock.replay(innerKeyValueStore);
+
+        inMemoryKeyValueLoggedStore.init(context, innerKeyValueStore);
+
         final List<KeyValue<Integer, String>> allReturned = new ArrayList<>();
-        final List<KeyValue<Integer, String>> initialPutAll = Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two"), KeyValue.pair(3, "three"));
+        final List<KeyValue<Integer, String>> initialPutAll = Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
 
         inMemoryKeyValueLoggedStore.putAll(initialPutAll);
 
@@ -142,73 +148,66 @@ public class InMemoryKeyValueLoggedStoreTest extends AbstractKeyValueStoreTest {
             allReturned.add(iterator.next());
         }
         assertThat(allReturned, equalTo(initialPutAll));
+        EasyMock.verify(innerKeyValueStore);
     }
 
     @Test
     public void shouldPutIfAbsentValidUpdate() {
-        final InMemoryKeyValueLoggedStore<Integer, String> inMemoryKeyValueLoggedStore = getInMemoryLoggedStore(3, integerSerde, stringSerde);
-        String returnedValue = inMemoryKeyValueLoggedStore.putIfAbsent(1, "one");
-        // null not previously in store
-        assertNull(returnedValue);
+        EasyMock.expect(innerKeyValueStore.putIfAbsent(1, "one")).andReturn(null);
+        EasyMock.expect(innerKeyValueStore.putIfAbsent(1, "one-more")).andReturn("one");
+        EasyMock.replay(innerKeyValueStore);
 
-        String attemptedUpdate = inMemoryKeyValueLoggedStore.putIfAbsent(1, "one-more");
+        inMemoryKeyValueLoggedStore.init(context, innerKeyValueStore);
+        inMemoryKeyValueLoggedStore.putIfAbsent(1, "one");
 
-        // already in store so sticking with original value, no update
-        assertThat(attemptedUpdate, equalTo("one"));
+        inMemoryKeyValueLoggedStore.putIfAbsent(1, "one-more");
+
+        EasyMock.verify(innerKeyValueStore);
     }
 
 
     @Test
     public void shouldReturnRange() {
-        final InMemoryKeyValueLoggedStore<Integer, String> inMemoryKeyValueLoggedStore = getInMemoryLoggedStore(3, integerSerde, stringSerde);
+        final List<KeyValue<Integer, String>> keyValueList = Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
+        final KeyValueIteratorStub<Integer, String> iteratorStub = new KeyValueIteratorStub<>(keyValueList.iterator());
+        innerKeyValueStore.putAll(keyValueList);
+
+        EasyMock.expect(innerKeyValueStore.range(1, 2)).andReturn(iteratorStub);
+        EasyMock.replay(innerKeyValueStore);
+
+        inMemoryKeyValueLoggedStore.init(context, innerKeyValueStore);
+
         final List<KeyValue<Integer, String>> allReturnedRange = new ArrayList<>();
         final List<KeyValue<Integer, String>>
             initialPutAll =
-            Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two"), KeyValue.pair(3, "three"), KeyValue.pair(4, "four"));
+            Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
 
-        final List<KeyValue<Integer, String>> expectedRange = Arrays.asList(KeyValue.pair(3, "three"), KeyValue.pair(4, "four"));
+        final List<KeyValue<Integer, String>> expectedRange = Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
         inMemoryKeyValueLoggedStore.putAll(initialPutAll);
 
-        final Iterator<KeyValue<Integer, String>> iterator = inMemoryKeyValueLoggedStore.range(3, 4);
+        final Iterator<KeyValue<Integer, String>> iterator = inMemoryKeyValueLoggedStore.range(1, 2);
 
         while (iterator.hasNext()) {
             allReturnedRange.add(iterator.next());
         }
         assertThat(allReturnedRange, equalTo(expectedRange));
+        EasyMock.verify(innerKeyValueStore);
     }
 
     @Test
     public void shouldDeleteFromStore() {
-        final InMemoryKeyValueLoggedStore<Integer, String> inMemoryKeyValueLoggedStore = getInMemoryLoggedStore(3, integerSerde, stringSerde);
+        innerKeyValueStore.put(1, "one");
+        innerKeyValueStore.put(2, "two");
+        EasyMock.expect(innerKeyValueStore.delete(2)).andReturn("two");
+        EasyMock.replay(innerKeyValueStore);
+
+        inMemoryKeyValueLoggedStore.init(context, innerKeyValueStore);
 
         inMemoryKeyValueLoggedStore.put(1, "one");
         inMemoryKeyValueLoggedStore.put(2, "two");
-        inMemoryKeyValueLoggedStore.put(3, "three");
 
-        String deletedValue = inMemoryKeyValueLoggedStore.delete(2);
-
-        assertThat(deletedValue, is("two"));
-        assertThat(inMemoryKeyValueLoggedStore.get(2), nullValue());
+        inMemoryKeyValueLoggedStore.delete(2);
+        EasyMock.verify(innerKeyValueStore);
     }
 
-
-    @SuppressWarnings("unchecked")
-    private KeyValueStore<Integer, String> getLruCacheInnerStore(final int size,
-                                                                 final Serde<Integer> integerSerde,
-                                                                 final Serde<String> stringSerde) {
-
-        return new MemoryNavigableLRUCache("test-cache", size, integerSerde, stringSerde);
-
-    }
-
-    private InMemoryKeyValueLoggedStore<Integer, String> getInMemoryLoggedStore(final int innerSize,
-                                                                                final Serde<Integer> integerSerde,
-                                                                                final Serde<String> stringSerde) {
-
-        final KeyValueStore<Integer, String> inner = getLruCacheInnerStore(innerSize, integerSerde, stringSerde);
-        InMemoryKeyValueLoggedStore<Integer, String> inMemoryKeyValueLoggedStore = new InMemoryKeyValueLoggedStore<>(inner, integerSerde, stringSerde);
-        inMemoryKeyValueLoggedStore.init(context, inner);
-
-        return inMemoryKeyValueLoggedStore;
-    }
 }
