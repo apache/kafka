@@ -171,6 +171,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         expected_broker_ids = "[" + ", ".join(str(self.idx(node)) for node in self.nodes) + "]"
         while retries > 0:
             broker_ids = self.zk.query("/brokers/ids", chroot=self.zk_chroot)
+            print broker_ids
+            print expected_broker_ids
             if broker_ids == expected_broker_ids:
                 break
             else:
