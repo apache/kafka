@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
@@ -51,7 +50,7 @@ public class MultiSendTest {
 
         for (int i = 0; i < numChunks; i++) {
             assertEquals(numChunks - i, send.numResidentSends());
-            ByteBufferChannel out = new NonOverflowingByteBufferChannel(chunkSize);
+            NonOverflowingByteBufferChannel out = new NonOverflowingByteBufferChannel(chunkSize);
             send.writeTo(out);
             out.close();
             assertEquals(chunks[i], out.buffer());
@@ -60,7 +59,7 @@ public class MultiSendTest {
         assertTrue(send.completed());
     }
 
-    private static class NonOverflowingByteBufferChannel extends ByteBufferChannel {
+    private static class NonOverflowingByteBufferChannel extends org.apache.kafka.common.requests.ByteBufferChannel {
 
         private NonOverflowingByteBufferChannel(long size) {
             super(size);
