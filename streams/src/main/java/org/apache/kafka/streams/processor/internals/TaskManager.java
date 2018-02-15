@@ -309,6 +309,10 @@ class TaskManager {
         return active.runningTaskMap();
     }
 
+    Map<TaskId, StreamTask> restoringTasks() {
+        return active.restoringTaskMap();
+    }
+
     Map<TaskId, StandbyTask> standbyTasks() {
         return standby.runningTaskMap();
     }

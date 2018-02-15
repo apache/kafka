@@ -1160,6 +1160,10 @@ public class StreamThread extends Thread {
         return taskManager.activeTasks();
     }
 
+    public Map<TaskId, StreamTask> restoringTasks() {
+        return taskManager.restoringTasks();
+    }
+
     /**
      * Produces a string representation containing useful information about a StreamThread.
      * This is useful in debugging scenarios.

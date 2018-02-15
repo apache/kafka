@@ -68,6 +68,7 @@ public class StreamThreadStateStoreProviderTest {
     private final String topicName = "topic";
     private StreamThread threadMock;
     private Map<TaskId, StreamTask> tasks;
+    private Map<TaskId, StreamTask> restoringTasks;
 
     @SuppressWarnings("deprecation")
     @Before
@@ -100,6 +101,7 @@ public class StreamThreadStateStoreProviderTest {
         builder.setApplicationId(applicationId);
         final ProcessorTopology topology = builder.build(null);
         tasks = new HashMap<>();
+        restoringTasks = new HashMap<>();
         stateDirectory = new StateDirectory(streamsConfig, new MockTime());
         taskOne = createStreamsTask(applicationId, streamsConfig, clientSupplier, topology,
                                     new TaskId(0, 0));
@@ -199,7 +201,9 @@ public class StreamThreadStateStoreProviderTest {
 
     private void mockThread(final boolean initialized) {
         EasyMock.expect(threadMock.isRunningAndNotRebalancing()).andReturn(initialized);
+        EasyMock.expect(threadMock.isRunning()).andReturn(initialized);
         EasyMock.expect(threadMock.tasks()).andStubReturn(tasks);
+        EasyMock.expect(threadMock.restoringTasks()).andStubReturn(restoringTasks);
         EasyMock.replay(threadMock);
     }
 

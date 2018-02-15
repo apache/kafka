@@ -22,9 +22,7 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 /**
  * Wrapper over StreamThread that implements StateStoreProvider
@@ -44,12 +42,25 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
         if (streamThread.state() == StreamThread.State.DEAD) {
             return Collections.emptyList();
         }
-        if (!streamThread.isRunningAndNotRebalancing()) {
+        if (!streamThread.isRunning()) {
             throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the stream thread is " +
-                    streamThread.state() + ", not RUNNING");
+                    streamThread.state() + ", not RUNNING or REBALANCING");
         }
+
         final List<T> stores = new ArrayList<>();
-        for (Task streamTask : streamThread.tasks().values()) {
+        // running tasks
+        for(Task streamTask : streamThread.tasks().values()) {
+            final StateStore store = streamTask.getStore(storeName);
+            if (store != null && queryableStoreType.accepts(store)) {
+                if (!store.isOpen()) {
+                    throw new InvalidStateStoreException("Cannot get state store " + storeName + " for task " + streamTask +
+                            " because the store is not open. The state store may have migrated to another instances.");
+                }
+                stores.add((T) store);
+            }
+        }
+        // restoring tasks
+        for(Task streamTask : streamThread.restoringTasks().values()) {
             final StateStore store = streamTask.getStore(storeName);
             if (store != null && queryableStoreType.accepts(store)) {
                 if (!store.isOpen()) {
