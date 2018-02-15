@@ -19,7 +19,7 @@ package kafka.zookeeper
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{ArrayBlockingQueue, CountDownLatch, TimeUnit}
+import java.util.concurrent.{ArrayBlockingQueue, ConcurrentLinkedQueue, CountDownLatch, Executors, Semaphore, TimeUnit}
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Gauge, Meter, MetricName}
@@ -29,8 +29,8 @@ import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException.{Code, NoNodeException}
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.ZooKeeper.States
-import org.apache.zookeeper.{CreateMode, WatchedEvent, ZooDefs}
-import org.junit.Assert.{assertArrayEquals, assertEquals, assertTrue}
+import org.apache.zookeeper.{CreateMode, WatchedEvent, Watcher, ZooDefs, ZooKeeper}
+import org.junit.Assert.{assertArrayEquals, assertEquals, assertFalse, assertNull, assertTrue}
 import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
@@ -383,6 +383,114 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
         fail(s"Received an unexpected non-CONNECTIONLOSS response code after a CONNECTIONLOSS response code from a single batch: $unexpectedResponses")
       }
     } finally zooKeeperClient.close()
+  }
+
+  /**
+    * Tests that if session expiry notification is received while a thread is processing requests,
+    * session expiry is handled and the request thread completes with responses to all requests,
+    * even though some requests may fail due to session expiry or disconnection.
+    *
+    * Sequence of events on different threads:
+    *   Request thread:
+    *       - Sends `maxInflightRequests` requests (these may complete before session is expired)
+    *   Main thread:
+    *       - Waits for at least one request to be processed (this should succeed)
+    *       - Expires session by creating new client with same session id
+    *       - Unblocks another `maxInflightRequests` requests before and after new client is closed (these may fail)
+    *   ZooKeeperClient Event thread:
+    *       - Delivers responses and session expiry (no ordering guarantee between these, both are processed asynchronously)
+    *   Response executor thread:
+    *       - Blocks subsequent sends by delaying response until session expiry is processed
+    *   ZooKeeperClient Session Expiry Handler:
+    *       - Unblocks subsequent sends
+    *   Main thread:
+    *       - Waits for all sends to complete. The requests sent after session expiry processing should succeed.
+    */
+  @Test
+  def testSessionExpiry(): Unit = {
+    val maxInflightRequests = 2
+    val responseExecutor = Executors.newSingleThreadExecutor
+    val sendSemaphore = new Semaphore(0)
+    val sendCompleteSemaphore = new Semaphore(0)
+    val sendSize = maxInflightRequests * 5
+    @volatile var resultCodes: Seq[Code] = null
+    val stateChanges = new ConcurrentLinkedQueue[String]()
+    val zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, maxInflightRequests,
+      time, "testGroupType", "testGroupName") {
+      override def send[Req <: AsyncRequest](request: Req)(processResponse: Req#Response => Unit): Unit = {
+        super.send(request)( response => {
+          responseExecutor.submit(new Runnable {
+            override def run(): Unit = {
+              sendCompleteSemaphore.release()
+              sendSemaphore.acquire()
+              processResponse(response)
+            }
+          })
+        })
+      }
+    }
+    try {
+      zooKeeperClient.registerStateChangeHandler(new StateChangeHandler {
+        override val name: String ="test-state-change-handler"
+        override def afterInitializingSession(): Unit = {
+          verifyHandlerThread()
+          stateChanges.add("afterInitializingSession")
+        }
+        override def beforeInitializingSession(): Unit = {
+          verifyHandlerThread()
+          stateChanges.add("beforeInitializingSession")
+          sendSemaphore.release(sendSize) // Resume remaining sends
+        }
+        private def verifyHandlerThread(): Unit = {
+          val threadName = Thread.currentThread.getName
+          assertTrue(s"Unexpected thread + $threadName", threadName.startsWith(zooKeeperClient.expiryScheduler.threadNamePrefix))
+        }
+      })
+
+      val requestThread = new Thread {
+        override def run(): Unit = {
+          val requests = (1 to sendSize).map(i => GetDataRequest(s"/$i"))
+          resultCodes = zooKeeperClient.handleRequests(requests).map(_.resultCode)
+        }
+      }
+      requestThread.start()
+      sendCompleteSemaphore.acquire() // Wait for request thread to start processing requests
+
+      // Trigger session expiry by reusing the session id in another client
+      val dummyWatcher = new Watcher {
+        override def process(event: WatchedEvent): Unit = {}
+      }
+      val anotherZkClient = new ZooKeeper(zkConnect, 1000, dummyWatcher,
+        zooKeeperClient.currentZooKeeper.getSessionId,
+        zooKeeperClient.currentZooKeeper.getSessionPasswd)
+      assertNull(anotherZkClient.exists("/nonexistent", false)) // Make sure new client works
+      sendSemaphore.release(maxInflightRequests) // Resume a few more sends which may fail
+      anotherZkClient.close()
+      sendSemaphore.release(maxInflightRequests) // Resume a few more sends which may fail
+
+      requestThread.join(10000)
+      if (requestThread.isAlive) {
+        requestThread.interrupt()
+        fail("Request thread did not complete")
+      }
+      assertEquals(Seq("beforeInitializingSession", "afterInitializingSession"), stateChanges.asScala.toSeq)
+
+      assertEquals(resultCodes.size, sendSize)
+      val connectionLostCount = resultCodes.count(_ == Code.CONNECTIONLOSS)
+      assertTrue(s"Unexpected connection lost requests $resultCodes", connectionLostCount <= maxInflightRequests)
+      val expiredCount = resultCodes.count(_ == Code.SESSIONEXPIRED)
+      assertTrue(s"Unexpected session expired requests $resultCodes", expiredCount <= maxInflightRequests)
+      assertTrue(s"No connection lost or expired requests $resultCodes", connectionLostCount + expiredCount > 0)
+      assertEquals(Code.NONODE, resultCodes.head)
+      assertEquals(Code.NONODE, resultCodes.last)
+      assertTrue(s"Unexpected result code $resultCodes",
+        resultCodes.filterNot(Set(Code.NONODE, Code.SESSIONEXPIRED, Code.CONNECTIONLOSS).contains).isEmpty)
+
+    } finally {
+      zooKeeperClient.close()
+      responseExecutor.shutdownNow()
+    }
+    assertFalse("Expiry executor not shutdown", zooKeeperClient.expiryScheduler.isStarted)
   }
 
   def isExpectedMetricName(metricName: MetricName, name: String): Boolean =
