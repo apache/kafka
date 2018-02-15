@@ -375,20 +375,14 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
       }
     }
 
-    val filteredPartitions = {
-      val givenPartitions = if (partitions.isEmpty)
-        controllerContext.partitionLeadershipInfo.keySet
-      else
-        partitions
-      if (controller.topicDeletionManager.partitionsToBeDeleted.isEmpty)
-        givenPartitions
-      else
-        givenPartitions -- controller.topicDeletionManager.partitionsToBeDeleted
-    }
+    val givenPartitions = if (partitions.isEmpty)
+      controllerContext.partitionLeadershipInfo.keySet
+    else
+      partitions
 
     updateMetadataRequestBrokerSet ++= brokerIds.filter(_ >= 0)
-    filteredPartitions.foreach(partition => updateMetadataRequestPartitionInfo(partition, beingDeleted = false))
-    controller.topicDeletionManager.partitionsToBeDeleted.foreach(partition => updateMetadataRequestPartitionInfo(partition, beingDeleted = true))
+    givenPartitions.foreach(partition => updateMetadataRequestPartitionInfo(partition,
+      beingDeleted = controller.topicDeletionManager.partitionsToBeDeleted.contains(partition)))
   }
 
   def sendRequestsToBrokers(controllerEpoch: Int) {
