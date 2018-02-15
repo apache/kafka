@@ -66,6 +66,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   private val retryBackoffMs = 100
   private val retryBackoffJitterMs = 50
+  val rand = new scala.util.Random
+  val genValue = 30 + rand.nextInt((40 - 30) + 1)
 
   /**
    * Guaranteed to be called before any authorize call is made.
@@ -156,6 +158,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   override def addAcls(acls: Set[Acl], resource: Resource) {
+    info(genValue + " : addAcls:" + acls)
     if (acls != null && acls.nonEmpty) {
       inWriteLock(lock) {
         updateResourceAcls(resource) { currentAcls =>
@@ -166,6 +169,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   override def removeAcls(aclsTobeRemoved: Set[Acl], resource: Resource): Boolean = {
+    info(genValue + " : removeAcls:" + aclsTobeRemoved)
     inWriteLock(lock) {
       updateResourceAcls(resource) { currentAcls =>
         currentAcls -- aclsTobeRemoved
@@ -254,6 +258,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     var retries = 0
     while (!writeComplete && retries <= maxUpdateRetries) {
       val newAcls = getNewAcls(currentVersionedAcls.acls)
+      info(genValue + " : In loop updating with :" + currentVersionedAcls.zkVersion)
+
       val (updateSucceeded, updateVersion) =
         if (newAcls.nonEmpty) {
           zkClient.conditionalSetOrCreateAclsForResource(resource, newAcls, currentVersionedAcls.zkVersion)
@@ -262,6 +268,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
           (zkClient.conditionalDelete(resource, currentVersionedAcls.zkVersion), 0)
         }
 
+      info(genValue + " : updateSucceeded:" +updateSucceeded + " updateVersion:"+ updateVersion )
       if (!updateSucceeded) {
         trace(s"Failed to update ACLs for $resource. Used version ${currentVersionedAcls.zkVersion}. Reading data and retrying update.")
         Thread.sleep(backoffTime)
