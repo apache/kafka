@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -359,7 +360,7 @@ public class FetchResponse extends AbstractResponse {
         responseHeaderStruct.writeTo(buffer);
         buffer.rewind();
 
-        List<Send> sends = new ArrayList<>();
+        LinkedList<Send> sends = new LinkedList<>();
         sends.add(new ByteBufferSend(dest, buffer));
         addResponseData(responseBodyStruct, throttleTimeMs, dest, sends);
         return new MultiSend(dest, sends);

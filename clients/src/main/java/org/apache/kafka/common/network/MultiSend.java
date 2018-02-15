@@ -22,32 +22,31 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
-import java.util.Iterator;
-import java.util.List;
+import java.util.Queue;
 
 /**
  * A set of composite sends, sent one after another
  */
-
 public class MultiSend implements Send {
-
     private static final Logger log = LoggerFactory.getLogger(MultiSend.class);
 
     private final String dest;
-    private final Iterator<Send> sendsIterator;
+    private final Queue<Send> sendQueue;
     private final long size;
 
     private long totalWritten = 0;
     private Send current;
 
-    public MultiSend(String dest, List<Send> sends) {
+    public MultiSend(String dest, Queue<Send> sends) {
         this.dest = dest;
-        this.sendsIterator = sends.iterator();
-        nextSendOrDone();
+        this.sendQueue = sends;
+
         long size = 0;
         for (Send send : sends)
             size += send.size();
         this.size = size;
+
+        this.current = sendQueue.poll();
     }
 
     @Override
@@ -65,6 +64,15 @@ public class MultiSend implements Send {
         return current == null;
     }
 
+    // Visible for testing
+    int numResidentSends() {
+        int count = 0;
+        if (current != null)
+            count += 1;
+        count += sendQueue.size();
+        return count;
+    }
+
     @Override
     public long writeTo(GatheringByteChannel channel) throws IOException {
         if (completed())
@@ -77,7 +85,7 @@ public class MultiSend implements Send {
             totalWrittenPerCall += written;
             sendComplete = current.completed();
             if (sendComplete)
-                nextSendOrDone();
+                current = sendQueue.poll();
         } while (!completed() && sendComplete);
 
         totalWritten += totalWrittenPerCall;
@@ -91,10 +99,4 @@ public class MultiSend implements Send {
         return totalWrittenPerCall;
     }
 
-    private void nextSendOrDone() {
-        if (sendsIterator.hasNext())
-            current = sendsIterator.next();
-        else
-            current = null;
-    }
 }
