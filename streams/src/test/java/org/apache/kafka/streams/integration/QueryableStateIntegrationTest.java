@@ -69,6 +69,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -146,14 +147,14 @@ public class QueryableStateIntegrationTest {
      */
     private List<String> getInputValues() {
         List<String> input = new ArrayList<>();
-        ClassLoader classLoader = getClass().getClassLoader();
-        String fileName = "QueryableStateIntegrationTest/inputValues.txt";
-        try (BufferedReader reader = new BufferedReader(new FileReader(classLoader.getResource(fileName).getFile()))) {
+        final ClassLoader classLoader = getClass().getClassLoader();
+        final String fileName = "QueryableStateIntegrationTest" + File.separator + "inputValues.txt";
+        try (final BufferedReader reader = new BufferedReader(new FileReader(classLoader.getResource(fileName).getFile()))) {
             for (String line = reader.readLine(); line != null; line = reader.readLine()) {
                 input.add(line);
             }
-        } catch (Exception e) {
-            log.warn("Unable to read '{}'. Using default inputValues list", "resources/" + fileName);
+        } catch (final Exception e) {
+            log.warn("Unable to read '{}{}{}'. Using default inputValues list", "resources", File.separator, fileName);
             input = Arrays.asList(
                         "hello world",
                         "all streams lead to kafka",
