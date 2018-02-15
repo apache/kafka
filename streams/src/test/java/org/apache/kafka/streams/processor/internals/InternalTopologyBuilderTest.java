@@ -103,7 +103,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldAddPatternSourceWithoutOffsetReset() {
         final Pattern expectedPattern = Pattern.compile("test-.*");
-        
+
         builder.addSource(null, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), Pattern.compile("test-.*"));
 
         assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
@@ -286,7 +286,7 @@ public class InternalTopologyBuilderTest {
 
     @Test(expected = TopologyException.class)
     public void testAddStateStoreWithNonExistingProcessor() {
-        builder.addStateStore(storeBuilder, "no-such-processsor");
+        builder.addStateStore(storeBuilder, "no-such-processor");
     }
 
     @Test

@@ -220,7 +220,7 @@
             ssl.keystore.location=/var/private/ssl/client.keystore.jks
             ssl.keystore.password=test1234
             ssl.key.password=test1234</pre>
-			
+
             Other configuration settings that may also be needed depending on our requirements and the broker configuration:
                 <ol>
                     <li>ssl.provider (Optional). The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.</li>
@@ -342,7 +342,7 @@
                 </li>
                 <li>Pass the JAAS config file location as JVM parameter to each client JVM. For example:
                     <pre class="brush: bash;">    -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre></li>
-	</ol>
+                </ol>
                 </li>
             </ol>
             </li>
@@ -455,7 +455,7 @@
                     Clients (producers, consumers, connect workers, etc) will authenticate to the cluster with their
                     own principal (usually with the same name as the user running the client), so obtain or create
                     these principals as needed. Then configure the JAAS configuration property for each client.
-                    Different clients within a JVM may run as different users by specifiying different principals.
+                    Different clients within a JVM may run as different users by specifying different principals.
                     The property <code>sasl.jaas.config</code> in producer.properties or consumer.properties describes
                     how clients like producer and consumer can connect to the Kafka Broker. The following is an example
                     configuration for a client using a keytab (recommended for long-running processes):
@@ -621,9 +621,9 @@
         <li><h5><a id="security_sasl_scram_clientconfig" href="#security_sasl_scram_clientconfig">Configuring Kafka Clients</a></h5>
             To configure SASL authentication on the clients:
             <ol>
-	    <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
+            <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
                 The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
-	        The following is an example configuration for a client for the SCRAM mechanisms:
+                The following is an example configuration for a client for the SCRAM mechanisms:
                 <pre class="brush: text;">
    sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
         username="alice" \
@@ -973,7 +973,7 @@
                 <ol>
                     <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
                 The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
-	        The following is an example configuration for a client for the token authentication:
+                The following is an example configuration for a client for the token authentication:
                 <pre class="brush: text;">
    sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
         username="tokenID123" \
