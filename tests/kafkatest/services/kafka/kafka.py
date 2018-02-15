@@ -168,7 +168,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Waiting for brokers to register at ZK")
 
         retries = 30
-        expected_broker_ids = "[" + ", ".join(self.idx(node) for node in self.nodes) + "]"
+        expected_broker_ids = "[" + ", ".join(str(self.idx(node)) for node in self.nodes) + "]"
         while retries > 0:
             broker_ids = self.zk.query("/brokers/ids", chroot=self.zk_chroot)
             if broker_ids == expected_broker_ids:
