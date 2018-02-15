@@ -871,7 +871,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * group and will trigger a rebalance operation if any one of the following events are triggered:
      * <ul>
      * <li>Number of partitions change for any of the subscribed topics
-     * <li>A subscribed topic is deleted
+     * <li>A subscribed topic is created or deleted
      * <li>An existing member of the consumer group is shutdown or fails
      * <li>A new member is added to the consumer group
      * </ul>
@@ -947,13 +947,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Subscribe to all topics matching specified pattern to get dynamically assigned partitions.
-     * The pattern matching will be done periodically against topic existing at the time of check.
+     * The pattern matching will be done periodically against all topics existing at the time of check.
+     * This can be controlled through the {@code metadata.max.age.ms} configuration: by lowering
+     * the max metadata age, the consumer will refresh metadata more often and check for matching topics.
      * <p>
-     * See the note in {@link #subscribe(Collection, ConsumerRebalanceListener)} for notes on the
-     * use of the {@link ConsumerRebalanceListener}. In addition to the reasons mentioned for
-     * rebalancing, a consumer which is subscribed to a topic pattern will rebalance
-     * when new topics are created which match the pattern. Rebalances only take place during
-     * an active call to {@link #poll(long)}.
+     * See {@link #subscribe(Collection, ConsumerRebalanceListener)} for details on the
+     * use of the {@link ConsumerRebalanceListener}. Generally rebalances are triggered when there
+     * is a change to the topics matching the provided pattern and when consumer group membership changes.
+     * Group rebalances only take place during an active call to {@link #poll(long)}.
      *
      * @param pattern Pattern to subscribe to
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
