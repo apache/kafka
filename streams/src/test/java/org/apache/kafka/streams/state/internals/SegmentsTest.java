@@ -133,6 +133,13 @@ public class SegmentsTest {
     }
 
     @Test
+    public void shouldGetCorrectSegmentString() {
+        final Segment segment = segments.getOrCreateSegment(0, context);
+        String expectedSegmentString = "Segment(id=0, name=test.0)";
+        assertTrue(segment.toString().equals(expectedSegmentString));
+    }
+
+    @Test
     public void shouldCloseAllOpenSegments() {
         final Segment first = segments.getOrCreateSegment(0, context);
         final Segment second = segments.getOrCreateSegment(1, context);

@@ -43,6 +43,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -218,6 +219,50 @@ public class RocksDBStoreTest {
                 null,
                 subject.get(new Bytes(stringSerializer.serialize(null, "3")))),
             "c");
+    }
+
+    @Test
+    public void shouldPutOnlyIfAbsentValue() throws Exception {
+        subject.init(context, subject);
+        final Bytes keyBytes = new Bytes(stringSerializer.serialize(null, "one"));
+        final byte[] valueBytes = stringSerializer.serialize(null, "A");
+        final byte[] valueBytesUpdate = stringSerializer.serialize(null, "B");
+
+        subject.putIfAbsent(keyBytes, valueBytes);
+        subject.putIfAbsent(keyBytes, valueBytesUpdate);
+
+        final String retrievedValue = stringDeserializer.deserialize(null, subject.get(keyBytes));
+        assertTrue(retrievedValue.equals("A"));
+    }
+
+    @Test
+    public void shouldRetrieveFirstValue() throws Exception {
+        final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
+
+        subject.init(context, subject);
+        context.restore(subject.name(), entries);
+
+        final KeyValue<byte[], byte[]> keyValue = entries.get(0);
+        final KeyValue<Bytes, byte[]> expectedKeyValue = KeyValue.pair(new Bytes(keyValue.key), keyValue.value);
+        final KeyValue<Bytes, byte[]> firstRetrievedEntry = subject.first();
+
+        assertTrue(Arrays.equals(expectedKeyValue.key.get(), firstRetrievedEntry.key.get()));
+        assertTrue(Arrays.equals(expectedKeyValue.value, firstRetrievedEntry.value));
+    }
+
+    @Test
+    public void shouldRetrieveLastValue() throws Exception {
+        final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
+
+        subject.init(context, subject);
+        context.restore(subject.name(), entries);
+
+        final KeyValue<byte[], byte[]> keyValue = entries.get(2);
+        final KeyValue<Bytes, byte[]> expectedKeyValue = KeyValue.pair(new Bytes(keyValue.key), keyValue.value);
+        final KeyValue<Bytes, byte[]> lastRetrievedEntry = subject.last();
+
+        assertTrue(Arrays.equals(expectedKeyValue.key.get(), lastRetrievedEntry.key.get()));
+        assertTrue(Arrays.equals(expectedKeyValue.value, lastRetrievedEntry.value));
     }
 
 
