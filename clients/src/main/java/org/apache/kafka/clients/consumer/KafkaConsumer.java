@@ -868,17 +868,20 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * <p>
      * As part of group management, the consumer will keep track of the list of consumers that belong to a particular
-     * group and will trigger a rebalance operation if one of the following events trigger -
+     * group and will trigger a rebalance operation if any one of the following events are triggered:
      * <ul>
-     * <li>Number of partitions change for any of the subscribed list of topics
-     * <li>Topic is created or deleted
-     * <li>An existing member of the consumer group dies
-     * <li>A new member is added to an existing consumer group via the join API
+     * <li>Number of partitions change for any of the subscribed topics
+     * <li>A subscribed topic is deleted
+     * <li>An existing member of the consumer group is shutdown or fails
+     * <li>A new member is added to the consumer group
      * </ul>
      * <p>
      * When any of these events are triggered, the provided listener will be invoked first to indicate that
      * the consumer's assignment has been revoked, and then again when the new assignment has been received.
-     * Note that this listener will immediately override any listener set in a previous call to subscribe.
+     * Note that rebalances will only occur during an active call to {@link #poll(long)}, so callbacks will
+     * also only be invoked during that time.
+     *
+     * The provided listener will immediately override any listener set in a previous call to subscribe.
      * It is guaranteed, however, that the partitions revoked/assigned through this interface are from topics
      * subscribed in this call. See {@link ConsumerRebalanceListener} for more details.
      *
@@ -926,7 +929,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * <p>
      * This is a short-hand for {@link #subscribe(Collection, ConsumerRebalanceListener)}, which
-     * uses a noop listener. If you need the ability to seek to particular offsets, you should prefer
+     * uses a no-op listener. If you need the ability to seek to particular offsets, you should prefer
      * {@link #subscribe(Collection, ConsumerRebalanceListener)}, since group rebalances will cause partition offsets
      * to be reset. You should also provide your own listener if you are doing your own offset
      * management since the listener gives you an opportunity to commit offsets before a rebalance finishes.
@@ -946,15 +949,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Subscribe to all topics matching specified pattern to get dynamically assigned partitions.
      * The pattern matching will be done periodically against topic existing at the time of check.
      * <p>
-     * As part of group management, the consumer will keep track of the list of consumers that
-     * belong to a particular group and will trigger a rebalance operation if one of the
-     * following events trigger -
-     * <ul>
-     * <li>Number of partitions change for any of the subscribed list of topics
-     * <li>Topic is created or deleted
-     * <li>An existing member of the consumer group dies
-     * <li>A new member is added to an existing consumer group via the join API
-     * </ul>
+     * See the note in {@link #subscribe(Collection, ConsumerRebalanceListener)} for notes on the
+     * use of the {@link ConsumerRebalanceListener}. In addition to the reasons mentioned for
+     * rebalancing, a consumer which is subscribed to a topic pattern will rebalance
+     * when new topics are created which match the pattern. Rebalances only take place during
+     * an active call to {@link #poll(long)}.
      *
      * @param pattern Pattern to subscribe to
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
