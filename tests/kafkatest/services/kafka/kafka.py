@@ -168,17 +168,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Waiting for brokers to register at ZK")
 
         retries = 30
+        expected_broker_ids = "[" + ", ".join(self.idx(node) for node in self.nodes) + "]"
         while retries > 0:
-            with self.zk.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor, \
-                 self.path.script("zookeeper-shell.sh", self.zk) + " " + self.zk_connect_setting() + " ls /brokers/ids" as cmd, \
-                 "[" + ", ".join(self.idx(node) for node in self.nodes) + "]" as broker_ids:
-                self.zk.account.ssh(cmd)
-                try:
-                    monitor.wait_until(broker_ids, timeout_sec=1, backoff_sec=.25, err_msg="Kafka servers didn't register at ZK")
-                    break
-                except:
-                    pass
-                retries = retries - 1
+            broker_ids = self.zk.query("/brokers/ids", chroot=self.zk_chroot)
+            if broker_ids == expected_broker_ids:
+                break
+            else:
+                time.sleep(1)
+            retries = retries - 1
 
         if retries == 0:
             raise RuntimeError("Kafka servers didn't register at ZK within 30 seconds")
