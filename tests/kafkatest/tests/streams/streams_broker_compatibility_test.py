@@ -63,11 +63,10 @@ class StreamsBrokerCompatibility(Test):
         self.kafka.start()
 
         processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, True)
-        processor.start()
 
-        processor.node.account.ssh(processor.start_cmd(processor.node))
         with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
-            monitor.wait_until("Exception in thread \"main\" org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS ",
+            processor.start()
+            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS ',
                                timeout_sec=60,
                                err_msg="Exception in thread \"main\" org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS " + str(processor.node.account))
 
@@ -98,10 +97,9 @@ class StreamsBrokerCompatibility(Test):
         self.kafka.start()
 
         processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, False)
-        processor.start()
 
-        processor.node.account.ssh(processor.start_cmd(processor.node))
         with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
+            processor.start()
             monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.streams.errors.StreamsException: Could not create topic kafka-streams-system-test-broker-compatibility-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog.',
                         timeout_sec=60,
                         err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.streams.errors.StreamsException: Could not create topic kafka-streams-system-test-broker-compatibility-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog.' error message " + str(processor.node.account))
@@ -116,10 +114,9 @@ class StreamsBrokerCompatibility(Test):
         self.kafka.start()
 
         processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, False)
-        processor.start()
 
-        processor.node.account.ssh(processor.start_cmd(processor.node))
         with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
+            processor.start()
             monitor.wait_until('Exception in thread "main" org.apache.kafka.streams.errors.BrokerNotFoundException: Could not find any available broker.',
                                timeout_sec=60,
                                err_msg="Never saw 'no available brokers' error message " + str(processor.node.account))
