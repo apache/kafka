@@ -46,8 +46,8 @@ public class LoginManager {
     private int refCount;
 
     private LoginManager(JaasContext jaasContext, boolean hasKerberos, Map<String, ?> configs,
-                         Password jaasConfigValue) throws IOException, LoginException {
-        this.cacheKey = jaasConfigValue != null ? jaasConfigValue : jaasContext.name();
+                         Object cacheKey) throws IOException, LoginException {
+        this.cacheKey = cacheKey;
         login = hasKerberos ? new KerberosLogin() : new DefaultLogin();
         login.configure(configs, jaasContext);
         login.login();
@@ -57,20 +57,33 @@ public class LoginManager {
      * Returns an instance of `LoginManager` and increases its reference count.
      *
      * `release()` should be invoked when the `LoginManager` is no longer needed. This method will try to reuse an
-     * existing `LoginManager` for the provided context type and `SaslConfigs.SASL_JAAS_CONFIG` in `configs`,
-     * if available.
+     * existing `LoginManager` for the provided context type. If `jaasContext` was loaded from a dynamic config,
+     * login managers are reused for the same dynamic config value. For `jaasContext` loaded from static JAAS
+     * configuration, login managers are reused for static contexts with the same login context name.
      *
      * This is a bit ugly and it would be nicer if we could pass the `LoginManager` to `ChannelBuilders.create` and
      * shut it down when the broker or clients are closed. It's straightforward to do the former, but it's more
      * complicated to do the latter without making the consumer API more complex.
+     *
+     * @param jaasContext Static or dynamic JAAS context. `jaasContext.dynamicJaasConfig()` is non-null for dynamic context.
+     *                    For static contexts, this may contain multiple login modules if the context type is SERVER.
+     *                    For CLIENT static contexts and dynamic contexts of CLIENT and SERVER, 'jaasContext` contains
+     *                    only one login module.
+     * @param saslMechanism SASL mechanism for which login manager is being acquired. For dynamic contexts, the single
+     *                      login module in `jaasContext` corresponds to this SASL mechanism. Hence `Login` class is
+     *                      chosen based on this mechanism.
+     * @param hasKerberos Boolean flag that indicates if Kerberos is enabled for the server listener or client. Since
+     *                    static broker configuration may contain multiple login modules in a login context, KerberosLogin
+     *                    must be used if Kerberos is enabled on the listener, even if `saslMechanism` is not GSSAPI.
+     * @param configs Config options used to configure `Login` if a new login manager is created.
+     *
      */
     public static LoginManager acquireLoginManager(JaasContext jaasContext, String saslMechanism, boolean hasKerberos,
                                                    Map<String, ?> configs) throws IOException, LoginException {
         synchronized (LoginManager.class) {
-            // SASL_JAAS_CONFIG is only supported by clients
             LoginManager loginManager;
-            Password jaasConfigValue = (Password) configs.get(SaslConfigs.SASL_JAAS_CONFIG);
-            if (jaasContext.type() == JaasContext.Type.CLIENT && jaasConfigValue != null) {
+            Password jaasConfigValue = jaasContext.dynamicJaasConfig();
+            if (jaasConfigValue != null) {
                 loginManager = DYNAMIC_INSTANCES.get(jaasConfigValue);
                 if (loginManager == null) {
                     loginManager = new LoginManager(jaasContext, saslMechanism.equals(SaslConfigs.GSSAPI_MECHANISM), configs, jaasConfigValue);
@@ -79,7 +92,7 @@ public class LoginManager {
             } else {
                 loginManager = STATIC_INSTANCES.get(jaasContext.name());
                 if (loginManager == null) {
-                    loginManager = new LoginManager(jaasContext, hasKerberos, configs, jaasConfigValue);
+                    loginManager = new LoginManager(jaasContext, hasKerberos, configs, jaasContext.name());
                     STATIC_INSTANCES.put(jaasContext.name(), loginManager);
                 }
             }
@@ -93,6 +106,11 @@ public class LoginManager {
 
     public String serviceName() {
         return login.serviceName();
+    }
+
+    // Only for testing
+    Object cacheKey() {
+        return cacheKey;
     }
 
     private LoginManager acquire() {

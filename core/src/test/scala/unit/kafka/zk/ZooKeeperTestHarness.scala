@@ -19,7 +19,7 @@ package kafka.zk
 
 import javax.security.auth.login.Configuration
 
-import kafka.utils.{CoreUtils, Logging, TestUtils, ZkUtils}
+import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.junit.{After, AfterClass, Before, BeforeClass}
 import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
@@ -43,7 +43,6 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
 
   protected val zkAclsEnabled: Option[Boolean] = None
 
-  var zkUtils: ZkUtils = null
   var zkClient: KafkaZkClient = null
   var adminZkClient: AdminZkClient = null
 
@@ -55,7 +54,6 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
   @Before
   def setUp() {
     zookeeper = new EmbeddedZookeeper()
-    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
     zkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled), zkSessionTimeout,
       zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
     adminZkClient = new AdminZkClient(zkClient)
@@ -63,8 +61,6 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
 
   @After
   def tearDown() {
-    if (zkUtils != null)
-     CoreUtils.swallow(zkUtils.close(), this)
     if (zkClient != null)
      zkClient.close()
     if (zookeeper != null)

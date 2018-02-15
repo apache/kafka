@@ -45,7 +45,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     props.put("zookeeper.connect", zooKeeperConnect + zookeeperChroot)
     server = TestUtils.createServer(KafkaConfig.fromProps(props))
 
-    val pathExists = zkUtils.pathExists(zookeeperChroot)
+    val pathExists = zkClient.pathExists(zookeeperChroot)
     assertTrue(pathExists)
   }
 
@@ -76,7 +76,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     val brokerId = 0
     val props1 = TestUtils.createBrokerConfig(brokerId, zkConnect)
     server = TestUtils.createServer(KafkaConfig.fromProps(props1))
-    val brokerRegistration = zkUtils.readData(ZkUtils.BrokerIdsPath + "/" + brokerId)._1
+    val brokerRegistration = zkClient.getBroker(brokerId).getOrElse(fail("broker doesn't exists"))
 
     val props2 = TestUtils.createBrokerConfig(brokerId, zkConnect)
     try {
@@ -88,7 +88,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     }
 
     // broker registration shouldn't change
-    assertEquals(brokerRegistration, zkUtils.readData(ZkUtils.BrokerIdsPath + "/" + brokerId)._1)
+    assertEquals(brokerRegistration, zkClient.getBroker(brokerId).getOrElse(fail("broker doesn't exists")))
   }
 
   @Test

@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.Values.Parser;
+import org.apache.kafka.connect.errors.DataException;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -157,6 +159,116 @@ public class ValuesTest {
     @Test
     public void shouldConvertListWithIntegerValues() {
         assertRoundTrip(INT_LIST_SCHEMA, INT_LIST_SCHEMA, INT_LIST);
+    }
+
+    /**
+     * The parsed array has byte values and one int value, so we should return list with single unified type of integers.
+     */
+    @Test
+    public void shouldConvertStringOfListWithOnlyNumericElementTypesIntoListOfLargestNumericType() {
+        int thirdValue = Short.MAX_VALUE + 1;
+        List<?> list = Values.convertToList(Schema.STRING_SCHEMA, "[1, 2, " + thirdValue + "]");
+        assertEquals(3, list.size());
+        assertEquals(1, ((Number) list.get(0)).intValue());
+        assertEquals(2, ((Number) list.get(1)).intValue());
+        assertEquals(thirdValue, ((Number) list.get(2)).intValue());
+    }
+
+    /**
+     * The parsed array has byte values and one int value, so we should return list with single unified type of integers.
+     */
+    @Test
+    public void shouldConvertStringOfListWithMixedElementTypesIntoListWithDifferentElementTypes() {
+        String str = "[1, 2, \"three\"]";
+        List<?> list = Values.convertToList(Schema.STRING_SCHEMA, str);
+        assertEquals(3, list.size());
+        assertEquals(1, ((Number) list.get(0)).intValue());
+        assertEquals(2, ((Number) list.get(1)).intValue());
+        assertEquals("three", list.get(2));
+    }
+
+    /**
+     * We parse into different element types, but cannot infer a common element schema.
+     */
+    @Test
+    public void shouldParseStringListWithMultipleElementTypesAndReturnListWithNoSchema() {
+        String str = "[1, 2, 3, \"four\"]";
+        SchemaAndValue result = Values.parseString(str);
+        assertNull(result.schema());
+        List<?> list = (List<?>) result.value();
+        assertEquals(4, list.size());
+        assertEquals(1, ((Number) list.get(0)).intValue());
+        assertEquals(2, ((Number) list.get(1)).intValue());
+        assertEquals(3, ((Number) list.get(2)).intValue());
+        assertEquals("four", list.get(3));
+    }
+
+    /**
+     * We can't infer or successfully parse into a different type, so this returns the same string.
+     */
+    @Test
+    public void shouldParseStringListWithExtraDelimitersAndReturnString() {
+        String str = "[1, 2, 3,,,]";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.STRING, result.schema().type());
+        assertEquals(str, result.value());
+    }
+
+    /**
+     * This is technically invalid JSON, and we don't want to simply ignore the blank elements.
+     */
+    @Test(expected = DataException.class)
+    public void shouldFailToConvertToListFromStringWithExtraDelimiters() {
+        Values.convertToList(Schema.STRING_SCHEMA, "[1, 2, 3,,,]");
+    }
+
+    /**
+     * Schema of type ARRAY requires a schema for the values, but Connect has no union or "any" schema type.
+     * Therefore, we can't represent this.
+     */
+    @Test(expected = DataException.class)
+    public void shouldFailToConvertToListFromStringWithNonCommonElementTypeAndBlankElement() {
+        Values.convertToList(Schema.STRING_SCHEMA, "[1, 2, 3, \"four\",,,]");
+    }
+
+    /**
+     * This is technically invalid JSON, and we don't want to simply ignore the blank entry.
+     */
+    @Test(expected = DataException.class)
+    public void shouldFailToParseStringOfMapWithIntValuesWithBlankEntry() {
+        Values.convertToList(Schema.STRING_SCHEMA, " { \"foo\" :  1234567890 ,, \"bar\" : 0,  \"baz\" : -987654321 }  ");
+    }
+
+    /**
+     * This is technically invalid JSON, and we don't want to simply ignore the malformed entry.
+     */
+    @Test(expected = DataException.class)
+    public void shouldFailToParseStringOfMalformedMap() {
+        Values.convertToList(Schema.STRING_SCHEMA, " { \"foo\" :  1234567890 , \"a\", \"bar\" : 0,  \"baz\" : -987654321 }  ");
+    }
+
+    /**
+     * This is technically invalid JSON, and we don't want to simply ignore the blank entries.
+     */
+    @Test(expected = DataException.class)
+    public void shouldFailToParseStringOfMapWithIntValuesWithOnlyBlankEntries() {
+        Values.convertToList(Schema.STRING_SCHEMA, " { ,,  , , }  ");
+    }
+
+    /**
+     * This is technically invalid JSON, and we don't want to simply ignore the blank entry.
+     */
+    @Test(expected = DataException.class)
+    public void shouldFailToParseStringOfMapWithIntValuesWithBlankEntries() {
+        Values.convertToList(Schema.STRING_SCHEMA, " { \"foo\" :  \"1234567890\" ,, \"bar\" : \"0\",  \"baz\" : \"boz\" }  ");
+    }
+
+    /**
+     * Schema for Map requires a schema for key and value, but we have no key or value and Connect has no "any" type
+     */
+    @Test(expected = DataException.class)
+    public void shouldFailToParseStringOfEmptyMap() {
+        Values.convertToList(Schema.STRING_SCHEMA, " { }  ");
     }
 
     @Test
