@@ -40,7 +40,7 @@ public class MultiSendTest {
         ByteBuffer[] chunks = new ByteBuffer[numChunks];
 
         for (int i = 0; i < numChunks; i++) {
-            ByteBuffer buffer = ByteBuffer.wrap(TestUtils.randomBytes(32));
+            ByteBuffer buffer = ByteBuffer.wrap(TestUtils.randomBytes(chunkSize));
             chunks[i] = buffer;
             sends.add(new ByteBufferSend(dest, buffer));
         }

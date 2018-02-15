@@ -37,6 +37,10 @@ public class MultiSend implements Send {
     private long totalWritten = 0;
     private Send current;
 
+    /**
+     * Construct a MultiSend for the given destination from a queue of Send objects. The queue will be
+     * consumed as the MultiSend progresses (on completion, it will be empty).
+     */
     public MultiSend(String dest, Queue<Send> sends) {
         this.dest = dest;
         this.sendQueue = sends;
