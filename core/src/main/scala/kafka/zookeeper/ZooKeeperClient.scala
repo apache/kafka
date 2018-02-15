@@ -19,12 +19,12 @@ package kafka.zookeeper
 
 import java.util.Locale
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
-import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch, Semaphore, SynchronousQueue, ThreadPoolExecutor, TimeUnit}
+import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch, Semaphore, TimeUnit}
 
 import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
-import kafka.utils.Logging
+import kafka.utils.{KafkaScheduler, Logging}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{ACLCallback, Children2Callback, DataCallback, StatCallback, StringCallback, VoidCallback}
 import org.apache.zookeeper.KeeperException.Code
@@ -59,7 +59,7 @@ class ZooKeeperClient(connectString: String,
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]().asScala
   private val inFlightRequests = new Semaphore(maxInFlightRequests)
   private val stateChangeHandlers = new ConcurrentHashMap[String, StateChangeHandler]().asScala
-  private val expiryHandlerExecutor = new ThreadPoolExecutor(0, 1, 60L, TimeUnit.SECONDS, new SynchronousQueue)
+  private[zookeeper] val expiryScheduler = new KafkaScheduler(0, "zk-session-expiry-handler")
 
   private val metricNames = Set[String]()
 
@@ -91,6 +91,7 @@ class ZooKeeperClient(connectString: String,
 
   metricNames += "SessionState"
 
+  expiryScheduler.startup()
   waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
 
   override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
@@ -307,6 +308,7 @@ class ZooKeeperClient(connectString: String,
     stateChangeHandlers.clear()
     zooKeeper.close()
     metricNames.foreach(removeMetric(_))
+    expiryScheduler.shutdown()
     info("Closed.")
   }
 
@@ -361,16 +363,14 @@ class ZooKeeperClient(connectString: String,
             error("Auth failed.")
             stateChangeHandlers.values.foreach(_.onAuthFailure())
           } else if (state == KeeperState.Expired) {
-            expiryHandlerExecutor.execute(new Runnable {
-              override def run(): Unit = {
-                inWriteLock(initializationLock) {
-                  info("Session expired.")
-                  stateChangeHandlers.values.foreach(_.beforeInitializingSession())
-                  initialize()
-                  stateChangeHandlers.values.foreach(_.afterInitializingSession())
-                }
+            expiryScheduler.schedule("zk-session-expired", () => {
+              inWriteLock(initializationLock) {
+                info("Session expired.")
+                stateChangeHandlers.values.foreach(_.beforeInitializingSession())
+                initialize()
+                stateChangeHandlers.values.foreach(_.afterInitializingSession())
               }
-            })
+            }, delay = 0L, period = -1L, unit = TimeUnit.MILLISECONDS)
           }
         case Some(path) =>
           (event.getType: @unchecked) match {
