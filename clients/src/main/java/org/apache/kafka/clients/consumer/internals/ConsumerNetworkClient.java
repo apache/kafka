@@ -57,6 +57,7 @@ public class ConsumerNetworkClient implements Closeable {
     // flag and the request completion queue below).
     private final Logger log;
     private final KafkaClient client;
+    private boolean disconnecting = false;
     private final UnsentRequests unsent = new UnsentRequests();
     private final Metadata metadata;
     private final Time time;
@@ -387,9 +388,13 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     public void disconnect(Node node) {
-        failUnsentRequests(node, DisconnectException.INSTANCE);
-
         synchronized (this) {
+            if(disconnecting){
+                return;
+            }
+            disconnecting=true;
+            failUnsentRequests(node, DisconnectException.INSTANCE);            
+
             client.disconnect(node.idString());
         }
 
@@ -483,6 +488,7 @@ public class ConsumerNetworkClient implements Closeable {
     public void tryConnect(Node node) {
         synchronized (this) {
             client.ready(node, time.milliseconds());
+            disconnecting = false;
         }
     }
 
