@@ -196,6 +196,9 @@ class WorkerSourceTask extends WorkerTask {
             }
         } catch (InterruptedException e) {
             // Ignore and allow to exit.
+        } catch (RuntimeException re) {
+          task.stop();
+          throw re;
         } finally {
             // It should still be safe to commit offsets since any exception would have
             // simply resulted in not getting more records but all the existing records should be ok to flush
