@@ -167,7 +167,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         self.logger.info("Waiting for brokers to register at ZK")
 
-        retries = 5
+        retries = 30
         expected_broker_ids = set(self.nodes)
         broker_ids = set()
         while retries > 0:
