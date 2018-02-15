@@ -987,7 +987,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * The pattern matching will be done periodically against topics existing at the time of check.
      * <p>
      * This is a short-hand for {@link #subscribe(Pattern, ConsumerRebalanceListener)}, which
-     * uses a noop listener. If you need the ability to seek to particular offsets, you should prefer
+     * uses a no-op listener. If you need the ability to seek to particular offsets, you should prefer
      * {@link #subscribe(Pattern, ConsumerRebalanceListener)}, since group rebalances will cause partition offsets
      * to be reset. You should also provide your own listener if you are doing your own offset
      * management since the listener gives you an opportunity to commit offsets before a rebalance finishes.
