@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -87,6 +86,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
                 timeTo = windowStartMs > timeTo ? windowStartMs : timeTo;
             }
 
+            /*
             try (WindowStoreIterator<V> iter = windowStore.fetch(key, timeFrom, timeTo)) {
                 // for each matching window, try to update the corresponding key and send to the downstream
                 while (iter.hasNext()) {
@@ -117,6 +117,23 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
             for (final Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
                 windowStore.put(key, value, entry.getKey());
                 tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), value, null);
+            }
+            */
+
+            // try update the window, and create the new window for the rest of unmatched window that do not exist yet
+            for (Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
+                V oldAgg = windowStore.fetch(key, entry.getKey());
+                V newAgg = oldAgg;
+
+                if (oldAgg == null) {
+                    newAgg = value;
+                } else {
+                    newAgg = reducer.apply(newAgg, value);
+                }
+
+                // update the store with the new value
+                windowStore.put(key, newAgg, entry.getKey());
+                tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, oldAgg);
             }
         }
     }

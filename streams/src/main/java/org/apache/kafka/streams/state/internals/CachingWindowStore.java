@@ -157,6 +157,27 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     }
 
     @Override
+    public byte[] fetch(final Bytes key, final long timestamp) {
+        validateStoreOpen();
+        final Bytes bytesKey = WindowStoreUtils.toBinaryKey(key, timestamp, 0, bytesSerdes);
+        final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
+        LRUCacheEntry entry = cache.get(name, cacheKey);
+        if (entry == null) {
+            final byte[] rawValue = underlying.fetch(key, timestamp);
+            if (rawValue == null) {
+                return null;
+            }
+            entry = new LRUCacheEntry(rawValue, true, context.offset(),
+                    timestamp, context.partition(), context.topic());
+            cache.put(name, cacheKey, entry);
+            return rawValue;
+        }
+
+        return entry.value;
+
+    }
+
+    @Override
     public synchronized WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
