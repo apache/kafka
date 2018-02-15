@@ -120,15 +120,16 @@ public abstract class AdminClient implements AutoCloseable {
      *     <li>{@link org.apache.kafka.common.errors.InvalidPartitionsException}
      *     if number of partitions is less than 1</li>
      *     <li>{@link org.apache.kafka.common.errors.InvalidReplicationFactorException}
-     *     if replication factor is less than 1 or large than number of available brokers</li>
+     *     if replication factor is less than 1 or should be large than number of available brokers</li>
      *     <li>{@link org.apache.kafka.common.errors.TopicExistsException}
      *     if topic name already exists</li>
      *     <li>{@link org.apache.kafka.common.errors.InvalidTopicException}
      *     if topic name collides with other topic name</li>
      *     <li>{@link org.apache.kafka.common.errors.InvalidReplicaAssignmentException}
-     *     if some of the partitions have different number of replicas or duplicate replica assignment found</li>
+     *     if the proposed replica assignment is invalid. For example if some of the partitions have different number
+     *     of replicas or a duplicate replica assignment was found</li>
      *     <li>{@link org.apache.kafka.common.errors.PolicyViolationException}
-     *     if the request parameters do not satisfy the user defined policy</li>
+     *     if the request parameters do not satisfy the policy configured on the broker</li>
      *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
      *     if the request was not completed in within the given {@link CreateTopicsOptions#timeoutMs()}.
      *     </li>
@@ -207,10 +208,8 @@ public abstract class AdminClient implements AutoCloseable {
      * <ul>
      *     <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
      *     if the authorized topic was in metadata first, but was not found during later look up</li>
-     *     <li>{@link org.apache.kafka.common.errors.LeaderNotAvailableException}
-     *     if leader is unavailable</li>
-     *     <li>{@link org.apache.kafka.common.errors.ReplicaNotAvailableException}
-     *     if the replica is not available</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidReplicationFactorException}
+     *     if replica assignment is invalid</li>
      *     <li>{@link org.apache.kafka.common.errors.TopicAuthorizationException}
      *     if the authenticated user is not authorized to alter the topic</li>
      *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
@@ -244,10 +243,8 @@ public abstract class AdminClient implements AutoCloseable {
      * <ul>
      *     <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
      *     if the authorized topic was in metadata first, but was not found during later look up</li>
-     *     <li>{@link org.apache.kafka.common.errors.LeaderNotAvailableException}
-     *     if leader is unavailable</li>
-     *     <li>{@link org.apache.kafka.common.errors.ReplicaNotAvailableException}
-     *     if the replica is not available</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidReplicationFactorException}
+     *     if replica assignment is invalid</li>
      *     <li>{@link org.apache.kafka.common.errors.TopicAuthorizationException}
      *     if the authenticated user is not authorized to alter the topic</li>
      *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
@@ -442,14 +439,10 @@ public abstract class AdminClient implements AutoCloseable {
      * {@link DescribeConfigsResult#values() values()} and {@link DescribeConfigsResult#all() all()} methods of the  returned
      * {@code DescribeConfigsResult}</p>
      * <ul>
-     *     <li>{@link org.apache.kafka.common.errors.SecurityDisabledException}
-     *     if security features are disabled</li>
      *     <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
      *     if cluster authorization failed</li>
      *     <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
      *     if unsupported resource type or unexpected broker id</li>
-     *     <li>{@link org.apache.kafka.common.errors.InvalidTopicException}
-     *     if topic name is illegal</li>
      *     <li>{@link org.apache.kafka.common.errors.UnknownServerException}
      *     if unexpected value in config</li>
      *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
@@ -488,8 +481,6 @@ public abstract class AdminClient implements AutoCloseable {
      * {@link AlterConfigsResult#values() values()} and {@link AlterConfigsResult#all() all()} methods of the  returned
      * {@code AlterConfigsResult}</p>
      * <ul>
-     *     <li>{@link org.apache.kafka.common.errors.SecurityDisabledException}
-     *     if security features are disabled</li>
      *     <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
      *     if cluster authorization failed</li>
      *     <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
