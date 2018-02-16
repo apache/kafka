@@ -99,7 +99,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /**
     * Package private for unit test. Get the cleaning state of the partition.
     */
-  private[log] def cleaningState(tp : TopicPartition): Option[LogCleaningState] = {
+  private[log] def cleaningState(tp: TopicPartition): Option[LogCleaningState] = {
     inLock(lock) {
       inProgress.get(tp)
     }
@@ -108,7 +108,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /**
     * Package private for unit test. Set the cleaning state of the partition.
     */
-  private[log] def setCleaningState(tp : TopicPartition, state: LogCleaningState): Unit = {
+  private[log] def setCleaningState(tp: TopicPartition, state: LogCleaningState): Unit = {
     inLock(lock) {
       inProgress.put(tp, state)
     }

@@ -229,10 +229,12 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     cleanerManager.setCleaningState(tp, LogCleaningInProgress)
     cleanerManager.doneCleaning(tp, log.dir, 1)
     assertTrue(cleanerManager.cleaningState(tp).isEmpty)
+    assertTrue(cleanerManager.allCleanerCheckpoints.get(tp).nonEmpty)
 
     cleanerManager.setCleaningState(tp, LogCleaningAborted)
     cleanerManager.doneCleaning(tp, log.dir, 1)
     assertEquals(LogCleaningPaused, cleanerManager.cleaningState(tp).get)
+    assertTrue(cleanerManager.allCleanerCheckpoints.get(tp).nonEmpty)
 
     try {
       cleanerManager.setCleaningState(tp, LogCleaningPaused)
