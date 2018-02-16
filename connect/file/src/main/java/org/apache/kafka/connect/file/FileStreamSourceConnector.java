@@ -43,7 +43,7 @@ public class FileStreamSourceConnector extends SourceConnector {
 
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(FILE_CONFIG, Type.STRING, null, Importance.HIGH, "Source filename. If not specified, the standard input will be used")
-        .define(TOPIC_CONFIG, Type.STRING, Importance.HIGH, "The topic to publish data to")
+        .define(TOPIC_CONFIG, Type.LIST, Importance.HIGH, "The topic to publish data to")
         .define(TASK_BATCH_SIZE_CONFIG, Type.INT, DEFAULT_TASK_BATCH_SIZE, Importance.LOW,
                 "The maximum number of records the Source task can read from file one time");
 
@@ -60,9 +60,11 @@ public class FileStreamSourceConnector extends SourceConnector {
     public void start(Map<String, String> props) {
         AbstractConfig parsedConfig = new AbstractConfig(CONFIG_DEF, props);
         filename = parsedConfig.getString(FILE_CONFIG);
-        topic = parsedConfig.getString(TOPIC_CONFIG);
-        if (topic.contains(","))
-            throw new ConfigException("FileStreamSourceConnector should only have a single topic when used as a source.");
+        List<String> topics = parsedConfig.getList(TOPIC_CONFIG);
+        if (topics.size() != 1) {
+            throw new ConfigException("'topic' in FileStreamSourceConnector configuration requires definition of a single topic");
+        }
+        topic = topics.get(0);
         batchSize = parsedConfig.getInt(TASK_BATCH_SIZE_CONFIG);
     }
 

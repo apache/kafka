@@ -121,6 +121,13 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
     }
 
     @Test(expected = ConfigException.class)
+    public void testBlankTopic() {
+        // Because of trimming this tests is same as testing for empty string.
+        sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, "     ");
+        connector.start(sourceProperties);
+    }
+
+    @Test(expected = ConfigException.class)
     public void testInvalidBatchSize() {
         sourceProperties.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "abcd");
         connector.start(sourceProperties);
