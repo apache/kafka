@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.file;
 
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.easymock.EasyMock;
@@ -49,6 +50,16 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
         sourceProperties = new HashMap<>();
         sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, SINGLE_TOPIC);
         sourceProperties.put(FileStreamSourceConnector.FILE_CONFIG, FILENAME);
+    }
+
+    @Test
+    public void testConnectorConfigValidation() {
+        replayAll();
+        List<ConfigValue> configValues = connector.config().validate(sourceProperties);
+        for (ConfigValue val : configValues) {
+            assertEquals("Config property errors: " + val.errorMessages(), 0, val.errorMessages().size());
+        }
+        verifyAll();
     }
 
     @Test

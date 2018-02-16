@@ -43,11 +43,12 @@ public class FileStreamSourceConnector extends SourceConnector {
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(FILE_CONFIG, Type.STRING, null, Importance.HIGH, "Source filename. If not specified, the standard input will be used")
         .define(TOPIC_CONFIG, Type.STRING, Importance.HIGH, "The topic to publish data to")
-        .define(TASK_BATCH_SIZE_CONFIG, Type.INT, Importance.LOW, "The maximum number of records the Source task can read from file one time");
+        .define(TASK_BATCH_SIZE_CONFIG, Type.INT, DEFAULT_TASK_BATCH_SIZE, Importance.LOW,
+                "The maximum number of records the Source task can read from file one time");
 
     private String filename;
     private String topic;
-    private int batchSize = DEFAULT_TASK_BATCH_SIZE;
+    private int batchSize;
 
     @Override
     public String version() {
