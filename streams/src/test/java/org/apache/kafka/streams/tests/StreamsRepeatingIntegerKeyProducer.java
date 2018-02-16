@@ -17,10 +17,14 @@
 
 package org.apache.kafka.streams.tests;
 
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.Map;
 import java.util.Properties;
@@ -33,6 +37,7 @@ import java.util.Properties;
 public class StreamsRepeatingIntegerKeyProducer {
 
     private static volatile boolean keepProducing = true;
+    private static int messageCounter = 0;
 
     public static void main(String[] args) {
         System.out.println("StreamsTest instance started");
@@ -43,13 +48,14 @@ public class StreamsRepeatingIntegerKeyProducer {
         Map<String, String> configs = SystemTestUtil.parseConfigs(configString);
         System.out.println("Using provided configs " + configs);
 
-        final int numMessages = configs.containsKey("num_messages") ? Integer.parseInt(configs.get("num_messages")) : Integer.MAX_VALUE;
+        final int numMessages = configs.containsKey("num_messages") ? Integer.parseInt(configs.get("num_messages")) : 1000;
 
         final Properties producerProps = new Properties();
-        producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "StandbyTaskTestsProducer");
+        producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "StreamsRepeatingIntegerKeyProducer");
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
 
         String value = "testingValue";
         Integer key = 0;
@@ -60,31 +66,47 @@ public class StreamsRepeatingIntegerKeyProducer {
                 keepProducing = false;
             }
         }));
-        final String[] topics = configs.get("topics").split(";");
 
-        int messageCounter = 0;
+        final String[] topics = configs.get("topics").split(";");
+        final int totalMessagesToProduce = numMessages * topics.length;
 
         try (final KafkaProducer<String, String> kafkaProducer = new KafkaProducer<>(producerProps)) {
 
-            while (keepProducing && messageCounter++ < numMessages) {
-                for (String topic : topics) {
-                    ProducerRecord<String, String> producerRecord = new ProducerRecord<>(topic, key.toString(), value + key);
-                    kafkaProducer.send(producerRecord);
+            while (keepProducing && messageCounter < totalMessagesToProduce) {
+                for (final String topic : topics) {
+                    final ProducerRecord<String, String> producerRecord = new ProducerRecord<>(topic, key.toString(), value + key);
+                    kafkaProducer.send(producerRecord, new Callback() {
+                        @Override
+                        public void onCompletion(final RecordMetadata metadata, final Exception exception) {
+                            if (exception != null) {
+                                exception.printStackTrace(System.err);
+                                System.err.flush();
+                                if (exception instanceof TimeoutException) {
+                                    try {
+                                        // message == org.apache.kafka.common.errors.TimeoutException: Expiring 4 record(s) for data-0: 30004 ms has passed since last attempt plus backoff time
+                                        final int expired = Integer.parseInt(exception.getMessage().split(" ")[2]);
+                                        messageCounter -= expired;
+                                    } catch (Exception ignore) {
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    messageCounter += 1;
                 }
                 key += 1;
                 if (key % 1000 == 0) {
-                    try {
-                        System.out.println("Sent 1000 messages");
-                        Thread.sleep(1000);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
+                    System.out.println("Sent 1000 messages");
+                    Utils.sleep(100);
                     key = 0;
                 }
             }
         }
-        System.out.println("Producer shut down now, sent total [" + (messageCounter - 1) + "] of requested [" + numMessages + "]");
+        System.out.println("Producer shut down now, sent total [" + (messageCounter - 1) + "] of requested [" + totalMessagesToProduce + "]");
         System.out.flush();
     }
 
+    private static void updateMessageCounter(int delta) {
+
+    }
 }

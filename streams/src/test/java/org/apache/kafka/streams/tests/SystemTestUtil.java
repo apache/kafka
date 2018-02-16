@@ -42,13 +42,16 @@ public class SystemTestUtil {
         Objects.requireNonNull(formattedConfigs, "Formatted config String can't be null");
 
         if (formattedConfigs.indexOf('=') == -1) {
-            throw new IllegalStateException(String.format("Provided string [ %s ] not in expected format", formattedConfigs));
+            throw new IllegalStateException(String.format("Provided string [ %s ] does not have expected key-value separator of '='", formattedConfigs));
         }
 
         final String[] parts = formattedConfigs.split(",");
         final Map<String, String> configs = new HashMap<>();
         for (final String part : parts) {
             final String[] keyValue = part.split("=");
+             if(keyValue.length > 2) {
+                 throw new IllegalStateException(String.format("Provided string [ %s ] does not have expected key-value pair separator of ','", formattedConfigs));
+             }
             configs.put(keyValue[KEY], keyValue[VALUE]);
         }
         return configs;

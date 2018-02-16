@@ -98,7 +98,9 @@ class StreamsStandbyTask(Test):
         driver = StreamsRepeatingIntegerKeyProducerService(self.test_context, self.kafka, driver_configs)
         driver.start()
 
-        configs = self.get_configs()
+        configs = self.get_configs("sourceTopic=%s,sinkTopic1=%s,sinkTopic2=%s" % (self.streams_source_topic,
+                                                                                   self.streams_sink_topic_1,
+                                                                                   self.streams_sink_topic_2))
 
         processor_1 = StreamsStandbyTaskService(self.test_context, self.kafka, configs)
         processor_2 = StreamsStandbyTaskService(self.test_context, self.kafka, configs)

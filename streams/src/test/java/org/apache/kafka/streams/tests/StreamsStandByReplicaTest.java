@@ -41,12 +41,6 @@ import java.util.concurrent.TimeUnit;
 
 public class StreamsStandByReplicaTest {
 
-    static final String SOURCE_TOPIC = "standbyTaskSource1";
-
-    private static final String SINK_TOPIC_1 = "standbyTaskSink1";
-    private static final String SINK_TOPIC_2 = "standbyTaskSink2";
-
-
     public static void main(String[] args) {
 
         System.out.println("StreamsTest instance started");
@@ -67,16 +61,23 @@ public class StreamsStandByReplicaTest {
         streamsProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         streamsProperties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
 
-        // it is expected that max.poll.interval, retries, request.timeout and max.block.ms set
-        // streams_broker_down_resilience_test and passed as args
-        if (additionalConfigs != null && !additionalConfigs.equalsIgnoreCase("none")) {
-            Map<String, String> updated = SystemTestUtil.parseConfigs(additionalConfigs);
-            System.out.println("Updating configs with " + updated);
-            streamsProperties.putAll(updated);
+        final Map<String, String> updated = SystemTestUtil.parseConfigs(additionalConfigs);
+        System.out.println("Updating configs with " + updated);
+
+        final String sourceTopic = updated.remove("sourceTopic");
+        final String sinkTopic1 = updated.remove("sinkTopic1");
+        final String sinkTopic2 = updated.remove("sinkTopic2");
+
+        if (sourceTopic == null || sinkTopic1 == null || sinkTopic2 == null) {
+            System.err.println(String.format("one or more required topics null sourceTopic[%s], sinkTopic1[%s], sinkTopic2[%s]", sourceTopic, sinkTopic1, sinkTopic2));
+            System.err.flush();
+            System.exit(1);
         }
 
+        streamsProperties.putAll(updated);
+
         if (!confirmCorrectConfigs(streamsProperties)) {
-            System.err.println(String.format("ERROR: Did not have all required configs expected  to contain %s %s %s %s",
+            System.err.println(String.format("ERROR: Did not have all required configs expected  to contain %s, %s,  %s,  %s",
                                              StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
                                              StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG),
                                              StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG),
@@ -93,20 +94,20 @@ public class StreamsStandByReplicaTest {
         KeyValueBytesStoreSupplier inMemoryStoreSupplier = Stores.inMemoryKeyValueStore(inMemoryStoreName);
         KeyValueBytesStoreSupplier persistentStoreSupplier = Stores.persistentKeyValueStore(persistentMemoryStoreName);
 
-        KStream<String, String> inputStream = builder.stream(SOURCE_TOPIC, Consumed.with(stringSerde, stringSerde));
+        KStream<String, String> inputStream = builder.stream(sourceTopic, Consumed.with(stringSerde, stringSerde));
 
         ValueMapper<Long, String> countMapper = new ValueMapper<Long, String>() {
             @Override
-            public String apply(Long value) {
+            public String apply(final Long value) {
                 return value.toString();
             }
         };
 
         inputStream.groupByKey().count(Materialized.<String, Long>as(inMemoryStoreSupplier)).toStream().mapValues(countMapper)
-            .to(SINK_TOPIC_1, Produced.with(stringSerde, stringSerde));
+            .to(sinkTopic1, Produced.with(stringSerde, stringSerde));
 
         inputStream.groupByKey().count(Materialized.<String, Long>as(persistentStoreSupplier)).toStream().mapValues(countMapper)
-            .to(SINK_TOPIC_2, Produced.with(stringSerde, stringSerde));
+            .to(sinkTopic2, Produced.with(stringSerde, stringSerde));
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
 
@@ -122,10 +123,10 @@ public class StreamsStandByReplicaTest {
 
         streams.setStateListener(new KafkaStreams.StateListener() {
             @Override
-            public void onChange(KafkaStreams.State newState, KafkaStreams.State oldState) {
+            public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
                 if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
-                    Set<ThreadMetadata> threadMetadata = streams.localThreadsMetadata();
-                    for (ThreadMetadata threadMetadatum : threadMetadata) {
+                    final Set<ThreadMetadata> threadMetadata = streams.localThreadsMetadata();
+                    for (final ThreadMetadata threadMetadatum : threadMetadata) {
                         System.out.println("ACTIVE_TASKS:" + threadMetadatum.activeTasks().size() + " STANDBY_TASKS:" + threadMetadatum.standbyTasks().size());
                     }
                 }
@@ -150,7 +151,7 @@ public class StreamsStandByReplicaTest {
         streams.close(10, TimeUnit.SECONDS);
     }
 
-    private static boolean confirmCorrectConfigs(Properties properties) {
+    private static boolean confirmCorrectConfigs(final Properties properties) {
         return properties.containsKey(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) &&
                properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG)) &&
                properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG)) &&
