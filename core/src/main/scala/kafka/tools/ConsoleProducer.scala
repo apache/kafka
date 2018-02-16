@@ -285,6 +285,12 @@ object ConsoleProducer {
     val maxPartitionMemoryBytes = options.valueOf(maxPartitionMemoryBytesOpt)
     val metadataExpiryMs = options.valueOf(metadataExpiryMsOpt)
     val maxBlockMs = options.valueOf(maxBlockMsOpt)
+    if (!useOldProducer && options.has(keyEncoderOpt) && keyEncoderClass != "org.apache.kafka.common.serialization.ByteArraySerializer") {
+      throw new KafkaException(s"Unexpected serializer for key-serializer. Supplied $keyEncoderOpt, allowed: org.apache.kafka.common.serialization.ByteArraySerializer")
+    }
+    if (!useOldProducer  && options.has(keyEncoderOpt) && valueEncoderClass != "org.apache.kafka.common.serialization.ByteArraySerializer") {
+      throw new KafkaException(s"Unexpected serializer for key-serializer. Supplied $valueEncoderOpt, allowed: org.apache.kafka.common.serialization.ByteArraySerializer")
+    }
   }
 
   class LineMessageReader extends MessageReader {
