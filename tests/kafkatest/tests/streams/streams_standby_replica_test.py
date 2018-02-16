@@ -160,7 +160,7 @@ class StreamsStandbyTask(Test):
         self.assert_consume("assert all messages consumed from %s" % self.streams_sink_topic_1, self.streams_sink_topic_1, self.num_messages)
         self.assert_consume("assert all messages consumed from %s" % self.streams_sink_topic_2, self.streams_sink_topic_2, self.num_messages)
 
-        self.wait_for_verification(driver, "Producer shut down now, sent total [{0}] of requested [{0}]".format(str(self.num_messages)),
+        self.wait_for_verification(driver, "Producer shut down now, sent total {0} of requested {0}".format(str(self.num_messages)),
                                    driver.STDOUT_FILE)
 
 

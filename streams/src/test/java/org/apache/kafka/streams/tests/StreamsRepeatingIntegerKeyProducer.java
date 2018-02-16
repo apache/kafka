@@ -102,11 +102,7 @@ public class StreamsRepeatingIntegerKeyProducer {
                 }
             }
         }
-        System.out.println("Producer shut down now, sent total [" + messageCounter  + "] of requested [" + totalMessagesToProduce + "]");
+        System.out.println("Producer shut down now, sent total " + messageCounter  + " of requested " + totalMessagesToProduce);
         System.out.flush();
-    }
-
-    private static void updateMessageCounter(int delta) {
-
     }
 }
