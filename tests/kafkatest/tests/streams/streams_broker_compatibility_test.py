@@ -66,9 +66,9 @@ class StreamsBrokerCompatibility(Test):
 
         with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
             processor.start()
-            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS ',
+            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: Cannot create a v0 FindCoordinator request because we require features supported only in 1 or later.',
                                timeout_sec=60,
-                               err_msg="Exception in thread \"main\" org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS " + str(processor.node.account))
+                               err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: Cannot create a v0 FindCoordinator request because we require features supported only in 1 or later.' error message " + str(processor.node.account))
 
         self.kafka.stop()
 
@@ -100,9 +100,9 @@ class StreamsBrokerCompatibility(Test):
 
         with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
             processor.start()
-            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.streams.errors.StreamsException: Could not create topic kafka-streams-system-test-broker-compatibility-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog.',
+            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support CREATE_TOPICS',
                         timeout_sec=60,
-                        err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.streams.errors.StreamsException: Could not create topic kafka-streams-system-test-broker-compatibility-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog.' error message " + str(processor.node.account))
+                        err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support CREATE_TOPICS' error message " + str(processor.node.account))
 
         self.kafka.stop()
 
