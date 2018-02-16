@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -39,6 +40,8 @@ import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
@@ -47,6 +50,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
@@ -133,6 +137,7 @@ public class SimpleBenchmark {
     private void run() {
         switch (testName) {
             case ALL_TESTS:
+                /*
                 // producer performance
                 produce(SOURCE_TOPIC);
                 // consumer performance
@@ -153,6 +158,9 @@ public class SimpleBenchmark {
                 kStreamKStreamJoin(JOIN_TOPIC_1_PREFIX + "KStreamKStream", JOIN_TOPIC_2_PREFIX + "KStreamKStream");
                 // simple streams performance KTABLE-KTABLE join
                 kTableKTableJoin(JOIN_TOPIC_1_PREFIX + "KTableKTable", JOIN_TOPIC_2_PREFIX + "KTableKTable");
+                */
+                // simple aggregation
+                count(COUNT_TOPIC);
                 break;
             case "produce":
                 produce(SOURCE_TOPIC);
@@ -288,7 +296,10 @@ public class SimpleBenchmark {
         final KStream<Integer, byte[]> input = builder.stream(topic);
 
         input.groupByKey()
-            .count("tmpStoreName").foreach(new CountDownAction(latch));
+                .windowedBy(TimeWindows.of(10).advanceBy(1))
+                .count(Materialized.<Integer, Long, WindowStore<Bytes, byte[]>>as("tmpStoreName"))
+                .toStream()
+                .foreach(new CountDownAction<Long>(latch));
 
         return new KafkaStreams(builder.build(), streamConfig);
     }
@@ -527,7 +538,7 @@ public class SimpleBenchmark {
         if (sequential) key = 0;
         else key = rand.nextInt(upperRange);
         for (int i = 0; i < numRecords; i++) {
-            producer.send(new ProducerRecord<>(topic, key, value));
+            producer.send(new ProducerRecord<>(topic, null, System.currentTimeMillis(), key, value));
             if (sequential) key++;
             else key = rand.nextInt(upperRange);
             processedRecords.getAndIncrement();
@@ -663,13 +674,13 @@ public class SimpleBenchmark {
         return createKafkaStreamsWithExceptionHandler(builder, props);
     }
 
-    private class CountDownAction<V> implements ForeachAction<Integer, V> {
+    private class CountDownAction<V> implements ForeachAction<Object, V> {
         private CountDownLatch latch;
         CountDownAction(final CountDownLatch latch) {
             this.latch = latch;
         }
         @Override
-        public void apply(Integer key, V value) {
+        public void apply(Object key, V value) {
             processedRecords.getAndIncrement();
             if (value instanceof byte[]) {
                 processedBytes += ((byte[]) value).length + Integer.SIZE;
