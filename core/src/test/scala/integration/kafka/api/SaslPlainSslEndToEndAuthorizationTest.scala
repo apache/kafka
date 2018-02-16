@@ -16,14 +16,40 @@
   */
 package kafka.api
 
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils, ZkUtils}
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
+import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SaslAuthenticationContext}
 import org.junit.Test
 
+object SaslPlainSslEndToEndAuthorizationTest {
+  class TestPrincipalBuilder extends KafkaPrincipalBuilder {
+
+    override def build(context: AuthenticationContext): KafkaPrincipal = {
+      context match {
+        case ctx: SaslAuthenticationContext =>
+          ctx.server.getAuthorizationID match {
+            case JaasTestUtils.KafkaPlainAdmin =>
+              new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")
+            case JaasTestUtils.KafkaPlainUser =>
+              new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
+            case _ =>
+              KafkaPrincipal.ANONYMOUS
+          }
+      }
+    }
+  }
+}
+
 class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
+  import SaslPlainSslEndToEndAuthorizationTest.TestPrincipalBuilder
+
+  this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[TestPrincipalBuilder].getName)
+
   override protected def kafkaClientSaslMechanism = "PLAIN"
   override protected def kafkaServerSaslMechanisms = List("PLAIN")
-  override val clientPrincipal = JaasTestUtils.KafkaPlainUser
-  override val kafkaPrincipal = JaasTestUtils.KafkaPlainAdmin
+  override val clientPrincipal = "user"
+  override val kafkaPrincipal = "admin"
 
   /**
    * Checks that secure paths created by broker and acl paths created by AclCommand
@@ -31,6 +57,8 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
    */
   @Test
   def testAcls() {
+    val zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
     TestUtils.verifySecureZkAcls(zkUtils, 1)
+    CoreUtils.swallow(zkUtils.close(), this)
   }
 }

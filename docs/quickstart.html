@@ -186,9 +186,10 @@ my test message 2
 
 On Windows use:
 <pre class="brush: bash;">
-&gt; wmic process get processid,caption,commandline | find "java.exe" | find "server-1.properties"
-java.exe    java  -Xmx1G -Xms1G -server -XX:+UseG1GC ... build\libs\kafka_2.11-{{fullDotVersion}}.jar"  kafka.Kafka config\server-1.properties    644
-&gt; taskkill /pid 644 /f
+&gt; wmic process where "caption = 'java.exe' and commandline like '%server-1.properties%'" get processid
+ProcessId
+6016
+&gt; taskkill /pid 6016 /f
 </pre>
 
 <p>Leadership has switched to one of the slaves and node 1 is no longer in the in-sync replica set:</p>
@@ -224,6 +225,11 @@ Kafka topic to a file.</p>
 <pre class="brush: bash;">
 &gt; echo -e "foo\nbar" > test.txt
 </pre>
+Or on Windows:
+<pre class="brush: bash;">
+&gt; echo foo> test.txt
+&gt; echo bar>> test.txt
+</pre>
 
 <p>Next, we'll start two connectors running in <i>standalone</i> mode, which means they run in a single, local, dedicated
 process. We provide three configuration files as parameters. The first is always the configuration for the Kafka Connect
@@ -251,7 +257,7 @@ by examining the contents of the output file:
 
 
 <pre class="brush: bash;">
-&gt; cat test.sink.txt
+&gt; more test.sink.txt
 foo
 bar
 </pre>
@@ -272,7 +278,7 @@ data in the topic (or use custom consumer code to process it):
 <p>The connectors continue to process data, so we can add data to the file and see it move through the pipeline:</p>
 
 <pre class="brush: bash;">
-&gt; echo "Another line" >> test.txt
+&gt; echo Another line>> test.txt
 </pre>
 
 <p>You should see the line appear in the console consumer output and in the sink file.</p>
@@ -280,169 +286,14 @@ data in the topic (or use custom consumer code to process it):
 <h4><a id="quickstart_kafkastreams" href="#quickstart_kafkastreams">Step 8: Use Kafka Streams to process data</a></h4>
 
 <p>
-Kafka Streams is a client library of Kafka for real-time stream processing and analyzing data stored in Kafka brokers.
-This quickstart example will demonstrate how to run a streaming application coded in this library. Here is the gist
-of the <code><a href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/examples/src/main/java/org/apache/kafka/streams/examples/wordcount/WordCountDemo.java">WordCountDemo</a></code> example code (converted to use Java 8 lambda expressions for easy reading).
-</p>
-<pre class="brush: bash;">
-// Serializers/deserializers (serde) for String and Long types
-final Serde&lt;String&gt; stringSerde = Serdes.String();
-final Serde&lt;Long&gt; longSerde = Serdes.Long();
-
-// Construct a `KStream` from the input topic ""streams-file-input", where message values
-// represent lines of text (for the sake of this example, we ignore whatever may be stored
-// in the message keys).
-KStream&lt;String, String&gt; textLines = builder.stream(stringSerde, stringSerde, "streams-file-input");
-
-KTable&lt;String, Long&gt; wordCounts = textLines
-    // Split each text line, by whitespace, into words.
-    .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
-
-    // Group the text words as message keys
-    .groupBy((key, value) -> value)
-
-    // Count the occurrences of each word (message key).
-    .count("Counts")
-
-// Store the running counts as a changelog stream to the output topic.
-wordCounts.to(stringSerde, longSerde, "streams-wordcount-output");
-</pre>
-
-<p>
-It implements the WordCount
-algorithm, which computes a word occurrence histogram from the input text. However, unlike other WordCount examples
-you might have seen before that operate on bounded data, the WordCount demo application behaves slightly differently because it is
-designed to operate on an <b>infinite, unbounded stream</b> of data. Similar to the bounded variant, it is a stateful algorithm that
-tracks and updates the counts of words. However, since it must assume potentially
-unbounded input data, it will periodically output its current state and results while continuing to process more data
-because it cannot know when it has processed "all" the input data.
-</p>
-<p>
-As the first step, we will prepare input data to a Kafka topic, which will subsequently be processed by a Kafka Streams application.
+  Kafka Streams is a client library for building mission-critical real-time applications and microservices,
+  where the input and/or output data is stored in Kafka clusters. Kafka Streams combines the simplicity of
+  writing and deploying standard Java and Scala applications on the client side with the benefits of Kafka's
+  server-side cluster technology to make these applications highly scalable, elastic, fault-tolerant, distributed,
+  and much more. This <a href="/{{version}}/documentation/streams/quickstart">quickstart example</a> will demonstrate how
+  to run a streaming application coded in this library. 
 </p>
 
-<!--
-<pre>
-&gt; <b>./bin/kafka-topics --create \</b>
-            <b>--zookeeper localhost:2181 \</b>
-            <b>--replication-factor 1 \</b>
-            <b>--partitions 1 \</b>
-            <b>--topic streams-file-input</b>
-
-</pre>
-
--->
-
-<pre class="brush: bash;">
-&gt; echo -e "all streams lead to kafka\nhello kafka streams\njoin kafka summit" > file-input.txt
-</pre>
-Or on Windows:
-<pre class="brush: bash;">
-&gt; echo all streams lead to kafka> file-input.txt
-&gt; echo hello kafka streams>> file-input.txt
-&gt; echo|set /p=join kafka summit>> file-input.txt
-</pre>
-
-<p>
-Next, we send this input data to the input topic named <b>streams-file-input</b> using the console producer,
-which reads the data from STDIN line-by-line, and publishes each line as a separate Kafka message with null key and value encoded a string to the topic (in practice,
-stream data will likely be flowing continuously into Kafka where the application will be up and running):
-</p>
-
-<pre class="brush: bash;">
-&gt; bin/kafka-topics.sh --create \
-    --zookeeper localhost:2181 \
-    --replication-factor 1 \
-    --partitions 1 \
-    --topic streams-file-input
-</pre>
-
-
-<pre class="brush: bash;">
-&gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-file-input < file-input.txt
-</pre>
-
-<p>
-We can now run the WordCount demo application to process the input data:
-</p>
-
-<pre class="brush: bash;">
-&gt; bin/kafka-run-class.sh org.apache.kafka.streams.examples.wordcount.WordCountDemo
-</pre>
-
-<p>
-The demo application will read from the input topic <b>streams-file-input</b>, perform the computations of the WordCount algorithm on each of the read messages,
-and continuously write its current results to the output topic <b>streams-wordcount-output</b>.
-Hence there won't be any STDOUT output except log entries as the results are written back into in Kafka.
-The demo will run for a few seconds and then, unlike typical stream processing applications, terminate automatically.
-</p>
-<p>
-We can now inspect the output of the WordCount demo application by reading from its output topic:
-</p>
-
-<pre class="brush: bash;">
-&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
-    --topic streams-wordcount-output \
-    --from-beginning \
-    --formatter kafka.tools.DefaultMessageFormatter \
-    --property print.key=true \
-    --property print.value=true \
-    --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
-    --property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer
-</pre>
-
-<p>
-with the following output data being printed to the console:
-</p>
-
-<pre class="brush: bash;">
-all     1
-lead    1
-to      1
-hello   1
-streams 2
-join    1
-kafka   3
-summit  1
-</pre>
-
-<p>
-Here, the first column is the Kafka message key in <code>java.lang.String</code> format, and the second column is the message value in <code>java.lang.Long</code> format.
-Note that the output is actually a continuous stream of updates, where each data record (i.e. each line in the original output above) is
-an updated count of a single word, aka record key such as "kafka". For multiple records with the same key, each later record is an update of the previous one.
-</p>
-
-<p>
-The two diagrams below illustrate what is essentially happening behind the scenes.
-The first column shows the evolution of the current state of the <code>KTable&lt;String, Long&gt;</code> that is counting word occurrences for <code>count</code>.
-The second column shows the change records that result from state updates to the KTable and that are being sent to the output Kafka topic <b>streams-wordcount-output</b>.
-</p>
-
-<img src="/{{version}}/images/streams-table-updates-02.png" style="float: right; width: 25%;">
-<img src="/{{version}}/images/streams-table-updates-01.png" style="float: right; width: 25%;">
-
-<p>
-First the text line “all streams lead to kafka” is being processed.
-The <code>KTable</code> is being built up as each new word results in a new table entry (highlighted with a green background), and a corresponding change record is sent to the downstream <code>KStream</code>.
-</p>
-<p>
-When the second text line “hello kafka streams” is processed, we observe, for the first time, that existing entries in the <code>KTable</code> are being updated (here: for the words “kafka” and for “streams”). And again, change records are being sent to the output topic.
-</p>
-<p>
-And so on (we skip the illustration of how the third line is being processed). This explains why the output topic has the contents we showed above, because it contains the full record of changes.
-</p>
-
-<p>
-Looking beyond the scope of this concrete example, what Kafka Streams is doing here is to leverage the duality between a table and a changelog stream (here: table = the KTable, changelog stream = the downstream KStream): you can publish every change of the table to a stream, and if you consume the entire changelog stream from beginning to end, you can reconstruct the contents of the table.
-</p>
-
-<p>
-Now you can write more input messages to the <b>streams-file-input</b> topic and observe additional messages added
-to <b>streams-wordcount-output</b> topic, reflecting updated word counts (e.g., using the console producer and the
-console consumer, as described above).
-</p>
-
-<p>You can stop the console consumer via <b>Ctrl-C</b>.</p>
 
 </script>
 

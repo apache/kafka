@@ -153,7 +153,7 @@ public class PartitionGroup {
         final RecordQueue recordQueue = partitionQueues.get(partition);
 
         if (recordQueue == null) {
-            throw new IllegalStateException("Record's partition does not belong to this partition-group.");
+            throw new IllegalStateException(String.format("Record's partition %s does not belong to this partition-group.", partition));
         }
 
         return recordQueue.size();
@@ -164,7 +164,6 @@ public class PartitionGroup {
     }
 
     public void close() {
-        queuesByTime.clear();
         partitionQueues.clear();
     }
 

@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.common.security.scram;
 
+import org.apache.kafka.common.utils.Base64;
+
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.security.sasl.SaslException;
-import javax.xml.bind.DatatypeConverter;
 
 /**
  * SCRAM request/response message creation and parsing based on
@@ -63,16 +65,18 @@ public class ScramMessages {
      */
     public static class ClientFirstMessage extends AbstractScramMessage {
         private static final Pattern PATTERN = Pattern.compile(String.format(
-                "n,(a=(?<authzid>%s))?,%sn=(?<saslname>%s),r=(?<nonce>%s)%s",
+                "n,(a=(?<authzid>%s))?,%sn=(?<saslname>%s),r=(?<nonce>%s)(?<extensions>%s)",
                 SASLNAME,
                 RESERVED,
                 SASLNAME,
                 PRINTABLE,
                 EXTENSIONS));
 
+
         private final String saslName;
         private final String nonce;
         private final String authorizationId;
+        private final ScramExtensions extensions;
         public ClientFirstMessage(byte[] messageBytes) throws SaslException {
             String message = toMessage(messageBytes);
             Matcher matcher = PATTERN.matcher(message);
@@ -82,10 +86,14 @@ public class ScramMessages {
             this.authorizationId = authzid != null ? authzid : "";
             this.saslName = matcher.group("saslname");
             this.nonce = matcher.group("nonce");
+            String extString = matcher.group("extensions");
+
+            this.extensions = extString.startsWith(",") ? new ScramExtensions(extString.substring(1)) : new ScramExtensions();
         }
-        public ClientFirstMessage(String saslName, String nonce) {
+        public ClientFirstMessage(String saslName, String nonce, Map<String, String> extensions) {
             this.saslName = saslName;
             this.nonce = nonce;
+            this.extensions = new ScramExtensions(extensions);
             this.authorizationId = ""; // Optional authzid not specified in gs2-header
         }
         public String saslName() {
@@ -100,8 +108,16 @@ public class ScramMessages {
         public String gs2Header() {
             return "n," + authorizationId + ",";
         }
+        public ScramExtensions extensions() {
+            return extensions;
+        }
+
         public String clientFirstMessageBare() {
-            return String.format("n=%s,r=%s", saslName, nonce);
+            String extensionStr = extensions.toString();
+            if (extensionStr.isEmpty())
+                return String.format("n=%s,r=%s", saslName, nonce);
+            else
+                return String.format("n=%s,r=%s,%s", saslName, nonce, extensionStr);
         }
         String toMessage() {
             return gs2Header() + clientFirstMessageBare();
@@ -140,7 +156,7 @@ public class ScramMessages {
             }
             this.nonce = matcher.group("nonce");
             String salt = matcher.group("salt");
-            this.salt = DatatypeConverter.parseBase64Binary(salt);
+            this.salt = Base64.decoder().decode(salt);
         }
         public ServerFirstMessage(String clientNonce, String serverNonce, byte[] salt, int iterations) {
             this.nonce = clientNonce + serverNonce;
@@ -157,7 +173,7 @@ public class ScramMessages {
             return iterations;
         }
         String toMessage() {
-            return String.format("r=%s,s=%s,i=%d", nonce, DatatypeConverter.printBase64Binary(salt), iterations);
+            return String.format("r=%s,s=%s,i=%d", nonce, Base64.encoder().encodeToString(salt), iterations);
         }
     }
     /**
@@ -184,9 +200,9 @@ public class ScramMessages {
             if (!matcher.matches())
                 throw new SaslException("Invalid SCRAM client final message format: " + message);
 
-            this.channelBinding = DatatypeConverter.parseBase64Binary(matcher.group("channel"));
+            this.channelBinding = Base64.decoder().decode(matcher.group("channel"));
             this.nonce = matcher.group("nonce");
-            this.proof = DatatypeConverter.parseBase64Binary(matcher.group("proof"));
+            this.proof = Base64.decoder().decode(matcher.group("proof"));
         }
         public ClientFinalMessage(byte[] channelBinding, String nonce) {
             this.channelBinding = channelBinding;
@@ -206,13 +222,13 @@ public class ScramMessages {
         }
         public String clientFinalMessageWithoutProof() {
             return String.format("c=%s,r=%s",
-                    DatatypeConverter.printBase64Binary(channelBinding),
+                    Base64.encoder().encodeToString(channelBinding),
                     nonce);
         }
         String toMessage() {
             return String.format("%s,p=%s",
                     clientFinalMessageWithoutProof(),
-                    DatatypeConverter.printBase64Binary(proof));
+                    Base64.encoder().encodeToString(proof));
         }
     }
     /**
@@ -243,7 +259,7 @@ public class ScramMessages {
                 // ignore
             }
             if (error == null) {
-                this.serverSignature = DatatypeConverter.parseBase64Binary(matcher.group("signature"));
+                this.serverSignature = Base64.decoder().decode(matcher.group("signature"));
                 this.error = null;
             } else {
                 this.serverSignature = null;
@@ -264,7 +280,7 @@ public class ScramMessages {
             if (error != null)
                 return "e=" + error;
             else
-                return "v=" + DatatypeConverter.printBase64Binary(serverSignature);
+                return "v=" + Base64.encoder().encodeToString(serverSignature);
         }
     }
 }

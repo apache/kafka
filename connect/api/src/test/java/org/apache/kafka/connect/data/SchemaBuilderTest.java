@@ -355,6 +355,11 @@ public class SchemaBuilderTest {
             .build();
     }
 
+    @Test(expected = SchemaBuilderException.class)
+    public void testTypeNotNull() {
+        SchemaBuilder.type(null);
+    }
+
     private void assertTypeAndDefault(Schema schema, Schema.Type type, boolean optional, Object defaultValue) {
         assertEquals(type, schema.type());
         assertEquals(optional, schema.isOptional());

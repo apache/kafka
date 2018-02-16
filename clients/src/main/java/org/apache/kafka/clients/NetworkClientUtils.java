@@ -26,7 +26,9 @@ import java.util.List;
 /**
  * Provides additional utilities for {@link NetworkClient} (e.g. to implement blocking behaviour).
  */
-public class NetworkClientUtils {
+public final class NetworkClientUtils {
+
+    private NetworkClientUtils() {}
 
     /**
      * Checks whether the node is currently connected, first calling `client.poll` to ensure that any pending
@@ -47,7 +49,7 @@ public class NetworkClientUtils {
      * It returns `true` if the call completes normally or `false` if the timeoutMs expires. If the connection fails,
      * an `IOException` is thrown instead. Note that if the `NetworkClient` has been configured with a positive
      * connection timeoutMs, it is possible for this method to raise an `IOException` for a previous connection which
-     * has recently disconnected.
+     * has recently disconnected. If authentication to the node fails, an `AuthenticationException` is thrown.
      *
      * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
      * care.
@@ -69,6 +71,8 @@ public class NetworkClientUtils {
             }
             long pollTimeout = expiryTime - attemptStartTime;
             client.poll(pollTimeout, attemptStartTime);
+            if (client.authenticationException(node) != null)
+                throw client.authenticationException(node);
             attemptStartTime = time.milliseconds();
         }
         return client.isReady(node, attemptStartTime);

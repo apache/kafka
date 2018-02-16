@@ -79,8 +79,8 @@ public final class Sensor {
 
         public static RecordingLevel forId(int id) {
             if (id < MIN_RECORDING_LEVEL_KEY || id > MAX_RECORDING_LEVEL_KEY)
-                throw new IllegalArgumentException(String.format("Unexpected RecordLevel id `%s`, it should be between `%s` " +
-                    "and `%s` (inclusive)", id, MIN_RECORDING_LEVEL_KEY, MAX_RECORDING_LEVEL_KEY));
+                throw new IllegalArgumentException(String.format("Unexpected RecordLevel id `%d`, it should be between `%d` " +
+                    "and `%d` (inclusive)", id, MIN_RECORDING_LEVEL_KEY, MAX_RECORDING_LEVEL_KEY));
             return ID_TO_TYPE[id];
         }
 
@@ -90,11 +90,7 @@ public final class Sensor {
         }
 
         public boolean shouldRecord(final int configId) {
-            if (configId == DEBUG.id) {
-                return true;
-            } else {
-                return configId == this.id;
-            }
+            return configId == DEBUG.id || configId == this.id;
         }
 
     }
@@ -199,7 +195,7 @@ public final class Sensor {
             if (config != null) {
                 Quota quota = config.quota();
                 if (quota != null) {
-                    double value = metric.value(timeMs);
+                    double value = metric.measurableValue(timeMs);
                     if (!quota.acceptable(value)) {
                         throw new QuotaViolationException(metric.metricName(), value,
                             quota.bound());
@@ -224,8 +220,9 @@ public final class Sensor {
      */
     public synchronized void add(CompoundStat stat, MetricConfig config) {
         this.stats.add(Utils.notNull(stat));
+        Object lock = new Object();
         for (NamedMeasurable m : stat.stats()) {
-            KafkaMetric metric = new KafkaMetric(this, m.name(), m.stat(), config == null ? this.config : config, time);
+            KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), config == null ? this.config : config, time);
             this.registry.registerMetric(metric);
             this.metrics.add(metric);
         }

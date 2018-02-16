@@ -28,7 +28,8 @@ import kafka.message.UncompressedCodec
 import kafka.server.Defaults
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
-import kafka.utils.{Logging, Pool, Scheduler, ZkUtils}
+import kafka.utils.{Logging, Pool, Scheduler}
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
@@ -56,9 +57,19 @@ object TransactionStateManager {
  * 1. the transaction log, which is a special internal topic.
  * 2. the transaction metadata including its ongoing transaction status.
  * 3. the background expiration of the transaction as well as the transactional id.
+ *
+ * <b>Delayed operation locking notes:</b>
+ * Delayed operations in TransactionStateManager use `stateLock.readLock` as the delayed operation
+ * lock. Delayed operations are completed only if `stateLock.readLock` can be acquired.
+ * Delayed callbacks may acquire `stateLock.readLock` or any of the `txnMetadata` locks.
+ * <ul>
+ * <li>`stateLock.readLock` must never be acquired while holding `txnMetadata` lock.</li>
+ * <li>`txnMetadata` lock must never be acquired while holding `stateLock.writeLock`.</li>
+ * <li>`ReplicaManager.appendRecords` should never be invoked while holding a `txnMetadata` lock.</li>
+ * </ul>
  */
 class TransactionStateManager(brokerId: Int,
-                              zkUtils: ZkUtils,
+                              zkClient: KafkaZkClient,
                               scheduler: Scheduler,
                               replicaManager: ReplicaManager,
                               config: TransactionConfig,
@@ -95,6 +106,7 @@ class TransactionStateManager(brokerId: Int,
       loadingPartitions.add(partitionAndLeaderEpoch)
     }
   }
+  private[transaction] def stateReadLock = stateLock.readLock
 
   // this is best-effort expiration of an ongoing transaction which has been open for more than its
   // txn timeout value, we do not need to grab the lock on the metadata object upon checking its state
@@ -136,7 +148,7 @@ class TransactionStateManager(brokerId: Int,
             }.filter { case (_, txnMetadata) =>
               txnMetadata.txnLastUpdateTimestamp <= now - config.transactionalIdExpirationMs
             }.map { case (transactionalId, txnMetadata) =>
-              val txnMetadataTransition = txnMetadata synchronized {
+              val txnMetadataTransition = txnMetadata.inLock {
                 txnMetadata.prepareDead()
               }
               TransactionalIdCoordinatorEpochAndMetadata(transactionalId, entry.coordinatorEpoch, txnMetadataTransition)
@@ -166,7 +178,7 @@ class TransactionStateManager(brokerId: Int,
                     .foreach { txnMetadataCacheEntry =>
                       toRemove.foreach { idCoordinatorEpochAndMetadata =>
                         val txnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.get(idCoordinatorEpochAndMetadata.transactionalId)
-                        txnMetadata synchronized {
+                        txnMetadata.inLock {
                           if (txnMetadataCacheEntry.coordinatorEpoch == idCoordinatorEpochAndMetadata.coordinatorEpoch
                             && txnMetadata.pendingState.contains(Dead)
                             && txnMetadata.producerEpoch == idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch
@@ -197,7 +209,7 @@ class TransactionStateManager(brokerId: Int,
           isFromClient = false,
           recordsPerPartition,
           removeFromCacheCallback,
-          None
+          Some(stateLock.readLock)
         )
       }
 
@@ -271,7 +283,7 @@ class TransactionStateManager(brokerId: Int,
    * If the topic does not exist, the default partition count is returned.
    */
   private def getTransactionTopicPartitionCount: Int = {
-    zkUtils.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionLogNumPartitions)
+    zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionLogNumPartitions)
   }
 
   private def loadTransactionMetadata(topicPartition: TopicPartition, coordinatorEpoch: Int): Pool[String, TransactionMetadata] =  {
@@ -377,7 +389,7 @@ class TransactionStateManager(brokerId: Int,
           val transactionsPendingForCompletion = new mutable.ListBuffer[TransactionalIdCoordinatorEpochAndTransitMetadata]
           loadedTransactions.foreach {
             case (transactionalId, txnMetadata) =>
-              txnMetadata synchronized {
+              txnMetadata.inLock {
                 // if state is PrepareCommit or PrepareAbort we need to complete the transaction
                 txnMetadata.state match {
                   case PrepareAbort =>
@@ -485,12 +497,13 @@ class TransactionStateManager(brokerId: Int,
                | Errors.REQUEST_TIMED_OUT => // note that for timed out request we return NOT_AVAILABLE error code to let client retry
             Errors.COORDINATOR_NOT_AVAILABLE
 
-          case Errors.NOT_LEADER_FOR_PARTITION =>
+          case Errors.NOT_LEADER_FOR_PARTITION
+               | Errors.KAFKA_STORAGE_ERROR =>
             Errors.NOT_COORDINATOR
 
           case Errors.MESSAGE_TOO_LARGE
                | Errors.RECORD_LIST_TOO_LARGE =>
-            Errors.UNKNOWN
+            Errors.UNKNOWN_SERVER_ERROR
 
           case other =>
             other
@@ -509,7 +522,7 @@ class TransactionStateManager(brokerId: Int,
           case Right(Some(epochAndMetadata)) =>
             val metadata = epochAndMetadata.transactionMetadata
 
-            metadata synchronized {
+            metadata.inLock {
               if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
                 // the cache may have been changed due to txn topic partition emigration and immigration,
                 // in this case directly return NOT_COORDINATOR to client and let it to re-discover the transaction coordinator
@@ -536,7 +549,7 @@ class TransactionStateManager(brokerId: Int,
         getTransactionState(transactionalId) match {
           case Right(Some(epochAndTxnMetadata)) =>
             val metadata = epochAndTxnMetadata.transactionMetadata
-            metadata synchronized {
+            metadata.inLock {
               if (epochAndTxnMetadata.coordinatorEpoch == coordinatorEpoch) {
                 if (retryOnError(responseError)) {
                   info(s"TransactionalId ${metadata.transactionalId} append transaction log for $newMetadata transition failed due to $responseError, " +
@@ -586,25 +599,28 @@ class TransactionStateManager(brokerId: Int,
         case Right(Some(epochAndMetadata)) =>
           val metadata = epochAndMetadata.transactionMetadata
 
-          metadata synchronized {
+          val append: Boolean = metadata.inLock {
             if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
-              // the coordinator epoch has changed, reply to client immediately with with NOT_COORDINATOR
+              // the coordinator epoch has changed, reply to client immediately with NOT_COORDINATOR
               responseCallback(Errors.NOT_COORDINATOR)
+              false
             } else {
               // do not need to check the metadata object itself since no concurrent thread should be able to modify it
               // under the same coordinator epoch, so directly append to txn log now
-
-              replicaManager.appendRecords(
+              true
+            }
+          }
+          if (append) {
+            replicaManager.appendRecords(
                 newMetadata.txnTimeoutMs.toLong,
                 TransactionLog.EnforcedRequiredAcks,
                 internalTopicsAllowed = true,
                 isFromClient = false,
                 recordsPerPartition,
                 updateCacheCallback,
-                delayedProduceLock = Some(newMetadata))
+                delayedProduceLock = Some(stateLock.readLock))
 
               trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
-            }
           }
       }
     }

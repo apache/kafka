@@ -77,8 +77,8 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
     def set_authorizer_and_bounce(self, client_protocol, broker_protocol):
         self.kafka.authorizer_class_name = KafkaService.SIMPLE_AUTHORIZER
-        self.acls.set_acls(client_protocol, self.kafka, self.zk, self.topic, self.group)
-        self.acls.set_acls(broker_protocol, self.kafka, self.zk, self.topic, self.group)
+        self.acls.set_acls(client_protocol, self.kafka, self.topic, self.group)
+        self.acls.set_acls(broker_protocol, self.kafka, self.topic, self.group)
         self.bounce()
 
     def open_secured_port(self, client_protocol):

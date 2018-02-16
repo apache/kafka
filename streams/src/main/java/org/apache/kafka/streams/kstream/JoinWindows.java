@@ -55,11 +55,11 @@ import java.util.Map;
  * @see UnlimitedWindows
  * @see SessionWindows
  * @see KStream#join(KStream, ValueJoiner, JoinWindows)
- * @see KStream#join(KStream, ValueJoiner, JoinWindows, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde)
+ * @see KStream#join(KStream, ValueJoiner, JoinWindows, Joined)
  * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows)
- * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde, org.apache.kafka.common.serialization.Serde)
+ * @see KStream#leftJoin(KStream, ValueJoiner, JoinWindows, Joined)
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows)
- * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows)
+ * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows, Joined)
  * @see TimestampExtractor
  */
 public final class JoinWindows extends Windows<Window> {

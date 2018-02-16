@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.common.config;
 
-import java.util.Collections;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+
 import java.util.List;
 
 public class SaslConfigs {
@@ -29,11 +30,21 @@ public class SaslConfigs {
     public static final String GSSAPI_MECHANISM = "GSSAPI";
     public static final String DEFAULT_SASL_MECHANISM = GSSAPI_MECHANISM;
 
-    public static final String SASL_ENABLED_MECHANISMS = "sasl.enabled.mechanisms";
-    public static final String SASL_ENABLED_MECHANISMS_DOC = "The list of SASL mechanisms enabled in the Kafka server. "
-        + "The list may contain any mechanism for which a security provider is available. "
-        + "Only GSSAPI is enabled by default.";
-    public static final List<String> DEFAULT_SASL_ENABLED_MECHANISMS = Collections.singletonList(GSSAPI_MECHANISM);
+    /**
+     * @deprecated As of 1.0.0. This field will be removed in a future major release.
+     */
+    @Deprecated
+    public static final String SASL_ENABLED_MECHANISMS = BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG;
+    /**
+     * @deprecated As of 1.0.0. This field will be removed in a future major release.
+     */
+    @Deprecated
+    public static final String SASL_ENABLED_MECHANISMS_DOC = BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_DOC;
+    /**
+     * @deprecated As of 1.0.0. This field will be removed in a future major release.
+     */
+    @Deprecated
+    public static final List<String> DEFAULT_SASL_ENABLED_MECHANISMS = BrokerSecurityConfigs.DEFAULT_SASL_ENABLED_MECHANISMS;
 
     public static final String SASL_JAAS_CONFIG = "sasl.jaas.config";
     public static final String SASL_JAAS_CONFIG_DOC = "JAAS login context parameters for SASL connections in the format used by JAAS configuration files. "
@@ -61,12 +72,21 @@ public class SaslConfigs {
     public static final String SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC = "Login thread sleep time between refresh attempts.";
     public static final long DEFAULT_KERBEROS_MIN_TIME_BEFORE_RELOGIN = 1 * 60 * 1000L;
 
-    public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = "sasl.kerberos.principal.to.local.rules";
-    public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC = "A list of rules for mapping from principal names to short names (typically operating system usernames). " +
-            "The rules are evaluated in order and the first rule that matches a principal name is used to map it to a short name. Any later rules in the list are ignored. " +
-            "By default, principal names of the form {username}/{hostname}@{REALM} are mapped to {username}. " +
-            "For more details on the format please see <a href=\"#security_authz\"> security authorization and acls</a>.";
-    public static final List<String> DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = Collections.singletonList("DEFAULT");
+    /**
+     * @deprecated As of 1.0.0. This field will be removed in a future major release.
+     */
+    @Deprecated
+    public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG;
+    /**
+     * @deprecated As of 1.0.0. This field will be removed in a future major release.
+     */
+    @Deprecated
+    public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC = BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC;
+    /**
+     * @deprecated As of 1.0.0. This field will be removed in a future major release.
+     */
+    @Deprecated
+    public static final List<String> DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = BrokerSecurityConfigs.DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES;
 
     public static void addClientSaslSupport(ConfigDef config) {
         config.define(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SaslConfigs.SASL_KERBEROS_SERVICE_NAME_DOC)

@@ -79,7 +79,7 @@ public class WindowStoreUtils {
      * Safely construct a time window of the given size,
      * taking care of bounding endMs to Long.MAX_VALUE if necessary
      */
-    static TimeWindow timeWindowForSize(final long startMs, final long windowSize) {
+    public static TimeWindow timeWindowForSize(final long startMs, final long windowSize) {
         final long endMs = startMs + windowSize;
         return new TimeWindow(startMs, endMs < 0 ? Long.MAX_VALUE : endMs);
     }

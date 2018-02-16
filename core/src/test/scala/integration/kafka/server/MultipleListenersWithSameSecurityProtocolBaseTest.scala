@@ -19,13 +19,14 @@
 package kafka.server
 
 import java.io.File
-import java.util.{Collections, Properties}
+import java.util.{Collections, Objects, Properties}
 import java.util.concurrent.TimeUnit
 
 import kafka.api.SaslSetup
 import kafka.coordinator.group.OffsetConfig
 import kafka.utils.JaasTestUtils.JaasSection
-import kafka.utils.TestUtils
+import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils.Implicits._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -54,18 +55,20 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
 
   private val trustStoreFile = File.createTempFile("truststore", ".jks")
   private val servers = new ArrayBuffer[KafkaServer]
-  private val producers = mutable.Map[ListenerName, KafkaProducer[Array[Byte], Array[Byte]]]()
-  private val consumers = mutable.Map[ListenerName, KafkaConsumer[Array[Byte], Array[Byte]]]()
+  private val producers = mutable.Map[ClientMetadata, KafkaProducer[Array[Byte], Array[Byte]]]()
+  private val consumers = mutable.Map[ClientMetadata, KafkaConsumer[Array[Byte], Array[Byte]]]()
 
   protected val kafkaClientSaslMechanism = Plain
-  protected val kafkaServerSaslMechanisms = List(GssApi, Plain)
+  protected val kafkaServerSaslMechanisms = Map(
+    SecureExternal -> Seq("SCRAM-SHA-256", GssApi),
+    SecureInternal -> Seq(Plain, "SCRAM-SHA-512"))
 
-  protected def saslProperties(listenerName: ListenerName): Properties
-  protected def jaasSections: Seq[JaasSection]
+  protected def staticJaasSections: Seq[JaasSection]
+  protected def dynamicJaasSections: Properties
 
   @Before
   override def setUp(): Unit = {
-    startSasl(jaasSections)
+    startSasl(staticJaasSections)
     super.setUp()
     // 2 brokers so that we can test that the data propagates correctly via UpdateMetadadaRequest
     val numServers = 2
@@ -81,10 +84,14 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
       props.put(KafkaConfig.InterBrokerListenerNameProp, Internal)
       props.put(KafkaConfig.ZkEnableSecureAclsProp, "true")
       props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, kafkaClientSaslMechanism)
-      props.put(KafkaConfig.SaslEnabledMechanismsProp, kafkaServerSaslMechanisms.mkString(","))
+      props.put(s"${new ListenerName(SecureInternal).configPrefix}${KafkaConfig.SaslEnabledMechanismsProp}",
+        kafkaServerSaslMechanisms(SecureInternal).mkString(","))
+      props.put(s"${new ListenerName(SecureExternal).configPrefix}${KafkaConfig.SaslEnabledMechanismsProp}",
+        kafkaServerSaslMechanisms(SecureExternal).mkString(","))
       props.put(KafkaConfig.SaslKerberosServiceNameProp, "kafka")
+      props ++= dynamicJaasSections
 
-      props.putAll(TestUtils.sslConfigs(Mode.SERVER, false, Some(trustStoreFile), s"server$brokerId"))
+      props ++= TestUtils.sslConfigs(Mode.SERVER, false, Some(trustStoreFile), s"server$brokerId")
 
       // set listener-specific configs and set an invalid path for the global config to verify that the overrides work
       Seq(SecureInternal, SecureExternal).foreach { listenerName =>
@@ -103,29 +110,40 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
         Internal, config.interBrokerListenerName.value)
     }
 
-    TestUtils.createTopic(zkUtils, Topic.GROUP_METADATA_TOPIC_NAME, OffsetConfig.DefaultOffsetsTopicNumPartitions,
+    TestUtils.createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, OffsetConfig.DefaultOffsetsTopicNumPartitions,
       replicationFactor = 2, servers, servers.head.groupCoordinator.offsetsTopicConfigs)
+
+    createScramCredentials(zkConnect, JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
 
     servers.head.config.listeners.foreach { endPoint =>
       val listenerName = endPoint.listenerName
-
-      TestUtils.createTopic(zkUtils, listenerName.value, 2, 2, servers)
 
       val trustStoreFile =
         if (TestUtils.usesSslTransportLayer(endPoint.securityProtocol)) Some(this.trustStoreFile)
         else None
 
-      val saslProps =
-        if (TestUtils.usesSaslAuthentication(endPoint.securityProtocol)) Some(saslProperties(listenerName))
-        else None
-
       val bootstrapServers = TestUtils.bootstrapServers(servers, listenerName)
 
-      producers(listenerName) = TestUtils.createNewProducer(bootstrapServers, acks = -1,
-        securityProtocol = endPoint.securityProtocol, trustStoreFile = trustStoreFile, saslProperties = saslProps)
+      def addProducerConsumer(listenerName: ListenerName, mechanism: String, saslProps: Option[Properties]): Unit = {
 
-      consumers(listenerName) = TestUtils.createNewConsumer(bootstrapServers, groupId = listenerName.value,
-        securityProtocol = endPoint.securityProtocol, trustStoreFile = trustStoreFile, saslProperties = saslProps)
+        val topic = s"${listenerName.value}${producers.size}"
+        TestUtils.createTopic(zkClient, topic, 2, 2, servers)
+        val clientMetadata = ClientMetadata(listenerName, mechanism, topic)
+
+        producers(clientMetadata) = TestUtils.createNewProducer(bootstrapServers, acks = -1,
+          securityProtocol = endPoint.securityProtocol, trustStoreFile = trustStoreFile, saslProperties = saslProps)
+
+        consumers(clientMetadata) = TestUtils.createNewConsumer(bootstrapServers, groupId = clientMetadata.toString,
+          securityProtocol = endPoint.securityProtocol, trustStoreFile = trustStoreFile, saslProperties = saslProps)
+      }
+
+      if (TestUtils.usesSaslAuthentication(endPoint.securityProtocol)) {
+        kafkaServerSaslMechanisms(endPoint.listenerName.value).foreach { mechanism =>
+          addProducerConsumer(listenerName, mechanism, Some(kafkaClientSaslProperties(mechanism, dynamicJaasConfig = true)))
+        }
+      } else {
+        addProducerConsumer(listenerName, "", saslProps = None)
+      }
     }
   }
 
@@ -144,18 +162,34 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
     */
   @Test
   def testProduceConsume(): Unit = {
-    producers.foreach { case (listenerName, producer) =>
-      val producerRecords = (1 to 10).map(i => new ProducerRecord(listenerName.value, s"key$i".getBytes,
+    producers.foreach { case (clientMetadata, producer) =>
+      val producerRecords = (1 to 10).map(i => new ProducerRecord(clientMetadata.topic, s"key$i".getBytes,
         s"value$i".getBytes))
       producerRecords.map(producer.send).map(_.get(10, TimeUnit.SECONDS))
 
-      val consumer = consumers(listenerName)
-      consumer.subscribe(Collections.singleton(listenerName.value))
+      val consumer = consumers(clientMetadata)
+      consumer.subscribe(Collections.singleton(clientMetadata.topic))
       val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]
       TestUtils.waitUntilTrue(() => {
         records ++= consumer.poll(50).asScala
         records.size == producerRecords.size
-      }, s"Consumed ${records.size} records until timeout instead of the expected ${producerRecords.size} records")
+      }, s"Consumed ${records.size} records until timeout instead of the expected ${producerRecords.size} records with mechanism ${clientMetadata.saslMechanism}")
     }
+  }
+
+  protected def addDynamicJaasSection(props: Properties, listener: String, mechanism: String, jaasSection: JaasSection): Unit = {
+    val listenerName = new ListenerName(listener)
+    val prefix = listenerName.saslMechanismConfigPrefix(mechanism)
+    val jaasConfig = jaasSection.modules.head.toString
+    props.put(s"${prefix}${KafkaConfig.SaslJaasConfigProp}", jaasConfig)
+  }
+
+  case class ClientMetadata(val listenerName: ListenerName, val saslMechanism: String, topic: String) {
+    override def hashCode: Int = Objects.hash(listenerName, saslMechanism)
+    override def equals(obj: Any): Boolean = obj match {
+      case other: ClientMetadata => listenerName == other.listenerName && saslMechanism == other.saslMechanism && topic == other.topic
+      case _ => false
+    }
+    override def toString: String = s"${listenerName.value}:$saslMechanism:$topic"
   }
 }

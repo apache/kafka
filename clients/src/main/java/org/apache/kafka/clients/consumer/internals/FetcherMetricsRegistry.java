@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -28,22 +29,35 @@ public class FetcherMetricsRegistry {
     public MetricNameTemplate fetchSizeAvg;
     public MetricNameTemplate fetchSizeMax;
     public MetricNameTemplate bytesConsumedRate;
+    public MetricNameTemplate bytesConsumedTotal;
     public MetricNameTemplate recordsPerRequestAvg;
     public MetricNameTemplate recordsConsumedRate;
+    public MetricNameTemplate recordsConsumedTotal;
     public MetricNameTemplate fetchLatencyAvg;
     public MetricNameTemplate fetchLatencyMax;
     public MetricNameTemplate fetchRequestRate;
+    public MetricNameTemplate fetchRequestTotal;
     public MetricNameTemplate recordsLagMax;
+    public MetricNameTemplate recordsLeadMin;
     public MetricNameTemplate fetchThrottleTimeAvg;
     public MetricNameTemplate fetchThrottleTimeMax;
     public MetricNameTemplate topicFetchSizeAvg;
     public MetricNameTemplate topicFetchSizeMax;
     public MetricNameTemplate topicBytesConsumedRate;
+    public MetricNameTemplate topicBytesConsumedTotal;
     public MetricNameTemplate topicRecordsPerRequestAvg;
     public MetricNameTemplate topicRecordsConsumedRate;
+    public MetricNameTemplate topicRecordsConsumedTotal;
     public MetricNameTemplate partitionRecordsLag;
     public MetricNameTemplate partitionRecordsLagMax;
     public MetricNameTemplate partitionRecordsLagAvg;
+    public MetricNameTemplate partitionRecordsLead;
+    public MetricNameTemplate partitionRecordsLeadMin;
+    public MetricNameTemplate partitionRecordsLeadAvg;
+    // To remove in 2.0
+    public MetricNameTemplate partitionRecordsLagDeprecated;
+    public MetricNameTemplate partitionRecordsLagMaxDeprecated;
+    public MetricNameTemplate partitionRecordsLagAvgDeprecated;
 
     public FetcherMetricsRegistry() {
         this(new HashSet<String>(), "");
@@ -65,11 +79,15 @@ public class FetcherMetricsRegistry {
                 "The maximum number of bytes fetched per request", tags);
         this.bytesConsumedRate = new MetricNameTemplate("bytes-consumed-rate", groupName, 
                 "The average number of bytes consumed per second", tags);
+        this.bytesConsumedTotal = new MetricNameTemplate("bytes-consumed-total", groupName,
+                "The total number of bytes consumed", tags);
 
         this.recordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", groupName, 
                 "The average number of records in each request", tags);
         this.recordsConsumedRate = new MetricNameTemplate("records-consumed-rate", groupName, 
                 "The average number of records consumed per second", tags);
+        this.recordsConsumedTotal = new MetricNameTemplate("records-consumed-total", groupName,
+                "The total number of records consumed", tags);
 
         this.fetchLatencyAvg = new MetricNameTemplate("fetch-latency-avg", groupName, 
                 "The average time taken for a fetch request.", tags);
@@ -77,9 +95,13 @@ public class FetcherMetricsRegistry {
                 "The max time taken for any fetch request.", tags);
         this.fetchRequestRate = new MetricNameTemplate("fetch-rate", groupName, 
                 "The number of fetch requests per second.", tags);
+        this.fetchRequestTotal = new MetricNameTemplate("fetch-total", groupName,
+                "The total number of fetch requests.", tags);
 
         this.recordsLagMax = new MetricNameTemplate("records-lag-max", groupName, 
                 "The maximum lag in terms of number of records for any partition in this window", tags);
+        this.recordsLeadMin = new MetricNameTemplate("records-lead-min", groupName,
+                "The minimum lead in terms of number of records for any partition in this window", tags);
 
         this.fetchThrottleTimeAvg = new MetricNameTemplate("fetch-throttle-time-avg", groupName, 
                 "The average throttle time in ms", tags);
@@ -87,7 +109,7 @@ public class FetcherMetricsRegistry {
                 "The maximum throttle time in ms", tags);
 
         /***** Topic level *****/
-        Set<String> topicTags = new HashSet<>(tags);
+        Set<String> topicTags = new LinkedHashSet<>(tags);
         topicTags.add("topic");
 
         this.topicFetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName, 
@@ -96,20 +118,38 @@ public class FetcherMetricsRegistry {
                 "The maximum number of bytes fetched per request for a topic", topicTags);
         this.topicBytesConsumedRate = new MetricNameTemplate("bytes-consumed-rate", groupName, 
                 "The average number of bytes consumed per second for a topic", topicTags);
+        this.topicBytesConsumedTotal = new MetricNameTemplate("bytes-consumed-total", groupName,
+                "The total number of bytes consumed for a topic", topicTags);
 
         this.topicRecordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", groupName, 
                 "The average number of records in each request for a topic", topicTags);
         this.topicRecordsConsumedRate = new MetricNameTemplate("records-consumed-rate", groupName, 
                 "The average number of records consumed per second for a topic", topicTags);
+        this.topicRecordsConsumedTotal = new MetricNameTemplate("records-consumed-total", groupName,
+                "The total number of records consumed for a topic", topicTags);
         
+        this.partitionRecordsLagDeprecated = new MetricNameTemplate("{topic}-{partition}.records-lag", groupName,
+                "The latest lag of the partition (DEPRECATED use the tag based version instead)", tags);
+        this.partitionRecordsLagMaxDeprecated = new MetricNameTemplate("{topic}-{partition}.records-lag-max", groupName,
+                "The max lag of the partition (DEPRECATED use the tag based version instead)", tags);
+        this.partitionRecordsLagAvgDeprecated = new MetricNameTemplate("{topic}-{partition}.records-lag-avg", groupName,
+                "The average lag of the partition (DEPRECATED use the tag based version instead)", tags);
+
         /***** Partition level *****/
-        this.partitionRecordsLag = new MetricNameTemplate("{topic}-{partition}.records-lag", groupName, 
-                "The latest lag of the partition", tags);
-        this.partitionRecordsLagMax = new MetricNameTemplate("{topic}-{partition}.records-lag-max", groupName, 
-                "The max lag of the partition", tags);
-        this.partitionRecordsLagAvg = new MetricNameTemplate("{topic}-{partition}.records-lag-avg", groupName, 
-                "The average lag of the partition", tags);
-        
+        Set<String> partitionTags = new HashSet<>(topicTags);
+        partitionTags.add("partition");
+        this.partitionRecordsLag = new MetricNameTemplate("records-lag", groupName,
+                "The latest lag of the partition", partitionTags);
+        this.partitionRecordsLagMax = new MetricNameTemplate("records-lag-max", groupName,
+                "The max lag of the partition", partitionTags);
+        this.partitionRecordsLagAvg = new MetricNameTemplate("records-lag-avg", groupName,
+                "The average lag of the partition", partitionTags);
+        this.partitionRecordsLead = new MetricNameTemplate("records-lead", groupName,
+                "The latest lead of the partition", partitionTags);
+        this.partitionRecordsLeadMin = new MetricNameTemplate("records-lead-min", groupName,
+                "The min lead of the partition", partitionTags);
+        this.partitionRecordsLeadAvg = new MetricNameTemplate("records-lead-avg", groupName,
+                "The average lead of the partition", partitionTags);
     
     }
     
@@ -118,22 +158,34 @@ public class FetcherMetricsRegistry {
             fetchSizeAvg,
             fetchSizeMax,
             bytesConsumedRate,
+            bytesConsumedTotal,
             recordsPerRequestAvg,
             recordsConsumedRate,
+            recordsConsumedTotal,
             fetchLatencyAvg,
             fetchLatencyMax,
             fetchRequestRate,
+            fetchRequestTotal,
             recordsLagMax,
+            recordsLeadMin,
             fetchThrottleTimeAvg,
             fetchThrottleTimeMax,
             topicFetchSizeAvg,
             topicFetchSizeMax,
             topicBytesConsumedRate,
+            topicBytesConsumedTotal,
             topicRecordsPerRequestAvg,
             topicRecordsConsumedRate,
+            topicRecordsConsumedTotal,
+            partitionRecordsLagDeprecated,
+            partitionRecordsLagAvgDeprecated,
+            partitionRecordsLagMaxDeprecated,
             partitionRecordsLag,
             partitionRecordsLagAvg,
-            partitionRecordsLagMax
+            partitionRecordsLagMax,
+            partitionRecordsLead,
+            partitionRecordsLeadMin,
+            partitionRecordsLeadAvg
         );
     }
 

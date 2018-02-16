@@ -73,4 +73,13 @@ public class Field {
     public int hashCode() {
         return Objects.hash(name, index, schema);
     }
+
+    @Override
+    public String toString() {
+        return "Field{" +
+                "name=" + name +
+                ", index=" + index +
+                ", schema=" + schema +
+                "}";
+    }
 }

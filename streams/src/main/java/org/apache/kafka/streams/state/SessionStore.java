@@ -30,8 +30,11 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      * Fetch any sessions with the matching key and the sessions end is &ge; earliestSessionEndTime and the sessions
      * start is &le; latestSessionStartTime
      *
+     * This iterator must be closed after use.
+     *
      * @param key the key to return sessions for
-     * @param earliestSessionEndTime
+     * @param earliestSessionEndTime the end timestamp of the earliest session to search for
+     * @param latestSessionStartTime the end timestamp of the latest session to search for
      * @return iterator of sessions with the matching key and aggregated values
      * @throws NullPointerException If null is used for key.
      */
@@ -41,9 +44,12 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      * Fetch any sessions in the given range of keys and the sessions end is &ge; earliestSessionEndTime and the sessions
      * start is &le; latestSessionStartTime
      *
+     * This iterator must be closed after use.
+     *
      * @param keyFrom The first key that could be in the range
      * @param keyTo The last key that could be in the range
-     * @param earliestSessionEndTime
+     * @param earliestSessionEndTime the end timestamp of the earliest session to search for
+     * @param latestSessionStartTime the end timestamp of the latest session to search for
      * @return iterator of sessions with the matching keys and aggregated values
      * @throws NullPointerException If null is used for any key.
      */
@@ -59,7 +65,8 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
     /**
      * Write the aggregated value for the provided key to the store
      * @param sessionKey key of the session to write
-     * @param aggregate  the aggregated value for the session
+     * @param aggregate  the aggregated value for the session, it can be null;
+     *                   if the serialized bytes are also null it is interpreted as deletes
      * @throws NullPointerException If null is used for sessionKey.
      */
     void put(final Windowed<K> sessionKey, final AGG aggregate);

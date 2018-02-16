@@ -17,6 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
@@ -53,7 +54,7 @@ interface MetadataUpdater {
     long maybeUpdate(long now);
 
     /**
-     * If `request` is a metadata request, handles it and return `true`. Otherwise, returns `false`.
+     * Handle disconnections for metadata requests.
      *
      * This provides a mechanism for the `MetadataUpdater` implementation to use the NetworkClient instance for its own
      * requests with special handling for disconnections of such requests.
@@ -62,7 +63,14 @@ interface MetadataUpdater {
     void handleDisconnection(String destination);
 
     /**
-     * If `request` is a metadata request, handles it and returns `true`. Otherwise, returns `false`.
+     * Handle authentication failure. Propagate the authentication exception if awaiting metadata.
+     *
+     * @param exception authentication exception from broker
+     */
+    void handleAuthenticationFailure(AuthenticationException exception);
+
+    /**
+     * Handle responses for metadata requests.
      *
      * This provides a mechanism for the `MetadataUpdater` implementation to use the NetworkClient instance for its own
      * requests with special handling for completed receives of such requests.

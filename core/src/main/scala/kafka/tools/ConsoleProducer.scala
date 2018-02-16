@@ -21,6 +21,7 @@ import kafka.common._
 import kafka.message._
 import kafka.serializer._
 import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
+import kafka.utils.Implicits._
 import kafka.producer.{NewShinyProducer, OldProducer}
 import java.util.Properties
 import java.io._
@@ -74,7 +75,7 @@ object ConsoleProducer {
   def getReaderProps(config: ProducerConfig): Properties = {
     val props = new Properties
     props.put("topic",config.topic)
-    props.putAll(config.cmdLineProps)
+    props ++= config.cmdLineProps
     props
   }
 
@@ -106,7 +107,7 @@ object ConsoleProducer {
       if (config.options.has(config.producerConfigOpt))
         Utils.loadProps(config.options.valueOf(config.producerConfigOpt))
       else new Properties
-    props.putAll(config.extraProducerProps)
+    props ++= config.extraProducerProps
     props
   }
 

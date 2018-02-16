@@ -59,7 +59,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "3000")
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
-  override def generateConfigs() = {
+  override def generateConfigs = {
     FixedPortTestUtils.createBrokerConfigs(serverCount, zkConnect, enableControlledShutdown = false)
       .map(KafkaConfig.fromProps(_, serverConfig))
   }
@@ -69,7 +69,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     super.setUp()
 
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(this.zkUtils, topic, 1, serverCount, this.servers)
+    createTopic(topic, 1, serverCount)
   }
 
   @After
@@ -104,7 +104,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     val scheduler = new BounceBrokerScheduler(numIters)
     scheduler.start()
 
-    while (scheduler.isRunning.get()) {
+    while (scheduler.isRunning) {
       val records = consumer.poll(100).asScala
       assertEquals(Set(tp), consumer.assignment.asScala)
 
@@ -146,7 +146,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     val scheduler = new BounceBrokerScheduler(numIters)
     scheduler.start()
 
-    while(scheduler.isRunning.get()) {
+    while(scheduler.isRunning) {
       val coin = TestUtils.random.nextInt(3)
       if (coin == 0) {
         info("Seeking to end of log")
@@ -173,11 +173,11 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     val consumer = this.consumers.head
     consumer.subscribe(Collections.singleton(newtopic))
     executor.schedule(new Runnable {
-        def run() = TestUtils.createTopic(zkUtils, newtopic, serverCount, serverCount, servers)
+        def run() = createTopic(newtopic, numPartitions = serverCount, replicationFactor = serverCount)
       }, 2, TimeUnit.SECONDS)
     consumer.poll(0)
 
-    def sendRecords(numRecords: Int, topic: String = this.topic) {
+    def sendRecords(numRecords: Int, topic: String) {
       var remainingRecords = numRecords
       val endTimeMs = System.currentTimeMillis + 20000
       while (remainingRecords > 0 && System.currentTimeMillis < endTimeMs) {
@@ -288,7 +288,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   @Test
   def testCloseDuringRebalance() {
     val topic = "closetest"
-    TestUtils.createTopic(this.zkUtils, topic, 10, serverCount, this.servers)
+    createTopic(topic, 10, serverCount)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
@@ -386,13 +386,11 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       info("Closing consumer with timeout " + closeTimeoutMs + " ms.")
       consumer.close(closeTimeoutMs, TimeUnit.MILLISECONDS)
       val timeTakenMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime - startNanos)
-      maxCloseTimeMs match {
-        case Some(ms) => assertTrue("Close took too long " + timeTakenMs, timeTakenMs < ms + closeGraceTimeMs)
-        case None =>
+      maxCloseTimeMs.foreach { ms =>
+        assertTrue("Close took too long " + timeTakenMs, timeTakenMs < ms + closeGraceTimeMs)
       }
-      minCloseTimeMs match {
-        case Some(ms) => assertTrue("Close finished too quickly " + timeTakenMs, timeTakenMs >= ms)
-        case None =>
+      minCloseTimeMs.foreach { ms =>
+        assertTrue("Close finished too quickly " + timeTakenMs, timeTakenMs >= ms)
       }
       info("consumer.close() completed in " + timeTakenMs + " ms.")
     }, 0)

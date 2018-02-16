@@ -31,6 +31,9 @@ import static org.junit.Assert.assertEquals;
 public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
 
     public final ArrayList<String> processed = new ArrayList<>();
+    public final ArrayList<K> processedKeys = new ArrayList<>();
+    public final ArrayList<V> processedValues = new ArrayList<>();
+
     public final ArrayList<Long> punctuatedStreamTime = new ArrayList<>();
     public final ArrayList<Long> punctuatedSystemTime = new ArrayList<>();
 
@@ -86,6 +89,8 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
 
         @Override
         public void process(K key, V value) {
+            processedKeys.add(key);
+            processedValues.add(value);
             processed.add((key == null ? "null" : key) + ":" +
                     (value == null ? "null" : value));
 

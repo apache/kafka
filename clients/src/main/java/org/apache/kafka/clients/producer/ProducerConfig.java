@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -96,7 +97,7 @@ public class ProducerConfig extends AbstractConfig {
                                                 + "we get <code>" + BATCH_SIZE_CONFIG + "</code> worth of records for a partition it will be sent immediately regardless of this "
                                                 + "setting, however if we have fewer than this many bytes accumulated for this partition we will 'linger' for the "
                                                 + "specified time waiting for more records to show up. This setting defaults to 0 (i.e. no delay). Setting <code>" + LINGER_MS_CONFIG + "=5</code>, "
-                                                + "for example, would have the effect of reducing the number of requests sent but would add up to 5ms of latency to records sent in the absense of load.";
+                                                + "for example, would have the effect of reducing the number of requests sent but would add up to 5ms of latency to records sent in the absence of load.";
 
     /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
@@ -165,7 +166,7 @@ public class ProducerConfig extends AbstractConfig {
                                                                             + " message re-ordering due to retries (i.e., if retries are enabled).";
 
     /** <code>retries</code> */
-    public static final String RETRIES_CONFIG = "retries";
+    public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
     private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error."
                                               + " Note that this retry is no different than if the client resent the record upon receiving the error."
                                               + " Allowing retries without setting <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"
@@ -174,18 +175,18 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>key.serializer</code> */
     public static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";
-    public static final String KEY_SERIALIZER_CLASS_DOC = "Serializer class for key that implements the <code>Serializer</code> interface.";
+    public static final String KEY_SERIALIZER_CLASS_DOC = "Serializer class for key that implements the <code>org.apache.kafka.common.serialization.Serializer</code> interface.";
 
     /** <code>value.serializer</code> */
     public static final String VALUE_SERIALIZER_CLASS_CONFIG = "value.serializer";
-    public static final String VALUE_SERIALIZER_CLASS_DOC = "Serializer class for value that implements the <code>Serializer</code> interface.";
+    public static final String VALUE_SERIALIZER_CLASS_DOC = "Serializer class for value that implements the <code>org.apache.kafka.common.serialization.Serializer</code> interface.";
 
     /** <code>connections.max.idle.ms</code> */
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
 
     /** <code>partitioner.class</code> */
     public static final String PARTITIONER_CLASS_CONFIG = "partitioner.class";
-    private static final String PARTITIONER_CLASS_DOC = "Partitioner class that implements the <code>Partitioner</code> interface.";
+    private static final String PARTITIONER_CLASS_DOC = "Partitioner class that implements the <code>org.apache.kafka.clients.producer.Partitioner</code> interface.";
 
     /** <code>request.timeout.ms</code> */
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
@@ -196,17 +197,17 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
     public static final String INTERCEPTOR_CLASSES_DOC = "A list of classes to use as interceptors. "
-                                                        + "Implementing the <code>ProducerInterceptor</code> interface allows you to intercept (and possibly mutate) the records "
+                                                        + "Implementing the <code>org.apache.kafka.clients.producer.ProducerInterceptor</code> interface allows you to intercept (and possibly mutate) the records "
                                                         + "received by the producer before they are published to the Kafka cluster. By default, there are no interceptors.";
 
     /** <code>enable.idempotence</code> */
     public static final String ENABLE_IDEMPOTENCE_CONFIG = "enable.idempotence";
     public static final String ENABLE_IDEMPOTENCE_DOC = "When set to 'true', the producer will ensure that exactly one copy of each message is written in the stream. If 'false', producer "
-                                                        + "retries due to broker failures, etc., may write duplicates of the retried message in the stream. This is set to 'false' by default. "
-                                                        + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be set to 1 and "
-                                                        + "<code>" + RETRIES_CONFIG + "</code> cannot be zero. Additionally " + ACKS_CONFIG + " must be set to 'all'. If these values "
-                                                        + "are left at their defaults, we will override the default to be suitable. "
-                                                        + "If the values are set to something incompatible with the idempotent producer, a ConfigException will be thrown.";
+                                                        + "retries due to broker failures, etc., may write duplicates of the retried message in the stream. "
+                                                        + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be less than or equal to 5, "
+                                                        + "<code>" + RETRIES_CONFIG + "</code> to be greater than 0 and " + ACKS_CONFIG + " must be 'all'. If these values "
+                                                        + "are not explicitly set by the user, suitable values will be chosen. If incompatible values are set, "
+                                                        + "a ConfigException will be thrown.";
 
     /** <code> transaction.timeout.ms </code> */
     public static final String TRANSACTION_TIMEOUT_CONFIG = "transaction.timeout.ms";
@@ -217,10 +218,11 @@ public class ProducerConfig extends AbstractConfig {
     public static final String TRANSACTIONAL_ID_CONFIG = "transactional.id";
     public static final String TRANSACTIONAL_ID_DOC = "The TransactionalId to use for transactional delivery. This enables reliability semantics which span multiple producer sessions since it allows the client to guarantee that transactions using the same TransactionalId have been completed prior to starting any new transactions. If no TransactionalId is provided, then the producer is limited to idempotent delivery. " +
             "Note that enable.idempotence must be enabled if a TransactionalId is configured. " +
-            "The default is empty, which means transactions cannot be used.";
+            "The default is <code>null</code>, which means transactions cannot be used. " +
+            "Note that transactions requires a cluster of at least three brokers by default what is the recommended setting for production; for development you can change this, by adjusting broker setting `transaction.state.log.replication.factor`.";
 
     static {
-        CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+        CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Collections.emptyList(), new ConfigDef.NonNullValidator(), Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
                                 .define(RETRIES_CONFIG, Type.INT, 0, between(0, Integer.MAX_VALUE), Importance.HIGH, RETRIES_DOC)
                                 .define(ACKS_CONFIG,
@@ -272,7 +274,8 @@ public class ProducerConfig extends AbstractConfig {
                                         CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
-                                        "",
+                                        Collections.emptyList(),
+                                        new ConfigDef.NonNullValidator(),
                                         Importance.LOW,
                                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                                 .define(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
@@ -301,7 +304,8 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.MEDIUM, PARTITIONER_CLASS_DOC)
                                 .define(INTERCEPTOR_CLASSES_CONFIG,
                                         Type.LIST,
-                                        null,
+                                        Collections.emptyList(),
+                                        new ConfigDef.NonNullValidator(),
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
@@ -336,8 +340,7 @@ public class ProducerConfig extends AbstractConfig {
 
     public static Map<String, Object> addSerializerToConfig(Map<String, Object> configs,
                                                             Serializer<?> keySerializer, Serializer<?> valueSerializer) {
-        Map<String, Object> newConfigs = new HashMap<>();
-        newConfigs.putAll(configs);
+        Map<String, Object> newConfigs = new HashMap<>(configs);
         if (keySerializer != null)
             newConfigs.put(KEY_SERIALIZER_CLASS_CONFIG, keySerializer.getClass());
         if (valueSerializer != null)
@@ -346,7 +349,8 @@ public class ProducerConfig extends AbstractConfig {
     }
 
     public static Properties addSerializerToConfig(Properties properties,
-                                                   Serializer<?> keySerializer, Serializer<?> valueSerializer) {
+                                                   Serializer<?> keySerializer,
+                                                   Serializer<?> valueSerializer) {
         Properties newProperties = new Properties();
         newProperties.putAll(properties);
         if (keySerializer != null)
@@ -356,7 +360,11 @@ public class ProducerConfig extends AbstractConfig {
         return newProperties;
     }
 
-    ProducerConfig(Map<?, ?> props) {
+    public ProducerConfig(Properties props) {
+        super(CONFIG, props);
+    }
+
+    public ProducerConfig(Map<String, Object> props) {
         super(CONFIG, props);
     }
 

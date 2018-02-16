@@ -28,7 +28,7 @@ import javax.security.sasl.RealmCallback;
 
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.common.security.auth.AuthCallbackHandler;
+import org.apache.kafka.common.security.scram.ScramExtensionsCallback;
 
 /**
  * Callback handler for Sasl clients. The callbacks required for the SASL mechanism
@@ -81,7 +81,12 @@ public class SaslClientCallbackHandler implements AuthCallbackHandler {
                 ac.setAuthorized(authId.equals(authzId));
                 if (ac.isAuthorized())
                     ac.setAuthorizedID(authzId);
-            } else {
+            } else if (callback instanceof ScramExtensionsCallback) {
+                ScramExtensionsCallback sc = (ScramExtensionsCallback) callback;
+                if (!isKerberos && subject != null && !subject.getPublicCredentials(Map.class).isEmpty()) {
+                    sc.extensions((Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next());
+                }
+            }  else {
                 throw new UnsupportedCallbackException(callback, "Unrecognized SASL ClientCallback");
             }
         }

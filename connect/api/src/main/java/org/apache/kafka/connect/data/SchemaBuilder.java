@@ -76,6 +76,8 @@ public class SchemaBuilder implements Schema {
     private Map<String, String> parameters;
 
     public SchemaBuilder(Type type) {
+        if (null == type)
+            throw new SchemaBuilderException("type cannot be null");
         this.type = type;
         if (type == Type.STRUCT) {
             fields = new LinkedHashMap<>();

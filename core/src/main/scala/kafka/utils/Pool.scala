@@ -27,11 +27,6 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
 
   private val pool: ConcurrentMap[K, V] = new ConcurrentHashMap[K, V]
   private val createLock = new Object
-
-  def this(m: collection.Map[K, V]) {
-    this()
-    m.foreach(kv => pool.put(kv._1, kv._2))
-  }
   
   def put(k: K, v: V): V = pool.put(k, v)
   
@@ -85,9 +80,9 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
 
   def remove(key: K, value: V): Boolean = pool.remove(key, value)
 
-  def keys: mutable.Set[K] = pool.keySet().asScala
+  def keys: mutable.Set[K] = pool.keySet.asScala
 
-  def values: Iterable[V] = pool.values().asScala
+  def values: Iterable[V] = pool.values.asScala
 
   def clear() { pool.clear() }
   

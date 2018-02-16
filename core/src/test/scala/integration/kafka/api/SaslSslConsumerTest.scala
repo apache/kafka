@@ -14,9 +14,9 @@ package kafka.api
 
 import java.io.File
 
-import org.apache.kafka.common.protocol.SecurityProtocol
 import kafka.server.KafkaConfig
 import kafka.utils.JaasTestUtils
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Before}
 
 class SaslSslConsumerTest extends BaseConsumerTest with SaslSetup {

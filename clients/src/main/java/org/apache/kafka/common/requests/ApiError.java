@@ -21,6 +21,9 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
+
 /**
  * Encapsulates an error code (via the Errors enum) and an optional message. Generally, the optional message is only
  * defined if it adds information over the default message associated with the error code.
@@ -30,9 +33,6 @@ import org.apache.kafka.common.protocol.types.Struct;
 public class ApiError {
 
     public static final ApiError NONE = new ApiError(Errors.NONE, null);
-
-    private static final String CODE_KEY_NAME = "error_code";
-    private static final String MESSAGE_KEY_NAME = "error_message";
 
     private final Errors error;
     private final String message;
@@ -45,12 +45,9 @@ public class ApiError {
     }
 
     public ApiError(Struct struct) {
-        error = Errors.forCode(struct.getShort(CODE_KEY_NAME));
+        error = Errors.forCode(struct.get(ERROR_CODE));
         // In some cases, the error message field was introduced in newer version
-        if (struct.hasField(MESSAGE_KEY_NAME))
-            message = struct.getString(MESSAGE_KEY_NAME);
-        else
-            message = null;
+        message = struct.getOrElse(ERROR_MESSAGE, null);
     }
 
     public ApiError(Errors error, String message) {
@@ -59,10 +56,9 @@ public class ApiError {
     }
 
     public void write(Struct struct) {
-        struct.set(CODE_KEY_NAME, error.code());
-        // In some cases, the error message field was introduced in a newer protocol API version
-        if (struct.hasField(MESSAGE_KEY_NAME) && message != null && error != Errors.NONE)
-            struct.set(MESSAGE_KEY_NAME, message);
+        struct.set(ERROR_CODE, error.code());
+        if (error != Errors.NONE)
+            struct.setIfExists(ERROR_MESSAGE, message);
     }
 
     public boolean is(Errors error) {

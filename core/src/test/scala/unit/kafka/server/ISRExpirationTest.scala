@@ -16,13 +16,13 @@
 */
 package kafka.server
 
+import java.io.File
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.{Partition, Replica}
 import kafka.log.Log
-import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
-import kafka.server.epoch.{LeaderEpochCache, LeaderEpochFileCache}
+import kafka.server.epoch.LeaderEpochCache
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
@@ -54,9 +54,13 @@ class IsrExpirationTest {
 
   @Before
   def setUp() {
-    replicaManager = new ReplicaManager(configs.head, metrics, time, null, null, null, new AtomicBoolean(false),
-      QuotaFactory.instantiate(configs.head, metrics, time).follower, new BrokerTopicStats,
-      new MetadataCache(configs.head.brokerId))
+    val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
+    EasyMock.expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
+    EasyMock.replay(logManager)
+
+    replicaManager = new ReplicaManager(configs.head, metrics, time, null, null, logManager, new AtomicBoolean(false),
+      QuotaFactory.instantiate(configs.head, metrics, time, ""), new BrokerTopicStats, new MetadataCache(configs.head.brokerId),
+      new LogDirFailureChannel(configs.head.logDirs.size))
   }
 
   @After
@@ -189,8 +193,9 @@ class IsrExpirationTest {
   private def getPartitionWithAllReplicasInIsr(topic: String, partitionId: Int, time: Time, config: KafkaConfig,
                                                localLog: Log): Partition = {
     val leaderId = config.brokerId
-    val partition = replicaManager.getOrCreatePartition(new TopicPartition(topic, partitionId))
-    val leaderReplica = new Replica(leaderId, partition, time, 0, Some(localLog))
+    val tp = new TopicPartition(topic, partitionId)
+    val partition = replicaManager.getOrCreatePartition(tp)
+    val leaderReplica = new Replica(leaderId, tp, time, 0, Some(localLog))
 
     val allReplicas = getFollowerReplicas(partition, leaderId, time) :+ leaderReplica
     allReplicas.foreach(r => partition.addReplicaIfNotExists(r))
@@ -216,13 +221,14 @@ class IsrExpirationTest {
     val cache = EasyMock.createNiceMock(classOf[LeaderEpochCache])
     EasyMock.expect(log.dir).andReturn(TestUtils.tempDir()).anyTimes()
     EasyMock.expect(log.leaderEpochCache).andReturn(cache).anyTimes()
+    EasyMock.expect(log.onHighWatermarkIncremented(0L))
     EasyMock.replay(log)
     log
   }
 
   private def getFollowerReplicas(partition: Partition, leaderId: Int, time: Time): Seq[Replica] = {
     configs.filter(_.brokerId != leaderId).map { config =>
-      new Replica(config.brokerId, partition, time)
+      new Replica(config.brokerId, partition.topicPartition, time)
     }
   }
 }

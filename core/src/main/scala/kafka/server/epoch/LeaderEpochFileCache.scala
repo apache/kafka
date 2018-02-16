@@ -140,7 +140,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
       val before = epochs
       if (offset >= 0 && earliestOffset() < offset) {
         val earliest = epochs.filter(entry => entry.startOffset < offset)
-        if (earliest.size > 0) {
+        if (earliest.nonEmpty) {
           epochs = epochs --= earliest
           //If the offset is less than the earliest offset remaining, add previous epoch back, but with an updated offset
           if (offset < earliestOffset() || epochs.isEmpty)
@@ -184,7 +184,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     checkpoint.write(epochs)
   }
 
-  def epochChangeMsg(epoch: Int, offset: Long) = s"New: {epoch:$epoch, offset:$offset}, Current: {epoch:$latestEpoch, offset$latestOffset} for Partition: $topicPartition"
+  def epochChangeMsg(epoch: Int, offset: Long) = s"New: {epoch:$epoch, offset:$offset}, Current: {epoch:$latestEpoch, offset:$latestOffset} for Partition: $topicPartition"
 
   def validateAndMaybeWarn(epoch: Int, offset: Long) = {
     assert(epoch >= 0, s"Received a PartitionLeaderEpoch assignment for an epoch < 0. This should not happen. ${epochChangeMsg(epoch, offset)}")

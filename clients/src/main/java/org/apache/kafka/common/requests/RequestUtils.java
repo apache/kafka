@@ -25,58 +25,71 @@ import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourceType;
 
-class RequestUtils {
+import static org.apache.kafka.common.protocol.CommonFields.HOST;
+import static org.apache.kafka.common.protocol.CommonFields.HOST_FILTER;
+import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
+import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
+import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
+import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL_FILTER;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_FILTER;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
+
+final class RequestUtils {
+
+    private RequestUtils() {}
+
     static Resource resourceFromStructFields(Struct struct) {
-        byte resourceType = struct.getByte("resource_type");
-        String name = struct.getString("resource_name");
+        byte resourceType = struct.get(RESOURCE_TYPE);
+        String name = struct.get(RESOURCE_NAME);
         return new Resource(ResourceType.fromCode(resourceType), name);
     }
 
     static void resourceSetStructFields(Resource resource, Struct struct) {
-        struct.set("resource_type", resource.resourceType().code());
-        struct.set("resource_name", resource.name());
+        struct.set(RESOURCE_TYPE, resource.resourceType().code());
+        struct.set(RESOURCE_NAME, resource.name());
     }
 
     static ResourceFilter resourceFilterFromStructFields(Struct struct) {
-        byte resourceType = struct.getByte("resource_type");
-        String name = struct.getString("resource_name");
+        byte resourceType = struct.get(RESOURCE_TYPE);
+        String name = struct.get(RESOURCE_NAME_FILTER);
         return new ResourceFilter(ResourceType.fromCode(resourceType), name);
     }
 
     static void resourceFilterSetStructFields(ResourceFilter resourceFilter, Struct struct) {
-        struct.set("resource_type", resourceFilter.resourceType().code());
-        struct.set("resource_name", resourceFilter.name());
+        struct.set(RESOURCE_TYPE, resourceFilter.resourceType().code());
+        struct.set(RESOURCE_NAME_FILTER, resourceFilter.name());
     }
 
     static AccessControlEntry aceFromStructFields(Struct struct) {
-        String principal = struct.getString("principal");
-        String host = struct.getString("host");
-        byte operation = struct.getByte("operation");
-        byte permissionType = struct.getByte("permission_type");
+        String principal = struct.get(PRINCIPAL);
+        String host = struct.get(HOST);
+        byte operation = struct.get(OPERATION);
+        byte permissionType = struct.get(PERMISSION_TYPE);
         return new AccessControlEntry(principal, host, AclOperation.fromCode(operation),
             AclPermissionType.fromCode(permissionType));
     }
 
     static void aceSetStructFields(AccessControlEntry data, Struct struct) {
-        struct.set("principal", data.principal());
-        struct.set("host", data.host());
-        struct.set("operation", data.operation().code());
-        struct.set("permission_type", data.permissionType().code());
+        struct.set(PRINCIPAL, data.principal());
+        struct.set(HOST, data.host());
+        struct.set(OPERATION, data.operation().code());
+        struct.set(PERMISSION_TYPE, data.permissionType().code());
     }
 
     static AccessControlEntryFilter aceFilterFromStructFields(Struct struct) {
-        String principal = struct.getString("principal");
-        String host = struct.getString("host");
-        byte operation = struct.getByte("operation");
-        byte permissionType = struct.getByte("permission_type");
+        String principal = struct.get(PRINCIPAL_FILTER);
+        String host = struct.get(HOST_FILTER);
+        byte operation = struct.get(OPERATION);
+        byte permissionType = struct.get(PERMISSION_TYPE);
         return new AccessControlEntryFilter(principal, host, AclOperation.fromCode(operation),
             AclPermissionType.fromCode(permissionType));
     }
 
     static void aceFilterSetStructFields(AccessControlEntryFilter filter, Struct struct) {
-        struct.set("principal", filter.principal());
-        struct.set("host", filter.host());
-        struct.set("operation", filter.operation().code());
-        struct.set("permission_type", filter.permissionType().code());
+        struct.set(PRINCIPAL_FILTER, filter.principal());
+        struct.set(HOST_FILTER, filter.host());
+        struct.set(OPERATION, filter.operation().code());
+        struct.set(PERMISSION_TYPE, filter.permissionType().code());
     }
 }

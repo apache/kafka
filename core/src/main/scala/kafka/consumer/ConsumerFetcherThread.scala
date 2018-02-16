@@ -21,6 +21,7 @@ import kafka.api.{FetchRequestBuilder, FetchResponsePartitionData, OffsetRequest
 import kafka.cluster.BrokerEndPoint
 import kafka.message.ByteBufferMessageSet
 import kafka.server.{AbstractFetcherThread, PartitionFetchState}
+import AbstractFetcherThread.ResultWithPartitions
 import kafka.common.{ErrorMapping, TopicAndPartition}
 
 import scala.collection.Map
@@ -30,14 +31,16 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.EpochEndOffset
 
+
 @deprecated("This class has been deprecated and will be removed in a future release. " +
             "Please use org.apache.kafka.clients.consumer.internals.Fetcher instead.", "0.11.0.0")
-class ConsumerFetcherThread(name: String,
+class ConsumerFetcherThread(consumerIdString: String,
+                            fetcherId: Int,
                             val config: ConsumerConfig,
                             sourceBroker: BrokerEndPoint,
                             partitionMap: Map[TopicPartition, PartitionTopicInfo],
                             val consumerFetcherManager: ConsumerFetcherManager)
-        extends AbstractFetcherThread(name = name,
+        extends AbstractFetcherThread(name = s"ConsumerFetcherThread-$consumerIdString-$fetcherId-${sourceBroker.id}",
                                       clientId = config.clientId,
                                       sourceBroker = sourceBroker,
                                       fetchBackOffMs = config.refreshLeaderBackoffMs,
@@ -46,6 +49,9 @@ class ConsumerFetcherThread(name: String,
 
   type REQ = FetchRequest
   type PD = PartitionData
+
+  this.logIdent = s"[ConsumerFetcher consumerId=$consumerIdString, leaderId=${sourceBroker.id}, " +
+    s"fetcherId=$fetcherId] "
 
   private val clientId = config.clientId
   private val fetchSize = config.fetchMessageMaxBytes
@@ -97,17 +103,19 @@ class ConsumerFetcherThread(name: String,
 
   // any logic for partitions whose leader has changed
   def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) {
-    removePartitions(partitions.toSet)
-    consumerFetcherManager.addPartitionsWithError(partitions)
+    if (partitions.nonEmpty) {
+      removePartitions(partitions.toSet)
+      consumerFetcherManager.addPartitionsWithError(partitions)
+    }
   }
 
-  protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): FetchRequest = {
+  protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[FetchRequest] = {
     partitionMap.foreach { case ((topicPartition, partitionFetchState)) =>
       if (partitionFetchState.isReadyForFetch)
         fetchRequestBuilder.addFetch(topicPartition.topic, topicPartition.partition, partitionFetchState.fetchOffset, fetchSize)
     }
 
-    new FetchRequest(fetchRequestBuilder.build())
+    ResultWithPartitions(new FetchRequest(fetchRequestBuilder.build()), Set())
   }
 
   protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] =
@@ -115,11 +123,15 @@ class ConsumerFetcherThread(name: String,
       new TopicPartition(t, p) -> new PartitionData(value)
     }
 
-  override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): Map[TopicPartition, Int] = { Map() }
+  override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]] = {
+    ResultWithPartitions(Map(), Set())
+  }
 
   override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = { Map() }
 
-  override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): Map[TopicPartition, Long] = { Map() }
+  override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, Long]] = {
+    ResultWithPartitions(Map(), Set())
+  }
 }
 
 @deprecated("This object has been deprecated and will be removed in a future release. " +

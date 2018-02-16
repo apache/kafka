@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import java.util.Locale;
 import java.util.Objects;
@@ -70,5 +70,9 @@ public final class ListenerName {
 
     public String configPrefix() {
         return CONFIG_STATIC_PREFIX + "." + value.toLowerCase(Locale.ROOT) + ".";
+    }
+
+    public String saslMechanismConfigPrefix(String saslMechanism) {
+        return configPrefix() + saslMechanism.toLowerCase(Locale.ROOT) + ".";
     }
 }

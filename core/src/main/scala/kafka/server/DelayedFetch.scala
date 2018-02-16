@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{NotLeaderForPartitionException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{NotLeaderForPartitionException, UnknownTopicOrPartitionException, KafkaStorageException}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.IsolationLevel
 
@@ -71,6 +71,7 @@ class DelayedFetch(delayMs: Long,
    * Case B: This broker does not know of some partitions it tries to fetch
    * Case C: The fetch offset locates not on the last segment of the log
    * Case D: The accumulated bytes from all the fetching partitions exceeds the minimum bytes
+   * Case E: The partition is in an offline log directory on this broker
    *
    * Upon completion, should return whatever data is available for each valid partition
    */
@@ -117,6 +118,9 @@ class DelayedFetch(delayMs: Long,
             }
           }
         } catch {
+          case _: KafkaStorageException => // Case E
+            debug("Partition %s is in an offline log directory, satisfy %s immediately".format(topicPartition, fetchMetadata))
+            return forceComplete()
           case _: UnknownTopicOrPartitionException => // Case B
             debug("Broker no longer know of %s, satisfy %s immediately".format(topicPartition, fetchMetadata))
             return forceComplete()

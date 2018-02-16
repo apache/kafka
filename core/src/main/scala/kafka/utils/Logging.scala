@@ -17,104 +17,64 @@
 
 package kafka.utils
 
-import org.apache.log4j.Logger
+import com.typesafe.scalalogging.{LazyLogging, Logger}
+import org.slf4j.{Marker, MarkerFactory}
 
-trait Logging {
-  val loggerName = this.getClass.getName
-  lazy val logger = Logger.getLogger(loggerName)
 
-  protected var logIdent: String = null
+object Log4jControllerRegistration {
+  private val logger = Logger(this.getClass.getName)
 
-  // Force initialization to register Log4jControllerMBean
-  private val log4jController = Log4jController
+  try {
+    val log4jController = Class.forName("kafka.utils.Log4jController").asInstanceOf[Class[Object]]
+    val instance = log4jController.getDeclaredConstructor().newInstance()
+    CoreUtils.registerMBean(instance, "kafka:type=kafka.Log4jController")
+    logger.info("Registered kafka:type=kafka.Log4jController MBean")
+  } catch {
+    case _: Exception => logger.info("Couldn't register kafka:type=kafka.Log4jController MBean")
+  }
+}
 
-  private def msgWithLogIdent(msg: String) = 
-    if(logIdent == null) msg else logIdent + msg
+private object Logging {
+  private val FatalMarker: Marker = MarkerFactory.getMarker("FATAL")
+}
 
-  def trace(msg: => String): Unit = {
-    if (logger.isTraceEnabled())
-      logger.trace(msgWithLogIdent(msg))
-  }
-  def trace(e: => Throwable): Any = {
-    if (logger.isTraceEnabled())
-      logger.trace(logIdent,e)
-  }
-  def trace(msg: => String, e: => Throwable) = {
-    if (logger.isTraceEnabled())
-      logger.trace(msgWithLogIdent(msg),e)
-  }
-  def swallowTrace(action: => Unit) {
-    CoreUtils.swallow(logger.trace, action)
-  }
+trait Logging extends LazyLogging {
+  def loggerName: String = logger.underlying.getName
 
-  def isDebugEnabled: Boolean = logger.isDebugEnabled
+  protected var logIdent: String = _
 
-  def debug(msg: => String): Unit = {
-    if (logger.isDebugEnabled())
-      logger.debug(msgWithLogIdent(msg))
-  }
-  def debug(e: => Throwable): Any = {
-    if (logger.isDebugEnabled())
-      logger.debug(logIdent,e)
-  }
-  def debug(msg: => String, e: => Throwable) = {
-    if (logger.isDebugEnabled())
-      logger.debug(msgWithLogIdent(msg),e)
-  }
-  def swallowDebug(action: => Unit) {
-    CoreUtils.swallow(logger.debug, action)
-  }
+  Log4jControllerRegistration
 
-  def info(msg: => String): Unit = {
-    if (logger.isInfoEnabled())
-      logger.info(msgWithLogIdent(msg))
-  }
-  def info(e: => Throwable): Any = {
-    if (logger.isInfoEnabled())
-      logger.info(logIdent,e)
-  }
-  def info(msg: => String,e: => Throwable) = {
-    if (logger.isInfoEnabled())
-      logger.info(msgWithLogIdent(msg),e)
-  }
-  def swallowInfo(action: => Unit) {
-    CoreUtils.swallow(logger.info, action)
-  }
+  protected def msgWithLogIdent(msg: String): String =
+    if (logIdent == null) msg else logIdent + msg
 
-  def warn(msg: => String): Unit = {
-    logger.warn(msgWithLogIdent(msg))
-  }
-  def warn(e: => Throwable): Any = {
-    logger.warn(logIdent,e)
-  }
-  def warn(msg: => String, e: => Throwable) = {
-    logger.warn(msgWithLogIdent(msg),e)
-  }
-  def swallowWarn(action: => Unit) {
-    CoreUtils.swallow(logger.warn, action)
-  }
-  def swallow(action: => Unit) = swallowWarn(action)
+  def trace(msg: => String): Unit = logger.trace(msgWithLogIdent(msg))
 
-  def error(msg: => String): Unit = {
-    logger.error(msgWithLogIdent(msg))
-  }		
-  def error(e: => Throwable): Any = {
-    logger.error(logIdent,e)
-  }
-  def error(msg: => String, e: => Throwable) = {
-    logger.error(msgWithLogIdent(msg),e)
-  }
-  def swallowError(action: => Unit) {
-    CoreUtils.swallow(logger.error, action)
-  }
+  def trace(msg: => String, e: => Throwable): Unit = logger.trace(msgWithLogIdent(msg),e)
 
-  def fatal(msg: => String): Unit = {
-    logger.fatal(msgWithLogIdent(msg))
-  }
-  def fatal(e: => Throwable): Any = {
-    logger.fatal(logIdent,e)
-  }	
-  def fatal(msg: => String, e: => Throwable) = {
-    logger.fatal(msgWithLogIdent(msg),e)
-  }
+  def isDebugEnabled: Boolean = logger.underlying.isDebugEnabled
+
+  def isTraceEnabled: Boolean = logger.underlying.isTraceEnabled
+
+  def debug(msg: => String): Unit = logger.debug(msgWithLogIdent(msg))
+
+  def debug(msg: => String, e: => Throwable): Unit = logger.debug(msgWithLogIdent(msg),e)
+
+  def info(msg: => String): Unit = logger.info(msgWithLogIdent(msg))
+
+  def info(msg: => String,e: => Throwable): Unit = logger.info(msgWithLogIdent(msg),e)
+
+  def warn(msg: => String): Unit = logger.warn(msgWithLogIdent(msg))
+
+  def warn(msg: => String, e: => Throwable): Unit = logger.warn(msgWithLogIdent(msg),e)
+
+  def error(msg: => String): Unit = logger.error(msgWithLogIdent(msg))
+
+  def error(msg: => String, e: => Throwable): Unit = logger.error(msgWithLogIdent(msg),e)
+
+  def fatal(msg: => String): Unit =
+    logger.error(Logging.FatalMarker, msgWithLogIdent(msg))
+
+  def fatal(msg: => String, e: => Throwable): Unit =
+    logger.error(Logging.FatalMarker, msgWithLogIdent(msg), e)
 }

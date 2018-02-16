@@ -123,7 +123,8 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
         if self.external_jars is not None:
             cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % self.external_jars
             cmd += "export CLASSPATH; "
-        cmd += " %s kafka.tools.MirrorMaker" % self.path.script("kafka-run-class.sh", node)
+        cmd += " %s %s" % (self.path.script("kafka-run-class.sh", node),
+                           self.java_class_name())
         cmd += " --consumer.config %s" % MirrorMaker.CONSUMER_CONFIG
         cmd += " --producer.config %s" % MirrorMaker.PRODUCER_CONFIG
         cmd += " --offset.commit.interval.ms %s" % str(self.offset_commit_interval_ms)
@@ -141,12 +142,7 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
         return cmd
 
     def pids(self, node):
-        try:
-            cmd = "ps ax | grep -i MirrorMaker | grep java | grep -v grep | awk '{print $1}'"
-            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
-            return pid_arr
-        except (RemoteCommandError, ValueError):
-            return []
+        return node.account.java_pids(self.java_class_name())
 
     def alive(self, node):
         return len(self.pids(node)) > 0
@@ -185,7 +181,8 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
         self.logger.debug("Mirror maker is alive")
 
     def stop_node(self, node, clean_shutdown=True):
-        node.account.kill_process("java", allow_fail=True, clean_shutdown=clean_shutdown)
+        node.account.kill_java_processes(self.java_class_name(), allow_fail=True,
+                                         clean_shutdown=clean_shutdown)
         wait_until(lambda: not self.alive(node), timeout_sec=30, backoff_sec=.5,
                    err_msg="Mirror maker took to long to stop.")
 
@@ -193,6 +190,10 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
         if self.alive(node):
             self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
                              (self.__class__.__name__, node.account))
-        node.account.kill_process("java", clean_shutdown=False, allow_fail=True)
+        node.account.kill_java_processes(self.java_class_name(), clean_shutdown=False,
+                                         allow_fail=True)
         node.account.ssh("rm -rf %s" % MirrorMaker.PERSISTENT_ROOT, allow_fail=False)
         self.security_config.clean_node(node)
+
+    def java_class_name(self):
+        return "kafka.tools.MirrorMaker"

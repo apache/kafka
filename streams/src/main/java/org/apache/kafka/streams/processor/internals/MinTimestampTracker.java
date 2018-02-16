@@ -77,4 +77,8 @@ public class MinTimestampTracker<E> implements TimestampTracker<E> {
             return stamped.timestamp;
     }
 
+    public void clear() {
+        lastKnownTime = NOT_KNOWN;
+        ascendingSubsequence.clear();
+    }
 }

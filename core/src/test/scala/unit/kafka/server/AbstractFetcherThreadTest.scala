@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import AbstractFetcherThread._
 import com.yammer.metrics.Metrics
 import kafka.cluster.BrokerEndPoint
 import kafka.server.AbstractFetcherThread.{FetchRequest, PartitionData}
@@ -121,14 +122,18 @@ class AbstractFetcherThreadTest {
     override protected def fetch(fetchRequest: DummyFetchRequest): Seq[(TopicPartition, TestPartitionData)] =
       fetchRequest.offsets.mapValues(_ => new TestPartitionData()).toSeq
 
-    override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): DummyFetchRequest =
-      new DummyFetchRequest(partitionMap.map { case (k, v) => (k, v.fetchOffset) }.toMap)
+    override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[DummyFetchRequest] =
+      ResultWithPartitions(new DummyFetchRequest(partitionMap.map { case (k, v) => (k, v.fetchOffset) }.toMap), Set())
 
-    override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): Map[TopicPartition, Int] = { Map() }
+    override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]] = {
+      ResultWithPartitions(Map(), Set())
+    }
 
     override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = { Map() }
 
-    override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): Map[TopicPartition, Long] = { Map() }
+    override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, Long]] = {
+      ResultWithPartitions(Map(), Set())
+    }
   }
 
 
@@ -201,14 +206,14 @@ class AbstractFetcherThreadTest {
       }
     }
 
-    override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): DummyFetchRequest = {
+    override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[DummyFetchRequest] = {
       val requestMap = new mutable.HashMap[TopicPartition, Long]
       partitionMap.foreach { case (topicPartition, partitionFetchState) =>
         // Add backoff delay check
         if (partitionFetchState.isReadyForFetch)
           requestMap.put(topicPartition, partitionFetchState.fetchOffset)
       }
-      new DummyFetchRequest(requestMap)
+      ResultWithPartitions(new DummyFetchRequest(requestMap), Set())
     }
 
     override def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) = delayPartitions(partitions, fetchBackOffMs.toLong)

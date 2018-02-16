@@ -45,6 +45,17 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
                 ProcessorStateManager.storeChangelogTopic(
                     context.applicationId(),
                     inner.name())));
+
+        // if the inner store is an LRU cache, add the eviction listener to log removed record
+        if (inner instanceof MemoryLRUCache) {
+            ((MemoryLRUCache<Bytes, byte[]>) inner).whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<Bytes, byte[]>() {
+                @Override
+                public void apply(Bytes key, byte[] value) {
+                    // pass null to indicate removal
+                    changeLogger.logChange(key, null);
+                }
+            });
+        }
     }
 
     @Override
@@ -77,8 +88,8 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
 
     @Override
     public byte[] delete(final Bytes key) {
-        final byte[] oldValue = inner.get(key);
-        put(key, null);
+        final byte[] oldValue = inner.delete(key);
+        changeLogger.logChange(key, null);
         return oldValue;
     }
 

@@ -25,17 +25,21 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.distributed.DistributedHerder.HerderMetrics;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -49,6 +53,7 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -144,12 +149,14 @@ public class DistributedHerderTest {
             TASK_CONFIGS_MAP, Collections.<String>emptySet());
 
     private static final String WORKER_ID = "localhost:8083";
+    private static final String KAFKA_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
 
     @Mock private ConfigBackingStore configBackingStore;
     @Mock private StatusBackingStore statusBackingStore;
     @Mock private WorkerGroupMember member;
     private MockTime time;
     private DistributedHerder herder;
+    private MockConnectMetrics metrics;
     @Mock private Worker worker;
     @Mock private Callback<Herder.Created<ConnectorInfo>> putConnectorCallback;
     @Mock
@@ -162,22 +169,36 @@ public class DistributedHerderTest {
     private ConfigBackingStore.UpdateListener configUpdateListener;
     private WorkerRebalanceListener rebalanceListener;
 
+    private SinkConnectorConfig conn1SinkConfig;
+    private SinkConnectorConfig conn1SinkConfigUpdated;
+
     @Before
     public void setUp() throws Exception {
-        worker = PowerMock.createMock(Worker.class);
-        EasyMock.expect(worker.isSinkConnector(CONN1)).andStubReturn(Boolean.FALSE);
         time = new MockTime();
+        metrics = new MockConnectMetrics(time);
+        worker = PowerMock.createMock(Worker.class);
+        EasyMock.expect(worker.isSinkConnector(CONN1)).andStubReturn(Boolean.TRUE);
 
-        herder = PowerMock.createPartialMock(DistributedHerder.class, new String[]{"backoff", "updateDeletedConnectorStatus"},
-                new DistributedConfig(HERDER_CONFIG), worker, WORKER_ID, statusBackingStore, configBackingStore, member, MEMBER_URL, time);
+        herder = PowerMock.createPartialMock(DistributedHerder.class,
+                new String[]{"backoff", "connectorTypeForClass", "updateDeletedConnectorStatus"},
+                new DistributedConfig(HERDER_CONFIG), worker, WORKER_ID, KAFKA_CLUSTER_ID,
+                statusBackingStore, configBackingStore, member, MEMBER_URL, metrics, time);
 
         configUpdateListener = herder.new ConfigUpdateListener();
         rebalanceListener = herder.new RebalanceListener();
         plugins = PowerMock.createMock(Plugins.class);
+        conn1SinkConfig = new SinkConnectorConfig(plugins, CONN1_CONFIG);
+        conn1SinkConfigUpdated = new SinkConnectorConfig(plugins, CONN1_CONFIG_UPDATED);
+        EasyMock.expect(herder.connectorTypeForClass(BogusSourceConnector.class.getName())).andReturn(ConnectorType.SOURCE).anyTimes();
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
         delegatingLoader = PowerMock.createMock(DelegatingClassLoader.class);
         PowerMock.mockStatic(Plugins.class);
         PowerMock.expectPrivate(herder, "updateDeletedConnectorStatus").andVoid().anyTimes();
+    }
+
+    @After
+    public void tearDown() {
+        if (metrics != null) metrics.stop();
     }
 
     @Test
@@ -192,7 +213,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
 
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
         worker.startTask(EasyMock.eq(TASK1), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
@@ -202,6 +223,8 @@ public class DistributedHerderTest {
         PowerMock.replayAll();
 
         herder.tick();
+        time.sleep(1000L);
+        assertStatistics(3, 1, 100, 1000L);
 
         PowerMock.verifyAll();
     }
@@ -217,7 +240,7 @@ public class DistributedHerderTest {
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
         worker.startTask(EasyMock.eq(TASK1), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
@@ -233,14 +256,22 @@ public class DistributedHerderTest {
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
         PowerMock.replayAll();
 
+        time.sleep(1000L);
+        assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
         herder.tick();
+
+        time.sleep(2000L);
+        assertStatistics(3, 1, 100, 2000);
         herder.tick();
+
+        time.sleep(3000L);
+        assertStatistics(3, 2, 100, 3000);
 
         PowerMock.verifyAll();
     }
@@ -256,7 +287,7 @@ public class DistributedHerderTest {
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
         worker.startTask(EasyMock.eq(TASK1), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
@@ -280,7 +311,12 @@ public class DistributedHerderTest {
         PowerMock.replayAll();
 
         herder.tick();
+        time.sleep(1000L);
+        assertStatistics(3, 1, 100, 1000L);
+
         herder.tick();
+        time.sleep(2000L);
+        assertStatistics(3, 2, 100, 2000L);
 
         PowerMock.verifyAll();
     }
@@ -319,7 +355,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
 
         // config validation
-        Connector connectorMock = PowerMock.createMock(Connector.class);
+        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
         EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(3);
         EasyMock.expect(plugins.compareAndSwapLoaders(connectorMock)).andReturn(delegatingLoader);
         EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
@@ -330,7 +366,8 @@ public class DistributedHerderTest {
         // CONN2 is new, should succeed
         configBackingStore.putConnectorConfig(CONN2, CONN2_CONFIG);
         PowerMock.expectLastCall();
-        ConnectorInfo info = new ConnectorInfo(CONN2, CONN2_CONFIG, Collections.<ConnectorTaskId>emptyList());
+        ConnectorInfo info = new ConnectorInfo(CONN2, CONN2_CONFIG, Collections.<ConnectorTaskId>emptyList(),
+            ConnectorType.SOURCE);
         putConnectorCallback.onCompletion(null, new Herder.Created<>(true, info));
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
@@ -341,6 +378,9 @@ public class DistributedHerderTest {
 
         herder.putConnectorConfig(CONN2, CONN2_CONFIG, false, putConnectorCallback);
         herder.tick();
+
+        time.sleep(1000L);
+        assertStatistics(3, 1, 100, 1000L);
 
         PowerMock.verifyAll();
     }
@@ -358,7 +398,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
 
         // config validation
-        Connector connectorMock = PowerMock.createMock(Connector.class);
+        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
         EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(3);
         EasyMock.expect(plugins.compareAndSwapLoaders(connectorMock)).andReturn(delegatingLoader);
         EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
@@ -387,6 +427,9 @@ public class DistributedHerderTest {
         assertTrue(error.hasCaptured());
         assertTrue(error.getValue() instanceof BadRequestException);
 
+        time.sleep(1000L);
+        assertStatistics(3, 1, 100, 1000L);
+
         PowerMock.verifyAll();
     }
 
@@ -400,7 +443,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
 
         // config validation
-        Connector connectorMock = PowerMock.createMock(Connector.class);
+        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
         EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(3);
         EasyMock.expect(plugins.compareAndSwapLoaders(connectorMock)).andReturn(delegatingLoader);
         EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
@@ -431,6 +474,9 @@ public class DistributedHerderTest {
 
         assertTrue(error.hasCaptured());
         assertTrue(error.getValue() instanceof BadRequestException);
+
+        time.sleep(1000L);
+        assertStatistics(3, 1, 100, 1000L);
 
         PowerMock.verifyAll();
     }
@@ -475,12 +521,17 @@ public class DistributedHerderTest {
         assertTrue(error.hasCaptured());
         assertTrue(error.getValue() instanceof BadRequestException);
 
+        time.sleep(1000L);
+        assertStatistics(3, 1, 100, 1000L);
+
         PowerMock.verifyAll();
     }
 
     @Test
     public void testCreateConnectorAlreadyExists() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
+        EasyMock.expect(worker.getPlugins()).andReturn(plugins);
+        EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(null);
         expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
         expectPostRebalanceCatchup(SNAPSHOT);
 
@@ -498,6 +549,9 @@ public class DistributedHerderTest {
         herder.putConnectorConfig(CONN1, CONN1_CONFIG, false, putConnectorCallback);
         herder.tick();
 
+        time.sleep(1000L);
+        assertStatistics(3, 1, 100, 1000L);
+
         PowerMock.verifyAll();
     }
 
@@ -512,7 +566,7 @@ public class DistributedHerderTest {
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
 
         // And delete the connector
         member.wakeup();
@@ -530,12 +584,15 @@ public class DistributedHerderTest {
         herder.deleteConnectorConfig(CONN1, putConnectorCallback);
         herder.tick();
 
+        time.sleep(1000L);
+        assertStatistics(3, 1, 100, 1000L);
+
         PowerMock.verifyAll();
     }
 
     @Test
     public void testRestartConnector() throws Exception {
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andStubReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andStubReturn(TASK_CONFIGS);
 
         // get the initial assignment
         EasyMock.expect(member.memberId()).andStubReturn("leader");
@@ -667,9 +724,15 @@ public class DistributedHerderTest {
         PowerMock.replayAll();
 
         herder.tick();
+        time.sleep(1000L);
+        assertStatistics(3, 1, 100, 1000L);
+
         FutureCallback<Void> callback = new FutureCallback<>();
         herder.restartConnector(CONN1, callback);
         herder.tick();
+
+        time.sleep(2000L);
+        assertStatistics(3, 1, 100, 3000L);
 
         try {
             callback.get(1000L, TimeUnit.MILLISECONDS);
@@ -685,7 +748,7 @@ public class DistributedHerderTest {
 
     @Test
     public void testRestartTask() throws Exception {
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andStubReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andStubReturn(TASK_CONFIGS);
 
         // get the initial assignment
         EasyMock.expect(member.memberId()).andStubReturn("leader");
@@ -866,7 +929,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.getPlugins()).andReturn(plugins);
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
@@ -895,7 +958,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.getPlugins()).andReturn(plugins);
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
@@ -911,7 +974,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.getPlugins()).andReturn(plugins);
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
@@ -939,7 +1002,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.getPlugins()).andReturn(plugins);
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
@@ -992,7 +1055,7 @@ public class DistributedHerderTest {
 
         // we expect reconfiguration after resuming
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
 
         worker.setTargetState(CONN1, TargetState.STARTED);
         PowerMock.expectLastCall();
@@ -1186,7 +1249,7 @@ public class DistributedHerderTest {
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.getPlugins()).andReturn(plugins);
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
         worker.startTask(EasyMock.eq(TASK1), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
@@ -1197,7 +1260,13 @@ public class DistributedHerderTest {
         PowerMock.replayAll();
 
         herder.tick();
+        time.sleep(1000L);
+        assertStatistics("leaderUrl", true, 3, 0, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);
+
         herder.tick();
+        time.sleep(2000L);
+        assertStatistics("leaderUrl", false, 3, 1, 100, 2000L);
+
 
         PowerMock.verifyAll();
     }
@@ -1205,6 +1274,7 @@ public class DistributedHerderTest {
     @Test
     public void testAccessors() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
+        EasyMock.expect(worker.getPlugins()).andReturn(plugins).anyTimes();
         expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
         expectPostRebalanceCatchup(SNAPSHOT);
 
@@ -1231,7 +1301,8 @@ public class DistributedHerderTest {
         assertTrue(listConnectorsCb.isDone());
         assertEquals(Collections.singleton(CONN1), listConnectorsCb.get());
         assertTrue(connectorInfoCb.isDone());
-        ConnectorInfo info = new ConnectorInfo(CONN1, CONN1_CONFIG, Arrays.asList(TASK0, TASK1, TASK2));
+        ConnectorInfo info = new ConnectorInfo(CONN1, CONN1_CONFIG, Arrays.asList(TASK0, TASK1, TASK2),
+            ConnectorType.SOURCE);
         assertEquals(info, connectorInfoCb.get());
         assertTrue(connectorConfigCb.isDone());
         assertEquals(CONN1_CONFIG, connectorConfigCb.get());
@@ -1254,7 +1325,7 @@ public class DistributedHerderTest {
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
 
         // list connectors, get connector info, get connector config, get task configs
         member.wakeup();
@@ -1267,8 +1338,8 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
 
         // config validation
-        Connector connectorMock = PowerMock.createMock(Connector.class);
-        EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(5);
+        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
+        EasyMock.expect(worker.getPlugins()).andReturn(plugins).anyTimes();
         EasyMock.expect(plugins.compareAndSwapLoaders(connectorMock)).andReturn(delegatingLoader);
         EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
         EasyMock.expect(connectorMock.config()).andReturn(new ConfigDef());
@@ -1293,7 +1364,7 @@ public class DistributedHerderTest {
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
-        EasyMock.expect(worker.connectorTaskConfigs(CONN1, MAX_TASKS, null)).andReturn(TASK_CONFIGS);
+        EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfigUpdated)).andReturn(TASK_CONFIGS);
 
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
@@ -1318,7 +1389,8 @@ public class DistributedHerderTest {
         herder.putConnectorConfig(CONN1, CONN1_CONFIG_UPDATED, true, putConfigCb);
         herder.tick();
         assertTrue(putConfigCb.isDone());
-        ConnectorInfo updatedInfo = new ConnectorInfo(CONN1, CONN1_CONFIG_UPDATED, Arrays.asList(TASK0, TASK1, TASK2));
+        ConnectorInfo updatedInfo = new ConnectorInfo(CONN1, CONN1_CONFIG_UPDATED, Arrays.asList(TASK0, TASK1, TASK2),
+            ConnectorType.SOURCE);
         assertEquals(new Herder.Created<>(false, updatedInfo), putConfigCb.get());
 
         // Check config again to validate change
@@ -1357,7 +1429,8 @@ public class DistributedHerderTest {
                     rebalanceListener.onRevoked("leader", revokedConnectors, revokedTasks);
                 ConnectProtocol.Assignment assignment = new ConnectProtocol.Assignment(
                         error, "leader", "leaderUrl", offset, assignedConnectors, assignedTasks);
-                rebalanceListener.onAssigned(assignment, 0);
+                rebalanceListener.onAssigned(assignment, 3);
+                time.sleep(100L);
                 return null;
             }
         });
@@ -1389,6 +1462,35 @@ public class DistributedHerderTest {
         EasyMock.expect(configBackingStore.snapshot()).andReturn(readToEndSnapshot);
     }
 
+    private void assertStatistics(int expectedEpoch, int completedRebalances, double rebalanceTime, double millisSinceLastRebalance) {
+        String expectedLeader = completedRebalances <= 0 ? null : "leaderUrl";
+        assertStatistics(expectedLeader, false, expectedEpoch, completedRebalances, rebalanceTime, millisSinceLastRebalance);
+    }
+
+    private void assertStatistics(String expectedLeader, boolean isRebalancing, int expectedEpoch, int completedRebalances, double rebalanceTime, double millisSinceLastRebalance) {
+        HerderMetrics herderMetrics = herder.herderMetrics();
+        MetricGroup group = herderMetrics.metricGroup();
+        double epoch = MockConnectMetrics.currentMetricValueAsDouble(metrics, group, "epoch");
+        String leader = MockConnectMetrics.currentMetricValueAsString(metrics, group, "leader-name");
+        double rebalanceCompletedTotal = MockConnectMetrics.currentMetricValueAsDouble(metrics, group, "completed-rebalances-total");
+        double rebalancing = MockConnectMetrics.currentMetricValueAsDouble(metrics, group, "rebalancing");
+        double rebalanceTimeMax = MockConnectMetrics.currentMetricValueAsDouble(metrics, group, "rebalance-max-time-ms");
+        double rebalanceTimeAvg = MockConnectMetrics.currentMetricValueAsDouble(metrics, group, "rebalance-avg-time-ms");
+        double rebalanceTimeSinceLast = MockConnectMetrics.currentMetricValueAsDouble(metrics, group, "time-since-last-rebalance-ms");
+
+        assertEquals(expectedEpoch, epoch, 0.0001d);
+        assertEquals(expectedLeader, leader);
+        assertEquals(completedRebalances, rebalanceCompletedTotal, 0.0001d);
+        assertEquals(isRebalancing ? 1.0d : 0.0d, rebalancing, 0.0001d);
+        assertEquals(millisSinceLastRebalance, rebalanceTimeSinceLast, 0.0001d);
+        if (rebalanceTime <= 0L) {
+            assertEquals(Double.NEGATIVE_INFINITY, rebalanceTimeMax, 0.0001d);
+            assertEquals(0.0d, rebalanceTimeAvg, 0.0001d);
+        } else {
+            assertEquals(rebalanceTime, rebalanceTimeMax, 0.0001d);
+            assertEquals(rebalanceTime, rebalanceTimeAvg, 0.0001d);
+        }
+    }
 
     // We need to use a real class here due to some issue with mocking java.lang.Class
     private abstract class BogusSourceConnector extends SourceConnector {

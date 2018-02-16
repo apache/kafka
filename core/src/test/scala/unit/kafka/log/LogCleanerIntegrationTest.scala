@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -22,6 +22,7 @@ import java.util.Properties
 
 import kafka.api.KAFKA_0_11_0_IV0
 import kafka.api.{KAFKA_0_10_0_IV1, KAFKA_0_9_0}
+import kafka.server.KafkaConfig
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -100,6 +101,8 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
 
       val messages = writeDups(numKeys = numKeys, numDups = 3, log = log, codec = codec)
       val startSize = log.size
+
+      log.onHighWatermarkIncremented(log.logEndOffset)
 
       val firstDirty = log.activeSegment.baseOffset
       cleaner.startup()
@@ -225,6 +228,56 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
     checkLogAfterAppendingDups(log, startSize, appends)
   }
 
+  @Test
+  def cleanerConfigUpdateTest() {
+    val largeMessageKey = 20
+    val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)
+    val maxMessageSize = largeMessageSet.sizeInBytes
+
+    cleaner = makeCleaner(partitions = topicPartitions, backOffMs = 1, maxMessageSize = maxMessageSize,
+      cleanerIoBufferSize = Some(1))
+    val log = cleaner.logs.get(topicPartitions(0))
+
+    val appends = writeDups(numKeys = 100, numDups = 3, log = log, codec = codec)
+    val startSize = log.size
+    cleaner.startup()
+    assertEquals(1, cleaner.cleanerCount)
+
+    // Verify no cleaning with LogCleanerIoBufferSizeProp=1
+    val firstDirty = log.activeSegment.baseOffset
+    val topicPartition = new TopicPartition("log", 0)
+    cleaner.awaitCleaned(topicPartition, firstDirty, maxWaitMs = 10)
+    assertTrue("Should not have cleaned", cleaner.cleanerManager.allCleanerCheckpoints.isEmpty)
+
+    def kafkaConfigWithCleanerConfig(cleanerConfig: CleanerConfig): KafkaConfig = {
+      val props = TestUtils.createBrokerConfig(0, "localhost:2181")
+      props.put(KafkaConfig.LogCleanerThreadsProp, cleanerConfig.numThreads.toString)
+      props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, cleanerConfig.dedupeBufferSize.toString)
+      props.put(KafkaConfig.LogCleanerDedupeBufferLoadFactorProp, cleanerConfig.dedupeBufferLoadFactor.toString)
+      props.put(KafkaConfig.LogCleanerIoBufferSizeProp, cleanerConfig.ioBufferSize.toString)
+      props.put(KafkaConfig.MessageMaxBytesProp, cleanerConfig.maxMessageSize.toString)
+      props.put(KafkaConfig.LogCleanerBackoffMsProp, cleanerConfig.backOffMs.toString)
+      props.put(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, cleanerConfig.maxIoBytesPerSecond.toString)
+      KafkaConfig.fromProps(props)
+    }
+
+    // Verify cleaning done with larger LogCleanerIoBufferSizeProp
+    val oldConfig = kafkaConfigWithCleanerConfig(cleaner.currentConfig)
+    val newConfig = kafkaConfigWithCleanerConfig(CleanerConfig(numThreads = 2,
+      dedupeBufferSize = cleaner.currentConfig.dedupeBufferSize,
+      dedupeBufferLoadFactor = cleaner.currentConfig.dedupeBufferLoadFactor,
+      ioBufferSize = 100000,
+      maxMessageSize = cleaner.currentConfig.maxMessageSize,
+      maxIoBytesPerSecond = cleaner.currentConfig.maxIoBytesPerSecond,
+      backOffMs = cleaner.currentConfig.backOffMs))
+    cleaner.reconfigure(oldConfig, newConfig)
+
+    assertEquals(2, cleaner.cleanerCount)
+    checkLastCleaned("log", 0, firstDirty)
+    val compactedSize = log.logSegments.map(_.size).sum
+    assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)
+  }
+
   private def checkLastCleaned(topic: String, partitionId: Int, firstDirty: Long) {
     // wait until cleaning up to base_offset, note that cleaning happens only when "log dirty ratio" is higher than
     // LogConfig.MinCleanableDirtyRatioProp
@@ -266,7 +319,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
   }
 
   private def writeDupsSingleMessageSet(numKeys: Int, numDups: Int, log: Log, codec: CompressionType,
-                                        startKey: Int = 0, magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): Seq[(Int, String, Long)] = {
+                                        startKey: Int = 0, magicValue: Byte): Seq[(Int, String, Long)] = {
     val kvs = for (_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val payload = counter.toString
       counter += 1

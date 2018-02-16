@@ -43,8 +43,16 @@ public abstract class SourceTask implements Task {
     public abstract void start(Map<String, String> props);
 
     /**
-     * Poll this SourceTask for new records. This method should block if no data is currently
-     * available.
+     * <p>
+     * Poll this source task for new records. If no data is currently available, this method
+     * should block but return control to the caller regularly (by returning {@code null}) in
+     * order for the task to transition to the {@code PAUSED} state if requested to do so.
+     * </p>
+     * <p>
+     * The task will be {@link #stop() stopped} on a separate thread, and when that happens
+     * this method is expected to unblock, quickly finish up any remaining processing, and
+     * return.
+     * </p>
      *
      * @return a list of source records
      */

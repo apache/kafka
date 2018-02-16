@@ -19,6 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
@@ -29,8 +30,8 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
+import java.nio.file.Files;
 import java.util.Iterator;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -135,12 +136,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
         if (size < 0)
             throw new IllegalArgumentException("Invalid size: " + size);
 
-        final int end;
-        // handle integer overflow
-        if (this.start + position + size < 0)
-            end = sizeInBytes();
-        else
-            end = Math.min(this.start + position + size, sizeInBytes());
+        int end = this.start + position + size;
+        // handle integer overflow or if end is beyond the end of the file
+        if (end < 0 || end >= start + sizeInBytes())
+            end = start + sizeInBytes();
         return new FileRecords(file, channel, this.start + position, end, true);
     }
 
@@ -172,12 +171,21 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Delete this message set from the filesystem
-     * @return True iff this message set was deleted.
+     * Close file handlers used by the FileChannel but don't write to disk. This is used when the disk may have failed
      */
-    public boolean delete() {
+    public void closeHandlers() throws IOException {
+        channel.close();
+    }
+
+    /**
+     * Delete this message set from the filesystem
+     * @throws IOException if deletion fails due to an I/O error
+     * @return  {@code true} if the file was deleted by this method; {@code false} if the file could not be deleted
+     *          because it did not exist
+     */
+    public boolean deleteIfExists() throws IOException {
         Utils.closeQuietly(channel, "FileChannel");
-        return file.delete();
+        return Files.deleteIfExists(file.toPath());
     }
 
     /**
@@ -230,19 +238,19 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     @Override
-    public Records downConvert(byte toMagic, long firstOffset) {
-        List<? extends RecordBatch> batches = Utils.toList(batches().iterator());
-        if (batches.isEmpty()) {
+    public ConvertedRecords<? extends Records> downConvert(byte toMagic, long firstOffset, Time time) {
+        ConvertedRecords<MemoryRecords> convertedRecords = downConvert(batches, toMagic, firstOffset, time);
+        if (convertedRecords.recordsProcessingStats().numRecordsConverted() == 0) {
             // This indicates that the message is too large, which means that the buffer is not large
-            // enough to hold a full record batch. We just return all the bytes in the file message set.
-            // Even though the message set does not have the right format version, we expect old clients
-            // to raise an error to the user after reading the message size and seeing that there
-            // are not enough available bytes in the response to read the full message. Note that this is
+            // enough to hold a full record batch. We just return all the bytes in this instance.
+            // Even though the record batch does not have the right format version, we expect old clients
+            // to raise an error to the user after reading the record batch size and seeing that there
+            // are not enough available bytes in the response to read it fully. Note that this is
             // only possible prior to KIP-74, after which the broker was changed to always return at least
-            // one full message, even if it requires exceeding the max fetch size requested by the client.
-            return this;
+            // one full record batch, even if it requires exceeding the max fetch size requested by the client.
+            return new ConvertedRecords<>(this, RecordsProcessingStats.EMPTY);
         } else {
-            return downConvert(batches, toMagic, firstOffset);
+            return convertedRecords;
         }
     }
 

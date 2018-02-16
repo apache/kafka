@@ -19,6 +19,7 @@ package kafka.server.checkpoints
 import java.io._
 import java.util.regex.Pattern
 
+import kafka.server.LogDirFailureChannel
 import kafka.server.epoch.EpochEntry
 
 import scala.collection._
@@ -55,10 +56,10 @@ object LeaderEpochCheckpointFile {
 /**
   * This class persists a map of (LeaderEpoch => Offsets) to a file (for a certain replica)
   */
-class LeaderEpochCheckpointFile(val file: File) extends LeaderEpochCheckpoint {
+class LeaderEpochCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureChannel = null) extends LeaderEpochCheckpoint {
   import LeaderEpochCheckpointFile._
 
-  val checkpoint = new CheckpointFile[EpochEntry](file, CurrentVersion, Formatter)
+  val checkpoint = new CheckpointFile[EpochEntry](file, CurrentVersion, Formatter, logDirFailureChannel, file.getParentFile.getParent)
 
   def write(epochs: Seq[EpochEntry]): Unit = checkpoint.write(epochs)
 

@@ -37,7 +37,7 @@ class KafkaStream[K,V](private val queue: BlockingQueue[FetchedDataChunk],
   /**
    *  Create an iterator over messages in the stream.
    */
-  def iterator(): ConsumerIterator[K,V] = iter
+  def iterator: ConsumerIterator[K,V] = iter
 
   /**
    * This method clears the queue being iterated during the consumer rebalancing. This is mainly

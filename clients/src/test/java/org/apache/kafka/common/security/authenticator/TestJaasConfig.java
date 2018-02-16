@@ -54,13 +54,28 @@ public class TestJaasConfig extends Configuration {
         return new Password(loginModule(mechanism) + " required username=" + username + " password=" + password + ";");
     }
 
-    public void setPlainClientOptions(String clientUsername, String clientPassword) {
+    public static Password jaasConfigProperty(String mechanism, Map<String, Object> options) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(loginModule(mechanism));
+        builder.append(" required");
+        for (Map.Entry<String, Object> option : options.entrySet()) {
+            builder.append(' ');
+            builder.append(option.getKey());
+            builder.append('=');
+            builder.append(option.getValue());
+        }
+        builder.append(';');
+        return new Password(builder.toString());
+    }
+
+    public void setClientOptions(String saslMechanism, String clientUsername, String clientPassword) {
         Map<String, Object> options = new HashMap<>();
         if (clientUsername != null)
             options.put("username", clientUsername);
         if (clientPassword != null)
             options.put("password", clientPassword);
-        createOrUpdateEntry(LOGIN_CONTEXT_CLIENT, PlainLoginModule.class.getName(), options);
+        Class<?> loginModuleClass = ScramMechanism.isScram(saslMechanism) ? ScramLoginModule.class : PlainLoginModule.class;
+        createOrUpdateEntry(LOGIN_CONTEXT_CLIENT, loginModuleClass.getName(), options);
     }
 
     public void createOrUpdateEntry(String name, String loginModule, Map<String, Object> options) {

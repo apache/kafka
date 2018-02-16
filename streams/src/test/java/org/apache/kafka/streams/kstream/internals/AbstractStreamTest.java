@@ -17,43 +17,72 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.junit.After;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.Random;
+
+import static org.easymock.EasyMock.createMock;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertTrue;
 
 public class AbstractStreamTest {
 
     private final String topicName = "topic";
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
-    private KStreamTestDriver driver;
+    @Test
+    public void testToInternlValueTransformerSupplierSuppliesNewTransformers() {
+        final ValueTransformerSupplier vts = createMock(ValueTransformerSupplier.class);
+        expect(vts.get()).andReturn(null).times(3);
+        final InternalValueTransformerWithKeySupplier ivtwks =
+            AbstractStream.toInternalValueTransformerSupplier(vts);
+        replay(vts);
+        ivtwks.get();
+        ivtwks.get();
+        ivtwks.get();
+        verify(vts);
+    }
 
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
+    @Test
+    public void testToInternalValueTransformerSupplierSuppliesNewTransformers() {
+        final ValueTransformerWithKeySupplier vtwks =
+            createMock(ValueTransformerWithKeySupplier.class);
+        expect(vtwks.get()).andReturn(null).times(3);
+        final InternalValueTransformerWithKeySupplier ivtwks =
+            AbstractStream.toInternalValueTransformerSupplier(vtwks);
+        replay(vtwks);
+        ivtwks.get();
+        ivtwks.get();
+        ivtwks.get();
+        verify(vtwks);
     }
 
     @Test
     public void testShouldBeExtensible() {
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
         final MockProcessorSupplier<Integer, String> processor = new MockProcessorSupplier<>();
+        final String topicName = "topic";
 
-        ExtendedKStream<Integer, String> stream = new ExtendedKStream<>(builder.stream(Serdes.Integer(), Serdes.String(), topicName));
+        ExtendedKStream<Integer, String> stream = new ExtendedKStream<>(builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String())));
 
         stream.randomFilter().process(processor);
 
-        driver = new KStreamTestDriver(builder);
+        driver.setUp(builder);
         for (int expectedKey : expectedKeys) {
             driver.process(topicName, expectedKey, "V" + expectedKey);
         }
@@ -63,14 +92,14 @@ public class AbstractStreamTest {
 
     private class ExtendedKStream<K, V> extends AbstractStream<K> {
 
-        ExtendedKStream(KStream<K, V> stream) {
+        ExtendedKStream(final KStream<K, V> stream) {
             super((KStreamImpl<K, V>) stream);
         }
 
         KStream<K, V> randomFilter() {
-            String name = this.topology.newName("RANDOM-FILTER-");
-            this.topology.addProcessor(name, new ExtendedKStreamDummy(), this.name);
-            return new KStreamImpl<>(topology, name, sourceNodes, false);
+            String name = builder.newProcessorName("RANDOM-FILTER-");
+            builder.internalTopologyBuilder.addProcessor(name, new ExtendedKStreamDummy(), this.name);
+            return new KStreamImpl<>(builder, name, sourceNodes, false);
         }
     }
 

@@ -205,11 +205,11 @@ public class ConsumerConfig extends AbstractConfig {
 
     /** <code>key.deserializer</code> */
     public static final String KEY_DESERIALIZER_CLASS_CONFIG = "key.deserializer";
-    public static final String KEY_DESERIALIZER_CLASS_DOC = "Deserializer class for key that implements the <code>Deserializer</code> interface.";
+    public static final String KEY_DESERIALIZER_CLASS_DOC = "Deserializer class for key that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface.";
 
     /** <code>value.deserializer</code> */
     public static final String VALUE_DESERIALIZER_CLASS_CONFIG = "value.deserializer";
-    public static final String VALUE_DESERIALIZER_CLASS_DOC = "Deserializer class for value that implements the <code>Deserializer</code> interface.";
+    public static final String VALUE_DESERIALIZER_CLASS_DOC = "Deserializer class for value that implements the <code>org.apache.kafka.common.serialization.Deserializer</code> interface.";
 
     /** <code>connections.max.idle.ms</code> */
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
@@ -221,7 +221,7 @@ public class ConsumerConfig extends AbstractConfig {
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
     public static final String INTERCEPTOR_CLASSES_DOC = "A list of classes to use as interceptors. "
-                                                        + "Implementing the <code>ConsumerInterceptor</code> interface allows you to intercept (and possibly mutate) records "
+                                                        + "Implementing the <code>org.apache.kafka.clients.consumer.ConsumerInterceptor</code> interface allows you to intercept (and possibly mutate) records "
                                                         + "received by the consumer. By default, there are no interceptors.";
 
 
@@ -257,6 +257,8 @@ public class ConsumerConfig extends AbstractConfig {
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
+                                        Collections.emptyList(),
+                                        new ConfigDef.NonNullValidator(),
                                         Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(GROUP_ID_CONFIG, Type.STRING, "", Importance.HIGH, GROUP_ID_DOC)
@@ -273,6 +275,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                                         Type.LIST,
                                         Collections.singletonList(RangeAssignor.class),
+                                        new ConfigDef.NonNullValidator(),
                                         Importance.MEDIUM,
                                         PARTITION_ASSIGNMENT_STRATEGY_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG,
@@ -382,7 +385,8 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
-                                        "",
+                                        Collections.emptyList(),
+                                        new ConfigDef.NonNullValidator(),
                                         Importance.LOW,
                                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                                 .define(KEY_DESERIALIZER_CLASS_CONFIG,
@@ -407,7 +411,8 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
                                 .define(INTERCEPTOR_CLASSES_CONFIG,
                                         Type.LIST,
-                                        null,
+                                        Collections.emptyList(),
+                                        new ConfigDef.NonNullValidator(),
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
                                 .define(MAX_POLL_RECORDS_CONFIG,
@@ -456,8 +461,7 @@ public class ConsumerConfig extends AbstractConfig {
     public static Map<String, Object> addDeserializerToConfig(Map<String, Object> configs,
                                                               Deserializer<?> keyDeserializer,
                                                               Deserializer<?> valueDeserializer) {
-        Map<String, Object> newConfigs = new HashMap<String, Object>();
-        newConfigs.putAll(configs);
+        Map<String, Object> newConfigs = new HashMap<>(configs);
         if (keyDeserializer != null)
             newConfigs.put(KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass());
         if (valueDeserializer != null)
@@ -477,7 +481,11 @@ public class ConsumerConfig extends AbstractConfig {
         return newProperties;
     }
 
-    ConsumerConfig(Map<?, ?> props) {
+    public ConsumerConfig(Properties props) {
+        super(CONFIG, props);
+    }
+
+    public ConsumerConfig(Map<String, Object> props) {
         super(CONFIG, props);
     }
 

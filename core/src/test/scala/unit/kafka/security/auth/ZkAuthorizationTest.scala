@@ -18,20 +18,22 @@
 package kafka.security.auth
 
 import kafka.admin.ZkSecurityMigrator
-import kafka.utils.{Logging, TestUtils, ZkUtils}
+import kafka.utils.{CoreUtils, Logging, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.security.JaasUtils
-import org.apache.zookeeper.data.{ACL}
+import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+
 import scala.collection.JavaConverters._
-import scala.util.{Try, Success, Failure}
+import scala.util.{Failure, Success, Try}
 import javax.security.auth.login.Configuration
 
 class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
   val jaasFile = kafka.utils.JaasTestUtils.writeJaasContextsToFile(kafka.utils.JaasTestUtils.zkSections)
   val authProvider = "zookeeper.authProvider.1"
+  var zkUtils: ZkUtils = null
 
   @Before
   override def setUp() {
@@ -39,10 +41,13 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     Configuration.setConfiguration(null)
     System.setProperty(authProvider, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
     super.setUp()
+    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
   }
 
   @After
   override def tearDown() {
+    if (zkUtils != null)
+     CoreUtils.swallow(zkUtils.close(), this)
     super.tearDown()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     System.clearProperty(authProvider)
@@ -79,12 +84,16 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     assertTrue(zkUtils.isSecure)
     for (path <- zkUtils.persistentZkPaths) {
       zkUtils.makeSurePersistentPathExists(path)
-      if(!path.equals(ZkUtils.ConsumersPath)) {
+      if (ZkUtils.sensitivePath(path)) {
         val aclList = zkUtils.zkConnection.getAcl(path).getKey
-        assertTrue(aclList.size == 2)
-        for (acl: ACL <- aclList.asScala) {
-          assertTrue(TestUtils.isAclSecure(acl, false))
-        }
+        assertEquals(s"Unexpected acl list size for $path", 1, aclList.size)
+        for (acl <- aclList.asScala)
+          assertTrue(TestUtils.isAclSecure(acl, sensitive = true))
+      } else if (!path.equals(ZkUtils.ConsumersPath)) {
+        val aclList = zkUtils.zkConnection.getAcl(path).getKey
+        assertEquals(s"Unexpected acl list size for $path", 2, aclList.size)
+        for (acl <- aclList.asScala)
+          assertTrue(TestUtils.isAclSecure(acl, sensitive = false))
       }
     }
     // Test that can create: createEphemeralPathExpectConflict
@@ -166,7 +175,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    * Tests the migration tool when chroot is being used.
    */
   @Test
-  def testChroot {
+  def testChroot(): Unit = {
     val zkUrl = zkConnect + "/kafka"
     zkUtils.createPersistentPath("/kafka")
     val unsecureZkUtils = ZkUtils(zkUrl, 6000, 6000, false)
