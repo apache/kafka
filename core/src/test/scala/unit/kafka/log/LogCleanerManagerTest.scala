@@ -226,6 +226,21 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
     val tp = new TopicPartition("log", 0)
+    try {
+      cleanerManager.doneCleaning(tp, log.dir, 1)
+    } catch {
+      case _ : IllegalStateException =>
+      case _ : Throwable => fail("Should have thrown IllegalStateException.")
+    }
+
+    try {
+      cleanerManager.setCleaningState(tp, LogCleaningPaused)
+      cleanerManager.doneCleaning(tp, log.dir, 1)
+    } catch {
+      case _ : IllegalStateException =>
+      case _ : Throwable => fail("Should have thrown IllegalStateException.")
+    }
+
     cleanerManager.setCleaningState(tp, LogCleaningInProgress)
     cleanerManager.doneCleaning(tp, log.dir, 1)
     assertTrue(cleanerManager.cleaningState(tp).isEmpty)
@@ -235,14 +250,6 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     cleanerManager.doneCleaning(tp, log.dir, 1)
     assertEquals(LogCleaningPaused, cleanerManager.cleaningState(tp).get)
     assertTrue(cleanerManager.allCleanerCheckpoints.get(tp).nonEmpty)
-
-    try {
-      cleanerManager.setCleaningState(tp, LogCleaningPaused)
-      cleanerManager.doneCleaning(tp, log.dir, 1)
-    } catch {
-      case _ : IllegalStateException =>
-      case _ : Throwable => fail("Should have thrown IllegalStateException.")
-    }
   }
 
   @Test
@@ -252,13 +259,13 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
     val tp = new TopicPartition("log", 0)
-    cleanerManager.setCleaningState(tp, LogCleaningInProgress)
-    cleanerManager.doneDeleting(tp)
-    assertTrue(cleanerManager.cleaningState(tp).isEmpty)
 
-    cleanerManager.setCleaningState(tp, LogCleaningAborted)
-    cleanerManager.doneDeleting(tp)
-    assertEquals(LogCleaningPaused, cleanerManager.cleaningState(tp).get)
+    try {
+      cleanerManager.doneDeleting(tp)
+    } catch {
+      case _ : IllegalStateException =>
+      case _ : Throwable => fail("Should have thrown IllegalStateException.")
+    }
 
     try {
       cleanerManager.setCleaningState(tp, LogCleaningPaused)
@@ -267,6 +274,15 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
       case _ : IllegalStateException =>
       case _ : Throwable => fail("Should have thrown IllegalStateException.")
     }
+
+    cleanerManager.setCleaningState(tp, LogCleaningInProgress)
+    cleanerManager.doneDeleting(tp)
+    assertTrue(cleanerManager.cleaningState(tp).isEmpty)
+
+    cleanerManager.setCleaningState(tp, LogCleaningAborted)
+    cleanerManager.doneDeleting(tp)
+    assertEquals(LogCleaningPaused, cleanerManager.cleaningState(tp).get)
+
   }
 
   private def createCleanerManager(log: Log): LogCleanerManager = {
