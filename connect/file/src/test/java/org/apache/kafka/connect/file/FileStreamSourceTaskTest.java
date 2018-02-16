@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.file;
 
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTaskContext;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
@@ -150,14 +149,6 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
 
         os.close();
         task.stop();
-    }
-
-    @Test(expected = ConnectException.class)
-    public void testMissingTopic() throws InterruptedException {
-        replay();
-
-        config.remove(FileStreamSourceConnector.TOPIC_CONFIG);
-        task.start(config);
     }
 
     @Test
