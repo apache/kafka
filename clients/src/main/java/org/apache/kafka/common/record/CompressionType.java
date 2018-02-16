@@ -51,8 +51,10 @@ public enum CompressionType {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
             try {
-                // GZIPOutputStream has a default buffer size of 512 bytes, which is too small
-                return new BufferedOutputStream(new GZIPOutputStream(buffer, 8 * 1024), 1 << 14);
+                // Set input buffer (uncompressed) to 16 KB (none by default) and output buffer (compressed) to
+                // 8 KB (0.5 KB by default) to ensure reasonable performance in cases where the caller passes a small
+                // number of bytes to write (potentially a single byte)
+                return new BufferedOutputStream(new GZIPOutputStream(buffer, 8 * 1024), 16 * 1024);
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
@@ -61,7 +63,11 @@ public enum CompressionType {
         @Override
         public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
             try {
-                return new BufferedInputStream(new GZIPInputStream(new ByteBufferInputStream(buffer)), 1 << 14);
+                // Set output buffer (uncompressed) to 16 KB (none by default) and input buffer (compressed) to
+                // 8 KB (0.5 KB by default) to ensure reasonable performance in cases where the caller reads a small
+                // number of bytes (potentially a single byte)
+                return new BufferedInputStream(new GZIPInputStream(new ByteBufferInputStream(buffer), 8 * 1024),
+                        16 * 1024);
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
