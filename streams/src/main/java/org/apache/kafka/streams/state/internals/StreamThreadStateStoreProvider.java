@@ -22,7 +22,9 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Wrapper over StreamThread that implements StateStoreProvider
@@ -49,7 +51,7 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
 
         final List<T> stores = new ArrayList<>();
         // running tasks
-        for(Task streamTask : streamThread.tasks().values()) {
+        for (Task streamTask : streamThread.tasks().values()) {
             final StateStore store = streamTask.getStore(storeName);
             if (store != null && queryableStoreType.accepts(store)) {
                 if (!store.isOpen()) {
@@ -60,7 +62,7 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
             }
         }
         // restoring tasks
-        for(Task streamTask : streamThread.restoringTasks().values()) {
+        for (Task streamTask : streamThread.restoringTasks().values()) {
             final StateStore store = streamTask.getStore(storeName);
             if (store != null && queryableStoreType.accepts(store)) {
                 if (!store.isOpen()) {
