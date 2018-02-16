@@ -385,11 +385,16 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             throw new TopologyException("filePath can't be an empty string");
         }
         String name = builder.newProcessorName(PRINTING_NAME);
+        PrintWriter printWriter = null;
         try {
-            PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
+            printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
             builder.internalTopologyBuilder.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, defaultKeyValueMapper, label)), this.name);
         } catch (final FileNotFoundException | UnsupportedEncodingException e) {
             throw new TopologyException(String.format("Unable to write stream to file at [%s] %s", filePath, e.getMessage()));
+        } finally {
+            if (printWriter != null) {
+                printWriter.close();
+            }
         }
     }
 
