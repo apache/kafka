@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.connect.file;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceConnector;
 
 import java.util.ArrayList;
@@ -57,20 +58,12 @@ public class FileStreamSourceConnector extends SourceConnector {
 
     @Override
     public void start(Map<String, String> props) {
-        filename = props.get(FILE_CONFIG);
-        topic = props.get(TOPIC_CONFIG);
-        if (topic == null || topic.isEmpty())
-            throw new ConnectException("FileStreamSourceConnector configuration must include 'topic' setting");
+        AbstractConfig parsedConfig = new AbstractConfig(CONFIG_DEF, props);
+        filename = parsedConfig.getString(FILE_CONFIG);
+        topic = parsedConfig.getString(TOPIC_CONFIG);
         if (topic.contains(","))
-            throw new ConnectException("FileStreamSourceConnector should only have a single topic when used as a source.");
-
-        if (props.containsKey(TASK_BATCH_SIZE_CONFIG)) {
-            try {
-                batchSize = Integer.parseInt(props.get(TASK_BATCH_SIZE_CONFIG));
-            } catch (NumberFormatException e) {
-                throw new ConnectException("Invalid FileStreamSourceConnector configuration", e);
-            }
-        }
+            throw new ConfigException("FileStreamSourceConnector should only have a single topic when used as a source.");
+        batchSize = parsedConfig.getInt(TASK_BATCH_SIZE_CONFIG);
     }
 
     @Override

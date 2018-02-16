@@ -55,6 +55,7 @@ public class FileStreamSourceTaskTest extends EasyMockSupport {
         config = new HashMap<>();
         config.put(FileStreamSourceConnector.FILE_CONFIG, tempFile.getAbsolutePath());
         config.put(FileStreamSourceConnector.TOPIC_CONFIG, TOPIC);
+        config.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, String.valueOf(FileStreamSourceConnector.DEFAULT_TASK_BATCH_SIZE));
         task = new FileStreamSourceTask();
         offsetStorageReader = createMock(OffsetStorageReader.class);
         context = createMock(SourceTaskContext.class);

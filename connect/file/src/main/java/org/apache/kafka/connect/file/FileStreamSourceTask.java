@@ -72,13 +72,8 @@ public class FileStreamSourceTask extends SourceTask {
         if (topic == null)
             throw new ConnectException("FileStreamSourceTask config missing topic setting");
 
-        if (props.containsKey(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG)) {
-            try {
-                batchSize = Integer.parseInt(props.get(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG));
-            } catch (NumberFormatException e) {
-                throw new ConnectException("Invalid FileStreamSourceTask configuration", e);
-            }
-        }
+        // Parsing error is not possible because we've parsed the config in the Connector
+        batchSize = Integer.parseInt(props.get(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG));
     }
 
     @Override

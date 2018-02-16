@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.connect.file;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.ConnectorContext;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
 import org.junit.Before;
@@ -98,7 +98,7 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
         EasyMock.verify(ctx);
     }
 
-    @Test(expected = ConnectException.class)
+    @Test(expected = ConfigException.class)
     public void testMultipleSourcesInvalid() {
         sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, MULTIPLE_TOPICS);
         connector.start(sourceProperties);
@@ -112,5 +112,11 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
         assertEquals(FileStreamSourceTask.class, connector.taskClass());
 
         EasyMock.verify(ctx);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testInvalidBatchSize() {
+        sourceProperties.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "abcd");
+        connector.start(sourceProperties);
     }
 }
