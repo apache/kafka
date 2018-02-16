@@ -28,10 +28,10 @@ import static org.junit.Assert.assertEquals;
 
 public class SystemTestUtilTest {
 
-    private Map<String, String> expectedParsedMap = new TreeMap<>();
+    private final Map<String, String> expectedParsedMap = new TreeMap<>();
 
     @Before
-    public void setUp(){
+    public void setUp() {
         expectedParsedMap.put("foo", "foo1");
         expectedParsedMap.put("bar", "bar1");
         expectedParsedMap.put("baz", "baz1");
@@ -39,9 +39,9 @@ public class SystemTestUtilTest {
 
     @Test
     public void shouldParseCorrectMap() {
-        String formattedConfigs = "foo=foo1,bar=bar1,baz=baz1";
-        Map<String,String> parsedMap = SystemTestUtil.parseConfigs(formattedConfigs);
-        TreeMap<String, String> sortedParsedMap = new TreeMap<>(parsedMap);
+        final String formattedConfigs = "foo=foo1,bar=bar1,baz=baz1";
+        final Map<String, String> parsedMap = SystemTestUtil.parseConfigs(formattedConfigs);
+        final TreeMap<String, String> sortedParsedMap = new TreeMap<>(parsedMap);
         assertEquals(sortedParsedMap, expectedParsedMap);
     }
 
@@ -51,26 +51,25 @@ public class SystemTestUtilTest {
     }
 
     @Test(expected = IllegalStateException.class)
-    public void shouldThrowExceptionIfNotCorrectKeyValueSeparator(){
-        String badString = "foo:bar,baz:boo";
+    public void shouldThrowExceptionIfNotCorrectKeyValueSeparator() {
+        final String badString = "foo:bar,baz:boo";
         SystemTestUtil.parseConfigs(badString);
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldThrowExceptionIfNotCorrectKeyValuePairSeparator() {
-        String badString = "foo=bar;baz=boo";
+        final String badString = "foo=bar;baz=boo";
         SystemTestUtil.parseConfigs(badString);
     }
 
     @Test
     public void shouldParseSingleKeyValuePairString() {
-        Map<String, String> expectedSinglePairMap = new HashMap<>();
+        final Map<String, String> expectedSinglePairMap = new HashMap<>();
         expectedSinglePairMap.put("foo", "bar");
-        String singleValueString ="foo=bar";
-        Map<String, String> parsedMap = SystemTestUtil.parseConfigs(singleValueString);
+        final String singleValueString = "foo=bar";
+        final Map<String, String> parsedMap = SystemTestUtil.parseConfigs(singleValueString);
         assertEquals(expectedSinglePairMap, parsedMap);
     }
-
 
 
 }
