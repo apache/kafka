@@ -30,12 +30,18 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
 public abstract class AbstractKeyValueStoreTest {
@@ -340,5 +346,32 @@ public abstract class AbstractKeyValueStoreTest {
         store.put(5, "five");
         store.flush();
         assertEquals(5, store.approximateNumEntries());
+    }
+
+    @Test
+    public void shouldPutAll() {
+        List<KeyValue<Integer, String>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(1, "one"));
+        entries.add(new KeyValue<>(2, "two"));
+
+        store.putAll(entries);
+
+        final List<KeyValue<Integer, String>> allReturned = new ArrayList<>();
+        final List<KeyValue<Integer, String>> expectedReturned = Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
+        final Iterator<KeyValue<Integer, String>> iterator = store.all();
+
+        while (iterator.hasNext()) {
+            allReturned.add(iterator.next());
+        }
+        assertThat(allReturned, equalTo(expectedReturned));
+
+    }
+
+    @Test
+    public void shouldDeleteFromStore() {
+        store.put(1, "one");
+        store.put(2, "two");
+        store.delete(2);
+        assertNull(store.get(2));
     }
 }

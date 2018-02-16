@@ -50,7 +50,6 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
@@ -234,37 +233,6 @@ public class RocksDBStoreTest {
         final String retrievedValue = stringDeserializer.deserialize(null, rocksDBStore.get(keyBytes));
         assertEquals(retrievedValue, "A");
     }
-
-    @Test
-    public void shouldRetrieveFirstValue() throws Exception {
-        final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
-
-        rocksDBStore.init(context, rocksDBStore);
-        context.restore(rocksDBStore.name(), entries);
-
-        final KeyValue<byte[], byte[]> keyValue = entries.get(0);
-        final KeyValue<Bytes, byte[]> expectedKeyValue = KeyValue.pair(new Bytes(keyValue.key), keyValue.value);
-        final KeyValue<Bytes, byte[]> firstRetrievedEntry = rocksDBStore.first();
-
-        assertArrayEquals(expectedKeyValue.key.get(), firstRetrievedEntry.key.get());
-        assertArrayEquals(expectedKeyValue.value, firstRetrievedEntry.value);
-    }
-
-    @Test
-    public void shouldRetrieveLastValue() throws Exception {
-        final List<KeyValue<byte[], byte[]>> entries = getKeyValueEntries();
-
-        rocksDBStore.init(context, rocksDBStore);
-        context.restore(rocksDBStore.name(), entries);
-
-        final KeyValue<byte[], byte[]> keyValue = entries.get(entries.size() - 1);
-        final KeyValue<Bytes, byte[]> expectedKeyValue = KeyValue.pair(new Bytes(keyValue.key), keyValue.value);
-        final KeyValue<Bytes, byte[]> lastRetrievedEntry = rocksDBStore.last();
-
-        assertArrayEquals(expectedKeyValue.key.get(), lastRetrievedEntry.key.get());
-        assertArrayEquals(expectedKeyValue.value, lastRetrievedEntry.value);
-    }
-
 
     @Test
     public void shouldHandleDeletesOnRestoreAll() throws Exception {
