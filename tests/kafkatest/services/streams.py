@@ -154,11 +154,17 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
 class StreamsEosTestBaseService(StreamsTestBaseService):
     """Base class for Streams EOS Test services providing some common settings and functionality"""
 
+    clean_node_enabled = True
+
     def __init__(self, test_context, kafka, command):
         super(StreamsEosTestBaseService, self).__init__(test_context,
                                                         kafka,
                                                         "org.apache.kafka.streams.tests.StreamsEosTest",
                                                         command)
+
+    def clean_node(self, node):
+        if self.clean_node_enabled:
+            super.clean_node(self, node)
 
 
 class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
@@ -180,11 +186,9 @@ class StreamsEosTestJobRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsEosTestJobRunnerService, self).__init__(test_context, kafka, "process")
 
-
 class StreamsComplexEosTestJobRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsComplexEosTestJobRunnerService, self).__init__(test_context, kafka, "process-complex")
-
 
 class StreamsEosTestVerifyRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
