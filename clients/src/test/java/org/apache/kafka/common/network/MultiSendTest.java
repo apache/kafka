@@ -56,6 +56,7 @@ public class MultiSendTest {
             assertEquals(chunks[i], out.buffer());
         }
 
+        assertEquals(0, send.numResidentSends());
         assertTrue(send.completed());
     }
 
