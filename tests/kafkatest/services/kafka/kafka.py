@@ -19,6 +19,7 @@ import os.path
 import re
 import signal
 import time
+from sets import Set
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
@@ -31,6 +32,7 @@ from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import DEV_BRANCH
+from kafkatest.utils.util import listening_any
 
 Port = collections.namedtuple('Port', ['name', 'number', 'open'])
 
@@ -97,6 +99,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.server_prop_overides = server_prop_overides
         self.log_level = "DEBUG"
         self.zk_chroot = zk_chroot
+        self.broker_ports = Set()
 
         #
         # In a heavily loaded and not very fast machine, it is
@@ -145,6 +148,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def open_port(self, protocol):
         self.port_mappings[protocol] = self.port_mappings[protocol]._replace(open=True)
+        self.broker_ports.add(self.port_mappings[protocol].number)
 
     def close_port(self, protocol):
         self.port_mappings[protocol] = self.port_mappings[protocol]._replace(open=False)
@@ -250,10 +254,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = self.start_cmd(node)
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
-        with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
-            node.account.ssh(cmd)
-            # Kafka 1.0.0 and higher don't have a space between "Kafka" and "Server"
-            monitor.wait_until("Kafka\s*Server.*started", timeout_sec=30, backoff_sec=.25, err_msg="Kafka server didn't finish startup")
+        node.account.ssh(cmd)
+        wait_until(lambda: listening_any(self.logger, node, self.broker_ports), timeout_sec=30, backoff_sec=.25,
+                   err_msg="Kafka server didn't finish startup")
 
         # Credentials for inter-broker communication are created before starting Kafka.
         # Client credentials are created after starting Kafka so that both loading of

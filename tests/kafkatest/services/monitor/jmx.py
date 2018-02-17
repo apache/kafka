@@ -18,6 +18,7 @@ import os
 from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.utils.util import wait_until
 from kafkatest.version import get_version, V_0_11_0_0, DEV_BRANCH
+from kafkatest.utils.util import listening
 
 class JmxMixin(object):
     """This mixin helps existing service subclasses start JmxTool on their worker nodes and collect jmx stats.
@@ -59,10 +60,7 @@ class JmxMixin(object):
         # JmxTool is not particularly robust to slow-starting processes. In order to ensure JmxTool doesn't fail if the
         # process we're trying to monitor takes awhile before listening on the JMX port, wait until we can see that port
         # listening before even launching JmxTool
-        def check_jmx_port_listening():
-            return 0 == node.account.ssh("nc -z 127.0.0.1 %d" % self.jmx_port, allow_fail=True)
-
-        wait_until(check_jmx_port_listening, timeout_sec=30, backoff_sec=.1,
+        wait_until(lambda: listening(self.logger, node, self.jmx_port), timeout_sec=30, backoff_sec=.1,
                    err_msg="%s: Never saw JMX port for %s start listening" % (node.account, self))
 
         # To correctly wait for requested JMX metrics to be added we need the --wait option for JmxTool. This option was

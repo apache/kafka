@@ -22,10 +22,11 @@ from shutil import move
 from tempfile import mkstemp
 
 from ducktape.services.service import Service
+from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin, CORE_LIBS_JAR_NAME, CORE_DEPENDANT_TEST_LIBS_JAR_NAME
 from kafkatest.version import DEV_BRANCH
-
+from kafkatest.utils.util import listening
 
 class MiniKdc(KafkaPathResolverMixin, Service):
 
@@ -40,6 +41,7 @@ class MiniKdc(KafkaPathResolverMixin, Service):
     KEYTAB_FILE = "/mnt/minikdc/keytab"
     KRB5CONF_FILE = "/mnt/minikdc/krb5.conf"
     LOG_FILE = "/mnt/minikdc/minikdc.log"
+    PORT = 11111
 
     LOCAL_KEYTAB_FILE = None
     LOCAL_KRB5CONF_FILE = None
@@ -111,9 +113,9 @@ class MiniKdc(KafkaPathResolverMixin, Service):
         cmd += " export CLASSPATH;"
         cmd += " %s kafka.security.minikdc.MiniKdc %s %s %s %s 1>> %s 2>> %s &" % (self.path.script("kafka-run-class.sh", node), MiniKdc.WORK_DIR, MiniKdc.PROPS_FILE, MiniKdc.KEYTAB_FILE, principals, MiniKdc.LOG_FILE, MiniKdc.LOG_FILE)
         self.logger.debug("Attempting to start MiniKdc on %s with command: %s" % (str(node.account), cmd))
-        with node.account.monitor_log(MiniKdc.LOG_FILE) as monitor:
-            node.account.ssh(cmd)
-            monitor.wait_until("MiniKdc Running", timeout_sec=60, backoff_sec=1, err_msg="MiniKdc didn't finish startup")
+        node.account.ssh(cmd)
+        wait_until(lambda: listening(self.logger, node, MiniKdc.PORT), timeout_sec=60, backoff_sec=1,
+                   err_msg="MiniKdc didn't finish startup")
 
         node.account.copy_from(MiniKdc.KEYTAB_FILE, MiniKdc.LOCAL_KEYTAB_FILE)
         node.account.copy_from(MiniKdc.KRB5CONF_FILE, MiniKdc.LOCAL_KRB5CONF_FILE)
