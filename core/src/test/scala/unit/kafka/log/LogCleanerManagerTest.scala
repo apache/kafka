@@ -215,6 +215,76 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     assertEquals(4L, cleanableOffsets._2)
   }
 
+  @Test
+  def testDoneCleaning(): Unit = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+    while(log.numberOfSegments < 8)
+      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()), leaderEpoch = 0)
+
+    val cleanerManager: LogCleanerManager = createCleanerManager(log)
+
+    val tp = new TopicPartition("log", 0)
+    try {
+      cleanerManager.doneCleaning(tp, log.dir, 1)
+    } catch {
+      case _ : IllegalStateException =>
+      case _ : Throwable => fail("Should have thrown IllegalStateException.")
+    }
+
+    try {
+      cleanerManager.setCleaningState(tp, LogCleaningPaused)
+      cleanerManager.doneCleaning(tp, log.dir, 1)
+    } catch {
+      case _ : IllegalStateException =>
+      case _ : Throwable => fail("Should have thrown IllegalStateException.")
+    }
+
+    cleanerManager.setCleaningState(tp, LogCleaningInProgress)
+    cleanerManager.doneCleaning(tp, log.dir, 1)
+    assertTrue(cleanerManager.cleaningState(tp).isEmpty)
+    assertTrue(cleanerManager.allCleanerCheckpoints.get(tp).nonEmpty)
+
+    cleanerManager.setCleaningState(tp, LogCleaningAborted)
+    cleanerManager.doneCleaning(tp, log.dir, 1)
+    assertEquals(LogCleaningPaused, cleanerManager.cleaningState(tp).get)
+    assertTrue(cleanerManager.allCleanerCheckpoints.get(tp).nonEmpty)
+  }
+
+  @Test
+  def testDoneDeleting(): Unit = {
+    val records = TestUtils.singletonRecords("test".getBytes, key="test".getBytes)
+    val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Compact + "," + LogConfig.Delete)
+    val cleanerManager: LogCleanerManager = createCleanerManager(log)
+
+    val tp = new TopicPartition("log", 0)
+
+    try {
+      cleanerManager.doneDeleting(tp)
+    } catch {
+      case _ : IllegalStateException =>
+      case _ : Throwable => fail("Should have thrown IllegalStateException.")
+    }
+
+    try {
+      cleanerManager.setCleaningState(tp, LogCleaningPaused)
+      cleanerManager.doneDeleting(tp)
+    } catch {
+      case _ : IllegalStateException =>
+      case _ : Throwable => fail("Should have thrown IllegalStateException.")
+    }
+
+    cleanerManager.setCleaningState(tp, LogCleaningInProgress)
+    cleanerManager.doneDeleting(tp)
+    assertTrue(cleanerManager.cleaningState(tp).isEmpty)
+
+    cleanerManager.setCleaningState(tp, LogCleaningAborted)
+    cleanerManager.doneDeleting(tp)
+    assertEquals(LogCleaningPaused, cleanerManager.cleaningState(tp).get)
+
+  }
+
   private def createCleanerManager(log: Log): LogCleanerManager = {
     val logs = new Pool[TopicPartition, Log]()
     logs.put(new TopicPartition("log", 0), log)
