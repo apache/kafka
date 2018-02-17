@@ -90,6 +90,18 @@ object ApiVersion {
 
   def latestVersion = versionNameMap.values.max
 
+  def allVersions: Set[ApiVersion] = {
+    versionNameMap.values.toSet
+  }
+
+  def minVersionForMessageFormat(messageFormatVersion: Byte): String = {
+    messageFormatVersion match {
+      case 0 => "0.8.0"
+      case 1 => "0.10.0"
+      case 2 => "0.11.0"
+      case _ => throw new IllegalArgumentException(s"Invalid message format version $messageFormatVersion")
+    }
+  }
 }
 
 sealed trait ApiVersion extends Ordered[ApiVersion] {

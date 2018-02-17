@@ -1330,8 +1330,13 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     require(!advertisedListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
       s"${KafkaConfig.AdvertisedListenersProp} cannot use the nonroutable meta-address 0.0.0.0. "+
       s"Use a routable IP address.")
-    require(interBrokerProtocolVersion >= logMessageFormatVersion,
-      s"log.message.format.version $logMessageFormatVersionString cannot be used when inter.broker.protocol.version is set to $interBrokerProtocolVersionString")
+
+    val messageFormatVersion = logMessageFormatVersion.messageFormatVersion
+    require(interBrokerProtocolVersion.messageFormatVersion >= messageFormatVersion,
+      s"log.message.format.version $logMessageFormatVersionString can only be used when " +
+        "inter.broker.protocol.version is set to version " +
+        s"${ApiVersion.minVersionForMessageFormat(messageFormatVersion)} or higher")
+
     val interBrokerUsesSasl = interBrokerSecurityProtocol == SecurityProtocol.SASL_PLAINTEXT || interBrokerSecurityProtocol == SecurityProtocol.SASL_SSL
     require(!interBrokerUsesSasl || saslInterBrokerHandshakeRequestEnable || saslMechanismInterBrokerProtocol == SaslConfigs.GSSAPI_MECHANISM,
       s"Only GSSAPI mechanism is supported for inter-broker communication with SASL when inter.broker.protocol.version is set to $interBrokerProtocolVersionString")

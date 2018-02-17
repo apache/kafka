@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util.Properties
 
-import kafka.api.{ApiVersion, KAFKA_0_8_2}
+import kafka.api._
 import kafka.cluster.EndPoint
 import kafka.message._
 import kafka.utils.{CoreUtils, TestUtils}
@@ -517,6 +517,38 @@ class KafkaConfigTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.ListenersProp, "TRACE://localhost:9091,SSL://localhost:9093")
     props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092")
+    intercept[IllegalArgumentException] {
+      KafkaConfig.fromProps(props)
+    }
+  }
+
+  @Test
+  def testInterBrokerVersionMessageFormatCompatibility(): Unit = {
+    ApiVersion.allVersions.foreach { interBrokerVersion =>
+      ApiVersion.allVersions.foreach { messageFormatVersion =>
+        if (interBrokerVersion.messageFormatVersion >= messageFormatVersion.messageFormatVersion)
+          assertCompatible(interBrokerVersion, messageFormatVersion)
+        else
+          assertIncompatible(interBrokerVersion, messageFormatVersion)
+      }
+    }
+  }
+
+  private def assertCompatible(interBrokerProtocol: ApiVersion,
+                               messageFormat: ApiVersion): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocol.version)
+    props.put(KafkaConfig.LogMessageFormatVersionProp, messageFormat.version)
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(messageFormat, config.logMessageFormatVersion)
+    assertEquals(interBrokerProtocol, config.interBrokerProtocolVersion)
+  }
+
+  private def assertIncompatible(interBrokerProtocol: ApiVersion,
+                                 messageFormat: ApiVersion): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocol.version)
+    props.put(KafkaConfig.LogMessageFormatVersionProp, messageFormat.version)
     intercept[IllegalArgumentException] {
       KafkaConfig.fromProps(props)
     }
