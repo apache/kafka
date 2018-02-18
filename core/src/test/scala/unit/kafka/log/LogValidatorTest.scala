@@ -147,6 +147,61 @@ class LogValidatorTest {
       compressed = true)
   }
 
+  @Test(expected = classOf[InvalidRecordException])
+  def testTooSmallLastOffsetDelta() {
+    validateRecordBatchWithCountOverrides(lastOffsetDelta = 0)
+  }
+
+  @Test(expected = classOf[InvalidRecordException])
+  def testTooLargeLastOffsetDelta() {
+    validateRecordBatchWithCountOverrides(lastOffsetDelta = 15)
+  }
+
+  @Test(expected = classOf[InvalidRecordException])
+  def testNegativeLastOffsetDelta() {
+    validateRecordBatchWithCountOverrides(lastOffsetDelta = -3)
+  }
+
+  @Test(expected = classOf[InvalidRecordException])
+  def testNegativeRecordBatchCount() {
+    validateRecordBatchWithCountOverrides(count = -3)
+  }
+
+  @Test(expected = classOf[InvalidRecordException])
+  def testTooLargeRecordBatchCount() {
+    validateRecordBatchWithCountOverrides(count = 6)
+  }
+
+  @Test(expected = classOf[InvalidRecordException])
+  def testTooSmallRecordBatchCount() {
+    validateRecordBatchWithCountOverrides(count = 0)
+  }
+
+  @Test(expected = classOf[InvalidRecordException])
+  def testNegativeLastOffsetDeltaAndCount() {
+    validateRecordBatchWithCountOverrides(lastOffsetDelta = -3, count = -2)
+  }
+
+  def validateRecordBatchWithCountOverrides(lastOffsetDelta: Int = 2, count: Int = 3) {
+    val now = System.currentTimeMillis()
+    val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V2, timestamp = 1234L, codec = CompressionType.NONE)
+    records.buffer.putInt(DefaultRecordBatch.RECORDS_COUNT_OFFSET, count)
+    records.buffer.putInt(DefaultRecordBatch.LAST_OFFSET_DELTA_OFFSET, lastOffsetDelta)
+    LogValidator.validateMessagesAndAssignOffsets(
+      records,
+      offsetCounter = new LongRef(0),
+      time = time,
+      now = now,
+      sourceCodec = DefaultCompressionCodec,
+      targetCodec = DefaultCompressionCodec,
+      compactedTopic = false,
+      magic = RecordBatch.MAGIC_VALUE_V2,
+      timestampType = TimestampType.LOG_APPEND_TIME,
+      timestampDiffMaxMs = 1000L,
+      partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
+      isFromClient = true)
+  }
+
   @Test
   def testLogAppendTimeWithoutRecompressionV2() {
     checkLogAppendTimeWithoutRecompression(RecordBatch.MAGIC_VALUE_V2)

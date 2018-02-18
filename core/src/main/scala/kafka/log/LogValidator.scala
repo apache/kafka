@@ -74,15 +74,26 @@ private[kafka] object LogValidator extends Logging {
 
   private def validateBatch(batch: RecordBatch, isFromClient: Boolean, toMagic: Byte): Unit = {
     if (isFromClient) {
+      if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
+        val countFromOffsets = batch.lastOffset - batch.baseOffset + 1
+        if (countFromOffsets <= 0)
+          throw new InvalidRecordException("Batch has an invalid offset range")
+
+        // v2 and above messages always have a non-null count
+        val count = batch.countOrNull
+        if (count <= 0)
+          throw new InvalidRecordException("Invalid reported count for record batch")
+
+        if (countFromOffsets != batch.countOrNull)
+          throw new InvalidRecordException("Inconsistent batch offset range and count of records")
+      }
+
       if (batch.hasProducerId && batch.baseSequence < 0)
         throw new InvalidRecordException(s"Invalid sequence number ${batch.baseSequence} in record batch " +
           s"with producerId ${batch.producerId}")
 
       if (batch.isControlBatch)
         throw new InvalidRecordException("Clients are not allowed to write control records")
-
-      if (Option(batch.countOrNull).contains(0))
-        throw new InvalidRecordException("Record batches must contain at least one record")
     }
 
     if (batch.isTransactional && toMagic < RecordBatch.MAGIC_VALUE_V2)
