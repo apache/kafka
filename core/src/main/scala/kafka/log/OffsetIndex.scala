@@ -21,6 +21,7 @@ import java.io.File
 import java.nio.ByteBuffer
 
 import kafka.utils.CoreUtils.inLock
+import kafka.utils.Logging
 import org.apache.kafka.common.errors.InvalidOffsetException
 
 /**
@@ -51,6 +52,7 @@ import org.apache.kafka.common.errors.InvalidOffsetException
 // Avoid shadowing mutable `file` in AbstractIndex
 class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
     extends AbstractIndex[Long, Int](_file, baseOffset, maxIndexSize, writable) {
+  import OffsetIndex._
 
   override def entrySize = 8
 
@@ -196,4 +198,8 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
         s"neither positive nor a multiple of $entrySize.")
   }
 
+}
+
+object OffsetIndex extends Logging {
+  override val loggerName: String = classOf[OffsetIndex].getName
 }

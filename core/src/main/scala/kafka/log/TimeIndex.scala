@@ -21,7 +21,6 @@ import java.io.File
 import java.nio.ByteBuffer
 
 import kafka.utils.CoreUtils._
-import kafka.utils.Logging
 import org.apache.kafka.common.errors.InvalidOffsetException
 import org.apache.kafka.common.record.RecordBatch
 
@@ -51,7 +50,7 @@ import org.apache.kafka.common.record.RecordBatch
  */
 // Avoid shadowing mutable file in AbstractIndex
 class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
-    extends AbstractIndex[Long, Long](_file, baseOffset, maxIndexSize, writable) with Logging {
+    extends AbstractIndex[Long, Long](_file, baseOffset, maxIndexSize, writable) {
 
   @volatile private var _lastEntry = lastEntryFromIndexFile
 
