@@ -87,7 +87,7 @@ public class RestClient {
             ContentResponse res = req.send();
 
             int responseCode = res.getStatus();
-            System.out.println(responseCode);
+            log.debug("Request's response code: {}", responseCode);
             if (responseCode == HttpStatus.NO_CONTENT_204) {
                 return new HttpResponse<>(responseCode, convertHttpFieldsToMap(res.getHeaders()), null);
             } else if (responseCode >= 400) {
