@@ -659,10 +659,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     static <K1, V1> String createRepartitionedSource(final InternalStreamsBuilder builder,
-                                                    final Serde<K1> keySerde,
-                                                    final Serde<V1> valSerde,
-                                                    final String topicNamePrefix,
-                                                    final String name) {
+                                                     final Serde<K1> keySerde,
+                                                     final Serde<V1> valSerde,
+                                                     final String topicNamePrefix,
+                                                     final String name) {
         Serializer<K1> keySerializer = keySerde != null ? keySerde.serializer() : null;
         Serializer<V1> valSerializer = valSerde != null ? valSerde.serializer() : null;
         Deserializer<K1> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
