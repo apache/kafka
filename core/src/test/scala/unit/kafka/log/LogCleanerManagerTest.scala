@@ -226,20 +226,10 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
     val tp = new TopicPartition("log", 0)
-    try {
-      cleanerManager.doneCleaning(tp, log.dir, 1)
-    } catch {
-      case _ : IllegalStateException =>
-      case _ : Throwable => fail("Should have thrown IllegalStateException.")
-    }
+    intercept[IllegalStateException](cleanerManager.doneCleaning(tp, log.dir, 1))
 
-    try {
-      cleanerManager.setCleaningState(tp, LogCleaningPaused)
-      cleanerManager.doneCleaning(tp, log.dir, 1)
-    } catch {
-      case _ : IllegalStateException =>
-      case _ : Throwable => fail("Should have thrown IllegalStateException.")
-    }
+    cleanerManager.setCleaningState(tp, LogCleaningPaused)
+    intercept[IllegalStateException](cleanerManager.doneCleaning(tp, log.dir, 1))
 
     cleanerManager.setCleaningState(tp, LogCleaningInProgress)
     cleanerManager.doneCleaning(tp, log.dir, 1)
@@ -260,20 +250,10 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val tp = new TopicPartition("log", 0)
 
-    try {
-      cleanerManager.doneDeleting(tp)
-    } catch {
-      case _ : IllegalStateException =>
-      case _ : Throwable => fail("Should have thrown IllegalStateException.")
-    }
+    intercept[IllegalStateException](cleanerManager.doneDeleting(tp))
 
-    try {
-      cleanerManager.setCleaningState(tp, LogCleaningPaused)
-      cleanerManager.doneDeleting(tp)
-    } catch {
-      case _ : IllegalStateException =>
-      case _ : Throwable => fail("Should have thrown IllegalStateException.")
-    }
+    cleanerManager.setCleaningState(tp, LogCleaningPaused)
+    intercept[IllegalStateException](cleanerManager.doneDeleting(tp))
 
     cleanerManager.setCleaningState(tp, LogCleaningInProgress)
     cleanerManager.doneDeleting(tp)
