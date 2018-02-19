@@ -206,8 +206,6 @@ public abstract class AdminClient implements AutoCloseable {
      * {@link ListTopicsResult#names() names()} methods of the  returned {@code ListTopicsResult}</p>
      *
      * <ul>
-     *     <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
-     *     if the authorized topic was in metadata first, but was not found during later look up</li>
      *     <li>{@link org.apache.kafka.common.errors.InvalidReplicationFactorException}
      *     if replica assignment is invalid</li>
      *     <li>{@link org.apache.kafka.common.errors.TopicAuthorizationException}
