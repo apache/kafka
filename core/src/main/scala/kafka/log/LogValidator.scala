@@ -77,15 +77,16 @@ private[kafka] object LogValidator extends Logging {
       if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
         val countFromOffsets = batch.lastOffset - batch.baseOffset + 1
         if (countFromOffsets <= 0)
-          throw new InvalidRecordException("Batch has an invalid offset range")
+          throw new InvalidRecordException(s"Batch has an invalid offset range: [${batch.baseOffset}, ${batch.lastOffset}]")
 
         // v2 and above messages always have a non-null count
         val count = batch.countOrNull
         if (count <= 0)
-          throw new InvalidRecordException("Invalid reported count for record batch")
+          throw new InvalidRecordException(s"Invalid reported count for record batch: $count")
 
         if (countFromOffsets != batch.countOrNull)
-          throw new InvalidRecordException("Inconsistent batch offset range and count of records")
+          throw new InvalidRecordException(s"Inconsistent batch offset range [${batch.baseOffset}, ${batch.lastOffset}] " +
+            s"and count of records $count")
       }
 
       if (batch.hasProducerId && batch.baseSequence < 0)

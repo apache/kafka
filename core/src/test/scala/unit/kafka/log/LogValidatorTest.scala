@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.test.TestUtils
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions
+import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
 
@@ -151,38 +151,45 @@ class LogValidatorTest {
   @Test
   def testInvalidOffsetRangeAndRecordCount(): Unit = {
     // The batch to be written contains 3 records, so the correct lastOffsetDelta is 2
-    validateRecordBatchWithCountOverrides(lastOffsetDelta = 0, count = 3)
-    validateRecordBatchWithCountOverrides(lastOffsetDelta = 15, count = 3)
-    validateRecordBatchWithCountOverrides(lastOffsetDelta = -3, count = 3)
-    validateRecordBatchWithCountOverrides(lastOffsetDelta = 2, count = -3)
-    validateRecordBatchWithCountOverrides(lastOffsetDelta = 2, count = 6)
-    validateRecordBatchWithCountOverrides(lastOffsetDelta = 2, count = 0)
-    validateRecordBatchWithCountOverrides(lastOffsetDelta = -3, count = -2)
+    validateRecordBatchWithCountOverrides(lastOffsetDelta = 2, count = 3)
 
-    // Count and offset range are consistent with each other, but do not match the actual number of records
-    validateRecordBatchWithCountOverrides(lastOffsetDelta = 5, count = 6)
-    validateRecordBatchWithCountOverrides(lastOffsetDelta = 1, count = 2)
+    // Count and offset range are inconsistent or invalid
+    assertInvalidBatchCountOverrides(lastOffsetDelta = 0, count = 3)
+    assertInvalidBatchCountOverrides(lastOffsetDelta = 15, count = 3)
+    assertInvalidBatchCountOverrides(lastOffsetDelta = -3, count = 3)
+    assertInvalidBatchCountOverrides(lastOffsetDelta = 2, count = -3)
+    assertInvalidBatchCountOverrides(lastOffsetDelta = 2, count = 6)
+    assertInvalidBatchCountOverrides(lastOffsetDelta = 2, count = 0)
+    assertInvalidBatchCountOverrides(lastOffsetDelta = -3, count = -2)
+
+    // Count and offset range are consistent, but do not match the actual number of records
+    assertInvalidBatchCountOverrides(lastOffsetDelta = 5, count = 6)
+    assertInvalidBatchCountOverrides(lastOffsetDelta = 1, count = 2)
   }
 
-  def validateRecordBatchWithCountOverrides(lastOffsetDelta: Int, count: Int) {
+  private def assertInvalidBatchCountOverrides(lastOffsetDelta: Int, count: Int): Unit = {
+    intercept[InvalidRecordException] {
+      validateRecordBatchWithCountOverrides(lastOffsetDelta, count)
+    }
+  }
+
+  private def validateRecordBatchWithCountOverrides(lastOffsetDelta: Int, count: Int) {
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V2, timestamp = 1234L, codec = CompressionType.NONE)
     records.buffer.putInt(DefaultRecordBatch.RECORDS_COUNT_OFFSET, count)
     records.buffer.putInt(DefaultRecordBatch.LAST_OFFSET_DELTA_OFFSET, lastOffsetDelta)
-    Assertions.intercept[InvalidRecordException] {
-      LogValidator.validateMessagesAndAssignOffsets(
-        records,
-        offsetCounter = new LongRef(0),
-        time = time,
-        now = time.milliseconds(),
-        sourceCodec = DefaultCompressionCodec,
-        targetCodec = DefaultCompressionCodec,
-        compactedTopic = false,
-        magic = RecordBatch.MAGIC_VALUE_V2,
-        timestampType = TimestampType.LOG_APPEND_TIME,
-        timestampDiffMaxMs = 1000L,
-        partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-        isFromClient = true)
-    }
+    LogValidator.validateMessagesAndAssignOffsets(
+      records,
+      offsetCounter = new LongRef(0),
+      time = time,
+      now = time.milliseconds(),
+      sourceCodec = DefaultCompressionCodec,
+      targetCodec = DefaultCompressionCodec,
+      compactedTopic = false,
+      magic = RecordBatch.MAGIC_VALUE_V2,
+      timestampType = TimestampType.LOG_APPEND_TIME,
+      timestampDiffMaxMs = 1000L,
+      partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
+      isFromClient = true)
   }
 
   @Test
