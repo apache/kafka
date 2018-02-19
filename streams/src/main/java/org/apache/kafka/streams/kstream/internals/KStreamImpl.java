@@ -653,12 +653,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
      */
     private KStreamImpl<K, V> repartitionForJoin(final Serde<K> keySerde,
                                                  final Serde<V> valSerde) {
-        String repartitionedSourceName = createReparitionedSource(builder, keySerde, valSerde, null, name);
+        String repartitionedSourceName = createRepartitionedSource(builder, keySerde, valSerde, null, name);
         return new KStreamImpl<>(builder, repartitionedSourceName, Collections
             .singleton(repartitionedSourceName), false);
     }
 
-    static <K1, V1> String createReparitionedSource(final InternalStreamsBuilder builder,
+    static <K1, V1> String createRepartitionedSource(final InternalStreamsBuilder builder,
                                                     final Serde<K1> keySerde,
                                                     final Serde<V1> valSerde,
                                                     final String topicNamePrefix,
