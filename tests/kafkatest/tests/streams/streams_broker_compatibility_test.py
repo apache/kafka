@@ -21,7 +21,7 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsBrokerCompatibilityService
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.version import DEV_BRANCH, LATEST_0_11_0, LATEST_0_10_2, LATEST_0_10_1, LATEST_0_10_0, LATEST_0_9, LATEST_0_8_2, KafkaVersion
+from kafkatest.version import LATEST_0_11_0, LATEST_0_10_2, LATEST_0_10_1, LATEST_0_10_0, LATEST_0_9, LATEST_0_8_2, KafkaVersion
 
 
 class StreamsBrokerCompatibility(Test):
@@ -67,9 +67,9 @@ class StreamsBrokerCompatibility(Test):
 
         processor.node.account.ssh(processor.start_cmd(processor.node))
         with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
-            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS ',
+            monitor.wait_until('Exception in thread \"main\" org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS',
                                timeout_sec=60,
-                               err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS ' error message " + str(processor.node.account))
+                               err_msg="Never saw 'Exception in thread \"main\" org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS ' error message " + str(processor.node.account))
 
         self.kafka.stop()
 
