@@ -116,14 +116,21 @@ public class BrokerCompatibilityTest {
         producerProperties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerProperties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
-        try(final KafkaProducer<String, String> producer = new KafkaProducer<>(producerProperties);) {
-            producer.send(new ProducerRecord<>(SOURCE_TOPIC, "key", "value"));
+        try {
+            try (final KafkaProducer<String, String> producer = new KafkaProducer<>(producerProperties);) {
+                producer.send(new ProducerRecord<>(SOURCE_TOPIC, "key", "value"));
 
-            System.out.println("wait for result");
-            loopUntilRecordReceived(kafka, eosEnabled);
-        } finally {
-            System.out.println("close Kafka Streams");
-            streams.close();
+                System.out.println("wait for result");
+                loopUntilRecordReceived(kafka, eosEnabled);
+            } finally {
+                System.out.println("close Kafka Streams");
+                streams.close();
+            }
+        } catch (final RuntimeException e) {
+            System.err.println("Non-Streams exception occurred: ");
+            e.printStackTrace(System.err);
+            System.err.flush();
+            System.exit(1);
         }
     }
 
