@@ -524,33 +524,25 @@ class KafkaConfigTest {
 
   @Test
   def testInterBrokerVersionMessageFormatCompatibility(): Unit = {
+    def loadConfig(interBrokerProtocol: ApiVersion, messageFormat: ApiVersion): KafkaConfig = {
+      val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+      props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocol.version)
+      props.put(KafkaConfig.LogMessageFormatVersionProp, messageFormat.version)
+      KafkaConfig.fromProps(props)
+    }
+
     ApiVersion.allVersions.foreach { interBrokerVersion =>
       ApiVersion.allVersions.foreach { messageFormatVersion =>
-        if (interBrokerVersion.messageFormatVersion >= messageFormatVersion.messageFormatVersion)
-          assertCompatible(interBrokerVersion, messageFormatVersion)
-        else
-          assertIncompatible(interBrokerVersion, messageFormatVersion)
+        if (interBrokerVersion.messageFormatVersion >= messageFormatVersion.messageFormatVersion) {
+          val config = loadConfig(interBrokerVersion, messageFormatVersion)
+          assertEquals(messageFormatVersion, config.logMessageFormatVersion)
+          assertEquals(interBrokerVersion, config.interBrokerProtocolVersion)
+        } else {
+          intercept[IllegalArgumentException] {
+            loadConfig(interBrokerVersion, messageFormatVersion)
+          }
+        }
       }
-    }
-  }
-
-  private def assertCompatible(interBrokerProtocol: ApiVersion,
-                               messageFormat: ApiVersion): Unit = {
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocol.version)
-    props.put(KafkaConfig.LogMessageFormatVersionProp, messageFormat.version)
-    val config = KafkaConfig.fromProps(props)
-    assertEquals(messageFormat, config.logMessageFormatVersion)
-    assertEquals(interBrokerProtocol, config.interBrokerProtocolVersion)
-  }
-
-  private def assertIncompatible(interBrokerProtocol: ApiVersion,
-                                 messageFormat: ApiVersion): Unit = {
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocol.version)
-    props.put(KafkaConfig.LogMessageFormatVersionProp, messageFormat.version)
-    intercept[IllegalArgumentException] {
-      KafkaConfig.fromProps(props)
     }
   }
 
