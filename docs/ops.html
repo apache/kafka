@@ -764,8 +764,13 @@
         <td></td>
       </tr>
       <tr>
-        <td>Byte in rate</td>
+        <td>Byte in rate from clients</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=BytesInPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Byte in rate from other brokers</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesInPerSec</td>
         <td></td>
       </tr>
       <tr>
@@ -800,8 +805,13 @@
         <td>Number of records which required message format conversion.</td>
       </tr>
       <tr>
-        <td>Byte out rate</td>
+        <td>Byte out rate to clients</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=BytesOutPerSec</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Byte out rate to other brokers</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesOutPerSec</td>
         <td></td>
       </tr>
       <tr>
