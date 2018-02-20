@@ -31,14 +31,15 @@ class ConnectRestApiTest(KafkaTest):
     FILE_SOURCE_CONNECTOR = 'org.apache.kafka.connect.file.FileStreamSourceConnector'
     FILE_SINK_CONNECTOR = 'org.apache.kafka.connect.file.FileStreamSinkConnector'
 
-    FILE_SOURCE_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'topic', 'file', 'transforms'}
-    FILE_SINK_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'topics', 'file', 'transforms', 'topics.regex'}
+    FILE_SOURCE_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'header.converter', 'batch.size', 'topic', 'file', 'transforms'}
+    FILE_SINK_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'header.converter', 'topics', 'file', 'transforms', 'topics.regex'}
 
     INPUT_FILE = "/mnt/connect.input"
     INPUT_FILE2 = "/mnt/connect.input2"
     OUTPUT_FILE = "/mnt/connect.output"
 
     TOPIC = "test"
+    DEFAULT_BATCH_SIZE = "2000"
     OFFSETS_TOPIC = "connect-offsets"
     OFFSETS_REPLICATION_FACTOR = "1"
     OFFSETS_PARTITIONS = "1"
@@ -141,7 +142,8 @@ class ConnectRestApiTest(KafkaTest):
             'config': {
                 'task.class': 'org.apache.kafka.connect.file.FileStreamSourceTask',
                 'file': self.INPUT_FILE,
-                'topic': self.TOPIC
+                'topic': self.TOPIC,
+                'batch.size': self.DEFAULT_BATCH_SIZE
             }
         }]
         source_task_info = self.cc.get_connector_tasks("local-file-source")
