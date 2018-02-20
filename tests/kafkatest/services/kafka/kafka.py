@@ -169,16 +169,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         retries = 30
         expected_broker_ids = set(self.nodes)
-        broker_ids = set()
-        while retries > 0:
-            for node in self.nodes:
-                if self.is_registered(node):
-                    broker_ids.add(node)
-            if broker_ids == expected_broker_ids:
-                break
-            else:
-                time.sleep(1)
-            retries = retries - 1
+        wait_until({node for node in self.nodes if self.is_registered(node)} == expected_broker_ids, 30, 1)
 
         if retries == 0:
             raise RuntimeError("Kafka servers didn't register at ZK within 30 seconds")
