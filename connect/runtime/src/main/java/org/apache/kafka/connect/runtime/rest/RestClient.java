@@ -82,7 +82,9 @@ public class RestClient {
             req.method(method);
             req.accept("application/json");
             req.agent("kafka-connect");
-            req.content(new StringContentProvider(serializedBody, StandardCharsets.UTF_8), "application/json");
+            if (serializedBody != null) {
+                req.content(new StringContentProvider(serializedBody, StandardCharsets.UTF_8), "application/json");
+            }
 
             ContentResponse res = req.send();
 
