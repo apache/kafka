@@ -130,7 +130,6 @@ public class BrokerCompatibilityTest {
             System.err.println("Non-Streams exception occurred: ");
             e.printStackTrace(System.err);
             System.err.flush();
-            System.exit(1);
         }
     }
 
