@@ -273,7 +273,6 @@ public class DelegatingClassLoader extends URLClassLoader {
         builder.setClassLoaders(new ClassLoader[]{loader});
         builder.addUrls(urls);
         builder.setScanners(new SubTypesScanner());
-        builder.setExpandSuperTypes(false);
         builder.useParallelExecutor();
         Reflections reflections = new InternalReflections(builder);
 
