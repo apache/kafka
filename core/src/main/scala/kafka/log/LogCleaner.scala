@@ -20,7 +20,6 @@ package kafka.log
 import java.io.{File, IOException}
 import java.nio._
 import java.nio.file.Files
-import java.util
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
@@ -264,7 +263,7 @@ class LogCleaner(initialConfig: CleanerConfig,
 
     protected override def loggerName = classOf[LogCleaner].getName
 
-    if(config.dedupeBufferSize / config.numThreads > Int.MaxValue)
+    if (config.dedupeBufferSize / config.numThreads > Int.MaxValue)
       warn("Cannot use more than 2G of cleaner buffer space per cleaner thread, ignoring excess buffer space...")
 
     val cleaner = new Cleaner(id = threadId,
