@@ -644,7 +644,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 continue;
             }
             if (numPartitions < 0) {
-                throw new org.apache.kafka.streams.errors.TopologyBuilderException(String.format("%sTopic [%s] number of partitions not defined", logPrefix, topic.name()));
+                throw new org.apache.kafka.streams.errors.StreamsException(String.format("%sTopic [%s] number of partitions not defined", logPrefix, topic.name()));
             }
 
             topic.setNumberOfPartitions(numPartitions);

@@ -60,7 +60,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @Override
     public StateStore getStateStore(final String name) {
         if (currentNode() == null) {
-            throw new org.apache.kafka.streams.errors.TopologyBuilderException("Accessing from an unknown node");
+            throw new org.apache.kafka.streams.errors.StreamsException("Accessing from an unknown node");
         }
 
         final StateStore global = stateManager.getGlobalStore(name);
@@ -69,7 +69,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         if (!currentNode().stateStores.contains(name)) {
-            throw new org.apache.kafka.streams.errors.TopologyBuilderException("Processor " + currentNode().name() + " has no access to StateStore " + name);
+            throw new org.apache.kafka.streams.errors.StreamsException("Processor " + currentNode().name() + " has no access to StateStore " + name);
         }
 
         return stateManager.getStore(name);

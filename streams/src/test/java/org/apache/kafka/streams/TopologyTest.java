@@ -17,7 +17,6 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -157,7 +156,7 @@ public class TopologyTest {
     }
 
     @Test
-    public void shouldNotAllowToAddProcessorWithSameName() {
+    public void shoudNotAllowToAddProcessorWithSameName() {
         topology.addSource("source", "topic-1");
         topology.addProcessor("processor", new MockProcessorSupplier(), "source");
         try {
@@ -252,7 +251,7 @@ public class TopologyTest {
         } catch (final TopologyException expected) { }
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test(expected = StreamsException.class)
     public void shouldThrowOnUnassignedStateStoreAccess() throws Exception {
         final String sourceNodeName = "source";
         final String goodNodeName = "goodGuy";
@@ -274,18 +273,7 @@ public class TopologyTest {
                 goodNodeName)
             .addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
 
-        try {
-            new ProcessorTopologyTestDriver(streamsConfig, topology.internalTopologyBuilder);
-        } catch (final StreamsException e) {
-            final Throwable cause = e.getCause();
-            if (cause != null
-                && cause instanceof TopologyBuilderException
-                && cause.getMessage().equals("Invalid topology building: Processor " + badNodeName + " has no access to StateStore " + LocalMockProcessorSupplier.STORE_NAME)) {
-                throw (TopologyBuilderException) cause;
-            } else {
-                throw new RuntimeException("Did expect different exception. Did catch:", e);
-            }
-        }
+        new ProcessorTopologyTestDriver(streamsConfig, topology.internalTopologyBuilder);
     }
 
     private static class LocalMockProcessorSupplier implements ProcessorSupplier {
