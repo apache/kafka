@@ -143,7 +143,7 @@ public class BrokerCompatibilityTest {
             consumerProperties.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
         }
 
-        try(final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProperties)) {
+        try (final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProperties)) {
             consumer.subscribe(Collections.singletonList(SINK_TOPIC));
 
             while (true) {
