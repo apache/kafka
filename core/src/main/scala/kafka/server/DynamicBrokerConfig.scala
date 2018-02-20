@@ -751,7 +751,9 @@ class DynamicListenerConfig(server: KafkaServer) extends BrokerReconfigurable wi
     if (listenersAdded.nonEmpty)
       server.socketServer.addListeners(listenersAdded)
 
-    server.zkClient.updateBrokerInfoInZk(server.createBrokerInfo)
+    val newBrokerInfo = server.createBrokerInfo
+    server.zkClient.updateBrokerInfoInZk(newBrokerInfo)
+    server.kafkaController.updateBrokerInfo(newBrokerInfo)
   }
 
   private def listenersToMap(listeners: Seq[EndPoint]): Map[ListenerName, EndPoint] =

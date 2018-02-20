@@ -599,6 +599,26 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val invalidHost = "192.168.0.1"
     alterAdvertisedListener(adminClient, externalAdminClient, "localhost", invalidHost)
 
+    def validateEndpointsInZooKeeper(server: KafkaServer, endpointMatcher: String => Boolean): Unit = {
+      val brokerInfo = zkClient.getBroker(server.config.brokerId)
+      assertTrue("Broker not registered", brokerInfo.nonEmpty)
+      val endpoints = brokerInfo.get.endPoints.toString
+      assertTrue(s"Endpoint update not saved $endpoints", endpointMatcher(endpoints))
+    }
+
+    // Verify that endpoints have been updated in ZK fr all brokers
+    servers.foreach(validateEndpointsInZooKeeper(_, endpoints => endpoints.contains(invalidHost)))
+
+    // Trigger session expiry and ensure that controller registers new advertised listener after expiry
+    val controllerEpoch = zkClient.getControllerEpoch
+    val controllerServer = servers(zkClient.getControllerId.getOrElse(throw new IllegalStateException("No controller")))
+    val controllerZkClient = controllerServer.zkClient
+    val sessionExpiringClient = createZooKeeperClientToTriggerSessionExpiry(controllerZkClient.currentZooKeeper)
+    sessionExpiringClient.close()
+    TestUtils.waitUntilTrue(() => zkClient.getControllerEpoch != controllerEpoch,
+      "Controller not re-elected after ZK session expiry")
+    TestUtils.retry(10000)(validateEndpointsInZooKeeper(controllerServer, endpoints => endpoints.contains(invalidHost)))
+
     // Verify that producer connections fail since advertised listener is invalid
     val bootstrap = bootstrapServers.replaceAll(invalidHost, "localhost") // allow bootstrap connection to succeed
     val producer1 = createProducer(trustStoreFile1, retries = 0, bootstrap = bootstrap)
@@ -606,6 +626,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val sendFuture = verifyConnectionFailure(producer1)
 
     alterAdvertisedListener(adminClient, externalAdminClient, invalidHost, "localhost")
+    servers.foreach(validateEndpointsInZooKeeper(_, endpoints => !endpoints.contains(invalidHost)))
 
     // Verify that produce/consume work now
     val producer = createProducer(trustStoreFile1, retries = 0)
