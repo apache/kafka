@@ -84,7 +84,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     config.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
 
     val adminClient = AdminClient.create(config.asScala.toMap)
-    var (error, token)  = adminClient.createToken(List())
+    val (error, token)  = adminClient.createToken(List())
 
     //wait for token to reach all the brokers
     TestUtils.waitUntilTrue(() => servers.forall(server => !server.tokenCache.tokens().isEmpty),
