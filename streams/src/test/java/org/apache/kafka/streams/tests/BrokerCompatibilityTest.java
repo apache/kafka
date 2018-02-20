@@ -122,7 +122,6 @@ public class BrokerCompatibilityTest {
 
                 System.out.println("wait for result");
                 loopUntilRecordReceived(kafka, eosEnabled);
-            } finally {
                 System.out.println("close Kafka Streams");
                 streams.close();
             }
