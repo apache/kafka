@@ -39,9 +39,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.io.FileNotFoundException;
-import java.io.PrintWriter;
-import java.io.UnsupportedEncodingException;
-import java.nio.charset.StandardCharsets;
+import java.io.FileOutputStream;
 import java.util.Objects;
 import java.util.Set;
 
@@ -346,7 +344,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       final String label) {
         Objects.requireNonNull(label, "label can't be null");
         final String name = builder.newProcessorName(PRINTING_NAME);
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, defaultKeyValueMapper, label)), this.name);
+        builder.internalTopologyBuilder.addProcessor(
+            name,
+            new KStreamPrint<>(new PrintForeachAction<>(System.out, defaultKeyValueMapper, label)),
+            this.name);
     }
 
     @SuppressWarnings("deprecation")
@@ -384,17 +385,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         if (filePath.trim().isEmpty()) {
             throw new TopologyException("filePath can't be an empty string");
         }
-        String name = builder.newProcessorName(PRINTING_NAME);
-        PrintWriter printWriter = null;
+        final String name = builder.newProcessorName(PRINTING_NAME);
         try {
-            printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
-            builder.internalTopologyBuilder.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, defaultKeyValueMapper, label)), this.name);
-        } catch (final FileNotFoundException | UnsupportedEncodingException e) {
+            builder.internalTopologyBuilder.addProcessor(
+                name,
+                new KStreamPrint<>(new PrintForeachAction<>(new FileOutputStream(filePath), defaultKeyValueMapper, label)),
+                this.name);
+        } catch (final FileNotFoundException e) {
             throw new TopologyException(String.format("Unable to write stream to file at [%s] %s", filePath, e.getMessage()));
-        } finally {
-            if (printWriter != null) {
-                printWriter.close();
-            }
         }
     }
 
