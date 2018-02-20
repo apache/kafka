@@ -314,6 +314,8 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         case Some(LogCleaningAborted) =>
           inProgress.put(topicPartition, LogCleaningPaused)
           pausedCleaningCond.signalAll()
+        case None =>
+          throw new IllegalStateException(s"State for partition $topicPartition should exist.")
         case s =>
           throw new IllegalStateException(s"In-progress partition $topicPartition cannot be in $s state.")
       }
@@ -328,6 +330,8 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         case Some(LogCleaningAborted) =>
           inProgress.put(topicPartition, LogCleaningPaused)
           pausedCleaningCond.signalAll()
+        case None =>
+          throw new IllegalStateException(s"State for partition $topicPartition should exist.")
         case s =>
           throw new IllegalStateException(s"In-progress partition $topicPartition cannot be in $s state.")
       }
