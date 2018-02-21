@@ -25,12 +25,12 @@ public enum RecordFormat {
         this.value = (byte) value;
     }
 
-    public static RecordFormat lookup(byte magic) {
-        switch (magic) {
+    public static RecordFormat lookup(byte version) {
+        switch (version) {
             case 0: return V0;
             case 1: return V1;
             case 2: return V2;
-            default: throw new IllegalArgumentException("Unknown message format version: " + magic);
+            default: throw new IllegalArgumentException("Unknown format version: " + version);
         }
     }
 
