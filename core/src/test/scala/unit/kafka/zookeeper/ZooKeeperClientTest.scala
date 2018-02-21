@@ -29,8 +29,8 @@ import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException.{Code, NoNodeException}
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.ZooKeeper.States
-import org.apache.zookeeper.{CreateMode, WatchedEvent, Watcher, ZooDefs, ZooKeeper}
-import org.junit.Assert.{assertArrayEquals, assertEquals, assertFalse, assertNull, assertTrue}
+import org.apache.zookeeper.{CreateMode, WatchedEvent, ZooDefs}
+import org.junit.Assert.{assertArrayEquals, assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
@@ -456,14 +456,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       requestThread.start()
       sendCompleteSemaphore.acquire() // Wait for request thread to start processing requests
 
-      // Trigger session expiry by reusing the session id in another client
-      val dummyWatcher = new Watcher {
-        override def process(event: WatchedEvent): Unit = {}
-      }
-      val anotherZkClient = new ZooKeeper(zkConnect, 1000, dummyWatcher,
-        zooKeeperClient.currentZooKeeper.getSessionId,
-        zooKeeperClient.currentZooKeeper.getSessionPasswd)
-      assertNull(anotherZkClient.exists("/nonexistent", false)) // Make sure new client works
+      val anotherZkClient = createZooKeeperClientToTriggerSessionExpiry(zooKeeperClient.currentZooKeeper)
       sendSemaphore.release(maxInflightRequests) // Resume a few more sends which may fail
       anotherZkClient.close()
       sendSemaphore.release(maxInflightRequests) // Resume a few more sends which may fail

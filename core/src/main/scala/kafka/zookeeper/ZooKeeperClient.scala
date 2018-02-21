@@ -317,7 +317,7 @@ class ZooKeeperClient(connectString: String,
   }
 
   // Only for testing
-  private[zookeeper] def currentZooKeeper: ZooKeeper = inReadLock(initializationLock) {
+  private[kafka] def currentZooKeeper: ZooKeeper = inReadLock(initializationLock) {
     zooKeeper
   }
   
