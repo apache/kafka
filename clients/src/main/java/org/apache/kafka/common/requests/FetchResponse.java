@@ -29,12 +29,14 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.Records;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
@@ -359,7 +361,7 @@ public class FetchResponse extends AbstractResponse {
         responseHeaderStruct.writeTo(buffer);
         buffer.rewind();
 
-        List<Send> sends = new ArrayList<>();
+        Queue<Send> sends = new ArrayDeque<>();
         sends.add(new ByteBufferSend(dest, buffer));
         addResponseData(responseBodyStruct, throttleTimeMs, dest, sends);
         return new MultiSend(dest, sends);
@@ -393,7 +395,7 @@ public class FetchResponse extends AbstractResponse {
         return new FetchResponse(ApiKeys.FETCH.responseSchema(version).read(buffer));
     }
 
-    private static void addResponseData(Struct struct, int throttleTimeMs, String dest, List<Send> sends) {
+    private static void addResponseData(Struct struct, int throttleTimeMs, String dest, Queue<Send> sends) {
         Object[] allTopicData = struct.getArray(RESPONSES_KEY_NAME);
 
         if (struct.hasField(ERROR_CODE)) {
@@ -421,7 +423,7 @@ public class FetchResponse extends AbstractResponse {
             addTopicData(dest, sends, (Struct) topicData);
     }
 
-    private static void addTopicData(String dest, List<Send> sends, Struct topicData) {
+    private static void addTopicData(String dest, Queue<Send> sends, Struct topicData) {
         String topic = topicData.get(TOPIC_NAME);
         Object[] allPartitionData = topicData.getArray(PARTITIONS_KEY_NAME);
 
@@ -436,7 +438,7 @@ public class FetchResponse extends AbstractResponse {
             addPartitionData(dest, sends, (Struct) partitionData);
     }
 
-    private static void addPartitionData(String dest, List<Send> sends, Struct partitionData) {
+    private static void addPartitionData(String dest, Queue<Send> sends, Struct partitionData) {
         Struct header = partitionData.getStruct(PARTITION_HEADER_KEY_NAME);
         Records records = partitionData.getRecords(RECORD_SET_KEY_NAME);
 

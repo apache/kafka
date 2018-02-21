@@ -67,9 +67,9 @@ class StreamsBrokerCompatibility(Test):
 
         processor.node.account.ssh(processor.start_cmd(processor.node))
         with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
-            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS ',
+            monitor.wait_until("Exception in thread \"main\" org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS ",
                                timeout_sec=60,
-                               err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS ' error message " + str(processor.node.account))
+                               err_msg="Exception in thread \"main\" org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support LIST_OFFSETS " + str(processor.node.account))
 
         self.kafka.stop()
 

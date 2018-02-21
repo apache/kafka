@@ -82,12 +82,14 @@ public class RestClient {
             req.method(method);
             req.accept("application/json");
             req.agent("kafka-connect");
-            req.content(new StringContentProvider(serializedBody, StandardCharsets.UTF_8), "application/json");
+            if (serializedBody != null) {
+                req.content(new StringContentProvider(serializedBody, StandardCharsets.UTF_8), "application/json");
+            }
 
             ContentResponse res = req.send();
 
             int responseCode = res.getStatus();
-            System.out.println(responseCode);
+            log.debug("Request's response code: {}", responseCode);
             if (responseCode == HttpStatus.NO_CONTENT_204) {
                 return new HttpResponse<>(responseCode, convertHttpFieldsToMap(res.getHeaders()), null);
             } else if (responseCode >= 400) {
