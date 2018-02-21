@@ -248,7 +248,11 @@ def command_stage_docs():
 
     # The contents of the docs jar are site-docs/<docs dir>. We need to get rid of the site-docs prefix and dump everything
     # inside it into the docs version subdirectory in the kafka-site repo
-    cmd('Extracting ', 'tar xf %s --strip-components 1' % docs_tar, cwd=versioned_docs_path)
+    cmd('Extracting site-docs', 'tar xf %s --strip-components 1' % docs_tar, cwd=versioned_docs_path)
+
+    javadocs_src_dir = os.path.join(REPO_HOME, 'build', 'docs', 'javadoc')
+
+    cmd('Copying javadocs', 'cp -R %s %s' % (javadocs_src_dir, versioned_docs_path))
 
     sys.exit(0)
 
