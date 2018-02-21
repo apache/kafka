@@ -78,6 +78,9 @@ object ConsumerGroupCommand extends Logging {
       else if (opts.options.has(opts.deleteOpt))
         consumerGroupService.deleteGroups()
       else if (opts.options.has(opts.resetOffsetsOpt)) {
+        if(!opts.options.has(opts.executeOpt))
+          System.err.println("Warning: No action will be performed as argument \"" + opts.executeOpt + "\" is missing.")
+
         val offsetsToReset = consumerGroupService.resetOffsets()
         if (opts.options.has(opts.exportOpt)) {
           val exported = consumerGroupService.exportOffsetsToReset(offsetsToReset)
