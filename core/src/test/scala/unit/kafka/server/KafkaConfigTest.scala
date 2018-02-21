@@ -19,7 +19,7 @@ package kafka.server
 
 import java.util.Properties
 
-import kafka.api._
+import kafka.api.{ApiVersion, KAFKA_0_8_2}
 import kafka.cluster.EndPoint
 import kafka.message._
 import kafka.utils.{CoreUtils, TestUtils}
@@ -524,7 +524,7 @@ class KafkaConfigTest {
 
   @Test
   def testInterBrokerVersionMessageFormatCompatibility(): Unit = {
-    def loadConfig(interBrokerProtocol: ApiVersion, messageFormat: ApiVersion): KafkaConfig = {
+    def buildConfig(interBrokerProtocol: ApiVersion, messageFormat: ApiVersion): KafkaConfig = {
       val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
       props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocol.version)
       props.put(KafkaConfig.LogMessageFormatVersionProp, messageFormat.version)
@@ -533,13 +533,13 @@ class KafkaConfigTest {
 
     ApiVersion.allVersions.foreach { interBrokerVersion =>
       ApiVersion.allVersions.foreach { messageFormatVersion =>
-        if (interBrokerVersion.messageFormatVersion >= messageFormatVersion.messageFormatVersion) {
-          val config = loadConfig(interBrokerVersion, messageFormatVersion)
+        if (interBrokerVersion.messageFormatVersion.value >= messageFormatVersion.messageFormatVersion.value) {
+          val config = buildConfig(interBrokerVersion, messageFormatVersion)
           assertEquals(messageFormatVersion, config.logMessageFormatVersion)
           assertEquals(interBrokerVersion, config.interBrokerProtocolVersion)
         } else {
           intercept[IllegalArgumentException] {
-            loadConfig(interBrokerVersion, messageFormatVersion)
+            buildConfig(interBrokerVersion, messageFormatVersion)
           }
         }
       }
