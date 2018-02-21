@@ -714,6 +714,7 @@ class GroupMetadataManager(brokerId: Int,
   // visible for testing
   private[group] def cleanupGroupMetadata(): Unit = {
     val startMs = time.milliseconds()
+    // note: there is a lock on the group when the function 'removeExpiredOffsets(...)' is called inside 'cleanupGroupMetadata(...)'
     val offsetsRemoved = cleanupGroupMetadata(groupMetadataCache.values, group => {
       group.removeExpiredOffsets(time.milliseconds())
     })
