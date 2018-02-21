@@ -1183,6 +1183,90 @@ class LogTest {
   }
 
   /**
+    * This test generates a single record set that is a concatenation of many valid record sets, and appends them to
+    * a log. It then checks to make sure we can read them all back.
+    */
+  @Test
+  def testAppendManyRecordSets() {
+    val logConfig = createLogConfig(segmentBytes = 71)
+    val log = createLog(logDir, logConfig)
+    val values = (0 until 100 by 2).map(id => id.toString.getBytes).toArray
+
+    // Build a single buffer with all record sets appended
+    val recordBuffer = ByteBuffer.allocate(4000)
+    for(value <- values) {
+      recordBuffer.put(TestUtils.singletonRecords(value = value).buffer())
+    }
+
+    // Close the buffer and create a MemoryRecords wrapping it
+    recordBuffer.flip()
+    recordBuffer.position(0)
+    val records = MemoryRecords.readableRecords(recordBuffer.slice())
+
+    log.appendAsLeader(records, leaderEpoch = 0)
+
+    for(i <- values.indices) {
+      val read = log.readUncommitted(i, 100, Some(i+1)).records.batches.iterator.next()
+      assertEquals("Offset read should match order appended.", i, read.lastOffset)
+      val actual = read.iterator.next()
+      assertNull("Key should be null", actual.key)
+      assertEquals("Values not equal", ByteBuffer.wrap(values(i)), actual.value)
+    }
+    assertEquals("Reading beyond the last message returns nothing.", 0,
+      log.readUncommitted(values.length, 100, None).records.batches.asScala.size)
+  }
+
+  /**
+    * This test makes sure that appending an empty record set does not fail. There should be no exception raised
+    */
+  @Test
+  def testAppendEmptyRecordSet() {
+    val logConfig = createLogConfig(segmentBytes = 71)
+    val log = createLog(logDir, logConfig)
+    log.appendAsFollower(MemoryRecords.withRecords(CompressionType.NONE))
+  }
+
+  /**
+    * This test generates a single record set that is a concatenation of many valid record sets, with one empty record
+    * set in the middle, and appends them to a log. It then checks to make sure we can read them all back.
+    */
+  @Test
+  def testAppendManyRecordSetsWithEmpty() {
+    val logConfig = createLogConfig(segmentBytes = 71)
+    val log = createLog(logDir, logConfig)
+    val values1 = (0 until 50 by 2).map(id => id.toString.getBytes).toArray
+    val values2 = (52 until 100 by 2).map(id => id.toString.getBytes).toArray
+
+    // Build a single buffer with all record sets appended
+    val recordBuffer = ByteBuffer.allocate(4000)
+    for(value <- values1) {
+      recordBuffer.put(TestUtils.singletonRecords(value = value).buffer())
+    }
+    recordBuffer.put(MemoryRecords.withRecords(CompressionType.NONE).buffer())
+    for(value <- values2) {
+      recordBuffer.put(TestUtils.singletonRecords(value = value).buffer())
+    }
+
+    // Close the buffer and create a MemoryRecords wrapping it
+    recordBuffer.flip()
+    recordBuffer.position(0)
+    val records = MemoryRecords.readableRecords(recordBuffer.slice())
+
+    log.appendAsLeader(records, leaderEpoch = 0)
+
+    val values = values1 ++ values2
+    for(i <- values.indices) {
+      val read = log.readUncommitted(i, 100, Some(i+1)).records.batches.iterator.next()
+      assertEquals("Offset read should match order appended.", i, read.lastOffset)
+      val actual = read.iterator.next()
+      assertNull("Key should be null", actual.key)
+      assertEquals("Values not equal", ByteBuffer.wrap(values(i)), actual.value)
+    }
+    assertEquals("Reading beyond the last message returns nothing.", 0,
+      log.readUncommitted(values.length, 100, None).records.batches.asScala.size)
+  }
+
+  /**
    * This test covers an odd case where we have a gap in the offsets that falls at the end of a log segment.
    * Specifically we create a log where the last message in the first segment has offset 0. If we
    * then read offset 1, we should expect this read to come from the second segment, even though the
