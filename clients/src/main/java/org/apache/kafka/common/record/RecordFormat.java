@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.common.record;
 
-public enum MessageFormatVersion {
+public enum RecordFormat {
     V0(0), V1(1), V2(2);
 
     public final byte value;
 
-    MessageFormatVersion(int value) {
+    RecordFormat(int value) {
         this.value = (byte) value;
     }
 
-    public static MessageFormatVersion lookup(byte magic) {
+    public static RecordFormat lookup(byte magic) {
         switch (magic) {
             case 0: return V0;
             case 1: return V1;
@@ -34,7 +34,7 @@ public enum MessageFormatVersion {
         }
     }
 
-    public static MessageFormatVersion current() {
+    public static RecordFormat current() {
         return V2;
     }
 
