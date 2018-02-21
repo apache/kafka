@@ -192,6 +192,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   private[kafka] def updateBrokerInfo(newBrokerInfo: BrokerInfo): Unit = {
     this.brokerInfo = newBrokerInfo
+    zkClient.updateBrokerInfoInZk(newBrokerInfo)
   }
 
   private def state: ControllerState = eventManager.state

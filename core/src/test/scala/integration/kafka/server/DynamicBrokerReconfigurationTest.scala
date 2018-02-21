@@ -606,7 +606,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       assertTrue(s"Endpoint update not saved $endpoints", endpointMatcher(endpoints))
     }
 
-    // Verify that endpoints have been updated in ZK fr all brokers
+    // Verify that endpoints have been updated in ZK for all brokers
     servers.foreach(validateEndpointsInZooKeeper(_, endpoints => endpoints.contains(invalidHost)))
 
     // Trigger session expiry and ensure that controller registers new advertised listener after expiry
