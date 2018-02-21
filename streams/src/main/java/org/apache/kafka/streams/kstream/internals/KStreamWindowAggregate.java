@@ -38,7 +38,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
     private boolean sendOldValues = false;
 
-    public KStreamWindowAggregate(Windows<W> windows, String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> aggregator) {
+    KStreamWindowAggregate(Windows<W> windows, String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
         this.initializer = initializer;
@@ -79,50 +79,6 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
             // first get the matching windows
             long timestamp = context().timestamp();
             Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
-
-            long timeFrom = Long.MAX_VALUE;
-            long timeTo = Long.MIN_VALUE;
-
-            // use range query on window store for efficient reads
-            for (long windowStartMs : matchedWindows.keySet()) {
-                timeFrom = windowStartMs < timeFrom ? windowStartMs : timeFrom;
-                timeTo = windowStartMs > timeTo ? windowStartMs : timeTo;
-            }
-
-            /*
-            try (WindowStoreIterator<T> iter = windowStore.fetch(key, timeFrom, timeTo)) {
-
-                // for each matching window, try to update the corresponding key
-                while (iter.hasNext()) {
-                    KeyValue<Long, T> entry = iter.next();
-                    W window = matchedWindows.get(entry.key);
-
-                    if (window != null) {
-
-                        T oldAgg = entry.value;
-
-                        if (oldAgg == null)
-                            oldAgg = initializer.apply();
-
-                        // try to add the new value (there will never be old value)
-                        T newAgg = aggregator.apply(key, value, oldAgg);
-
-                        // update the store with the new value
-                        windowStore.put(key, newAgg, window.start());
-                        tupleForwarder.maybeForward(new Windowed<>(key, window), newAgg, oldAgg);
-                        matchedWindows.remove(entry.key);
-                    }
-                }
-            }
-
-            // create the new window for the rest of unmatched window that do not exist yet
-            for (Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
-                T oldAgg = initializer.apply();
-                T newAgg = aggregator.apply(key, value, oldAgg);
-                windowStore.put(key, newAgg, entry.getKey());
-                tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, oldAgg);
-            }
-            */
 
             // try update the window, and create the new window for the rest of unmatched window that do not exist yet
             for (Map.Entry<Long, W> entry : matchedWindows.entrySet()) {

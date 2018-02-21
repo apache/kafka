@@ -28,6 +28,15 @@ import org.apache.kafka.streams.kstream.Windowed;
  */
 public interface ReadOnlyWindowStore<K, V> {
 
+    /**
+     * Get the value of key within a certain window.
+     *
+     * @param key       the key to fetch
+     * @param time      start timestamp (inclusive) of the window
+     * @return The value or null if no value is found in the window
+     * @throws InvalidStateStoreException if the store is not initialized
+     * @throws NullPointerException If null is used for any key.
+     */
     V fetch(K key, long time);
 
     /**

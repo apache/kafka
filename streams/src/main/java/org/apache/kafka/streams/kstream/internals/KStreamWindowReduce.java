@@ -36,7 +36,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
     private boolean sendOldValues = false;
 
-    public KStreamWindowReduce(Windows<W> windows, String storeName, Reducer<V> reducer) {
+    KStreamWindowReduce(Windows<W> windows, String storeName, Reducer<V> reducer) {
         this.windows = windows;
         this.storeName = storeName;
         this.reducer = reducer;
@@ -76,49 +76,6 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
             long timestamp = context().timestamp();
 
             Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
-
-            long timeFrom = Long.MAX_VALUE;
-            long timeTo = Long.MIN_VALUE;
-
-            // use range query on window store for efficient reads
-            for (long windowStartMs : matchedWindows.keySet()) {
-                timeFrom = windowStartMs < timeFrom ? windowStartMs : timeFrom;
-                timeTo = windowStartMs > timeTo ? windowStartMs : timeTo;
-            }
-
-            /*
-            try (WindowStoreIterator<V> iter = windowStore.fetch(key, timeFrom, timeTo)) {
-                // for each matching window, try to update the corresponding key and send to the downstream
-                while (iter.hasNext()) {
-                    KeyValue<Long, V> entry = iter.next();
-                    W window = matchedWindows.get(entry.key);
-
-                    if (window != null) {
-
-                        V oldAgg = entry.value;
-                        V newAgg = oldAgg;
-
-                        // try to add the new value (there will never be old value)
-                        if (newAgg == null) {
-                            newAgg = value;
-                        } else {
-                            newAgg = reducer.apply(newAgg, value);
-                        }
-
-                        // update the store with the new value
-                        windowStore.put(key, newAgg, window.start());
-                        tupleForwarder.maybeForward(new Windowed<>(key, window), newAgg, oldAgg);
-                        matchedWindows.remove(entry.key);
-                    }
-                }
-            }
-
-            // create the new window for the rest of unmatched window that do not exist yet
-            for (final Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
-                windowStore.put(key, value, entry.getKey());
-                tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), value, null);
-            }
-            */
 
             // try update the window, and create the new window for the rest of unmatched window that do not exist yet
             for (Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
