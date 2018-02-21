@@ -56,7 +56,7 @@ import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
 import DescribeLogDirsResponse.LogDirInfo
 
-import scala.collection.{mutable, _}
+import scala.collection._
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
@@ -1288,7 +1288,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (apiVersionRequest.hasUnsupportedRequestVersion)
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception)
       else
-        ApiVersionsResponse.apiVersionsResponse(requestThrottleMs, config.interBrokerProtocolVersion.messageFormatVersion)
+        ApiVersionsResponse.apiVersionsResponse(requestThrottleMs,
+          config.interBrokerProtocolVersion.messageFormatVersion.value)
     }
     sendResponseMaybeThrottle(request, createResponseCallback)
   }

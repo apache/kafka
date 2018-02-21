@@ -34,12 +34,13 @@
         <ul>
             <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. 0.8.2, 0.9.0, 0.10.0, 0.10.1, 0.10.2, 0.11.0).</li>
             <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
-		following the upgrade</a> for the details on what this configuration does.)</li>
+                following the upgrade</a> for the details on what this configuration does.)</li>
         </ul>
-	If you are upgrading from 0.11.0.x and you have not overridden the message format, then you only need to override
-	the inter-broker protocol format.
+        If you are upgrading from 0.11.0.x and you have not overridden the message format, you must set
+        both the message format version and the inter-broker protocol version to 0.11.0.
         <ul>
-            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. 0.8.2, 0.9.0, 0.10.0, 0.10.1, 0.10.2, 0.11.0).</li>
+            <li>inter.broker.protocol.version=0.11.0</li>
+            <li>log.message.format.version=0.11.0</li>
         </ul>
     </li>
     <li> Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. </li>
@@ -47,9 +48,11 @@
     <li> Restart the brokers one by one for the new protocol version to take effect. </li>
     <li> If you have overridden the message format version as instructed above, then you need to do one more rolling restart to
         upgrade it to its latest version. Once all (or most) consumers have been upgraded to 0.11.0 or later,
-        change log.message.format.version to 1.0 on each broker and restart them one by one. Note that the older Scala consumer
-        does not support the new message format introduced in 0.11, so to avoid the performance cost of down-conversion (or to
-        take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>), the newer Java consumer must be used.</li>
+        change log.message.format.version to 1.0 on each broker and restart them one by one. If you are upgrading from
+        0.11.0 and log.message.format.version is set to 0.11.0, you can update the config and skip the rolling restart.
+        Note that the older Scala consumer does not support the new message format introduced in 0.11, so to avoid the
+        performance cost of down-conversion (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
+        the newer Java consumer must be used.</li>
 </ol>
 
 <p><b>Additional Upgrade Notes:</b></p>
