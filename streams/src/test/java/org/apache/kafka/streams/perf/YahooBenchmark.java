@@ -166,10 +166,9 @@ public class YahooBenchmark {
             for (int i = 0; i < numRecords; i++) {
                 event.eventType = eventTypes[rand.nextInt(eventTypes.length - 1)];
                 event.adID = ads.get(rand.nextInt(ads.size() - 1));
-                final long timestamp = System.currentTimeMillis();
-                event.eventTime = timestamp;
+                event.eventTime = System.currentTimeMillis();
                 byte[] value = projectedEventSerializer.serialize(topic, event);
-                producer.send(new ProducerRecord<>(topic, null, timestamp, event.adID, value));
+                producer.send(new ProducerRecord<>(topic, event.adID, value));
                 parent.processedRecords.getAndIncrement();
                 parent.processedBytes += value.length + event.adID.length();
             }
