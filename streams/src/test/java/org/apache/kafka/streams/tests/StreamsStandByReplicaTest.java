@@ -60,6 +60,7 @@ public class StreamsStandByReplicaTest {
         streamsProperties.put(StreamsConfig.STATE_DIR_CONFIG, stateDirStr);
         streamsProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         streamsProperties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        streamsProperties.put(StreamsConfig.producerPrefix(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG), true);
 
         final Map<String, String> updated = SystemTestUtil.parseConfigs(additionalConfigs);
         System.out.println("Updating configs with " + updated);

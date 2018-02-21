@@ -37,7 +37,7 @@ import java.util.Properties;
 public class StreamsRepeatingIntegerKeyProducer {
 
     private static volatile boolean keepProducing = true;
-    private static int messageCounter = 0;
+    private volatile static int messageCounter = 0;
 
     public static void main(String[] args) {
         System.out.println("StreamsTest instance started");
@@ -45,7 +45,7 @@ public class StreamsRepeatingIntegerKeyProducer {
         final String kafka = args.length > 0 ? args[0] : "localhost:9092";
         final String configString = args.length > 2 ? args[2] : null;
 
-        Map<String, String> configs = SystemTestUtil.parseConfigs(configString);
+        final Map<String, String> configs = SystemTestUtil.parseConfigs(configString);
         System.out.println("Using provided configs " + configs);
 
         final int numMessages = configs.containsKey("num_messages") ? Integer.parseInt(configs.get("num_messages")) : 1000;
@@ -57,7 +57,7 @@ public class StreamsRepeatingIntegerKeyProducer {
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
 
-        String value = "testingValue";
+        final String value = "testingValue";
         Integer key = 0;
 
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
@@ -86,7 +86,7 @@ public class StreamsRepeatingIntegerKeyProducer {
                                         // message == org.apache.kafka.common.errors.TimeoutException: Expiring 4 record(s) for data-0: 30004 ms has passed since last attempt plus backoff time
                                         final int expired = Integer.parseInt(exception.getMessage().split(" ")[2]);
                                         messageCounter -= expired;
-                                    } catch (Exception ignore) {
+                                    } catch (final Exception ignore) {
                                     }
                                 }
                             }
