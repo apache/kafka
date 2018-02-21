@@ -78,6 +78,7 @@ public class ConnectStandalone {
         StandaloneConfig config = new StandaloneConfig(workerProps);
 
         String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
+        log.debug("Kafka cluster ID: {}", kafkaClusterId);
 
         RestServer rest = new RestServer(config);
         URI advertisedUrl = rest.advertisedUrl();
