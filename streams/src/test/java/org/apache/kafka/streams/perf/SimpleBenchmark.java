@@ -157,8 +157,6 @@ public class SimpleBenchmark {
                 kStreamKStreamJoin(JOIN_TOPIC_1_PREFIX + "KStreamKStream", JOIN_TOPIC_2_PREFIX + "KStreamKStream");
                 // simple streams performance KTABLE-KTABLE join
                 kTableKTableJoin(JOIN_TOPIC_1_PREFIX + "KTableKTable", JOIN_TOPIC_2_PREFIX + "KTableKTable");
-                // simple aggregation
-                count(COUNT_TOPIC);
                 break;
             case "produce":
                 produce(SOURCE_TOPIC);
