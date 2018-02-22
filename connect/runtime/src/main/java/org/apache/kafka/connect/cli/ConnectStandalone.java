@@ -63,7 +63,6 @@ public class ConnectStandalone {
         }
 
         int statusCode = 0;
-        String errorMessage = null;
 
         try {
             Time time = Time.SYSTEM;
