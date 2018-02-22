@@ -58,8 +58,6 @@ public class ConnectDistributed {
             Exit.exit(1);
         }
 
-        int statusCode = 0;
-
         try {
             Time time = Time.SYSTEM;
             log.info("Kafka Connect distributed worker initializing ...");
@@ -104,7 +102,7 @@ public class ConnectDistributed {
             } catch (Exception e) {
                 log.error("Failed to start Connect", e);
                 connect.stop();
-                statusCode = 2;
+                Exit.exit(3);
             }
 
             // Shutdown will be triggered by Ctrl-C or via HTTP shutdown request
@@ -112,11 +110,7 @@ public class ConnectDistributed {
 
         } catch (Throwable t) {
             log.error("Stopping due to error", t);
-            if (statusCode == 0) statusCode = 3;
-        }
-
-        if (statusCode != 0) {
-            Exit.exit(statusCode);
+            Exit.exit(2);
         }
     }
 }
