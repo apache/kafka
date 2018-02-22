@@ -1599,11 +1599,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *         such message.
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
-     * @throws IllegalArgumentException if the target timestamp is negative.
+     * @throws IllegalArgumentException if the target timestamp is negative
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
-     *         expiration of the configured {@code request.timeout.ms}.
+     *         expiration of the configured {@code request.timeout.ms}
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the broker does not support looking up
-     *         the offsets by timestamp.
+     *         the offsets by timestamp
      */
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
@@ -1665,7 +1665,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offsets could not be fetched before
-     *         expiration of the configured {@code request.timeout.ms}.
+     *         expiration of the configured {@code request.timeout.ms}
      */
     @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
