@@ -66,7 +66,6 @@ class TaskManager {
     private Map<TaskId, Set<TopicPartition>> assignedStandbyTasks;
 
     private Consumer<byte[], byte[]> consumer;
-    private final Set<TopicPartition> resumedPartitions;
 
     TaskManager(final ChangelogReader changelogReader,
                 final UUID processId,
@@ -93,7 +92,6 @@ class TaskManager {
         this.log = logContext.logger(getClass());
 
         this.adminClient = adminClient;
-        this.resumedPartitions = new HashSet<>();
     }
 
     /**
@@ -111,9 +109,9 @@ class TaskManager {
         active.closeNonAssignedSuspendedTasks(assignedActiveTasks);
         addStreamTasks(assignment);
         addStandbyTasks();
-        final Set<TopicPartition> partitions = active.uninitializedPartitions();
-        log.trace("Pausing partitions: {}", partitions);
-        consumer.pause(partitions);
+        // Pause all the partitions until the underlying state store is ready for all the active tasks.
+        log.trace("Pausing partitions: {}", assignment);
+        consumer.pause(assignment);
     }
 
     /**
@@ -324,19 +322,17 @@ class TaskManager {
      * @throws TaskMigratedException if another thread wrote to the changelog topic that is currently restored
      */
     boolean updateNewAndRestoringTasks() {
-        resumedPartitions.addAll(active.initializeNewTasks());
+        active.initializeNewTasks();
         standby.initializeNewTasks();
 
         final Collection<TopicPartition> restored = changelogReader.restore(active);
 
-        resumedPartitions.addAll(active.updateRestored(restored));
+        active.updateRestored(restored);
 
         if (active.allTasksRunning()) {
-            if (!resumedPartitions.isEmpty()) {
-                log.trace("Resuming partitions {}", resumedPartitions);
-                consumer.resume(resumedPartitions);
-                resumedPartitions.clear();
-            }
+            Set<TopicPartition> assignment = consumer.assignment();
+            log.trace("Resuming partitions {}", assignment);
+            consumer.resume(assignment);
             assignStandbyPartitions();
             return true;
         }
