@@ -96,8 +96,8 @@ public class CachingWindowStoreTest {
         cachingStore.put(bytesKey("a"), bytesValue("a"));
         cachingStore.put(bytesKey("b"), bytesValue("b"));
 
-        assertEquals(bytesValue("a"), cachingStore.fetch(bytesKey("a"), 10));
-        assertEquals(bytesValue("b"), cachingStore.fetch(bytesKey("b"), 10));
+        assertThat(cachingStore.fetch(bytesKey("a"), 10), equalTo(bytesValue("a")));
+        assertThat(cachingStore.fetch(bytesKey("b"), 10), equalTo(bytesValue("b")));
 
         final WindowStoreIterator<byte[]> a = cachingStore.fetch(bytesKey("a"), 10, 10);
         final WindowStoreIterator<byte[]> b = cachingStore.fetch(bytesKey("b"), 10, 10);

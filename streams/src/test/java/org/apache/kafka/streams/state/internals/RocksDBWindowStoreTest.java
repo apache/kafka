@@ -34,6 +34,8 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.MockProcessorContext;
@@ -98,12 +100,23 @@ public class RocksDBWindowStoreTest {
     private WindowStore windowStore;
 
     @SuppressWarnings("unchecked")
-    private <K, V> WindowStore<K, V> createWindowStore(ProcessorContext context, final boolean enableCaching, final boolean retainDuplicates) {
-        final RocksDBWindowStoreSupplier supplier = new RocksDBWindowStoreSupplier<>(windowName, retentionPeriod, numSegments, retainDuplicates, Serdes.Integer(), Serdes.String(),
-                                                                                     WINDOW_SIZE, true, Collections.<String, String>emptyMap(), enableCaching);
-        final WindowStore<K, V> store = (WindowStore<K, V>) supplier.get();
+    private WindowStore createWindowStore(ProcessorContext context, boolean retainDuplicates) {
+        final WindowStore<Integer, String> store = Stores.windowStoreBuilder(
+                Stores.persistentWindowStore(windowName,
+                        retentionPeriod,
+                        numSegments,
+                        WINDOW_SIZE,
+                        retainDuplicates),
+                Serdes.Integer(),
+                Serdes.String()).build();
+
         store.init(context, store);
         return store;
+    }
+
+    @SuppressWarnings("unchecked")
+    private WindowStore createWindowStore(ProcessorContext context) {
+        return createWindowStore(context, false);
     }
 
     @After
@@ -115,7 +128,7 @@ public class RocksDBWindowStoreTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldOnlyIterateOpenSegments() {
-        windowStore = createWindowStore(context, false, true);
+        windowStore = createWindowStore(context);
         long currentTime = 0;
         context.setRecordContext(createRecordContext(currentTime));
         windowStore.put(1, "one");
@@ -147,11 +160,17 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testPutAndFetch() throws IOException {
-        windowStore = createWindowStore(context, false, true);
+    public void testPutAndFetch() {
+        windowStore = createWindowStore(context);
         long startTime = segmentSize - 4L;
 
         putFirstBatch(windowStore, startTime, context);
+
+        assertEquals("zero", windowStore.fetch(0, startTime));
+        assertEquals("one", windowStore.fetch(1, startTime + 1L));
+        assertEquals("two", windowStore.fetch(2, startTime + 2L));
+        assertEquals("four", windowStore.fetch(4, startTime + 4L));
+        assertEquals("five", windowStore.fetch(5, startTime + 5L));
 
         assertEquals(Utils.mkList("zero"), toList(windowStore.fetch(0, startTime + 0L - WINDOW_SIZE, startTime + 0L + WINDOW_SIZE)));
         assertEquals(Utils.mkList("one"), toList(windowStore.fetch(1, startTime + 1L - WINDOW_SIZE, startTime + 1L + WINDOW_SIZE)));
@@ -161,6 +180,13 @@ public class RocksDBWindowStoreTest {
         assertEquals(Utils.mkList("five"), toList(windowStore.fetch(5, startTime + 5L - WINDOW_SIZE, startTime + 5L + WINDOW_SIZE)));
 
         putSecondBatch(windowStore, startTime, context);
+
+        assertEquals("two+1", windowStore.fetch(2, startTime + 3L));
+        assertEquals("two+2", windowStore.fetch(2, startTime + 4L));
+        assertEquals("two+3", windowStore.fetch(2, startTime + 5L));
+        assertEquals("two+4", windowStore.fetch(2, startTime + 6L));
+        assertEquals("two+5", windowStore.fetch(2, startTime + 7L));
+        assertEquals("two+6", windowStore.fetch(2, startTime + 8L));
 
         assertEquals(Utils.mkList(), toList(windowStore.fetch(2, startTime - 2L - WINDOW_SIZE, startTime - 2L + WINDOW_SIZE)));
         assertEquals(Utils.mkList("two"), toList(windowStore.fetch(2, startTime - 1L - WINDOW_SIZE, startTime - 1L + WINDOW_SIZE)));
@@ -194,8 +220,8 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldGetAll() throws IOException {
-        windowStore = createWindowStore(context, false, true);
+    public void shouldGetAll() {
+        windowStore = createWindowStore(context);
         long startTime = segmentSize - 4L;
 
         putFirstBatch(windowStore, startTime, context);
@@ -214,8 +240,8 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldFetchAllInTimeRange() throws IOException {
-        windowStore = createWindowStore(context, false, true);
+    public void shouldFetchAllInTimeRange() {
+        windowStore = createWindowStore(context);
         long startTime = segmentSize - 4L;
 
         putFirstBatch(windowStore, startTime, context);
@@ -244,8 +270,8 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testFetchRange() throws IOException {
-        windowStore = createWindowStore(context, false, true);
+    public void testFetchRange() {
+        windowStore = createWindowStore(context);
         long startTime = segmentSize - 4L;
 
         putFirstBatch(windowStore, startTime, context);
@@ -293,8 +319,8 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testPutAndFetchBefore() throws IOException {
-        windowStore = createWindowStore(context, false, true);
+    public void testPutAndFetchBefore() {
+        windowStore = createWindowStore(context);
         long startTime = segmentSize - 4L;
 
         putFirstBatch(windowStore, startTime, context);
@@ -340,8 +366,8 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testPutAndFetchAfter() throws IOException {
-        windowStore = createWindowStore(context, false, true);
+    public void testPutAndFetchAfter() {
+        windowStore = createWindowStore(context);
         long startTime = segmentSize - 4L;
 
         putFirstBatch(windowStore, startTime, context);
@@ -387,8 +413,8 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testPutSameKeyTimestamp() throws IOException {
-        windowStore = createWindowStore(context, false, true);
+    public void testPutSameKeyTimestamp() {
+        windowStore = createWindowStore(context, true);
         long startTime = segmentSize - 4L;
 
         context.setRecordContext(createRecordContext(startTime));
@@ -417,8 +443,8 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testRolling() throws IOException {
-        windowStore = createWindowStore(context, false, true);
+    public void testRolling() {
+        windowStore = createWindowStore(context);
 
         // to validate segments
         final Segments segments = new Segments(windowName, retentionPeriod, numSegments);
@@ -521,7 +547,7 @@ public class RocksDBWindowStoreTest {
         long startTime = segmentSize * 2;
         long incr = segmentSize / 2;
 
-        windowStore = createWindowStore(context, false, true);
+        windowStore = createWindowStore(context);
         context.setRecordContext(createRecordContext(startTime));
         windowStore.put(0, "zero");
         context.setRecordContext(createRecordContext(startTime + incr));
@@ -547,7 +573,7 @@ public class RocksDBWindowStoreTest {
         // remove local store image
         Utils.delete(baseDir);
 
-        windowStore = createWindowStore(context, false, true);
+        windowStore = createWindowStore(context);
         assertEquals(Utils.mkList(), toList(windowStore.fetch(0, startTime - WINDOW_SIZE, startTime + WINDOW_SIZE)));
         assertEquals(Utils.mkList(), toList(windowStore.fetch(1, startTime + incr - WINDOW_SIZE, startTime + incr + WINDOW_SIZE)));
         assertEquals(Utils.mkList(), toList(windowStore.fetch(2, startTime + incr * 2 - WINDOW_SIZE, startTime + incr * 2 + WINDOW_SIZE)));
@@ -580,8 +606,8 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testSegmentMaintenance() throws IOException {
-        windowStore = createWindowStore(context, false, true);
+    public void testSegmentMaintenance() {
+        windowStore = createWindowStore(context, true);
         context.setTime(0L);
         context.setRecordContext(createRecordContext(0));
         windowStore.put(0, "v");
@@ -657,10 +683,10 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testInitialLoading() throws IOException {
+    public void testInitialLoading() {
         File storeDir = new File(baseDir, windowName);
 
-        windowStore = createWindowStore(context, false, true);
+        windowStore = createWindowStore(context);
 
         new File(storeDir, segments.segmentName(0L)).mkdir();
         new File(storeDir, segments.segmentName(1L)).mkdir();
@@ -671,7 +697,7 @@ public class RocksDBWindowStoreTest {
         new File(storeDir, segments.segmentName(6L)).mkdir();
         windowStore.close();
 
-        windowStore = createWindowStore(context, false, true);
+        windowStore = createWindowStore(context);
 
         assertEquals(
                 Utils.mkSet(segments.segmentName(4L), segments.segmentName(5L), segments.segmentName(6L)),
@@ -693,7 +719,7 @@ public class RocksDBWindowStoreTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldCloseOpenIteratorsWhenStoreIsClosedAndThrowInvalidStateStoreExceptionOnHasNextAndNext() {
-        windowStore = createWindowStore(context, false, true);
+        windowStore = createWindowStore(context);
         context.setRecordContext(createRecordContext(0));
         windowStore.put(1, "one", 1L);
         windowStore.put(1, "two", 2L);
@@ -763,31 +789,31 @@ public class RocksDBWindowStoreTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
-        windowStore = createWindowStore(context, false, true);
+        windowStore = createWindowStore(context);
         windowStore.put(null, "anyValue");
     }
 
     @Test
     public void shouldNotThrowNullPointerExceptionOnPutNullValue() {
-        windowStore = createWindowStore(context, false, true);
+        windowStore = createWindowStore(context);
         windowStore.put(1, null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerExceptionOnGetNullKey() {
-        windowStore = createWindowStore(context, false, true);
+        windowStore = createWindowStore(context);
         windowStore.fetch(null, 1L, 2L);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerExceptionOnRangeNullFromKey() {
-        windowStore = createWindowStore(context, false, true);
+        windowStore = createWindowStore(context);
         windowStore.fetch(null, 2, 1L, 2L);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerExceptionOnRangeNullToKey() {
-        windowStore = createWindowStore(context, false, true);
+        windowStore = createWindowStore(context);
         windowStore.fetch(1, null, 1L, 2L);
     }
 
