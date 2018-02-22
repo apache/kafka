@@ -896,8 +896,10 @@ object ConsumerGroupCommand extends Logging {
       "or is going through some changes)."
     val CommandConfigDoc = "Property file containing configs to be passed to Admin Client and Consumer."
     val ResetOffsetsDoc = "Reset offsets of consumer group. Supports one consumer group at the time, and instances should be inactive" + nl +
-      "Has 3 execution options: (default) to plan which offsets to reset, --execute to execute the reset-offsets process, and --export to export the results to a CSV format." + nl +
-      "Has the following scenarios to choose: --to-datetime, --by-period, --to-earliest, --to-latest, --shift-by, --from-file, --to-current. One scenario must be choose" + nl +
+      "Has 2 execution options: --dry-run (the default) to plan which offsets to reset, and --execute to update the offsets. " +
+      "Additionally, the --export option is used to export the results to a CSV format." + nl +
+      "Has the following scenarios to choose: --to-datetime, --by-period, --to-earliest, --to-latest, --shift-by, " +
+      "--from-file, --to-current. One scenario must be choose" + nl +
       "To define the scope use: --all-topics or --topic. . One scope must be choose, unless you use '--from-file' scenario"
     val DryRunDoc = "Only show results without executing changes on Consumer Groups. Supported operations: reset-offsets."
     val ExecuteDoc = "Execute operation. Supported operations: reset-offsets."
