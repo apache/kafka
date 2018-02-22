@@ -62,6 +62,9 @@ public class ConnectStandalone {
             Exit.exit(1);
         }
 
+        int statusCode = 0;
+        String errorMessage = null;
+
         try {
             Time time = Time.SYSTEM;
             log.info("Kafka Connect standalone worker initializing ...");
@@ -112,6 +115,7 @@ public class ConnectStandalone {
             } catch (Throwable t) {
                 log.error("Stopping after connector error", t);
                 connect.stop();
+                statusCode = 2;
             }
 
             // Shutdown will be triggered by Ctrl-C or via HTTP shutdown request
@@ -119,6 +123,11 @@ public class ConnectStandalone {
 
         } catch (Throwable t) {
             log.error("Stopping due to error", t);
+            if (statusCode == 0) statusCode = 3;
+        }
+
+        if (statusCode != 0) {
+            Exit.exit(statusCode);
         }
     }
 }
