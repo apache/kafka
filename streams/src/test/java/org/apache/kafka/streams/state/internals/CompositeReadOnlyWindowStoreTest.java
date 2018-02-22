@@ -169,8 +169,7 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void shouldFetchKeyRangeAcrossStores() {
-        final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new
-                ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
         stubProviderTwo.addStore(storeName, secondUnderlying);
         underlyingWindowStore.put("a", "a", 0L);
         secondUnderlying.put("b", "b", 10L);
@@ -179,7 +178,18 @@ public class CompositeReadOnlyWindowStoreTest {
                 KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
                 KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
     }
-    
+
+    @Test
+    public void shouldFetchKeyValueAcrossStores() {
+        final ReadOnlyWindowStoreStub<String, String> secondUnderlyingWindowStore = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stubProviderTwo.addStore(storeName, secondUnderlyingWindowStore);
+        underlyingWindowStore.put("a", "a", 0L);
+        secondUnderlyingWindowStore.put("b", "b", 10L);
+        assertThat(windowStore.fetch("a", 0L), equalTo("a"));
+        assertThat(windowStore.fetch("b", 10L), equalTo("b"));
+    }
+
+
     @Test
     public void shouldGetAllAcrossStores() {
         final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new
