@@ -137,7 +137,6 @@ public class SimpleBenchmark {
     private void run() {
         switch (testName) {
             case ALL_TESTS:
-                /*
                 // producer performance
                 produce(SOURCE_TOPIC);
                 // consumer performance
@@ -158,7 +157,6 @@ public class SimpleBenchmark {
                 kStreamKStreamJoin(JOIN_TOPIC_1_PREFIX + "KStreamKStream", JOIN_TOPIC_2_PREFIX + "KStreamKStream");
                 // simple streams performance KTABLE-KTABLE join
                 kTableKTableJoin(JOIN_TOPIC_1_PREFIX + "KTableKTable", JOIN_TOPIC_2_PREFIX + "KTableKTable");
-                */
                 // simple aggregation
                 count(COUNT_TOPIC);
                 break;
@@ -296,7 +294,7 @@ public class SimpleBenchmark {
         final KStream<Integer, byte[]> input = builder.stream(topic);
 
         input.groupByKey()
-                .windowedBy(TimeWindows.of(10).advanceBy(1))
+                .windowedBy(TimeWindows.of(100).advanceBy(20))
                 .count(Materialized.<Integer, Long, WindowStore<Bytes, byte[]>>as("tmpStoreName"))
                 .toStream()
                 .foreach(new CountDownAction<Long>(latch));
