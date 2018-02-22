@@ -375,7 +375,6 @@ class GroupCoordinator(val brokerId: Int,
       }
 
       if (eligibleGroups.nonEmpty) {
-        // note: there is a lock on the group when the function 'removeAllOffsets()' is called inside 'cleanupGroupMetadata(...)'
         val offsetsRemoved = groupManager.cleanupGroupMetadata(eligibleGroups, group => {
           group.removeAllOffsets()
         })
@@ -571,7 +570,6 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def handleDeletedPartitions(topicPartitions: Seq[TopicPartition]) {
-    // note: there is a lock on the group when the function 'removeOffsets(...)' is called inside 'cleanupGroupMetadata(...)'
     val offsetsRemoved = groupManager.cleanupGroupMetadata(groupManager.currentGroups, group => {
       group.removeOffsets(topicPartitions)
     })
