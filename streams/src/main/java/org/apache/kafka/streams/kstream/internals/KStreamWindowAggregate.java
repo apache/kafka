@@ -80,8 +80,6 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
             long timestamp = context().timestamp();
             Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
 
-            System.out.println("WINDOW AGG: " + key + " @ " + timestamp + " -> " + matchedWindows);
-
             // try update the window, and create the new window for the rest of unmatched window that do not exist yet
             for (Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
                 T oldAgg = windowStore.fetch(key, entry.getKey());
@@ -91,9 +89,6 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
                 }
 
                 final T newAgg = aggregator.apply(key, value, oldAgg);
-
-                System.out.println("\tWINDOW ITEM: " + key + " -> " + newAgg + " @ " + entry.getKey());
-                System.out.flush();
 
                 // update the store with the new value
                 windowStore.put(key, newAgg, entry.getKey());

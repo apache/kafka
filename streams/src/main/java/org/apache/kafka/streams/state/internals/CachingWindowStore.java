@@ -163,18 +163,10 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
         LRUCacheEntry entry = cache.get(name, cacheKey);
         if (entry == null) {
-            final byte[] rawValue = underlying.fetch(key, timestamp);
-            if (rawValue == null) {
-                return null;
-            }
-            entry = new LRUCacheEntry(rawValue, true, context.offset(),
-                    timestamp, context.partition(), context.topic());
-            cache.put(name, cacheKey, entry);
-            return rawValue;
+            return underlying.fetch(key, timestamp);
+        } else {
+            return entry.value;
         }
-
-        return entry.value;
-
     }
 
     @Override
