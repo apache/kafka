@@ -65,10 +65,10 @@ public class SubscriptionInfoTest {
 
         final ByteBuffer v1Encoding = encodePreviousVersion(processId, activeTasks, standbyTasks);
         final SubscriptionInfo decode = SubscriptionInfo.decode(v1Encoding);
-        assertEquals(activeTasks, decode.prevTasks);
-        assertEquals(standbyTasks, decode.standbyTasks);
-        assertEquals(processId, decode.processId);
-        assertNull(decode.userEndPoint);
+        assertEquals(activeTasks, decode.prevTasks());
+        assertEquals(standbyTasks, decode.standbyTasks());
+        assertEquals(processId, decode.processId());
+        assertNull(decode.userEndPoint());
 
     }
 
@@ -87,12 +87,12 @@ public class SubscriptionInfoTest {
         // encode ids of previously running tasks
         buf.putInt(prevTasks.size());
         for (TaskId id : prevTasks) {
-            id.writeTo(buf);
+            id.writeTo(buf, 1);
         }
         // encode ids of cached tasks
         buf.putInt(standbyTasks.size());
         for (TaskId id : standbyTasks) {
-            id.writeTo(buf);
+            id.writeTo(buf, 1);
         }
         buf.rewind();
 
