@@ -40,6 +40,7 @@ trait BaseConsumer {
   def stop()
   def cleanup()
   def commit()
+  def resetOffsets(): Unit = {}
 }
 
 @deprecated("This class has been deprecated and will be removed in a future release. " +
@@ -91,15 +92,13 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
     }
   }
 
-  private def seekToRealPositionsBeforeExit() {
+  override def resetOffsets() {
     val smallestUnconsumedOffsets = collection.mutable.Map[TopicPartition, Long]()
     while (recordIter.hasNext) {
       val record = recordIter.next()
-      val tp = new TopicPartition(record.topic(), record.partition())
-      // only insert the smallest offset for each partition
-      smallestUnconsumedOffsets.getOrElse(tp, {
-        smallestUnconsumedOffsets += tp -> record.offset()
-      })
+      val tp = new TopicPartition(record.topic, record.partition)
+      // avoid auto-committing offsets which haven't been consumed
+      smallestUnconsumedOffsets.getOrElseUpdate(tp, record.offset)
     }
     smallestUnconsumedOffsets.foreach { case (tp, offset) => consumer.seek(tp, offset) }
   }
@@ -127,7 +126,6 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
   }
 
   override def cleanup() {
-    seekToRealPositionsBeforeExit()
     this.consumer.close()
   }
 

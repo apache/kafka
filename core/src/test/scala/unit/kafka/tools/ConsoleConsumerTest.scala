@@ -20,7 +20,7 @@ package kafka.tools
 import java.io.{PrintStream, FileOutputStream}
 
 import kafka.common.MessageFormatter
-import kafka.consumer.{BaseConsumer, BaseConsumerRecord}
+import kafka.consumer.{BaseConsumer, BaseConsumerRecord, NewShinyConsumer}
 import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.easymock.EasyMock
@@ -28,6 +28,38 @@ import org.junit.Assert._
 import org.junit.Test
 
 class ConsoleConsumerTest {
+
+  @Test
+  def shouldResetOffsetsBeforeExitForNewConsumer() {
+    //Given
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--group", "test-group",
+      "--max-messages", "123")
+
+    //When
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+
+    // Mocks
+    val consumer = EasyMock.createNiceMock(classOf[NewShinyConsumer])
+
+    // Stubs
+    val record = new BaseConsumerRecord(topic = "foo", partition = 0, offset = 1, key = Array[Byte](), value = Array[Byte]())
+
+    // Expectations
+    ConsoleConsumer.messageCount = 0 // reset message count to zero
+    EasyMock.expect(consumer.receive()).andReturn(record).times(config.maxMessages)
+    EasyMock.expect(consumer.resetOffsets())
+    EasyMock.expectLastCall().once()
+
+    EasyMock.replay(consumer)
+
+    // Test
+    ConsoleConsumer.run(consumer, config)
+
+    EasyMock.verify(consumer)
+  }
 
   @Test
   def shouldLimitReadsToMaxMessageLimit() {

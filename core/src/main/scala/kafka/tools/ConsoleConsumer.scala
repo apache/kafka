@@ -77,12 +77,16 @@ object ConsoleConsumer extends Logging {
         else
           new NewShinyConsumer(Option(conf.topicArg), None, None, Option(conf.whitelistArg), getNewConsumerProps(conf), timeoutMs)
       }
+    run(consumer, conf)
+  }
 
+  private[tools] def run(consumer: BaseConsumer, conf: ConsumerConfig) {
     addShutdownHook(consumer, conf)
 
     try {
       process(conf.maxMessages, conf.formatter, consumer, System.out, conf.skipMessageOnError)
     } finally {
+      consumer.resetOffsets()
       consumer.cleanup()
       conf.formatter.close()
       reportRecordCount()
