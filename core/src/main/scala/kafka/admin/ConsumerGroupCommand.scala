@@ -1033,6 +1033,13 @@ object ConsumerGroupCommand extends Logging {
         CommandLineUtils.printUsageAndDie(parser, s"Option $deleteOpt either takes $groupOpt, $topicOpt, or both")
 
       if (options.has(resetOffsetsOpt)) {
+        if (!options.has(dryRunOpt) && !options.has(executeOpt)) {
+          Console.err.println("WARN: In a future major release, the default behavior of this command will be to " +
+            "prompt the user before executing the reset rather than doing a dry run. You should add the --dry-run " +
+            "option explicitly if you are scripting this command and want to keep the current default behavior " +
+            "without prompting.")
+        }
+
         if (options.has(dryRunOpt) && options.has(executeOpt))
           CommandLineUtils.printUsageAndDie(parser, s"Option $resetOffsetsOpt only accepts one of $executeOpt and $dryRunOpt")
 
