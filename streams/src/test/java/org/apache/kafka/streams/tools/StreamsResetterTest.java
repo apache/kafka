@@ -43,9 +43,6 @@ import java.util.concurrent.ExecutionException;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
-/**
- *
- */
 public class StreamsResetterTest {
 
     private static final String TOPIC = "topic1";
