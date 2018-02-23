@@ -91,6 +91,7 @@ public class StreamsResetter {
     private static OptionSpec<String> fromFileOption;
     private static OptionSpec<Long> shiftByOption;
     private static OptionSpecBuilder dryRunOption;
+    private static OptionSpecBuilder executeOption;
     private static OptionSpec<String> commandConfigOption;
 
     private OptionSet options = null;
@@ -109,6 +110,7 @@ public class StreamsResetter {
 
         try {
             parseArguments(args);
+
             final boolean dryRun = options.has(dryRunOption);
 
             final String groupId = options.valueOf(applicationIdOption);
@@ -207,6 +209,7 @@ public class StreamsResetter {
             .withRequiredArg()
             .ofType(String.class)
             .describedAs("file name");
+        executeOption = optionParser.accepts("execute", "Execute the command.");
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
 
         // TODO: deprecated in 1.0; can be removed eventually
@@ -217,6 +220,16 @@ public class StreamsResetter {
         } catch (final OptionException e) {
             printHelp(optionParser);
             throw e;
+        }
+
+        if (options.has(executeOption) && options.has(dryRunOption)) {
+            CommandLineUtils.printUsageAndDie(optionParser, "Only one of --dry-run and --execute can be specified");
+        }
+
+        if (!options.has(executeOption) && !options.has(dryRunOption)) {
+            System.err.println("WARN: In a future major release, the default behavior of this command will be to " +
+                    "prompt the user before executing the reset. You should add the --execute option explicitly if " +
+                    "you are scripting this command and want to keep the current default behavior without prompting.");
         }
 
         scala.collection.immutable.HashSet<OptionSpec<?>> allScenarioOptions = new scala.collection.immutable.HashSet<>();
@@ -266,7 +279,6 @@ public class StreamsResetter {
                 notFoundInputTopics.add(topic);
             } else {
                 topicsToSubscribe.add(topic);
-
             }
         }
         for (final String topic : intermediateTopics) {
@@ -275,6 +287,28 @@ public class StreamsResetter {
             } else {
                 topicsToSubscribe.add(topic);
             }
+        }
+
+        if (!notFoundInputTopics.isEmpty()) {
+            System.out.println("Following input topics are not found, skipping them");
+            for (final String topic : notFoundInputTopics) {
+                System.out.println("Topic: " + topic);
+            }
+            topicNotFound = EXIT_CODE_ERROR;
+        }
+
+        if (!notFoundIntermediateTopics.isEmpty()) {
+            System.out.println("Following intermediate topics are not found, skipping them");
+            for (final String topic : notFoundIntermediateTopics) {
+                System.out.println("Topic:" + topic);
+            }
+            topicNotFound = EXIT_CODE_ERROR;
+        }
+
+        // Return early if there are no topics to reset (the consumer will raise an error if we
+        // try to poll with an empty subscription)
+        if (topicsToSubscribe.isEmpty()) {
+            return topicNotFound;
         }
 
         final Properties config = new Properties();
@@ -311,22 +345,6 @@ public class StreamsResetter {
                 }
                 client.commitSync();
             }
-
-            if (notFoundInputTopics.size() > 0) {
-                System.out.println("Following input topics are not found, skipping them");
-                for (final String topic : notFoundInputTopics) {
-                    System.out.println("Topic: " + topic);
-                }
-                topicNotFound = EXIT_CODE_ERROR;
-            }
-
-            if (notFoundIntermediateTopics.size() > 0) {
-                System.out.println("Following intermediate topics are not found, skipping them");
-                for (final String topic : notFoundIntermediateTopics) {
-                    System.out.println("Topic:" + topic);
-                }
-            }
-
         } catch (final Exception e) {
             System.err.println("ERROR: Resetting offsets failed.");
             throw e;
@@ -337,8 +355,8 @@ public class StreamsResetter {
 
     // visible for testing
     public void maybeSeekToEnd(final String groupId,
-                                final Consumer<byte[], byte[]> client,
-                                final Set<TopicPartition> intermediateTopicPartitions) {
+                               final Consumer<byte[], byte[]> client,
+                               final Set<TopicPartition> intermediateTopicPartitions) {
         if (intermediateTopicPartitions.size() > 0) {
             System.out.println("Following intermediate topics offsets will be reset to end (for consumer group " + groupId + ")");
             for (final TopicPartition topicPartition : intermediateTopicPartitions) {
