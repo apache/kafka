@@ -127,6 +127,12 @@ class LogCleaner(val config: CleanerConfig,
              def value: Int = cleaners.map(_.lastStats).map(_.elapsedSecs).max.toInt
            })
 
+  /* a metric to track the number of cleaner threads alive */
+  newGauge("live-cleaner-thread-count",
+    new Gauge[Int] {
+      def value: Int = cleaners.count(_.asInstanceOf[Thread].isAlive)
+    })
+
   /**
    * Start the background cleaning
    */
@@ -265,8 +271,8 @@ class LogCleaner(val config: CleanerConfig,
           var endOffset = cleanable.firstDirtyOffset
           try {
             val (nextDirtyOffset, cleanerStats) = cleaner.clean(cleanable)
-            recordStats(cleaner.id, cleanable.log.name, cleanable.firstDirtyOffset, endOffset, cleanerStats)
             endOffset = nextDirtyOffset
+            recordStats(cleaner.id, cleanable.log.name, cleanable.firstDirtyOffset, endOffset, cleanerStats)
           } catch {
             case _: LogCleaningAbortedException => // task can be aborted, let it go.
             case _: KafkaStorageException => // partition is already offline. let it go.
