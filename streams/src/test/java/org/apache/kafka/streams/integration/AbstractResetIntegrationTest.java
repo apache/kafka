@@ -211,7 +211,9 @@ public abstract class AbstractResetIntegrationTest {
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
-            "--input-topics", NON_EXISTING_TOPIC };
+            "--input-topics", NON_EXISTING_TOPIC,
+            "--execute"
+        };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
@@ -233,7 +235,9 @@ public abstract class AbstractResetIntegrationTest {
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
-            "--input-topics", NON_EXISTING_TOPIC };
+            "--input-topics", NON_EXISTING_TOPIC,
+            "--execute"
+        };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
@@ -247,7 +251,9 @@ public abstract class AbstractResetIntegrationTest {
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
-            "--input-topics", NON_EXISTING_TOPIC };
+            "--intermediate-topics", NON_EXISTING_TOPIC,
+            "--execute"
+        };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
@@ -540,8 +546,9 @@ public abstract class AbstractResetIntegrationTest {
         // leaving --zookeeper arg here to ensure tool works if users add it
         final List<String> parameterList = new ArrayList<>(
             Arrays.asList("--application-id", appID,
-                "--bootstrap-servers", cluster.bootstrapServers(),
-                "--input-topics", INPUT_TOPIC));
+                    "--bootstrap-servers", cluster.bootstrapServers(),
+                    "--input-topics", INPUT_TOPIC,
+                    "--execute"));
         if (withIntermediateTopics) {
             parameterList.add("--intermediate-topics");
             parameterList.add(INTERMEDIATE_USER_TOPIC);
