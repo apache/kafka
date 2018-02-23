@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.TestUtils;
@@ -93,7 +94,13 @@ public class BrokerCompatibilityTest {
         streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(final Thread t, final Throwable e) {
-                System.err.println("FATAL: An unexpected exception " + e);
+                Throwable cause = e;
+                if (cause instanceof StreamsException) {
+                    while (cause.getCause() != null) {
+                        cause = cause.getCause();
+                    }
+                }
+                System.err.println("FATAL: An unexpected exception " + cause);
                 e.printStackTrace(System.err);
                 System.err.flush();
                 streams.close(30, TimeUnit.SECONDS);
@@ -109,17 +116,20 @@ public class BrokerCompatibilityTest {
         producerProperties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerProperties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
-        final KafkaProducer<String, String> producer = new KafkaProducer<>(producerProperties);
-        producer.send(new ProducerRecord<>(SOURCE_TOPIC, "key", "value"));
+        try {
+            try (final KafkaProducer<String, String> producer = new KafkaProducer<>(producerProperties);) {
+                producer.send(new ProducerRecord<>(SOURCE_TOPIC, "key", "value"));
 
-
-        System.out.println("wait for result");
-        loopUntilRecordReceived(kafka, eosEnabled);
-
-
-        System.out.println("close Kafka Streams");
-        producer.close();
-        streams.close();
+                System.out.println("wait for result");
+                loopUntilRecordReceived(kafka, eosEnabled);
+                System.out.println("close Kafka Streams");
+                streams.close();
+            }
+        } catch (final RuntimeException e) {
+            System.err.println("Non-Streams exception occurred: ");
+            e.printStackTrace(System.err);
+            System.err.flush();
+        }
     }
 
     private static void loopUntilRecordReceived(final String kafka, final boolean eosEnabled) {
@@ -133,15 +143,15 @@ public class BrokerCompatibilityTest {
             consumerProperties.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
         }
 
-        final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProperties);
-        consumer.subscribe(Collections.singletonList(SINK_TOPIC));
+        try (final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProperties)) {
+            consumer.subscribe(Collections.singletonList(SINK_TOPIC));
 
-        while (true) {
-            final ConsumerRecords<String, String> records = consumer.poll(100);
-            for (final ConsumerRecord<String, String> record : records) {
-                if (record.key().equals("key") && record.value().equals("1")) {
-                    consumer.close();
-                    return;
+            while (true) {
+                final ConsumerRecords<String, String> records = consumer.poll(100);
+                for (final ConsumerRecord<String, String> record : records) {
+                    if (record.key().equals("key") && record.value().equals("1")) {
+                        return;
+                    }
                 }
             }
         }

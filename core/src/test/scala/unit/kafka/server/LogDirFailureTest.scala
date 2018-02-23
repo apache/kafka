@@ -24,7 +24,7 @@ import kafka.server.LogDirFailureTest._
 import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.utils.{CoreUtils, Exit, TestUtils}
-import kafka.zk.LogDirEventNotificationZNode
+
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
@@ -191,7 +191,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     }, "Expected some messages", 3000L)
 
     // There should be no remaining LogDirEventNotification znode
-    assertTrue(zkUtils.getChildrenParentMayNotExist(LogDirEventNotificationZNode.path).isEmpty)
+    assertTrue(zkClient.getAllLogDirEventNotifications.isEmpty)
 
     // The controller should have marked the replica on the original leader as offline
     val controllerServer = servers.find(_.kafkaController.isActive).get

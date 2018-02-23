@@ -104,6 +104,7 @@ public class SaslAuthenticatorTest {
 
     @Before
     public void setup() throws Exception {
+        LoginManager.closeAll();
         serverCertStores = new CertStores(true, "localhost");
         clientCertStores = new CertStores(false, "localhost");
         saslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);

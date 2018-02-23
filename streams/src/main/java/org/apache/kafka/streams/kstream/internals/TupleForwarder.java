@@ -23,7 +23,8 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 /**
  * This class is used to determine if a processor should forward values to child nodes.
- * Forwarding only occurs when caching is not enabled.
+ * Forwarding by this class only occurs when caching is not enabled. If caching is enabled,
+ * forwarding occurs in the flush listener when the cached store flushes.
  *
  * @param <K>
  * @param <V>

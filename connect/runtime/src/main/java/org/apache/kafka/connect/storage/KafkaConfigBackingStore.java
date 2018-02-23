@@ -228,7 +228,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         this.offset = -1;
 
         this.topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
-        if (this.topic.equals(""))
+        if (this.topic == null || this.topic.trim().length() == 0)
             throw new ConfigException("Must specify topic for connector configuration.");
 
         configLog = setupAndCreateKafkaBasedLog(this.topic, config);
@@ -406,16 +406,16 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     // package private for testing
     KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, final WorkerConfig config) {
-        Map<String, Object> producerProps = new HashMap<>(config.originals());
+        Map<String, Object> originals = config.originals();
+        Map<String, Object> producerProps = new HashMap<>(originals);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
-
-        Map<String, Object> consumerProps = new HashMap<>(config.originals());
+        Map<String, Object> consumerProps = new HashMap<>(originals);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
-        Map<String, Object> adminProps = new HashMap<>(config.originals());
+        Map<String, Object> adminProps = new HashMap<>(originals);
         NewTopic topicDescription = TopicAdmin.defineTopic(topic).
                 compacted().
                 partitions(1).
@@ -432,6 +432,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         Runnable createTopics = new Runnable() {
             @Override
             public void run() {
+                log.debug("Creating admin client to manage Connect internal config topic");
                 try (TopicAdmin admin = new TopicAdmin(adminProps)) {
                     admin.createTopics(topicDescription);
                 }

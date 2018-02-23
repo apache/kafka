@@ -256,7 +256,7 @@ public class BufferPoolTest {
         mockedSensor.record(anyDouble(), anyLong());
         expectLastCall().andThrow(new OutOfMemoryError());
         expect(mockedMetrics.metricName(anyString(), eq(metricGroup), anyString())).andReturn(metricName);
-        mockedSensor.add(new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName));
+        expect(mockedSensor.add(new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName))).andReturn(true);
 
         replay(mockedMetrics, mockedSensor, metricName);
 

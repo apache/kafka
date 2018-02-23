@@ -1187,8 +1187,12 @@ public class StreamThread extends Thread {
         return sb.toString();
     }
 
-    // this is for testing only
+    // the following are for testing only
     TaskManager taskManager() {
         return taskManager;
+    }
+
+    Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords() {
+        return standbyRecords;
     }
 }

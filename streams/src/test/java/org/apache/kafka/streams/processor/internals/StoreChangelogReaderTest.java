@@ -234,14 +234,27 @@ public class StoreChangelogReaderTest {
         assertThat(callbackTwo.restored.size(), equalTo(3));
 
         assertAllCallbackStatesExecuted(callback, "storeName1");
-        assertCorrectOffsetsReportedByListener(callback, 0L, 10L, 10L);
+        assertCorrectOffsetsReportedByListener(callback, 0L, 9L, 10L);
 
         assertAllCallbackStatesExecuted(callbackOne, "storeName2");
-        assertCorrectOffsetsReportedByListener(callbackOne, 0L, 5L, 5L);
+        assertCorrectOffsetsReportedByListener(callbackOne, 0L, 4L, 5L);
 
         assertAllCallbackStatesExecuted(callbackTwo, "storeName3");
-        assertCorrectOffsetsReportedByListener(callbackTwo, 0L, 3L, 3L);
+        assertCorrectOffsetsReportedByListener(callbackTwo, 0L, 2L, 3L);
     }
+
+    @Test
+    public void shouldOnlyReportTheLastRestoredOffset() {
+        setupConsumer(10, topicPartition);
+        changelogReader
+            .register(new StateRestorer(topicPartition, restoreListener, null, 5, true, "storeName1"));
+        changelogReader.restore(active);
+
+        assertThat(callback.restored.size(), equalTo(5));
+        assertAllCallbackStatesExecuted(callback, "storeName1");
+        assertCorrectOffsetsReportedByListener(callback, 0L, 4L, 5L);
+    }
+
 
     private void assertAllCallbackStatesExecuted(final MockStateRestoreListener restoreListener,
                                                  final String storeName) {
@@ -253,11 +266,12 @@ public class StoreChangelogReaderTest {
 
     private void assertCorrectOffsetsReportedByListener(final MockStateRestoreListener restoreListener,
                                                         final long startOffset,
-                                                        final long batchOffset, final long endOffset) {
+                                                        final long batchOffset,
+                                                        final long totalRestored) {
 
         assertThat(restoreListener.restoreStartOffset, equalTo(startOffset));
         assertThat(restoreListener.restoredBatchOffset, equalTo(batchOffset));
-        assertThat(restoreListener.restoreEndOffset, equalTo(endOffset));
+        assertThat(restoreListener.totalNumRestored, equalTo(totalRestored));
     }
 
     @Test
@@ -376,8 +390,49 @@ public class StoreChangelogReaderTest {
         try {
             changelogReader.restore(active);
             fail("Should have thrown TaskMigratedException");
-        } catch (final TaskMigratedException expected) { /* ignore */ }
+        } catch (final TaskMigratedException expected) {
+            /* ignore */
+        }
     }
+
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionIfChangelogTopicUpdatedDuringRestoreProcessFoundInSecondCheck() {
+        final int messages = 10;
+        setupConsumer(messages, topicPartition);
+        // in this case first call to endOffsets returns correct value, but a second thread has updated the changelog topic
+        // so a subsequent call to endOffsets returns a value exceeding the expected end value
+        consumer.addEndOffsets(Collections.singletonMap(topicPartition, 15L));
+        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName"));
+
+        expect(active.restoringTaskFor(topicPartition)).andReturn(task);
+        replay(active);
+
+        try {
+            changelogReader.restore(active);
+            fail("Should have thrown TaskMigratedException");
+        } catch (final TaskMigratedException expected) {
+            // verifies second block threw exception with updated end offset
+            assertTrue(expected.getMessage().contains("end offset 15, current offset 10"));
+        }
+    }
+
+
+    @Test
+    public void shouldNotThrowTaskMigratedExceptionIfSourceTopicUpdatedDuringRestoreProcess() {
+        final int messages = 10;
+        setupConsumer(messages, topicPartition);
+        // in this case first call to endOffsets returns correct value, but a second thread has updated the source topic
+        // but since it's a source topic, the second check should not fire hence no exception
+        consumer.addEndOffsets(Collections.singletonMap(topicPartition, 15L));
+        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, 9L, true, "storeName"));
+
+        expect(active.restoringTaskFor(topicPartition)).andReturn(task);
+        replay(active);
+
+        changelogReader.restore(active);
+    }
+
 
     @Test
     public void shouldThrowTaskMigratedExceptionIfEndOffsetGetsExceededDuringRestoreForChangelogTopicEOSEnabled() {
