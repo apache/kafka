@@ -1593,19 +1593,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If the message format version in a partition is before 0.10.0, i.e. the messages do not have timestamps, null
      * will be returned for that partition.
      *
-     * Notice that this method may block indefinitely if the partition does not exist.
-     *
      * @param timestampsToSearch the mapping from partition to the timestamp to look up.
      * @return a mapping from partition to the timestamp and offset of the first message with timestamp greater
      *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
      *         such message.
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
-     * @throws IllegalArgumentException if the target timestamp is negative.
+     * @throws IllegalArgumentException if the target timestamp is negative
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
-     *         expiration of the configured request timeout
+     *         expiration of the configured {@code request.timeout.ms}
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the broker does not support looking up
-     *         the offsets by timestamp.
+     *         the offsets by timestamp
      */
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
@@ -1627,7 +1625,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Get the first offset for the given partitions.
      * <p>
-     * Notice that this method may block indefinitely if the partition does not exist.
      * This method does not change the current consumer position of the partitions.
      *
      * @see #seekToBeginning(Collection)
@@ -1636,8 +1633,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The earliest available offsets for the given partitions
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
-     * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
-     *         expiration of the configured request timeout
+     * @throws org.apache.kafka.common.errors.TimeoutException if the offsets could not be fetched before
+     *         expiration of the configured {@code request.timeout.ms}
      */
     @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
@@ -1655,7 +1652,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * to the the partition, the offset returned will be 0.
      *
      * <p>
-     * Notice that this method may block indefinitely if the partition does not exist.
      * This method does not change the current consumer position of the partitions.
      * <p>
      * When {@code isolation.level=read_committed} the last offset will be the Last Stable Offset (LSO).
@@ -1668,8 +1664,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The end offsets for the given partitions.
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
-     * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
-     *         expiration of the configured request timeout
+     * @throws org.apache.kafka.common.errors.TimeoutException if the offsets could not be fetched before
+     *         expiration of the configured {@code request.timeout.ms}
      */
     @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
