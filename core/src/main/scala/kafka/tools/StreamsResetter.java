@@ -111,7 +111,6 @@ public class StreamsResetter {
         try {
             parseArguments(args);
 
-            // Dry-run is the default if execute is not present
             final boolean dryRun = options.has(dryRunOption);
 
             final String groupId = options.valueOf(applicationIdOption);
