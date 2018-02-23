@@ -103,9 +103,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         # is authenticating and waiting for the SaslAuthenticated
         # in addition to the SyncConnected event.
         #
-        # The defaut value for zookeeper.connect.timeout.ms is
+        # The default value for zookeeper.connect.timeout.ms is
         # 2 seconds and here we increase it to 5 seconds, but
-        # it can be overriden by setting the corresponding parameter
+        # it can be overridden by setting the corresponding parameter
         # for this constructor.
         self.zk_connect_timeout = zk_connect_timeout
 

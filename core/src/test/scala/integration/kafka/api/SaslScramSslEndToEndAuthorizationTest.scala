@@ -18,7 +18,6 @@ package kafka.api
 
 import org.apache.kafka.common.security.scram.ScramMechanism
 import kafka.utils.JaasTestUtils
-import kafka.utils.ZkUtils
 import kafka.zk.ConfigEntityChangeNotificationZNode
 
 import scala.collection.JavaConverters._

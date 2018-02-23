@@ -868,17 +868,20 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * <p>
      * As part of group management, the consumer will keep track of the list of consumers that belong to a particular
-     * group and will trigger a rebalance operation if one of the following events trigger -
+     * group and will trigger a rebalance operation if any one of the following events are triggered:
      * <ul>
-     * <li>Number of partitions change for any of the subscribed list of topics
-     * <li>Topic is created or deleted
-     * <li>An existing member of the consumer group dies
-     * <li>A new member is added to an existing consumer group via the join API
+     * <li>Number of partitions change for any of the subscribed topics
+     * <li>A subscribed topic is created or deleted
+     * <li>An existing member of the consumer group is shutdown or fails
+     * <li>A new member is added to the consumer group
      * </ul>
      * <p>
      * When any of these events are triggered, the provided listener will be invoked first to indicate that
      * the consumer's assignment has been revoked, and then again when the new assignment has been received.
-     * Note that this listener will immediately override any listener set in a previous call to subscribe.
+     * Note that rebalances will only occur during an active call to {@link #poll(long)}, so callbacks will
+     * also only be invoked during that time.
+     *
+     * The provided listener will immediately override any listener set in a previous call to subscribe.
      * It is guaranteed, however, that the partitions revoked/assigned through this interface are from topics
      * subscribed in this call. See {@link ConsumerRebalanceListener} for more details.
      *
@@ -926,7 +929,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * <p>
      * This is a short-hand for {@link #subscribe(Collection, ConsumerRebalanceListener)}, which
-     * uses a noop listener. If you need the ability to seek to particular offsets, you should prefer
+     * uses a no-op listener. If you need the ability to seek to particular offsets, you should prefer
      * {@link #subscribe(Collection, ConsumerRebalanceListener)}, since group rebalances will cause partition offsets
      * to be reset. You should also provide your own listener if you are doing your own offset
      * management since the listener gives you an opportunity to commit offsets before a rebalance finishes.
@@ -944,17 +947,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Subscribe to all topics matching specified pattern to get dynamically assigned partitions.
-     * The pattern matching will be done periodically against topic existing at the time of check.
+     * The pattern matching will be done periodically against all topics existing at the time of check.
+     * This can be controlled through the {@code metadata.max.age.ms} configuration: by lowering
+     * the max metadata age, the consumer will refresh metadata more often and check for matching topics.
      * <p>
-     * As part of group management, the consumer will keep track of the list of consumers that
-     * belong to a particular group and will trigger a rebalance operation if one of the
-     * following events trigger -
-     * <ul>
-     * <li>Number of partitions change for any of the subscribed list of topics
-     * <li>Topic is created or deleted
-     * <li>An existing member of the consumer group dies
-     * <li>A new member is added to an existing consumer group via the join API
-     * </ul>
+     * See {@link #subscribe(Collection, ConsumerRebalanceListener)} for details on the
+     * use of the {@link ConsumerRebalanceListener}. Generally rebalances are triggered when there
+     * is a change to the topics matching the provided pattern and when consumer group membership changes.
+     * Group rebalances only take place during an active call to {@link #poll(long)}.
      *
      * @param pattern Pattern to subscribe to
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
@@ -988,7 +988,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * The pattern matching will be done periodically against topics existing at the time of check.
      * <p>
      * This is a short-hand for {@link #subscribe(Pattern, ConsumerRebalanceListener)}, which
-     * uses a noop listener. If you need the ability to seek to particular offsets, you should prefer
+     * uses a no-op listener. If you need the ability to seek to particular offsets, you should prefer
      * {@link #subscribe(Pattern, ConsumerRebalanceListener)}, since group rebalances will cause partition offsets
      * to be reset. You should also provide your own listener if you are doing your own offset
      * management since the listener gives you an opportunity to commit offsets before a rebalance finishes.
@@ -1593,19 +1593,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If the message format version in a partition is before 0.10.0, i.e. the messages do not have timestamps, null
      * will be returned for that partition.
      *
-     * Notice that this method may block indefinitely if the partition does not exist.
-     *
      * @param timestampsToSearch the mapping from partition to the timestamp to look up.
      * @return a mapping from partition to the timestamp and offset of the first message with timestamp greater
      *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
      *         such message.
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
-     * @throws IllegalArgumentException if the target timestamp is negative.
+     * @throws IllegalArgumentException if the target timestamp is negative
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
-     *         expiration of the configured request timeout
+     *         expiration of the configured {@code request.timeout.ms}
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the broker does not support looking up
-     *         the offsets by timestamp.
+     *         the offsets by timestamp
      */
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
@@ -1627,7 +1625,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Get the first offset for the given partitions.
      * <p>
-     * Notice that this method may block indefinitely if the partition does not exist.
      * This method does not change the current consumer position of the partitions.
      *
      * @see #seekToBeginning(Collection)
@@ -1636,8 +1633,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The earliest available offsets for the given partitions
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
-     * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
-     *         expiration of the configured request timeout
+     * @throws org.apache.kafka.common.errors.TimeoutException if the offsets could not be fetched before
+     *         expiration of the configured {@code request.timeout.ms}
      */
     @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
@@ -1655,7 +1652,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * to the the partition, the offset returned will be 0.
      *
      * <p>
-     * Notice that this method may block indefinitely if the partition does not exist.
      * This method does not change the current consumer position of the partitions.
      * <p>
      * When {@code isolation.level=read_committed} the last offset will be the Last Stable Offset (LSO).
@@ -1668,8 +1664,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The end offsets for the given partitions.
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
-     * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
-     *         expiration of the configured request timeout
+     * @throws org.apache.kafka.common.errors.TimeoutException if the offsets could not be fetched before
+     *         expiration of the configured {@code request.timeout.ms}
      */
     @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {

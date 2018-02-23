@@ -207,9 +207,11 @@ public final class Sensor {
 
     /**
      * Register a compound statistic with this sensor with no config override
+     * @param stat The stat to register
+     * @return true if stat is added to sensor, false if sensor is expired
      */
-    public void add(CompoundStat stat) {
-        add(stat, null);
+    public boolean add(CompoundStat stat) {
+        return add(stat, null);
     }
 
     /**
@@ -217,8 +219,12 @@ public final class Sensor {
      * @param stat The stat to register
      * @param config The configuration for this stat. If null then the stat will use the default configuration for this
      *        sensor.
+     * @return true if stat is added to sensor, false if sensor is expired
      */
-    public synchronized void add(CompoundStat stat, MetricConfig config) {
+    public synchronized boolean add(CompoundStat stat, MetricConfig config) {
+        if (hasExpired())
+            return false;
+
         this.stats.add(Utils.notNull(stat));
         Object lock = new Object();
         for (NamedMeasurable m : stat.stats()) {
@@ -226,15 +232,17 @@ public final class Sensor {
             this.registry.registerMetric(metric);
             this.metrics.add(metric);
         }
+        return true;
     }
 
     /**
      * Register a metric with this sensor
      * @param metricName The name of the metric
      * @param stat The statistic to keep
+     * @return true if metric is added to sensor, false if sensor is expired
      */
-    public void add(MetricName metricName, MeasurableStat stat) {
-        add(metricName, stat, null);
+    public boolean add(MetricName metricName, MeasurableStat stat) {
+        return add(metricName, stat, null);
     }
 
     /**
@@ -242,8 +250,12 @@ public final class Sensor {
      * @param metricName The name of the metric
      * @param stat The statistic to keep
      * @param config A special configuration for this metric. If null use the sensor default configuration.
+     * @return true if metric is added to sensor, false if sensor is expired
      */
-    public synchronized void add(MetricName metricName, MeasurableStat stat, MetricConfig config) {
+    public synchronized boolean add(MetricName metricName, MeasurableStat stat, MetricConfig config) {
+        if (hasExpired())
+            return false;
+
         KafkaMetric metric = new KafkaMetric(new Object(),
                                              Utils.notNull(metricName),
                                              Utils.notNull(stat),
@@ -252,6 +264,7 @@ public final class Sensor {
         this.registry.registerMetric(metric);
         this.metrics.add(metric);
         this.stats.add(stat);
+        return true;
     }
 
     /**
