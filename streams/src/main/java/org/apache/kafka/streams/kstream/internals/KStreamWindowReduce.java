@@ -36,7 +36,9 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
     private boolean sendOldValues = false;
 
-    KStreamWindowReduce(Windows<W> windows, String storeName, Reducer<V> reducer) {
+    KStreamWindowReduce(final Windows<W> windows,
+                        final String storeName,
+                        final Reducer<V> reducer) {
         this.windows = windows;
         this.storeName = storeName;
         this.reducer = reducer;
@@ -59,33 +61,32 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
             windowStore = (WindowStore<K, V>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues), sendOldValues);
         }
 
         @Override
-        public void process(K key, V value) {
+        public void process(final K key, final V value) {
             // if the key is null, we do not need proceed aggregating
             // the record with the table
             if (key == null)
                 return;
 
             // first get the matching windows
-            long timestamp = context().timestamp();
-
-            Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
+            final long timestamp = context().timestamp();
+            final Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
 
             // try update the window, and create the new window for the rest of unmatched window that do not exist yet
             for (Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
-                V oldAgg = windowStore.fetch(key, entry.getKey());
-                V newAgg = oldAgg;
+                final V oldAgg = windowStore.fetch(key, entry.getKey());
 
+                V newAgg;
                 if (oldAgg == null) {
                     newAgg = value;
                 } else {
-                    newAgg = reducer.apply(newAgg, value);
+                    newAgg = reducer.apply(oldAgg, value);
                 }
 
                 // update the store with the new value
@@ -117,13 +118,13 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             windowStore = (WindowStore<K, V>) context.getStateStore(storeName);
         }
 
         @SuppressWarnings("unchecked")
         @Override
-        public V get(Windowed<K> windowedKey) {
+        public V get(final Windowed<K> windowedKey) {
             K key = windowedKey.key();
             W window = (W) windowedKey.window();
 

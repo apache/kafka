@@ -48,13 +48,13 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     public V fetch(final K key, final long time) {
         Objects.requireNonNull(key, "key can't be null");
         final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
-        for (ReadOnlyWindowStore<K, V> windowStore : stores) {
+        for (final ReadOnlyWindowStore<K, V> windowStore : stores) {
             try {
                 final V result = windowStore.fetch(key, time);
                 if (result != null) {
                     return result;
                 }
-            } catch (InvalidStateStoreException e) {
+            } catch (final InvalidStateStoreException e) {
                 throw new InvalidStateStoreException(
                         "State store is not available anymore and may have been migrated to another instance; " +
                                 "please re-discover its location from the state metadata.");
@@ -67,7 +67,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
         Objects.requireNonNull(key, "key can't be null");
         final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
-        for (ReadOnlyWindowStore<K, V> windowStore : stores) {
+        for (final ReadOnlyWindowStore<K, V> windowStore : stores) {
             try {
                 final WindowStoreIterator<V> result = windowStore.fetch(key, timeFrom, timeTo);
                 if (!result.hasNext()) {
@@ -75,7 +75,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
                 } else {
                     return result;
                 }
-            } catch (InvalidStateStoreException e) {
+            } catch (final InvalidStateStoreException e) {
                 throw new InvalidStateStoreException(
                         "State store is not available anymore and may have been migrated to another instance; " +
                                 "please re-discover its location from the state metadata.");

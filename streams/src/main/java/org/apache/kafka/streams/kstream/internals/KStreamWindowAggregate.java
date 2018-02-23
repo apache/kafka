@@ -38,7 +38,10 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
     private boolean sendOldValues = false;
 
-    KStreamWindowAggregate(Windows<W> windows, String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> aggregator) {
+    KStreamWindowAggregate(final Windows<W> windows,
+                           final String storeName,
+                           final Initializer<T> initializer,
+                           final Aggregator<? super K, ? super V, T> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
         this.initializer = initializer;
@@ -62,7 +65,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
 
             windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
@@ -70,15 +73,15 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
         }
 
         @Override
-        public void process(K key, V value) {
+        public void process(final K key, final V value) {
             // if the key is null, we do not need proceed aggregating the record
             // the record with the table
             if (key == null)
                 return;
 
             // first get the matching windows
-            long timestamp = context().timestamp();
-            Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
+            final long timestamp = context().timestamp();
+            final Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
 
             // try update the window, and create the new window for the rest of unmatched window that do not exist yet
             for (Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
@@ -119,13 +122,13 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
         }
 
         @SuppressWarnings("unchecked")
         @Override
-        public T get(Windowed<K> windowedKey) {
+        public T get(final Windowed<K> windowedKey) {
             K key = windowedKey.key();
             W window = (W) windowedKey.window();
 
