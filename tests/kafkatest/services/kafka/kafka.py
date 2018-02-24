@@ -158,6 +158,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.start_minikdc(add_principals)
         Service.start(self)
 
+        self.logger.info("Waiting for brokers to register at ZK")
+
+        retries = 30
+        expected_broker_ids = set(self.nodes)
+        wait_until(lambda: {node for node in self.nodes if self.is_registered(node)} == expected_broker_ids, 30, 1)
+
+        if retries == 0:
+            raise RuntimeError("Kafka servers didn't register at ZK within 30 seconds")
+
         # Create topics if necessary
         if self.topics is not None:
             for topic, topic_cfg in self.topics.items():
