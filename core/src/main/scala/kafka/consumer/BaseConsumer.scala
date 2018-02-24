@@ -23,6 +23,7 @@ import java.util.regex.Pattern
 import kafka.api.OffsetRequest
 import kafka.common.StreamEndException
 import kafka.message.Message
+import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.header.Headers
@@ -40,7 +41,6 @@ trait BaseConsumer {
   def stop()
   def cleanup()
   def commit()
-  def resetOffsets(): Unit = {}
 }
 
 @deprecated("This class has been deprecated and will be removed in a future release. " +
@@ -56,10 +56,8 @@ case class BaseConsumerRecord(topic: String,
 
 @deprecated("This class has been deprecated and will be removed in a future release. " +
             "Please use org.apache.kafka.clients.consumer.KafkaConsumer instead.", "0.11.0.0")
-class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: Option[Long], whitelist: Option[String], consumerProps: Properties, val timeoutMs: Long = Long.MaxValue) extends BaseConsumer {
-  import org.apache.kafka.clients.consumer.KafkaConsumer
-
-  val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
+class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: Option[Long], whitelist: Option[String],
+                       consumer: Consumer[Array[Byte], Array[Byte]], val timeoutMs: Long = Long.MaxValue) extends BaseConsumer {
   consumerInit()
   var recordIter = consumer.poll(0).iterator
 
@@ -92,7 +90,7 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
     }
   }
 
-  override def resetOffsets() {
+  def resetUnconsumedOffsets() {
     val smallestUnconsumedOffsets = collection.mutable.Map[TopicPartition, Long]()
     while (recordIter.hasNext) {
       val record = recordIter.next()
@@ -126,6 +124,7 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
   }
 
   override def cleanup() {
+    resetUnconsumedOffsets()
     this.consumer.close()
   }
 
