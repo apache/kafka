@@ -40,6 +40,7 @@ trait PartitionAssignor {
 object PartitionAssignor {
   def createInstance(assignmentStrategy: String) = assignmentStrategy match {
     case "roundrobin" => new RoundRobinAssignor()
+    case "fair" => new FairAssignor()
     case _ => new RangeAssignor()
   }
 }
@@ -163,6 +164,79 @@ class RangeAssignor() extends PartitionAssignor with Logging {
           }
         }
       }
+    }
+
+    // assign Map.empty for the consumers which are not associated with topic partitions
+    ctx.consumers.foreach(consumerId => partitionAssignment.getAndMaybePut(consumerId))
+    partitionAssignment
+  }
+}
+
+/**
+ * The fair assignor attempts to balance partitions across consumers such that each consumer thread is assigned approximately
+ * the same number of partitions, even if the consumer topic subscriptions are substantially different (if they are identical,
+ * then the result will be equivalent to that of the roundrobin assignor). The running total of assignments per consumer
+ * thread is tracked as the algorithm executes in order to accomplish this.
+ *
+ * The algorithm starts with the topic with the fewest consumer subscriptions, and assigns its partitions in roundrobin
+ * fashion. In the event of a tie for least subscriptions, the topic with the highest partition count is assigned first, as
+ * this generally creates a more balanced distribution. The final tiebreaker is the topic name.
+ *
+ * The partitions for subsequent topics are assigned to the subscribing consumer with the fewest number of assignments.
+ * In the event of a tie for least assignments, the tiebreaker is the consumer id, so that the assignment pattern is fairly
+ * similar to how the roundrobin assignor functions.
+ *
+ * For example, suppose there are two consumers C0 and C1, two topics t0 and t1, and each topic has 3 partitions,
+ * resulting in partitions t0p0, t0p1, t0p2, t1p0, t1p1, and t1p2. If both C0 and C1 are consuming t0, but only C1 is
+ * consuming t1 then the assignment will be:
+ * C0 -> [t0p0, t0p1, t0p2]
+ * C1 -> [t1p0, t1p1, t1p2]
+ */
+class FairAssignor() extends PartitionAssignor with Logging {
+
+  def assign(ctx: AssignmentContext) = {
+    val valueFactory = (topic: String) => new mutable.HashMap[TopicAndPartition, ConsumerThreadId]
+    val partitionAssignment =
+      new Pool[String, mutable.Map[TopicAndPartition, ConsumerThreadId]](Some(valueFactory))
+
+    if (ctx.consumersForTopic.size > 0) {
+      val allThreadIds = ctx.consumersForTopic.flatMap { case (topic, threadIds) => threadIds }
+
+      // Map for tracking the total number of partitions assigned to each consumer thread
+      val consumerAssignmentCounts: mutable.Map[ConsumerThreadId, Int] = mutable.Map()
+      for (threadId <- allThreadIds) {
+        consumerAssignmentCounts(threadId) = 0
+      }
+
+      // Assign topics with fewer consumers first, tiebreakers are most partitions, then topic name
+      val topicConsumerCounts = ctx.consumersForTopic.map { case(topic, threadIds) =>
+        (topic -> threadIds.size)
+      }.toList.sortBy {
+        count => (count._2, -ctx.partitionsForTopic(count._1).size, count._1)
+      }
+
+      val allTopicPartitions = topicConsumerCounts.flatMap { topicConsumerCount =>
+        val topic = topicConsumerCount._1
+        val partitions = ctx.partitionsForTopic(topic)
+        info("Consumer %s rebalancing the following partitions for topic %s: %s"
+            .format(ctx.consumerId, topic, partitions))
+        ctx.partitionsForTopic(topic).map(partition => {
+            TopicAndPartition(topic, partition)
+        })
+      }
+
+      allTopicPartitions.foreach(topicPartition => {
+        val topicConsumers = ctx.consumersForTopic(topicPartition.topic)
+        val filteredCounts = consumerAssignmentCounts.toList.filter(consumer => topicConsumers.contains(consumer._1))
+
+        // Assign partition to consumer thread with least assignments, tiebreaker is consumer thread id
+        val threadId = filteredCounts.sortBy(count => (count._2, count._1.toString)).head._1
+        consumerAssignmentCounts(threadId) += 1
+
+        // record the partition ownership decision
+        val assignmentForConsumer = partitionAssignment.getAndMaybePut(threadId.consumer)
+        assignmentForConsumer += (topicPartition -> threadId)
+      })
     }
 
     // assign Map.empty for the consumers which are not associated with topic partitions
