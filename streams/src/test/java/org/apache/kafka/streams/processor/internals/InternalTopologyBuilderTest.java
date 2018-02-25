@@ -559,7 +559,7 @@ public class InternalTopologyBuilderTest {
     }
 
     @SuppressWarnings("deprecation")
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowOnUnassignedStateStoreAccess() {
         final String sourceNodeName = "source";
         final String goodNodeName = "goodGuy";
@@ -577,9 +577,16 @@ public class InternalTopologyBuilderTest {
             Stores.create(LocalMockProcessorSupplier.STORE_NAME).withStringKeys().withStringValues().inMemory().build(),
             goodNodeName);
         builder.addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
-
-        new ProcessorTopologyTestDriver(streamsConfig, builder);
-        fail("Should have throw StreamsException");
+        
+        try {
+            new ProcessorTopologyTestDriver(streamsConfig, builder);
+            fail("Should have throw StreamsException");
+        } catch (final StreamsException expected) {
+            final Throwable cause = expected.getCause();
+            final String expectedMessage = "Processor " + badNodeName + " has no access to StateStore ";
+            
+            assertTrue(cause.getMessage().contains(expectedMessage));
+        }
     }
 
     private static class LocalMockProcessorSupplier implements ProcessorSupplier {

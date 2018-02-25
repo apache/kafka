@@ -40,6 +40,7 @@ import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class TopologyTest {
@@ -156,7 +157,7 @@ public class TopologyTest {
     }
 
     @Test
-    public void shoudNotAllowToAddProcessorWithSameName() {
+    public void shouldNotAllowToAddProcessorWithSameName() {
         topology.addSource("source", "topic-1");
         topology.addProcessor("processor", new MockProcessorSupplier(), "source");
         try {
@@ -251,7 +252,7 @@ public class TopologyTest {
         } catch (final TopologyException expected) { }
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowOnUnassignedStateStoreAccess() throws Exception {
         final String sourceNodeName = "source";
         final String goodNodeName = "goodGuy";
@@ -273,7 +274,16 @@ public class TopologyTest {
                 goodNodeName)
             .addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
 
-        new ProcessorTopologyTestDriver(streamsConfig, topology.internalTopologyBuilder);
+        try {
+            new ProcessorTopologyTestDriver(streamsConfig, topology.internalTopologyBuilder);
+            fail("Should have thrown StreamsException");
+        } catch (final StreamsException e) {
+            final String error = e.getCause().toString();
+            final String expectedMessage = "Processor " + badNodeName + " has no access to StateStore " +
+                    LocalMockProcessorSupplier.STORE_NAME;
+            
+            assertTrue(error.contains(expectedMessage));
+        }
     }
 
     private static class LocalMockProcessorSupplier implements ProcessorSupplier {

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -28,13 +28,13 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
     private final String windowName;
 
     /**
-     * @throws StreamsException if retention period of the join window is less than expected
+     * @throws TopologyException if retention period of the join window is less than expected
      */
     KStreamJoinWindow(String windowName, long windowSizeMs, long retentionPeriodMs) {
         this.windowName = windowName;
 
         if (windowSizeMs > retentionPeriodMs)
-            throw new StreamsException("The retention period of the join window "
+            throw new TopologyException("The retention period of the join window "
                     + windowName + " must be no smaller than its window size.");
     }
 

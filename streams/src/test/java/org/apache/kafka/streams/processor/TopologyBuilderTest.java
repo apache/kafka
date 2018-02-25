@@ -590,7 +590,7 @@ public class TopologyBuilderTest {
         assertEquals("appId-foo", topicConfig.name());
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThroughOnUnassignedStateStoreAccess() throws Exception {
         final String sourceNodeName = "source";
         final String goodNodeName = "goodGuy";
@@ -599,8 +599,7 @@ public class TopologyBuilderTest {
         final Properties config = new Properties();
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
-        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory()
-                .getAbsolutePath());
+        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         final StreamsConfig streamsConfig = new StreamsConfig(config);
 
         final TopologyBuilder builder = new TopologyBuilder();
@@ -614,9 +613,15 @@ public class TopologyBuilderTest {
                 .addProcessor(badNodeName, new LocalMockProcessorSupplier(),
                         sourceNodeName);
 
-        final ProcessorTopologyTestDriver driver = new ProcessorTopologyTestDriver(
-                streamsConfig, builder.internalTopologyBuilder);
-        driver.process("topic", null, null);
+        try {
+            final ProcessorTopologyTestDriver driver = new ProcessorTopologyTestDriver(streamsConfig, builder.internalTopologyBuilder);
+            driver.process("topic", null, null);
+        } catch (final StreamsException e) {
+            final String error = e.getCause().toString();
+            final String expectedMessage = "Processor " + badNodeName + " has no access to StateStore ";
+
+            assert error.contains(expectedMessage);
+        }
     }
 
     private static class LocalMockProcessorSupplier implements ProcessorSupplier {
