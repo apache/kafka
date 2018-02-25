@@ -1276,8 +1276,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
             if (this.unrecordedPartitions.isEmpty()) {
                 // once all expected partitions from the fetch have reported in, record the metrics
-                this.sensors.bytesFetched.record(topicFetchMetric.fetchBytes);
-                this.sensors.recordsFetched.record(topicFetchMetric.fetchRecords);
+                this.sensors.bytesFetched.record(this.fetchMetrics.fetchBytes);
+                this.sensors.recordsFetched.record(this.fetchMetrics.fetchRecords);
 
                 // also record per-topic metrics
                 for (Map.Entry<String, FetchMetrics> entry: this.topicFetchMetrics.entrySet()) {
