@@ -386,7 +386,7 @@ public class StreamsResetter {
                 shiftOffsetsBy(client, inputTopicPartitions, options.valueOf(shiftByOption));
             } else if (options.has(toDatetimeOption)) {
                 final String ts = options.valueOf(toDatetimeOption);
-                final Long timestamp = getDateTime(ts);
+                final long timestamp = getDateTime(ts);
                 resetToDatetime(client, inputTopicPartitions, timestamp);
             } else if (options.has(byDurationOption)) {
                 final String duration = options.valueOf(byDurationOption);
@@ -401,8 +401,7 @@ public class StreamsResetter {
             }
 
             for (final TopicPartition p : inputTopicPartitions) {
-                final Long position = client.position(p);
-                System.out.println("Topic: " + p.topic() + " Partition: " + p.partition() + " Offset: " + position);
+                System.out.println("Topic: " + p.topic() + " Partition: " + p.partition() + " Offset: " + client.position(p));
             }
         }
     }
@@ -416,8 +415,7 @@ public class StreamsResetter {
             checkOffsetRange(topicPartitionsAndOffset, beginningOffsets, endOffsets);
 
         for (final TopicPartition topicPartition : inputTopicPartitions) {
-            final Long offset = validatedTopicPartitionsAndOffset.get(topicPartition);
-            client.seek(topicPartition, offset);
+            client.seek(topicPartition, validatedTopicPartitionsAndOffset.get(topicPartition));
         }
     }
 
@@ -429,7 +427,7 @@ public class StreamsResetter {
     private void resetByDuration(Consumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions, Duration duration) throws DatatypeConfigurationException {
         final Date now = new Date();
         duration.negate().addTo(now);
-        final Long timestamp = now.getTime();
+        final long timestamp = now.getTime();
 
         final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
         for (final TopicPartition topicPartition : inputTopicPartitions) {
@@ -439,8 +437,7 @@ public class StreamsResetter {
         final Map<TopicPartition, OffsetAndTimestamp> topicPartitionsAndOffset = client.offsetsForTimes(topicPartitionsAndTimes);
 
         for (final TopicPartition topicPartition : inputTopicPartitions) {
-            final Long offset = topicPartitionsAndOffset.get(topicPartition).offset();
-            client.seek(topicPartition, offset);
+            client.seek(topicPartition, topicPartitionsAndOffset.get(topicPartition).offset());
         }
     }
 
@@ -453,20 +450,19 @@ public class StreamsResetter {
         final Map<TopicPartition, OffsetAndTimestamp> topicPartitionsAndOffset = client.offsetsForTimes(topicPartitionsAndTimes);
 
         for (final TopicPartition topicPartition : inputTopicPartitions) {
-            final Long offset = topicPartitionsAndOffset.get(topicPartition).offset();
-            client.seek(topicPartition, offset);
+            client.seek(topicPartition, topicPartitionsAndOffset.get(topicPartition).offset());
         }
     }
 
     // visible for testing
-    public void shiftOffsetsBy(Consumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions, Long shiftBy) {
+    public void shiftOffsetsBy(Consumer<byte[], byte[]> client, Set<TopicPartition> inputTopicPartitions, long shiftBy) {
         final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
         final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
 
         final Map<TopicPartition, Long> topicPartitionsAndOffset = new HashMap<>(inputTopicPartitions.size());
         for (final TopicPartition topicPartition : inputTopicPartitions) {
-            final Long position = client.position(topicPartition);
-            final Long offset = position + shiftBy;
+            final long position = client.position(topicPartition);
+            final long offset = position + shiftBy;
             topicPartitionsAndOffset.put(topicPartition, offset);
         }
 
@@ -497,7 +493,7 @@ public class StreamsResetter {
     }
 
     // visible for testing
-    public Long getDateTime(String timestamp) throws ParseException {
+    public long getDateTime(String timestamp) throws ParseException {
         final String[] timestampParts = timestamp.split("T");
         if (timestampParts.length < 2) {
             throw new ParseException("Error parsing timestamp. It does not contain a 'T' according to ISO8601 format", timestamp.length());
@@ -549,10 +545,10 @@ public class StreamsResetter {
                                                        final Map<TopicPartition, Long> endOffsets) {
         final Map<TopicPartition, Long> validatedTopicPartitionsOffsets = new HashMap<>();
         for (final Map.Entry<TopicPartition, Long> topicPartitionAndOffset : inputTopicPartitionsAndOffset.entrySet()) {
-            final Long endOffset = endOffsets.get(topicPartitionAndOffset.getKey());
-            final Long offset = topicPartitionAndOffset.getValue();
+            final long endOffset = endOffsets.get(topicPartitionAndOffset.getKey());
+            final long offset = topicPartitionAndOffset.getValue();
             if (offset < endOffset) {
-                final Long beginningOffset = beginningOffsets.get(topicPartitionAndOffset.getKey());
+                final long beginningOffset = beginningOffsets.get(topicPartitionAndOffset.getKey());
                 if (offset > beginningOffset) {
                     validatedTopicPartitionsOffsets.put(topicPartitionAndOffset.getKey(), offset);
                 } else {
