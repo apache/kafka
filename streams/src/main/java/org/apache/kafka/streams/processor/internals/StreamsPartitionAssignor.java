@@ -54,7 +54,7 @@ import java.util.UUID;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 
-public class StreamPartitionAssignor implements PartitionAssignor, Configurable {
+public class StreamsPartitionAssignor implements PartitionAssignor, Configurable {
 
     private final static int UNKNOWN = -1;
     public final static int NOT_AVAILABLE = -2;
@@ -377,7 +377,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         final Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions = new HashMap<>();
         for (Map.Entry<String, InternalTopicMetadata> entry : repartitionTopicMetadata.entrySet()) {
             final String topic = entry.getKey();
-            final Integer numPartitions = entry.getValue().numPartitions;
+            final int numPartitions = entry.getValue().numPartitions;
 
             for (int partition = 0; partition < numPartitions; partition++) {
                 allRepartitionTopicPartitions.put(new TopicPartition(topic, partition),
@@ -638,7 +638,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         for (final InternalTopicMetadata metadata : topicPartitions.values()) {
             final InternalTopicConfig topic = metadata.config;
-            final Integer numPartitions = metadata.numPartitions;
+            final int numPartitions = metadata.numPartitions;
 
             if (numPartitions == NOT_AVAILABLE) {
                 continue;

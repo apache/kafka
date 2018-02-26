@@ -757,7 +757,8 @@ public class StreamThread extends Thread {
             } catch (final TaskMigratedException ignoreAndRejoinGroup) {
                 log.warn("Detected task {} that got migrated to another thread. " +
                     "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
-                    "Will try to rejoin the consumer group. Below is the detailed description of the task:\n{}", ignoreAndRejoinGroup.migratedTask().id(), ignoreAndRejoinGroup.migratedTask().toString(">"));
+                    "Will try to rejoin the consumer group. Below is the detailed description of the task:\n{}",
+                        ignoreAndRejoinGroup.migratedTask().id(), ignoreAndRejoinGroup.migratedTask().toString(">"));
 
                 // re-subscribe to enforce a rebalance in the next poll call
                 consumer.unsubscribe();
@@ -898,22 +899,20 @@ public class StreamThread extends Thread {
      * @param records Records, can be null
      */
     private void addRecordsToTasks(final ConsumerRecords<byte[], byte[]> records) {
-        if (records != null && !records.isEmpty()) {
-            int numAddedRecords = 0;
+        int numAddedRecords = 0;
 
-            for (final TopicPartition partition : records.partitions()) {
-                final StreamTask task = taskManager.activeTask(partition);
+        for (final TopicPartition partition : records.partitions()) {
+            final StreamTask task = taskManager.activeTask(partition);
 
-                if (task.isClosed()) {
-                    log.info("Stream task {} is already closed, probably because it got migrated to another thread already. " +
-                            "Notifying the thread to trigger a new rebalance immediately.", task.id());
-                    throw new TaskMigratedException(task);
-                }
-
-                numAddedRecords += task.addRecords(partition, records.records(partition));
+            if (task.isClosed()) {
+                log.warn("Stream task {} is already closed, probably because it got unexpectly migrated to another thread already. " +
+                        "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                throw new TaskMigratedException(task);
             }
-            streamsMetrics.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);
+
+            numAddedRecords += task.addRecords(partition, records.records(partition));
         }
+        streamsMetrics.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);
     }
 
     /**
@@ -1039,7 +1038,7 @@ public class StreamThread extends Thread {
                             final StandbyTask task = taskManager.standbyTask(partition);
 
                             if (task.isClosed()) {
-                                log.info("Standby task {} is already closed, probably because it got migrated to another thread already. " +
+                                log.warn("Standby task {} is already closed, probably because it got unexpectly migrated to another thread already. " +
                                         "Notifying the thread to trigger a new rebalance immediately.", task.id());
                                 throw new TaskMigratedException(task);
                             }
@@ -1072,7 +1071,7 @@ public class StreamThread extends Thread {
                         }
 
                         if (task.isClosed()) {
-                            log.info("Standby task {} is already closed, probably because it got migrated to another thread already. " +
+                            log.warn("Standby task {} is already closed, probably because it got unexpectly migrated to another thread already. " +
                                     "Notifying the thread to trigger a new rebalance immediately.", task.id());
                             throw new TaskMigratedException(task);
                         }
@@ -1091,7 +1090,7 @@ public class StreamThread extends Thread {
                     final StandbyTask task = taskManager.standbyTask(partition);
 
                     if (task.isClosed()) {
-                        log.info("Standby task {} is already closed, probably because it got migrated to another thread already. " +
+                        log.warn("Standby task {} is already closed, probably because it got unexpectly migrated to another thread already. " +
                                 "Notifying the thread to trigger a new rebalance immediately.", task.id());
                         throw new TaskMigratedException(task);
                     }

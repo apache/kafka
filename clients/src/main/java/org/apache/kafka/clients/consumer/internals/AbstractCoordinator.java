@@ -767,7 +767,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 future.complete(null);
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                     || error == Errors.NOT_COORDINATOR) {
-                log.info("Attempt to heartbeat since coordinator {} is either not started or not valid.",
+                log.info("Attempt to heartbeat failed since coordinator {} is either not started or not valid.",
                         coordinator());
                 coordinatorDead();
                 future.raise(error);
