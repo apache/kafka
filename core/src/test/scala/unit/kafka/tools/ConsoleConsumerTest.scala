@@ -17,8 +17,7 @@
 
 package kafka.tools
 
-import java.io.{PrintStream, FileOutputStream}
-import java.util.Arrays
+import java.io.{FileOutputStream, PrintStream}
 
 import kafka.common.MessageFormatter
 import kafka.consumer.{BaseConsumer, BaseConsumerRecord, NewShinyConsumer}
@@ -28,11 +27,16 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.easymock.EasyMock
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
 
 class ConsoleConsumerTest {
+
+  @Before
+  def setup(): Unit = {
+    ConsoleConsumer.messageCount = 0
+  }
 
   @Test
   def shouldResetUnConsumedOffsetsBeforeExitForNewConsumer() {
@@ -47,14 +51,13 @@ class ConsoleConsumerTest {
 
     val consumer = new NewShinyConsumer(Some(topic), None, None, None, mockConsumer)
 
-    mockConsumer.rebalance(Arrays.asList(tp1, tp2))
+    mockConsumer.rebalance(List(tp1, tp2).asJava)
     mockConsumer.updateBeginningOffsets(Map(tp1 -> startOffset, tp2 -> startOffset).asJava)
 
     0 until totalMessages foreach { i =>
       // add all records, each partition should have half of `totalMessages`
       mockConsumer.addRecord(new ConsumerRecord[Array[Byte], Array[Byte]](topic, i % 2, i / 2, "key".getBytes, "value".getBytes))
     }
-    consumer.recordIter = mockConsumer.poll(0).iterator // refresh the iterator after NewShinyConsumer was created
 
     // Mocks
     val formatter = EasyMock.createNiceMock(classOf[MessageFormatter])
@@ -64,12 +67,13 @@ class ConsoleConsumerTest {
     EasyMock.replay(formatter)
 
     // Test
-    ConsoleConsumer.messageCount = 0 // reset messageCount modified by other test cases
     ConsoleConsumer.process(maxMessages, formatter, consumer, System.out, skipMessageOnError = false)
     assertEquals(totalMessages, mockConsumer.position(tp1) + mockConsumer.position(tp2))
 
     consumer.resetUnconsumedOffsets()
     assertEquals(maxMessages, mockConsumer.position(tp1) + mockConsumer.position(tp2))
+
+    EasyMock.verify(formatter)
   }
 
   @Test
