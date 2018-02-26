@@ -23,7 +23,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -578,17 +577,15 @@ public class InternalTopologyBuilderTest {
             Stores.create(LocalMockProcessorSupplier.STORE_NAME).withStringKeys().withStringValues().inMemory().build(),
             goodNodeName);
         builder.addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
-
+        
         try {
             new ProcessorTopologyTestDriver(streamsConfig, builder);
             fail("Should have throw StreamsException");
         } catch (final StreamsException expected) {
             final Throwable cause = expected.getCause();
-            if (cause == null
-                || !(cause instanceof TopologyBuilderException)
-                || !cause.getMessage().equals("Invalid topology building: Processor " + badNodeName + " has no access to StateStore " + LocalMockProcessorSupplier.STORE_NAME)) {
-                throw new RuntimeException("Did expect different exception. Did catch:", expected);
-            }
+            final String expectedMessage = "Processor " + badNodeName + " has no access to StateStore ";
+            
+            assertTrue(cause.getMessage().contains(expectedMessage));
         }
     }
 
