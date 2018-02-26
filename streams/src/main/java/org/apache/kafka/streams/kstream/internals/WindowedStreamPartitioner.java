@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.WindowedSerializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
 import static org.apache.kafka.common.utils.Utils.toPositive;

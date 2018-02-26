@@ -14,13 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.state.internals.WindowStoreUtils;
 
 import java.nio.ByteBuffer;
@@ -44,16 +43,11 @@ public class WindowedDeserializer<T> implements Deserializer<Windowed<T>> {
         this(null, Long.MAX_VALUE);
     }
     
-    public WindowedDeserializer(final Long windowSize) {
-       this(null, windowSize);
-    }
-    
     public WindowedDeserializer(final Deserializer<T> inner) {
         this(inner, Long.MAX_VALUE);
     }
 
-    public WindowedDeserializer(final Deserializer<T> inner,
-                                final long windowSize) {
+    public WindowedDeserializer(final Deserializer<T> inner, final long windowSize) {
         this.inner = inner;
         this.windowSize = windowSize;
     }
