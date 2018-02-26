@@ -54,7 +54,7 @@ import java.util.UUID;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 
-public class StreamPartitionAssignor implements PartitionAssignor, Configurable {
+public class StreamsPartitionAssignor implements PartitionAssignor, Configurable {
 
     private final static int UNKNOWN = -1;
     public final static int NOT_AVAILABLE = -2;
