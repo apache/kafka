@@ -25,9 +25,12 @@ import kafka.consumer.{BaseConsumer, BaseConsumerRecord, NewShinyConsumer}
 import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.consumer.{ConsumerRecord, MockConsumer, OffsetResetStrategy}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
+
+import scala.collection.JavaConverters._
 
 class ConsoleConsumerTest {
 
@@ -45,16 +48,25 @@ class ConsoleConsumerTest {
     val consumer = new NewShinyConsumer(Some(topic), None, None, None, mockConsumer)
 
     mockConsumer.rebalance(Arrays.asList(tp1, tp2))
-    import scala.collection.JavaConverters._
     mockConsumer.updateBeginningOffsets(Map(tp1 -> startOffset, tp2 -> startOffset).asJava)
 
-    0 until totalMessages map { i =>
+    0 until totalMessages foreach { i =>
       // add all records, each partition should have half of `totalMessages`
       mockConsumer.addRecord(new ConsumerRecord[Array[Byte], Array[Byte]](topic, i % 2, i / 2, "key".getBytes, "value".getBytes))
     }
     consumer.recordIter = mockConsumer.poll(0).iterator // refresh the iterator after NewShinyConsumer was created
 
-    1 to maxMessages foreach { _ => consumer.receive() } // consume up to `maxMessages` records
+    // Mocks
+    val formatter = EasyMock.createNiceMock(classOf[MessageFormatter])
+
+    // Expectations
+    EasyMock.expect(formatter.writeTo(EasyMock.anyObject(), EasyMock.anyObject())).times(maxMessages)
+    EasyMock.replay(formatter)
+
+    // Test
+    ConsoleConsumer.messageCount = 0 // reset messageCount modified by other test cases
+    ConsoleConsumer.process(maxMessages, formatter, consumer, System.out, skipMessageOnError = false)
+    assertEquals(totalMessages, mockConsumer.position(tp1) + mockConsumer.position(tp2))
 
     consumer.resetUnconsumedOffsets()
     assertEquals(maxMessages, mockConsumer.position(tp1) + mockConsumer.position(tp2))

@@ -34,7 +34,7 @@ import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.common.errors.{AuthenticationException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
-import org.apache.kafka.common.serialization.Deserializer
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
@@ -72,7 +72,7 @@ object ConsoleConsumer extends Logging {
         new OldConsumer(conf.filterSpec, props)
       } else {
         val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
-        val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](getNewConsumerProps(conf))
+        val consumer = new KafkaConsumer(getNewConsumerProps(conf), new ByteArrayDeserializer, new ByteArrayDeserializer)
         if (conf.partitionArg.isDefined)
           new NewShinyConsumer(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, consumer, timeoutMs)
         else
