@@ -40,16 +40,13 @@ public class Stamped<V> implements Comparable {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        Stamped<?> stamped = (Stamped<?>) o;
-
-        if (timestamp != stamped.timestamp) return false;
-        return value != null ? value.equals(stamped.value) : stamped.value == null;
+        // we do not compare values for this stamped object
+        return this.compareTo(o) == 0;
     }
 
     @Override
     public int hashCode() {
-        int result = value != null ? value.hashCode() : 0;
-        result = 31 * result + (int) (timestamp ^ (timestamp >>> 32));
-        return result;
+        // we do not use values for this object's hashcode
+        return (int) (timestamp ^ (timestamp >>> 32));
     }
 }
