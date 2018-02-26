@@ -29,18 +29,18 @@ import java.util.Map;
  *  if the no-arg constructor is called and hence it is not passed during initialization.
  *  Note that the first two take precedence over the last.
  */
-public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
+public class TimeWindowedSerializer<T> implements Serializer<Windowed<T>> {
 
     private static final int TIMESTAMP_SIZE = 8;
 
     private Serializer<T> inner;
 
-    public WindowedSerializer(Serializer<T> inner) {
+    public TimeWindowedSerializer(Serializer<T> inner) {
         this.inner = inner;
     }
 
     // Default constructor needed by Kafka
-    public WindowedSerializer() {}
+    public TimeWindowedSerializer() {}
 
     @SuppressWarnings("unchecked")
     @Override

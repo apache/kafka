@@ -28,27 +28,27 @@ import java.util.Map;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-public class WindowedSerializerTest {
+public class TimeWindowedSerializerTest {
     @Test
     public void testWindowedSerializerNoArgConstructors() {
         Map<String, String> props = new HashMap<>();
         // test key[value].serializer.inner.class takes precedence over serializer.inner.class
-        WindowedSerializer<StringSerializer> windowedSerializer = new WindowedSerializer<>();
+        TimeWindowedSerializer<StringSerializer> timeWindowedSerializer = new TimeWindowedSerializer<>();
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         props.put("key.serializer.inner.class", "org.apache.kafka.common.serialization.StringSerializer");
         props.put("serializer.inner.class", "org.apache.kafka.common.serialization.StringSerializer");
-        windowedSerializer.configure(props, true);
-        Serializer<?> inner = windowedSerializer.innerSerializer();
+        timeWindowedSerializer.configure(props, true);
+        Serializer<?> inner = timeWindowedSerializer.innerSerializer();
         assertNotNull("Inner serializer should be not null", inner);
         assertTrue("Inner serializer type should be StringSerializer", inner instanceof StringSerializer);
         // test serializer.inner.class
         props.put("serializer.inner.class", "org.apache.kafka.common.serialization.ByteArraySerializer");
         props.remove("key.serializer.inner.class");
         props.remove("value.serializer.inner.class");
-        WindowedSerializer<?> windowedSerializer1 = new WindowedSerializer<>();
-        windowedSerializer1.configure(props, false);
-        Serializer<?> inner1 = windowedSerializer1.innerSerializer();
+        TimeWindowedSerializer<?> timeWindowedSerializer1 = new TimeWindowedSerializer<>();
+        timeWindowedSerializer1.configure(props, false);
+        Serializer<?> inner1 = timeWindowedSerializer1.innerSerializer();
         assertNotNull("Inner serializer should be not null", inner1);
         assertTrue("Inner serializer type should be ByteArraySerializer", inner1 instanceof ByteArraySerializer);
     }

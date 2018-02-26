@@ -31,7 +31,7 @@ import java.util.Map;
  *  if the no-arg constructor is called and hence it is not passed during initialization.
  *  Note that the first two take precedence over the last.
  */
-public class WindowedDeserializer<T> implements Deserializer<Windowed<T>> {
+public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
     private static final int TIMESTAMP_SIZE = 8;
     private final Long windowSize;
@@ -39,15 +39,15 @@ public class WindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     private Deserializer<T> inner;
     
     // Default constructor needed by Kafka
-    public WindowedDeserializer() {
+    public TimeWindowedDeserializer() {
         this(null, Long.MAX_VALUE);
     }
     
-    public WindowedDeserializer(final Deserializer<T> inner) {
+    public TimeWindowedDeserializer(final Deserializer<T> inner) {
         this(inner, Long.MAX_VALUE);
     }
 
-    public WindowedDeserializer(final Deserializer<T> inner, final long windowSize) {
+    public TimeWindowedDeserializer(final Deserializer<T> inner, final long windowSize) {
         this.inner = inner;
         this.windowSize = windowSize;
     }
