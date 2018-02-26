@@ -76,7 +76,7 @@ public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
         inner.close();
     }
 
-    byte[] serializeBaseKey(String topic, Windowed<T> data) {
+    public byte[] serializeBaseKey(String topic, Windowed<T> data) {
         return inner.serialize(topic, data.key());
     }
 
