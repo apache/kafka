@@ -34,4 +34,19 @@ public class Stamped<V> implements Comparable {
         else if (timestamp > otherTimestamp) return 1;
         return 0;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        // we do not compare values for this stamped object
+        return this.compareTo(o) == 0;
+    }
+
+    @Override
+    public int hashCode() {
+        // we do not use values for this object's hashcode
+        return (int) (timestamp ^ (timestamp >>> 32));
+    }
 }
