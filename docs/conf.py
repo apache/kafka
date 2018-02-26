@@ -164,7 +164,11 @@ html_theme = 'sphinx_rtd_theme'
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
-#html_theme_options = {}
+html_theme_options = {
+    'canonical_url': "http://kafka.apache.org/documentation/",
+    'navigation_depth': 2,
+    'prev_next_buttons_location': None,
+}
 
 # Add any paths that contain custom themes here, relative to this directory.
 html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
@@ -239,6 +243,8 @@ html_static_path = ['_static']
 # Output file base name for HTML help builder.
 # htmlhelp_basename = ''
 
+# TODO style permalinks
+html_add_permalinks = None
 
 # -- Options for LaTeX output ---------------------------------------------
 

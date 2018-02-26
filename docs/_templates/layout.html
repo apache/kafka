@@ -1,0 +1,64 @@
+{# TEMPLATE VAR SETTINGS #}
+{%- set url_root = pathto('', 1) %}
+{%- if url_root == '#' %}{% set url_root = '' %}{% endif %}
+{%- if not embedded and docstitle %}
+  {%- set titlesuffix = " &mdash; "|safe + docstitle|e %}
+{%- else %}
+  {%- set titlesuffix = "" %}
+{%- endif %}
+
+<script><!--#include virtual="{{ pathto('js/templateData.js', 1) }}" --></script>
+
+<!--#include virtual="/includes/_header.htm" -->
+<!--#include virtual="/includes/_top.htm" -->
+
+
+<div class="content documentation documentation--current">
+
+  <!--#include virtual="/includes/_nav.htm" -->
+
+  <div class="right">
+    <!--#include virtual="/includes/_docs_banner.htm" -->
+    {# PAGE CONTENT #}
+    <div class="wy-nav-content">
+      <div class="rst-content">
+        <!-- TODO style breadcrumbs
+        {% include "breadcrumbs.html" %}
+        -->
+        <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+          <div itemprop="articleBody">
+            {% block body %}{% endblock %}
+          </div>
+        </div>
+        {% include "footer.html" %}
+      </div>
+    </div>
+
+  </div>
+  {% include "versions.html" %}
+
+  {% if not embedded %}
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'{{ url_root }}',
+            VERSION:'{{ release|e }}',
+            LANGUAGE:'{{ language }}',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'{{ '' if no_search_suffix else file_suffix }}',
+            HAS_SOURCE:  {{ has_source|lower }},
+            SOURCELINK_SUFFIX: '{{ sourcelink_suffix }}'
+        };
+    </script>
+    {%- for scriptfile in script_files %}
+      <script type="text/javascript" src="{{ pathto(scriptfile, 1) }}"></script>
+    {%- endfor %}
+
+  {% endif %}
+
+  <script type="text/javascript" src="{{ pathto('_static/js/theme.js', 1) }}"></script>
+
+  {%- block footer %} {% endblock %}
+
+<!--#include virtual="/includes/_footer.htm" -->
+<!--#include virtual="/includes/_docs_footer.htm" -->
