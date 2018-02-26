@@ -15,20 +15,28 @@
 
 import json
 import os
-import signal
-import subprocess
 import time
 
 from ducktape.services.background_thread import BackgroundThreadService
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
-from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin, TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.services.verifiable_client import VerifiableClientMixin
 from kafkatest.utils import is_int, is_int_with_prefix
-from kafkatest.version import TRUNK, LATEST_0_8_2
+from kafkatest.version import DEV_BRANCH
 
+class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
+    """This service wraps org.apache.kafka.tools.VerifiableProducer for use in
+    system testing.
 
-class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
+    NOTE: this class should be treated as a PUBLIC API. Downstream users use
+    this service both directly and through class extension, so care must be
+    taken to ensure compatibility.
+    """
+
     PERSISTENT_ROOT = "/mnt/verifiable_producer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stdout")
+    STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stderr")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "verifiable_producer.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
@@ -38,14 +46,18 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         "verifiable_producer_stdout": {
             "path": STDOUT_CAPTURE,
             "collect_default": False},
+        "verifiable_producer_stderr": {
+            "path": STDERR_CAPTURE,
+            "collect_default": False},
         "verifiable_producer_log": {
             "path": LOG_FILE,
             "collect_default": True}
         }
 
     def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000,
-                 message_validator=is_int, compression_types=None, version=TRUNK, acks=None,
-                 stop_timeout_sec=150):
+                 message_validator=is_int, compression_types=None, version=DEV_BRANCH, acks=None,
+                 stop_timeout_sec=150, request_timeout_sec=30, log_level="INFO",
+                 enable_idempotence=False, offline_nodes=[], create_time=-1):
         """
         :param max_messages is a number of messages to be produced per producer
         :param message_validator checks for an expected format of messages produced. There are
@@ -58,6 +70,7 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         compression types, one per producer (could be "none").
         """
         super(VerifiableProducer, self).__init__(context, num_nodes)
+        self.log_level = log_level
 
         self.kafka = kafka
         self.topic = topic
@@ -76,10 +89,13 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         self.clean_shutdown_nodes = set()
         self.acks = acks
         self.stop_timeout_sec = stop_timeout_sec
+        self.request_timeout_sec = request_timeout_sec
+        self.enable_idempotence = enable_idempotence
+        self.offline_nodes = offline_nodes
+        self.create_time = create_time
 
-    @property
-    def security_config(self):
-        return self.kafka.security_config.client_config()
+    def java_class_name(self):
+        return "VerifiableProducer"
 
     def prop_file(self, node):
         idx = self.idx(node)
@@ -98,15 +114,26 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         log_config = self.render('tools_log4j.properties', log_file=VerifiableProducer.LOG_FILE)
         node.account.create_file(VerifiableProducer.LOG4J_CONFIG, log_config)
 
+        # Configure security
+        self.security_config = self.kafka.security_config.client_config(node=node)
+        self.security_config.setup_node(node)
+
         # Create and upload config file
         producer_prop_file = self.prop_file(node)
         if self.acks is not None:
             self.logger.info("VerifiableProducer (index = %d) will use acks = %s", idx, self.acks)
             producer_prop_file += "\nacks=%s\n" % self.acks
+
+        producer_prop_file += "\nrequest.timeout.ms=%d\n" % (self.request_timeout_sec * 1000)
+        if self.enable_idempotence:
+            self.logger.info("Setting up an idempotent producer")
+            producer_prop_file += "\nmax.in.flight.requests.per.connection=5\n"
+            producer_prop_file += "\nretries=1000000\n"
+            producer_prop_file += "\nenable.idempotence=true\n"
+
         self.logger.info("verifiable_producer.properties:")
         self.logger.info(producer_prop_file)
         node.account.create_file(VerifiableProducer.CONFIG_FILE, producer_prop_file)
-        self.security_config.setup_node(node)
 
         cmd = self.start_cmd(node, idx)
         self.logger.debug("VerifiableProducer %d command: %s" % (idx, cmd))
@@ -114,6 +141,7 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         self.produced_count[idx] = 0
         last_produced_time = time.time()
         prev_msg = None
+
         for line in node.account.ssh_capture(cmd):
             line = line.strip()
 
@@ -146,24 +174,20 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
                             raise Exception("Unexpected shutdown event from producer, already shutdown. Producer index: %d" % idx)
                         self.clean_shutdown_nodes.add(node)
 
+    def _has_output(self, node):
+        """Helper used as a proxy to determine whether jmx is running by that jmx_tool_log contains output."""
+        try:
+            node.account.ssh("test -z \"$(cat %s)\"" % VerifiableProducer.STDOUT_CAPTURE, allow_fail=False)
+            return False
+        except RemoteCommandError:
+            return True
+
     def start_cmd(self, node, idx):
-        cmd = ""
-        if node.version <= LATEST_0_8_2:
-            # 0.8.2.X releases do not have VerifiableProducer.java, so cheat and add
-            # the tools jar from trunk to the classpath
-            tools_jar = self.path.jar(TOOLS_JAR_NAME, TRUNK)
-            tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, TRUNK)
-
-            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_jar
-            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_dependant_libs_jar
-            cmd += "export CLASSPATH; "
-
-        cmd += "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR
+        cmd  = "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableProducer.LOG4J_CONFIG
-        cmd += " " + self.path.script("kafka-run-class.sh", node)
-        cmd += " org.apache.kafka.tools.VerifiableProducer"
-        cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol))
+        cmd += self.impl.exec_cmd(node)
+        cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol, True, self.offline_nodes))
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
         if self.throughput > 0:
@@ -171,27 +195,21 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         if self.message_validator == is_int_with_prefix:
             cmd += " --value-prefix %s" % str(idx)
         if self.acks is not None:
-            cmd += " --acks %s\n" % str(self.acks)
+            cmd += " --acks %s " % str(self.acks)
+        if self.create_time > -1:
+            cmd += " --message-create-time %s " % str(self.create_time)
 
         cmd += " --producer.config %s" % VerifiableProducer.CONFIG_FILE
         cmd += " 2>> %s | tee -a %s &" % (VerifiableProducer.STDOUT_CAPTURE, VerifiableProducer.STDOUT_CAPTURE)
         return cmd
 
     def kill_node(self, node, clean_shutdown=True, allow_fail=False):
-        if clean_shutdown:
-            sig = signal.SIGTERM
-        else:
-            sig = signal.SIGKILL
+        sig = self.impl.kill_signal(clean_shutdown)
         for pid in self.pids(node):
             node.account.signal(pid, sig, allow_fail)
 
     def pids(self, node):
-        try:
-            cmd = "jps | grep -i VerifiableProducer | awk '{print $1}'"
-            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
-            return pid_arr
-        except (subprocess.CalledProcessError, ValueError) as e:
-            return []
+        return self.impl.pids(node)
 
     def alive(self, node):
         return len(self.pids(node)) > 0

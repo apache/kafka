@@ -22,6 +22,7 @@ package kafka.metrics
 
 import com.yammer.metrics.Metrics
 import java.io.File
+import java.nio.file.Files
 
 import com.yammer.metrics.reporting.CsvReporter
 import java.util.concurrent.TimeUnit
@@ -50,7 +51,7 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
         val metricsConfig = new KafkaMetricsConfig(props)
         csvDir = new File(props.getString("kafka.csv.metrics.dir", "kafka_metrics"))
         Utils.delete(csvDir)
-        csvDir.mkdirs()
+        Files.createDirectories(csvDir.toPath())
         underlying = new CsvReporter(Metrics.defaultRegistry(), csvDir)
         if (props.getBoolean("kafka.csv.metrics.reporter.enabled", default = false)) {
           initialized = true

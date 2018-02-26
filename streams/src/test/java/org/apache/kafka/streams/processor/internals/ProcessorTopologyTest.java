@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,12 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -33,6 +28,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -49,17 +45,26 @@ import org.junit.Test;
 import java.io.File;
 import java.util.Properties;
 
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+
 public class ProcessorTopologyTest {
 
     private static final Serializer<String> STRING_SERIALIZER = new StringSerializer();
     private static final Deserializer<String> STRING_DESERIALIZER = new StringDeserializer();
 
-    protected static final String INPUT_TOPIC_1 = "input-topic-1";
-    protected static final String INPUT_TOPIC_2 = "input-topic-2";
-    protected static final String OUTPUT_TOPIC_1 = "output-topic-1";
-    protected static final String OUTPUT_TOPIC_2 = "output-topic-2";
+    private static final String INPUT_TOPIC_1 = "input-topic-1";
+    private static final String INPUT_TOPIC_2 = "input-topic-2";
+    private static final String OUTPUT_TOPIC_1 = "output-topic-1";
+    private static final String OUTPUT_TOPIC_2 = "output-topic-2";
+    private static final String THROUGH_TOPIC_1 = "through-topic-1";
 
-    private static long timestamp = 1000L;
+    private final TopologyBuilder builder = new TopologyBuilder();
+    private final MockProcessorSupplier mockProcessorSupplier = new MockProcessorSupplier();
 
     private ProcessorTopologyTestDriver driver;
     private StreamsConfig config;
@@ -72,9 +77,9 @@ public class ProcessorTopologyTest {
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "processor-topology-test");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, localState.getAbsolutePath());
-        props.setProperty(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        props.setProperty(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        props.setProperty(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
+        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        props.setProperty(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
         this.config = new StreamsConfig(props);
     }
 
@@ -88,7 +93,7 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testTopologyMetadata() {
-        final TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
+        builder.setApplicationId("X");
 
         builder.addSource("source-1", "topic-1");
         builder.addSource("source-2", "topic-2", "topic-3");
@@ -115,9 +120,9 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingSimpleTopology() {
+    public void testDrivingSimpleTopology() throws Exception {
         int partition = 10;
-        driver = new ProcessorTopologyTestDriver(config, createSimpleTopology(partition));
+        driver = new ProcessorTopologyTestDriver(config, createSimpleTopology(partition).internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition);
         assertNoOutputRecord(OUTPUT_TOPIC_2);
@@ -135,9 +140,10 @@ public class ProcessorTopologyTest {
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key5", "value5", partition);
     }
 
+
     @Test
-    public void testDrivingMultiplexingTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createMultiplexingTopology());
+    public void testDrivingMultiplexingTopology() throws Exception {
+        driver = new ProcessorTopologyTestDriver(config, createMultiplexingTopology().internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1(1)");
         assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1(2)");
@@ -158,8 +164,8 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingMultiplexByNameTopology() {
-        driver = new ProcessorTopologyTestDriver(config, createMultiplexByNameTopology());
+    public void testDrivingMultiplexByNameTopology() throws Exception {
+        driver = new ProcessorTopologyTestDriver(config, createMultiplexByNameTopology().internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1(1)");
         assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1(2)");
@@ -180,9 +186,9 @@ public class ProcessorTopologyTest {
     }
 
     @Test
-    public void testDrivingStatefulTopology() {
+    public void testDrivingStatefulTopology() throws Exception {
         String storeName = "entries";
-        driver = new ProcessorTopologyTestDriver(config, createStatefulTopology(storeName), storeName);
+        driver = new ProcessorTopologyTestDriver(config, createStatefulTopology(storeName).internalTopologyBuilder);
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
         driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
@@ -196,10 +202,28 @@ public class ProcessorTopologyTest {
         assertNull(store.get("key4"));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
-    public void testDrivingSimpleMultiSourceTopology() {
+    public void shouldDriveGlobalStore() {
+        final StateStoreSupplier storeSupplier = Stores.create("my-store")
+                .withStringKeys().withStringValues().inMemory().disableLogging().build();
+        final String global = "global";
+        final String topic = "topic";
+        final TopologyBuilder topologyBuilder = this.builder
+                .addGlobalStore(storeSupplier, global, STRING_DESERIALIZER, STRING_DESERIALIZER, topic, "processor", define(new StatefulProcessor("my-store")));
+
+        driver = new ProcessorTopologyTestDriver(config, topologyBuilder.internalTopologyBuilder);
+        final KeyValueStore<String, String> globalStore = (KeyValueStore<String, String>) topologyBuilder.globalStateStores().get("my-store");
+        driver.process(topic, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(topic, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
+        assertEquals("value1", globalStore.get("key1"));
+        assertEquals("value2", globalStore.get("key2"));
+    }
+
+    @Test
+    public void testDrivingSimpleMultiSourceTopology() throws Exception {
         int partition = 10;
-        driver = new ProcessorTopologyTestDriver(config, createSimpleMultiSourceTopology(partition));
+        driver = new ProcessorTopologyTestDriver(config, createSimpleMultiSourceTopology(partition).internalTopologyBuilder);
 
         driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition);
@@ -210,58 +234,160 @@ public class ProcessorTopologyTest {
         assertNoOutputRecord(OUTPUT_TOPIC_1);
     }
 
-
-    protected void assertNextOutputRecord(String topic, String key, String value) {
-        ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
-        assertEquals(topic, record.topic());
-        assertEquals(key, record.key());
-        assertEquals(value, record.value());
-        assertNull(record.partition());
+    @Test
+    public void testDrivingForwardToSourceTopology() throws Exception {
+        driver = new ProcessorTopologyTestDriver(config, createForwardToSourceTopology().internalTopologyBuilder);
+        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1");
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key2", "value2");
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key3", "value3");
     }
 
-    protected void assertNextOutputRecord(String topic, String key, String value, Integer partition) {
+    @Test
+    public void testDrivingInternalRepartitioningTopology() throws Exception {
+        driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningTopology().internalTopologyBuilder);
+        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1");
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2");
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3");
+    }
+
+    @Test
+    public void testDrivingInternalRepartitioningForwardingTimestampTopology() throws Exception {
+        driver = new ProcessorTopologyTestDriver(config, createInternalRepartitioningWithValueTimestampTopology().internalTopologyBuilder);
+        driver.process(INPUT_TOPIC_1, "key1", "value1@1000", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC_1, "key2", "value2@2000", STRING_SERIALIZER, STRING_SERIALIZER);
+        driver.process(INPUT_TOPIC_1, "key3", "value3@3000", STRING_SERIALIZER, STRING_SERIALIZER);
+        assertThat(driver.readOutput(OUTPUT_TOPIC_1, STRING_DESERIALIZER, STRING_DESERIALIZER),
+                equalTo(new ProducerRecord<>(OUTPUT_TOPIC_1, null, 1000L, "key1", "value1")));
+        assertThat(driver.readOutput(OUTPUT_TOPIC_1, STRING_DESERIALIZER, STRING_DESERIALIZER),
+                equalTo(new ProducerRecord<>(OUTPUT_TOPIC_1, null, 2000L, "key2", "value2")));
+        assertThat(driver.readOutput(OUTPUT_TOPIC_1, STRING_DESERIALIZER, STRING_DESERIALIZER),
+                equalTo(new ProducerRecord<>(OUTPUT_TOPIC_1, null, 3000L, "key3", "value3")));
+    }
+
+    @Test
+    public void shouldCreateStringWithSourceAndTopics() {
+        builder.addSource("source", "topic1", "topic2");
+        final ProcessorTopology topology = builder.build(null);
+        final String result = topology.toString();
+        assertThat(result, containsString("source:\n\t\ttopics:\t\t[topic1, topic2]\n"));
+    }
+
+    @Test
+    public void shouldCreateStringWithMultipleSourcesAndTopics() {
+        builder.addSource("source", "topic1", "topic2");
+        builder.addSource("source2", "t", "t1", "t2");
+        final ProcessorTopology topology = builder.build(null);
+        final String result = topology.toString();
+        assertThat(result, containsString("source:\n\t\ttopics:\t\t[topic1, topic2]\n"));
+        assertThat(result, containsString("source2:\n\t\ttopics:\t\t[t, t1, t2]\n"));
+    }
+
+    @Test
+    public void shouldCreateStringWithProcessors() {
+        builder.addSource("source", "t")
+                .addProcessor("processor", mockProcessorSupplier, "source")
+                .addProcessor("other", mockProcessorSupplier, "source");
+        final ProcessorTopology topology = builder.build(null);
+        final String result = topology.toString();
+        assertThat(result, containsString("\t\tchildren:\t[processor, other]"));
+        assertThat(result, containsString("processor:\n"));
+        assertThat(result, containsString("other:\n"));
+    }
+
+    @Test
+    public void shouldRecursivelyPrintChildren() {
+        builder.addSource("source", "t")
+                .addProcessor("processor", mockProcessorSupplier, "source")
+                .addProcessor("child-one", mockProcessorSupplier, "processor")
+                .addProcessor("child-one-one", mockProcessorSupplier, "child-one")
+                .addProcessor("child-two", mockProcessorSupplier, "processor")
+                .addProcessor("child-two-one", mockProcessorSupplier, "child-two");
+
+        final String result = builder.build(null).toString();
+        assertThat(result, containsString("child-one:\n\t\tchildren:\t[child-one-one]"));
+        assertThat(result, containsString("child-two:\n\t\tchildren:\t[child-two-one]"));
+    }
+
+    @Test
+    public void shouldConsiderTimeStamps() throws Exception {
+        final int partition = 10;
+        driver = new ProcessorTopologyTestDriver(config, createSimpleTopology(partition).internalTopologyBuilder);
+        driver.process(INPUT_TOPIC_1, "key1", "value1", STRING_SERIALIZER, STRING_SERIALIZER, 10L);
+        driver.process(INPUT_TOPIC_1, "key2", "value2", STRING_SERIALIZER, STRING_SERIALIZER, 20L);
+        driver.process(INPUT_TOPIC_1, "key3", "value3", STRING_SERIALIZER, STRING_SERIALIZER, 30L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition, 10L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", partition, 20L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", partition, 30L);
+    }
+
+
+    private void assertNextOutputRecord(final String topic,
+                                        final String key,
+                                        final String value) {
+        assertNextOutputRecord(topic, key, value, null, 0L);
+    }
+
+    private void assertNextOutputRecord(final String topic,
+                                        final String key,
+                                        final String value,
+                                        final Integer partition) {
+        assertNextOutputRecord(topic, key, value, partition, 0L);
+    }
+
+    private void assertNextOutputRecord(final String topic,
+                                        final String key,
+                                        final String value,
+                                        final Integer partition,
+                                        final Long timestamp) {
         ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
         assertEquals(topic, record.topic());
         assertEquals(key, record.key());
         assertEquals(value, record.value());
         assertEquals(partition, record.partition());
+        assertEquals(timestamp, record.timestamp());
     }
 
-    protected void assertNoOutputRecord(String topic) {
+    private void assertNoOutputRecord(String topic) {
         assertNull(driver.readOutput(topic));
     }
 
-    protected <K, V> StreamPartitioner<K, V> constantPartitioner(final Integer partition) {
-        return new StreamPartitioner<K, V>() {
+    private StreamPartitioner<Object, Object> constantPartitioner(final Integer partition) {
+        return new StreamPartitioner<Object, Object>() {
             @Override
-            public Integer partition(K key, V value, int numPartitions) {
+            public Integer partition(Object key, Object value, int numPartitions) {
                 return partition;
             }
         };
     }
 
-    protected TopologyBuilder createSimpleTopology(int partition) {
-        return new TopologyBuilder().addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+    private TopologyBuilder createSimpleTopology(int partition) {
+        return builder.addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
                                     .addProcessor("processor", define(new ForwardingProcessor()), "source")
                                     .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
     }
 
-    protected TopologyBuilder createMultiplexingTopology() {
-        return new TopologyBuilder().addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+    private TopologyBuilder createMultiplexingTopology() {
+        return builder.addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
                                     .addProcessor("processor", define(new MultiplexingProcessor(2)), "source")
                                     .addSink("sink1", OUTPUT_TOPIC_1, "processor")
                                     .addSink("sink2", OUTPUT_TOPIC_2, "processor");
     }
 
-    protected TopologyBuilder createMultiplexByNameTopology() {
-        return new TopologyBuilder().addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+    private TopologyBuilder createMultiplexByNameTopology() {
+        return builder.addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
             .addProcessor("processor", define(new MultiplexByNameProcessor(2)), "source")
             .addSink("sink0", OUTPUT_TOPIC_1, "processor")
             .addSink("sink1", OUTPUT_TOPIC_2, "processor");
     }
 
-    protected TopologyBuilder createStatefulTopology(String storeName) {
-        return new TopologyBuilder().addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+    private TopologyBuilder createStatefulTopology(String storeName) {
+        return builder.addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
                                     .addProcessor("processor", define(new StatefulProcessor(storeName)), "source")
                                     .addStateStore(
                                             Stores.create(storeName).withStringKeys().withStringValues().inMemory().build(),
@@ -270,9 +396,32 @@ public class ProcessorTopologyTest {
                                     .addSink("counts", OUTPUT_TOPIC_1, "processor");
     }
 
+    private TopologyBuilder createInternalRepartitioningTopology() {
+        return builder.addSource("source", INPUT_TOPIC_1)
+            .addInternalTopic(THROUGH_TOPIC_1)
+            .addSink("sink0", THROUGH_TOPIC_1, "source")
+            .addSource("source1", THROUGH_TOPIC_1)
+            .addSink("sink1", OUTPUT_TOPIC_1, "source1");
+    }
 
-    protected TopologyBuilder createSimpleMultiSourceTopology(int partition) {
-        return new TopologyBuilder().addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+    private TopologyBuilder createInternalRepartitioningWithValueTimestampTopology() {
+        return builder.addSource("source", INPUT_TOPIC_1)
+                .addInternalTopic(THROUGH_TOPIC_1)
+                .addProcessor("processor", define(new ValueTimestampProcessor()), "source")
+                .addSink("sink0", THROUGH_TOPIC_1, "processor")
+                .addSource("source1", THROUGH_TOPIC_1)
+                .addSink("sink1", OUTPUT_TOPIC_1, "source1");
+    }
+
+    private TopologyBuilder createForwardToSourceTopology() {
+        return builder.addSource("source-1", INPUT_TOPIC_1)
+                .addSink("sink-1", OUTPUT_TOPIC_1, "source-1")
+                .addSource("source-2", OUTPUT_TOPIC_1)
+                .addSink("sink-2", OUTPUT_TOPIC_2, "source-2");
+    }
+
+    private TopologyBuilder createSimpleMultiSourceTopology(int partition) {
+        return builder.addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
                 .addProcessor("processor-1", define(new ForwardingProcessor()), "source-1")
                 .addSink("sink-1", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor-1")
                 .addSource("source-2", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_2)
@@ -294,6 +443,18 @@ public class ProcessorTopologyTest {
         @Override
         public void punctuate(long streamTime) {
             context().forward(Long.toString(streamTime), "punctuate");
+        }
+    }
+
+    /**
+     * A processor that removes custom timestamp information from messages and forwards modified messages to each child.
+     * A message contains custom timestamp information if the value is in ".*@[0-9]+" format.
+     */
+    protected static class ValueTimestampProcessor extends AbstractProcessor<String, String> {
+
+        @Override
+        public void process(String key, String value) {
+            context().forward(key, value.split("@")[0]);
         }
     }
 
@@ -393,7 +554,7 @@ public class ProcessorTopologyTest {
         }
     }
 
-    protected <K, V> ProcessorSupplier<K, V> define(final Processor<K, V> processor) {
+    private <K, V> ProcessorSupplier<K, V> define(final Processor<K, V> processor) {
         return new ProcessorSupplier<K, V>() {
             @Override
             public Processor<K, V> get() {
@@ -402,10 +563,22 @@ public class ProcessorTopologyTest {
         };
     }
 
+    /**
+     * A custom timestamp extractor that extracts the timestamp from the record's value if the value is in ".*@[0-9]+"
+     * format. Otherwise, it returns the record's timestamp or the default timestamp if the record's timestamp is negative.
+    */
     public static class CustomTimestampExtractor implements TimestampExtractor {
+        private static final long DEFAULT_TIMESTAMP = 1000L;
+
         @Override
-        public long extract(ConsumerRecord<Object, Object> record) {
-            return timestamp;
+        public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
+            if (record.value().toString().matches(".*@[0-9]+"))
+                return Long.parseLong(record.value().toString().split("@")[1]);
+
+            if (record.timestamp() >= 0L)
+                return record.timestamp();
+
+            return DEFAULT_TIMESTAMP;
         }
     }
 }

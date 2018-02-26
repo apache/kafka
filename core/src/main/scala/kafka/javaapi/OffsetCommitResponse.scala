@@ -20,16 +20,18 @@ package kafka.javaapi
 import java.nio.ByteBuffer
 
 import kafka.common.TopicAndPartition
+import org.apache.kafka.common.protocol.Errors
 import scala.collection.JavaConverters._
 
 class OffsetCommitResponse(private val underlying: kafka.api.OffsetCommitResponse) {
 
-  def errors: java.util.Map[TopicAndPartition, Short] = underlying.commitStatus.asJava
+  def errors: java.util.Map[TopicAndPartition, Errors] = underlying.commitStatus.asJava
 
   def hasError = underlying.hasError
 
-  def errorCode(topicAndPartition: TopicAndPartition) = underlying.commitStatus(topicAndPartition)
+  def error(topicAndPartition: TopicAndPartition) = underlying.commitStatus(topicAndPartition)
 
+  def errorCode(topicAndPartition: TopicAndPartition) = error(topicAndPartition).code
 }
 
 object OffsetCommitResponse {

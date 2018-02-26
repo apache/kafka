@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,35 +14,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
-
 import java.io.File;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -51,42 +51,39 @@ import static org.junit.Assert.assertEquals;
 public class KTableAggregateTest {
 
     final private Serde<String> stringSerde = Serdes.String();
+    private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
+    private final Serialized<String, String> stringSerialzied = Serialized.with(stringSerde, stringSerde);
 
-    private KStreamTestDriver driver = null;
     private File stateDir = null;
 
-    @After
-    public void tearDown() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    @Rule
+    public EmbeddedKafkaCluster cluster = null;
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Before
-    public void setUp() throws IOException {
+    public void setUp() {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
     @Test
-    public void testAggBasic() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+    public void testAggBasic() {
+        final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
-        KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
-                stringSerde,
-                stringSerde
+        KTable<String, String> table1 = builder.table(topic1, consumed);
+        KTable<String, String> table2 = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
+                                                       stringSerialzied
         ).aggregate(MockInitializer.STRING_INIT,
-                MockAggregator.STRING_ADDER,
-                MockAggregator.STRING_REMOVER,
+                MockAggregator.TOSTRING_ADDER,
+                MockAggregator.TOSTRING_REMOVER,
                 stringSerde,
                 "topic1-Canonized");
 
         table2.toStream().process(proc);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir, Serdes.String(), Serdes.String());
 
         driver.process(topic1, "A", "1");
         driver.flushState();
@@ -118,24 +115,23 @@ public class KTableAggregateTest {
 
 
     @Test
-    public void testAggCoalesced() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+    public void testAggCoalesced() {
+        final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
-        KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
-            stringSerde,
-            stringSerde
+        KTable<String, String> table1 = builder.table(topic1, consumed);
+        KTable<String, String> table2 = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
+                                                       stringSerialzied
         ).aggregate(MockInitializer.STRING_INIT,
-            MockAggregator.STRING_ADDER,
-            MockAggregator.STRING_REMOVER,
+            MockAggregator.TOSTRING_ADDER,
+            MockAggregator.TOSTRING_REMOVER,
             stringSerde,
             "topic1-Canonized");
 
         table2.toStream().process(proc);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(topic1, "A", "1");
         driver.process(topic1, "A", "3");
@@ -147,36 +143,36 @@ public class KTableAggregateTest {
 
 
     @Test
-    public void testAggRepartition() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+    public void testAggRepartition() {
+        final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
+        KTable<String, String> table1 = builder.table(topic1, consumed);
         KTable<String, String> table2 = table1.groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
             @Override
                 public KeyValue<String, String> apply(String key, String value) {
-                    if (key.equals("null")) {
+                switch (key) {
+                    case "null":
                         return KeyValue.pair(null, value);
-                    } else if (key.equals("NULL")) {
+                    case "NULL":
                         return null;
-                    } else {
+                    default:
                         return KeyValue.pair(value, value);
-                    }
+                }
                 }
             },
-                stringSerde,
-                stringSerde
+                stringSerialzied
         )
                 .aggregate(MockInitializer.STRING_INIT,
-                MockAggregator.STRING_ADDER,
-                MockAggregator.STRING_REMOVER,
+                MockAggregator.TOSTRING_ADDER,
+                MockAggregator.TOSTRING_REMOVER,
                 stringSerde,
                 "topic1-Canonized");
 
         table2.toStream().process(proc);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(topic1, "A", "1");
         driver.flushState();
@@ -207,19 +203,8 @@ public class KTableAggregateTest {
                 ), proc.processed);
     }
 
-    @Test
-    public void testCount() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
-        final String input = "count-test-input";
-        final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
-
-        builder.table(Serdes.String(), Serdes.String(), input, "anyStoreName")
-                .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(), stringSerde, stringSerde)
-                .count("count")
-                .toStream()
-                .process(proc);
-
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
+    private void testCountHelper(final StreamsBuilder builder, final String input, final MockProcessorSupplier<String, Long> proc) {
+        driver.setUp(builder, stateDir);
 
         driver.process(input, "A", "green");
         driver.flushState();
@@ -235,27 +220,57 @@ public class KTableAggregateTest {
 
 
         assertEquals(Utils.mkList(
-                 "green:1",
-                 "green:2",
-                 "green:1", "blue:1",
-                 "yellow:1",
-                 "green:2"
-                 ), proc.processed);
+            "green:1",
+            "green:2",
+            "green:1", "blue:1",
+            "yellow:1",
+            "green:2"
+        ), proc.processed);
     }
 
     @Test
-    public void testCountCoalesced() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
+    public void testCount() {
+        final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
         final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
 
-        builder.table(Serdes.String(), Serdes.String(), input, "anyStoreName")
-            .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(), stringSerde, stringSerde)
+        builder.table(input, consumed)
+                .groupBy(MockMapper.<String, String>selectValueKeyValueMapper(), stringSerialzied)
+                .count("count")
+                .toStream()
+                .process(proc);
+
+        testCountHelper(builder, input, proc);
+    }
+
+    @Test
+    public void testCountWithInternalStore() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String input = "count-test-input";
+        final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
+
+        builder.table(input, consumed)
+            .groupBy(MockMapper.<String, String>selectValueKeyValueMapper(), stringSerialzied)
+            .count()
+            .toStream()
+            .process(proc);
+
+        testCountHelper(builder, input, proc);
+    }
+
+    @Test
+    public void testCountCoalesced() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String input = "count-test-input";
+        final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
+
+        builder.table(input, consumed)
+            .groupBy(MockMapper.<String, String>selectValueKeyValueMapper(), stringSerialzied)
             .count("count")
             .toStream()
             .process(proc);
 
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(input, "A", "green");
         driver.process(input, "B", "green");
@@ -273,19 +288,19 @@ public class KTableAggregateTest {
     }
     
     @Test
-    public void testRemoveOldBeforeAddNew() throws IOException {
-        final KStreamBuilder builder = new KStreamBuilder();
+    public void testRemoveOldBeforeAddNew() {
+        final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
-        builder.table(Serdes.String(), Serdes.String(), input, "anyStoreName")
+        builder.table(input, consumed)
                 .groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
 
                     @Override
                     public KeyValue<String, String> apply(String key, String value) {
                         return KeyValue.pair(String.valueOf(key.charAt(0)), String.valueOf(key.charAt(1)));
                     }
-                }, stringSerde, stringSerde)
+                }, stringSerialzied)
                 .aggregate(new Initializer<String>() {
 
                     @Override
@@ -308,7 +323,7 @@ public class KTableAggregateTest {
                 .toStream()
                 .process(proc);
 
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
+        driver.setUp(builder, stateDir);
 
         driver.process(input, "11", "A");
         driver.flushState();
@@ -328,15 +343,15 @@ public class KTableAggregateTest {
     }
 
     @Test
-    public void shouldForwardToCorrectProcessorNodeWhenMultiCacheEvictions() throws Exception {
+    public void shouldForwardToCorrectProcessorNodeWhenMultiCacheEvictions() {
         final String tableOne = "tableOne";
         final String tableTwo = "tableTwo";
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final String reduceTopic = "TestDriver-reducer-store-repartition";
         final Map<String, Long> reduceResults = new HashMap<>();
 
-        final KTable<String, String> one = builder.table(Serdes.String(), Serdes.String(), tableOne, tableOne);
-        final KTable<Long, String> two = builder.table(Serdes.Long(), Serdes.String(), tableTwo, tableTwo);
+        final KTable<String, String> one = builder.table(tableOne, consumed);
+        final KTable<Long, String> two = builder.table(tableTwo, Consumed.with(Serdes.Long(), Serdes.String()));
 
 
         final KTable<String, Long> reduce = two.groupBy(new KeyValueMapper<Long, String, KeyValue<String, Long>>() {
@@ -344,7 +359,7 @@ public class KTableAggregateTest {
             public KeyValue<String, Long> apply(final Long key, final String value) {
                 return new KeyValue<>(value, key);
             }
-        }, Serdes.String(), Serdes.Long())
+        }, Serialized.with(Serdes.String(), Serdes.Long()))
                 .reduce(new Reducer<Long>() {
                     @Override
                     public Long apply(final Long value1, final Long value2) {
@@ -357,7 +372,7 @@ public class KTableAggregateTest {
                     }
                 }, "reducer-store");
 
-        reduce.foreach(new ForeachAction<String, Long>() {
+        reduce.toStream().foreach(new ForeachAction<String, Long>() {
             @Override
             public void apply(final String key, final Long value) {
                 reduceResults.put(key, value);
@@ -377,7 +392,7 @@ public class KTableAggregateTest {
                     }
                 });
 
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, 111);
+        driver.setUp(builder, stateDir, 111);
         driver.process(reduceTopic, "1", new Change<>(1L, null));
         driver.process("tableOne", "2", "2");
         // this should trigger eviction on the reducer-store topic
@@ -392,4 +407,5 @@ public class KTableAggregateTest {
         driver.process("tableOne", "1", "5");
         assertEquals(Long.valueOf(4L), reduceResults.get("2"));
     }
+
 }

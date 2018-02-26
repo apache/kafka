@@ -1,27 +1,49 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.network;
+
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Count;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Meter;
+import org.apache.kafka.common.metrics.stats.SampledStat;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.channels.CancelledKeyException;
-import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.UnresolvedAddressException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,20 +53,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.metrics.Measurable;
-import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.utils.Time;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A nioSelector interface for doing non-blocking multi-connection network I/O.
@@ -75,33 +83,50 @@ import org.slf4j.LoggerFactory;
  *
  * This class is not thread safe!
  */
-public class Selector implements Selectable {
+public class Selector implements Selectable, AutoCloseable {
 
     public static final long NO_IDLE_TIMEOUT_MS = -1;
-    private static final Logger log = LoggerFactory.getLogger(Selector.class);
 
+    private enum CloseMode {
+        GRACEFUL(true),            // process outstanding staged receives, notify disconnect
+        NOTIFY_ONLY(true),         // discard any outstanding receives, notify disconnect
+        DISCARD_NO_NOTIFY(false);  // discard any outstanding receives, no disconnect notification
+
+        boolean notifyDisconnect;
+
+        CloseMode(boolean notifyDisconnect) {
+            this.notifyDisconnect = notifyDisconnect;
+        }
+    }
+
+    private final Logger log;
     private final java.nio.channels.Selector nioSelector;
     private final Map<String, KafkaChannel> channels;
+    private final Set<KafkaChannel> explicitlyMutedChannels;
+    private boolean outOfMemory;
     private final List<Send> completedSends;
     private final List<NetworkReceive> completedReceives;
     private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
     private final Set<SelectionKey> immediatelyConnectedKeys;
     private final Map<String, KafkaChannel> closingChannels;
-    private final List<String> disconnected;
+    private Set<SelectionKey> keysWithBufferedRead;
+    private final Map<String, ChannelState> disconnected;
     private final List<String> connected;
     private final List<String> failedSends;
     private final Time time;
     private final SelectorMetrics sensors;
-    private final String metricGrpPrefix;
-    private final Map<String, String> metricTags;
     private final ChannelBuilder channelBuilder;
     private final int maxReceiveSize;
-    private final boolean metricsPerConnection;
+    private final boolean recordTimePerConnection;
     private final IdleExpiryManager idleExpiryManager;
+    private final MemoryPool memoryPool;
+    private final long lowMemThreshold;
+    //indicates if the previous call to poll was able to make progress in reading already-buffered data.
+    //this is used to prevent tight loops when memory is not available to read any more data
+    private boolean madeReadProgressLastPoll = true;
 
     /**
      * Create a new nioSelector
-     *
      * @param maxReceiveSize Max size in bytes of a single network receive (use {@link NetworkReceive#UNLIMITED} for no limit)
      * @param connectionMaxIdleMs Max idle connection time (use {@link #NO_IDLE_TIMEOUT_MS} to disable idle timeout)
      * @param metrics Registry for Selector metrics
@@ -110,15 +135,19 @@ public class Selector implements Selectable {
      * @param metricTags Additional tags to add to metrics registered by Selector
      * @param metricsPerConnection Whether or not to enable per-connection metrics
      * @param channelBuilder Channel builder for every new connection
+     * @param logContext Context for logging with additional info
      */
     public Selector(int maxReceiveSize,
-                    long connectionMaxIdleMs,
-                    Metrics metrics,
-                    Time time,
-                    String metricGrpPrefix,
-                    Map<String, String> metricTags,
-                    boolean metricsPerConnection,
-                    ChannelBuilder channelBuilder) {
+            long connectionMaxIdleMs,
+            Metrics metrics,
+            Time time,
+            String metricGrpPrefix,
+            Map<String, String> metricTags,
+            boolean metricsPerConnection,
+            boolean recordTimePerConnection,
+            ChannelBuilder channelBuilder,
+            MemoryPool memoryPool,
+            LogContext logContext) {
         try {
             this.nioSelector = java.nio.channels.Selector.open();
         } catch (IOException e) {
@@ -126,25 +155,41 @@ public class Selector implements Selectable {
         }
         this.maxReceiveSize = maxReceiveSize;
         this.time = time;
-        this.metricGrpPrefix = metricGrpPrefix;
-        this.metricTags = metricTags;
         this.channels = new HashMap<>();
+        this.explicitlyMutedChannels = new HashSet<>();
+        this.outOfMemory = false;
         this.completedSends = new ArrayList<>();
         this.completedReceives = new ArrayList<>();
         this.stagedReceives = new HashMap<>();
         this.immediatelyConnectedKeys = new HashSet<>();
         this.closingChannels = new HashMap<>();
+        this.keysWithBufferedRead = new HashSet<>();
         this.connected = new ArrayList<>();
-        this.disconnected = new ArrayList<>();
+        this.disconnected = new HashMap<>();
         this.failedSends = new ArrayList<>();
-        this.sensors = new SelectorMetrics(metrics);
+        this.sensors = new SelectorMetrics(metrics, metricGrpPrefix, metricTags, metricsPerConnection);
         this.channelBuilder = channelBuilder;
-        this.metricsPerConnection = metricsPerConnection;
+        this.recordTimePerConnection = recordTimePerConnection;
         this.idleExpiryManager = connectionMaxIdleMs < 0 ? null : new IdleExpiryManager(time, connectionMaxIdleMs);
+        this.memoryPool = memoryPool;
+        this.lowMemThreshold = (long) (0.1 * this.memoryPool.size());
+        this.log = logContext.logger(Selector.class);
     }
 
-    public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, new HashMap<String, String>(), true, channelBuilder);
+    public Selector(int maxReceiveSize,
+            long connectionMaxIdleMs,
+            Metrics metrics,
+            Time time,
+            String metricGrpPrefix,
+            Map<String, String> metricTags,
+            boolean metricsPerConnection,
+            ChannelBuilder channelBuilder,
+            LogContext logContext) {
+        this(maxReceiveSize, connectionMaxIdleMs, metrics, time, metricGrpPrefix, metricTags, metricsPerConnection, false, channelBuilder, MemoryPool.NONE, logContext);
+    }
+
+    public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, Collections.<String, String>emptyMap(), true, channelBuilder, logContext);
     }
 
     /**
@@ -162,10 +207,37 @@ public class Selector implements Selectable {
      */
     @Override
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
-        if (this.channels.containsKey(id))
-            throw new IllegalStateException("There is already a connection for id " + id);
-
+        ensureNotRegistered(id);
         SocketChannel socketChannel = SocketChannel.open();
+        try {
+            configureSocketChannel(socketChannel, sendBufferSize, receiveBufferSize);
+            boolean connected = doConnect(socketChannel, address);
+            SelectionKey key = registerChannel(id, socketChannel, SelectionKey.OP_CONNECT);
+
+            if (connected) {
+                // OP_CONNECT won't trigger for immediately connected channels
+                log.debug("Immediately connected to node {}", id);
+                immediatelyConnectedKeys.add(key);
+                key.interestOps(0);
+            }
+        } catch (IOException | RuntimeException e) {
+            socketChannel.close();
+            throw e;
+        }
+    }
+
+    // Visible to allow test cases to override. In particular, we use this to implement a blocking connect
+    // in order to simulate "immediately connected" sockets.
+    protected boolean doConnect(SocketChannel channel, InetSocketAddress address) throws IOException {
+        try {
+            return channel.connect(address);
+        } catch (UnresolvedAddressException e) {
+            throw new IOException("Can't resolve address: " + address, e);
+        }
+    }
+
+    private void configureSocketChannel(SocketChannel socketChannel, int sendBufferSize, int receiveBufferSize)
+            throws IOException {
         socketChannel.configureBlocking(false);
         Socket socket = socketChannel.socket();
         socket.setKeepAlive(true);
@@ -174,39 +246,54 @@ public class Selector implements Selectable {
         if (receiveBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
             socket.setReceiveBufferSize(receiveBufferSize);
         socket.setTcpNoDelay(true);
-        boolean connected;
-        try {
-            connected = socketChannel.connect(address);
-        } catch (UnresolvedAddressException e) {
-            socketChannel.close();
-            throw new IOException("Can't resolve address: " + address, e);
-        } catch (IOException e) {
-            socketChannel.close();
-            throw e;
-        }
-        SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_CONNECT);
-        KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
-        key.attach(channel);
-        this.channels.put(id, channel);
-
-        if (connected) {
-            // OP_CONNECT won't trigger for immediately connected channels
-            log.debug("Immediately connected to node {}", channel.id());
-            immediatelyConnectedKeys.add(key);
-            key.interestOps(0);
-        }
     }
 
     /**
      * Register the nioSelector with an existing channel
      * Use this on server-side, when a connection is accepted by a different thread but processed by the Selector
-     * Note that we are not checking if the connection id is valid - since the connection already exists
+     * <p>
+     * If a connection already exists with the same connection id in `channels` or `closingChannels`,
+     * an exception is thrown. Connection ids must be chosen to avoid conflict when remote ports are reused.
+     * Kafka brokers add an incrementing index to the connection id to avoid reuse in the timing window
+     * where an existing connection may not yet have been closed by the broker when a new connection with
+     * the same remote host:port is processed.
+     * </p><p>
+     * If a `KafkaChannel` cannot be created for this connection, the `socketChannel` is closed
+     * and its selection key cancelled.
+     * </p>
      */
-    public void register(String id, SocketChannel socketChannel) throws ClosedChannelException {
-        SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_READ);
-        KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
-        key.attach(channel);
+    public void register(String id, SocketChannel socketChannel) throws IOException {
+        ensureNotRegistered(id);
+        registerChannel(id, socketChannel, SelectionKey.OP_READ);
+    }
+
+    private void ensureNotRegistered(String id) {
+        if (this.channels.containsKey(id))
+            throw new IllegalStateException("There is already a connection for id " + id);
+        if (this.closingChannels.containsKey(id))
+            throw new IllegalStateException("There is already a connection for id " + id + " that is still being closed");
+    }
+
+    private SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
+        SelectionKey key = socketChannel.register(nioSelector, interestedOps);
+        KafkaChannel channel = buildAndAttachKafkaChannel(socketChannel, id, key);
         this.channels.put(id, channel);
+        return key;
+    }
+
+    private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
+        try {
+            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool);
+            key.attach(channel);
+            return channel;
+        } catch (Exception e) {
+            try {
+                socketChannel.close();
+            } finally {
+                key.cancel();
+            }
+            throw new IOException("Channel could not be created for socket " + socketChannel, e);
+        }
     }
 
     /**
@@ -240,15 +327,24 @@ public class Selector implements Selectable {
      */
     public void send(Send send) {
         String connectionId = send.destination();
-        if (closingChannels.containsKey(connectionId))
+        KafkaChannel channel = openOrClosingChannelOrFail(connectionId);
+        if (closingChannels.containsKey(connectionId)) {
+            // ensure notification via `disconnected`, leave channel in the state in which closing was triggered
             this.failedSends.add(connectionId);
-        else {
-            KafkaChannel channel = channelOrFail(connectionId, false);
+        } else {
             try {
                 channel.setSend(send);
-            } catch (CancelledKeyException e) {
+            } catch (Exception e) {
+                // update the state for consistency, the channel will be discarded after `close`
+                channel.state(ChannelState.FAILED_SEND);
+                // ensure notification via `disconnected` when `failedSends` are processed in the next poll
                 this.failedSends.add(connectionId);
-                close(channel, false);
+                close(channel, CloseMode.DISCARD_NO_NOTIFY);
+                if (!(e instanceof CancelledKeyException)) {
+                    log.error("Unexpected exception during send, closing connection {} and rethrowing exception {}",
+                            connectionId, e);
+                    throw e;
+                }
             }
         }
     }
@@ -288,23 +384,52 @@ public class Selector implements Selectable {
         if (timeout < 0)
             throw new IllegalArgumentException("timeout should be >= 0");
 
+        boolean madeReadProgressLastCall = madeReadProgressLastPoll;
         clear();
 
-        if (hasStagedReceives() || !immediatelyConnectedKeys.isEmpty())
+        boolean dataInBuffers = !keysWithBufferedRead.isEmpty();
+
+        if (hasStagedReceives() || !immediatelyConnectedKeys.isEmpty() || (madeReadProgressLastCall && dataInBuffers))
             timeout = 0;
+
+        if (!memoryPool.isOutOfMemory() && outOfMemory) {
+            //we have recovered from memory pressure. unmute any channel not explicitly muted for other reasons
+            log.trace("Broker no longer low on memory - unmuting incoming sockets");
+            for (KafkaChannel channel : channels.values()) {
+                if (channel.isInMutableState() && !explicitlyMutedChannels.contains(channel)) {
+                    channel.unmute();
+                }
+            }
+            outOfMemory = false;
+        }
 
         /* check ready keys */
         long startSelect = time.nanoseconds();
-        int readyKeys = select(timeout);
+        int numReadyKeys = select(timeout);
         long endSelect = time.nanoseconds();
         this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
 
-        if (readyKeys > 0 || !immediatelyConnectedKeys.isEmpty()) {
-            pollSelectionKeys(this.nioSelector.selectedKeys(), false, endSelect);
-            pollSelectionKeys(immediatelyConnectedKeys, true, endSelect);
-        }
+        if (numReadyKeys > 0 || !immediatelyConnectedKeys.isEmpty() || dataInBuffers) {
+            Set<SelectionKey> readyKeys = this.nioSelector.selectedKeys();
 
-        addToCompletedReceives();
+            // Poll from channels that have buffered data (but nothing more from the underlying socket)
+            if (dataInBuffers) {
+                keysWithBufferedRead.removeAll(readyKeys); //so no channel gets polled twice
+                Set<SelectionKey> toPoll = keysWithBufferedRead;
+                keysWithBufferedRead = new HashSet<>(); //poll() calls will repopulate if needed
+                pollSelectionKeys(toPoll, false, endSelect);
+            }
+
+            // Poll from channels where the underlying socket has more data
+            pollSelectionKeys(readyKeys, false, endSelect);
+            // Clear all selected keys so that they are included in the ready count for the next select
+            readyKeys.clear();
+
+            pollSelectionKeys(immediatelyConnectedKeys, true, endSelect);
+            immediatelyConnectedKeys.clear();
+        } else {
+            madeReadProgressLastPoll = true; //no work is also "progress"
+        }
 
         long endIo = time.nanoseconds();
         this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
@@ -312,22 +437,32 @@ public class Selector implements Selectable {
         // we use the time at the end of select to ensure that we don't close any connections that
         // have just been processed in pollSelectionKeys
         maybeCloseOldestConnection(endSelect);
+
+        // Add to completedReceives after closing expired connections to avoid removing
+        // channels with completed receives until all staged receives are completed.
+        addToCompletedReceives();
     }
 
-    private void pollSelectionKeys(Iterable<SelectionKey> selectionKeys,
-                                   boolean isImmediatelyConnected,
-                                   long currentTimeNanos) {
-        Iterator<SelectionKey> iterator = selectionKeys.iterator();
-        while (iterator.hasNext()) {
-            SelectionKey key = iterator.next();
-            iterator.remove();
+    /**
+     * handle any ready I/O on a set of selection keys
+     * @param selectionKeys set of keys to handle
+     * @param isImmediatelyConnected true if running over a set of keys for just-connected sockets
+     * @param currentTimeNanos time at which set of keys was determined
+     */
+    // package-private for testing
+    void pollSelectionKeys(Set<SelectionKey> selectionKeys,
+                           boolean isImmediatelyConnected,
+                           long currentTimeNanos) {
+        for (SelectionKey key : determineHandlingOrder(selectionKeys)) {
             KafkaChannel channel = channel(key);
+            long channelStartTimeNanos = recordTimePerConnection ? time.nanoseconds() : 0;
 
             // register all per-connection metrics at once
             sensors.maybeRegisterConnectionMetrics(channel.id());
             if (idleExpiryManager != null)
                 idleExpiryManager.update(channel.id(), currentTimeNanos);
 
+            boolean sendFailed = false;
             try {
 
                 /* complete any connections that have finished their handshake (either normally or immediately) */
@@ -346,19 +481,36 @@ public class Selector implements Selectable {
                 }
 
                 /* if channel is not ready finish prepare */
-                if (channel.isConnected() && !channel.ready())
-                    channel.prepare();
+                if (channel.isConnected() && !channel.ready()) {
+                    try {
+                        channel.prepare();
+                    } catch (AuthenticationException e) {
+                        sensors.failedAuthentication.record();
+                        throw e;
+                    }
+                    if (channel.ready())
+                        sensors.successfulAuthentication.record();
+                }
 
-                /* if channel is ready read from any connections that have readable data */
-                if (channel.ready() && key.isReadable() && !hasStagedReceive(channel)) {
-                    NetworkReceive networkReceive;
-                    while ((networkReceive = channel.read()) != null)
-                        addToStagedReceives(channel, networkReceive);
+                attemptRead(key, channel);
+
+                if (channel.hasBytesBuffered()) {
+                    //this channel has bytes enqueued in intermediary buffers that we could not read
+                    //(possibly because no memory). it may be the case that the underlying socket will
+                    //not come up in the next poll() and so we need to remember this channel for the
+                    //next poll call otherwise data may be stuck in said buffers forever.
+                    keysWithBufferedRead.add(key);
                 }
 
                 /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
                 if (channel.ready() && key.isWritable()) {
-                    Send send = channel.write();
+                    Send send = null;
+                    try {
+                        send = channel.write();
+                    } catch (Exception e) {
+                        sendFailed = true;
+                        throw e;
+                    }
                     if (send != null) {
                         this.completedSends.add(send);
                         this.sensors.recordBytesSent(channel.id(), send.size());
@@ -367,17 +519,57 @@ public class Selector implements Selectable {
 
                 /* cancel any defunct sockets */
                 if (!key.isValid())
-                    close(channel, true);
+                    close(channel, CloseMode.GRACEFUL);
 
             } catch (Exception e) {
                 String desc = channel.socketDescription();
                 if (e instanceof IOException)
                     log.debug("Connection with {} disconnected", desc, e);
+                else if (e instanceof AuthenticationException) // will be logged later as error by clients
+                    log.debug("Connection with {} disconnected due to authentication exception", desc, e);
                 else
                     log.warn("Unexpected error from {}; closing connection", desc, e);
-                close(channel, true);
+                close(channel, sendFailed ? CloseMode.NOTIFY_ONLY : CloseMode.GRACEFUL);
+            } finally {
+                maybeRecordTimePerConnection(channel, channelStartTimeNanos);
             }
         }
+    }
+
+    private Collection<SelectionKey> determineHandlingOrder(Set<SelectionKey> selectionKeys) {
+        //it is possible that the iteration order over selectionKeys is the same every invocation.
+        //this may cause starvation of reads when memory is low. to address this we shuffle the keys if memory is low.
+        if (!outOfMemory && memoryPool.availableMemory() < lowMemThreshold) {
+            List<SelectionKey> shuffledKeys = new ArrayList<>(selectionKeys);
+            Collections.shuffle(shuffledKeys);
+            return shuffledKeys;
+        } else {
+            return selectionKeys;
+        }
+    }
+
+    private void attemptRead(SelectionKey key, KafkaChannel channel) throws IOException {
+        //if channel is ready and has bytes to read from socket or buffer, and has no
+        //previous receive(s) already staged or otherwise in progress then read from it
+        if (channel.ready() && (key.isReadable() || channel.hasBytesBuffered()) && !hasStagedReceive(channel)
+            && !explicitlyMutedChannels.contains(channel)) {
+            NetworkReceive networkReceive;
+            while ((networkReceive = channel.read()) != null) {
+                madeReadProgressLastPoll = true;
+                addToStagedReceives(channel, networkReceive);
+            }
+            if (channel.isMute()) {
+                outOfMemory = true; //channel has muted itself due to memory pressure.
+            } else {
+                madeReadProgressLastPoll = true;
+            }
+        }
+    }
+
+    // Record time spent in pollSelectionKeys for channel (moved into a method to keep checkstyle happy)
+    private void maybeRecordTimePerConnection(KafkaChannel channel, long startTimeNanos) {
+        if (recordTimePerConnection)
+            channel.addNetworkThreadTimeNanos(time.nanoseconds() - startTimeNanos);
     }
 
     @Override
@@ -391,7 +583,7 @@ public class Selector implements Selectable {
     }
 
     @Override
-    public List<String> disconnected() {
+    public Map<String, ChannelState> disconnected() {
         return this.disconnected;
     }
 
@@ -402,21 +594,23 @@ public class Selector implements Selectable {
 
     @Override
     public void mute(String id) {
-        KafkaChannel channel = channelOrFail(id, true);
+        KafkaChannel channel = openOrClosingChannelOrFail(id);
         mute(channel);
     }
 
     private void mute(KafkaChannel channel) {
         channel.mute();
+        explicitlyMutedChannels.add(channel);
     }
 
     @Override
     public void unmute(String id) {
-        KafkaChannel channel = channelOrFail(id, true);
+        KafkaChannel channel = openOrClosingChannelOrFail(id);
         unmute(channel);
     }
 
     private void unmute(KafkaChannel channel) {
+        explicitlyMutedChannels.remove(channel);
         channel.unmute();
     }
 
@@ -444,7 +638,8 @@ public class Selector implements Selectable {
                 if (log.isTraceEnabled())
                     log.trace("About to close the idle connection from {} due to being idle for {} millis",
                             connectionId, (currentTimeNanos - expiredConnection.getValue()) / 1000 / 1000);
-                close(channel, true);
+                channel.state(ChannelState.EXPIRED);
+                close(channel, CloseMode.GRACEFUL);
             }
         }
     }
@@ -467,26 +662,26 @@ public class Selector implements Selectable {
                 it.remove();
             }
         }
-        this.disconnected.addAll(this.failedSends);
+        for (String channel : this.failedSends)
+            this.disconnected.put(channel, ChannelState.FAILED_SEND);
         this.failedSends.clear();
+        this.madeReadProgressLastPoll = false;
     }
 
     /**
      * Check for data, waiting up to the given timeout.
      *
-     * @param ms Length of time to wait, in milliseconds, which must be non-negative
+     * @param timeoutMs Length of time to wait, in milliseconds, which must be non-negative
      * @return The number of keys ready
-     * @throws IllegalArgumentException
-     * @throws IOException
      */
-    private int select(long ms) throws IOException {
-        if (ms < 0L)
+    private int select(long timeoutMs) throws IOException {
+        if (timeoutMs < 0L)
             throw new IllegalArgumentException("timeout should be >= 0");
 
-        if (ms == 0L)
+        if (timeoutMs == 0L)
             return this.nioSelector.selectNow();
         else
-            return this.nioSelector.select(ms);
+            return this.nioSelector.select(timeoutMs);
     }
 
     /**
@@ -494,24 +689,35 @@ public class Selector implements Selectable {
      */
     public void close(String id) {
         KafkaChannel channel = this.channels.get(id);
-        if (channel != null)
-            close(channel, false);
+        if (channel != null) {
+            // There is no disconnect notification for local close, but updating
+            // channel state here anyway to avoid confusion.
+            channel.state(ChannelState.LOCAL_CLOSE);
+            close(channel, CloseMode.DISCARD_NO_NOTIFY);
+        } else {
+            KafkaChannel closingChannel = this.closingChannels.remove(id);
+            // Close any closing channel, leave the channel in the state in which closing was triggered
+            if (closingChannel != null)
+                doClose(closingChannel, false);
+        }
     }
 
     /**
      * Begin closing this connection.
+     * If 'closeMode' is `CloseMode.GRACEFUL`, the channel is disconnected here, but staged receives
+     * are processed. The channel is closed when there are no outstanding receives or if a send is
+     * requested. For other values of `closeMode`, outstanding receives are discarded and the channel
+     * is closed immediately.
      *
-     * If 'processOutstanding' is true, the channel is disconnected here, but staged receives are
-     * processed. The channel is closed when there are no outstanding receives or if a send
-     * is requested. The channel will be added to disconnect list when it is actually closed.
-     *
-     * If 'processOutstanding' is false, outstanding receives are discarded and the channel is
-     * closed immediately. The channel will not be added to disconnected list and it is the
-     * responsibility of the caller to handle disconnect notifications.
+     * The channel will be added to disconnect list when it is actually closed if `closeMode.notifyDisconnect`
+     * is true.
      */
-    private void close(KafkaChannel channel, boolean processOutstanding) {
-
+    private void close(KafkaChannel channel, CloseMode closeMode) {
         channel.disconnect();
+
+        // Ensure that `connected` does not have closed channels. This could happen if `prepare` throws an exception
+        // in the `poll` invocation when `finishConnect` succeeds
+        connected.remove(channel.id());
 
         // Keep track of closed channels with pending receives so that all received records
         // may be processed. For example, when producer with acks=0 sends some records and
@@ -520,15 +726,12 @@ public class Selector implements Selectable {
         // a send fails or all outstanding receives are processed. Mute state of disconnected channels
         // are tracked to ensure that requests are processed one-by-one by the broker to preserve ordering.
         Deque<NetworkReceive> deque = this.stagedReceives.get(channel);
-        if (processOutstanding && deque != null && !deque.isEmpty()) {
-            if (!channel.isMute()) {
-                addToCompletedReceives(channel, deque);
-                if (deque.isEmpty())
-                    this.stagedReceives.remove(channel);
-            }
+        if (closeMode == CloseMode.GRACEFUL && deque != null && !deque.isEmpty()) {
+            // stagedReceives will be moved to completedReceives later along with receives from other channels
             closingChannels.put(channel.id(), channel);
+            log.debug("Tracking closing connection {} to process outstanding requests", channel.id());
         } else
-            doClose(channel, processOutstanding);
+            doClose(channel, closeMode.notifyDisconnect);
         this.channels.remove(channel.id());
 
         if (idleExpiryManager != null)
@@ -536,15 +739,22 @@ public class Selector implements Selectable {
     }
 
     private void doClose(KafkaChannel channel, boolean notifyDisconnect) {
+        SelectionKey key = channel.selectionKey();
         try {
+            immediatelyConnectedKeys.remove(key);
+            keysWithBufferedRead.remove(key);
             channel.close();
         } catch (IOException e) {
             log.error("Exception closing connection to node {}:", channel.id(), e);
+        } finally {
+            key.cancel();
+            key.attach(null);
         }
         this.sensors.connectionClosed.record();
         this.stagedReceives.remove(channel);
+        this.explicitlyMutedChannels.remove(channel);
         if (notifyDisconnect)
-            this.disconnected.add(channel.id());
+            this.disconnected.put(channel.id(), channel.state());
     }
 
     /**
@@ -556,9 +766,9 @@ public class Selector implements Selectable {
         return channel != null && channel.ready();
     }
 
-    private KafkaChannel channelOrFail(String id, boolean maybeClosing) {
+    private KafkaChannel openOrClosingChannelOrFail(String id) {
         KafkaChannel channel = this.channels.get(id);
-        if (channel == null && maybeClosing)
+        if (channel == null)
             channel = this.closingChannels.get(id);
         if (channel == null)
             throw new IllegalStateException("Attempt to retrieve channel for which there is no connection. Connection id " + id + " existing connections " + channels.keySet());
@@ -634,7 +844,7 @@ public class Selector implements Selectable {
             while (iter.hasNext()) {
                 Map.Entry<KafkaChannel, Deque<NetworkReceive>> entry = iter.next();
                 KafkaChannel channel = entry.getKey();
-                if (!channel.isMute()) {
+                if (!explicitlyMutedChannels.contains(channel)) {
                     Deque<NetworkReceive> deque = entry.getValue();
                     addToCompletedReceives(channel, deque);
                     if (deque.isEmpty())
@@ -650,10 +860,27 @@ public class Selector implements Selectable {
         this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
     }
 
+    // only for testing
+    public Set<SelectionKey> keys() {
+        return new HashSet<>(nioSelector.keys());
+    }
+
+    // only for testing
+    public int numStagedReceives(KafkaChannel channel) {
+        Deque<NetworkReceive> deque = stagedReceives.get(channel);
+        return deque == null ? 0 : deque.size();
+    }
+
     private class SelectorMetrics {
         private final Metrics metrics;
+        private final String metricGrpPrefix;
+        private final Map<String, String> metricTags;
+        private final boolean metricsPerConnection;
+
         public final Sensor connectionClosed;
         public final Sensor connectionCreated;
+        public final Sensor successfulAuthentication;
+        public final Sensor failedAuthentication;
         public final Sensor bytesTransferred;
         public final Sensor bytesSent;
         public final Sensor bytesReceived;
@@ -664,8 +891,11 @@ public class Selector implements Selectable {
         private final List<MetricName> topLevelMetricNames = new ArrayList<>();
         private final List<Sensor> sensors = new ArrayList<>();
 
-        public SelectorMetrics(Metrics metrics) {
+        public SelectorMetrics(Metrics metrics, String metricGrpPrefix, Map<String, String> metricTags, boolean metricsPerConnection) {
             this.metrics = metrics;
+            this.metricGrpPrefix = metricGrpPrefix;
+            this.metricTags = metricTags;
+            this.metricsPerConnection = metricsPerConnection;
             String metricGrpName = metricGrpPrefix + "-metrics";
             StringBuilder tagsSuffix = new StringBuilder();
 
@@ -675,47 +905,53 @@ public class Selector implements Selectable {
                 tagsSuffix.append(tag.getValue());
             }
 
-            this.connectionClosed = sensor("connections-closed:" + tagsSuffix.toString());
-            MetricName metricName = metrics.metricName("connection-close-rate", metricGrpName, "Connections closed per second in the window.", metricTags);
-            this.connectionClosed.add(metricName, new Rate());
+            this.connectionClosed = sensor("connections-closed:" + tagsSuffix);
+            this.connectionClosed.add(createMeter(metrics, metricGrpName, metricTags,
+                    "connection-close", "connections closed"));
 
-            this.connectionCreated = sensor("connections-created:" + tagsSuffix.toString());
-            metricName = metrics.metricName("connection-creation-rate", metricGrpName, "New connections established per second in the window.", metricTags);
-            this.connectionCreated.add(metricName, new Rate());
+            this.connectionCreated = sensor("connections-created:" + tagsSuffix);
+            this.connectionCreated.add(createMeter(metrics, metricGrpName, metricTags,
+                    "connection-creation", "new connections established"));
 
-            this.bytesTransferred = sensor("bytes-sent-received:" + tagsSuffix.toString());
-            metricName = metrics.metricName("network-io-rate", metricGrpName, "The average number of network operations (reads or writes) on all connections per second.", metricTags);
-            bytesTransferred.add(metricName, new Rate(new Count()));
+            this.successfulAuthentication = sensor("successful-authentication:" + tagsSuffix);
+            this.successfulAuthentication.add(createMeter(metrics, metricGrpName, metricTags,
+                    "successful-authentication", "connections with successful authentication"));
 
-            this.bytesSent = sensor("bytes-sent:" + tagsSuffix.toString(), bytesTransferred);
-            metricName = metrics.metricName("outgoing-byte-rate", metricGrpName, "The average number of outgoing bytes sent per second to all servers.", metricTags);
-            this.bytesSent.add(metricName, new Rate());
-            metricName = metrics.metricName("request-rate", metricGrpName, "The average number of requests sent per second.", metricTags);
-            this.bytesSent.add(metricName, new Rate(new Count()));
-            metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of all requests in the window..", metricTags);
+            this.failedAuthentication = sensor("failed-authentication:" + tagsSuffix);
+            this.failedAuthentication.add(createMeter(metrics, metricGrpName, metricTags,
+                    "failed-authentication", "connections with failed authentication"));
+
+            this.bytesTransferred = sensor("bytes-sent-received:" + tagsSuffix);
+            bytesTransferred.add(createMeter(metrics, metricGrpName, metricTags, new Count(),
+                    "network-io", "network operations (reads or writes) on all connections"));
+
+            this.bytesSent = sensor("bytes-sent:" + tagsSuffix, bytesTransferred);
+            this.bytesSent.add(createMeter(metrics, metricGrpName, metricTags,
+                    "outgoing-byte", "outgoing bytes sent to all servers"));
+            this.bytesSent.add(createMeter(metrics, metricGrpName, metricTags, new Count(),
+                    "request", "requests sent"));
+            MetricName metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of requests sent.", metricTags);
             this.bytesSent.add(metricName, new Avg());
-            metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent in the window.", metricTags);
+            metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent.", metricTags);
             this.bytesSent.add(metricName, new Max());
 
-            this.bytesReceived = sensor("bytes-received:" + tagsSuffix.toString(), bytesTransferred);
-            metricName = metrics.metricName("incoming-byte-rate", metricGrpName, "Bytes/second read off all sockets", metricTags);
-            this.bytesReceived.add(metricName, new Rate());
-            metricName = metrics.metricName("response-rate", metricGrpName, "Responses received sent per second.", metricTags);
-            this.bytesReceived.add(metricName, new Rate(new Count()));
+            this.bytesReceived = sensor("bytes-received:" + tagsSuffix, bytesTransferred);
+            this.bytesReceived.add(createMeter(metrics, metricGrpName, metricTags,
+                    "incoming-byte", "bytes read off all sockets"));
+            this.bytesReceived.add(createMeter(metrics, metricGrpName, metricTags,
+                    new Count(), "response", "responses received"));
 
-            this.selectTime = sensor("select-time:" + tagsSuffix.toString());
-            metricName = metrics.metricName("select-rate", metricGrpName, "Number of times the I/O layer checked for new I/O to perform per second", metricTags);
-            this.selectTime.add(metricName, new Rate(new Count()));
+            this.selectTime = sensor("select-time:" + tagsSuffix);
+            this.selectTime.add(createMeter(metrics, metricGrpName, metricTags,
+                    new Count(), "select", "times the I/O layer checked for new I/O to perform"));
             metricName = metrics.metricName("io-wait-time-ns-avg", metricGrpName, "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.", metricTags);
             this.selectTime.add(metricName, new Avg());
-            metricName = metrics.metricName("io-wait-ratio", metricGrpName, "The fraction of time the I/O thread spent waiting.", metricTags);
-            this.selectTime.add(metricName, new Rate(TimeUnit.NANOSECONDS));
+            this.selectTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io-wait", "waiting"));
 
-            this.ioTime = sensor("io-time:" + tagsSuffix.toString());
+            this.ioTime = sensor("io-time:" + tagsSuffix);
             metricName = metrics.metricName("io-time-ns-avg", metricGrpName, "The average length of time for I/O per select call in nanoseconds.", metricTags);
             this.ioTime.add(metricName, new Avg());
-            metricName = metrics.metricName("io-ratio", metricGrpName, "The fraction of time the I/O thread spent doing I/O", metricTags);
-            this.ioTime.add(metricName, new Rate(TimeUnit.NANOSECONDS));
+            this.ioTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io", "doing I/O"));
 
             metricName = metrics.metricName("connection-count", metricGrpName, "The current number of active connections.", metricTags);
             topLevelMetricNames.add(metricName);
@@ -724,6 +960,32 @@ public class Selector implements Selectable {
                     return channels.size();
                 }
             });
+        }
+
+        private Meter createMeter(Metrics metrics, String groupName, Map<String, String> metricTags,
+                SampledStat stat, String baseName, String descriptiveName) {
+            MetricName rateMetricName = metrics.metricName(baseName + "-rate", groupName,
+                            String.format("The number of %s per second", descriptiveName), metricTags);
+            MetricName totalMetricName = metrics.metricName(baseName + "-total", groupName,
+                            String.format("The total number of %s", descriptiveName), metricTags);
+            if (stat == null)
+                return new Meter(rateMetricName, totalMetricName);
+            else
+                return new Meter(stat, rateMetricName, totalMetricName);
+        }
+
+        private Meter createMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
+                String baseName, String descriptiveName) {
+            return createMeter(metrics, groupName, metricTags, null, baseName, descriptiveName);
+        }
+
+        private Meter createIOThreadRatioMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
+                String baseName, String action) {
+            MetricName rateMetricName = metrics.metricName(baseName + "-ratio", groupName,
+                    String.format("The fraction of time the I/O thread spent %s", action), metricTags);
+            MetricName totalMetricName = metrics.metricName(baseName + "time-total", groupName,
+                    String.format("The total time the I/O thread spent %s", action), metricTags);
+            return new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName);
         }
 
         private Sensor sensor(String name, Sensor... parents) {
@@ -745,21 +1007,17 @@ public class Selector implements Selectable {
                     tags.put("node-id", "node-" + connectionId);
 
                     nodeRequest = sensor(nodeRequestName);
-                    MetricName metricName = metrics.metricName("outgoing-byte-rate", metricGrpName, tags);
-                    nodeRequest.add(metricName, new Rate());
-                    metricName = metrics.metricName("request-rate", metricGrpName, "The average number of requests sent per second.", tags);
-                    nodeRequest.add(metricName, new Rate(new Count()));
-                    metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of all requests in the window..", tags);
+                    nodeRequest.add(createMeter(metrics, metricGrpName, tags, "outgoing-byte", "outgoing bytes"));
+                    nodeRequest.add(createMeter(metrics, metricGrpName, tags, new Count(), "request", "requests sent"));
+                    MetricName metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of requests sent.", tags);
                     nodeRequest.add(metricName, new Avg());
-                    metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent in the window.", tags);
+                    metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent.", tags);
                     nodeRequest.add(metricName, new Max());
 
                     String nodeResponseName = "node-" + connectionId + ".bytes-received";
                     Sensor nodeResponse = sensor(nodeResponseName);
-                    metricName = metrics.metricName("incoming-byte-rate", metricGrpName, tags);
-                    nodeResponse.add(metricName, new Rate());
-                    metricName = metrics.metricName("response-rate", metricGrpName, "The average number of responses received per second.", tags);
-                    nodeResponse.add(metricName, new Rate(new Count()));
+                    nodeResponse.add(createMeter(metrics, metricGrpName, tags, "incoming-byte", "incoming bytes"));
+                    nodeResponse.add(createMeter(metrics, metricGrpName, tags, new Count(), "response", "responses received"));
 
                     String nodeTimeName = "node-" + connectionId + ".latency";
                     Sensor nodeRequestTime = sensor(nodeTimeName);
@@ -842,4 +1100,13 @@ public class Selector implements Selectable {
         }
     }
 
+    //package-private for testing
+    boolean isOutOfMemory() {
+        return outOfMemory;
+    }
+
+    //package-private for testing
+    boolean isMadeReadProgressLastPoll() {
+        return madeReadProgressLastPoll;
+    }
 }

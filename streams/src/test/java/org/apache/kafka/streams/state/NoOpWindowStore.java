@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,10 +16,41 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 
+import java.util.NoSuchElementException;
+
 public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
+
+    private static class EmptyWindowStoreIterator implements WindowStoreIterator<KeyValue> {
+
+        @Override
+        public void close() {
+        }
+
+        @Override
+        public Long peekNextKey() {
+            throw new NoSuchElementException();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return false;
+        }
+
+        @Override
+        public KeyValue<Long, KeyValue> next() {
+            throw new NoSuchElementException();
+        }
+
+        @Override
+        public void remove() {
+        }
+    }
+
+    private static final WindowStoreIterator<KeyValue> EMPTY_WINDOW_STORE_ITERATOR = new EmptyWindowStoreIterator();
 
     @Override
     public String name() {
@@ -53,6 +84,21 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
 
     @Override
     public WindowStoreIterator fetch(final Object key, final long timeFrom, final long timeTo) {
-        return null;
+        return EMPTY_WINDOW_STORE_ITERATOR;
+    }
+
+    @Override
+    public WindowStoreIterator<KeyValue> fetch(Object from, Object to, long timeFrom, long timeTo) {
+        return EMPTY_WINDOW_STORE_ITERATOR;
+    }
+    
+    @Override
+    public WindowStoreIterator<KeyValue> all() {
+        return EMPTY_WINDOW_STORE_ITERATOR;
+    }
+    
+    @Override
+    public WindowStoreIterator<KeyValue> fetchAll(long timeFrom, long timeTo) {
+        return EMPTY_WINDOW_STORE_ITERATOR;
     }
 }

@@ -1,17 +1,22 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.utils;
 
+import java.nio.ByteBuffer;
 import java.util.zip.Checksum;
 
 /**
@@ -49,6 +54,20 @@ public class Crc32 implements Checksum {
     public static long crc32(byte[] bytes, int offset, int size) {
         Crc32 crc = new Crc32();
         crc.update(bytes, offset, size);
+        return crc.getValue();
+    }
+
+    /**
+     * Compute the CRC32 of a byte buffer from a given offset (relative to the buffer's current position)
+     *
+     * @param buffer The buffer with the underlying data
+     * @param offset The offset relative to the current position
+     * @param size The number of bytes beginning from the offset to include
+     * @return The CRC32
+     */
+    public static long crc32(ByteBuffer buffer, int offset, int size) {
+        Crc32 crc = new Crc32();
+        Checksums.update(crc, buffer, offset, size);
         return crc.getValue();
     }
 
@@ -122,27 +141,6 @@ public class Crc32 implements Checksum {
     @Override
     final public void update(int b) {
         crc = (crc >>> 8) ^ T[T8_0_START + ((crc ^ b) & 0xff)];
-    }
-
-    /**
-     * Update the CRC32 given an integer
-     */
-    final public void updateInt(int input) {
-        update((byte) (input >> 24));
-        update((byte) (input >> 16));
-        update((byte) (input >> 8));
-        update((byte) input /* >> 0 */);
-    }
-
-    final public void updateLong(long input) {
-        update((byte) (input >> 56));
-        update((byte) (input >> 48));
-        update((byte) (input >> 40));
-        update((byte) (input >> 32));
-        update((byte) (input >> 24));
-        update((byte) (input >> 16));
-        update((byte) (input >> 8));
-        update((byte) input /* >> 0 */);
     }
 
     /*

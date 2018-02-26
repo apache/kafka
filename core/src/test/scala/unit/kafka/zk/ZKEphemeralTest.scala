@@ -21,18 +21,15 @@ import java.lang.Iterable
 import javax.security.auth.login.Configuration
 
 import scala.collection.JavaConverters._
-
 import kafka.consumer.ConsumerConfig
-import kafka.utils.ZkUtils
-import kafka.utils.ZKCheckedEphemeral
-import kafka.utils.TestUtils
+import kafka.utils.{CoreUtils, TestUtils, ZKCheckedEphemeral, ZkUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.WatchedEvent
 import org.apache.zookeeper.Watcher
 import org.apache.zookeeper.ZooDefs.Ids
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import org.junit.{After, Before, Test, Assert}
+import org.junit.{After, Assert, Before, Test}
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
 import org.junit.runner.RunWith
@@ -47,25 +44,28 @@ object ZKEphemeralTest {
 
 @RunWith(value = classOf[Parameterized])
 class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
-  val jaasFile = kafka.utils.JaasTestUtils.writeZkFile()
+  val jaasFile = kafka.utils.JaasTestUtils.writeJaasContextsToFile(kafka.utils.JaasTestUtils.zkSections)
   val authProvider = "zookeeper.authProvider.1"
   var zkSessionTimeoutMs = 1000
-  
+  var zkUtils: ZkUtils = null
+
   @Before
   override def setUp() {
-    if(secure) {
+    if (secure) {
+      System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile.getAbsolutePath)
       Configuration.setConfiguration(null)
-      System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile)
       System.setProperty(authProvider, "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
-      if(!JaasUtils.isZkSecurityEnabled()) {
+      if (!JaasUtils.isZkSecurityEnabled)
         fail("Secure access not enabled")
-     }
     }
     super.setUp
+    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
   }
   
   @After
   override def tearDown() {
+    if (zkUtils != null)
+     CoreUtils.swallow(zkUtils.close(), this)
     super.tearDown
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     System.clearProperty(authProvider)
@@ -73,7 +73,7 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
   }
   
   @Test
-  def testEphemeralNodeCleanup = {
+  def testEphemeralNodeCleanup(): Unit = {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
     var zkUtils = ZkUtils(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs, JaasUtils.isZkSecurityEnabled())
 
@@ -101,7 +101,7 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
    * Tests basic creation
    */
   @Test
-  def testZkWatchedEphemeral = {
+  def testZkWatchedEphemeral(): Unit = {
     testCreation("/zwe-test")
     testCreation("/zwe-test-parent/zwe-test")
   }
@@ -129,7 +129,7 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
    * session.
    */
   @Test
-  def testOverlappingSessions = {
+  def testOverlappingSessions(): Unit = {
     val path = "/zwe-test"
     val zk1 = zkUtils.zkConnection.getZookeeper
 
@@ -157,7 +157,7 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
    * Tests if succeeds with znode from the same session
    */
   @Test
-  def testSameSession = {
+  def testSameSession(): Unit = {
     val path = "/zwe-test"
     val zk = zkUtils.zkConnection.getZookeeper
     // Creates znode for path in the first session

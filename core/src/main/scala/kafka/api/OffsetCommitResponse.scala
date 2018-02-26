@@ -23,6 +23,7 @@ import kafka.utils.Logging
 import kafka.common.TopicAndPartition
 import org.apache.kafka.common.protocol.Errors
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object OffsetCommitResponse extends Logging {
   val CurrentVersion: Short = 0
 
@@ -34,7 +35,7 @@ object OffsetCommitResponse extends Logging {
       val partitionCount = buffer.getInt
       (1 to partitionCount).map(_ => {
         val partitionId = buffer.getInt
-        val error = buffer.getShort
+        val error = Errors.forCode(buffer.getShort)
         (TopicAndPartition(topic, partitionId), error)
       })
     })
@@ -42,13 +43,14 @@ object OffsetCommitResponse extends Logging {
   }
 }
 
-case class OffsetCommitResponse(commitStatus: Map[TopicAndPartition, Short],
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
+case class OffsetCommitResponse(commitStatus: Map[TopicAndPartition, Errors],
                                 correlationId: Int = 0)
     extends RequestOrResponse() {
 
   lazy val commitStatusGroupedByTopic = commitStatus.groupBy(_._1.topic)
 
-  def hasError = commitStatus.values.exists(_ != Errors.NONE.code)
+  def hasError = commitStatus.values.exists(_ != Errors.NONE)
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(correlationId)
@@ -56,9 +58,9 @@ case class OffsetCommitResponse(commitStatus: Map[TopicAndPartition, Short],
     commitStatusGroupedByTopic.foreach { case(topic, statusMap) =>
       ApiUtils.writeShortString(buffer, topic)
       buffer.putInt(statusMap.size) // partition count
-      statusMap.foreach { case(topicAndPartition, errorCode) =>
+      statusMap.foreach { case(topicAndPartition, error) =>
         buffer.putInt(topicAndPartition.partition)
-        buffer.putShort(errorCode)
+        buffer.putShort(error.code)
       }
     }
   }

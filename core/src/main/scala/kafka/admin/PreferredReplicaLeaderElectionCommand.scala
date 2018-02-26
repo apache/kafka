@@ -18,17 +18,19 @@ package kafka.admin
 
 import joptsimple.OptionParser
 import kafka.utils._
-import org.I0Itec.zkclient.ZkClient
-import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import kafka.common.{TopicAndPartition, AdminCommandFailedException}
+import kafka.common.AdminCommandFailedException
+import kafka.zk.KafkaZkClient
+
 import collection._
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.TopicPartition
+import org.apache.zookeeper.KeeperException.NodeExistsException
 
 object PreferredReplicaLeaderElectionCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val jsonFileOpt = parser.accepts("path-to-json-file", "The JSON file with the list of partitions " +
       "for which preferred replica leader election should be done, in the following format - \n" +
        "{\"partitions\":\n\t[{\"topic\": \"foo\", \"partition\": 1},\n\t {\"topic\": \"foobar\", \"partition\": 2}]\n}\n" +
@@ -51,23 +53,19 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
 
     val zkConnect = options.valueOf(zkConnectOpt)
-    var zkClient: ZkClient = null
-    var zkUtils: ZkUtils = null
+    var zkClient: KafkaZkClient = null
     try {
-      zkClient = ZkUtils.createZkClient(zkConnect, 30000, 30000)
-      zkUtils = ZkUtils(zkConnect, 
-                        30000,
-                        30000,
-                        JaasUtils.isZkSecurityEnabled())
+      val time = Time.SYSTEM
+      zkClient = KafkaZkClient(zkConnect, JaasUtils.isZkSecurityEnabled, 30000, 30000, Int.MaxValue, time)
+
       val partitionsForPreferredReplicaElection =
         if (!options.has(jsonFileOpt))
-          zkUtils.getAllPartitions()
+          zkClient.getAllPartitions()
         else
           parsePreferredReplicaElectionData(Utils.readFileAsString(options.valueOf(jsonFileOpt)))
-      val preferredReplicaElectionCommand = new PreferredReplicaLeaderElectionCommand(zkUtils, partitionsForPreferredReplicaElection)
+      val preferredReplicaElectionCommand = new PreferredReplicaLeaderElectionCommand(zkClient, partitionsForPreferredReplicaElection)
 
       preferredReplicaElectionCommand.moveLeaderToPreferredReplica()
-      println("Successfully started preferred replica election for partitions %s".format(partitionsForPreferredReplicaElection))
     } catch {
       case e: Throwable =>
         println("Failed to start preferred replica election")
@@ -78,73 +76,56 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     }
   }
 
-  def parsePreferredReplicaElectionData(jsonString: String): immutable.Set[TopicAndPartition] = {
+  def parsePreferredReplicaElectionData(jsonString: String): immutable.Set[TopicPartition] = {
     Json.parseFull(jsonString) match {
-      case Some(m) =>
-        m.asInstanceOf[Map[String, Any]].get("partitions") match {
+      case Some(js) =>
+        js.asJsonObject.get("partitions") match {
           case Some(partitionsList) =>
-            val partitionsRaw = partitionsList.asInstanceOf[List[Map[String, Any]]]
+            val partitionsRaw = partitionsList.asJsonArray.iterator.map(_.asJsonObject)
             val partitions = partitionsRaw.map { p =>
-              val topic = p.get("topic").get.asInstanceOf[String]
-              val partition = p.get("partition").get.asInstanceOf[Int]
-              TopicAndPartition(topic, partition)
-            }
+              val topic = p("topic").to[String]
+              val partition = p("partition").to[Int]
+              new TopicPartition(topic, partition)
+            }.toBuffer
             val duplicatePartitions = CoreUtils.duplicates(partitions)
-            val partitionsSet = partitions.toSet
             if (duplicatePartitions.nonEmpty)
               throw new AdminOperationException("Preferred replica election data contains duplicate partitions: %s".format(duplicatePartitions.mkString(",")))
-            partitionsSet
+            partitions.toSet
           case None => throw new AdminOperationException("Preferred replica election data is empty")
         }
       case None => throw new AdminOperationException("Preferred replica election data is empty")
     }
   }
 
-  def writePreferredReplicaElectionData(zkUtils: ZkUtils,
-                                        partitionsUndergoingPreferredReplicaElection: scala.collection.Set[TopicAndPartition]) {
-    val zkPath = ZkUtils.PreferredReplicaLeaderElectionPath
-    val partitionsList = partitionsUndergoingPreferredReplicaElection.map(e => Map("topic" -> e.topic, "partition" -> e.partition))
-    val jsonData = Json.encode(Map("version" -> 1, "partitions" -> partitionsList))
+  def writePreferredReplicaElectionData(zkClient: KafkaZkClient,
+                                        partitionsUndergoingPreferredReplicaElection: Set[TopicPartition]) {
     try {
-      zkUtils.createPersistentPath(zkPath, jsonData)
-      info("Created preferred replica election path with %s".format(jsonData))
+      zkClient.createPreferredReplicaElection(partitionsUndergoingPreferredReplicaElection.toSet)
+      println("Created preferred replica election path with %s".format(partitionsUndergoingPreferredReplicaElection.mkString(",")))
     } catch {
-      case _: ZkNodeExistsException =>
-        val partitionsUndergoingPreferredReplicaElection =
-          PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(zkUtils.readData(zkPath)._1)
+      case _: NodeExistsException =>
         throw new AdminOperationException("Preferred replica leader election currently in progress for " +
-          "%s. Aborting operation".format(partitionsUndergoingPreferredReplicaElection))
+          "%s. Aborting operation".format(zkClient.getPreferredReplicaElection.mkString(",")))
       case e2: Throwable => throw new AdminOperationException(e2.toString)
     }
   }
 }
 
-class PreferredReplicaLeaderElectionCommand(zkUtils: ZkUtils, partitions: scala.collection.Set[TopicAndPartition])
-  extends Logging {
+class PreferredReplicaLeaderElectionCommand(zkClient: KafkaZkClient, partitionsFromUser: scala.collection.Set[TopicPartition]) {
   def moveLeaderToPreferredReplica() = {
     try {
-      val validPartitions = partitions.filter(p => validatePartition(zkUtils, p.topic, p.partition))
-      PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkUtils, validPartitions)
+      val topics = partitionsFromUser.map(_.topic).toSet
+      val partitionsFromZk = zkClient.getPartitionsForTopics(topics).flatMap{ case (topic, partitions) =>
+        partitions.map(new TopicPartition(topic, _))
+      }.toSet
+
+      val (validPartitions, invalidPartitions) = partitionsFromUser.partition(partitionsFromZk.contains)
+      PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkClient, validPartitions)
+
+      println("Successfully started preferred replica election for partitions %s".format(validPartitions))
+      invalidPartitions.foreach(p => println("Skipping preferred replica leader election for partition %s since it doesn't exist.".format(p)))
     } catch {
       case e: Throwable => throw new AdminCommandFailedException("Admin command failed", e)
-    }
-  }
-
-  def validatePartition(zkUtils: ZkUtils, topic: String, partition: Int): Boolean = {
-    // check if partition exists
-    val partitionsOpt = zkUtils.getPartitionsForTopics(List(topic)).get(topic)
-    partitionsOpt match {
-      case Some(partitions) =>
-        if(partitions.contains(partition)) {
-          true
-        } else {
-          error("Skipping preferred replica leader election for partition [%s,%d] ".format(topic, partition) +
-            "since it doesn't exist")
-          false
-        }
-      case None => error("Skipping preferred replica leader election for partition " +
-        "[%s,%d] since topic %s doesn't exist".format(topic, partition, topic))
-        false
     }
   }
 }

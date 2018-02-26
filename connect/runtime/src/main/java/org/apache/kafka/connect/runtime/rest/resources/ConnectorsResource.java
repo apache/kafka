@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,16 +13,16 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.distributed.RequestTargetException;
-import org.apache.kafka.connect.runtime.rest.RestServer;
+import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
@@ -68,11 +68,13 @@ public class ConnectorsResource {
     private static final long REQUEST_TIMEOUT_MS = 90 * 1000;
 
     private final Herder herder;
+    private final WorkerConfig config;
     @javax.ws.rs.core.Context
     private ServletContext context;
 
-    public ConnectorsResource(Herder herder) {
+    public ConnectorsResource(Herder herder, WorkerConfig config) {
         this.herder = herder;
+        this.config = config;
     }
 
     @GET
@@ -88,19 +90,21 @@ public class ConnectorsResource {
     @Path("/")
     public Response createConnector(final @QueryParam("forward") Boolean forward,
                                     final CreateConnectorRequest createRequest) throws Throwable {
-        String name = createRequest.name();
-        if (name.contains("/")) {
-            throw new BadRequestException("connector name should not contain '/'");
-        }
+        // Trim leading and trailing whitespaces from the connector name, replace null with empty string
+        // if no name element present to keep validation within validator (NonEmptyStringWithoutControlChars
+        // allows null values)
+        String name = createRequest.name() == null ? "" : createRequest.name().trim();
+
         Map<String, String> configs = createRequest.config();
-        if (!configs.containsKey(ConnectorConfig.NAME_CONFIG))
-            configs.put(ConnectorConfig.NAME_CONFIG, name);
+        checkAndPutConnectorConfigName(name, configs);
 
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         herder.putConnectorConfig(name, configs, false, cb);
         Herder.Created<ConnectorInfo> info = completeOrForwardRequest(cb, "/connectors", "POST", createRequest,
                 new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
-        return Response.created(URI.create("/connectors/" + name)).entity(info.result()).build();
+
+        URI location = UriBuilder.fromUri("/connectors").path(name).build();
+        return Response.created(location).entity(info.result()).build();
     }
 
     @GET
@@ -133,22 +137,18 @@ public class ConnectorsResource {
                                        final @QueryParam("forward") Boolean forward,
                                        final Map<String, String> connectorConfig) throws Throwable {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
-        String includedName = connectorConfig.get(ConnectorConfig.NAME_CONFIG);
-        if (includedName != null) {
-            if (!includedName.equals(connector))
-                throw new BadRequestException("Connector name configuration (" + includedName + ") doesn't match connector name in the URL (" + connector + ")");
-        } else {
-            connectorConfig.put(ConnectorConfig.NAME_CONFIG, connector);
-        }
+        checkAndPutConnectorConfigName(connector, connectorConfig);
 
         herder.putConnectorConfig(connector, connectorConfig, true, cb);
         Herder.Created<ConnectorInfo> createdInfo = completeOrForwardRequest(cb, "/connectors/" + connector + "/config",
                 "PUT", connectorConfig, new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
         Response.ResponseBuilder response;
-        if (createdInfo.created())
-            response = Response.created(URI.create("/connectors/" + connector));
-        else
+        if (createdInfo.created()) {
+            URI location = UriBuilder.fromUri("/connectors").path(connector).build();
+            response = Response.created(location);
+        } else {
             response = Response.ok();
+        }
         return response.entity(createdInfo.result()).build();
     }
 
@@ -222,6 +222,18 @@ public class ConnectorsResource {
         completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", null, forward);
     }
 
+    // Check whether the connector name from the url matches the one (if there is one) provided in the connectorconfig
+    // object. Throw BadRequestException on mismatch, otherwise put connectorname in config
+    private void checkAndPutConnectorConfigName(String connectorName, Map<String, String> connectorConfig) {
+        String includedName = connectorConfig.get(ConnectorConfig.NAME_CONFIG);
+        if (includedName != null) {
+            if (!includedName.equals(connectorName))
+                throw new BadRequestException("Connector name configuration (" + includedName + ") doesn't match connector name in the URL (" + connectorName + ")");
+        } else {
+            connectorConfig.put(ConnectorConfig.NAME_CONFIG, connectorName);
+        }
+    }
+
     // Wait for a FutureCallback to complete. If it succeeds, return the parsed response. If it fails, try to forward the
     // request to the leader.
     private <T, U> T completeOrForwardRequest(FutureCallback<T> cb,
@@ -249,7 +261,7 @@ public class ConnectorsResource {
                             .build()
                             .toString();
                     log.debug("Forwarding request {} {} {}", forwardUrl, method, body);
-                    return translator.translate(RestServer.httpRequest(forwardUrl, method, body, resultType));
+                    return translator.translate(RestClient.httpRequest(forwardUrl, method, body, resultType, config));
                 } else {
                     // we should find the right target for the query within two hops, so if
                     // we don't, it probably means that a rebalance has taken place.
@@ -282,19 +294,19 @@ public class ConnectorsResource {
     }
 
     private interface Translator<T, U> {
-        T translate(RestServer.HttpResponse<U> response);
+        T translate(RestClient.HttpResponse<U> response);
     }
 
-    private class IdentityTranslator<T> implements Translator<T, T> {
+    private static class IdentityTranslator<T> implements Translator<T, T> {
         @Override
-        public T translate(RestServer.HttpResponse<T> response) {
+        public T translate(RestClient.HttpResponse<T> response) {
             return response.body();
         }
     }
 
-    private class CreatedConnectorInfoTranslator implements Translator<Herder.Created<ConnectorInfo>, ConnectorInfo> {
+    private static class CreatedConnectorInfoTranslator implements Translator<Herder.Created<ConnectorInfo>, ConnectorInfo> {
         @Override
-        public Herder.Created<ConnectorInfo> translate(RestServer.HttpResponse<ConnectorInfo> response) {
+        public Herder.Created<ConnectorInfo> translate(RestClient.HttpResponse<ConnectorInfo> response) {
             boolean created = response.status() == 201;
             return new Herder.Created<>(created, response.body());
         }

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -20,8 +20,6 @@ import org.apache.kafka.common.utils.Utils;
 
 /**
  * A container class for offset and timestamp.
- *
- * Both offset and timestamp are non-negative.
  */
 public final class OffsetAndTimestamp {
     private final long timestamp;
@@ -29,7 +27,9 @@ public final class OffsetAndTimestamp {
 
     public OffsetAndTimestamp(long offset, long timestamp) {
         this.offset = offset;
+        assert this.offset >= 0;
         this.timestamp = timestamp;
+        assert this.timestamp >= 0;
     }
 
     public long timestamp() {
@@ -42,7 +42,7 @@ public final class OffsetAndTimestamp {
 
     @Override
     public String toString() {
-        return "{timestamp=" + timestamp + ", offset=" + offset + "}";
+        return "(timestamp=" + timestamp + ", offset=" + offset + ")";
     }
 
     @Override

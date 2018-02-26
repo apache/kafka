@@ -14,26 +14,32 @@ sudo: required
 dist: trusty
 language: java
 
-# TODO enable failing splits after they have been stablized
 env:
-  - TC_PATHS="tests/kafkatest/tests/client1"
-  - TC_PATHS="tests/kafkatest/tests/client2"
-# - TC_PATHS="tests/kafkatest/tests/connect tests/kafkatest/tests/streams tests/kafkatest/tests/tools"
-# - TC_PATHS="tests/kafkatest/tests/mirror_maker"
-# - TC_PATHS="tests/kafkatest/tests/replication"
-# - TC_PATHS="tests/kafkatest/tests/upgrade"
-  - TC_PATHS="tests/kafkatest/tests/security1"
-# - TC_PATHS="tests/kafkatest/tests/security2"
-# - TC_PATHS="tests/kafkatest/tests/core1"
-  - TC_PATHS="tests/kafkatest/tests/core2"
+  - _DUCKTAPE_OPTIONS="--subset 0  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 1  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 2  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 3  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 4  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 5  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 6  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 7  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 8  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 9  --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 10 --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 11 --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 12 --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 13 --subsets 15"
+  - _DUCKTAPE_OPTIONS="--subset 14 --subsets 15"
 
 jdk:
   - oraclejdk8
 
 before_install:
+  - gradle wrapper
 
 script:
-  - ./gradlew releaseTarGz && /bin/bash ./tests/travis/run_tests.sh
+  - ./gradlew rat
+  - ./gradlew systemTestLibs && /bin/bash ./tests/docker/run_tests.sh
 
 services:
   - docker

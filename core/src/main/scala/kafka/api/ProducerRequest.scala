@@ -22,10 +22,9 @@ import java.nio._
 import kafka.api.ApiUtils._
 import kafka.common._
 import kafka.message._
-import kafka.network.{RequestOrResponseSend, RequestChannel}
-import kafka.network.RequestChannel.Response
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.ApiKeys
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object ProducerRequest {
   val CurrentVersion = 2.shortValue
 
@@ -54,6 +53,7 @@ object ProducerRequest {
   }
 }
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
                            correlationId: Int,
                            clientId: String,
@@ -93,7 +93,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
           val partitionMessageData = partitionAndData._2
           val bytes = partitionMessageData.buffer
           buffer.putInt(partition)
-          buffer.putInt(bytes.limit)
+          buffer.putInt(bytes.limit())
           buffer.put(bytes)
           bytes.rewind
         })
@@ -126,19 +126,6 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
 
   override def toString: String = {
     describe(true)
-  }
-
-  override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    if(request.body.asInstanceOf[org.apache.kafka.common.requests.ProduceRequest].acks == 0) {
-        requestChannel.closeConnection(request.processor, request)
-    }
-    else {
-      val producerResponseStatus = data.map { case (topicAndPartition, _) =>
-        (topicAndPartition, ProducerResponseStatus(Errors.forException(e).code, -1l, Message.NoTimestamp))
-      }
-      val errorResponse = ProducerResponse(correlationId, producerResponseStatus)
-      requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
-    }
   }
 
   override def describe(details: Boolean): String = {

@@ -24,10 +24,14 @@ import kafka.api.FetchRequestBuilder
 import kafka.message.ByteBufferMessageSet
 import java.io.File
 
+import kafka.log.LogManager
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
 import org.junit.{Before, Test}
 import org.junit.Assert._
+
+import scala.reflect.ClassTag
 
 class ServerShutdownTest extends ZooKeeperTestHarness {
   var config: KafkaConfig = null
@@ -59,7 +63,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     var producer = createProducer(server)
 
     // create topic
-    createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
+    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
 
     // send some messages
     sent1.map(value => producer.send(new ProducerRecord(topic, 0, value))).foreach(_.get)
@@ -67,7 +71,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     // do a clean shutdown and check that offset checkpoint file exists
     server.shutdown()
     for (logDir <- config.logDirs) {
-      val OffsetCheckpointFile = new File(logDir, server.logManager.RecoveryPointCheckpointFile)
+      val OffsetCheckpointFile = new File(logDir, LogManager.RecoveryPointCheckpointFile)
       assertTrue(OffsetCheckpointFile.exists)
       assertTrue(OffsetCheckpointFile.length() > 0)
     }
@@ -81,7 +85,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilMetadataIsPropagated(Seq(server), topic, 0)
 
     producer = createProducer(server)
-    val consumer = new SimpleConsumer(host, server.boundPort(), 1000000, 64*1024, "")
+    val consumer = new SimpleConsumer(host, TestUtils.boundPort(server), 1000000, 64*1024, "")
 
     var fetchedMessage: ByteBufferMessageSet = null
     while (fetchedMessage == null || fetchedMessage.validBytes == 0) {
@@ -124,9 +128,27 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
   @Test
   def testCleanShutdownAfterFailedStartup() {
     val newProps = TestUtils.createBrokerConfig(0, zkConnect)
-    newProps.setProperty("zookeeper.connect", "fakehostthatwontresolve:65535")
+    newProps.setProperty("zookeeper.connect", "some.invalid.hostname.foo.bar.local:65535")
     val newConfig = KafkaConfig.fromProps(newProps)
-    val server = new KafkaServer(newConfig, threadNamePrefix = Option(this.getClass.getName))
+    verifyCleanShutdownAfterFailedStartup[IllegalArgumentException](newConfig)
+  }
+
+  @Test
+  def testCleanShutdownAfterFailedStartupDueToCorruptLogs() {
+    val server = new KafkaServer(config)
+    server.startup()
+    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
+    server.shutdown()
+    server.awaitShutdown()
+    config.logDirs.foreach { dirName =>
+      val partitionDir = new File(dirName, s"$topic-0")
+      partitionDir.listFiles.foreach(f => TestUtils.appendNonsenseToFile(f, TestUtils.random.nextInt(1024) + 1))
+    }
+    verifyCleanShutdownAfterFailedStartup[KafkaStorageException](config)
+  }
+
+  private def verifyCleanShutdownAfterFailedStartup[E <: Exception](config: KafkaConfig)(implicit exceptionClassTag: ClassTag[E]) {
+    val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
     try {
       server.startup()
       fail("Expected KafkaServer setup to fail and throw exception")
@@ -135,7 +157,8 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       // Try to clean up carefully without hanging even if the test fails. This means trying to accurately
       // identify the correct exception, making sure the server was shutdown, and cleaning up if anything
       // goes wrong so that awaitShutdown doesn't hang
-      case _: org.I0Itec.zkclient.exception.ZkException =>
+      case e: Exception =>
+        assertTrue(s"Unexpected exception $e", exceptionClassTag.runtimeClass.isInstance(e))
         assertEquals(NotRunning.state, server.brokerState.currentState)
     }
     finally {

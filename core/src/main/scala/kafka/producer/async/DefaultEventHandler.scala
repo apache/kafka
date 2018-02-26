@@ -18,18 +18,21 @@
 package kafka.producer.async
 
 import kafka.common._
-import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
+import kafka.message.{ByteBufferMessageSet, Message, NoCompressionCodec}
 import kafka.producer._
 import kafka.serializer.Encoder
 import kafka.utils._
 import org.apache.kafka.common.errors.{LeaderNotAvailableException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.protocol.Errors
+
 import scala.util.Random
-import scala.collection.{Seq, Map}
+import scala.collection.{Map, Seq}
 import scala.collection.mutable.{ArrayBuffer, HashMap, Set}
 import java.util.concurrent.atomic._
-import kafka.api.{TopicMetadata, ProducerRequest}
-import org.apache.kafka.common.utils.Utils
+
+import kafka.api.{ProducerRequest, TopicMetadata}
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.slf4j.event.Level
 
 @deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")
 class DefaultEventHandler[K,V](config: ProducerConfig,
@@ -38,7 +41,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
                                private val keyEncoder: Encoder[K],
                                private val producerPool: ProducerPool,
                                private val topicPartitionInfos: HashMap[String, TopicMetadata] = new HashMap[String, TopicMetadata],
-                               private val time: Time = SystemTime)
+                               private val time: Time = Time.SYSTEM)
   extends EventHandler[K,V] with Logging {
 
   val isSync = ("sync" == config.producerType)
@@ -69,11 +72,11 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     while (remainingRetries > 0 && outstandingProduceRequests.nonEmpty) {
       topicMetadataToRefresh ++= outstandingProduceRequests.map(_.topic)
       if (topicMetadataRefreshInterval >= 0 &&
-          SystemTime.milliseconds - lastTopicMetadataRefreshTime > topicMetadataRefreshInterval) {
-        CoreUtils.swallowError(brokerPartitionInfo.updateInfo(topicMetadataToRefresh.toSet, correlationId.getAndIncrement))
+          Time.SYSTEM.milliseconds - lastTopicMetadataRefreshTime > topicMetadataRefreshInterval) {
+        CoreUtils.swallow(brokerPartitionInfo.updateInfo(topicMetadataToRefresh.toSet, correlationId.getAndIncrement), this, Level.ERROR)
         sendPartitionPerTopicCache.clear()
         topicMetadataToRefresh.clear
-        lastTopicMetadataRefreshTime = SystemTime.milliseconds
+        lastTopicMetadataRefreshTime = Time.SYSTEM.milliseconds
       }
       outstandingProduceRequests = dispatchSerializedData(outstandingProduceRequests)
       if (outstandingProduceRequests.nonEmpty) {
@@ -81,7 +84,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         // back off and update the topic metadata cache before attempting another send operation
         Thread.sleep(config.retryBackoffMs)
         // get topics of the outstanding produce requests and refresh metadata for those
-        CoreUtils.swallowError(brokerPartitionInfo.updateInfo(outstandingProduceRequests.map(_.topic).toSet, correlationId.getAndIncrement))
+        CoreUtils.swallow(brokerPartitionInfo.updateInfo(outstandingProduceRequests.map(_.topic).toSet, correlationId.getAndIncrement), this, Level.ERROR)
         sendPartitionPerTopicCache.clear()
         remainingRetries -= 1
         producerStats.resendRate.mark()
@@ -103,7 +106,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       case Some(partitionedData) =>
         val failedProduceRequests = new ArrayBuffer[KeyedMessage[K, Message]]
         for ((brokerid, messagesPerBrokerMap) <- partitionedData) {
-          if (logger.isTraceEnabled) {
+          if (isTraceEnabled) {
             messagesPerBrokerMap.foreach(partitionAndEvent =>
               trace("Handling event for Topic: %s, Broker: %d, Partitions: %s".format(partitionAndEvent._1, brokerid, partitionAndEvent._2)))
           }
@@ -112,10 +115,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
             case Some(messageSetPerBroker) =>
               val failedTopicPartitions = send(brokerid, messageSetPerBroker)
               failedTopicPartitions.foreach(topicPartition => {
-                messagesPerBrokerMap.get(topicPartition) match {
-                  case Some(data) => failedProduceRequests.appendAll(data)
-                  case None => // nothing
-                }
+                messagesPerBrokerMap.get(topicPartition).foreach(failedProduceRequests.appendAll)
               })
             case None => // failed to group messages
               messagesPerBrokerMap.values.foreach(m => failedProduceRequests.appendAll(m))
@@ -278,12 +278,12 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         if(response != null) {
           if (response.status.size != producerRequest.data.size)
             throw new KafkaException("Incomplete response (%s) for producer request (%s)".format(response, producerRequest))
-          if (logger.isTraceEnabled) {
-            val successfullySentData = response.status.filter(_._2.error == Errors.NONE.code)
+          if (isTraceEnabled) {
+            val successfullySentData = response.status.filter(_._2.error == Errors.NONE)
             successfullySentData.foreach(m => messagesPerTopic(m._1).foreach(message =>
               trace("Successfully sent message: %s".format(if(message.message.isNull) null else message.message.toString()))))
           }
-          val failedPartitionsAndStatus = response.status.filter(_._2.error != Errors.NONE.code).toSeq
+          val failedPartitionsAndStatus = response.status.filter(_._2.error != Errors.NONE).toSeq
           failedTopicPartitions = failedPartitionsAndStatus.map(partitionStatus => partitionStatus._1)
           if(failedTopicPartitions.nonEmpty) {
             val errorString = failedPartitionsAndStatus
@@ -291,7 +291,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
                                     (p1._1.topic.compareTo(p2._1.topic) == 0 && p1._1.partition < p2._1.partition))
               .map{
                 case(topicAndPartition, status) =>
-                  topicAndPartition.toString + ": " + Errors.forCode(status.error).exceptionName
+                  topicAndPartition.toString + ": " + status.error.exceptionName
               }.mkString(",")
             warn("Produce request with correlation id %d failed due to %s".format(currentCorrelationId, errorString))
           }

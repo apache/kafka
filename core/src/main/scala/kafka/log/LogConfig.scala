@@ -23,12 +23,13 @@ import scala.collection.JavaConverters._
 import kafka.api.ApiVersion
 import kafka.message.{BrokerCompressionCodec, Message}
 import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
+import kafka.utils.Implicits._
 import org.apache.kafka.common.errors.InvalidConfigurationException
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, TopicConfig}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.mutable
+import scala.collection.{Map, mutable}
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList, Validator}
 
 object Defaults {
@@ -46,7 +47,12 @@ object Defaults {
   val DeleteRetentionMs = kafka.server.Defaults.LogCleanerDeleteRetentionMs
   val MinCompactionLagMs = kafka.server.Defaults.LogCleanerMinCompactionLagMs
   val MinCleanableDirtyRatio = kafka.server.Defaults.LogCleanerMinCleanRatio
+
+  @deprecated(message = "This is a misleading variable name as it actually refers to the 'delete' cleanup policy. Use " +
+                        "`CleanupPolicy` instead.", since = "1.0.0")
   val Compact = kafka.server.Defaults.LogCleanupPolicy
+
+  val CleanupPolicy = kafka.server.Defaults.LogCleanupPolicy
   val UncleanLeaderElectionEnable = kafka.server.Defaults.UncleanLeaderElectionEnable
   val MinInSyncReplicas = kafka.server.Defaults.MinInSyncReplicas
   val CompressionType = kafka.server.Defaults.CompressionType
@@ -56,9 +62,11 @@ object Defaults {
   val MessageTimestampDifferenceMaxMs = kafka.server.Defaults.LogMessageTimestampDifferenceMaxMs
   val LeaderReplicationThrottledReplicas = Collections.emptyList[String]()
   val FollowerReplicationThrottledReplicas = Collections.emptyList[String]()
+  val MaxIdMapSnapshots = kafka.server.Defaults.MaxIdMapSnapshots
 }
 
-case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
+case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] = Set.empty)
+  extends AbstractConfig(LogConfig.configDef, props, false) {
   /**
    * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
    * should also go in [[kafka.server.KafkaServer.copyKafkaConfigToLog]].
@@ -99,107 +107,66 @@ object LogConfig {
     println(configDef.toHtmlTable)
   }
 
-  val Delete = "delete"
-  val Compact = "compact"
+  val SegmentBytesProp = TopicConfig.SEGMENT_BYTES_CONFIG
+  val SegmentMsProp = TopicConfig.SEGMENT_MS_CONFIG
+  val SegmentJitterMsProp = TopicConfig.SEGMENT_JITTER_MS_CONFIG
+  val SegmentIndexBytesProp = TopicConfig.SEGMENT_INDEX_BYTES_CONFIG
+  val FlushMessagesProp = TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG
+  val FlushMsProp = TopicConfig.FLUSH_MS_CONFIG
+  val RetentionBytesProp = TopicConfig.RETENTION_BYTES_CONFIG
+  val RetentionMsProp = TopicConfig.RETENTION_MS_CONFIG
+  val MaxMessageBytesProp = TopicConfig.MAX_MESSAGE_BYTES_CONFIG
+  val IndexIntervalBytesProp = TopicConfig.INDEX_INTERVAL_BYTES_CONFIG
+  val DeleteRetentionMsProp = TopicConfig.DELETE_RETENTION_MS_CONFIG
+  val MinCompactionLagMsProp = TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG
+  val FileDeleteDelayMsProp = TopicConfig.FILE_DELETE_DELAY_MS_CONFIG
+  val MinCleanableDirtyRatioProp = TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG
+  val CleanupPolicyProp = TopicConfig.CLEANUP_POLICY_CONFIG
+  val Delete = TopicConfig.CLEANUP_POLICY_DELETE
+  val Compact = TopicConfig.CLEANUP_POLICY_COMPACT
+  val UncleanLeaderElectionEnableProp = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG
+  val MinInSyncReplicasProp = TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG
+  val CompressionTypeProp = TopicConfig.COMPRESSION_TYPE_CONFIG
+  val PreAllocateEnableProp = TopicConfig.PREALLOCATE_CONFIG
+  val MessageFormatVersionProp = TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG
+  val MessageTimestampTypeProp = TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG
+  val MessageTimestampDifferenceMaxMsProp = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG
 
-  val SegmentBytesProp = "segment.bytes"
-  val SegmentMsProp = "segment.ms"
-  val SegmentJitterMsProp = "segment.jitter.ms"
-  val SegmentIndexBytesProp = "segment.index.bytes"
-  val FlushMessagesProp = "flush.messages"
-  val FlushMsProp = "flush.ms"
-  val RetentionBytesProp = "retention.bytes"
-  val RetentionMsProp = "retention.ms"
-  val MaxMessageBytesProp = "max.message.bytes"
-  val IndexIntervalBytesProp = "index.interval.bytes"
-  val DeleteRetentionMsProp = "delete.retention.ms"
-  val MinCompactionLagMsProp = "min.compaction.lag.ms"
-  val FileDeleteDelayMsProp = "file.delete.delay.ms"
-  val MinCleanableDirtyRatioProp = "min.cleanable.dirty.ratio"
-  val CleanupPolicyProp = "cleanup.policy"
-  val UncleanLeaderElectionEnableProp = "unclean.leader.election.enable"
-  val MinInSyncReplicasProp = "min.insync.replicas"
-  val CompressionTypeProp = "compression.type"
-  val PreAllocateEnableProp = "preallocate"
-  val MessageFormatVersionProp = "message.format.version"
-  val MessageTimestampTypeProp = "message.timestamp.type"
-  val MessageTimestampDifferenceMaxMsProp = "message.timestamp.difference.max.ms"
+  // Leave these out of TopicConfig for now as they are replication quota configs
   val LeaderReplicationThrottledReplicasProp = "leader.replication.throttled.replicas"
   val FollowerReplicationThrottledReplicasProp = "follower.replication.throttled.replicas"
 
-  val SegmentSizeDoc = "This configuration controls the segment file size for " +
-    "the log. Retention and cleaning is always done a file at a time so a larger " +
-    "segment size means fewer files but less granular control over retention."
-  val SegmentMsDoc = "This configuration controls the period of time after " +
-    "which Kafka will force the log to roll even if the segment file isn't full " +
-    "to ensure that retention can delete or compact old data."
-  val SegmentJitterMsDoc = "The maximum random jitter subtracted from the scheduled segment roll time to avoid" +
-    " thundering herds of segment rolling"
-  val FlushIntervalDoc = "This setting allows specifying an interval at which we " +
-    "will force an fsync of data written to the log. For example if this was set to 1 " +
-    "we would fsync after every message; if it were 5 we would fsync after every five " +
-    "messages. In general we recommend you not set this and use replication for " +
-    "durability and allow the operating system's background flush capabilities as it " +
-    "is more efficient. This setting can be overridden on a per-topic basis (see <a " +
-    "href=\"#topic-config\">the per-topic configuration section</a>)."
-  val FlushMsDoc = "This setting allows specifying a time interval at which we will " +
-    "force an fsync of data written to the log. For example if this was set to 1000 " +
-    "we would fsync after 1000 ms had passed. In general we recommend you not set " +
-    "this and use replication for durability and allow the operating system's background " +
-    "flush capabilities as it is more efficient."
-  val RetentionSizeDoc = "This configuration controls the maximum size a log can grow " +
-    "to before we will discard old log segments to free up space if we are using the " +
-    "\"delete\" retention policy. By default there is no size limit only a time limit."
-  val RetentionMsDoc = "This configuration controls the maximum time we will retain a " +
-    "log before we will discard old log segments to free up space if we are using the " +
-    "\"delete\" retention policy. This represents an SLA on how soon consumers must read " +
-    "their data."
-  val MaxIndexSizeDoc = "This configuration controls the size of the index that maps " +
-    "offsets to file positions. We preallocate this index file and shrink it only after log " +
-    "rolls. You generally should not need to change this setting."
-  val MaxMessageSizeDoc = "This is largest message size Kafka will allow to be appended. Note that if you increase" +
-    " this size you must also increase your consumer's fetch size so they can fetch messages this large."
-  val IndexIntervalDoc = "This setting controls how frequently Kafka adds an index " +
-    "entry to it's offset index. The default setting ensures that we index a message " +
-    "roughly every 4096 bytes. More indexing allows reads to jump closer to the exact " +
-    "position in the log but makes the index larger. You probably don't need to change " +
-    "this."
-  val FileDeleteDelayMsDoc = "The time to wait before deleting a file from the filesystem"
-  val DeleteRetentionMsDoc = "The amount of time to retain delete tombstone markers " +
-    "for <a href=\"#compaction\">log compacted</a> topics. This setting also gives a bound " +
-    "on the time in which a consumer must complete a read if they begin from offset 0 " +
-    "to ensure that they get a valid snapshot of the final stage (otherwise delete " +
-    "tombstones may be collected before they complete their scan)."
-  val MinCompactionLagMsDoc = "The minimum time a message will remain uncompacted in the log. " +
-    "Only applicable for logs that are being compacted."
-  val MinCleanableRatioDoc = "This configuration controls how frequently the log " +
-    "compactor will attempt to clean the log (assuming <a href=\"#compaction\">log " +
-    "compaction</a> is enabled). By default we will avoid cleaning a log where more than " +
-    "50% of the log has been compacted. This ratio bounds the maximum space wasted in " +
-    "the log by duplicates (at 50% at most 50% of the log could be duplicates). A " +
-    "higher ratio will mean fewer, more efficient cleanings but will mean more wasted " +
-    "space in the log."
-  val CompactDoc = "A string that is either \"delete\" or \"compact\". This string " +
-    "designates the retention policy to use on old log segments. The default policy " +
-    "(\"delete\") will discard old segments when their retention time or size limit has " +
-    "been reached. The \"compact\" setting will enable <a href=\"#compaction\">log " +
-    "compaction</a> on the topic."
-  val UncleanLeaderElectionEnableDoc = "Indicates whether to enable replicas not in the ISR set to be elected as" +
-    " leader as a last resort, even though doing so may result in data loss"
-  val MinInSyncReplicasDoc = KafkaConfig.MinInSyncReplicasDoc
-  val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the " +
-    "standard compression codecs ('gzip', 'snappy', lz4). It additionally accepts 'uncompressed' which is equivalent to " +
-    "no compression; and 'producer' which means retain the original compression codec set by the producer."
-  val PreAllocateEnableDoc ="Should pre allocate file when create new segment?"
-  val MessageFormatVersionDoc = KafkaConfig.LogMessageFormatVersionDoc
-  val MessageTimestampTypeDoc = KafkaConfig.LogMessageTimestampTypeDoc
-  val MessageTimestampDifferenceMaxMsDoc = "The maximum difference allowed between the timestamp when a broker receives " +
-    "a message and the timestamp specified in the message. If message.timestamp.type=CreateTime, a message will be rejected " +
-    "if the difference in timestamp exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime."
-  val LeaderReplicationThrottledReplicasDoc = "A list of replicas for which log replication should be throttled on the leader side. The list should describe a set of " +
-    "replicas in the form [PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle all replicas for this topic."
-  val FollowerReplicationThrottledReplicasDoc = "A list of replicas for which log replication should be throttled on the follower side. The list should describe a set of " +
-    "replicas in the form [PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle all replicas for this topic."
+  val SegmentSizeDoc = TopicConfig.SEGMENT_BYTES_DOC
+  val SegmentMsDoc = TopicConfig.SEGMENT_MS_DOC
+  val SegmentJitterMsDoc = TopicConfig.SEGMENT_JITTER_MS_DOC
+  val MaxIndexSizeDoc = TopicConfig.SEGMENT_INDEX_BYTES_DOC
+  val FlushIntervalDoc = TopicConfig.FLUSH_MESSAGES_INTERVAL_DOC
+  val FlushMsDoc = TopicConfig.FLUSH_MS_DOC
+  val RetentionSizeDoc = TopicConfig.RETENTION_BYTES_DOC
+  val RetentionMsDoc = TopicConfig.RETENTION_MS_DOC
+  val MaxMessageSizeDoc = TopicConfig.MAX_MESSAGE_BYTES_DOC
+  val IndexIntervalDoc = TopicConfig.INDEX_INTERVAL_BYTES_DOCS
+  val FileDeleteDelayMsDoc = TopicConfig.FILE_DELETE_DELAY_MS_DOC
+  val DeleteRetentionMsDoc = TopicConfig.DELETE_RETENTION_MS_DOC
+  val MinCompactionLagMsDoc = TopicConfig.MIN_COMPACTION_LAG_MS_DOC
+  val MinCleanableRatioDoc = TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_DOC
+  val CompactDoc = TopicConfig.CLEANUP_POLICY_DOC
+  val UncleanLeaderElectionEnableDoc = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_DOC
+  val MinInSyncReplicasDoc = TopicConfig.MIN_IN_SYNC_REPLICAS_DOC
+  val CompressionTypeDoc = TopicConfig.COMPRESSION_TYPE_DOC
+  val PreAllocateEnableDoc = TopicConfig.PREALLOCATE_DOC
+  val MessageFormatVersionDoc = TopicConfig.MESSAGE_FORMAT_VERSION_DOC
+  val MessageTimestampTypeDoc = TopicConfig.MESSAGE_TIMESTAMP_TYPE_DOC
+  val MessageTimestampDifferenceMaxMsDoc = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC
+
+  val LeaderReplicationThrottledReplicasDoc = "A list of replicas for which log replication should be throttled on " +
+    "the leader side. The list should describe a set of replicas in the form " +
+    "[PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle " +
+    "all replicas for this topic."
+  val FollowerReplicationThrottledReplicasDoc = "A list of replicas for which log replication should be throttled on " +
+    "the follower side. The list should describe a set of " + "replicas in the form " +
+    "[PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle " +
+    "all replicas for this topic."
 
   private class LogConfigDef extends ConfigDef {
 
@@ -275,7 +242,7 @@ object LogConfig {
         KafkaConfig.LogDeleteDelayMsProp)
       .define(MinCleanableDirtyRatioProp, DOUBLE, Defaults.MinCleanableDirtyRatio, between(0, 1), MEDIUM,
         MinCleanableRatioDoc, KafkaConfig.LogCleanerMinCleanRatioProp)
-      .define(CleanupPolicyProp, LIST, Defaults.Compact, ValidList.in(LogConfig.Compact, LogConfig.Delete), MEDIUM, CompactDoc,
+      .define(CleanupPolicyProp, LIST, Defaults.CleanupPolicy, ValidList.in(LogConfig.Compact, LogConfig.Delete), MEDIUM, CompactDoc,
         KafkaConfig.LogCleanupPolicyProp)
       .define(UncleanLeaderElectionEnableProp, BOOLEAN, Defaults.UncleanLeaderElectionEnable,
         MEDIUM, UncleanLeaderElectionEnableDoc, KafkaConfig.UncleanLeaderElectionEnableProp)
@@ -308,9 +275,10 @@ object LogConfig {
    */
   def fromProps(defaults: java.util.Map[_ <: Object, _ <: Object], overrides: Properties): LogConfig = {
     val props = new Properties()
-    props.putAll(defaults)
-    props.putAll(overrides)
-    LogConfig(props)
+    defaults.asScala.foreach { case (k, v) => props.put(k, v) }
+    props ++= overrides
+    val overriddenKeys = overrides.keySet.asScala.map(_.asInstanceOf[String]).toSet
+    new LogConfig(props, overriddenKeys)
   }
 
   /**
@@ -320,7 +288,7 @@ object LogConfig {
     val names = configNames
     for(name <- props.asScala.keys)
       if (!names.contains(name))
-        throw new InvalidConfigurationException(s"Unknown Log configuration $name.")
+        throw new InvalidConfigurationException(s"Unknown topic config name: $name")
   }
 
   /**
@@ -330,5 +298,34 @@ object LogConfig {
     validateNames(props)
     configDef.parse(props)
   }
+
+  /**
+   * Map topic config to the broker config with highest priority. Some of these have additional synonyms
+   * that can be obtained using [[kafka.server.DynamicBrokerConfig#brokerConfigSynonyms]]
+   */
+  val TopicConfigSynonyms = Map(
+    SegmentBytesProp -> KafkaConfig.LogSegmentBytesProp,
+    SegmentMsProp -> KafkaConfig.LogRollTimeMillisProp,
+    SegmentJitterMsProp -> KafkaConfig.LogRollTimeJitterMillisProp,
+    SegmentIndexBytesProp -> KafkaConfig.LogIndexSizeMaxBytesProp,
+    FlushMessagesProp -> KafkaConfig.LogFlushIntervalMessagesProp,
+    FlushMsProp -> KafkaConfig.LogFlushIntervalMsProp,
+    RetentionBytesProp -> KafkaConfig.LogRetentionBytesProp,
+    RetentionMsProp -> KafkaConfig.LogRetentionTimeMillisProp,
+    MaxMessageBytesProp -> KafkaConfig.MessageMaxBytesProp,
+    IndexIntervalBytesProp -> KafkaConfig.LogIndexIntervalBytesProp,
+    DeleteRetentionMsProp -> KafkaConfig.LogCleanerDeleteRetentionMsProp,
+    MinCompactionLagMsProp -> KafkaConfig.LogCleanerMinCompactionLagMsProp,
+    FileDeleteDelayMsProp -> KafkaConfig.LogDeleteDelayMsProp,
+    MinCleanableDirtyRatioProp -> KafkaConfig.LogCleanerMinCleanRatioProp,
+    CleanupPolicyProp -> KafkaConfig.LogCleanupPolicyProp,
+    UncleanLeaderElectionEnableProp -> KafkaConfig.UncleanLeaderElectionEnableProp,
+    MinInSyncReplicasProp -> KafkaConfig.MinInSyncReplicasProp,
+    CompressionTypeProp -> KafkaConfig.CompressionTypeProp,
+    PreAllocateEnableProp -> KafkaConfig.LogPreAllocateProp,
+    MessageFormatVersionProp -> KafkaConfig.LogMessageFormatVersionProp,
+    MessageTimestampTypeProp -> KafkaConfig.LogMessageTimestampTypeProp,
+    MessageTimestampDifferenceMaxMsProp -> KafkaConfig.LogMessageTimestampDifferenceMaxMsProp
+  )
 
 }

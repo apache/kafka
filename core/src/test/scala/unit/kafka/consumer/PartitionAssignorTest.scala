@@ -28,6 +28,7 @@ import kafka.consumer.PartitionAssignorTest.Scenario
 import kafka.consumer.PartitionAssignorTest.WildcardSubscriptionInfo
 import org.junit.Test
 
+@deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
 class PartitionAssignorTest extends Logging {
 
   @Test
@@ -42,7 +43,7 @@ class PartitionAssignorTest extends Logging {
       val topicPartitionCounts = Map((1 to topicCount).map(topic => {
         ("topic-" + topic, PartitionAssignorTest.MinPartitionCount.max(TestUtils.random.nextInt(PartitionAssignorTest.MaxPartitionCount)))
       }):_*)
-      
+
       val subscriptions = Map((1 to consumerCount).map { consumer =>
         val streamCount = 1.max(TestUtils.random.nextInt(PartitionAssignorTest.MaxStreamCount + 1))
         ("g1c" + consumer, WildcardSubscriptionInfo(streamCount, ".*", isWhitelist = true))
@@ -52,6 +53,61 @@ class PartitionAssignorTest extends Logging {
       EasyMock.replay(zkUtils.zkClient)
       PartitionAssignorTest.assignAndVerify(scenario, assignor, zkUtils, verifyAssignmentIsUniform = true)
     }
+  }
+
+  @Test
+  def testRoundRobinPartitionAssignorStaticSubscriptions() {
+    val assignor = new RoundRobinAssignor
+
+    /** test static subscription scenarios */
+    (1 to PartitionAssignorTest.TestCaseCount).foreach (testCase => {
+      val consumerCount = 1.max(TestUtils.random.nextInt(PartitionAssignorTest.MaxConsumerCount + 1))
+      val topicCount = PartitionAssignorTest.MinTopicCount.max(TestUtils.random.nextInt(PartitionAssignorTest.MaxTopicCount + 1))
+
+      val topicPartitionCounts = Map((1 to topicCount).map(topic => {
+        ("topic-" + topic, PartitionAssignorTest.MinPartitionCount.max(TestUtils.random.nextInt(PartitionAssignorTest.MaxPartitionCount)))
+      }).toSeq:_*)
+
+      val subscriptions = Map((1 to consumerCount).map(consumer => {
+        val streamCounts = Map((1 to topicCount).map(topic => {
+            ("topic-" + topic, 1)
+          }).toSeq:_*)
+        ("g1c" + consumer, StaticSubscriptionInfo(streamCounts))
+      }).toSeq:_*)
+      val scenario = Scenario("g1", topicPartitionCounts, subscriptions)
+      val zkUtils = PartitionAssignorTest.setupZkClientMock(scenario)
+      EasyMock.replay(zkUtils.zkClient)
+      PartitionAssignorTest.assignAndVerify(scenario, assignor, zkUtils, verifyAssignmentIsUniform = true)
+    })
+  }
+
+  @Test
+  def testRoundRobinPartitionAssignorUnbalancedStaticSubscriptions() {
+    val assignor = new RoundRobinAssignor
+    val minConsumerCount = 5
+
+    /** test unbalanced static subscription scenarios */
+    (1 to PartitionAssignorTest.TestCaseCount).foreach (testCase => {
+      val consumerCount = minConsumerCount.max(TestUtils.random.nextInt(PartitionAssignorTest.MaxConsumerCount + 1))
+      val topicCount = 10
+
+      val topicPartitionCounts = Map((1 to topicCount).map(topic => {
+        ("topic-" + topic, 10)
+      }).toSeq:_*)
+
+      val subscriptions = Map((1 to consumerCount).map(consumer => {
+        // Exclude some topics from some consumers
+        val topicRange = (1 to topicCount - consumer % minConsumerCount)
+        val streamCounts = Map(topicRange.map(topic => {
+            ("topic-" + topic, 3)
+          }).toSeq:_*)
+        ("g1c" + consumer, StaticSubscriptionInfo(streamCounts))
+      }).toSeq:_*)
+      val scenario = Scenario("g1", topicPartitionCounts, subscriptions)
+      val zkUtils = PartitionAssignorTest.setupZkClientMock(scenario)
+      EasyMock.replay(zkUtils.zkClient)
+      PartitionAssignorTest.assignAndVerify(scenario, assignor, zkUtils)
+    })
   }
 
   @Test
@@ -97,7 +153,7 @@ private object PartitionAssignorTest extends Logging {
 
   private case class StaticSubscriptionInfo(streamCounts: Map[String, Int]) extends SubscriptionInfo {
     def registrationString =
-      Json.encode(Map("version" -> 1,
+      Json.legacyEncodeAsString(Map("version" -> 1,
                       "subscription" -> streamCounts,
                       "pattern" -> "static",
                       "timestamp" -> 1234.toString))
@@ -110,7 +166,7 @@ private object PartitionAssignorTest extends Logging {
   private case class WildcardSubscriptionInfo(streamCount: Int, regex: String, isWhitelist: Boolean)
           extends SubscriptionInfo {
     def registrationString =
-      Json.encode(Map("version" -> 1,
+      Json.legacyEncodeAsString(Map("version" -> 1,
                       "subscription" -> Map(regex -> streamCount),
                       "pattern" -> (if (isWhitelist) "white_list" else "black_list")))
 
@@ -150,7 +206,7 @@ private object PartitionAssignorTest extends Logging {
     scenario.topicPartitionCounts.foreach { case(topic, partitionCount) =>
       val replicaAssignment = Map((0 until partitionCount).map(partition => (partition.toString, Seq(0))):_*)
       EasyMock.expect(zkClient.readData("/brokers/topics/%s".format(topic), new Stat()))
-              .andReturn(zkUtils.replicaAssignmentZkData(replicaAssignment))
+        .andReturn(zkUtils.replicaAssignmentZkData(replicaAssignment))
       EasyMock.expectLastCall().anyTimes()
     }
 

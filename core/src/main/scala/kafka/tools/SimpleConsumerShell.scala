@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -27,18 +27,20 @@ import kafka.cluster.BrokerEndPoint
 import scala.collection.JavaConverters._
 import kafka.common.{MessageFormatter, TopicAndPartition}
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{KafkaThread, Utils}
 
 /**
  * Command line program to dump out messages to standard out using the simple consumer
  */
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
 object SimpleConsumerShell extends Logging {
 
   def UseLeaderReplica = -1
 
   def main(args: Array[String]): Unit = {
+    warn("WARNING: SimpleConsumerShell is deprecated and will be dropped in a future release following 0.11.0.0.")
 
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val brokerListOpt = parser.accepts("broker-list", "REQUIRED: The list of hostname and port of the server to connect to.")
                            .withRequiredArg
                            .describedAs("hostname:port,...,hostname:port")
@@ -96,7 +98,7 @@ object SimpleConsumerShell extends Logging {
         "skip it instead of halt.")
     val noWaitAtEndOfLogOpt = parser.accepts("no-wait-at-logend",
         "If set, when the simple consumer reaches the end of the Log, it will stop, not waiting for new produced messages")
-        
+
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "A low-level tool for fetching data directly from a particular replica.")
 
@@ -126,14 +128,14 @@ object SimpleConsumerShell extends Logging {
                        .minBytes(ConsumerConfig.MinFetchBytes)
 
     // getting topic metadata
-    info("Getting topic metatdata...")
+    info("Getting topic metadata...")
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser,brokerList)
     val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
     val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), metadataTargetBrokers, clientId, maxWaitMs).topicsMetadata
     if(topicsMetadata.size != 1 || !topicsMetadata.head.topic.equals(topic)) {
       System.err.println(("Error: no valid topic metadata for topic: %s, " + "what we get from server is only: %s").format(topic, topicsMetadata))
-      System.exit(1)
+      Exit.exit(1)
     }
 
     // validating partition id
@@ -141,7 +143,7 @@ object SimpleConsumerShell extends Logging {
     val partitionMetadataOpt = partitionsMetadata.find(p => p.partitionId == partitionId)
     if (partitionMetadataOpt.isEmpty) {
       System.err.println("Error: partition %d does not exist for topic %s".format(partitionId, topic))
-      System.exit(1)
+      Exit.exit(1)
     }
 
     // validating replica id and initializing target broker
@@ -151,7 +153,7 @@ object SimpleConsumerShell extends Logging {
       replicaOpt = partitionMetadataOpt.get.leader
       if (replicaOpt.isEmpty) {
         System.err.println("Error: user specifies to fetch from leader for partition (%s, %d) which has not been elected yet".format(topic, partitionId))
-        System.exit(1)
+        Exit.exit(1)
       }
     }
     else {
@@ -159,7 +161,7 @@ object SimpleConsumerShell extends Logging {
       replicaOpt = replicasForPartition.find(r => r.id == replicaId)
       if(replicaOpt.isEmpty) {
         System.err.println("Error: replica %d does not exist for partition (%s, %d)".format(replicaId, topic, partitionId))
-        System.exit(1)
+        Exit.exit(1)
       }
     }
     fetchTargetBroker = replicaOpt.get
@@ -167,7 +169,7 @@ object SimpleConsumerShell extends Logging {
     // initializing starting offset
     if(startingOffset < OffsetRequest.EarliestTime) {
       System.err.println("Invalid starting offset: %d".format(startingOffset))
-      System.exit(1)
+      Exit.exit(1)
     }
     if (startingOffset < 0) {
       val simpleConsumer = new SimpleConsumer(fetchTargetBroker.host,
@@ -180,7 +182,7 @@ object SimpleConsumerShell extends Logging {
       } catch {
         case t: Throwable =>
           System.err.println("Error in getting earliest or latest offset due to: " + Utils.stackTrace(t))
-          System.exit(1)
+          Exit.exit(1)
       } finally {
         if (simpleConsumer != null)
           simpleConsumer.close()
@@ -199,7 +201,7 @@ object SimpleConsumerShell extends Logging {
     val simpleConsumer = new SimpleConsumer(fetchTargetBroker.host,
                                             fetchTargetBroker.port,
                                             10000, 64*1024, clientId)
-    val thread = Utils.newThread("kafka-simpleconsumer-shell", new Runnable() {
+    val thread = KafkaThread.nonDaemon("kafka-simpleconsumer-shell", new Runnable() {
       def run() {
         var offset = startingOffset
         var numMessagesConsumed = 0
@@ -240,7 +242,7 @@ object SimpleConsumerShell extends Logging {
                 System.err.println("Unable to write to standard out, closing consumer.")
                 formatter.close()
                 simpleConsumer.close()
-                System.exit(1)
+                Exit.exit(1)
               }
             }
           }
@@ -251,7 +253,7 @@ object SimpleConsumerShell extends Logging {
           info(s"Consumed $numMessagesConsumed messages")
         }
       }
-    }, false)
+    })
     thread.start()
     thread.join()
     System.out.flush()

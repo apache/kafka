@@ -18,7 +18,7 @@ import os
 
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import TRUNK, V_0_9_0_0, LATEST_0_10_0
+from kafkatest.version import DEV_BRANCH, V_0_9_0_0, LATEST_0_10_0
 
 
 class ConsumerPerformanceService(PerformanceService):
@@ -70,7 +70,7 @@ class ConsumerPerformanceService(PerformanceService):
             "collect_default": True}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, messages, version=TRUNK, new_consumer=True, settings={}):
+    def __init__(self, context, num_nodes, kafka, topic, messages, version=DEV_BRANCH, new_consumer=True, settings={}):
         super(ConsumerPerformanceService, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
@@ -109,7 +109,7 @@ class ConsumerPerformanceService(PerformanceService):
                 args['new-consumer'] = ""
             args['broker-list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
         else:
-            args['zookeeper'] = self.kafka.zk.connect_setting()
+            args['zookeeper'] = self.kafka.zk_connect_setting()
 
         if self.fetch_size is not None:
             args['fetch-size'] = self.fetch_size

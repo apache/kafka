@@ -23,27 +23,23 @@ class OffsetResponse(private val underlying: kafka.api.OffsetResponse) {
 
   def hasError = underlying.hasError
 
-
-  def errorCode(topic: String, partition: Int) =
+  def error(topic: String, partition: Int) =
     underlying.partitionErrorAndOffsets(TopicAndPartition(topic, partition)).error
 
+  def errorCode(topic: String, partition: Int) = error(topic, partition).code
 
   def offsets(topic: String, partition: Int) =
     underlying.partitionErrorAndOffsets(TopicAndPartition(topic, partition)).offsets.toArray
 
-
-  override def equals(other: Any) = canEqual(other) && {
-    val otherOffsetResponse = other.asInstanceOf[kafka.javaapi.OffsetResponse]
-    this.underlying.equals(otherOffsetResponse.underlying)
+  override def equals(obj: Any): Boolean = {
+    obj match {
+      case null => false
+      case other: OffsetResponse => this.underlying.equals(other.underlying)
+      case _ => false
+    }
   }
-
-
-  def canEqual(other: Any) = other.isInstanceOf[kafka.javaapi.OffsetResponse]
-
 
   override def hashCode = underlying.hashCode
 
-
   override def toString = underlying.toString
-
 }

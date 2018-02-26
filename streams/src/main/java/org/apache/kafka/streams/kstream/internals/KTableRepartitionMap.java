@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
@@ -32,9 +31,9 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSupplier<K, V, KeyValue<K1, V1>> {
 
     private final KTableImpl<K, ?, V> parent;
-    private final KeyValueMapper<K, V, KeyValue<K1, V1>> mapper;
+    private final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> mapper;
 
-    public KTableRepartitionMap(KTableImpl<K, ?, V> parent, KeyValueMapper<K, V, KeyValue<K1, V1>> mapper) {
+    KTableRepartitionMap(final KTableImpl<K, ?, V> parent, final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> mapper) {
         this.parent = parent;
         this.mapper = mapper;
     }
@@ -82,8 +81,8 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
                 throw new StreamsException("Record key for the grouping KTable should not be null.");
 
             // if the value is null, we do not need to forward its selected key-value further
-            KeyValue<K1, V1> newPair = change.newValue == null ? null : mapper.apply(key, change.newValue);
-            KeyValue<K1, V1> oldPair = change.oldValue == null ? null : mapper.apply(key, change.oldValue);
+            KeyValue<? extends K1, ? extends V1> newPair = change.newValue == null ? null : mapper.apply(key, change.newValue);
+            KeyValue<? extends K1, ? extends V1> oldPair = change.oldValue == null ? null : mapper.apply(key, change.oldValue);
 
             // if the selected repartition key or value is null, skip
             // forward oldPair first, to be consistent with reduce and aggregate
@@ -102,17 +101,17 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
 
         private final KTableValueGetter<K, V> parentGetter;
 
-        public KTableMapValueGetter(KTableValueGetter<K, V> parentGetter) {
+        KTableMapValueGetter(final KTableValueGetter<K, V> parentGetter) {
             this.parentGetter = parentGetter;
         }
 
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             parentGetter.init(context);
         }
 
         @Override
-        public KeyValue<K1, V1> get(K key) {
+        public KeyValue<K1, V1> get(final K key) {
             return mapper.apply(key, parentGetter.get(key));
         }
     }

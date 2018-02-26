@@ -17,8 +17,10 @@
 
 package kafka.tools
 
+import java.nio.charset.StandardCharsets
 import java.util.{Arrays, Collections, Properties}
 
+import kafka.utils.Exit
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.utils.Utils
@@ -44,7 +46,7 @@ object EndToEndLatency {
   def main(args: Array[String]) {
     if (args.length != 5 && args.length != 6) {
       System.err.println("USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes [optional] properties_file")
-      System.exit(1)
+      Exit.exit(1)
     }
 
     val brokerList = args(0)
@@ -112,8 +114,8 @@ object EndToEndLatency {
       }
 
       //Check result matches the original record
-      val sent = new String(message)
-      val read = new String(recordIter.next().value())
+      val sent = new String(message, StandardCharsets.UTF_8)
+      val read = new String(recordIter.next().value(), StandardCharsets.UTF_8)
       if (!read.equals(sent)) {
         finalise()
         throw new RuntimeException(s"The message read [$read] did not match the message sent [$sent]")

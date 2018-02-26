@@ -18,16 +18,19 @@
 package other.kafka
 
 import kafka.api._
-import kafka.utils.{ZkUtils, ShutdownableThread}
+import kafka.utils.{Exit, ShutdownableThread, ZkUtils}
 import org.apache.kafka.common.protocol.Errors
+
 import scala.collection._
 import kafka.client.ClientUtils
 import joptsimple.OptionParser
 import kafka.common.{OffsetAndMetadata, TopicAndPartition}
 import kafka.network.BlockingChannel
+
 import scala.util.Random
 import java.io.IOException
-import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
+
+import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.nio.channels.ClosedByInterruptException
@@ -89,7 +92,7 @@ object TestOffsetManager {
         numCommits.getAndIncrement
         commitTimer.time {
           val response = OffsetCommitResponse.readFrom(offsetsChannel.receive().payload())
-          if (response.commitStatus.exists(_._2 != Errors.NONE.code)) numErrors.getAndIncrement
+          if (response.commitStatus.exists(_._2 != Errors.NONE)) numErrors.getAndIncrement
         }
         offset += 1
       }
@@ -152,7 +155,7 @@ object TestOffsetManager {
 
           fetchTimer.time {
             val response = OffsetFetchResponse.readFrom(channel.receive().payload())
-            if (response.requestInfo.exists(_._2.error != Errors.NONE.code)) {
+            if (response.requestInfo.exists(_._2.error != Errors.NONE)) {
               numErrors.getAndIncrement
             }
           }
@@ -194,7 +197,7 @@ object TestOffsetManager {
   }
 
   def main(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val zookeeperOpt = parser.accepts("zookeeper", "The ZooKeeper connection URL.")
       .withRequiredArg
       .describedAs("ZooKeeper URL")
@@ -237,7 +240,7 @@ object TestOffsetManager {
 
     if (options.has(helpOpt)) {
       parser.printHelpOn(System.out)
-      System.exit(0)
+      Exit.exit(0)
     }
 
     val commitIntervalMs = options.valueOf(commitIntervalOpt).intValue()
@@ -260,8 +263,7 @@ object TestOffsetManager {
       }
 
       fetchThread = new FetchThread(threadCount, fetchIntervalMs, zkUtils)
-
-      val statsThread = new StatsThread(reportingIntervalMs, commitThreads, fetchThread)
+      statsThread = new StatsThread(reportingIntervalMs, commitThreads, fetchThread)
 
       Runtime.getRuntime.addShutdownHook(new Thread() {
         override def run() {

@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import atexit
 import os
 import subprocess
 from tempfile import mkdtemp
@@ -22,21 +21,23 @@ from ducktape.template import TemplateRenderer
 from kafkatest.services.security.minikdc import MiniKdc
 import itertools
 
+
 class SslStores(object):
-    def __init__(self):
-        self.ca_and_truststore_dir = mkdtemp(dir="/tmp")
-        self.ca_crt_path = os.path.join(self.ca_and_truststore_dir, "test.ca.crt")
-        self.ca_jks_path = os.path.join(self.ca_and_truststore_dir, "test.ca.jks")
+    def __init__(self, local_scratch_dir):
+        self.ca_crt_path = os.path.join(local_scratch_dir, "test.ca.crt")
+        self.ca_jks_path = os.path.join(local_scratch_dir, "test.ca.jks")
         self.ca_passwd = "test-ca-passwd"
 
-        self.truststore_path = os.path.join(self.ca_and_truststore_dir, "test.truststore.jks")
+        self.truststore_path = os.path.join(local_scratch_dir, "test.truststore.jks")
         self.truststore_passwd = "test-ts-passwd"
         self.keystore_passwd = "test-ks-passwd"
         self.key_passwd = "test-key-passwd"
         # Allow upto one hour of clock skew between host and VMs
         self.startdate = "-1H"
-        # Register rmtree to run on exit
-        atexit.register(rmtree, self.ca_and_truststore_dir)
+
+        for file in [self.ca_crt_path, self.ca_jks_path, self.truststore_path]:
+            if os.path.exists(file):
+                os.remove(file)
 
     def generate_ca(self):
         """
@@ -64,12 +65,12 @@ class SslStores(object):
         csr_path = os.path.join(ks_dir, "test.kafka.csr")
         crt_path = os.path.join(ks_dir, "test.kafka.crt")
 
-        self.runcmd("keytool -genkeypair -alias kafka -keyalg RSA -keysize 2048 -keystore %s -storepass %s -keypass %s -dname CN=systemtest -ext SAN=DNS:%s -startdate %s" % (ks_path, self.keystore_passwd, self.key_passwd, self.hostname(node), self.startdate))
-        self.runcmd("keytool -certreq -keystore %s -storepass %s -keypass %s -alias kafka -file %s" % (ks_path, self.keystore_passwd, self.key_passwd, csr_path))
-        self.runcmd("keytool -gencert -keystore %s -storepass %s -alias ca -infile %s -outfile %s -dname CN=systemtest -ext SAN=DNS:%s -startdate %s" % (self.ca_jks_path, self.ca_passwd, csr_path, crt_path, self.hostname(node), self.startdate))
-        self.runcmd("keytool -importcert -keystore %s -storepass %s -alias ca -file %s -noprompt" % (ks_path, self.keystore_passwd, self.ca_crt_path))
-        self.runcmd("keytool -importcert -keystore %s -storepass %s -keypass %s -alias kafka -file %s -noprompt" % (ks_path, self.keystore_passwd, self.key_passwd, crt_path))
-        node.account.scp_to(ks_path, SecurityConfig.KEYSTORE_PATH)
+        self.runcmd("keytool -genkeypair -alias kafka -keyalg RSA -keysize 2048 -keystore %s -storepass %s -storetype JKS -keypass %s -dname CN=systemtest -ext SAN=DNS:%s -startdate %s" % (ks_path, self.keystore_passwd, self.key_passwd, self.hostname(node), self.startdate))
+        self.runcmd("keytool -certreq -keystore %s -storepass %s -storetype JKS -keypass %s -alias kafka -file %s" % (ks_path, self.keystore_passwd, self.key_passwd, csr_path))
+        self.runcmd("keytool -gencert -keystore %s -storepass %s -storetype JKS -alias ca -infile %s -outfile %s -dname CN=systemtest -ext SAN=DNS:%s -startdate %s" % (self.ca_jks_path, self.ca_passwd, csr_path, crt_path, self.hostname(node), self.startdate))
+        self.runcmd("keytool -importcert -keystore %s -storepass %s -storetype JKS -alias ca -file %s -noprompt" % (ks_path, self.keystore_passwd, self.ca_crt_path))
+        self.runcmd("keytool -importcert -keystore %s -storepass %s -storetype JKS -keypass %s -alias kafka -file %s -noprompt" % (ks_path, self.keystore_passwd, self.key_passwd, crt_path))
+        node.account.copy_to(ks_path, SecurityConfig.KEYSTORE_PATH)
         rmtree(ks_dir)
 
     def hostname(self, node):
@@ -79,9 +80,10 @@ class SslStores(object):
 
     def runcmd(self, cmd):
         proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        proc.communicate()
+        stdout, stderr = proc.communicate()
+
         if proc.returncode != 0:
-            raise subprocess.CalledProcessError(proc.returncode, cmd)
+            raise RuntimeError("Command '%s' returned non-zero exit status %d: %s" % (cmd, proc.returncode, stdout))
 
 
 class SecurityConfig(TemplateRenderer):
@@ -92,6 +94,12 @@ class SecurityConfig(TemplateRenderer):
     SASL_SSL = 'SASL_SSL'
     SASL_MECHANISM_GSSAPI = 'GSSAPI'
     SASL_MECHANISM_PLAIN = 'PLAIN'
+    SASL_MECHANISM_SCRAM_SHA_256 = 'SCRAM-SHA-256'
+    SASL_MECHANISM_SCRAM_SHA_512 = 'SCRAM-SHA-512'
+    SCRAM_CLIENT_USER = "kafka-client"
+    SCRAM_CLIENT_PASSWORD = "client-secret"
+    SCRAM_BROKER_USER = "kafka-broker"
+    SCRAM_BROKER_PASSWORD = "broker-secret"
     CONFIG_DIR = "/mnt/security"
     KEYSTORE_PATH = "/mnt/security/test.keystore.jks"
     TRUSTSTORE_PATH = "/mnt/security/test.truststore.jks"
@@ -99,13 +107,12 @@ class SecurityConfig(TemplateRenderer):
     KRB5CONF_PATH = "/mnt/security/krb5.conf"
     KEYTAB_PATH = "/mnt/security/keytab"
 
-    ssl_stores = SslStores()
-    ssl_stores.generate_ca()
-    ssl_stores.generate_truststore()
+    # This is initialized only when the first instance of SecurityConfig is created
+    ssl_stores = None
 
-    def __init__(self, security_protocol=None, interbroker_security_protocol=None,
+    def __init__(self, context, security_protocol=None, interbroker_security_protocol=None,
                  client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
-                 zk_sasl=False, template_props=""):
+                 zk_sasl=False, template_props="", static_jaas_conf=True):
         """
         Initialize the security properties for the node and copy
         keystore and truststore to the remote node if the transport protocol 
@@ -113,6 +120,15 @@ class SecurityConfig(TemplateRenderer):
         template properties file is used. If no protocol is specified in the
         template properties either, PLAINTEXT is used as default.
         """
+
+        self.context = context
+        if not SecurityConfig.ssl_stores:
+            # This generates keystore/trustore files in a local scratch directory which gets
+            # automatically destroyed after the test is run
+            # Creating within the scratch directory allows us to run tests in parallel without fear of collision
+            SecurityConfig.ssl_stores = SslStores(context.local_scratch_dir)
+            SecurityConfig.ssl_stores.generate_ca()
+            SecurityConfig.ssl_stores.generate_truststore()
 
         if security_protocol is None:
             security_protocol = self.get_property('security.protocol', template_props)
@@ -127,6 +143,7 @@ class SecurityConfig(TemplateRenderer):
         self.has_sasl = self.is_sasl(security_protocol) or self.is_sasl(interbroker_security_protocol) or zk_sasl
         self.has_ssl = self.is_ssl(security_protocol) or self.is_ssl(interbroker_security_protocol)
         self.zk_sasl = zk_sasl
+        self.static_jaas_conf = static_jaas_conf
         self.properties = {
             'security.protocol' : security_protocol,
             'ssl.keystore.location' : SecurityConfig.KEYSTORE_PATH,
@@ -140,13 +157,22 @@ class SecurityConfig(TemplateRenderer):
             'sasl.kerberos.service.name' : 'kafka'
         }
 
+    def client_config(self, template_props="", node=None):
+        # If node is not specified, use static jaas config which will be created later.
+        # Otherwise use static JAAS configuration files with SASL_SSL and sasl.jaas.config
+        # property with SASL_PLAINTEXT so that both code paths are tested by existing tests.
+        # Note that this is an artibtrary choice and it is possible to run all tests with
+        # either static or dynamic jaas config files if required.
+        static_jaas_conf = node is None or (self.has_sasl and self.has_ssl)
+        return SecurityConfig(self.context, self.security_protocol, client_sasl_mechanism=self.client_sasl_mechanism, template_props=template_props, static_jaas_conf=static_jaas_conf)
 
-    def client_config(self, template_props=""):
-        return SecurityConfig(self.security_protocol, client_sasl_mechanism=self.client_sasl_mechanism, template_props=template_props)
+    def enable_security_protocol(self, security_protocol):
+        self.has_sasl = self.has_sasl or self.is_sasl(security_protocol)
+        self.has_ssl = self.has_ssl or self.is_ssl(security_protocol)
 
     def setup_ssl(self, node):
         node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
-        node.account.scp_to(SecurityConfig.ssl_stores.truststore_path, SecurityConfig.TRUSTSTORE_PATH)
+        node.account.copy_to(SecurityConfig.ssl_stores.truststore_path, SecurityConfig.TRUSTSTORE_PATH)
         SecurityConfig.ssl_stores.generate_and_copy_keystore(node)
 
     def setup_sasl(self, node):
@@ -158,12 +184,17 @@ class SecurityConfig(TemplateRenderer):
         else:
             is_ibm_jdk = False
         jaas_conf = self.render(jaas_conf_file,  node=node, is_ibm_jdk=is_ibm_jdk,
+                                SecurityConfig=SecurityConfig,
                                 client_sasl_mechanism=self.client_sasl_mechanism,
-                                enabled_sasl_mechanisms=self.enabled_sasl_mechanisms)
-        node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
+                                enabled_sasl_mechanisms=self.enabled_sasl_mechanisms,
+                                static_jaas_conf=self.static_jaas_conf)
+        if self.static_jaas_conf:
+            node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
+        else:
+            self.properties['sasl.jaas.config'] = jaas_conf.replace("\n", " \\\n")
         if self.has_sasl_kerberos:
-            node.account.scp_to(MiniKdc.LOCAL_KEYTAB_FILE, SecurityConfig.KEYTAB_PATH)
-            node.account.scp_to(MiniKdc.LOCAL_KRB5CONF_FILE, SecurityConfig.KRB5CONF_PATH)
+            node.account.copy_to(MiniKdc.LOCAL_KEYTAB_FILE, SecurityConfig.KEYTAB_PATH)
+            node.account.copy_to(MiniKdc.LOCAL_KRB5CONF_FILE, SecurityConfig.KRB5CONF_PATH)
 
     def setup_node(self, node):
         if self.has_ssl:
@@ -171,6 +202,21 @@ class SecurityConfig(TemplateRenderer):
 
         if self.has_sasl:
             self.setup_sasl(node)
+
+    def setup_credentials(self, node, path, zk_connect, broker):
+        if broker:
+            self.maybe_create_scram_credentials(node, zk_connect, path, self.interbroker_sasl_mechanism,
+                 SecurityConfig.SCRAM_BROKER_USER, SecurityConfig.SCRAM_BROKER_PASSWORD)
+        else:
+            self.maybe_create_scram_credentials(node, zk_connect, path, self.client_sasl_mechanism,
+                 SecurityConfig.SCRAM_CLIENT_USER, SecurityConfig.SCRAM_CLIENT_PASSWORD)
+
+    def maybe_create_scram_credentials(self, node, zk_connect, path, mechanism, user_name, password):
+        if self.has_sasl and self.is_sasl_scram(mechanism):
+            cmd = "%s --zookeeper %s --entity-name %s --entity-type users --alter --add-config %s=[password=%s]" % \
+                  (path.script("kafka-configs.sh", node), zk_connect,
+                  user_name, mechanism, password)
+            node.account.ssh(cmd)
 
     def clean_node(self, node):
         if self.security_protocol != SecurityConfig.PLAINTEXT:
@@ -193,6 +239,9 @@ class SecurityConfig(TemplateRenderer):
 
     def is_sasl(self, security_protocol):
         return security_protocol == SecurityConfig.SASL_PLAINTEXT or security_protocol == SecurityConfig.SASL_SSL
+
+    def is_sasl_scram(self, sasl_mechanism):
+        return sasl_mechanism == SecurityConfig.SASL_MECHANISM_SCRAM_SHA_256 or sasl_mechanism == SecurityConfig.SASL_MECHANISM_SCRAM_SHA_512
 
     @property
     def security_protocol(self):
@@ -217,7 +266,10 @@ class SecurityConfig(TemplateRenderer):
     @property
     def kafka_opts(self):
         if self.has_sasl:
-            return "\"-Djava.security.auth.login.config=%s -Djava.security.krb5.conf=%s\"" % (SecurityConfig.JAAS_CONF_PATH, SecurityConfig.KRB5CONF_PATH)
+            if self.static_jaas_conf:
+                return "\"-Djava.security.auth.login.config=%s -Djava.security.krb5.conf=%s\"" % (SecurityConfig.JAAS_CONF_PATH, SecurityConfig.KRB5CONF_PATH)
+            else:
+                return "\"-Djava.security.krb5.conf=%s\"" % SecurityConfig.KRB5CONF_PATH
         else:
             return ""
 
@@ -231,6 +283,8 @@ class SecurityConfig(TemplateRenderer):
         """
         if self.security_protocol == SecurityConfig.PLAINTEXT:
             return ""
+        if self.has_sasl and not self.static_jaas_conf and 'sasl.jaas.config' not in self.properties:
+            raise Exception("JAAS configuration property has not yet been initialized")
         config_lines = (prefix + key + "=" + value for key, value in self.properties.iteritems())
         # Extra blank lines ensure this can be appended/prepended safely
         return "\n".join(itertools.chain([""], config_lines, [""]))

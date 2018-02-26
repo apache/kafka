@@ -17,7 +17,7 @@
 
 package kafka.consumer
 
-import java.util.{Collections, Properties}
+import java.util.Properties
 
 import org.junit.Assert._
 import kafka.common.MessageStreamsExistException
@@ -28,9 +28,9 @@ import kafka.serializer._
 import kafka.server._
 import kafka.utils.TestUtils._
 import kafka.utils._
-import org.I0Itec.zkclient.ZkClient
+import org.apache.kafka.common.security.JaasUtils
 import org.apache.log4j.{Level, Logger}
-import org.junit.{Test, After, Before}
+import org.junit.{After, Before, Test}
 
 import scala.collection._
 
@@ -44,9 +44,10 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
   val topic = "topic1"
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
+  var zkUtils: ZkUtils = null
 
-  override def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect)
-    .map(KafkaConfig.fromProps(_, overridingProps))
+  override def generateConfigs =
+    TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps(_, overridingProps))
 
   val group = "group1"
   val consumer0 = "consumer0"
@@ -58,11 +59,14 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
   @Before
   override def setUp() {
     super.setUp()
+    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
     dirs = new ZKGroupTopicDirs(group, topic)
   }
 
   @After
   override def tearDown() {
+    if (zkUtils != null)
+     CoreUtils.swallow(zkUtils.close(), this)
     super.tearDown()
   }
 
@@ -97,8 +101,8 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
       sendMessages(servers, topic, nMessages, 1)
 
     // wait to make sure the topic and partition have a leader for the successful case
-    waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
-    waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 1)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1)
 
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 1)
@@ -130,8 +134,8 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     val sentMessages2 = sendMessages(servers, topic, nMessages, 0) ++
                          sendMessages(servers, topic, nMessages, 1)
 
-    waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
-    waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 1)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1)
 
     val receivedMessages2 = getMessages(topicMessageStreams1, nMessages) ++ getMessages(topicMessageStreams2, nMessages)
     assertEquals(sentMessages2.sorted, receivedMessages2.sorted)
@@ -151,8 +155,8 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     val sentMessages3 = sendMessages(servers, topic, nMessages, 0) ++
                         sendMessages(servers, topic, nMessages, 1)
 
-    waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
-    waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 1)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1)
 
     val receivedMessages3 = getMessages(topicMessageStreams1, nMessages) ++ getMessages(topicMessageStreams2, nMessages)
     assertEquals(sentMessages3.sorted, receivedMessages3.sorted)
@@ -185,8 +189,8 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     val sentMessages1 = sendMessages(servers, topic, nMessages, 0, GZIPCompressionCodec) ++
                         sendMessages(servers, topic, nMessages, 1, GZIPCompressionCodec)
 
-    waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
-    waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 1)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1)
 
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 1)
@@ -218,8 +222,8 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     val sentMessages2 = sendMessages(servers, topic, nMessages, 0, GZIPCompressionCodec) ++
                         sendMessages(servers, topic, nMessages, 1, GZIPCompressionCodec)
 
-    waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
-    waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 1)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1)
 
     val receivedMessages2 = getMessages(topicMessageStreams1, nMessages) ++ getMessages(topicMessageStreams2, nMessages)
     assertEquals(sentMessages2.sorted, receivedMessages2.sorted)
@@ -239,8 +243,8 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     val sentMessages3 = sendMessages(servers, topic, nMessages, 0, GZIPCompressionCodec) ++
                         sendMessages(servers, topic, nMessages, 1, GZIPCompressionCodec)
 
-    waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
-    waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 1)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1)
 
     val receivedMessages3 = getMessages(topicMessageStreams1, nMessages) ++ getMessages(topicMessageStreams2, nMessages)
     assertEquals(sentMessages3.sorted, receivedMessages3.sorted)
@@ -294,8 +298,8 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
 
     val consumerConfig = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer1))
 
-    waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
-    waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 1)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1)
 
     val zkConsumerConnector =
       new ZookeeperConsumerConnector(consumerConfig, true)
@@ -325,7 +329,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     val zkUtils = ZkUtils(zkConnect, 6000, 30000, false)
 
     // create topic topic1 with 1 partition on broker 0
-    createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = servers)
+    createTopic(topic, numPartitions = 1, replicationFactor = 1)
 
     // send some messages to each broker
     val sentMessages1 = sendMessages(servers, topic, nMessages)
@@ -416,13 +420,8 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
   }
 
   def getZKChildrenValues(path : String) : Seq[Tuple2[String,String]] = {
-    val children = zkUtils.zkClient.getChildren(path)
-    Collections.sort(children)
-    val childrenAsSeq : Seq[java.lang.String] = {
-      import scala.collection.JavaConversions._
-      children.toSeq
-    }
-    childrenAsSeq.map(partition =>
+    val children = zkUtils.getChildren(path).sorted
+    children.map(partition =>
       (partition, zkUtils.zkClient.readData(path + "/" + partition).asInstanceOf[String]))
   }
 

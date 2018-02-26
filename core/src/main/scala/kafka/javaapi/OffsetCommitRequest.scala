@@ -45,19 +45,15 @@ class OffsetCommitRequest(groupId: String,
     this(groupId, requestInfo, correlationId, clientId, 0)
   }
 
-
   override def toString = underlying.toString
 
-
-  override def equals(other: Any) = canEqual(other) && {
-    val otherOffsetRequest = other.asInstanceOf[kafka.javaapi.OffsetCommitRequest]
-    this.underlying.equals(otherOffsetRequest.underlying)
+  override def equals(obj: Any): Boolean = {
+    obj match {
+      case null => false
+      case other: OffsetCommitRequest => this.underlying.equals(other.underlying)
+      case _ => false
+    }
   }
 
-
-  def canEqual(other: Any) = other.isInstanceOf[kafka.javaapi.OffsetCommitRequest]
-
-
   override def hashCode = underlying.hashCode
-
 }

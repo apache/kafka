@@ -1,13 +1,12 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,10 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.plain;
 
-import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
 import java.util.Map;
@@ -29,8 +26,9 @@ import javax.security.sasl.SaslException;
 import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslServerFactory;
 
-import org.apache.kafka.common.network.LoginType;
-import org.apache.kafka.common.security.JaasUtils;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.authenticator.SaslServerCallbackHandler;
 
 /**
  * Simple SaslServer implementation for SASL/PLAIN. In order to make this implementation
@@ -50,14 +48,27 @@ public class PlainSaslServer implements SaslServer {
     public static final String PLAIN_MECHANISM = "PLAIN";
     private static final String JAAS_USER_PREFIX = "user_";
 
-    private boolean complete;
-    private String authorizationID;
+    private final JaasContext jaasContext;
 
-    public PlainSaslServer(CallbackHandler callbackHandler) {
+    private boolean complete;
+    private String authorizationId;
+
+    public PlainSaslServer(JaasContext jaasContext) {
+        this.jaasContext = jaasContext;
     }
 
+    /**
+     * @throws SaslAuthenticationException if username/password combination is invalid or if the requested
+     *         authorization id is not the same as username.
+     * <p>
+     * <b>Note:</b> This method may throw {@link SaslAuthenticationException} to provide custom error messages
+     * to clients. But care should be taken to avoid including any information in the exception message that
+     * should not be leaked to unauthenticated clients. It may be safer to throw {@link SaslException} in
+     * some cases so that a standard error message is returned to clients.
+     * </p>
+     */
     @Override
-    public byte[] evaluateResponse(byte[] response) throws SaslException {
+    public byte[] evaluateResponse(byte[] response) throws SaslException, SaslAuthenticationException {
         /*
          * Message format (from https://tools.ietf.org/html/rfc4616):
          *
@@ -79,7 +90,7 @@ public class PlainSaslServer implements SaslServer {
         }
         if (tokens.length != 3)
             throw new SaslException("Invalid SASL/PLAIN response: expected 3 tokens, got " + tokens.length);
-        authorizationID = tokens[0];
+        String authorizationIdFromClient = tokens[0];
         String username = tokens[1];
         String password = tokens[2];
 
@@ -89,17 +100,18 @@ public class PlainSaslServer implements SaslServer {
         if (password.isEmpty()) {
             throw new SaslException("Authentication failed: password not specified");
         }
-        if (authorizationID.isEmpty())
-            authorizationID = username;
 
-        try {
-            String expectedPassword = JaasUtils.jaasConfig(LoginType.SERVER.contextName(), JAAS_USER_PREFIX + username);
-            if (!password.equals(expectedPassword)) {
-                throw new SaslException("Authentication failed: Invalid username or password");
-            }
-        } catch (IOException e) {
-            throw new SaslException("Authentication failed: Invalid JAAS configuration", e);
+        String expectedPassword = jaasContext.configEntryOption(JAAS_USER_PREFIX + username,
+                PlainLoginModule.class.getName());
+        if (!password.equals(expectedPassword)) {
+            throw new SaslAuthenticationException("Authentication failed: Invalid username or password");
         }
+
+        if (!authorizationIdFromClient.isEmpty() && !authorizationIdFromClient.equals(username))
+            throw new SaslAuthenticationException("Authentication failed: Client requested an authorization id that is different from username");
+
+        this.authorizationId = username;
+
         complete = true;
         return new byte[0];
     }
@@ -108,7 +120,7 @@ public class PlainSaslServer implements SaslServer {
     public String getAuthorizationID() {
         if (!complete)
             throw new IllegalStateException("Authentication exchange has not completed");
-        return authorizationID;
+        return authorizationId;
     }
 
     @Override
@@ -152,14 +164,18 @@ public class PlainSaslServer implements SaslServer {
         public SaslServer createSaslServer(String mechanism, String protocol, String serverName, Map<String, ?> props, CallbackHandler cbh)
             throws SaslException {
 
-            if (!PLAIN_MECHANISM.equals(mechanism)) {
+            if (!PLAIN_MECHANISM.equals(mechanism))
                 throw new SaslException(String.format("Mechanism \'%s\' is not supported. Only PLAIN is supported.", mechanism));
-            }
-            return new PlainSaslServer(cbh);
+
+            if (!(cbh instanceof SaslServerCallbackHandler))
+                throw new SaslException("CallbackHandler must be of type SaslServerCallbackHandler, but it is: " + cbh.getClass());
+
+            return new PlainSaslServer(((SaslServerCallbackHandler) cbh).jaasContext());
         }
 
         @Override
         public String[] getMechanismNames(Map<String, ?> props) {
+            if (props == null) return new String[]{PLAIN_MECHANISM};
             String noPlainText = (String) props.get(Sasl.POLICY_NOPLAINTEXT);
             if ("true".equals(noPlainText))
                 return new String[]{};

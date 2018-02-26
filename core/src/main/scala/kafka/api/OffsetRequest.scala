@@ -21,11 +21,9 @@ import java.nio.ByteBuffer
 
 import kafka.api.ApiUtils._
 import kafka.common.TopicAndPartition
-import kafka.network.{RequestOrResponseSend, RequestChannel}
-import kafka.network.RequestChannel.Response
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.ApiKeys
 
-
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object OffsetRequest {
   val CurrentVersion = 0.shortValue
   val DefaultClientId = ""
@@ -57,6 +55,7 @@ object OffsetRequest {
 
 case class PartitionOffsetRequestInfo(time: Long, maxNumOffsets: Int)
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequestInfo],
                          versionId: Short = OffsetRequest.CurrentVersion,
                          correlationId: Int = 0,
@@ -111,14 +110,6 @@ case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequ
 
   override def toString: String = {
     describe(true)
-  }
-
-  override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val partitionOffsetResponseMap = requestInfo.map { case (topicAndPartition, _) =>
-        (topicAndPartition, PartitionOffsetsResponse(Errors.forException(e).code, Nil))
-    }
-    val errorResponse = OffsetResponse(correlationId, partitionOffsetResponseMap)
-    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 
   override def describe(details: Boolean): String = {

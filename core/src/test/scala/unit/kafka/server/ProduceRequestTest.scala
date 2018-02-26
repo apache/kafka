@@ -17,13 +17,10 @@
 
 package kafka.server
 
-import java.nio.ByteBuffer
-
 import kafka.utils.TestUtils
-import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, ProtoUtils}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Record}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.record.{CompressionType, DefaultRecordBatch, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.junit.Assert._
 import org.junit.Test
@@ -40,32 +37,33 @@ class ProduceRequestTest extends BaseRequestTest {
   def testSimpleProduceRequest() {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
 
-    def sendAndCheck(recordBuffer: ByteBuffer, expectedOffset: Long): ProduceResponse.PartitionResponse = {
+    def sendAndCheck(memoryRecords: MemoryRecords, expectedOffset: Long): ProduceResponse.PartitionResponse = {
       val topicPartition = new TopicPartition("topic", partition)
-      val partitionRecords = Map(topicPartition -> MemoryRecords.readableRecords(recordBuffer))
-      val produceResponse = sendProduceRequest(leader, new ProduceRequest(-1, 3000, partitionRecords.asJava))
+      val partitionRecords = Map(topicPartition -> memoryRecords)
+      val produceResponse = sendProduceRequest(leader,
+          ProduceRequest.Builder.forCurrentMagic(-1, 3000, partitionRecords.asJava).build())
       assertEquals(1, produceResponse.responses.size)
       val (tp, partitionResponse) = produceResponse.responses.asScala.head
       assertEquals(topicPartition, tp)
-      assertEquals(Errors.NONE.code, partitionResponse.errorCode)
+      assertEquals(Errors.NONE, partitionResponse.error)
       assertEquals(expectedOffset, partitionResponse.baseOffset)
-      assertEquals(-1, partitionResponse.timestamp)
+      assertEquals(-1, partitionResponse.logAppendTime)
       partitionResponse
     }
 
-    sendAndCheck(JTestUtils.partitionRecordsBuffer(0, CompressionType.NONE,
-      new Record(System.currentTimeMillis(), "key".getBytes, "value".getBytes)), 0)
+    sendAndCheck(MemoryRecords.withRecords(CompressionType.NONE,
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes)), 0)
 
-    sendAndCheck(JTestUtils.partitionRecordsBuffer(0, CompressionType.GZIP,
-      new Record(System.currentTimeMillis(), "key1".getBytes, "value1".getBytes),
-      new Record(System.currentTimeMillis(), "key2".getBytes, "value2".getBytes)), 1)
+    sendAndCheck(MemoryRecords.withRecords(CompressionType.GZIP,
+      new SimpleRecord(System.currentTimeMillis(), "key1".getBytes, "value1".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "key2".getBytes, "value2".getBytes)), 1)
   }
 
   /* returns a pair of partition id and leader id */
   private def createTopicAndFindPartitionWithLeader(topic: String): (Int, Int) = {
-    val partitionToLeader = TestUtils.createTopic(zkUtils, topic, 3, 2, servers)
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, 3, 2, servers)
     partitionToLeader.collectFirst {
-      case (partition, Some(leader)) if leader != -1 => (partition, leader)
+      case (partition, leader) if leader != -1 => (partition, leader)
     }.getOrElse(fail(s"No leader elected for topic $topic"))
   }
 
@@ -73,24 +71,26 @@ class ProduceRequestTest extends BaseRequestTest {
   def testCorruptLz4ProduceRequest() {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
     val timestamp = 1000000
-    val recordBuffer = JTestUtils.partitionRecordsBuffer(0, CompressionType.LZ4,
-      new Record(timestamp, "key".getBytes, "value".getBytes))
-    // Change the lz4 checksum value so that it doesn't match the contents
-    recordBuffer.array.update(40, 0)
+    val memoryRecords = MemoryRecords.withRecords(CompressionType.LZ4,
+      new SimpleRecord(timestamp, "key".getBytes, "value".getBytes))
+    // Change the lz4 checksum value (not the kafka record crc) so that it doesn't match the contents
+    val lz4ChecksumOffset = 6
+    memoryRecords.buffer.array.update(DefaultRecordBatch.RECORD_BATCH_OVERHEAD + lz4ChecksumOffset, 0)
     val topicPartition = new TopicPartition("topic", partition)
-    val partitionRecords = Map(topicPartition -> MemoryRecords.readableRecords(recordBuffer))
-    val produceResponse = sendProduceRequest(leader, new ProduceRequest(-1, 3000, partitionRecords.asJava))
+    val partitionRecords = Map(topicPartition -> memoryRecords)
+    val produceResponse = sendProduceRequest(leader, 
+      ProduceRequest.Builder.forCurrentMagic(-1, 3000, partitionRecords.asJava).build())
     assertEquals(1, produceResponse.responses.size)
     val (tp, partitionResponse) = produceResponse.responses.asScala.head
     assertEquals(topicPartition, tp)
-    assertEquals(Errors.CORRUPT_MESSAGE.code, partitionResponse.errorCode)
+    assertEquals(Errors.CORRUPT_MESSAGE, partitionResponse.error)
     assertEquals(-1, partitionResponse.baseOffset)
-    assertEquals(-1, partitionResponse.timestamp)
+    assertEquals(-1, partitionResponse.logAppendTime)
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {
-    val response = send(request, ApiKeys.PRODUCE, destination = brokerSocketServer(leaderId))
-    ProduceResponse.parse(response)
+    val response = connectAndSend(request, ApiKeys.PRODUCE, destination = brokerSocketServer(leaderId))
+    ProduceResponse.parse(response, request.version)
   }
 
 }

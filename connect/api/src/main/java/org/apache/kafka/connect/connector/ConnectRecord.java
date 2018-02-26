@@ -1,24 +1,27 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.connector;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Header;
+import org.apache.kafka.connect.header.Headers;
+
+import java.util.Objects;
 
 /**
  * <p>
@@ -28,8 +31,7 @@ import org.apache.kafka.connect.data.Schema;
  * notion of offset, it is not included here because they differ in type.
  * </p>
  */
-@InterfaceStability.Unstable
-public abstract class ConnectRecord {
+public abstract class ConnectRecord<R extends ConnectRecord<R>> {
     private final String topic;
     private final Integer kafkaPartition;
     private final Schema keySchema;
@@ -37,11 +39,19 @@ public abstract class ConnectRecord {
     private final Schema valueSchema;
     private final Object value;
     private final Long timestamp;
+    private final Headers headers;
 
     public ConnectRecord(String topic, Integer kafkaPartition,
                          Schema keySchema, Object key,
                          Schema valueSchema, Object value,
                          Long timestamp) {
+        this(topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp, new ConnectHeaders());
+    }
+
+    public ConnectRecord(String topic, Integer kafkaPartition,
+                         Schema keySchema, Object key,
+                         Schema valueSchema, Object value,
+                         Long timestamp, Iterable<Header> headers) {
         this.topic = topic;
         this.kafkaPartition = kafkaPartition;
         this.keySchema = keySchema;
@@ -49,6 +59,11 @@ public abstract class ConnectRecord {
         this.valueSchema = valueSchema;
         this.value = value;
         this.timestamp = timestamp;
+        if (headers instanceof ConnectHeaders) {
+            this.headers = (ConnectHeaders) headers;
+        } else {
+            this.headers = new ConnectHeaders(headers);
+        }
     }
 
     public String topic() {
@@ -79,6 +94,46 @@ public abstract class ConnectRecord {
         return timestamp;
     }
 
+    /**
+     * Get the headers for this record.
+     *
+     * @return the headers; never null
+     */
+    public Headers headers() {
+        return headers;
+    }
+
+    /**
+     * Create a new record of the same type as itself, with the specified parameter values. All other fields in this record will be copied
+     * over to the new record. Since the headers are mutable, the resulting record will have a copy of this record's headers.
+     *
+     * @param topic the name of the topic; may be null
+     * @param kafkaPartition the partition number for the Kafka topic; may be null
+     * @param keySchema the schema for the key; may be null
+     * @param key the key; may be null
+     * @param valueSchema the schema for the value; may be null
+     * @param value the value; may be null
+     * @param timestamp the timestamp; may be null
+     * @return the new record
+     */
+    public abstract R newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp);
+
+    /**
+     * Create a new record of the same type as itself, with the specified parameter values. All other fields in this record will be copied
+     * over to the new record.
+     *
+     * @param topic the name of the topic; may be null
+     * @param kafkaPartition the partition number for the Kafka topic; may be null
+     * @param keySchema the schema for the key; may be null
+     * @param key the key; may be null
+     * @param valueSchema the schema for the value; may be null
+     * @param value the value; may be null
+     * @param timestamp the timestamp; may be null
+     * @param headers the headers; may be null or empty
+     * @return the new record
+     */
+    public abstract R newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp, Iterable<Header> headers);
+
     @Override
     public String toString() {
         return "ConnectRecord{" +
@@ -87,6 +142,7 @@ public abstract class ConnectRecord {
                 ", key=" + key +
                 ", value=" + value +
                 ", timestamp=" + timestamp +
+                ", headers=" + headers +
                 '}';
     }
 
@@ -113,6 +169,8 @@ public abstract class ConnectRecord {
             return false;
         if (timestamp != null ? !timestamp.equals(that.timestamp) : that.timestamp != null)
             return false;
+        if (!Objects.equals(headers, that.headers))
+            return false;
 
         return true;
     }
@@ -126,6 +184,7 @@ public abstract class ConnectRecord {
         result = 31 * result + (valueSchema != null ? valueSchema.hashCode() : 0);
         result = 31 * result + (value != null ? value.hashCode() : 0);
         result = 31 * result + (timestamp != null ? timestamp.hashCode() : 0);
+        result = 31 * result + headers.hashCode();
         return result;
     }
 }

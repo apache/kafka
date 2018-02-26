@@ -21,17 +21,17 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.Properties
 
-import kafka.admin.AdminUtils
 import kafka.api.FetchRequestBuilder
 import kafka.common.FailedToSendMessageException
 import kafka.consumer.SimpleConsumer
-import kafka.message.Message
+import kafka.message.{Message, MessageAndOffset}
 import kafka.serializer.StringEncoder
 import kafka.server.{KafkaConfig, KafkaRequestHandler, KafkaServer}
 import kafka.utils._
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.utils.Time
 import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -52,13 +52,13 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
   // ports and then get a consumer instance that will be pointed at the correct port
   def getConsumer1() = {
     if (consumer1 == null)
-      consumer1 = new SimpleConsumer("localhost", server1.boundPort(), 1000000, 64*1024, "")
+      consumer1 = new SimpleConsumer("localhost", TestUtils.boundPort(server1), 1000000, 64*1024, "")
     consumer1
   }
 
   def getConsumer2() = {
     if (consumer2 == null)
-      consumer2 = new SimpleConsumer("localhost", server2.boundPort(), 100, 64*1024, "")
+      consumer2 = new SimpleConsumer("localhost", TestUtils.boundPort(server2), 1000000, 64*1024, "")
     consumer2
   }
 
@@ -76,10 +76,6 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     server2 = TestUtils.createServer(config2)
     servers = List(server1,server2)
 
-    val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", server1.boundPort().toString)
-
     // temporarily set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.FATAL)
   }
@@ -94,17 +90,14 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     if (consumer2 != null)
       consumer2.close()
 
-    server1.shutdown
-    server2.shutdown
-    CoreUtils.delete(server1.config.logDirs)
-    CoreUtils.delete(server2.config.logDirs)
+    TestUtils.shutdownServers(Seq(server1, server2))
     super.tearDown()
   }
 
   @Test
   def testUpdateBrokerPartitionInfo() {
     val topic = "new-topic"
-    TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
+    TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
 
     val props = new Properties()
     // no need to retry since the send will always fail
@@ -156,7 +149,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
     val topic = "new-topic"
     // create topic with 1 partition and await leadership
-    TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
+    TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
 
     val producer1 = TestUtils.createProducer[String, String](
       brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
@@ -170,7 +163,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     producer1.send(new KeyedMessage[String, String](topic, "test", "test2"))
     val endTime = System.currentTimeMillis()
     // get the leader
-    val leaderOpt = zkUtils.getLeaderForPartition(topic, 0)
+    val leaderOpt = zkClient.getLeaderForPartition(new TopicPartition(topic, 0))
     assertTrue("Leader for topic new-topic partition 0 should exist", leaderOpt.isDefined)
     val leader = leaderOpt.get
 
@@ -228,7 +221,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
     val topic = "new-topic"
     // create topic
-    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0->Seq(0), 1->Seq(0), 2->Seq(0), 3->Seq(0)),
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(0), 1->Seq(0), 2->Seq(0), 3->Seq(0)),
                           servers = servers)
 
     val producer = TestUtils.createProducer[String, String](
@@ -261,7 +254,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
     // restart server 1
     server1.startup()
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
     TestUtils.waitUntilLeaderIsKnown(servers, topic, 0)
 
@@ -287,11 +280,11 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
   def testAsyncSendCanCorrectlyFailWithTimeout() {
     val topic = "new-topic"
     // create topics in ZK
-    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(0, 1)), servers = servers)
 
     val timeoutMs = 500
     val props = new Properties()
-    props.put("request.timeout.ms", String.valueOf(timeoutMs))
+    props.put("request.timeout.ms", timeoutMs.toString)
     props.put("request.required.acks", "1")
     props.put("message.send.max.retries", "0")
     props.put("client.id","ProducerTest-testAsyncSendCanCorrectlyFailWithTimeout")
@@ -305,26 +298,32 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
     // do a simple test to make sure plumbing is okay
     try {
       // this message should be assigned to partition 0 whose leader is on broker 0
-      producer.send(new KeyedMessage[String, String](topic, "test", "test"))
-      // cross check if brokers got the messages
-      val response1 = getConsumer1().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
-      val messageSet1 = response1.messageSet("new-topic", 0).iterator
-      assertTrue("Message set should have 1 message", messageSet1.hasNext)
+      producer.send(new KeyedMessage(topic, "test", "test"))
+      // cross check if the broker received the messages
+      // we need the loop because the broker won't return the message until it has been replicated and the producer is
+      // using acks=1
+      var messageSet1: Iterator[MessageAndOffset] = null
+      TestUtils.waitUntilTrue(() => {
+        val response1 = getConsumer1().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
+        messageSet1 = response1.messageSet(topic, 0).iterator
+        messageSet1.hasNext
+      }, "Message set should have 1 message")
       assertEquals(ByteBuffer.wrap("test".getBytes), messageSet1.next.message.payload)
 
       // stop IO threads and request handling, but leave networking operational
       // any requests should be accepted and queue up, but not handled
       server1.requestHandlerPool.shutdown()
 
-      val t1 = SystemTime.milliseconds
+      val t1 = Time.SYSTEM.milliseconds
       try {
         // this message should be assigned to partition 0 whose leader is on broker 0, but
-        // broker 0 will not response within timeoutMs millis.
-        producer.send(new KeyedMessage[String, String](topic, "test", "test"))
+        // broker 0 will not respond within timeoutMs millis.
+        producer.send(new KeyedMessage(topic, "test", "test"))
+        fail("Exception should have been thrown")
       } catch {
         case _: FailedToSendMessageException => /* success */
       }
-      val t2 = SystemTime.milliseconds
+      val t2 = Time.SYSTEM.milliseconds
       // make sure we don't wait fewer than timeoutMs
       assertTrue((t2-t1) >= timeoutMs)
 
@@ -340,16 +339,8 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       partitioner = classOf[StaticPartitioner].getName)
 
     try {
-
-      // create topic
-      AdminUtils.createTopic(zkUtils, "new-topic", 2, 1)
-      TestUtils.waitUntilTrue(() =>
-        AdminUtils.fetchTopicMetadataFromZk("new-topic", zkUtils).error != Errors.UNKNOWN_TOPIC_OR_PARTITION,
-        "Topic new-topic not created after timeout",
-        waitTime = zookeeper.tickTime)
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, "new-topic", 0)
-
-      producer.send(new KeyedMessage[String, String]("new-topic", "key", null))
+      TestUtils.createTopic(zkClient, "new-topic", 2, 1, servers)
+      producer.send(new KeyedMessage("new-topic", "key", null))
     } finally {
       producer.close()
     }

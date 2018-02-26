@@ -1,16 +1,35 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.network;
+
+import static org.junit.Assert.assertEquals;
+
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.security.authenticator.CredentialCache;
+import org.apache.kafka.common.security.scram.ScramCredentialUtils;
+import org.apache.kafka.common.security.scram.ScramMechanism;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.TestCondition;
+import org.apache.kafka.test.TestUtils;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -25,9 +44,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
 
 /**
  * Non-blocking EchoServer implementation that uses ChannelBuilder to create channels
@@ -35,6 +52,9 @@ import org.apache.kafka.common.utils.MockTime;
  *
  */
 public class NioEchoServer extends Thread {
+
+    private static final double EPS = 0.0001;
+
     private final int port;
     private final ServerSocketChannel serverSocketChannel;
     private final List<SocketChannel> newChannels;
@@ -42,23 +62,79 @@ public class NioEchoServer extends Thread {
     private final AcceptorThread acceptorThread;
     private final Selector selector;
     private volatile WritableByteChannel outputChannel;
+    private final CredentialCache credentialCache;
+    private final Metrics metrics;
+    private int numSent = 0;
+    private final DelegationTokenCache tokenCache;
 
-    public NioEchoServer(SecurityProtocol securityProtocol, Map<String, ?> configs, String serverHost) throws Exception {
+    public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
+            String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache) throws Exception {
+        super("echoserver");
+        setDaemon(true);
         serverSocketChannel = ServerSocketChannel.open();
         serverSocketChannel.configureBlocking(false);
         serverSocketChannel.socket().bind(new InetSocketAddress(serverHost, 0));
         this.port = serverSocketChannel.socket().getLocalPort();
         this.socketChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
         this.newChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
-        ChannelBuilder channelBuilder = ChannelBuilders.create(securityProtocol, Mode.SERVER, LoginType.SERVER, configs, null, true);
-        this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
-        setName("echoserver");
-        setDaemon(true);
+        this.credentialCache = credentialCache;
+        this.tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames());
+        if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL)
+            ScramCredentialUtils.createCache(credentialCache, ScramMechanism.mechanismNames());
+        if (channelBuilder == null)
+            channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false, securityProtocol, config, credentialCache, tokenCache);
+        this.metrics = new Metrics();
+        this.selector = new Selector(5000, metrics, new MockTime(), "MetricGroup", channelBuilder, new LogContext());
         acceptorThread = new AcceptorThread();
     }
 
     public int port() {
         return port;
+    }
+
+    public CredentialCache credentialCache() {
+        return credentialCache;
+    }
+
+    public DelegationTokenCache tokenCache() {
+        return tokenCache;
+    }
+
+    @SuppressWarnings("deprecation")
+    public double metricValue(String name) {
+        for (Map.Entry<MetricName, KafkaMetric> entry : metrics.metrics().entrySet()) {
+            if (entry.getKey().name().equals(name))
+                return entry.getValue().value();
+        }
+        throw new IllegalStateException("Metric not found, " + name + ", found=" + metrics.metrics().keySet());
+    }
+
+    public void verifyAuthenticationMetrics(int successfulAuthentications, final int failedAuthentications)
+            throws InterruptedException {
+        waitForMetric("successful-authentication", successfulAuthentications);
+        waitForMetric("failed-authentication", failedAuthentications);
+    }
+
+    private void waitForMetric(String name, final double expectedValue) throws InterruptedException {
+        final String totalName = name + "-total";
+        final String rateName = name + "-rate";
+        if (expectedValue == 0.0) {
+            assertEquals(expectedValue, metricValue(totalName), EPS);
+            assertEquals(expectedValue, metricValue(rateName), EPS);
+        } else {
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return Math.abs(metricValue(totalName) - expectedValue) <= EPS;
+                }
+            }, "Metric not updated " + totalName);
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return metricValue(rateName) > 0.0;
+                }
+            }, "Metric not updated " + rateName);
+        }
     }
 
     @Override
@@ -67,33 +143,42 @@ public class NioEchoServer extends Thread {
             acceptorThread.start();
             while (serverSocketChannel.isOpen()) {
                 selector.poll(1000);
-                for (SocketChannel socketChannel : newChannels) {
-                    String id = id(socketChannel);
-                    selector.register(id, socketChannel);
-                    socketChannels.add(socketChannel);
+                synchronized (newChannels) {
+                    for (SocketChannel socketChannel : newChannels) {
+                        String id = id(socketChannel);
+                        selector.register(id, socketChannel);
+                        socketChannels.add(socketChannel);
+                    }
+                    newChannels.clear();
                 }
-                newChannels.clear();
 
                 List<NetworkReceive> completedReceives = selector.completedReceives();
                 for (NetworkReceive rcv : completedReceives) {
                     KafkaChannel channel = channel(rcv.source());
-                    channel.mute();
+                    String channelId = channel.id();
+                    selector.mute(channelId);
                     NetworkSend send = new NetworkSend(rcv.source(), rcv.payload());
                     if (outputChannel == null)
                         selector.send(send);
                     else {
                         for (ByteBuffer buffer : send.buffers)
                             outputChannel.write(buffer);
-                        channel.unmute();
+                        selector.unmute(channelId);
                     }
                 }
-                for (Send send : selector.completedSends())
+                for (Send send : selector.completedSends()) {
                     selector.unmute(send.destination());
+                    numSent += 1;
+                }
 
             }
         } catch (IOException e) {
             // ignore
         }
+    }
+
+    public int numSent() {
+        return numSent;
     }
 
     private String id(SocketChannel channel) {

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -25,14 +25,21 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class MockDeserializer implements ClusterResourceListener, Deserializer<byte[]> {
-    public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
-    public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
-    public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
-    public static final ClusterResource NO_CLUSTER_ID = new ClusterResource("no_cluster_id");
-    public static final AtomicReference<ClusterResource> CLUSTER_ID_BEFORE_DESERIALIZE = new AtomicReference<>(NO_CLUSTER_ID);
+    public static AtomicInteger initCount = new AtomicInteger(0);
+    public static AtomicInteger closeCount = new AtomicInteger(0);
+    public static AtomicReference<ClusterResource> clusterMeta = new AtomicReference<>();
+    public static ClusterResource noClusterId = new ClusterResource("no_cluster_id");
+    public static AtomicReference<ClusterResource> clusterIdBeforeDeserialize = new AtomicReference<>(noClusterId);
+
+    public static void resetStaticVariables() {
+        initCount = new AtomicInteger(0);
+        closeCount = new AtomicInteger(0);
+        clusterMeta = new AtomicReference<>();
+        clusterIdBeforeDeserialize = new AtomicReference<>(noClusterId);
+    }
 
     public MockDeserializer() {
-        INIT_COUNT.incrementAndGet();
+        initCount.incrementAndGet();
     }
 
     @Override
@@ -43,17 +50,17 @@ public class MockDeserializer implements ClusterResourceListener, Deserializer<b
     public byte[] deserialize(String topic, byte[] data) {
         // This will ensure that we get the cluster metadata when deserialize is called for the first time
         // as subsequent compareAndSet operations will fail.
-        CLUSTER_ID_BEFORE_DESERIALIZE.compareAndSet(NO_CLUSTER_ID, CLUSTER_META.get());
+        clusterIdBeforeDeserialize.compareAndSet(noClusterId, clusterMeta.get());
         return data;
     }
 
     @Override
     public void close() {
-        CLOSE_COUNT.incrementAndGet();
+        closeCount.incrementAndGet();
     }
 
     @Override
     public void onUpdate(ClusterResource clusterResource) {
-        CLUSTER_META.set(clusterResource);
+        clusterMeta.set(clusterResource);
     }
 }

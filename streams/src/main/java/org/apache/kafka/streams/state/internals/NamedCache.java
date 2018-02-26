@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,8 +17,13 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.processor.internals.StreamsMetricsImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +31,8 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -39,11 +46,7 @@ class NamedCache {
     private LRUNode tail;
     private LRUNode head;
     private long currentSizeBytes;
-    private ThreadCacheMetrics metrics;
-
-    // JMX stats
-    private Sensor hitRatio = null;
-
+    private NamedCacheMetrics namedCacheMetrics;
 
     // internal stats
     private long numReadHits = 0;
@@ -51,15 +54,13 @@ class NamedCache {
     private long numOverwrites = 0;
     private long numFlushes = 0;
 
-    NamedCache(final String name) {
-        this(name, null);
+    NamedCache(final String name, final StreamsMetrics metrics) {
+        this.name = name;
+        this.namedCacheMetrics = new NamedCacheMetrics(metrics);
     }
 
-    NamedCache(final String name, final ThreadCacheMetrics metrics) {
-        this.name = name;
-        this.metrics = metrics != null ? metrics : new ThreadCache.NullThreadCacheMetrics();
-
-        this.hitRatio = this.metrics.addCacheSensor(name, "hitRatio");
+    synchronized final String name() {
+        return name;
     }
 
     synchronized long hits() {
@@ -79,6 +80,10 @@ class NamedCache {
     }
 
     synchronized LRUCacheEntry get(final Bytes key) {
+        if (key == null) {
+            return null;
+        }
+
         final LRUNode node = getInternal(key);
         if (node == null) {
             return null;
@@ -92,10 +97,16 @@ class NamedCache {
     }
 
     synchronized void flush() {
+        flush(null);
+    }
+
+    private void flush(final LRUNode evicted) {
         numFlushes++;
 
-        log.debug("Named cache {} stats on flush: #hits={}, #misses={}, #overwrites={}, #flushes={}",
-            name, hits(), misses(), overwrites(), flushes());
+        if (log.isTraceEnabled()) {
+            log.trace("Named cache {} stats on flush: #hits={}, #misses={}, #overwrites={}, #flushes={}",
+                      name, hits(), misses(), overwrites(), flushes());
+        }
 
         if (listener == null) {
             throw new IllegalArgumentException("No listener for namespace " + name + " registered with cache");
@@ -106,6 +117,15 @@ class NamedCache {
         }
 
         final List<ThreadCache.DirtyEntry> entries  = new ArrayList<>();
+        final List<Bytes> deleted = new ArrayList<>();
+
+        // evicted already been removed from the cache so add it to the list of
+        // flushed entries and remove from dirtyKeys.
+        if (evicted != null) {
+            entries.add(new ThreadCache.DirtyEntry(evicted.key, evicted.entry.value, evicted.entry));
+            dirtyKeys.remove(evicted.key);
+        }
+
         for (Bytes key : dirtyKeys) {
             final LRUNode node = getInternal(key);
             if (node == null) {
@@ -113,14 +133,20 @@ class NamedCache {
             }
             entries.add(new ThreadCache.DirtyEntry(key, node.entry.value, node.entry));
             node.entry.markClean();
+            if (node.entry.value == null) {
+                deleted.add(node.key);
+            }
         }
-        listener.apply(entries);
+        // clear dirtyKeys before the listener is applied as it may be re-entrant.
         dirtyKeys.clear();
+        listener.apply(entries);
+        for (Bytes key : deleted) {
+            delete(key);
+        }
     }
 
-
     synchronized void put(final Bytes key, final LRUCacheEntry value) {
-        if (!value.isDirty && dirtyKeys.contains(key)) {
+        if (!value.isDirty() && dirtyKeys.contains(key)) {
             throw new IllegalStateException(String.format("Attempting to put a clean entry for key [%s] " +
                                                                   "into NamedCache [%s] when it already contains " +
                                                                   "a dirty entry for the same key",
@@ -159,7 +185,7 @@ class NamedCache {
             return null;
         } else {
             numReadHits++;
-            metrics.recordCacheSensor(hitRatio, (double) numReadHits / (double) (numReadHits + numReadMisses));
+            namedCacheMetrics.hitRatioSensor.record((double) numReadHits / (double) (numReadHits + numReadMisses));
         }
         return node;
     }
@@ -201,11 +227,11 @@ class NamedCache {
         }
         final LRUNode eldest = tail;
         currentSizeBytes -= eldest.size();
-        if (eldest.entry.isDirty()) {
-            flush();
-        }
         remove(eldest);
         cache.remove(eldest.key);
+        if (eldest.entry.isDirty()) {
+            flush(eldest);
+        }
     }
 
     synchronized LRUCacheEntry putIfAbsent(final Bytes key, final LRUCacheEntry value) {
@@ -249,10 +275,13 @@ class NamedCache {
         copy.addAll(keySet);
         return copy.iterator();
     }
-    
 
     synchronized Iterator<Bytes> allKeys() {
         return keySetIterator(cache.navigableKeySet());
+    }
+    
+    synchronized NavigableSet<Bytes> keySet() {
+        return cache.navigableKeySet();
     }
 
     synchronized LRUCacheEntry first() {
@@ -269,14 +298,27 @@ class NamedCache {
         return tail.entry;
     }
 
-    synchronized long dirtySize() {
-        return dirtyKeys.size();
+    synchronized LRUNode head() {
+        return head;
+    }
+
+    synchronized LRUNode tail() {
+        return tail;
+    }
+
+    synchronized void close() {
+        head = tail = null;
+        listener = null;
+        currentSizeBytes = 0;
+        dirtyKeys.clear();
+        cache.clear();
+        namedCacheMetrics.removeAllSensors();
     }
 
     /**
      * A simple wrapper class to implement a doubly-linked list around MemoryLRUCacheBytesEntry
      */
-    private class LRUNode {
+    static class LRUNode {
         private final Bytes key;
         private LRUCacheEntry entry;
         private LRUNode previous;
@@ -287,21 +329,76 @@ class NamedCache {
             this.entry = entry;
         }
 
-        public LRUCacheEntry entry() {
+        LRUCacheEntry entry() {
             return entry;
         }
 
-        public void update(LRUCacheEntry entry) {
-            this.entry = entry;
+        Bytes key() {
+            return key;
         }
 
-        public long size() {
+        long size() {
             return  key.get().length +
                     8 + // entry
                     8 + // previous
                     8 + // next
                     entry.size();
         }
+
+        LRUNode next() {
+            return next;
+        }
+
+        LRUNode previous() {
+            return previous;
+        }
+
+        private void update(LRUCacheEntry entry) {
+            this.entry = entry;
+        }
     }
 
+    class NamedCacheMetrics  {
+        final StreamsMetricsImpl metrics;
+        final String groupName;
+        final Map<String, String> metricTags;
+        final Map<String, String> allMetricTags;
+        final Sensor hitRatioSensor;
+
+        public NamedCacheMetrics(StreamsMetrics metrics) {
+            final String scope = "record-cache";
+            final String opName = "hitRatio";
+            final String tagKey = scope + "-id";
+            final String tagValue = ThreadCache.underlyingStoreNamefromCacheName(name);
+            this.groupName = "stream-" + scope + "-metrics";
+            this.metrics = (StreamsMetricsImpl) metrics;
+            this.allMetricTags = ((StreamsMetricsImpl) metrics).tagMap(tagKey, "all",
+                    "task-id", ThreadCache.taskIDfromCacheName(name));
+            this.metricTags = ((StreamsMetricsImpl) metrics).tagMap(tagKey, tagValue,
+                    "task-id", ThreadCache.taskIDfromCacheName(name));
+
+            // add parent
+            Sensor parent = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG);
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-avg", groupName,
+                    "The average cache hit ratio.", allMetricTags), new Avg());
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-min", groupName,
+                    "The minimum cache hit ratio.", allMetricTags), new Min());
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(parent, this.metrics.registry().metricName(opName + "-max", groupName,
+                    "The maximum cache hit ratio.", allMetricTags), new Max());
+
+            // add child
+            hitRatioSensor = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG, parent);
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(hitRatioSensor, this.metrics.registry().metricName(opName + "-avg", groupName,
+                "The average cache hit ratio.", metricTags), new Avg());
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(hitRatioSensor, this.metrics.registry().metricName(opName + "-min", groupName,
+                "The minimum cache hit ratio.", metricTags), new Min());
+            ((StreamsMetricsImpl) metrics).maybeAddMetric(hitRatioSensor, this.metrics.registry().metricName(opName + "-max", groupName,
+                "The maximum cache hit ratio.", metricTags), new Max());
+
+        }
+
+        public void removeAllSensors() {
+            metrics.removeSensor(hitRatioSensor);
+        }
+    }
 }

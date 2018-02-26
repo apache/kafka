@@ -21,8 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.utils.threadsafe
-import org.apache.kafka.common.utils.Utils
-import kafka.utils.SystemTime
+import org.apache.kafka.common.utils.{KafkaThread, Time}
 
 trait Timer {
   /**
@@ -56,12 +55,12 @@ trait Timer {
 class SystemTimer(executorName: String,
                   tickMs: Long = 1,
                   wheelSize: Int = 20,
-                  startMs: Long = SystemTime.hiResClockMs) extends Timer {
+                  startMs: Long = Time.SYSTEM.hiResClockMs) extends Timer {
 
   // timeout timer
   private[this] val taskExecutor = Executors.newFixedThreadPool(1, new ThreadFactory() {
     def newThread(runnable: Runnable): Thread =
-      Utils.newThread("executor-"+executorName, runnable, false)
+      KafkaThread.nonDaemon("executor-"+executorName, runnable)
   })
 
   private[this] val delayQueue = new DelayQueue[TimerTaskList]()
@@ -82,7 +81,7 @@ class SystemTimer(executorName: String,
   def add(timerTask: TimerTask): Unit = {
     readLock.lock()
     try {
-      addTimerTaskEntry(new TimerTaskEntry(timerTask, timerTask.delayMs + SystemTime.hiResClockMs))
+      addTimerTaskEntry(new TimerTaskEntry(timerTask, timerTask.delayMs + Time.SYSTEM.hiResClockMs))
     } finally {
       readLock.unlock()
     }

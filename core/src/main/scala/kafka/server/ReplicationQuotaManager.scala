@@ -17,13 +17,15 @@
 package kafka.server
 
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
-import kafka.common.TopicAndPartition
+
 import kafka.server.Constants._
 import kafka.server.ReplicationQuotaManagerConfig._
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.metrics._
 import java.util.concurrent.locks.ReentrantReadWriteLock
+
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.stats.SimpleRate
 import org.apache.kafka.common.utils.Time
 
@@ -49,7 +51,7 @@ object ReplicationQuotaManagerConfig {
 }
 
 trait ReplicaQuota {
-  def isThrottled(topicAndPartition: TopicAndPartition): Boolean
+  def isThrottled(topicPartition: TopicPartition): Boolean
   def isQuotaExceeded(): Boolean
 }
 
@@ -72,8 +74,9 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   private val lock = new ReentrantReadWriteLock()
   private val throttledPartitions = new ConcurrentHashMap[String, Seq[Int]]()
   private var quota: Quota = null
-  private val sensorAccess = new SensorAccess
-  private val rateMetricName = metrics.metricName("byte-rate", replicationType.toString, s"Tracking byte-rate for ${replicationType}")
+  private val sensorAccess = new SensorAccess(lock, metrics)
+  private val rateMetricName = metrics.metricName("byte-rate", replicationType.toString,
+    s"Tracking byte-rate for ${replicationType}")
 
   /**
     * Update the quota
@@ -113,7 +116,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param topicPartition the partition to check
     * @return
     */
-  override def isThrottled(topicPartition: TopicAndPartition): Boolean = {
+  override def isThrottled(topicPartition: TopicPartition): Boolean = {
     val partitions = throttledPartitions.get(topicPartition.topic)
     if (partitions != null)
       (partitions eq AllReplicas) || partitions.contains(topicPartition.partition)
@@ -192,11 +195,9 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     sensorAccess.getOrCreate(
       replicationType.toString,
       InactiveSensorExpirationTimeSeconds,
-      lock,
-      metrics,
-      () => rateMetricName,
-      () => getQuotaMetricConfig(quota),
-      () => new SimpleRate()
+      rateMetricName,
+      Some(getQuotaMetricConfig(quota)),
+      new SimpleRate
     )
   }
 }

@@ -16,59 +16,92 @@
   */
 package kafka.server
 
-import kafka.common.TopicAndPartition
 import kafka.server.QuotaType._
+import kafka.utils.Logging
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 
 object QuotaType  {
   case object Fetch extends QuotaType
   case object Produce extends QuotaType
+  case object Request extends QuotaType
   case object LeaderReplication extends QuotaType
   case object FollowerReplication extends QuotaType
+  case object AlterLogDirsReplication extends QuotaType
 }
 sealed trait QuotaType
 
-object QuotaFactory {
+object QuotaFactory extends Logging {
 
   object UnboundedQuota extends ReplicaQuota {
-    override def isThrottled(topicAndPartition: TopicAndPartition): Boolean = false
+    override def isThrottled(topicPartition: TopicPartition): Boolean = false
     override def isQuotaExceeded(): Boolean = false
   }
 
-  case class QuotaManagers(fetch: ClientQuotaManager, produce: ClientQuotaManager, leader: ReplicationQuotaManager, follower: ReplicationQuotaManager) {
+  case class QuotaManagers(fetch: ClientQuotaManager,
+                           produce: ClientQuotaManager,
+                           request: ClientRequestQuotaManager,
+                           leader: ReplicationQuotaManager,
+                           follower: ReplicationQuotaManager,
+                           alterLogDirs: ReplicationQuotaManager) {
     def shutdown() {
       fetch.shutdown
       produce.shutdown
+      request.shutdown
     }
   }
 
-  def instantiate(cfg: KafkaConfig, metrics: Metrics, time: Time): QuotaManagers = {
+  def instantiate(cfg: KafkaConfig, metrics: Metrics, time: Time, threadNamePrefix: String): QuotaManagers = {
     QuotaManagers(
-      new ClientQuotaManager(clientFetchConfig(cfg), metrics, Fetch, time),
-      new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, time),
+      new ClientQuotaManager(clientFetchConfig(cfg), metrics, Fetch, time, threadNamePrefix),
+      new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, time, threadNamePrefix),
+      new ClientRequestQuotaManager(clientRequestConfig(cfg), metrics, time, threadNamePrefix),
       new ReplicationQuotaManager(replicationConfig(cfg), metrics, LeaderReplication, time),
-      new ReplicationQuotaManager(replicationConfig(cfg), metrics, FollowerReplication, time)
+      new ReplicationQuotaManager(replicationConfig(cfg), metrics, FollowerReplication, time),
+      new ReplicationQuotaManager(alterLogDirsReplicationConfig(cfg), metrics, AlterLogDirsReplication, time)
     )
   }
 
-  def clientProduceConfig(cfg: KafkaConfig): ClientQuotaManagerConfig =
+  def clientProduceConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
+    if (cfg.producerQuotaBytesPerSecondDefault != Long.MaxValue)
+      warn(s"${KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp} has been deprecated in 0.11.0.0 and will be removed in a future release. Use dynamic quota defaults instead.")
     ClientQuotaManagerConfig(
       quotaBytesPerSecondDefault = cfg.producerQuotaBytesPerSecondDefault,
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
     )
+  }
 
-  def clientFetchConfig(cfg: KafkaConfig): ClientQuotaManagerConfig =
+  def clientFetchConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
+    if (cfg.consumerQuotaBytesPerSecondDefault != Long.MaxValue)
+      warn(s"${KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp} has been deprecated in 0.11.0.0 and will be removed in a future release. Use dynamic quota defaults instead.")
     ClientQuotaManagerConfig(
       quotaBytesPerSecondDefault = cfg.consumerQuotaBytesPerSecondDefault,
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
     )
+  }
 
-  def replicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig =
+  def clientRequestConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
+    ClientQuotaManagerConfig(
+      numQuotaSamples = cfg.numQuotaSamples,
+      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
+    )
+  }
+
+  def replicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
     ReplicationQuotaManagerConfig(
       numQuotaSamples = cfg.numReplicationQuotaSamples,
       quotaWindowSizeSeconds = cfg.replicationQuotaWindowSizeSeconds
     )
+  }
+
+  def alterLogDirsReplicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
+    ReplicationQuotaManagerConfig(
+      numQuotaSamples = cfg.numAlterLogDirsReplicationQuotaSamples,
+      quotaWindowSizeSeconds = cfg.alterLogDirsReplicationQuotaWindowSizeSeconds
+    )
+  }
+
 }

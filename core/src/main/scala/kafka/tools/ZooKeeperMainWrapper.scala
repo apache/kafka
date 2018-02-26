@@ -17,12 +17,13 @@
 
 package kafka.tools
 
+import kafka.utils.Exit
 import org.apache.zookeeper.ZooKeeperMain
 
 class ZooKeeperMainWrapper(args: Array[String]) extends ZooKeeperMain(args) {
   def runCmd(): Unit = {
     processCmd(this.cl)
-    System.exit(0)
+    Exit.exit(0)
   }
 }
 

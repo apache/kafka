@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -43,13 +42,13 @@ public interface OffsetBackingStore {
     /**
      * Start this offset store.
      */
-    public void start();
+    void start();
 
     /**
      * Stop the backing store. Implementations should attempt to shutdown gracefully, but not block
      * indefinitely.
      */
-    public void stop();
+    void stop();
 
     /**
      * Get the values for the specified keys
@@ -57,7 +56,7 @@ public interface OffsetBackingStore {
      * @param callback callback to invoke on completion
      * @return future for the resulting map from key to value
      */
-    public Future<Map<ByteBuffer, ByteBuffer>> get(
+    Future<Map<ByteBuffer, ByteBuffer>> get(
             Collection<ByteBuffer> keys,
             Callback<Map<ByteBuffer, ByteBuffer>> callback);
 
@@ -67,12 +66,12 @@ public interface OffsetBackingStore {
      * @param callback callback to invoke on completion
      * @return void future for the operation
      */
-    public Future<Void> set(Map<ByteBuffer, ByteBuffer> values,
+    Future<Void> set(Map<ByteBuffer, ByteBuffer> values,
                             Callback<Void> callback);
 
     /**
      * Configure class with the given key-value pairs
      * @param config can be DistributedConfig or StandaloneConfig
      */
-    public void configure(WorkerConfig config);
+    void configure(WorkerConfig config);
 }

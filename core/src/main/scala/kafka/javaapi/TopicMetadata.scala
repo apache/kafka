@@ -35,7 +35,9 @@ class TopicMetadata(private val underlying: kafka.api.TopicMetadata) {
     underlying.partitionsMetadata
   }
 
-  def errorCode: Short = underlying.errorCode
+  def error = underlying.error
+
+  def errorCode = error.code
 
   def sizeInBytes: Int = underlying.sizeInBytes
 
@@ -55,7 +57,9 @@ class PartitionMetadata(private val underlying: kafka.api.PartitionMetadata) {
 
   def isr: java.util.List[BrokerEndPoint] = underlying.isr.asJava
 
-  def errorCode: Short = underlying.errorCode
+  def error = underlying.error
+
+  def errorCode = error.code
 
   def sizeInBytes: Int = underlying.sizeInBytes
 

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,12 +13,11 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
+ */
 package org.apache.kafka.connect.sink;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.connect.connector.Task;
 
 import java.util.Collection;
@@ -52,7 +51,6 @@ import java.util.Map;
   * </ol>
  *
  */
-@InterfaceStability.Unstable
 public abstract class SinkTask implements Task {
 
     /**
@@ -62,6 +60,14 @@ public abstract class SinkTask implements Task {
      * </p>
      */
     public static final String TOPICS_CONFIG = "topics";
+
+    /**
+     * <p>
+     * The configuration key that provides a regex specifying which topics to include as inputs
+     * for this SinkTask.
+     * </p>
+     */
+    public static final String TOPICS_REGEX_CONFIG = "topics.regex";
 
     protected SinkTaskContext context;
 
@@ -95,13 +101,30 @@ public abstract class SinkTask implements Task {
     public abstract void put(Collection<SinkRecord> records);
 
     /**
-     * Flush all records that have been {@link #put} for the specified topic-partitions. The
-     * offsets are provided for convenience, but could also be determined by tracking all offsets
-     * included in the SinkRecords passed to {@link #put}.
+     * Flush all records that have been {@link #put(Collection)} for the specified topic-partitions.
      *
-     * @param offsets mapping of TopicPartition to committed offset
+     * @param currentOffsets the current offset state as of the last call to {@link #put(Collection)}},
+     *                       provided for convenience but could also be determined by tracking all offsets included in the {@link SinkRecord}s
+     *                       passed to {@link #put}.
      */
-    public abstract void flush(Map<TopicPartition, OffsetAndMetadata> offsets);
+    public void flush(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
+    }
+
+    /**
+     * Pre-commit hook invoked prior to an offset commit.
+     *
+     * The default implementation simply invokes {@link #flush(Map)} and is thus able to assume all {@code currentOffsets} are safe to commit.
+     *
+     * @param currentOffsets the current offset state as of the last call to {@link #put(Collection)}},
+     *                       provided for convenience but could also be determined by tracking all offsets included in the {@link SinkRecord}s
+     *                       passed to {@link #put}.
+     *
+     * @return an empty map if Connect-managed offset commit is not desired, otherwise a map of offsets by topic-partition that are safe to commit.
+     */
+    public Map<TopicPartition, OffsetAndMetadata> preCommit(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
+        flush(currentOffsets);
+        return currentOffsets;
+    }
 
     /**
      * The SinkTask use this method to create writers for newly assigned partitions in case of partition

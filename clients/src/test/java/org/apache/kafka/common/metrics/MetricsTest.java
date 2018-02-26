@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.metrics;
 
@@ -29,6 +33,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.metrics.stats.Percentile;
 import org.apache.kafka.common.metrics.stats.Percentiles;
@@ -41,6 +46,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+@SuppressWarnings("deprecation")
 public class MetricsTest {
 
     private static final double EPS = 0.000001;
@@ -84,8 +90,10 @@ public class MetricsTest {
         s.add(metrics.metricName("test.avg", "grp1"), new Avg());
         s.add(metrics.metricName("test.max", "grp1"), new Max());
         s.add(metrics.metricName("test.min", "grp1"), new Min());
-        s.add(metrics.metricName("test.rate", "grp1"), new Rate(TimeUnit.SECONDS));
-        s.add(metrics.metricName("test.occurences", "grp1"), new Rate(TimeUnit.SECONDS, new Count()));
+        s.add(new Meter(TimeUnit.SECONDS, metrics.metricName("test.rate", "grp1"),
+                metrics.metricName("test.total", "grp1")));
+        s.add(new Meter(TimeUnit.SECONDS, new Count(), metrics.metricName("test.occurences", "grp1"),
+                metrics.metricName("test.occurences.total", "grp1")));
         s.add(metrics.metricName("test.count", "grp1"), new Count());
         s.add(new Percentiles(100, -100, 100, BucketSizing.CONSTANT,
                              new Percentile(metrics.metricName("test.median", "grp1"), 50.0),
@@ -420,6 +428,14 @@ public class MetricsTest {
         assertEquals(0.0, p25.value(), 1.0);
         assertEquals(0.0, p50.value(), 1.0);
         assertEquals(0.0, p75.value(), 1.0);
+
+        // record two more windows worth of sequential values
+        for (int i = 0; i < buckets; i++)
+            sensor.record(i);
+
+        assertEquals(25, p25.value(), 1.0);
+        assertEquals(50, p50.value(), 1.0);
+        assertEquals(75, p75.value(), 1.0);
     }
 
     @Test
@@ -427,7 +443,10 @@ public class MetricsTest {
         // Use the default time window. Set 3 samples
         MetricConfig cfg = new MetricConfig().samples(3);
         Sensor s = metrics.sensor("test.sensor", cfg);
-        s.add(metrics.metricName("test.rate", "grp1"), new Rate(TimeUnit.SECONDS));
+        MetricName rateMetricName = metrics.metricName("test.rate", "grp1");
+        MetricName totalMetricName = metrics.metricName("test.total", "grp1");
+        s.add(new Meter(TimeUnit.SECONDS, rateMetricName, totalMetricName));
+        KafkaMetric totalMetric = metrics.metrics().get(metrics.metricName("test.total", "grp1"));
 
         int sum = 0;
         int count = cfg.samples() - 1;
@@ -436,6 +455,7 @@ public class MetricsTest {
             s.record(100);
             sum += 100;
             time.sleep(cfg.timeWindowMs());
+            assertEquals(sum, totalMetric.value(), EPS);
         }
 
         // Sleep for half the window.
@@ -444,10 +464,11 @@ public class MetricsTest {
         // prior to any time passing
         double elapsedSecs = (cfg.timeWindowMs() * (cfg.samples() - 1) + cfg.timeWindowMs() / 2) / 1000.0;
 
-        KafkaMetric km = metrics.metrics().get(metrics.metricName("test.rate", "grp1"));
-        assertEquals("Rate(0...2) = 2.666", sum / elapsedSecs, km.value(), EPS);
+        KafkaMetric rateMetric = metrics.metrics().get(metrics.metricName("test.rate", "grp1"));
+        assertEquals("Rate(0...2) = 2.666", sum / elapsedSecs, rateMetric.value(), EPS);
         assertEquals("Elapsed Time = 75 seconds", elapsedSecs,
-                ((Rate) km.measurable()).windowSize(cfg, time.milliseconds()) / 1000, EPS);
+                ((Rate) rateMetric.measurable()).windowSize(cfg, time.milliseconds()) / 1000, EPS);
+        assertEquals(sum, totalMetric.value(), EPS);
     }
 
     public static class ConstantMeasurable implements Measurable {
@@ -518,4 +539,58 @@ public class MetricsTest {
     private Double measure(Measurable rate, MetricConfig config) {
         return rate.measure(config, time.milliseconds());
     }
+    
+    @Test
+    public void testMetricInstances() {
+        MetricName n1 = metrics.metricInstance(SampleMetrics.METRIC1, "key1", "value1", "key2", "value2");
+        Map<String, String> tags = new HashMap<String, String>();
+        tags.put("key1", "value1");
+        tags.put("key2", "value2");
+        MetricName n2 = metrics.metricInstance(SampleMetrics.METRIC2, tags);
+        assertEquals("metric names created in two different ways should be equal", n1, n2);
+
+        try {
+            metrics.metricInstance(SampleMetrics.METRIC1, "key1");
+            fail("Creating MetricName with an odd number of keyValue should fail");
+        } catch (IllegalArgumentException e) {
+            // this is expected
+        }
+        
+        Map<String, String> parentTagsWithValues = new HashMap<>();
+        parentTagsWithValues.put("parent-tag", "parent-tag-value");
+
+        Map<String, String> childTagsWithValues = new HashMap<>();
+        childTagsWithValues.put("child-tag", "child-tag-value");
+
+        try (Metrics inherited = new Metrics(new MetricConfig().tags(parentTagsWithValues), Arrays.asList((MetricsReporter) new JmxReporter()), time, true)) {
+            MetricName inheritedMetric = inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, childTagsWithValues);
+
+            Map<String, String> filledOutTags = inheritedMetric.tags();
+            assertEquals("parent-tag should be set properly", filledOutTags.get("parent-tag"), "parent-tag-value");
+            assertEquals("child-tag should be set properly", filledOutTags.get("child-tag"), "child-tag-value");
+
+            try {
+                inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, parentTagsWithValues);
+                fail("Creating MetricName should fail if the child metrics are not defined at runtime");
+            } catch (IllegalArgumentException e) {
+                // this is expected
+            }
+
+            try {
+
+                Map<String, String> runtimeTags = new HashMap<>();
+                runtimeTags.put("child-tag", "child-tag-value");
+                runtimeTags.put("tag-not-in-template", "unexpected-value");
+
+                inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, runtimeTags);
+                fail("Creating MetricName should fail if there is a tag at runtime that is not in the template");
+            } catch (IllegalArgumentException e) {
+                // this is expected
+            }
+        }
+
+    }
+
+    
+
 }
