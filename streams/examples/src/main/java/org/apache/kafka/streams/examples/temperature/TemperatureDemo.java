@@ -114,7 +114,7 @@ public class TemperatureDemo {
                 }
             });
 
-        Serde<Windowed<String>> windowedSerde = WindowedSerdes.sessionWindowedSerdeFrom(String.class);
+        Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class);
 
         // need to override key serde to Windowed<String> type
         max.to("iot-temperature-max", Produced.with(windowedSerde, Serdes.String()));

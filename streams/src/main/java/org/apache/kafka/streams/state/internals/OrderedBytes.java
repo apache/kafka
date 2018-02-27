@@ -57,7 +57,7 @@ class OrderedBytes {
 
         // unless there is a maximum key length, you can keep appending more zero bytes
         // to keyFrom to create a key that will match the range, yet that would precede
-        // TimeWindowedSerde.toBinaryKey(keyFrom, from, 0) in byte order
+        // KeySchema.toBinaryKey(keyFrom, from, 0) in byte order
         return Bytes.wrap(
             rangeStart
                 .put(bytes)

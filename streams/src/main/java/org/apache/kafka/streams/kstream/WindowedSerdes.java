@@ -22,7 +22,7 @@ import org.apache.kafka.common.serialization.Serdes;
 public class WindowedSerdes {
 
     static public class TimeWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
-        // Default constructor needed by Kafka
+        // Default constructor needed for reflection object creation
         public TimeWindowedSerde() {
             super(new TimeWindowedSerializer<T>(), new TimeWindowedDeserializer<T>());
         }
@@ -33,7 +33,7 @@ public class WindowedSerdes {
     }
 
     static public class SessionWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
-        // Default constructor needed by Kafka
+        // Default constructor needed for reflection object creation
         public SessionWindowedSerde() {
             super(new SessionWindowedSerializer<T>(), new SessionWindowedDeserializer<T>());
         }
@@ -43,10 +43,16 @@ public class WindowedSerdes {
         }
     }
 
+    /**
+     * Construct a {@code TimeWindowedSerde} object for the specified inner class type.
+     */
     static public <T> Serde<Windowed<T>> timeWindowedSerdeFrom(final Class<T> type) {
         return new TimeWindowedSerde<>(Serdes.serdeFrom(type));
     }
 
+    /**
+     * Construct a {@code SessionWindowedSerde} object for the specified inner class type.
+     */
     static public <T> Serde<Windowed<T>> sessionWindowedSerdeFrom(final Class<T> type) {
         return new TimeWindowedSerde<>(Serdes.serdeFrom(type));
     }
