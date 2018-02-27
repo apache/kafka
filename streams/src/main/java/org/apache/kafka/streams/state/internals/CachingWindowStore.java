@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.WindowedSerdes.TimeWindowedSerde;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -34,7 +35,6 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import java.util.List;
 
 class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore implements WindowStore<Bytes, byte[]>, CachedStateStore<Windowed<K>, V> {
-
 
     private final WindowStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;
@@ -91,11 +91,10 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
                 for (ThreadCache.DirtyEntry entry : entries) {
                     final byte[] binaryWindowKey = cacheFunction.key(entry.key()).get();
-                    final long timestamp = WindowStoreUtils.timestampFromBinaryKey(binaryWindowKey);
+                    final long timestamp = TimeWindowedSerde.extractStoreTimestamp(binaryWindowKey);
 
-                    final Windowed<K> windowedKey = new Windowed<>(WindowStoreUtils.keyFromBinaryKey(binaryWindowKey, serdes),
-                            WindowStoreUtils.timeWindowForSize(timestamp, windowSize));
-                    final Bytes key = WindowStoreUtils.bytesKeyFromBinaryKey(binaryWindowKey);
+                    final Windowed<K> windowedKey = TimeWindowedSerde.fromStoreKey(binaryWindowKey, windowSize, serdes);
+                    final Bytes key = Bytes.wrap(TimeWindowedSerde.extractStoreKeyBytes(binaryWindowKey));
                     maybeForward(entry, key, windowedKey, (InternalProcessorContext) context);
                     underlying.put(key, entry.newValue(), timestamp);
                 }
@@ -150,7 +149,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         // if store is open outside as well.
         validateStoreOpen();
         
-        final Bytes keyBytes = WindowStoreUtils.toBinaryKey(key, timestamp, 0, bytesSerdes);
+        final Bytes keyBytes = TimeWindowedSerde.toStoreKeyBinary(key, timestamp, 0);
         final LRUCacheEntry entry = new LRUCacheEntry(value, true, context.offset(),
                                                       timestamp, context.partition(), context.topic());
         cache.put(name, cacheFunction.cacheKey(keyBytes), entry);

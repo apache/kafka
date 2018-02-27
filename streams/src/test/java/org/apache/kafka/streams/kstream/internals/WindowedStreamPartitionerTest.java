@@ -20,29 +20,18 @@ import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
-import org.apache.kafka.streams.kstream.WindowedSerializer;
 import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 
 public class WindowedStreamPartitionerTest {
 
@@ -70,8 +59,8 @@ public class WindowedStreamPartitionerTest {
 
         DefaultPartitioner defaultPartitioner = new DefaultPartitioner();
 
-        WindowedSerializer<Integer> timeWindowedSerializer = new WindowedSerializer<>(intSerializer);
-        WindowedStreamPartitioner<Integer, String> streamPartitioner = new WindowedStreamPartitioner<>(topicName, windowedSerializer);
+        WindowedSerializer<Integer> timeWindowedSerializer = new TimeWindowedSerializer<>(intSerializer);
+        WindowedStreamPartitioner<Integer, String> streamPartitioner = new WindowedStreamPartitioner<>(topicName, timeWindowedSerializer);
 
         for (int k = 0; k < 10; k++) {
             Integer key = rand.nextInt();
@@ -93,71 +82,5 @@ public class WindowedStreamPartitionerTest {
         }
 
         defaultPartitioner.close();
-    }
-    
-    @Test
-    public void testWindowedSerializerNoArgConstructors() {
-        Map<String, String> props = new HashMap<>();
-        // test key[value].serializer.inner.class takes precedence over serializer.inner.class
-        WindowedSerializer<StringSerializer> timeWindowedSerializer = new WindowedSerializer<>();
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
-        props.put("key.serializer.inner.class", "org.apache.kafka.common.serialization.StringSerializer");
-        props.put("serializer.inner.class", "org.apache.kafka.common.serialization.StringSerializer");
-        windowedSerializer.configure(props, true);
-        Serializer<?> inner = windowedSerializer.innerSerializer();
-        assertNotNull("Inner serializer should be not null", inner);
-        assertTrue("Inner serializer type should be StringSerializer", inner instanceof StringSerializer);
-        // test serializer.inner.class
-        props.put("serializer.inner.class", "org.apache.kafka.common.serialization.ByteArraySerializer");
-        props.remove("key.serializer.inner.class");
-        props.remove("value.serializer.inner.class");
-        WindowedSerializer<?> timeWindowedSerializer1 = new WindowedSerializer<>();
-        windowedSerializer1.configure(props, false);
-        Serializer<?> inner1 = windowedSerializer1.innerSerializer();
-        assertNotNull("Inner serializer should be not null", inner1);
-        assertTrue("Inner serializer type should be ByteArraySerializer", inner1 instanceof ByteArraySerializer);
-        windowedSerializer.close();
-        windowedSerializer1.close();
-    }
-    
-    @Test
-    public void testWindowedDeserializerNoArgConstructors() {
-        Map<String, String> props = new HashMap<>();
-        TimeWindowedDeserializer<StringSerializer> timeWindowedDeserializer = new TimeWindowedDeserializer<>();
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
-        props.put("key.deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
-        props.put("deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
-        timeWindowedDeserializer.configure(props, true);
-        Deserializer<?> inner = timeWindowedDeserializer.innerDeserializer();
-        assertNotNull("Inner deserializer should be not null", inner);
-        assertTrue("Inner deserializer type should be StringDeserializer", inner instanceof StringDeserializer);
-        // test deserializer.inner.class
-        props.put("deserializer.inner.class", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        props.remove("key.deserializer.inner.class");
-        props.remove("value.deserializer.inner.class");
-        TimeWindowedDeserializer<?> timeWindowedDeserializer1 = new TimeWindowedDeserializer<>();
-        timeWindowedDeserializer1.configure(props, false);
-        final Deserializer<?> inner1 = timeWindowedDeserializer1.innerDeserializer();
-        assertNotNull("Inner deserializer should be not null", inner1);
-        assertTrue("Inner deserializer type should be ByteArrayDeserializer", inner1 instanceof ByteArrayDeserializer);
-        timeWindowedDeserializer.close();
-        timeWindowedDeserializer1.close();
-    }
-    
-    @Test
-    public void testWindowDeserializeExpectedWindowSize() {
-        final long randomLong = 5000000;
-        final Map<String, String> props = new HashMap<>();
-        final TimeWindowedDeserializer<StringSerializer> timeWindowedDeserializer = new TimeWindowedDeserializer<>(randomLong);
-        props.put("key.deserializer.inner.class", "org.apache.kafka.common.serialization.StringDeserializer");
-        timeWindowedDeserializer.configure(props, true);
-        //test for deserializer expected window end time
-        final byte[] byteValues = stringSerializer.serialize(topicName, "dummy string"); //dummy string, serves no real purpose
-        final Windowed<?> windowed = timeWindowedDeserializer.deserialize(topicName, byteValues);
-        final long actualSize = windowed.window().end() - windowed.window().start(); //find actual window time
-        assertEquals(randomLong, actualSize); //testing if window size matches up with expected one
-        timeWindowedDeserializer.close();
     }
 }

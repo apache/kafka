@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.WindowedSerdes.TimeWindowedSerde;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -43,7 +44,7 @@ class MergedSortedCacheWindowStoreIterator extends AbstractMergedSortedCacheStor
     @Override
     Long deserializeCacheKey(final Bytes cacheKey) {
         byte[] binaryKey = bytesFromCacheKey(cacheKey);
-        return WindowStoreUtils.timestampFromBinaryKey(binaryKey);
+        return TimeWindowedSerde.extractStoreTimestamp(binaryKey);
     }
 
     @Override
@@ -60,7 +61,7 @@ class MergedSortedCacheWindowStoreIterator extends AbstractMergedSortedCacheStor
     public int compare(final Bytes cacheKey, final Long storeKey) {
         byte[] binaryKey = bytesFromCacheKey(cacheKey);
 
-        final Long cacheTimestamp = WindowStoreUtils.timestampFromBinaryKey(binaryKey);
+        final Long cacheTimestamp = TimeWindowedSerde.extractStoreTimestamp(binaryKey);
         return cacheTimestamp.compareTo(storeKey);
     }
 }

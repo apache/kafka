@@ -17,10 +17,12 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 
-import java.nio.ByteBuffer;
 import java.util.Map;
 
 /**
@@ -29,46 +31,35 @@ import java.util.Map;
  *  if the no-arg constructor is called and hence it is not passed during initialization.
  *  Note that the first two take precedence over the last.
  */
-public class TimeWindowedSerializer<T> implements Serializer<Windowed<T>> {
-
-    private static final int TIMESTAMP_SIZE = 8;
+public class TimeWindowedSerializer<T> implements WindowedSerializer<T> {
 
     private Serializer<T> inner;
+
+    // Default constructor needed by Kafka
+    public TimeWindowedSerializer() {}
 
     public TimeWindowedSerializer(Serializer<T> inner) {
         this.inner = inner;
     }
 
-    // Default constructor needed by Kafka
-    public TimeWindowedSerializer() {}
-
     @SuppressWarnings("unchecked")
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
         if (inner == null) {
-            String propertyName = isKey ? "key.serializer.inner.class" : "value.serializer.inner.class";
-            Object innerSerializerClass = configs.get(propertyName);
-            propertyName = (innerSerializerClass == null) ? "serializer.inner.class" : propertyName;
-            String value = null;
+            String propertyName = isKey ? StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS : StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS;
+            String value = (String) configs.get(propertyName);
             try {
-                value = (String) configs.get(propertyName);
-                inner = Serializer.class.cast(Utils.newInstance(value, Serializer.class));
+                inner = Serde.class.cast(Utils.newInstance(value, Serde.class)).serializer();
                 inner.configure(configs, isKey);
             } catch (ClassNotFoundException e) {
-                throw new ConfigException(propertyName, value, "Class " + value + " could not be found.");
+                throw new ConfigException(propertyName, value, "Serde class " + value + " could not be found.");
             }
         }
     }
 
     @Override
     public byte[] serialize(String topic, Windowed<T> data) {
-        byte[] serializedKey = inner.serialize(topic, data.key());
-
-        ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + TIMESTAMP_SIZE);
-        buf.put(serializedKey);
-        buf.putLong(data.window().start());
-
-        return buf.array();
+        return WindowedSerdes.TimeWindowedSerde.toBinary(data, inner, topic);
     }
 
     @Override
@@ -76,6 +67,7 @@ public class TimeWindowedSerializer<T> implements Serializer<Windowed<T>> {
         inner.close();
     }
 
+    @Override
     public byte[] serializeBaseKey(String topic, Windowed<T> data) {
         return inner.serialize(topic, data.key());
     }

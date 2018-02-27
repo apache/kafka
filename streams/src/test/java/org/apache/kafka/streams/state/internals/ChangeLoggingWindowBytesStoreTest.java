@@ -20,6 +20,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.WindowedSerdes.TimeWindowedSerde;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.state.WindowStore;
@@ -66,7 +67,7 @@ public class ChangeLoggingWindowBytesStoreTest {
 
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         store = new ChangeLoggingWindowBytesStore(inner, false);
     }
 
@@ -81,7 +82,7 @@ public class ChangeLoggingWindowBytesStoreTest {
     }
 
     @Test
-    public void shouldLogPuts() throws Exception {
+    public void shouldLogPuts() {
         inner.put(bytesKey, value1, 0);
         EasyMock.expectLastCall();
 
@@ -89,12 +90,12 @@ public class ChangeLoggingWindowBytesStoreTest {
 
         store.put(bytesKey, value1);
 
-        assertArrayEquals(value1, (byte[]) sent.get(WindowStoreUtils.toBinaryKey(bytesKey.get(), 0, 0)));
+        assertArrayEquals(value1, (byte[]) sent.get(TimeWindowedSerde.toStoreKeyBinary(bytesKey.get(), 0, 0)));
         EasyMock.verify(inner);
     }
 
     @Test
-    public void shouldDelegateToUnderlyingStoreWhenFetching() throws Exception {
+    public void shouldDelegateToUnderlyingStoreWhenFetching() {
         EasyMock.expect(inner.fetch(bytesKey, 0, 10)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
 
         init();
@@ -123,8 +124,8 @@ public class ChangeLoggingWindowBytesStoreTest {
         store.put(bytesKey, value1);
         store.put(bytesKey, value1);
 
-        assertArrayEquals(value1, (byte[]) sent.get(WindowStoreUtils.toBinaryKey(bytesKey.get(), 0, 1)));
-        assertArrayEquals(value1, (byte[]) sent.get(WindowStoreUtils.toBinaryKey(bytesKey.get(), 0, 2)));
+        assertArrayEquals(value1, (byte[]) sent.get(TimeWindowedSerde.toStoreKeyBinary(bytesKey.get(), 0, 1)));
+        assertArrayEquals(value1, (byte[]) sent.get(TimeWindowedSerde.toStoreKeyBinary(bytesKey.get(), 0, 2)));
 
         EasyMock.verify(inner);
     }

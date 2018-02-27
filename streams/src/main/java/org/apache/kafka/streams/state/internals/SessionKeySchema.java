@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
+import org.apache.kafka.streams.kstream.WindowedSerdes.SessionWindowedSerde;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
@@ -29,10 +30,11 @@ import java.util.List;
 
 class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
-    private static final int SUFFIX_SIZE = 2 * WindowStoreUtils.TIMESTAMP_SIZE;
+    private static final int SUFFIX_SIZE = 2 * SessionWindowedSerde.TIMESTAMP_SIZE;
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
 
     private String topic;
+    private final Serde<Bytes> bytesSerdes = Serdes.Bytes();
 
     @Override
     public void init(final String topic) {
@@ -42,13 +44,13 @@ class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     @Override
     public Bytes upperRangeFixedSize(final Bytes key, final long to) {
         final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(to, Long.MAX_VALUE));
-        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer(), topic);
+        return Bytes.wrap(SessionWindowedSerde.toBinary(sessionKey, bytesSerdes.serializer(), topic));
     }
 
     @Override
     public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
         final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(0, Math.max(0, from)));
-        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer(), topic);
+        return Bytes.wrap(SessionWindowedSerde.toBinary(sessionKey, bytesSerdes.serializer(), topic));
     }
 
     @Override
@@ -68,7 +70,7 @@ class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
     @Override
     public long segmentTimestamp(final Bytes key) {
-        return SessionKeySerde.extractEnd(key.get());
+        return SessionWindowedSerde.extractEndTimestamp(key.get());
     }
 
     @Override
@@ -78,7 +80,7 @@ class SessionKeySchema implements SegmentedBytesStore.KeySchema {
             public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
                 while (iterator.hasNext()) {
                     final Bytes bytes = iterator.peekNextKey();
-                    final Windowed<Bytes> windowedKey = SessionKeySerde.fromBytes(bytes);
+                    final Windowed<Bytes> windowedKey = SessionWindowedSerde.from(bytes);
                     if ((binaryKeyFrom == null || windowedKey.key().compareTo(binaryKeyFrom) >= 0)
                         && (binaryKeyTo == null || windowedKey.key().compareTo(binaryKeyTo) <= 0)
                         && windowedKey.window().end() >= from

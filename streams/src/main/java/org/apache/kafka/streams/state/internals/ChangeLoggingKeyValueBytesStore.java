@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -23,6 +24,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
 
@@ -38,13 +40,11 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         inner.init(context, root);
+        final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), inner.name());
         this.changeLogger = new StoreChangeLogger<>(
             inner.name(),
             context,
-            WindowStoreUtils.getInnerStateSerde(
-                ProcessorStateManager.storeChangelogTopic(
-                    context.applicationId(),
-                    inner.name())));
+            new StateSerdes<>(topic,Serdes.Bytes(), Serdes.ByteArray()));
 
         // if the inner store is an LRU cache, add the eviction listener to log removed record
         if (inner instanceof MemoryLRUCache) {

@@ -14,13 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream;
+package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.kstream.Windowed;
 
-public class TimeWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
+public interface WindowedSerializer<T> extends Serializer<Windowed<T>> {
 
-    public TimeWindowedSerde() {
-        super(new TimeWindowedSerializer<T>(), new TimeWindowedDeserializer<T>());
-    }
+    byte[] serializeBaseKey(String topic, Windowed<T> data);
 }

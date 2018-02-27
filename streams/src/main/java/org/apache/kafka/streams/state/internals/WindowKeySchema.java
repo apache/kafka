@@ -16,24 +16,21 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.kstream.WindowedSerdes.TimeWindowedSerde;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.StateSerdes;
 
 import java.nio.ByteBuffer;
 import java.util.List;
 
 class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
-    private static final int SUFFIX_SIZE = WindowStoreUtils.TIMESTAMP_SIZE + WindowStoreUtils.SEQNUM_SIZE;
+    private static final int SUFFIX_SIZE = TimeWindowedSerde.TIMESTAMP_SIZE + TimeWindowedSerde.SEQNUM_SIZE;
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
-
-    private StateSerdes<Bytes, byte[]> serdes;
 
     @Override
     public void init(final String topic) {
-        serdes = new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray());
+        // do nothing;
     }
 
     @Override
@@ -53,17 +50,17 @@ class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
     @Override
     public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
-        return WindowStoreUtils.toBinaryKey(key, Math.max(0, from), 0, serdes);
+        return TimeWindowedSerde.toStoreKeyBinary(key, Math.max(0, from), 0);
     }
 
     @Override
     public Bytes upperRangeFixedSize(final Bytes key, final long to) {
-        return WindowStoreUtils.toBinaryKey(key, to, Integer.MAX_VALUE, serdes);
+        return TimeWindowedSerde.toStoreKeyBinary(key, to, Integer.MAX_VALUE);
     }
 
     @Override
     public long segmentTimestamp(final Bytes key) {
-        return WindowStoreUtils.timestampFromBinaryKey(key.get());
+        return TimeWindowedSerde.extractStoreTimestamp(key.get());
     }
 
     @Override
@@ -73,8 +70,8 @@ class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
             public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
                 while (iterator.hasNext()) {
                     final Bytes bytes = iterator.peekNextKey();
-                    final Bytes keyBytes = WindowStoreUtils.bytesKeyFromBinaryKey(bytes.get());
-                    final long time = WindowStoreUtils.timestampFromBinaryKey(bytes.get());
+                    final Bytes keyBytes = Bytes.wrap(TimeWindowedSerde.extractStoreKeyBytes(bytes.get()));
+                    final long time = TimeWindowedSerde.extractStoreTimestamp(bytes.get());
                     if ((binaryKeyFrom == null || keyBytes.compareTo(binaryKeyFrom) >= 0)
                         && (binaryKeyTo == null || keyBytes.compareTo(binaryKeyTo) <= 0)
                         && time >= from

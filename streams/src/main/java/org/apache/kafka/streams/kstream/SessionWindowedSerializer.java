@@ -17,49 +17,35 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 
-import java.nio.ByteBuffer;
 import java.util.Map;
 
-/**
- *  The inner deserializer class can be specified by setting the property key.deserializer.inner.class,
- *  value.deserializer.inner.class or deserializer.inner.class,
- *  if the no-arg constructor is called and hence it is not passed during initialization.
- *  Note that the first two take precedence over the last.
- */
-public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
+public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
 
-    private final Long windowSize;
-    
-    private Deserializer<T> inner;
-    
+    private Serializer<T> inner;
+
     // Default constructor needed by Kafka
-    public TimeWindowedDeserializer() {
-        this(null, Long.MAX_VALUE);
+    public SessionWindowedSerializer() {
+        this(null);
     }
 
-    // TODO: fix this part as last bits of KAFKA-4468
-    public TimeWindowedDeserializer(final Deserializer<T> inner) {
-        this(inner, Long.MAX_VALUE);
-    }
-
-    public TimeWindowedDeserializer(final Deserializer<T> inner, final long windowSize) {
+    public SessionWindowedSerializer(final Serializer<T> inner) {
         this.inner = inner;
-        this.windowSize = windowSize;
     }
-    
+
     @SuppressWarnings("unchecked")
     @Override
-    public void configure(Map<String, ?> configs, boolean isKey) {
+    public void configure(final Map<String, ?> configs, final boolean isKey) {
         if (inner == null) {
             String propertyName = isKey ? StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS : StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS;
             String value = (String) configs.get(propertyName);
             try {
-                inner = Serde.class.cast(Utils.newInstance(value, Serde.class)).deserializer();
+                inner = Serde.class.cast(Utils.newInstance(value, Serde.class)).serializer();
                 inner.configure(configs, isKey);
             } catch (ClassNotFoundException e) {
                 throw new ConfigException(propertyName, value, "Serde class " + value + " could not be found.");
@@ -68,21 +54,25 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     }
 
     @Override
-    public Windowed<T> deserialize(String topic, byte[] data) {
-        return WindowedSerdes.TimeWindowedSerde.from(data, windowSize, inner, topic);
+    public byte[] serialize(final String topic, final Windowed<T> data) {
+        if (data == null) {
+            return null;
+        }
+        return WindowedSerdes.SessionWindowedSerde.toBinary(data, inner, topic);
     }
 
     @Override
     public void close() {
         inner.close();
     }
-    
-    // Only for testing
-    public Deserializer<T> innerDeserializer() {
-        return inner;
+
+    @Override
+    public byte[] serializeBaseKey(String topic, Windowed<T> data) {
+        return inner.serialize(topic, data.key());
     }
-    
-    public Long getWindowSize() {
-        return this.windowSize;
+
+    // Only for testing
+    Serializer<T> innerSerializer() {
+        return inner;
     }
 }

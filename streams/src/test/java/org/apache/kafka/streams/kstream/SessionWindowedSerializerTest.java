@@ -29,22 +29,22 @@ import java.util.Map;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-public class TimeWindowedSerializerTest {
+public class SessionWindowedSerializerTest {
     @Test
     public void testWindowedSerializerNoArgConstructors() {
         Map<String, String> props = new HashMap<>();
         props.put(StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class.getName());
         props.put(StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS, Serdes.ByteArraySerde.class.getName());
 
-        TimeWindowedSerializer<?> timeWindowedDeserializer = new TimeWindowedSerializer<>();
-        timeWindowedDeserializer.configure(props, true);
-        Serializer<?> inner = timeWindowedDeserializer.innerSerializer();
+        SessionWindowedSerializer<?> sessionWindowedDeserializer = new SessionWindowedSerializer<>();
+        sessionWindowedDeserializer.configure(props, true);
+        Serializer<?> inner = sessionWindowedDeserializer.innerSerializer();
         assertNotNull("Inner serializer should be not null", inner);
         assertTrue("Inner serializer type should be StringDeserializer", inner instanceof StringSerializer);
 
-        timeWindowedDeserializer = new TimeWindowedSerializer<>();
-        timeWindowedDeserializer.configure(props, false);
-        inner = timeWindowedDeserializer.innerSerializer();
+        sessionWindowedDeserializer = new SessionWindowedSerializer<>();
+        sessionWindowedDeserializer.configure(props, false);
+        inner = sessionWindowedDeserializer.innerSerializer();
         assertNotNull("Inner serializer should be not null", inner);
         assertTrue("Inner serializer type should be ByteArrayDeserializer", inner instanceof ByteArraySerializer);
     }

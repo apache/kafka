@@ -22,39 +22,24 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 
-import java.nio.ByteBuffer;
 import java.util.Map;
 
-/**
- *  The inner deserializer class can be specified by setting the property key.deserializer.inner.class,
- *  value.deserializer.inner.class or deserializer.inner.class,
- *  if the no-arg constructor is called and hence it is not passed during initialization.
- *  Note that the first two take precedence over the last.
- */
-public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
+public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
-    private final Long windowSize;
-    
     private Deserializer<T> inner;
-    
+
     // Default constructor needed by Kafka
-    public TimeWindowedDeserializer() {
-        this(null, Long.MAX_VALUE);
+    public SessionWindowedDeserializer() {
+        this(null);
     }
 
-    // TODO: fix this part as last bits of KAFKA-4468
-    public TimeWindowedDeserializer(final Deserializer<T> inner) {
-        this(inner, Long.MAX_VALUE);
-    }
-
-    public TimeWindowedDeserializer(final Deserializer<T> inner, final long windowSize) {
+    public SessionWindowedDeserializer(final Deserializer<T> inner) {
         this.inner = inner;
-        this.windowSize = windowSize;
     }
-    
+
     @SuppressWarnings("unchecked")
     @Override
-    public void configure(Map<String, ?> configs, boolean isKey) {
+    public void configure(final Map<String, ?> configs, final boolean isKey) {
         if (inner == null) {
             String propertyName = isKey ? StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS : StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS;
             String value = (String) configs.get(propertyName);
@@ -68,21 +53,20 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     }
 
     @Override
-    public Windowed<T> deserialize(String topic, byte[] data) {
-        return WindowedSerdes.TimeWindowedSerde.from(data, windowSize, inner, topic);
+    public Windowed<T> deserialize(final String topic, final byte[] data) {
+        if (data == null || data.length == 0) {
+            return null;
+        }
+        return WindowedSerdes.SessionWindowedSerde.from(data, inner, topic);
     }
 
     @Override
     public void close() {
         inner.close();
     }
-    
+
     // Only for testing
     public Deserializer<T> innerDeserializer() {
         return inner;
-    }
-    
-    public Long getWindowSize() {
-        return this.windowSize;
     }
 }

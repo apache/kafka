@@ -20,8 +20,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.kstream.WindowedSerdes.TimeWindowedSerde;
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.test.KeyValueIteratorStub;
 import org.junit.Before;
 import org.junit.Test;
@@ -41,12 +41,12 @@ public class WindowKeySchemaTest {
     @Before
     public void before() {
         windowKeySchema.init("topic");
-        final List<KeyValue<Bytes, Integer>> keys = Arrays.asList(KeyValue.pair(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new SessionWindow(0, 0))), 1),
-                                                                  KeyValue.pair(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(0, 0))), 2),
-                                                                  KeyValue.pair(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new SessionWindow(0, 0))), 3),
-                                                                  KeyValue.pair(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(10, 20))), 4),
-                                                                  KeyValue.pair(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new SessionWindow(10, 20))), 5),
-                                                                  KeyValue.pair(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new SessionWindow(10, 20))), 6));
+        final List<KeyValue<Bytes, Integer>> keys = Arrays.asList(KeyValue.pair(Bytes.wrap(TimeWindowedSerde.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new TimeWindow(0, 0)))), 1),
+                                                                  KeyValue.pair(Bytes.wrap(TimeWindowedSerde.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new TimeWindow(0, 0)))), 2),
+                                                                  KeyValue.pair(Bytes.wrap(TimeWindowedSerde.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new TimeWindow(0, 0)))), 3),
+                                                                  KeyValue.pair(Bytes.wrap(TimeWindowedSerde.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new TimeWindow(10, 20)))), 4),
+                                                                  KeyValue.pair(Bytes.wrap(TimeWindowedSerde.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new TimeWindow(10, 20)))), 5),
+                                                                  KeyValue.pair(Bytes.wrap(TimeWindowedSerde.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new TimeWindow(10, 20)))), 6));
         iterator = new DelegatingPeekingKeyValueIterator<>("foo", new KeyValueIteratorStub<>(keys.iterator()));
     }
     
@@ -64,7 +64,7 @@ public class WindowKeySchemaTest {
         assertThat(
             "shorter key with max timestamp should be in range",
             upper.compareTo(
-                WindowStoreUtils.toBinaryKey(
+                TimeWindowedSerde.toStoreKeyBinary(
                     new byte[]{0xA},
                     Long.MAX_VALUE,
                     Integer.MAX_VALUE
@@ -75,7 +75,7 @@ public class WindowKeySchemaTest {
         assertThat(
             "shorter key with max timestamp should be in range",
             upper.compareTo(
-                WindowStoreUtils.toBinaryKey(
+                TimeWindowedSerde.toStoreKeyBinary(
                     new byte[]{0xA, 0xB},
                     Long.MAX_VALUE,
                     Integer.MAX_VALUE
@@ -83,7 +83,7 @@ public class WindowKeySchemaTest {
             ) >= 0
         );
 
-        assertThat(upper, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xA}, Long.MAX_VALUE, Integer.MAX_VALUE)));
+        assertThat(upper, equalTo(TimeWindowedSerde.toStoreKeyBinary(new byte[]{0xA}, Long.MAX_VALUE, Integer.MAX_VALUE)));
     }
 
     @Test
@@ -93,7 +93,7 @@ public class WindowKeySchemaTest {
         assertThat(
             "shorter key with max timestamp should be in range",
             upper.compareTo(
-                WindowStoreUtils.toBinaryKey(
+                TimeWindowedSerde.toStoreKeyBinary(
                     new byte[]{0xA, (byte) 0x8F},
                     Long.MAX_VALUE,
                     Integer.MAX_VALUE
@@ -101,7 +101,7 @@ public class WindowKeySchemaTest {
             ) >= 0
         );
 
-        assertThat(upper, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}, Long.MAX_VALUE, Integer.MAX_VALUE)));
+        assertThat(upper, equalTo(TimeWindowedSerde.toStoreKeyBinary(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}, Long.MAX_VALUE, Integer.MAX_VALUE)));
     }
 
 
@@ -112,7 +112,7 @@ public class WindowKeySchemaTest {
         assertThat(
             "shorter key with max timestamp should be in range",
             upper.compareTo(
-                WindowStoreUtils.toBinaryKey(
+                TimeWindowedSerde.toStoreKeyBinary(
                     new byte[]{0xC, 0xC},
                     0x0AffffffffffffffL,
                     Integer.MAX_VALUE
@@ -120,25 +120,25 @@ public class WindowKeySchemaTest {
             ) >= 0
         );
 
-        assertThat(upper, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xC, 0xC}, 0x0AffffffffffffffL, Integer.MAX_VALUE)));
+        assertThat(upper, equalTo(TimeWindowedSerde.toStoreKeyBinary(new byte[]{0xC, 0xC}, 0x0AffffffffffffffL, Integer.MAX_VALUE)));
     }
 
     @Test
     public void testUpperBoundWithZeroTimestamp() {
         Bytes upper = windowKeySchema.upperRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 0);
-        assertThat(upper, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xA, 0xB, 0xC}, 0, Integer.MAX_VALUE)));
+        assertThat(upper, equalTo(TimeWindowedSerde.toStoreKeyBinary(new byte[]{0xA, 0xB, 0xC}, 0, Integer.MAX_VALUE)));
     }
 
     @Test
     public void testLowerBoundWithZeroTimestamp() {
         Bytes lower = windowKeySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 0);
-        assertThat(lower, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xA, 0xB, 0xC}, 0, 0)));
+        assertThat(lower, equalTo(TimeWindowedSerde.toStoreKeyBinary(new byte[]{0xA, 0xB, 0xC}, 0, 0)));
     }
 
     @Test
     public void testLowerBoundWithMonZeroTimestamp() {
         Bytes lower = windowKeySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 42);
-        assertThat(lower, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xA, 0xB, 0xC}, 0, 0)));
+        assertThat(lower, equalTo(TimeWindowedSerde.toStoreKeyBinary(new byte[]{0xA, 0xB, 0xC}, 0, 0)));
     }
 
     @Test
@@ -148,7 +148,7 @@ public class WindowKeySchemaTest {
         assertThat(
             "appending zeros to key should still be in range",
             lower.compareTo(
-                WindowStoreUtils.toBinaryKey(
+                    TimeWindowedSerde.toStoreKeyBinary(
                         new byte[]{0xA, 0xB, 0xC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
                         Long.MAX_VALUE - 1,
                         0
@@ -156,7 +156,7 @@ public class WindowKeySchemaTest {
             ) < 0
         );
 
-        assertThat(lower, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xA, 0xB, 0xC}, 0, 0)));
+        assertThat(lower, equalTo(TimeWindowedSerde.toStoreKeyBinary(new byte[]{0xA, 0xB, 0xC}, 0, 0)));
     }
     
     private List<Integer> getValues(final HasNextCondition hasNextCondition) {

@@ -14,94 +14,95 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.kstream.WindowedSerdes.SessionWindowedSerde;
 import org.junit.Test;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
-public class SessionKeySerdeTest {
+public class SessionWindowedSerdesTest {
 
-    final private String topic = "topic";
     final private String key = "key";
+    final private String topic = "topic";
     final private long startTime = 50L;
     final private long endTime = 100L;
+    final private Serde<String> serde = Serdes.String();
+
     final private Window window = new SessionWindow(startTime, endTime);
     final private Windowed<String> windowedKey = new Windowed<>(key, window);
-    final private Serde<String> serde = Serdes.String();
-    final private SessionKeySerde<String> sessionKeySerde = new SessionKeySerde<>(serde);
+    final private Serde<Windowed<String>> keySerde = new SessionWindowedSerde<>(serde);
 
     @Test
     public void shouldSerializeDeserialize() {
-        final byte[] bytes = sessionKeySerde.serializer().serialize(topic, windowedKey);
-        final Windowed<String> result = sessionKeySerde.deserializer().deserialize(topic, bytes);
+        final byte[] bytes = keySerde.serializer().serialize(topic, windowedKey);
+        final Windowed<String> result = keySerde.deserializer().deserialize(topic, bytes);
         assertEquals(windowedKey, result);
     }
 
     @Test
     public void shouldSerializeNullToNull() {
-        assertNull(sessionKeySerde.serializer().serialize(topic, null));
+        assertNull(keySerde.serializer().serialize(topic, null));
     }
 
     @Test
     public void shouldDeSerializeEmtpyByteArrayToNull() {
-        assertNull(sessionKeySerde.deserializer().deserialize(topic, new byte[0]));
+        assertNull(keySerde.deserializer().deserialize(topic, new byte[0]));
     }
 
     @Test
     public void shouldDeSerializeNullToNull() {
-        assertNull(sessionKeySerde.deserializer().deserialize(topic, null));
+        assertNull(keySerde.deserializer().deserialize(topic, null));
     }
 
     @Test
     public void shouldConvertToBinaryAndBack() {
-        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
-        final Windowed<String> result = SessionKeySerde.from(serialized.get(), Serdes.String().deserializer(), "dummy");
+        final byte[] serialized = SessionWindowedSerde.toBinary(windowedKey, serde.serializer(), "dummy");
+        final Windowed<String> result = SessionWindowedSerde.from(serialized, Serdes.String().deserializer(), "dummy");
         assertEquals(windowedKey, result);
     }
 
     @Test
     public void shouldExtractEndTimeFromBinary() {
-        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
-        assertEquals(endTime, SessionKeySerde.extractEnd(serialized.get()));
+        final byte[] serialized = SessionWindowedSerde.toBinary(windowedKey, serde.serializer(), "dummy");
+        assertEquals(endTime, SessionWindowedSerde.extractEndTimestamp(serialized));
     }
 
     @Test
     public void shouldExtractStartTimeFromBinary() {
-        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
-        assertEquals(startTime, SessionKeySerde.extractStart(serialized.get()));
+        final byte[] serialized = SessionWindowedSerde.toBinary(windowedKey, serde.serializer(), "dummy");
+        assertEquals(startTime, SessionWindowedSerde.extractStartTimestamp(serialized));
     }
 
     @Test
     public void shouldExtractWindowFromBindary() {
-        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
-        assertEquals(window, SessionKeySerde.extractWindow(serialized.get()));
+        final byte[] serialized = SessionWindowedSerde.toBinary(windowedKey, serde.serializer(), "dummy");
+        assertEquals(window, SessionWindowedSerde.extractWindow(serialized));
     }
 
     @Test
     public void shouldExtractKeyBytesFromBinary() {
-        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
-        assertArrayEquals(key.getBytes(), SessionKeySerde.extractKeyBytes(serialized.get()));
+        final byte[] serialized = SessionWindowedSerde.toBinary(windowedKey, serde.serializer(), "dummy");
+        assertArrayEquals(key.getBytes(), SessionWindowedSerde.extractKeyBytes(serialized));
     }
 
     @Test
     public void shouldExtractKeyFromBinary() {
-        final Bytes serialized = SessionKeySerde.toBinary(windowedKey, serde.serializer(), "dummy");
-        assertEquals(windowedKey, SessionKeySerde.from(serialized.get(), serde.deserializer(), "dummy"));
+        final byte[] serialized = SessionWindowedSerde.toBinary(windowedKey, serde.serializer(), "dummy");
+        assertEquals(windowedKey, SessionWindowedSerde.from(serialized, serde.deserializer(), "dummy"));
     }
 
     @Test
     public void shouldExtractBytesKeyFromBinary() {
         final Bytes bytesKey = Bytes.wrap(key.getBytes());
         final Windowed<Bytes> windowedBytesKey = new Windowed<>(bytesKey, window);
-        final Bytes serialized = SessionKeySerde.bytesToBinary(windowedBytesKey);
-        assertEquals(windowedBytesKey, SessionKeySerde.fromBytes(serialized));
+        final Bytes serialized = Bytes.wrap(SessionWindowedSerde.toBinary(windowedBytesKey));
+        assertEquals(windowedBytesKey, SessionWindowedSerde.from(serialized));
     }
 }
