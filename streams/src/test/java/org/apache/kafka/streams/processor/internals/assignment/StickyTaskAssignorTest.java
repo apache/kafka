@@ -703,18 +703,18 @@ public class StickyTaskAssignorTest {
         }
     }
 
-    private Map<Integer, Set<TaskId>> sortClientAssignments(Map<Integer, ClientState> clients) {
-        Map<Integer, Set<TaskId>> sortedAssignments = new HashMap<>();
-        for (Map.Entry<Integer, ClientState> entry : clients.entrySet()) {
-            Set<TaskId> sorted = new TreeSet<>(entry.getValue().activeTasks());
+    private Map<Integer, Set<TaskId>> sortClientAssignments(final Map<Integer, ClientState> clients) {
+        final Map<Integer, Set<TaskId>> sortedAssignments = new HashMap<>();
+        for (final Map.Entry<Integer, ClientState> entry : clients.entrySet()) {
+            final Set<TaskId> sorted = new TreeSet<>(entry.getValue().activeTasks());
             sortedAssignments.put(entry.getKey(), sorted);
         }
         return sortedAssignments;
     }
 
-    private Set<TaskId> getExpectedTaskIdAssignment(List<TaskId> tasks, int... indices) {
-        Set<TaskId> sortedAssignment = new TreeSet<>();
-        for (int index : indices) {
+    private Set<TaskId> getExpectedTaskIdAssignment(final List<TaskId> tasks, final int... indices) {
+        final Set<TaskId> sortedAssignment = new TreeSet<>();
+        for (final int index : indices) {
             sortedAssignment.add(tasks.get(index));
         }
         return sortedAssignment;
