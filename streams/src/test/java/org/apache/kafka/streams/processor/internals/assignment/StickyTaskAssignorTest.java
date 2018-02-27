@@ -368,17 +368,19 @@ public class StickyTaskAssignorTest {
             }
         }
 
+        Collections.shuffle(taskIds);
         taskIds.toArray(taskIdArray);
 
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(taskIdArray);
         taskAssignor.assign(0);
 
-        Set<TaskId> expectedClientOneAssignment = getExpectedTaskId(taskIds, 0, 4, 8, 12);
-        Set<TaskId> expectedClientTwoAssignment = getExpectedTaskId(taskIds, 1, 5, 9, 13);
-        Set<TaskId> expectedClientThreeAssignment = getExpectedTaskId(taskIds, 2, 6, 10, 14);
-        Set<TaskId> expectedClientFourAssignment = getExpectedTaskId(taskIds, 3, 7, 11, 15);
+        Collections.sort(taskIds);
+        final Set<TaskId> expectedClientOneAssignment = getExpectedTaskIdAssignment(taskIds, 0, 4, 8, 12);
+        final Set<TaskId> expectedClientTwoAssignment = getExpectedTaskIdAssignment(taskIds, 1, 5, 9, 13);
+        final Set<TaskId> expectedClientThreeAssignment = getExpectedTaskIdAssignment(taskIds, 2, 6, 10, 14);
+        final Set<TaskId> expectedClientFourAssignment = getExpectedTaskIdAssignment(taskIds, 3, 7, 11, 15);
 
-        Map<Integer, Set<TaskId>> sortedAssignments = sortClientAssignments(clients);
+        final Map<Integer, Set<TaskId>> sortedAssignments = sortClientAssignments(clients);
 
         assertThat(sortedAssignments.get(p1), equalTo(expectedClientOneAssignment));
         assertThat(sortedAssignments.get(p2), equalTo(expectedClientTwoAssignment));
@@ -710,7 +712,7 @@ public class StickyTaskAssignorTest {
         return sortedAssignments;
     }
 
-    private Set<TaskId> getExpectedTaskId(List<TaskId> tasks, int... indices) {
+    private Set<TaskId> getExpectedTaskIdAssignment(List<TaskId> tasks, int... indices) {
         Set<TaskId> sortedAssignment = new TreeSet<>();
         for (int index : indices) {
             sortedAssignment.add(tasks.get(index));
