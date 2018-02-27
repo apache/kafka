@@ -66,7 +66,7 @@ class MergedSortedCacheWindowStoreKeyValueIterator
 
     @Override
     int compare(final Bytes cacheKey, final Windowed<Bytes> storeKey) {
-        Bytes storeKeyBytes = WindowKeySchema.toStoreKeyBinary(storeKey.key().get(), storeKey.window().start(), 0);
+        Bytes storeKeyBytes = WindowKeySchema.toStoreKeyBinary(storeKey.key(), storeKey.window().start(), 0);
         return cacheFunction.compareSegmentedKeys(cacheKey, storeKeyBytes);
     }
 }

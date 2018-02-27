@@ -89,7 +89,7 @@ public class ChangeLoggingWindowBytesStoreTest {
 
         store.put(bytesKey, value1);
 
-        assertArrayEquals(value1, (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey.get(), 0, 0)));
+        assertArrayEquals(value1, (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0)));
         EasyMock.verify(inner);
     }
 
@@ -123,8 +123,8 @@ public class ChangeLoggingWindowBytesStoreTest {
         store.put(bytesKey, value1);
         store.put(bytesKey, value1);
 
-        assertArrayEquals(value1, (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey.get(), 0, 1)));
-        assertArrayEquals(value1, (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey.get(), 0, 2)));
+        assertArrayEquals(value1, (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1)));
+        assertArrayEquals(value1, (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2)));
 
         EasyMock.verify(inner);
     }

@@ -54,7 +54,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     private final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs = Collections.singleton(
         KeyValue.pair(
             SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(WindowKeySchema.toStoreKeyBinary(
-                    cacheKey, cacheWindow.start(), 0, Serdes.String().serializer(), "dummy")
+                    new Windowed<>(cacheKey, cacheWindow), 0, new StateSerdes<>("dummy", Serdes.String(), Serdes.ByteArray()))
             ),
             new LRUCacheEntry(cacheKey.getBytes())
         )).iterator();

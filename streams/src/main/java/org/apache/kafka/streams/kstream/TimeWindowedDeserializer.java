@@ -69,8 +69,9 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
     @Override
     public Windowed<T> deserialize(String topic, byte[] data) {
-        if (data == null)
+        if (data == null || data.length == 0) {
             return null;
+        }
 
         return WindowKeySchema.from(data, windowSize, inner, topic);
     }
