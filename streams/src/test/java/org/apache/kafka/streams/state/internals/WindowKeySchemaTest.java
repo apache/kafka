@@ -35,24 +35,27 @@ import java.util.List;
 public class WindowKeySchemaTest {
 
     private final WindowKeySchema windowKeySchema = new WindowKeySchema();
-    private DelegatingPeekingKeyValueIterator<Bytes, Integer> iterator;
 
     @Before
     public void before() {
         windowKeySchema.init("topic");
-        final List<KeyValue<Bytes, Integer>> keys = Arrays.asList(KeyValue.pair(Bytes.wrap(WindowKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new TimeWindow(0, 0)))), 1),
-                                                                  KeyValue.pair(Bytes.wrap(WindowKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new TimeWindow(0, 0)))), 2),
-                                                                  KeyValue.pair(Bytes.wrap(WindowKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new TimeWindow(0, 0)))), 3),
-                                                                  KeyValue.pair(Bytes.wrap(WindowKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new TimeWindow(10, 20)))), 4),
-                                                                  KeyValue.pair(Bytes.wrap(WindowKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new TimeWindow(10, 20)))), 5),
-                                                                  KeyValue.pair(Bytes.wrap(WindowKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new TimeWindow(10, 20)))), 6));
-        iterator = new DelegatingPeekingKeyValueIterator<>("foo", new KeyValueIteratorStub<>(keys.iterator()));
     }
-    
+
     @Test
     public void testHasNextConditionUsingNullKeys() {
+        final List<KeyValue<Bytes, Integer>> keys = Arrays.asList(KeyValue.pair(Bytes.wrap(WindowKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new TimeWindow(0, 0)))), 1),
+                KeyValue.pair(Bytes.wrap(WindowKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new TimeWindow(0, 0)))), 2),
+                KeyValue.pair(Bytes.wrap(WindowKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new TimeWindow(0, 0)))), 3),
+                KeyValue.pair(Bytes.wrap(WindowKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new TimeWindow(10, 20)))), 4),
+                KeyValue.pair(Bytes.wrap(WindowKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new TimeWindow(10, 20)))), 5),
+                KeyValue.pair(Bytes.wrap(WindowKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new TimeWindow(10, 20)))), 6));
+        private DelegatingPeekingKeyValueIterator<Bytes, Integer> iterator = new DelegatingPeekingKeyValueIterator<>("foo", new KeyValueIteratorStub<>(keys.iterator()));
+
         final HasNextCondition hasNextCondition = windowKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE);
-        final List<Integer> results = getValues(hasNextCondition);
+        final List<Integer> results = new ArrayList<>();
+        while (hasNextCondition.hasNext(iterator)) {
+            results.add(iterator.next().value);
+        }
         assertThat(results, equalTo(Arrays.asList(1, 2, 3, 4, 5, 6)));
     }
 
@@ -156,13 +159,5 @@ public class WindowKeySchemaTest {
         );
 
         assertThat(lower, equalTo(WindowKeySchema.toStoreKeyBinary(new byte[]{0xA, 0xB, 0xC}, 0, 0)));
-    }
-    
-    private List<Integer> getValues(final HasNextCondition hasNextCondition) {
-        final List<Integer> results = new ArrayList<>();
-        while (hasNextCondition.hasNext(iterator)) {
-            results.add(iterator.next().value);
-        }
-        return results;
     }
 }
