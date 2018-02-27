@@ -221,7 +221,8 @@ public class ConsumerCoordinatorTest {
             });
         }
 
-        coordinator.coordinatorDead();
+        coordinator.markCoordinatorUnknown();
+        consumerClient.pollNoWakeup();
         coordinator.invokeCompletedOffsetCommitCallbacks();
         assertEquals(numRequests, responses.get());
     }
@@ -238,7 +239,7 @@ public class ConsumerCoordinatorTest {
         final AtomicBoolean asyncCallbackInvoked = new AtomicBoolean(false);
         Map<TopicPartition, OffsetCommitRequest.PartitionData> offsets = Collections.singletonMap(
                 new TopicPartition("foo", 0), new OffsetCommitRequest.PartitionData(13L, ""));
-        consumerClient.send(coordinator.coordinator(), new OffsetCommitRequest.Builder(groupId, offsets))
+        consumerClient.send(coordinator.checkAndGetCoordinator(), new OffsetCommitRequest.Builder(groupId, offsets))
                 .compose(new RequestFutureAdapter<ClientResponse, Object>() {
                     @Override
                     public void onSuccess(ClientResponse value, RequestFuture<Object> future) {}
@@ -251,7 +252,8 @@ public class ConsumerCoordinatorTest {
                     }
                 });
 
-        coordinator.coordinatorDead();
+        coordinator.markCoordinatorUnknown();
+        consumerClient.pollNoWakeup();
         assertTrue(asyncCallbackInvoked.get());
     }
 
@@ -1033,6 +1035,7 @@ public class ConsumerCoordinatorTest {
 
         client.respond(offsetCommitResponse(Collections.singletonMap(t1p, error)));
         consumerClient.pollNoWakeup();
+        consumerClient.pollNoWakeup(); // second poll since coordinator disconnect is async
         coordinator.invokeCompletedOffsetCommitCallbacks();
 
         assertTrue(coordinator.coordinatorUnknown());
@@ -1678,7 +1681,7 @@ public class ConsumerCoordinatorTest {
         subscriptions.assignFromUser(Collections.singleton(t1p));
         subscriptions.seek(t1p, 100L);
 
-        coordinator.coordinatorDead();
+        coordinator.markCoordinatorUnknown();
         assertTrue(coordinator.coordinatorUnknown());
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(t1p, Errors.NONE)));

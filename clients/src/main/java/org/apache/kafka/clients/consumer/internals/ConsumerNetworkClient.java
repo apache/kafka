@@ -44,6 +44,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Higher level consumer access to the network layer with basic support for request futures. This class
@@ -65,9 +66,14 @@ public class ConsumerNetworkClient implements Closeable {
     private final long unsentExpiryMs;
     private final AtomicBoolean wakeupDisabled = new AtomicBoolean();
 
+    // We do not need high throughput, so use a fair lock to try to avoid starvation
+    private final ReentrantLock lock = new ReentrantLock(true);
+
     // when requests complete, they are transferred to this queue prior to invocation. The purpose
     // is to avoid invoking them while holding this object's monitor which can open the door for deadlocks.
     private final ConcurrentLinkedQueue<RequestFutureCompletionHandler> pendingCompletion = new ConcurrentLinkedQueue<>();
+
+    private final ConcurrentLinkedQueue<Node> pendingDisconnects = new ConcurrentLinkedQueue<>();
 
     // this flag allows the client to be safely woken up without waiting on the lock above. It is
     // atomic to avoid the need to acquire the lock above in order to enable it concurrently.
@@ -113,12 +119,22 @@ public class ConsumerNetworkClient implements Closeable {
         return completionHandler.future;
     }
 
-    public synchronized Node leastLoadedNode() {
-        return client.leastLoadedNode(time.milliseconds());
+    public Node leastLoadedNode() {
+        lock.lock();
+        try {
+            return client.leastLoadedNode(time.milliseconds());
+        } finally {
+            lock.unlock();
+        }
     }
 
-    public synchronized boolean hasReadyNodes() {
-        return client.hasReadyNodes();
+    public boolean hasReadyNodes() {
+        lock.lock();
+        try {
+            return client.hasReadyNodes();
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
@@ -227,7 +243,10 @@ public class ConsumerNetworkClient implements Closeable {
         // there may be handlers which need to be invoked if we woke up the previous call to poll
         firePendingCompletedRequests();
 
-        synchronized (this) {
+        lock.lock();
+        try {
+            handlePendingDisconnects();
+
             // send all the requests we can send now
             trySend(now);
 
@@ -265,6 +284,8 @@ public class ConsumerNetworkClient implements Closeable {
 
             // clean unsent requests collection to keep the map from growing indefinitely
             unsent.clean();
+        } finally {
+            lock.unlock();
         }
 
         // called without the lock to avoid deadlock potential if handlers need to acquire locks
@@ -303,8 +324,11 @@ public class ConsumerNetworkClient implements Closeable {
      * @return The number of pending requests
      */
     public int pendingRequestCount(Node node) {
-        synchronized (this) {
+        lock.lock();
+        try {
             return unsent.requestCount(node) + client.inFlightRequestCount(node.idString());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -317,8 +341,11 @@ public class ConsumerNetworkClient implements Closeable {
     public boolean hasPendingRequests(Node node) {
         if (unsent.hasRequests(node))
             return true;
-        synchronized (this) {
+        lock.lock();
+        try {
             return client.hasInFlightRequests(node.idString());
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -328,8 +355,11 @@ public class ConsumerNetworkClient implements Closeable {
      * @return The total count of pending requests
      */
     public int pendingRequestCount() {
-        synchronized (this) {
+        lock.lock();
+        try {
             return unsent.requestCount() + client.inFlightRequestCount();
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -341,8 +371,11 @@ public class ConsumerNetworkClient implements Closeable {
     public boolean hasPendingRequests() {
         if (unsent.hasRequests())
             return true;
-        synchronized (this) {
+        lock.lock();
+        try {
             return client.hasInFlightRequests();
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -386,15 +419,24 @@ public class ConsumerNetworkClient implements Closeable {
         }
     }
 
-    public void disconnect(Node node) {
-        failUnsentRequests(node, DisconnectException.INSTANCE);
+    private void handlePendingDisconnects() {
+        lock.lock();
+        try {
+            while (true) {
+                Node node = pendingDisconnects.poll();
+                if (node == null)
+                    break;
 
-        synchronized (this) {
-            client.disconnect(node.idString());
+                failUnsentRequests(node, DisconnectException.INSTANCE);
+                client.disconnect(node.idString());
+            }
+        } finally {
+            lock.unlock();
         }
+    }
 
-        // We need to poll to ensure callbacks from in-flight requests on the disconnected socket are fired
-        pollNoWakeup();
+    public void disconnectAsync(Node node) {
+        pendingDisconnects.offer(node);
     }
 
     private void failExpiredRequests(long now) {
@@ -408,16 +450,16 @@ public class ConsumerNetworkClient implements Closeable {
 
     private void failUnsentRequests(Node node, RuntimeException e) {
         // clear unsent requests to node and fail their corresponding futures
-        synchronized (this) {
+        lock.lock();
+        try {
             Collection<ClientRequest> unsentRequests = unsent.remove(node);
             for (ClientRequest unsentRequest : unsentRequests) {
                 RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) unsentRequest.callback();
                 handler.onFailure(e);
             }
+        } finally {
+            lock.unlock();
         }
-
-        // called without the lock to avoid deadlock potential
-        firePendingCompletedRequests();
     }
 
     private boolean trySend(long now) {
@@ -458,8 +500,11 @@ public class ConsumerNetworkClient implements Closeable {
 
     @Override
     public void close() throws IOException {
-        synchronized (this) {
+        lock.lock();
+        try {
             client.close();
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -469,8 +514,11 @@ public class ConsumerNetworkClient implements Closeable {
      * @param node Node to connect to if possible
      */
     public boolean connectionFailed(Node node) {
-        synchronized (this) {
+        lock.lock();
+        try {
             return client.connectionFailed(node);
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -481,8 +529,11 @@ public class ConsumerNetworkClient implements Closeable {
      * @param node The node to connect to
      */
     public void tryConnect(Node node) {
-        synchronized (this) {
+        lock.lock();
+        try {
             client.ready(node, time.milliseconds());
+        } finally {
+            lock.unlock();
         }
     }
 

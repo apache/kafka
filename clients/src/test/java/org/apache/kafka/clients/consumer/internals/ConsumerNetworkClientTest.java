@@ -107,7 +107,8 @@ public class ConsumerNetworkClientTest {
         RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
         assertTrue(consumerClient.hasPendingRequests(node));
         assertFalse(client.hasInFlightRequests(node.idString()));
-        consumerClient.disconnect(node);
+        consumerClient.disconnectAsync(node);
+        consumerClient.pollNoWakeup();
         assertTrue(future.failed());
         assertTrue(future.exception() instanceof DisconnectException);
     }
@@ -118,7 +119,8 @@ public class ConsumerNetworkClientTest {
         consumerClient.pollNoWakeup();
         assertTrue(consumerClient.hasPendingRequests(node));
         assertTrue(client.hasInFlightRequests(node.idString()));
-        consumerClient.disconnect(node);
+        consumerClient.disconnectAsync(node);
+        consumerClient.pollNoWakeup();
         assertTrue(future.failed());
         assertTrue(future.exception() instanceof DisconnectException);
     }
