@@ -23,11 +23,13 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -350,6 +352,40 @@ public class StickyTaskAssignorTest {
         assertThat(clients.get(p1).assignedTaskCount(), equalTo(4));
     }
 
+    @Test
+    public void shouldEvenlyDistributeByTaskIdAndPartition() {
+        createClient(p1, 4);
+        createClient(p2, 4);
+        createClient(p3, 4);
+        createClient(p4, 4);
+
+        final List<TaskId> taskIds = new ArrayList<>();
+        final TaskId[] taskIdArray = new TaskId[16];
+
+        for (int i = 1; i <= 2; i++) {
+            for (int j = 0; j < 8; j++) {
+                taskIds.add(new TaskId(i, j));
+            }
+        }
+
+        taskIds.toArray(taskIdArray);
+
+        final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(taskIdArray);
+        taskAssignor.assign(0);
+
+        Set<TaskId> expectedClientOneAssignment = getExpectedTaskId(taskIds, 0, 4, 8, 12);
+        Set<TaskId> expectedClientTwoAssignment = getExpectedTaskId(taskIds, 1, 5, 9, 13);
+        Set<TaskId> expectedClientThreeAssignment = getExpectedTaskId(taskIds, 2, 6, 10, 14);
+        Set<TaskId> expectedClientFourAssignment = getExpectedTaskId(taskIds, 3, 7, 11, 15);
+
+        Map<Integer, Set<TaskId>> sortedAssignments = sortClientAssignments(clients);
+
+        assertThat(sortedAssignments.get(p1), equalTo(expectedClientOneAssignment));
+        assertThat(sortedAssignments.get(p2), equalTo(expectedClientTwoAssignment));
+        assertThat(sortedAssignments.get(p3), equalTo(expectedClientThreeAssignment));
+        assertThat(sortedAssignments.get(p4), equalTo(expectedClientFourAssignment));
+    }
+
 
     @Test
     public void shouldNotHaveSameAssignmentOnAnyTwoHosts() {
@@ -663,6 +699,23 @@ public class StickyTaskAssignorTest {
             Collections.sort(topicGroupIds);
             assertThat(topicGroupIds, equalTo(expectedTopicGroupIds));
         }
+    }
+
+    private Map<Integer, Set<TaskId>> sortClientAssignments(Map<Integer, ClientState> clients) {
+        Map<Integer, Set<TaskId>> sortedAssignments = new HashMap<>();
+        for (Map.Entry<Integer, ClientState> entry : clients.entrySet()) {
+            Set<TaskId> sorted = new TreeSet<>(entry.getValue().activeTasks());
+            sortedAssignments.put(entry.getKey(), sorted);
+        }
+        return sortedAssignments;
+    }
+
+    private Set<TaskId> getExpectedTaskId(List<TaskId> tasks, int... indices) {
+        Set<TaskId> sortedAssignment = new TreeSet<>();
+        for (int index : indices) {
+            sortedAssignment.add(tasks.get(index));
+        }
+        return sortedAssignment;
     }
 
 }
