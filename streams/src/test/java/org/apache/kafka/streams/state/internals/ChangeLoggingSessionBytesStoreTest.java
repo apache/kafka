@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.WindowedSerdes.SessionWindowedSerde;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
@@ -93,7 +92,7 @@ public class ChangeLoggingSessionBytesStoreTest {
 
         store.put(key1, value1);
 
-        assertArrayEquals(value1, (byte[]) sent.get(SessionWindowedSerde.toBinary(key1)));
+        assertArrayEquals(value1, (byte[]) sent.get(SessionKeySchema.toBinary(key1)));
         EasyMock.verify(inner);
     }
 
@@ -105,7 +104,7 @@ public class ChangeLoggingSessionBytesStoreTest {
         init();
         store.remove(key1);
 
-        final Bytes binaryKey = Bytes.wrap(SessionWindowedSerde.toBinary(key1));
+        final Bytes binaryKey = Bytes.wrap(SessionKeySchema.toBinary(key1));
         assertTrue(sent.containsKey(binaryKey));
         assertNull(sent.get(binaryKey));
         EasyMock.verify(inner);

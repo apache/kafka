@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.state.internals.SessionKeySchema;
 
 import java.util.Map;
 
@@ -57,7 +58,9 @@ public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>>
         if (data == null || data.length == 0) {
             return null;
         }
-        return WindowedSerdes.SessionWindowedSerde.from(data, inner, topic);
+
+        // for either key or value, their schema is the same hence we will just use session key schema
+        return SessionKeySchema.from(data, inner, topic);
     }
 
     @Override

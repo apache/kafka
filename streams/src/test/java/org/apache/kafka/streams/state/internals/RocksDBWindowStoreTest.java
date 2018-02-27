@@ -28,7 +28,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.WindowedSerdes.TimeWindowedSerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -877,8 +876,8 @@ public class RocksDBWindowStoreTest {
         HashMap<Integer, Set<String>> entriesByKey = new HashMap<>();
 
         for (KeyValue<byte[], byte[]> entry : changeLog) {
-            long timestamp = TimeWindowedSerde.extractStoreTimestamp(entry.key);
-            Integer key = TimeWindowedSerde.extractStoreKey(entry.key, serdes);
+            long timestamp = WindowKeySchema.extractStoreTimestamp(entry.key);
+            Integer key = WindowKeySchema.extractStoreKey(entry.key, serdes);
             String value = entry.value == null ? null : serdes.valueFrom(entry.value);
 
             Set<String> entries = entriesByKey.get(key);
@@ -897,6 +896,6 @@ public class RocksDBWindowStoreTest {
     }
 
     private static <K, V> KeyValue<Windowed<K>, V> windowedPair(K key, V value, long timestamp, long windowSize) {
-        return KeyValue.pair(new Windowed<>(key, TimeWindowedSerde.timeWindowForSize(timestamp, windowSize)), value);
+        return KeyValue.pair(new Windowed<>(key, WindowKeySchema.timeWindowForSize(timestamp, windowSize)), value);
     }
 }

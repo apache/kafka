@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.KeyValueIteratorStub;
@@ -54,7 +53,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     private final TimeWindow cacheWindow = new TimeWindow(10, 20);
     private final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs = Collections.singleton(
         KeyValue.pair(
-            SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(WindowedSerdes.TimeWindowedSerde.toStoreKeyBinary(
+            SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(WindowKeySchema.toStoreKeyBinary(
                     cacheKey, cacheWindow.start(), 0, Serdes.String().serializer(), "dummy")
             ),
             new LRUCacheEntry(cacheKey.getBytes())

@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.WindowedSerdes.SessionWindowedSerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -86,11 +85,11 @@ public class RocksDBSessionStore<K, AGG> extends WrappedStateStore.AbstractState
 
     @Override
     public void remove(final Windowed<K> key) {
-        bytesStore.remove(Bytes.wrap(SessionWindowedSerde.toBinary(key, serdes.keySerializer(), topic)));
+        bytesStore.remove(Bytes.wrap(SessionKeySchema.toBinary(key, serdes.keySerializer(), topic)));
     }
 
     @Override
     public void put(final Windowed<K> sessionKey, final AGG aggregate) {
-        bytesStore.put(Bytes.wrap(SessionWindowedSerde.toBinary(sessionKey, serdes.keySerializer(), topic)), serdes.rawValue(aggregate));
+        bytesStore.put(Bytes.wrap(SessionKeySchema.toBinary(sessionKey, serdes.keySerializer(), topic)), serdes.rawValue(aggregate));
     }
 }

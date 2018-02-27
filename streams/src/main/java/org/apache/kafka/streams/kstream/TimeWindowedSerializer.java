@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
+import org.apache.kafka.streams.state.internals.WindowKeySchema;
 
 import java.util.Map;
 
@@ -59,7 +60,10 @@ public class TimeWindowedSerializer<T> implements WindowedSerializer<T> {
 
     @Override
     public byte[] serialize(String topic, Windowed<T> data) {
-        return WindowedSerdes.TimeWindowedSerde.toBinary(data, inner, topic);
+        if (data == null)
+            return null;
+
+        return WindowKeySchema.toBinary(data, inner, topic);
     }
 
     @Override

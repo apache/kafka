@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
+import org.apache.kafka.streams.state.internals.SessionKeySchema;
 
 import java.util.Map;
 
@@ -58,7 +59,9 @@ public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
         if (data == null) {
             return null;
         }
-        return WindowedSerdes.SessionWindowedSerde.toBinary(data, inner, topic);
+
+        // for either key or value, their schema is the same hence we will just use session key schema
+        return SessionKeySchema.toBinary(data, inner, topic);
     }
 
     @Override

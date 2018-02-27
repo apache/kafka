@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.WindowedSerdes.TimeWindowedSerde;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -58,7 +57,7 @@ class WindowStoreIteratorWrapper<K, V> {
 
         @Override
         public Long peekNextKey() {
-            return TimeWindowedSerde.extractStoreTimestamp(bytesIterator.peekNextKey().get());
+            return WindowKeySchema.extractStoreTimestamp(bytesIterator.peekNextKey().get());
         }
 
         @Override
@@ -69,7 +68,7 @@ class WindowStoreIteratorWrapper<K, V> {
         @Override
         public KeyValue<Long, V> next() {
             final KeyValue<Bytes, byte[]> next = bytesIterator.next();
-            final long timestamp = TimeWindowedSerde.extractStoreTimestamp(next.key.get());
+            final long timestamp = WindowKeySchema.extractStoreTimestamp(next.key.get());
             final V value = serdes.valueFrom(next.value);
             return KeyValue.pair(timestamp, value);
         }
@@ -101,9 +100,9 @@ class WindowStoreIteratorWrapper<K, V> {
         @Override
         public Windowed<K> peekNextKey() {
             final byte[] nextKey = bytesIterator.peekNextKey().get();
-            final long timestamp = TimeWindowedSerde.extractStoreTimestamp(nextKey);
-            final K key = TimeWindowedSerde.extractStoreKey(nextKey, serdes);
-            return new Windowed<>(key, TimeWindowedSerde.timeWindowForSize(timestamp, windowSize));
+            final long timestamp = WindowKeySchema.extractStoreTimestamp(nextKey);
+            final K key = WindowKeySchema.extractStoreKey(nextKey, serdes);
+            return new Windowed<>(key, WindowKeySchema.timeWindowForSize(timestamp, windowSize));
         }
 
         @Override
@@ -114,11 +113,11 @@ class WindowStoreIteratorWrapper<K, V> {
         @Override
         public KeyValue<Windowed<K>, V> next() {
             final KeyValue<Bytes, byte[]> next = bytesIterator.next();
-            final long timestamp = TimeWindowedSerde.extractStoreTimestamp(next.key.get());
-            final K key = TimeWindowedSerde.extractStoreKey(next.key.get(), serdes);
+            final long timestamp = WindowKeySchema.extractStoreTimestamp(next.key.get());
+            final K key = WindowKeySchema.extractStoreKey(next.key.get(), serdes);
             final V value = serdes.valueFrom(next.value);
             return KeyValue.pair(
-                new Windowed<>(key, TimeWindowedSerde.timeWindowForSize(timestamp, windowSize)),
+                new Windowed<>(key, WindowKeySchema.timeWindowForSize(timestamp, windowSize)),
                 value
             );
 

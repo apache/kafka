@@ -20,7 +20,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.WindowedSerdes.SessionWindowedSerde;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -141,7 +140,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     @Override
     public void put(final Windowed<Bytes> key, byte[] value) {
         validateStoreOpen();
-        final Bytes binaryKey = Bytes.wrap(SessionWindowedSerde.toBinary(key));
+        final Bytes binaryKey = Bytes.wrap(SessionKeySchema.toBinary(key));
         final LRUCacheEntry entry = new LRUCacheEntry(value, true, context.offset(),
                                                       key.window().end(), context.partition(), context.topic());
         cache.put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
@@ -165,7 +164,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
         final RecordContext current = context.recordContext();
         context.setRecordContext(entry.recordContext());
         try {
-            final Windowed<K> key = SessionWindowedSerde.from(binaryKey.get(), serdes.keyDeserializer(), topic);
+            final Windowed<K> key = SessionKeySchema.from(binaryKey.get(), serdes.keyDeserializer(), topic);
             final Bytes rawKey = Bytes.wrap(serdes.rawKey(key.key()));
             if (flushListener != null) {
                 final AGG newValue = serdes.valueFrom(entry.newValue());

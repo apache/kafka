@@ -21,8 +21,8 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.state.internals.WindowKeySchema;
 
-import java.nio.ByteBuffer;
 import java.util.Map;
 
 /**
@@ -69,7 +69,10 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
     @Override
     public Windowed<T> deserialize(String topic, byte[] data) {
-        return WindowedSerdes.TimeWindowedSerde.from(data, windowSize, inner, topic);
+        if (data == null)
+            return null;
+
+        return WindowKeySchema.from(data, windowSize, inner, topic);
     }
 
     @Override

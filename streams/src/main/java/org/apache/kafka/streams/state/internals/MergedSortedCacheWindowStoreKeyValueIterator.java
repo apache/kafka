@@ -20,7 +20,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.WindowedSerdes.TimeWindowedSerde;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 
@@ -57,7 +56,7 @@ class MergedSortedCacheWindowStoreKeyValueIterator
     @Override
     Windowed<Bytes> deserializeCacheKey(final Bytes cacheKey) {
         final byte[] binaryKey = cacheFunction.key(cacheKey).get();
-        return TimeWindowedSerde.fromStoreKey(binaryKey, windowSize, serdes);
+        return WindowKeySchema.fromStoreKey(binaryKey, windowSize, serdes);
     }
 
     @Override
@@ -67,7 +66,7 @@ class MergedSortedCacheWindowStoreKeyValueIterator
 
     @Override
     int compare(final Bytes cacheKey, final Windowed<Bytes> storeKey) {
-        Bytes storeKeyBytes = TimeWindowedSerde.toStoreKeyBinary(storeKey.key().get(), storeKey.window().start(), 0);
+        Bytes storeKeyBytes = WindowKeySchema.toStoreKeyBinary(storeKey.key().get(), storeKey.window().start(), 0);
         return cacheFunction.compareSegmentedKeys(cacheKey, storeKeyBytes);
     }
 }

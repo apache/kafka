@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.WindowedSerdes.TimeWindowedSerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -75,7 +74,7 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     @Override
     public void put(final Bytes key, final byte[] value, final long timestamp) {
         bytesStore.put(key, value, timestamp);
-        changeLogger.logChange(TimeWindowedSerde.toStoreKeyBinary(key, timestamp, maybeUpdateSeqnumForDups()), value);
+        changeLogger.logChange(WindowKeySchema.toStoreKeyBinary(key, timestamp, maybeUpdateSeqnumForDups()), value);
     }
 
     @Override
