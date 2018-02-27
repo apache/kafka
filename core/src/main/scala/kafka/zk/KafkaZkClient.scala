@@ -85,6 +85,12 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     info(s"Registered broker ${brokerInfo.broker.id} at path $path with addresses: ${brokerInfo.broker.endPoints}")
   }
 
+  /**
+   * Registers a given broker in zookeeper as the controller.
+   * @param brokerId the id of the broker that is to be registered as the controller.
+   * @param timestamp the timestamp of the controller election.
+   * @throws KeeperException if an error is returned by ZooKeeper.
+   */
   def registerControllerInZk(brokerId: Int, timestamp: Long): Unit = {
     val path = ControllerZNode.path
     checkedEphemeralCreate(path, ControllerZNode.encode(brokerId, timestamp))
