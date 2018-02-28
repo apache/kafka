@@ -239,17 +239,17 @@ public class StreamsPartitionAssignorTest {
 
         // the first consumer
         AssignmentInfo info10 = checkAssignment(allTopics, assignments.get("consumer10"));
-        allActiveTasks.addAll(info10.activeTasks);
+        allActiveTasks.addAll(info10.activeTasks());
 
         // the second consumer
         AssignmentInfo info11 = checkAssignment(allTopics, assignments.get("consumer11"));
-        allActiveTasks.addAll(info11.activeTasks);
+        allActiveTasks.addAll(info11.activeTasks());
 
         assertEquals(Utils.mkSet(task0, task1), allActiveTasks);
 
         // the third consumer
         AssignmentInfo info20 = checkAssignment(allTopics, assignments.get("consumer20"));
-        allActiveTasks.addAll(info20.activeTasks);
+        allActiveTasks.addAll(info20.activeTasks());
 
         assertEquals(3, allActiveTasks.size());
         assertEquals(allTasks, new HashSet<>(allActiveTasks));
@@ -317,13 +317,13 @@ public class StreamsPartitionAssignorTest {
         final AssignmentInfo info10 = AssignmentInfo.decode(assignments.get("consumer10").userData());
 
         final List<TaskId> expectedInfo10TaskIds = Arrays.asList(taskIdA1, taskIdA3, taskIdB1, taskIdB3);
-        assertEquals(expectedInfo10TaskIds, info10.activeTasks);
+        assertEquals(expectedInfo10TaskIds, info10.activeTasks());
 
         // the second consumer
         final AssignmentInfo info11 = AssignmentInfo.decode(assignments.get("consumer11").userData());
         final List<TaskId> expectedInfo11TaskIds = Arrays.asList(taskIdA0, taskIdA2, taskIdB0, taskIdB2);
 
-        assertEquals(expectedInfo11TaskIds, info11.activeTasks);
+        assertEquals(expectedInfo11TaskIds, info11.activeTasks());
     }
 
     @Test
@@ -354,7 +354,7 @@ public class StreamsPartitionAssignorTest {
         // check assignment info
         Set<TaskId> allActiveTasks = new HashSet<>();
         AssignmentInfo info10 = checkAssignment(Utils.mkSet("topic1"), assignments.get("consumer10"));
-        allActiveTasks.addAll(info10.activeTasks);
+        allActiveTasks.addAll(info10.activeTasks());
 
         assertEquals(3, allActiveTasks.size());
         assertEquals(allTasks, new HashSet<>(allActiveTasks));
@@ -394,7 +394,7 @@ public class StreamsPartitionAssignorTest {
         // check assignment info
         Set<TaskId> allActiveTasks = new HashSet<>();
         AssignmentInfo info10 = checkAssignment(Collections.<String>emptySet(), assignments.get("consumer10"));
-        allActiveTasks.addAll(info10.activeTasks);
+        allActiveTasks.addAll(info10.activeTasks());
 
         assertEquals(0, allActiveTasks.size());
         assertEquals(Collections.<TaskId>emptySet(), new HashSet<>(allActiveTasks));
@@ -407,7 +407,7 @@ public class StreamsPartitionAssignorTest {
 
         // the first consumer
         info10 = checkAssignment(allTopics, assignments.get("consumer10"));
-        allActiveTasks.addAll(info10.activeTasks);
+        allActiveTasks.addAll(info10.activeTasks());
 
         assertEquals(3, allActiveTasks.size());
         assertEquals(allTasks, new HashSet<>(allActiveTasks));
@@ -455,15 +455,15 @@ public class StreamsPartitionAssignorTest {
         AssignmentInfo info;
 
         info = AssignmentInfo.decode(assignments.get("consumer10").userData());
-        allActiveTasks.addAll(info.activeTasks);
+        allActiveTasks.addAll(info.activeTasks());
         allPartitions.addAll(assignments.get("consumer10").partitions());
 
         info = AssignmentInfo.decode(assignments.get("consumer11").userData());
-        allActiveTasks.addAll(info.activeTasks);
+        allActiveTasks.addAll(info.activeTasks());
         allPartitions.addAll(assignments.get("consumer11").partitions());
 
         info = AssignmentInfo.decode(assignments.get("consumer20").userData());
-        allActiveTasks.addAll(info.activeTasks);
+        allActiveTasks.addAll(info.activeTasks());
         allPartitions.addAll(assignments.get("consumer20").partitions());
 
         assertEquals(allTasks, allActiveTasks);
@@ -524,14 +524,14 @@ public class StreamsPartitionAssignorTest {
         AssignmentInfo info11 = AssignmentInfo.decode(assignments.get("consumer11").userData());
         AssignmentInfo info20 = AssignmentInfo.decode(assignments.get("consumer20").userData());
 
-        assertEquals(2, info10.activeTasks.size());
-        assertEquals(2, info11.activeTasks.size());
-        assertEquals(2, info20.activeTasks.size());
+        assertEquals(2, info10.activeTasks().size());
+        assertEquals(2, info11.activeTasks().size());
+        assertEquals(2, info20.activeTasks().size());
 
         Set<TaskId> allTasks = new HashSet<>();
-        allTasks.addAll(info10.activeTasks);
-        allTasks.addAll(info11.activeTasks);
-        allTasks.addAll(info20.activeTasks);
+        allTasks.addAll(info10.activeTasks());
+        allTasks.addAll(info11.activeTasks());
+        allTasks.addAll(info20.activeTasks());
         assertEquals(new HashSet<>(tasks), allTasks);
 
         // check tasks for state topics
@@ -603,15 +603,15 @@ public class StreamsPartitionAssignorTest {
 
         // the first consumer
         AssignmentInfo info10 = checkAssignment(allTopics, assignments.get("consumer10"));
-        allActiveTasks.addAll(info10.activeTasks);
-        allStandbyTasks.addAll(info10.standbyTasks.keySet());
+        allActiveTasks.addAll(info10.activeTasks());
+        allStandbyTasks.addAll(info10.standbyTasks().keySet());
 
         // the second consumer
         AssignmentInfo info11 = checkAssignment(allTopics, assignments.get("consumer11"));
-        allActiveTasks.addAll(info11.activeTasks);
-        allStandbyTasks.addAll(info11.standbyTasks.keySet());
+        allActiveTasks.addAll(info11.activeTasks());
+        allStandbyTasks.addAll(info11.standbyTasks().keySet());
 
-        assertNotEquals("same processId has same set of standby tasks", info11.standbyTasks.keySet(), info10.standbyTasks.keySet());
+        assertNotEquals("same processId has same set of standby tasks", info11.standbyTasks().keySet(), info10.standbyTasks().keySet());
 
         // check active tasks assigned to the first client
         assertEquals(Utils.mkSet(task0, task1), new HashSet<>(allActiveTasks));
@@ -619,8 +619,8 @@ public class StreamsPartitionAssignorTest {
 
         // the third consumer
         AssignmentInfo info20 = checkAssignment(allTopics, assignments.get("consumer20"));
-        allActiveTasks.addAll(info20.activeTasks);
-        allStandbyTasks.addAll(info20.standbyTasks.keySet());
+        allActiveTasks.addAll(info20.activeTasks());
+        allStandbyTasks.addAll(info20.standbyTasks().keySet());
 
         // all task ids are in the active tasks and also in the standby tasks
 
@@ -847,7 +847,7 @@ public class StreamsPartitionAssignorTest {
         configurePartitionAssignor(Collections.singletonMap(StreamsConfig.APPLICATION_SERVER_CONFIG, (Object) userEndPoint));
         final PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("input"));
         final SubscriptionInfo subscriptionInfo = SubscriptionInfo.decode(subscription.userData());
-        assertEquals("localhost:8080", subscriptionInfo.userEndPoint);
+        assertEquals("localhost:8080", subscriptionInfo.userEndPoint());
     }
 
     @Test
@@ -874,7 +874,7 @@ public class StreamsPartitionAssignorTest {
         final Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(metadata, subscriptions);
         final PartitionAssignor.Assignment consumerAssignment = assignments.get("consumer1");
         final AssignmentInfo assignmentInfo = AssignmentInfo.decode(consumerAssignment.userData());
-        final Set<TopicPartition> topicPartitions = assignmentInfo.partitionsByHost.get(new HostInfo("localhost", 8080));
+        final Set<TopicPartition> topicPartitions = assignmentInfo.partitionsByHost().get(new HostInfo("localhost", 8080));
         assertEquals(Utils.mkSet(new TopicPartition("topic1", 0),
                 new TopicPartition("topic1", 1),
                 new TopicPartition("topic1", 2)), topicPartitions);
@@ -1072,8 +1072,8 @@ public class StreamsPartitionAssignorTest {
         final Map<String, PartitionAssignor.Assignment> assign = partitionAssignor.assign(metadata, subscriptions);
         final PartitionAssignor.Assignment consumer1Assignment = assign.get("consumer1");
         final AssignmentInfo assignmentInfo = AssignmentInfo.decode(consumer1Assignment.userData());
-        final Set<TopicPartition> consumer1partitions = assignmentInfo.partitionsByHost.get(new HostInfo("localhost", 8080));
-        final Set<TopicPartition> consumer2Partitions = assignmentInfo.partitionsByHost.get(new HostInfo("other", 9090));
+        final Set<TopicPartition> consumer1partitions = assignmentInfo.partitionsByHost().get(new HostInfo("localhost", 8080));
+        final Set<TopicPartition> consumer2Partitions = assignmentInfo.partitionsByHost().get(new HostInfo("other", 9090));
         final HashSet<TopicPartition> allAssignedPartitions = new HashSet<>(consumer1partitions);
         allAssignedPartitions.addAll(consumer2Partitions);
         assertThat(consumer1partitions, not(allPartitions));
@@ -1111,7 +1111,7 @@ public class StreamsPartitionAssignorTest {
         AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
 
         // check if the number of assigned partitions == the size of active task id list
-        assertEquals(assignment.partitions().size(), info.activeTasks.size());
+        assertEquals(assignment.partitions().size(), info.activeTasks().size());
 
         // check if active tasks are consistent
         List<TaskId> activeTasks = new ArrayList<>();
@@ -1121,14 +1121,14 @@ public class StreamsPartitionAssignorTest {
             activeTasks.add(new TaskId(0, partition.partition()));
             activeTopics.add(partition.topic());
         }
-        assertEquals(activeTasks, info.activeTasks);
+        assertEquals(activeTasks, info.activeTasks());
 
         // check if active partitions cover all topics
         assertEquals(expectedTopics, activeTopics);
 
         // check if standby tasks are consistent
         Set<String> standbyTopics = new HashSet<>();
-        for (Map.Entry<TaskId, Set<TopicPartition>> entry : info.standbyTasks.entrySet()) {
+        for (Map.Entry<TaskId, Set<TopicPartition>> entry : info.standbyTasks().entrySet()) {
             TaskId id = entry.getKey();
             Set<TopicPartition> partitions = entry.getValue();
             for (TopicPartition partition : partitions) {
@@ -1139,7 +1139,7 @@ public class StreamsPartitionAssignorTest {
             }
         }
 
-        if (info.standbyTasks.size() > 0) {
+        if (info.standbyTasks().size() > 0) {
             // check if standby partitions cover all topics
             assertEquals(expectedTopics, standbyTopics);
         }
