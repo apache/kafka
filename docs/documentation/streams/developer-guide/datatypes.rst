@@ -91,7 +91,7 @@ Maven artifact:
     <dependency>
         <groupId>org.apache.kafka</groupId>
         <artifactId>kafka-clients</artifactId>
-        <version>1.0.0-cp1</version>
+        <version>1.0.0</version>
     </dependency>
 
 .. raw:: html
