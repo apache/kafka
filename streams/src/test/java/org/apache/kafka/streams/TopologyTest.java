@@ -40,7 +40,6 @@ import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class TopologyTest {
@@ -278,11 +277,10 @@ public class TopologyTest {
             new ProcessorTopologyTestDriver(streamsConfig, topology.internalTopologyBuilder);
             fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
-            final String error = e.getCause().toString();
-            final String expectedMessage = "Processor " + badNodeName + " has no access to StateStore " +
-                    LocalMockProcessorSupplier.STORE_NAME;
+            final String error = e.toString();
+            final String expectedMessage = "org.apache.kafka.streams.errors.StreamsException: failed to initialize processor " + badNodeName;
             
-            assertTrue(error.contains(expectedMessage));
+            assertThat(error, equalTo(expectedMessage));
         }
     }
 

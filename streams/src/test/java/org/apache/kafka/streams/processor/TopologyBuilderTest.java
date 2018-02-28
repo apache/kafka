@@ -51,6 +51,7 @@ import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.utils.Utils.mkList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -611,16 +612,15 @@ public class TopologyBuilderTest {
                                 .withStringKeys().withStringValues().inMemory()
                                 .build(), goodNodeName)
                 .addProcessor(badNodeName, new LocalMockProcessorSupplier(),
-                        sourceNodeName);
-
+                        sourceNodeName);     
         try {
             final ProcessorTopologyTestDriver driver = new ProcessorTopologyTestDriver(streamsConfig, builder.internalTopologyBuilder);
-            driver.process("topic", null, null);
+            fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
-            final String error = e.getCause().toString();
-            final String expectedMessage = "Processor " + badNodeName + " has no access to StateStore ";
+            final String error = e.toString();
+            final String expectedMessage = "org.apache.kafka.streams.errors.StreamsException: failed to initialize processor " + badNodeName;
 
-            assert error.contains(expectedMessage);
+            assertThat(error, equalTo(expectedMessage));
         }
     }
 

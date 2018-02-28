@@ -55,7 +55,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     /**
-     * @throws org.apache.kafka.streams.errors.StreamsException if an attempt is made to access this state store from an unknown node
+     * @throws StreamsException if an attempt is made to access this state store from an unknown node
      */
     @Override
     public StateStore getStateStore(final String name) {
