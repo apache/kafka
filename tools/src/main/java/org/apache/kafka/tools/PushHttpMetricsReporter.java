@@ -48,6 +48,8 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -96,7 +98,17 @@ public class PushHttpMetricsReporter implements MetricsReporter {
 
     public PushHttpMetricsReporter() {
         time = new SystemTime();
-        executor = Executors.newSingleThreadScheduledExecutor();
+        executor = new ScheduledThreadPoolExecutor(1, new ThreadFactory() {
+            @Override
+            public Thread newThread(Runnable r) {
+                Thread thread = Executors.defaultThreadFactory().newThread(r);
+                thread.setName("PushHttpMetricsReporterThread");
+                // Ensure these are daemon threads so they won't block shutdown if the MetricsReporter is not properly
+                // closed (e.g. as might happen with Kafka Streams < 1.1.0)
+                thread.setDaemon(true);
+                return thread;
+            }
+        });
     }
 
     PushHttpMetricsReporter(Time mockTime, ScheduledExecutorService mockExecutor) {
