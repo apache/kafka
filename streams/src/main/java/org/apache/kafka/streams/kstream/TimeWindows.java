@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
