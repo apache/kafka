@@ -20,6 +20,7 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -105,7 +106,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
     @Override
     public Map<Long, TimeWindow> windowsFor(final long timestamp) {
         long windowStart = (Math.max(0, timestamp - sizeMs + advanceMs) / advanceMs) * advanceMs;
-        final Map<Long, TimeWindow> windows = new HashMap<>();
+        final Map<Long, TimeWindow> windows = new LinkedHashMap<>();
         while (windowStart <= timestamp) {
             final TimeWindow window = new TimeWindow(windowStart, windowStart + sizeMs);
             windows.put(windowStart, window);
