@@ -44,11 +44,12 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
 
     private String name;
     private ThreadCache cache;
-    private InternalProcessorContext context;
+    private boolean sendOldValues;
     private StateSerdes<K, V> serdes;
+    private InternalProcessorContext context;
     private StateSerdes<Bytes, byte[]> bytesSerdes;
     private CacheFlushListener<Windowed<K>, V> flushListener;
-    private boolean sendOldValues;
+
     private final SegmentedCacheFunction cacheFunction;
 
     CachingWindowStore(final WindowStore<Bytes, byte[]> underlying,
@@ -152,6 +153,19 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         final LRUCacheEntry entry = new LRUCacheEntry(value, true, context.offset(),
                                                       timestamp, context.partition(), context.topic());
         cache.put(name, cacheFunction.cacheKey(keyBytes), entry);
+    }
+
+    @Override
+    public byte[] fetch(final Bytes key, final long timestamp) {
+        validateStoreOpen();
+        final Bytes bytesKey = WindowKeySchema.toStoreKeyBinary(key, timestamp, 0);
+        final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
+        final LRUCacheEntry entry = cache.get(name, cacheKey);
+        if (entry == null) {
+            return underlying.fetch(key, timestamp);
+        } else {
+            return entry.value;
+        }
     }
 
     @Override

@@ -37,7 +37,7 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
     @Override
     public void init(final String topic) {
-        // do nothing;
+        // nothing to do
     }
 
     @Override
@@ -134,12 +134,12 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     // for store serdes
 
     public static Bytes toStoreKeyBinary(final Bytes key, final long timestamp, final int seqnum) {
-        byte[] serializedKey = key.get();
+        final byte[] serializedKey = key.get();
         return toStoreKeyBinary(serializedKey, timestamp, seqnum);
     }
 
     public static <K> Bytes toStoreKeyBinary(final K key, final long timestamp, final int seqnum, final StateSerdes<K, ?> serdes) {
-        byte[] serializedKey = serdes.rawKey(key);
+        final byte[] serializedKey = serdes.rawKey(key);
         return toStoreKeyBinary(serializedKey, timestamp, seqnum);
     }
 
@@ -149,7 +149,7 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     }
 
     public static <K> Bytes toStoreKeyBinary(final Windowed<K> timeKey, final int seqnum, final StateSerdes<K, ?> serdes) {
-        byte[] serializedKey = serdes.rawKey(timeKey.key());
+        final byte[] serializedKey = serdes.rawKey(timeKey.key());
         return toStoreKeyBinary(serializedKey, timeKey.window().start(), seqnum);
     }
 

@@ -47,6 +47,11 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     }
 
     @Override
+    public byte[] fetch(final Bytes key, final long timestamp) {
+        return bytesStore.fetch(key, timestamp);
+    }
+
+    @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long from, final long to) {
         return bytesStore.fetch(key, from, to);
     }
