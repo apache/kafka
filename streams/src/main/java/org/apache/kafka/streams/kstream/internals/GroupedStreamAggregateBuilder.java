@@ -86,6 +86,6 @@ class GroupedStreamAggregateBuilder<K, V> {
         if (!repartitionRequired) {
             return this.name;
         }
-        return KStreamImpl.createReparitionedSource(builder, keySerde, valueSerde, queryableStoreName, name);
+        return KStreamImpl.createRepartitionedSource(builder, keySerde, valueSerde, queryableStoreName, name);
     }
 }

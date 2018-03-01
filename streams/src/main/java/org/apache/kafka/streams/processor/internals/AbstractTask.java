@@ -52,6 +52,7 @@ public abstract class AbstractTask implements Task {
     final Logger log;
     final LogContext logContext;
     boolean taskInitialized;
+    boolean taskClosed;
     final StateDirectory stateDirectory;
 
     InternalProcessorContext processorContext;
@@ -256,6 +257,9 @@ public abstract class AbstractTask implements Task {
         }
     }
 
+    public boolean isClosed() {
+        return taskClosed;
+    }
 
     public boolean hasStateStores() {
         return !topology.stateStores().isEmpty();
