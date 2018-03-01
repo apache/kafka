@@ -253,7 +253,7 @@ public class ConsumerNetworkClient implements Closeable {
             // check whether the poll is still needed by the caller. Note that if the expected completion
             // condition becomes satisfied after the call to shouldBlock() (because of a fired completion
             // handler), the client will be woken up.
-            if (pollCondition == null || pollCondition.shouldBlock()) {
+            if (pendingCompletion.isEmpty() && (pollCondition == null || pollCondition.shouldBlock())) {
                 // if there are no requests in flight, do not block longer than the retry backoff
                 if (client.inFlightRequestCount() == 0)
                     timeout = Math.min(timeout, retryBackoffMs);
@@ -437,6 +437,7 @@ public class ConsumerNetworkClient implements Closeable {
 
     public void disconnectAsync(Node node) {
         pendingDisconnects.offer(node);
+        client.wakeup();
     }
 
     private void failExpiredRequests(long now) {
