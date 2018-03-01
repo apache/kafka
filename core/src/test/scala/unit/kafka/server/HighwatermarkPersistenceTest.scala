@@ -100,6 +100,7 @@ class HighwatermarkPersistenceTest {
   def testHighWatermarkPersistenceMultiplePartitions() {
     val topic1 = "foo1"
     val topic2 = "foo2"
+    val topic3 = "foo3"
     // mock zkclient
     EasyMock.replay(zkClient)
     // create kafka scheduler
@@ -111,6 +112,12 @@ class HighwatermarkPersistenceTest {
     val replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient,
       scheduler, logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""),
       new BrokerTopicStats, new MetadataCache(configs.head.brokerId), logDirFailureChannels.head)
+
+    // Initialize high watermark checkpoint file with topic3 -> 20 and put this partition in LogManager.
+    logManagers.head.getOrCreateLog(new TopicPartition(topic3, 0), LogConfig())
+    val checkpointFile = replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs.head).getAbsolutePath)
+    checkpointFile.write(Map(new TopicPartition(topic3, 0) -> 20L))
+
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -156,6 +163,10 @@ class HighwatermarkPersistenceTest {
       // verify checkpointed hw for topic 1
       topic1Partition0Hw = hwmFor(replicaManager, topic1, 0)
       assertEquals(10L, topic1Partition0Hw)
+
+      // The partition topic3-0 should remain in the high watermark checkpoint file even if ReplicaManager does not know this partition
+      val topic3Partition0Hw = hwmFor(replicaManager, topic3, 0)
+      assertEquals(20L, topic3Partition0Hw)
       EasyMock.verify(zkClient)
     } finally {
       // shutdown the replica manager upon test completion
