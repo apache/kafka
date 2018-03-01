@@ -245,6 +245,7 @@ public class ConsumerNetworkClient implements Closeable {
 
         lock.lock();
         try {
+            // Handle async disconnects prior to attempting any sends
             handlePendingDisconnects();
 
             // send all the requests we can send now
