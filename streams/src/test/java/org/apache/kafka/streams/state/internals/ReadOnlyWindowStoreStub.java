@@ -47,7 +47,16 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     public ReadOnlyWindowStoreStub(long windowSize) {
         this.windowSize = windowSize;
     }
-    
+
+    @Override
+    public V fetch(final K key, final long time) {
+        final Map<K, V> kvMap = data.get(time);
+        if (kvMap != null) {
+            return kvMap.get(key);
+        } else {
+            return null;
+        }
+    }
 
     @Override
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {

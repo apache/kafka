@@ -36,7 +36,6 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     private final boolean retainDuplicates;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
     private ProcessorContext context;
-    private StateSerdes<Bytes, byte[]> innerStateSerde;
     private int seqnum = 0;
 
     ChangeLoggingWindowBytesStore(final WindowStore<Bytes, byte[]> bytesStore,
@@ -44,6 +43,11 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
         super(bytesStore);
         this.bytesStore = bytesStore;
         this.retainDuplicates = retainDuplicates;
+    }
+
+    @Override
+    public byte[] fetch(final Bytes key, final long timestamp) {
+        return bytesStore.fetch(key, timestamp);
     }
 
     @Override
@@ -74,18 +78,19 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     @Override
     public void put(final Bytes key, final byte[] value, final long timestamp) {
         bytesStore.put(key, value, timestamp);
-        changeLogger.logChange(WindowStoreUtils.toBinaryKey(key, timestamp, maybeUpdateSeqnumForDups(), innerStateSerde), value);
+        changeLogger.logChange(WindowStoreUtils.toBinaryKey(key.get(), timestamp, maybeUpdateSeqnumForDups()), value);
     }
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = context;
         bytesStore.init(context, root);
-        innerStateSerde = WindowStoreUtils.getInnerStateSerde(ProcessorStateManager.storeChangelogTopic(context.applicationId(), bytesStore.name()));
+
+        final StateSerdes<Bytes, byte[]> bytesSerde = WindowStoreUtils.getInnerStateSerde(ProcessorStateManager.storeChangelogTopic(context.applicationId(), bytesStore.name()));
         changeLogger = new StoreChangeLogger<>(
             name(),
             context,
-            innerStateSerde);
+            bytesSerde);
     }
 
     private int maybeUpdateSeqnumForDups() {
