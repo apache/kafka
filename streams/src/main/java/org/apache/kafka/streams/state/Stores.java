@@ -198,7 +198,8 @@ public class Stores {
      * Creates a {@link StoreBuilder} that can be used to build a {@link WindowStore}.
      * @param supplier      a {@link WindowBytesStoreSupplier} (cannot be {@code null})
      * @param keySerde      the key serde to use
-     * @param valueSerde    the value serde to use
+     * @param valueSerde    the value serde to use; if the serialized bytes is null for put operations,
+     *                      it is treated as delete
      * @param <K>           key type
      * @param <V>           value type
      * @return an instance of {@link StoreBuilder} than can build a {@link WindowStore}
@@ -214,7 +215,8 @@ public class Stores {
      * Creates a {@link StoreBuilder} than can be used to build a {@link KeyValueStore}.
      * @param supplier      a {@link KeyValueBytesStoreSupplier} (cannot be {@code null})
      * @param keySerde      the key serde to use
-     * @param valueSerde    the value serde to use
+     * @param valueSerde    the value serde to use; if the serialized bytes is null for put operations,
+     *                      it is treated as delete
      * @param <K>           key type
      * @param <V>           value type
      * @return an instance of a {@link StoreBuilder} that can build a {@link KeyValueStore}
@@ -230,7 +232,8 @@ public class Stores {
      * Creates a {@link StoreBuilder} that can be used to build a {@link SessionStore}.
      * @param supplier      a {@link SessionBytesStoreSupplier} (cannot be {@code null})
      * @param keySerde      the key serde to use
-     * @param valueSerde    the value serde to use
+     * @param valueSerde    the value serde to use; if the serialized bytes is null for put operations,
+     *                      it is treated as delete
      * @param <K>           key type
      * @param <V>           value type
      * @return an instance of {@link StoreBuilder} than can build a {@link SessionStore}

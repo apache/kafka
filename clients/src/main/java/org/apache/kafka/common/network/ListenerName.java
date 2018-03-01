@@ -71,4 +71,8 @@ public final class ListenerName {
     public String configPrefix() {
         return CONFIG_STATIC_PREFIX + "." + value.toLowerCase(Locale.ROOT) + ".";
     }
+
+    public String saslMechanismConfigPrefix(String saslMechanism) {
+        return configPrefix() + saslMechanism.toLowerCase(Locale.ROOT) + ".";
+    }
 }

@@ -29,11 +29,14 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.Records;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
@@ -42,6 +45,7 @@ import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
+import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 
 /**
  * This wrapper supports all versions of the Fetch API
@@ -148,9 +152,19 @@ public class FetchResponse extends AbstractResponse {
      */
     private static final Schema FETCH_RESPONSE_V6 = FETCH_RESPONSE_V5;
 
+    // FETCH_REESPONSE_V7 added incremental fetch responses and a top-level error code.
+    public static final Field.Int32 SESSION_ID = new Field.Int32("session_id", "The fetch session ID");
+
+    private static final Schema FETCH_RESPONSE_V7 = new Schema(
+        THROTTLE_TIME_MS,
+        ERROR_CODE,
+        SESSION_ID,
+        new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V5)));
+
     public static Schema[] schemaVersions() {
         return new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2,
-            FETCH_RESPONSE_V3, FETCH_RESPONSE_V4, FETCH_RESPONSE_V5, FETCH_RESPONSE_V6};
+            FETCH_RESPONSE_V3, FETCH_RESPONSE_V4, FETCH_RESPONSE_V5, FETCH_RESPONSE_V6,
+            FETCH_RESPONSE_V7};
     }
 
 
@@ -168,8 +182,10 @@ public class FetchResponse extends AbstractResponse {
      *  UNKNOWN (-1)
      */
 
-    private final LinkedHashMap<TopicPartition, PartitionData> responseData;
     private final int throttleTimeMs;
+    private final Errors error;
+    private final int sessionId;
+    private final LinkedHashMap<TopicPartition, PartitionData> responseData;
 
     public static final class AbortedTransaction {
         public final long producerId;
@@ -268,17 +284,20 @@ public class FetchResponse extends AbstractResponse {
     }
 
     /**
-     * Constructor for all versions.
-     *
      * From version 3 or later, the entries in `responseData` should be in the same order as the entries in
      * `FetchRequest.fetchData`.
      *
-     * @param responseData fetched data grouped by topic-partition
-     * @param throttleTimeMs Time in milliseconds the response was throttled
+     * @param error             The top-level error code.
+     * @param responseData      The fetched data grouped by partition.
+     * @param throttleTimeMs    The time in milliseconds that the response was throttled
+     * @param sessionId         The fetch session id.
      */
-    public FetchResponse(LinkedHashMap<TopicPartition, PartitionData> responseData, int throttleTimeMs) {
+    public FetchResponse(Errors error, LinkedHashMap<TopicPartition, PartitionData> responseData,
+                         int throttleTimeMs, int sessionId) {
+        this.error = error;
         this.responseData = responseData;
         this.throttleTimeMs = throttleTimeMs;
+        this.sessionId = sessionId;
     }
 
     public FetchResponse(Struct struct) {
@@ -316,17 +335,19 @@ public class FetchResponse extends AbstractResponse {
                 }
 
                 PartitionData partitionData = new PartitionData(error, highWatermark, lastStableOffset, logStartOffset,
-                        abortedTransactions, records);
+                    abortedTransactions, records);
                 responseData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
         this.responseData = responseData;
         this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
+        this.error = Errors.forCode(struct.getOrElse(ERROR_CODE, (short) 0));
+        this.sessionId = struct.getOrElse(SESSION_ID, INVALID_SESSION_ID);
     }
 
     @Override
     public Struct toStruct(short version) {
-        return toStruct(version, responseData, throttleTimeMs);
+        return toStruct(version, throttleTimeMs, error, responseData.entrySet().iterator(), sessionId);
     }
 
     @Override
@@ -340,10 +361,14 @@ public class FetchResponse extends AbstractResponse {
         responseHeaderStruct.writeTo(buffer);
         buffer.rewind();
 
-        List<Send> sends = new ArrayList<>();
+        Queue<Send> sends = new ArrayDeque<>();
         sends.add(new ByteBufferSend(dest, buffer));
         addResponseData(responseBodyStruct, throttleTimeMs, dest, sends);
         return new MultiSend(dest, sends);
+    }
+
+    public Errors error() {
+        return error;
     }
 
     public LinkedHashMap<TopicPartition, PartitionData> responseData() {
@@ -352,6 +377,10 @@ public class FetchResponse extends AbstractResponse {
 
     public int throttleTimeMs() {
         return this.throttleTimeMs;
+    }
+
+    public int sessionId() {
+        return sessionId;
     }
 
     @Override
@@ -366,10 +395,18 @@ public class FetchResponse extends AbstractResponse {
         return new FetchResponse(ApiKeys.FETCH.responseSchema(version).read(buffer));
     }
 
-    private static void addResponseData(Struct struct, int throttleTimeMs, String dest, List<Send> sends) {
+    private static void addResponseData(Struct struct, int throttleTimeMs, String dest, Queue<Send> sends) {
         Object[] allTopicData = struct.getArray(RESPONSES_KEY_NAME);
 
-        if (struct.hasField(THROTTLE_TIME_MS)) {
+        if (struct.hasField(ERROR_CODE)) {
+            ByteBuffer buffer = ByteBuffer.allocate(14);
+            buffer.putInt(throttleTimeMs);
+            buffer.putShort(struct.get(ERROR_CODE));
+            buffer.putInt(struct.get(SESSION_ID));
+            buffer.putInt(allTopicData.length);
+            buffer.rewind();
+            sends.add(new ByteBufferSend(dest, buffer));
+        } else if (struct.hasField(THROTTLE_TIME_MS)) {
             ByteBuffer buffer = ByteBuffer.allocate(8);
             buffer.putInt(throttleTimeMs);
             buffer.putInt(allTopicData.length);
@@ -386,7 +423,7 @@ public class FetchResponse extends AbstractResponse {
             addTopicData(dest, sends, (Struct) topicData);
     }
 
-    private static void addTopicData(String dest, List<Send> sends, Struct topicData) {
+    private static void addTopicData(String dest, Queue<Send> sends, Struct topicData) {
         String topic = topicData.get(TOPIC_NAME);
         Object[] allPartitionData = topicData.getArray(PARTITIONS_KEY_NAME);
 
@@ -401,7 +438,7 @@ public class FetchResponse extends AbstractResponse {
             addPartitionData(dest, sends, (Struct) partitionData);
     }
 
-    private static void addPartitionData(String dest, List<Send> sends, Struct partitionData) {
+    private static void addPartitionData(String dest, Queue<Send> sends, Struct partitionData) {
         Struct header = partitionData.getStruct(PARTITION_HEADER_KEY_NAME);
         Records records = partitionData.getRecords(RECORD_SET_KEY_NAME);
 
@@ -416,9 +453,14 @@ public class FetchResponse extends AbstractResponse {
         sends.add(new RecordsSend(dest, records));
     }
 
-    private static Struct toStruct(short version, LinkedHashMap<TopicPartition, PartitionData> responseData, int throttleTimeMs) {
+    private static Struct toStruct(short version, int throttleTimeMs, Errors error,
+            Iterator<Map.Entry<TopicPartition, PartitionData>> partIterator, int sessionId) {
         Struct struct = new Struct(ApiKeys.FETCH.responseSchema(version));
-        List<FetchRequest.TopicAndPartitionData<PartitionData>> topicsData = FetchRequest.TopicAndPartitionData.batchByTopic(responseData);
+        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
+        struct.setIfExists(ERROR_CODE, error.code());
+        struct.setIfExists(SESSION_ID, sessionId);
+        List<FetchRequest.TopicAndPartitionData<PartitionData>> topicsData =
+            FetchRequest.TopicAndPartitionData.batchByTopic(partIterator);
         List<Struct> topicArray = new ArrayList<>();
         for (FetchRequest.TopicAndPartitionData<PartitionData> topicEntry: topicsData) {
             Struct topicData = struct.instance(RESPONSES_KEY_NAME);
@@ -466,13 +508,20 @@ public class FetchResponse extends AbstractResponse {
             topicArray.add(topicData);
         }
         struct.set(RESPONSES_KEY_NAME, topicArray.toArray());
-        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
-
         return struct;
     }
 
-    public static int sizeOf(short version, LinkedHashMap<TopicPartition, PartitionData> responseData) {
-        return 4 + toStruct(version, responseData, 0).sizeOf();
+    /**
+     * Convenience method to find the size of a response.
+     *
+     * @param version       The version of the response to use.
+     * @param partIterator  The partition iterator.
+     * @return              The response size in bytes.
+     */
+    public static int sizeOf(short version, Iterator<Map.Entry<TopicPartition, PartitionData>> partIterator) {
+        // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
+        // use arbitrary values here without affecting the result.
+        return 4 + toStruct(version, 0, Errors.NONE, partIterator, INVALID_SESSION_ID).sizeOf();
     }
 
 }

@@ -54,10 +54,12 @@ object KafkaController extends Logging {
 
 }
 
-class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Time, metrics: Metrics, brokerInfo: BrokerInfo,
+class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Time, metrics: Metrics, initialBrokerInfo: BrokerInfo,
                       tokenManager: DelegationTokenManager, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
 
   this.logIdent = s"[Controller id=${config.brokerId}] "
+
+  @volatile private var brokerInfo = initialBrokerInfo
 
   private val stateChangeLogger = new StateChangeLogger(config.brokerId, inControllerContext = true, None)
   val controllerContext = new ControllerContext
@@ -77,6 +79,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   private val controllerChangeHandler = new ControllerChangeHandler(this, eventManager)
   private val brokerChangeHandler = new BrokerChangeHandler(this, eventManager)
+  private val brokerModificationsHandlers: mutable.Map[Int, BrokerModificationsHandler] = mutable.Map.empty
   private val topicChangeHandler = new TopicChangeHandler(this, eventManager)
   private val topicDeletionHandler = new TopicDeletionHandler(this, eventManager)
   private val partitionModificationsHandlers: mutable.Map[String, PartitionModificationsHandler] = mutable.Map.empty
@@ -187,6 +190,11 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     eventManager.put(controlledShutdownEvent)
   }
 
+  private[kafka] def updateBrokerInfo(newBrokerInfo: BrokerInfo): Unit = {
+    this.brokerInfo = newBrokerInfo
+    zkClient.updateBrokerInfoInZk(newBrokerInfo)
+  }
+
   private def state: ControllerState = eventManager.state
 
   /**
@@ -274,6 +282,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     zkClient.unregisterZNodeChangeHandler(partitionReassignmentHandler.path)
     zkClient.unregisterZNodeChangeHandler(preferredReplicaElectionHandler.path)
     zkClient.unregisterZNodeChildChangeHandler(logDirEventNotificationHandler.path)
+    unregisterBrokerModificationsHandler(brokerModificationsHandlers.keySet)
 
     // reset topic deletion manager
     topicDeletionManager.reset()
@@ -360,6 +369,23 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         s"${newBrokers.mkString(",")}. Signaling restart of topic deletion for these topics")
       topicDeletionManager.resumeDeletionForTopics(replicasForTopicsToBeDeleted.map(_.topic))
     }
+    registerBrokerModificationsHandler(newBrokers)
+  }
+
+  private def registerBrokerModificationsHandler(brokerIds: Iterable[Int]): Unit = {
+    debug(s"Register BrokerModifications handler for $brokerIds")
+    brokerIds.foreach { brokerId =>
+      val brokerModificationsHandler = new BrokerModificationsHandler(this, eventManager, brokerId)
+      zkClient.registerZNodeChangeHandler(brokerModificationsHandler)
+      brokerModificationsHandlers.put(brokerId, brokerModificationsHandler)
+    }
+  }
+
+  private def unregisterBrokerModificationsHandler(brokerIds: Iterable[Int]): Unit = {
+    debug(s"Unregister BrokerModifications handler for $brokerIds")
+    brokerIds.foreach { brokerId =>
+      brokerModificationsHandlers.remove(brokerId).foreach(handler => zkClient.unregisterZNodeChangeHandler(handler.path))
+    }
   }
 
   /*
@@ -374,6 +400,13 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     info(s"Removed $deadBrokersThatWereShuttingDown from list of shutting down brokers.")
     val allReplicasOnDeadBrokers = controllerContext.replicasOnBrokers(deadBrokers.toSet)
     onReplicasBecomeOffline(allReplicasOnDeadBrokers)
+
+    unregisterBrokerModificationsHandler(deadBrokers)
+  }
+
+  private def onBrokerUpdate(updatedBrokers: Seq[Int]) {
+    info(s"Broker info update callback for ${updatedBrokers.mkString(",")}")
+    sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq)
   }
 
   /**
@@ -613,6 +646,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     controllerContext.partitionReplicaAssignment = mutable.Map.empty ++ zkClient.getReplicaAssignmentForTopics(controllerContext.allTopics.toSet)
     controllerContext.partitionLeadershipInfo = new mutable.HashMap[TopicPartition, LeaderIsrAndControllerEpoch]
     controllerContext.shuttingDownBrokerIds = mutable.Set.empty[Int]
+    // register broker modifications handlers
+    registerBrokerModificationsHandler(controllerContext.liveBrokers.map(_.id))
     // update the leader and isr cache for all existing partitions from Zookeeper
     updateLeaderAndIsrCache()
     // start the channel manager
@@ -1209,6 +1244,29 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
+  case object BrokerModifications extends ControllerEvent {
+    override def state: ControllerState = ControllerState.BrokerChange
+
+    override def process(): Unit = {
+      if (!isActive) return
+      val curBrokers = zkClient.getAllBrokersInCluster.toSet
+      val updatedBrokers = controllerContext.liveBrokers.filter { broker =>
+        val existingBroker = curBrokers.find(_.id == broker.id)
+        existingBroker match {
+          case Some(b) => broker.endPoints != b.endPoints
+          case None => false
+        }
+      }
+      if (updatedBrokers.nonEmpty) {
+        val updatedBrokerIdsSorted = updatedBrokers.map(_.id).toSeq.sorted
+        info(s"Updated brokers: $updatedBrokers")
+
+        controllerContext.liveBrokers = curBrokers // Update broker metadata
+        onBrokerUpdate(updatedBrokerIdsSorted)
+      }
+    }
+  }
+
   case object TopicChange extends ControllerEvent {
     override def state: ControllerState = ControllerState.TopicChange
 
@@ -1458,7 +1516,17 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 class BrokerChangeHandler(controller: KafkaController, eventManager: ControllerEventManager) extends ZNodeChildChangeHandler {
   override val path: String = BrokerIdsZNode.path
 
-  override def handleChildChange(): Unit = eventManager.put(controller.BrokerChange)
+  override def handleChildChange(): Unit = {
+    eventManager.put(controller.BrokerChange)
+  }
+}
+
+class BrokerModificationsHandler(controller: KafkaController, eventManager: ControllerEventManager, brokerId: Int) extends ZNodeChangeHandler {
+  override val path: String = BrokerIdZNode.path(brokerId)
+
+  override def handleDataChange(): Unit = {
+    eventManager.put(controller.BrokerModifications)
+  }
 }
 
 class TopicChangeHandler(controller: KafkaController, eventManager: ControllerEventManager) extends ZNodeChildChangeHandler {

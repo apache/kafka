@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.connect.file;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceConnector;
 
 import java.util.ArrayList;
@@ -42,12 +43,13 @@ public class FileStreamSourceConnector extends SourceConnector {
 
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(FILE_CONFIG, Type.STRING, null, Importance.HIGH, "Source filename. If not specified, the standard input will be used")
-        .define(TOPIC_CONFIG, Type.STRING, Importance.HIGH, "The topic to publish data to")
-        .define(TASK_BATCH_SIZE_CONFIG, Type.INT, Importance.LOW, "The maximum number of records the Source task can read from file one time");
+        .define(TOPIC_CONFIG, Type.LIST, Importance.HIGH, "The topic to publish data to")
+        .define(TASK_BATCH_SIZE_CONFIG, Type.INT, DEFAULT_TASK_BATCH_SIZE, Importance.LOW,
+                "The maximum number of records the Source task can read from file one time");
 
     private String filename;
     private String topic;
-    private int batchSize = DEFAULT_TASK_BATCH_SIZE;
+    private int batchSize;
 
     @Override
     public String version() {
@@ -56,20 +58,14 @@ public class FileStreamSourceConnector extends SourceConnector {
 
     @Override
     public void start(Map<String, String> props) {
-        filename = props.get(FILE_CONFIG);
-        topic = props.get(TOPIC_CONFIG);
-        if (topic == null || topic.isEmpty())
-            throw new ConnectException("FileStreamSourceConnector configuration must include 'topic' setting");
-        if (topic.contains(","))
-            throw new ConnectException("FileStreamSourceConnector should only have a single topic when used as a source.");
-
-        if (props.containsKey(TASK_BATCH_SIZE_CONFIG)) {
-            try {
-                batchSize = Integer.parseInt(props.get(TASK_BATCH_SIZE_CONFIG));
-            } catch (NumberFormatException e) {
-                throw new ConnectException("Invalid FileStreamSourceConnector configuration", e);
-            }
+        AbstractConfig parsedConfig = new AbstractConfig(CONFIG_DEF, props);
+        filename = parsedConfig.getString(FILE_CONFIG);
+        List<String> topics = parsedConfig.getList(TOPIC_CONFIG);
+        if (topics.size() != 1) {
+            throw new ConfigException("'topic' in FileStreamSourceConnector configuration requires definition of a single topic");
         }
+        topic = topics.get(0);
+        batchSize = parsedConfig.getInt(TASK_BATCH_SIZE_CONFIG);
     }
 
     @Override

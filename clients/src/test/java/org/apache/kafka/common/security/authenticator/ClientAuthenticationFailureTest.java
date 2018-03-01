@@ -56,6 +56,7 @@ public class ClientAuthenticationFailureTest {
 
     @Before
     public void setup() throws Exception {
+        LoginManager.closeAll();
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
 
         saslServerConfigs = new HashMap<>();

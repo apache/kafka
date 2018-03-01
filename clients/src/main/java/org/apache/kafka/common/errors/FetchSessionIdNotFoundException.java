@@ -15,18 +15,15 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.scram;
+package org.apache.kafka.common.errors;
 
-import javax.security.auth.callback.Callback;
+public class FetchSessionIdNotFoundException extends RetriableException {
+    private static final long serialVersionUID = 1L;
 
-public class DelegationTokenAuthenticationCallback implements Callback {
-    private boolean tokenauth;
-
-    public String extension() {
-        return ScramLoginModule.TOKEN_AUTH_CONFIG + "=" +  Boolean.toString(tokenauth);
+    public FetchSessionIdNotFoundException() {
     }
 
-    public void tokenauth(Boolean tokenauth) {
-        this.tokenauth = tokenauth;
+    public FetchSessionIdNotFoundException(String message) {
+        super(message);
     }
 }

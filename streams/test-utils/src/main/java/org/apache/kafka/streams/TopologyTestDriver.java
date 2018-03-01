@@ -323,47 +323,19 @@ public class TopologyTestDriver {
                 offset,
                 consumerRecord.timestamp(),
                 consumerRecord.timestampType(),
-                consumerRecord.checksum(),
+                ConsumerRecord.NULL_CHECKSUM,
                 consumerRecord.serializedKeySize(),
                 consumerRecord.serializedValueSize(),
                 consumerRecord.key(),
                 consumerRecord.value())));
-            producer.clear();
 
             // Process the record ...
             ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(consumerRecord.timestamp(), offset, topicPartition.partition(), topicName));
             task.process();
             task.maybePunctuateStreamTime();
             task.commit();
+            captureOutputRecords();
 
-            // Capture all the records sent to the producer ...
-            for (final ProducerRecord<byte[], byte[]> record : producer.history()) {
-                Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(record.topic());
-                if (outputRecords == null) {
-                    outputRecords = new LinkedList<>();
-                    outputRecordsByTopic.put(record.topic(), outputRecords);
-                }
-                outputRecords.add(record);
-
-                // Forward back into the topology if the produced record is to an internal or a source topic ...
-                final String outputTopicName = record.topic();
-                if (internalTopics.contains(outputTopicName) || processorTopology.sourceTopics().contains(outputTopicName)) {
-                    final byte[] serializedKey = record.key();
-                    final byte[] serializedValue = record.value();
-
-                    pipeInput(new ConsumerRecord<>(
-                        outputTopicName,
-                        -1,
-                        -1L,
-                        record.timestamp(),
-                        TimestampType.CREATE_TIME,
-                        0L,
-                        serializedKey == null ? 0 : serializedKey.length,
-                        serializedValue == null ? 0 : serializedValue.length,
-                        serializedKey,
-                        serializedValue));
-                }
-            }
         } else {
             final TopicPartition globalTopicPartition = globalPartitionsByTopic.get(topicName);
             if (globalTopicPartition == null) {
@@ -376,7 +348,7 @@ public class TopologyTestDriver {
                 offset,
                 consumerRecord.timestamp(),
                 consumerRecord.timestampType(),
-                consumerRecord.checksum(),
+                ConsumerRecord.NULL_CHECKSUM,
                 consumerRecord.serializedKeySize(),
                 consumerRecord.serializedValueSize(),
                 consumerRecord.key(),
@@ -385,6 +357,38 @@ public class TopologyTestDriver {
         }
     }
 
+    private void captureOutputRecords() {
+        // Capture all the records sent to the producer ...
+        final List<ProducerRecord<byte[], byte[]>> output = producer.history();
+        producer.clear();
+        for (final ProducerRecord<byte[], byte[]> record : output) {
+            Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(record.topic());
+            if (outputRecords == null) {
+                outputRecords = new LinkedList<>();
+                outputRecordsByTopic.put(record.topic(), outputRecords);
+            }
+            outputRecords.add(record);
+
+            // Forward back into the topology if the produced record is to an internal or a source topic ...
+            final String outputTopicName = record.topic();
+            if (internalTopics.contains(outputTopicName) || processorTopology.sourceTopics().contains(outputTopicName)) {
+                final byte[] serializedKey = record.key();
+                final byte[] serializedValue = record.value();
+
+                pipeInput(new ConsumerRecord<>(
+                    outputTopicName,
+                    -1,
+                    -1L,
+                    record.timestamp(),
+                    TimestampType.CREATE_TIME,
+                    0L,
+                    serializedKey == null ? 0 : serializedKey.length,
+                    serializedValue == null ? 0 : serializedValue.length,
+                    serializedKey,
+                    serializedValue));
+            }
+        }
+    }
     /**
      * Send input messages to the topology and then commit each message individually.
      *
@@ -407,6 +411,7 @@ public class TopologyTestDriver {
         mockTime.sleep(advanceMs);
         task.maybePunctuateSystemTime();
         task.commit();
+        captureOutputRecords();
     }
 
     /**
@@ -558,6 +563,7 @@ public class TopologyTestDriver {
                 // ignore
             }
         }
+        captureOutputRecords();
     }
 
     static class MockTime implements Time {

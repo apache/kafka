@@ -221,7 +221,7 @@ public class InternalTopicManager {
                                                              final Map<String, Integer> existingTopicNamesPartitions) {
         final Set<InternalTopicConfig> topicsToBeCreated = new HashSet<>();
         for (final InternalTopicConfig topic : topicsPartitionsMap) {
-            final Integer numberOfPartitions = topic.numberOfPartitions();
+            final int numberOfPartitions = topic.numberOfPartitions();
             if (existingTopicNamesPartitions.containsKey(topic.name())) {
                 if (!existingTopicNamesPartitions.get(topic.name()).equals(numberOfPartitions)) {
                     final String errorMsg = String.format("Existing internal topic %s has invalid partitions: " +

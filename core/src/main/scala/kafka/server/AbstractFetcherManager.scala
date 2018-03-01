@@ -70,9 +70,7 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   def resizeThreadPool(newSize: Int): Unit = {
     def migratePartitions(newSize: Int): Unit = {
       fetcherThreadMap.foreach { case (id, thread) =>
-        val removedPartitions = thread.partitionStates.partitionStates.asScala.map { case state =>
-          state.topicPartition -> new BrokerAndInitialOffset(thread.sourceBroker, state.value.fetchOffset)
-        }.toMap
+        val removedPartitions = thread.partitionsAndOffsets
         removeFetcherForPartitions(removedPartitions.keySet)
         if (id.fetcherId >= newSize)
           thread.shutdown()
@@ -93,7 +91,8 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
     }
   }
 
-  private def getFetcherId(topic: String, partitionId: Int) : Int = {
+  // Visibility for testing
+  private[server] def getFetcherId(topic: String, partitionId: Int) : Int = {
     lock synchronized {
       Utils.abs(31 * topic.hashCode() + partitionId) % numFetchersPerBroker
     }

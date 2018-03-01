@@ -523,6 +523,30 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testInterBrokerVersionMessageFormatCompatibility(): Unit = {
+    def buildConfig(interBrokerProtocol: ApiVersion, messageFormat: ApiVersion): KafkaConfig = {
+      val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+      props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocol.version)
+      props.put(KafkaConfig.LogMessageFormatVersionProp, messageFormat.version)
+      KafkaConfig.fromProps(props)
+    }
+
+    ApiVersion.allVersions.foreach { interBrokerVersion =>
+      ApiVersion.allVersions.foreach { messageFormatVersion =>
+        if (interBrokerVersion.messageFormatVersion.value >= messageFormatVersion.messageFormatVersion.value) {
+          val config = buildConfig(interBrokerVersion, messageFormatVersion)
+          assertEquals(messageFormatVersion, config.logMessageFormatVersion)
+          assertEquals(interBrokerVersion, config.interBrokerProtocolVersion)
+        } else {
+          intercept[IllegalArgumentException] {
+            buildConfig(interBrokerVersion, messageFormatVersion)
+          }
+        }
+      }
+    }
+  }
+
+  @Test
   def testFromPropsInvalid() {
     def getBaseProperties(): Properties = {
       val validRequiredProperties = new Properties()
@@ -674,12 +698,22 @@ class KafkaConfigTest {
         case KafkaConfig.SaslKerberosTicketRenewJitterProp =>
         case KafkaConfig.SaslKerberosMinTimeBeforeReloginProp =>
         case KafkaConfig.SaslKerberosPrincipalToLocalRulesProp => // ignore string
+        case KafkaConfig.SaslJaasConfigProp =>
+
+        // Password encoder configs
+        case KafkaConfig.PasswordEncoderSecretProp =>
+        case KafkaConfig.PasswordEncoderOldSecretProp =>
+        case KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp =>
+        case KafkaConfig.PasswordEncoderCipherAlgorithmProp =>
+        case KafkaConfig.PasswordEncoderKeyLengthProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
+        case KafkaConfig.PasswordEncoderIterationsProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
 
         //delegation token configs
         case KafkaConfig.DelegationTokenMasterKeyProp => // ignore
         case KafkaConfig.DelegationTokenMaxLifeTimeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryTimeMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+
         case _ => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }
     })

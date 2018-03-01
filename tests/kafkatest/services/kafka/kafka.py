@@ -103,9 +103,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         # is authenticating and waiting for the SaslAuthenticated
         # in addition to the SyncConnected event.
         #
-        # The defaut value for zookeeper.connect.timeout.ms is
+        # The default value for zookeeper.connect.timeout.ms is
         # 2 seconds and here we increase it to 5 seconds, but
-        # it can be overriden by setting the corresponding parameter
+        # it can be overridden by setting the corresponding parameter
         # for this constructor.
         self.zk_connect_timeout = zk_connect_timeout
 
@@ -164,6 +164,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         self.start_minikdc(add_principals)
         Service.start(self)
+
+        self.logger.info("Waiting for brokers to register at ZK")
+
+        retries = 30
+        expected_broker_ids = set(self.nodes)
+        wait_until(lambda: {node for node in self.nodes if self.is_registered(node)} == expected_broker_ids, 30, 1)
+
+        if retries == 0:
+            raise RuntimeError("Kafka servers didn't register at ZK within 30 seconds")
 
         # Create topics if necessary
         if self.topics is not None:

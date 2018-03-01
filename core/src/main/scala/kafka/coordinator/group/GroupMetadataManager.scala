@@ -713,22 +713,27 @@ class GroupMetadataManager(brokerId: Int,
 
   // visible for testing
   private[group] def cleanupGroupMetadata(): Unit = {
-    cleanupGroupMetadata(None, groupMetadataCache.values, time.milliseconds())
+    val startMs = time.milliseconds()
+    val offsetsRemoved = cleanupGroupMetadata(groupMetadataCache.values, group => {
+      group.removeExpiredOffsets(time.milliseconds())
+    })
+    info(s"Removed $offsetsRemoved expired offsets in ${time.milliseconds() - startMs} milliseconds.")
   }
 
-  def cleanupGroupMetadata(deletedTopicPartitions: Option[Seq[TopicPartition]],
-                           groups: Iterable[GroupMetadata],
-                           startMs: Long) {
+  /**
+    * This function is used to clean up group offsets given the groups and also a function that performs the offset deletion.
+    * @param groups Groups whose metadata are to be cleaned up
+    * @param selector A function that implements deletion of (all or part of) group offsets. This function is called while
+    *                 a group lock is held, therefore there is no need for the caller to also obtain a group lock.
+    * @return The cumulative number of offsets removed
+    */
+  def cleanupGroupMetadata(groups: Iterable[GroupMetadata], selector: GroupMetadata => Map[TopicPartition, OffsetAndMetadata]): Int = {
     var offsetsRemoved = 0
 
     groups.foreach { group =>
       val groupId = group.groupId
       val (removedOffsets, groupIsDead, generation) = group.inLock {
-        val removedOffsets = deletedTopicPartitions match {
-          case Some(topicPartitions) => group.removeOffsets(topicPartitions)
-          case None => group.removeExpiredOffsets(startMs)
-        }
-
+        val removedOffsets = selector(group)
         if (group.is(Empty) && !group.hasOffsets) {
           info(s"Group $groupId transitioned to Dead in generation ${group.generationId}")
           group.transitionTo(Dead)
@@ -736,13 +741,13 @@ class GroupMetadataManager(brokerId: Int,
         (removedOffsets, group.is(Dead), group.generationId)
       }
 
-      val offsetsPartition = partitionFor(groupId)
-      val appendPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
-      getMagic(offsetsPartition) match {
-        case Some(magicValue) =>
-          // We always use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
-          val timestampType = TimestampType.CREATE_TIME
-          val timestamp = time.milliseconds()
+    val offsetsPartition = partitionFor(groupId)
+    val appendPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
+    getMagic(offsetsPartition) match {
+      case Some(magicValue) =>
+        // We always use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
+        val timestampType = TimestampType.CREATE_TIME
+        val timestamp = time.milliseconds()
 
           replicaManager.nonOfflinePartition(appendPartition).foreach { partition =>
             val tombstones = ListBuffer.empty[SimpleRecord]
@@ -788,7 +793,7 @@ class GroupMetadataManager(brokerId: Int,
       }
     }
 
-    info(s"Removed $offsetsRemoved expired offsets in ${time.milliseconds() - startMs} milliseconds.")
+    offsetsRemoved
   }
 
   def handleTxnCompletion(producerId: Long, completedPartitions: Set[Int], isCommit: Boolean) {

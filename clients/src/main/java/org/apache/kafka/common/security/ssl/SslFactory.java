@@ -144,14 +144,13 @@ public class SslFactory implements Reconfigurable {
     }
 
     @Override
-    public boolean validateReconfiguration(Map<String, ?> configs) {
+    public void validateReconfiguration(Map<String, ?> configs) {
         try {
             SecurityStore newKeystore = maybeCreateNewKeystore(configs);
             if (newKeystore != null)
                 createSSLContext(newKeystore);
-            return true;
         } catch (Exception e) {
-            throw new KafkaException("Validation of dynamic config update failed", e);
+            throw new ConfigException("Validation of dynamic config update failed", e);
         }
     }
 
@@ -163,7 +162,7 @@ public class SslFactory implements Reconfigurable {
                 this.sslContext = createSSLContext(newKeystore);
                 this.keystore = newKeystore;
             } catch (Exception e) {
-                throw new KafkaException("Reconfiguration of SSL keystore failed", e);
+                throw new ConfigException("Reconfiguration of SSL keystore failed", e);
             }
         }
     }
