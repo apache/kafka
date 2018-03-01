@@ -17,17 +17,64 @@
 
 package kafka.tools
 
-import java.io.{PrintStream, FileOutputStream}
+import java.io.{FileOutputStream, PrintStream}
 
 import kafka.common.MessageFormatter
-import kafka.consumer.{BaseConsumer, BaseConsumerRecord}
+import kafka.consumer.{BaseConsumer, BaseConsumerRecord, NewShinyConsumer}
 import kafka.utils.{Exit, TestUtils}
+import org.apache.kafka.clients.consumer.{ConsumerRecord, MockConsumer, OffsetResetStrategy}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.easymock.EasyMock
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{Before, Test}
+
+import scala.collection.JavaConverters._
 
 class ConsoleConsumerTest {
+
+  @Before
+  def setup(): Unit = {
+    ConsoleConsumer.messageCount = 0
+  }
+
+  @Test
+  def shouldResetUnConsumedOffsetsBeforeExitForNewConsumer() {
+    val topic = "test"
+    val maxMessages: Int = 123
+    val totalMessages: Int = 700
+    val startOffset: java.lang.Long = 0L
+
+    val mockConsumer = new MockConsumer[Array[Byte], Array[Byte]](OffsetResetStrategy.EARLIEST)
+    val tp1 = new TopicPartition(topic, 0)
+    val tp2 = new TopicPartition(topic, 1)
+
+    val consumer = new NewShinyConsumer(Some(topic), None, None, None, mockConsumer)
+
+    mockConsumer.rebalance(List(tp1, tp2).asJava)
+    mockConsumer.updateBeginningOffsets(Map(tp1 -> startOffset, tp2 -> startOffset).asJava)
+
+    0 until totalMessages foreach { i =>
+      // add all records, each partition should have half of `totalMessages`
+      mockConsumer.addRecord(new ConsumerRecord[Array[Byte], Array[Byte]](topic, i % 2, i / 2, "key".getBytes, "value".getBytes))
+    }
+
+    // Mocks
+    val formatter = EasyMock.createNiceMock(classOf[MessageFormatter])
+
+    // Expectations
+    EasyMock.expect(formatter.writeTo(EasyMock.anyObject(), EasyMock.anyObject())).times(maxMessages)
+    EasyMock.replay(formatter)
+
+    // Test
+    ConsoleConsumer.process(maxMessages, formatter, consumer, System.out, skipMessageOnError = false)
+    assertEquals(totalMessages, mockConsumer.position(tp1) + mockConsumer.position(tp2))
+
+    consumer.resetUnconsumedOffsets()
+    assertEquals(maxMessages, mockConsumer.position(tp1) + mockConsumer.position(tp2))
+
+    EasyMock.verify(formatter)
+  }
 
   @Test
   def shouldLimitReadsToMaxMessageLimit() {

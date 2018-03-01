@@ -65,7 +65,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThat;
 
-public class StreamPartitionAssignorTest {
+public class StreamsPartitionAssignorTest {
 
     private final TopicPartition t1p0 = new TopicPartition("topic1", 0);
     private final TopicPartition t1p1 = new TopicPartition("topic1", 1);
@@ -105,7 +105,7 @@ public class StreamPartitionAssignorTest {
     private final TaskId task1 = new TaskId(0, 1);
     private final TaskId task2 = new TaskId(0, 2);
     private final TaskId task3 = new TaskId(0, 3);
-    private final StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
+    private final StreamsPartitionAssignor partitionAssignor = new StreamsPartitionAssignor();
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
     private final StreamsConfig streamsConfig = new StreamsConfig(configProps());
@@ -762,7 +762,7 @@ public class StreamPartitionAssignorTest {
             .count();
 
         // joining the stream and the table
-        // this triggers the enforceCopartitioning() routine in the StreamPartitionAssignor,
+        // this triggers the enforceCopartitioning() routine in the StreamsPartitionAssignor,
         // forcing the stream.map to get repartitioned to a topic with four partitions.
         stream1.join(
             table1,
