@@ -107,7 +107,8 @@ public class ConsumerNetworkClientTest {
         RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
         assertTrue(consumerClient.hasPendingRequests(node));
         assertFalse(client.hasInFlightRequests(node.idString()));
-        consumerClient.disconnect(node);
+        consumerClient.disconnectAsync(node);
+        consumerClient.pollNoWakeup();
         assertTrue(future.failed());
         assertTrue(future.exception() instanceof DisconnectException);
     }
@@ -118,7 +119,8 @@ public class ConsumerNetworkClientTest {
         consumerClient.pollNoWakeup();
         assertTrue(consumerClient.hasPendingRequests(node));
         assertTrue(client.hasInFlightRequests(node.idString()));
-        consumerClient.disconnect(node);
+        consumerClient.disconnectAsync(node);
+        consumerClient.pollNoWakeup();
         assertTrue(future.failed());
         assertTrue(future.exception() instanceof DisconnectException);
     }
@@ -203,6 +205,66 @@ public class ConsumerNetworkClientTest {
         client.respond(heartbeatResponse(Errors.NONE));
         consumerClient.poll(future);
         assertTrue(future.isDone());
+    }
+
+    @Test
+    public void testDisconnectWakesUpPoll() throws Exception {
+        final RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
+
+        client.enableBlockingUntilWakeup(1);
+        Thread t = new Thread() {
+            @Override
+            public void run() {
+                consumerClient.poll(future);
+            }
+        };
+        t.start();
+
+        consumerClient.disconnectAsync(node);
+        t.join();
+        assertTrue(future.failed());
+        assertTrue(future.exception() instanceof DisconnectException);
+    }
+
+    @Test
+    public void testFutureCompletionOutsidePoll() throws Exception {
+        // Tests the scenario in which the request that is being awaited in one thread
+        // is received and completed in another thread.
+
+        final RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
+        consumerClient.pollNoWakeup(); // dequeue and send the request
+
+        client.enableBlockingUntilWakeup(2);
+        Thread t1 = new Thread() {
+            @Override
+            public void run() {
+                consumerClient.pollNoWakeup();
+            }
+        };
+        t1.start();
+
+        // Sleep a little so that t1 is blocking in poll
+        Thread.sleep(50);
+
+        Thread t2 = new Thread() {
+            @Override
+            public void run() {
+                consumerClient.poll(future);
+            }
+        };
+        t2.start();
+
+        // Sleep a little so that t2 is awaiting the network client lock
+        Thread.sleep(50);
+
+        // Simulate a network response and return from the poll in t1
+        client.respond(heartbeatResponse(Errors.NONE));
+        client.wakeup();
+
+        // Both threads should complete since t1 should wakeup t2
+        t1.join();
+        t2.join();
+        assertTrue(future.succeeded());
     }
 
     @Test
