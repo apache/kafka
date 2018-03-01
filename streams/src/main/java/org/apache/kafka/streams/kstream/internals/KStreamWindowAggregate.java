@@ -84,7 +84,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
             final Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
 
             // try update the window, and create the new window for the rest of unmatched window that do not exist yet
-            for (Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
+            for (final Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
                 T oldAgg = windowStore.fetch(key, entry.getKey());
 
                 if (oldAgg == null) {

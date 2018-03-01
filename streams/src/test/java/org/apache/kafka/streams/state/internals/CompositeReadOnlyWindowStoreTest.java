@@ -188,6 +188,7 @@ public class CompositeReadOnlyWindowStoreTest {
         assertThat(windowStore.fetch("a", 0L), equalTo("a"));
         assertThat(windowStore.fetch("b", 10L), equalTo("b"));
         assertThat(windowStore.fetch("c", 10L), equalTo(null));
+        assertThat(windowStore.fetch("a", 10L), equalTo(null));
     }
 
 

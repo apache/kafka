@@ -156,7 +156,7 @@ public class RocksDBWindowStoreTest {
     }
 
     @Test
-    public void testPutAndFetch() {
+    public void testRangeAndSinglePointFetch() {
         windowStore = createWindowStore(context);
         long startTime = segmentSize - 4L;
 

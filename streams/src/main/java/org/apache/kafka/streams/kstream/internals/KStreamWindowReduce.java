@@ -79,7 +79,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
             final Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
 
             // try update the window, and create the new window for the rest of unmatched window that do not exist yet
-            for (Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
+            for (final Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
                 final V oldAgg = windowStore.fetch(key, entry.getKey());
 
                 V newAgg;
