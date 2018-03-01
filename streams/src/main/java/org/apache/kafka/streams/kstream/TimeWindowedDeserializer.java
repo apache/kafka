@@ -26,10 +26,10 @@ import org.apache.kafka.streams.state.internals.WindowKeySchema;
 import java.util.Map;
 
 /**
- *  The inner deserializer class can be specified by setting the property key.deserializer.inner.class,
- *  value.deserializer.inner.class or deserializer.inner.class,
+ *  The inner serde class can be specified by setting the property
+ *  {@link StreamsConfig#DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS} or
+ *  {@link StreamsConfig#DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS}
  *  if the no-arg constructor is called and hence it is not passed during initialization.
- *  Note that the first two take precedence over the last.
  */
 public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
@@ -56,8 +56,8 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
         if (inner == null) {
-            String propertyName = isKey ? StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS : StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS;
-            String value = (String) configs.get(propertyName);
+            final String propertyName = isKey ? StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS : StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS;
+            final String value = (String) configs.get(propertyName);
             try {
                 inner = Serde.class.cast(Utils.newInstance(value, Serde.class)).deserializer();
                 inner.configure(configs, isKey);

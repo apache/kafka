@@ -141,7 +141,7 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
     public static <K> byte[] toBinary(final Windowed<K> sessionKey, final Serializer<K> serializer, final String topic) {
         final byte[] bytes = serializer.serialize(topic, sessionKey.key());
-        ByteBuffer buf = ByteBuffer.allocate(bytes.length + 2 * TIMESTAMP_SIZE);
+        final ByteBuffer buf = ByteBuffer.allocate(bytes.length + 2 * TIMESTAMP_SIZE);
         buf.put(bytes);
         buf.putLong(sessionKey.window().end());
         buf.putLong(sessionKey.window().start());
@@ -150,7 +150,7 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
     public static byte[] toBinary(final Windowed<Bytes> sessionKey) {
         final byte[] bytes = sessionKey.key().get();
-        ByteBuffer buf = ByteBuffer.allocate(bytes.length + 2 * TIMESTAMP_SIZE);
+        final ByteBuffer buf = ByteBuffer.allocate(bytes.length + 2 * TIMESTAMP_SIZE);
         buf.put(bytes);
         buf.putLong(sessionKey.window().end());
         buf.putLong(sessionKey.window().start());

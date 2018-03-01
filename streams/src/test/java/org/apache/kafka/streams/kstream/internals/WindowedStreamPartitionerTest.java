@@ -54,13 +54,10 @@ public class WindowedStreamPartitionerTest {
 
     @Test
     public void testCopartitioning() {
-
-        Random rand = new Random();
-
-        DefaultPartitioner defaultPartitioner = new DefaultPartitioner();
-
-        WindowedSerializer<Integer> timeWindowedSerializer = new TimeWindowedSerializer<>(intSerializer);
-        WindowedStreamPartitioner<Integer, String> streamPartitioner = new WindowedStreamPartitioner<>(topicName, timeWindowedSerializer);
+        final Random rand = new Random();
+        final DefaultPartitioner defaultPartitioner = new DefaultPartitioner();
+        final WindowedSerializer<Integer> timeWindowedSerializer = new TimeWindowedSerializer<>(intSerializer);
+        final WindowedStreamPartitioner<Integer, String> streamPartitioner = new WindowedStreamPartitioner<>(topicName, timeWindowedSerializer);
 
         for (int k = 0; k < 10; k++) {
             Integer key = rand.nextInt();

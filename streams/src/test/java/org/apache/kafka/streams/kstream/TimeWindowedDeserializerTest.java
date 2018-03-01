@@ -34,7 +34,7 @@ import static org.junit.Assert.assertTrue;
 public class TimeWindowedDeserializerTest {
     @Test
     public void testWindowedDeserializerNoArgConstructors() {
-        Map<String, String> props = new HashMap<>();
+        final Map<String, String> props = new HashMap<>();
         props.put(StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class.getName());
         props.put(StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS, Serdes.ByteArraySerde.class.getName());
 

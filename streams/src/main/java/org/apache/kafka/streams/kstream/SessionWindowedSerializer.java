@@ -26,6 +26,12 @@ import org.apache.kafka.streams.state.internals.SessionKeySchema;
 
 import java.util.Map;
 
+/**
+ *  The inner serde class can be specified by setting the property
+ *  {@link StreamsConfig#DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS} or
+ *  {@link StreamsConfig#DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS}
+ *  if the no-arg constructor is called and hence it is not passed during initialization.
+ */
 public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
 
     private Serializer<T> inner;
@@ -70,7 +76,7 @@ public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
     }
 
     @Override
-    public byte[] serializeBaseKey(String topic, Windowed<T> data) {
+    public byte[] serializeBaseKey(final String topic, final Windowed<T> data) {
         return inner.serialize(topic, data.key());
     }
 

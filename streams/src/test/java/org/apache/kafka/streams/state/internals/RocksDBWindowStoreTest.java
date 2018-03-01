@@ -876,9 +876,9 @@ public class RocksDBWindowStoreTest {
         HashMap<Integer, Set<String>> entriesByKey = new HashMap<>();
 
         for (KeyValue<byte[], byte[]> entry : changeLog) {
-            long timestamp = WindowKeySchema.extractStoreTimestamp(entry.key);
-            Integer key = WindowKeySchema.extractStoreKey(entry.key, serdes);
-            String value = entry.value == null ? null : serdes.valueFrom(entry.value);
+            final long timestamp = WindowKeySchema.extractStoreTimestamp(entry.key);
+            final Integer key = WindowKeySchema.extractStoreKey(entry.key, serdes);
+            final String value = entry.value == null ? null : serdes.valueFrom(entry.value);
 
             Set<String> entries = entriesByKey.get(key);
             if (entries == null) {

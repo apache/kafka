@@ -110,7 +110,7 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
     public static <K> byte[] toBinary(final Windowed<K> timeKey, final Serializer<K> serializer, final String topic) {
         final byte[] bytes = serializer.serialize(topic, timeKey.key());
-        ByteBuffer buf = ByteBuffer.allocate(bytes.length + TIMESTAMP_SIZE);
+        final ByteBuffer buf = ByteBuffer.allocate(bytes.length + TIMESTAMP_SIZE);
         buf.put(bytes);
         buf.putLong(timeKey.window().start());
 
@@ -155,7 +155,7 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
     // package private for testing
     static Bytes toStoreKeyBinary(byte[] serializedKey, final long timestamp, final int seqnum) {
-        ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + TIMESTAMP_SIZE + SEQNUM_SIZE);
+        final ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + TIMESTAMP_SIZE + SEQNUM_SIZE);
         buf.put(serializedKey);
         buf.putLong(timestamp);
         buf.putInt(seqnum);
