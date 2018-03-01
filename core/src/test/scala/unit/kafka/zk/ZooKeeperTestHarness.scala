@@ -50,7 +50,7 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
 
   def zkPort: Int = zookeeper.port
   def zkConnect: String = s"127.0.0.1:$zkPort"
-
+  
   @Before
   def setUp() {
     zookeeper = new EmbeddedZookeeper()
