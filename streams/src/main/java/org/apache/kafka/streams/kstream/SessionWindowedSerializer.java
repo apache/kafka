@@ -37,9 +37,7 @@ public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
     private Serializer<T> inner;
 
     // Default constructor needed by Kafka
-    public SessionWindowedSerializer() {
-        this(null);
-    }
+    public SessionWindowedSerializer() {}
 
     public SessionWindowedSerializer(final Serializer<T> inner) {
         this.inner = inner;
@@ -54,7 +52,7 @@ public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
             try {
                 inner = Serde.class.cast(Utils.newInstance(value, Serde.class)).serializer();
                 inner.configure(configs, isKey);
-            } catch (ClassNotFoundException e) {
+            } catch (final ClassNotFoundException e) {
                 throw new ConfigException(propertyName, value, "Serde class " + value + " could not be found.");
             }
         }

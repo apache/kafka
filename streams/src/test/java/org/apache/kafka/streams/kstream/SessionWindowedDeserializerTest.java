@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.StreamsConfig;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -30,21 +31,27 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class SessionWindowedDeserializerTest {
-    @Test
-    public void testWindowedDeserializerNoArgConstructors() {
-        final Map<String, String> props = new HashMap<>();
+    private final SessionWindowedDeserializer<?> sessionWindowedDeserializer = new SessionWindowedDeserializer<>();
+    private final Map<String, String> props = new HashMap<>();
+
+    @Before
+    public void setUp() {
         props.put(StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class.getName());
         props.put(StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS, Serdes.ByteArraySerde.class.getName());
+    }
 
-        SessionWindowedDeserializer<?> sessionWindowedDeserializer = new SessionWindowedDeserializer<>();
+    @Test
+    public void testWindowedKeyDeserializerNoArgConstructors() {
         sessionWindowedDeserializer.configure(props, true);
         Deserializer<?> inner = sessionWindowedDeserializer.innerDeserializer();
         assertNotNull("Inner deserializer should be not null", inner);
         assertTrue("Inner deserializer type should be StringDeserializer", inner instanceof StringDeserializer);
+    }
 
-        sessionWindowedDeserializer = new SessionWindowedDeserializer<>();
+    @Test
+    public void testWindowedValueDeserializerNoArgConstructors() {
         sessionWindowedDeserializer.configure(props, false);
-        inner = sessionWindowedDeserializer.innerDeserializer();
+        Deserializer<?> inner = sessionWindowedDeserializer.innerDeserializer();
         assertNotNull("Inner deserializer should be not null", inner);
         assertTrue("Inner deserializer type should be ByteArrayDeserializer", inner instanceof ByteArrayDeserializer);
     }

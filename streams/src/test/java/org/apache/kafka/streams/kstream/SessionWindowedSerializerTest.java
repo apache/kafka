@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsConfig;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -30,22 +31,28 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class SessionWindowedSerializerTest {
-    @Test
-    public void testWindowedSerializerNoArgConstructors() {
-        final Map<String, String> props = new HashMap<>();
+    private final SessionWindowedSerializer<?> sessionWindowedSerializer = new SessionWindowedSerializer<>();
+    private final Map<String, String> props = new HashMap<>();
+
+    @Before
+    public void setUp() {
         props.put(StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class.getName());
         props.put(StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS, Serdes.ByteArraySerde.class.getName());
+    }
 
-        SessionWindowedSerializer<?> sessionWindowedDeserializer = new SessionWindowedSerializer<>();
-        sessionWindowedDeserializer.configure(props, true);
-        Serializer<?> inner = sessionWindowedDeserializer.innerSerializer();
+    @Test
+    public void testWindowedKeySerializerNoArgConstructors() {
+        sessionWindowedSerializer.configure(props, true);
+        Serializer<?> inner = sessionWindowedSerializer.innerSerializer();
         assertNotNull("Inner serializer should be not null", inner);
-        assertTrue("Inner serializer type should be StringDeserializer", inner instanceof StringSerializer);
+        assertTrue("Inner serializer type should be StringSerializer", inner instanceof StringSerializer);
+    }
 
-        sessionWindowedDeserializer = new SessionWindowedSerializer<>();
-        sessionWindowedDeserializer.configure(props, false);
-        inner = sessionWindowedDeserializer.innerSerializer();
+    @Test
+    public void testWindowedValueSerializerNoArgConstructors() {
+        sessionWindowedSerializer.configure(props, false);
+        Serializer<?> inner = sessionWindowedSerializer.innerSerializer();
         assertNotNull("Inner serializer should be not null", inner);
-        assertTrue("Inner serializer type should be ByteArrayDeserializer", inner instanceof ByteArraySerializer);
+        assertTrue("Inner serializer type should be ByteArraySerializer", inner instanceof ByteArraySerializer);
     }
 }

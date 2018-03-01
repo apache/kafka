@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsConfig;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -30,22 +31,28 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class TimeWindowedSerializerTest {
-    @Test
-    public void testWindowedSerializerNoArgConstructors() {
-        final Map<String, String> props = new HashMap<>();
+    private final TimeWindowedSerializer<?> timeWindowedSerializer = new TimeWindowedSerializer<>();
+    private final Map<String, String> props = new HashMap<>();
+
+    @Before
+    public void setUp() {
         props.put(StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class.getName());
         props.put(StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS, Serdes.ByteArraySerde.class.getName());
+    }
 
-        TimeWindowedSerializer<?> timeWindowedDeserializer = new TimeWindowedSerializer<>();
-        timeWindowedDeserializer.configure(props, true);
-        Serializer<?> inner = timeWindowedDeserializer.innerSerializer();
+    @Test
+    public void testWindowedKeySerializerNoArgConstructors() {
+        timeWindowedSerializer.configure(props, true);
+        Serializer<?> inner = timeWindowedSerializer.innerSerializer();
         assertNotNull("Inner serializer should be not null", inner);
-        assertTrue("Inner serializer type should be StringDeserializer", inner instanceof StringSerializer);
+        assertTrue("Inner serializer type should be StringSerializer", inner instanceof StringSerializer);
+    }
 
-        timeWindowedDeserializer = new TimeWindowedSerializer<>();
-        timeWindowedDeserializer.configure(props, false);
-        inner = timeWindowedDeserializer.innerSerializer();
+    @Test
+    public void testWindowedValueSerializerNoArgConstructors() {
+        timeWindowedSerializer.configure(props, false);
+        Serializer<?> inner = timeWindowedSerializer.innerSerializer();
         assertNotNull("Inner serializer should be not null", inner);
-        assertTrue("Inner serializer type should be ByteArrayDeserializer", inner instanceof ByteArraySerializer);
+        assertTrue("Inner serializer type should be ByteArraySerializer", inner instanceof ByteArraySerializer);
     }
 }

@@ -78,7 +78,7 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
 
     @Override
     public V fetch(final K key, final long timestamp) {
-        final byte[] bytesValue = bytesStore.get(WindowStoreUtils.toBinaryKey(key, timestamp, seqnum, serdes));
+        final byte[] bytesValue = bytesStore.get(WindowKeySchema.toStoreKeyBinary(key, timestamp, seqnum, serdes));
         return serdes.valueFrom(bytesValue);
     }
 

@@ -36,9 +36,7 @@ public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>>
     private Deserializer<T> inner;
 
     // Default constructor needed by Kafka
-    public SessionWindowedDeserializer() {
-        this(null);
-    }
+    public SessionWindowedDeserializer() {}
 
     public SessionWindowedDeserializer(final Deserializer<T> inner) {
         this.inner = inner;
@@ -53,7 +51,7 @@ public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>>
             try {
                 inner = Serde.class.cast(Utils.newInstance(value, Serde.class)).deserializer();
                 inner.configure(configs, isKey);
-            } catch (ClassNotFoundException e) {
+            } catch (final ClassNotFoundException e) {
                 throw new ConfigException(propertyName, value, "Serde class " + value + " could not be found.");
             }
         }
@@ -75,7 +73,7 @@ public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>>
     }
 
     // Only for testing
-    public Deserializer<T> innerDeserializer() {
+    Deserializer<T> innerDeserializer() {
         return inner;
     }
 }

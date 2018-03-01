@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
@@ -85,7 +86,7 @@ public class WindowKeySchemaTest {
         assertThat(
             "shorter key with max timestamp should be in range",
             upper.compareTo(
-                    WindowKeySchema.toStoreKeyBinary(
+                WindowKeySchema.toStoreKeyBinary(
                     new byte[]{0xA},
                     Long.MAX_VALUE,
                     Integer.MAX_VALUE
@@ -96,7 +97,7 @@ public class WindowKeySchemaTest {
         assertThat(
             "shorter key with max timestamp should be in range",
             upper.compareTo(
-                    WindowKeySchema.toStoreKeyBinary(
+                WindowKeySchema.toStoreKeyBinary(
                     new byte[]{0xA, 0xB},
                     Long.MAX_VALUE,
                     Integer.MAX_VALUE
@@ -114,7 +115,7 @@ public class WindowKeySchemaTest {
         assertThat(
             "shorter key with max timestamp should be in range",
             upper.compareTo(
-                    WindowKeySchema.toStoreKeyBinary(
+                WindowKeySchema.toStoreKeyBinary(
                     new byte[]{0xA, (byte) 0x8F},
                     Long.MAX_VALUE,
                     Integer.MAX_VALUE
@@ -133,7 +134,7 @@ public class WindowKeySchemaTest {
         assertThat(
             "shorter key with max timestamp should be in range",
             upper.compareTo(
-                    WindowKeySchema.toStoreKeyBinary(
+                WindowKeySchema.toStoreKeyBinary(
                     new byte[]{0xC, 0xC},
                     0x0AffffffffffffffL,
                     Integer.MAX_VALUE
@@ -186,6 +187,22 @@ public class WindowKeySchemaTest {
         final Windowed<String> result = keySerde.deserializer().deserialize(topic, bytes);
         // TODO: fix this part as last bits of KAFKA-4468
         assertEquals(new Windowed<>(key, new TimeWindow(startTime, Long.MAX_VALUE)), result);
+    }
+
+    @Test
+    public void testSerializeDeserializeOverflowWindowSize() {
+        final byte[] bytes = keySerde.serializer().serialize(topic, windowedKey);
+        final Windowed<String> result = new TimeWindowedDeserializer<>(serde.deserializer(), Long.MAX_VALUE - 1)
+                .deserialize(topic, bytes);
+        assertEquals(new Windowed<>(key, new TimeWindow(startTime, Long.MAX_VALUE)), result);
+    }
+
+
+    @Test
+    public void shouldSerializeDeserializeExpectedWindowSize() {
+        final byte[] bytes = keySerde.serializer().serialize(topic, windowedKey);
+        final Windowed<String> result = keySerde.deserializer().deserialize(topic, bytes);
+        assertEquals(windowedKey, result);
     }
 
     @Test

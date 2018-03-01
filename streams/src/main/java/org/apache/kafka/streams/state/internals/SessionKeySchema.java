@@ -98,11 +98,15 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     }
 
     @Override
-    public List<Segment> segmentsToSearch(final Segments segments, final long from, final long to) {
+    public List<Segment> segmentsToSearch(final Segments segments,
+                                          final long from,
+                                          final long to) {
         return segments.segments(from, Long.MAX_VALUE);
     }
 
-    private static <K> K extractKey(final byte[] binaryKey, final Deserializer<K> deserializer, final String topic) {
+    private static <K> K extractKey(final byte[] binaryKey,
+                                    final Deserializer<K> deserializer,
+                                    final String topic) {
         return deserializer.deserialize(topic, extractKeyBytes(binaryKey));
     }
 
@@ -127,7 +131,9 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
         return new SessionWindow(start, end);
     }
 
-    public static <K> Windowed<K> from(final byte[] binaryKey, final Deserializer<K> keyDeserializer, final String topic) {
+    public static <K> Windowed<K> from(final byte[] binaryKey,
+                                       final Deserializer<K> keyDeserializer,
+                                       final String topic) {
         final K key = extractKey(binaryKey, keyDeserializer, topic);
         final Window window = extractWindow(binaryKey);
         return new Windowed<>(key, window);
@@ -139,7 +145,9 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
         return new Windowed<>(Bytes.wrap(extractKeyBytes(binaryKey)), window);
     }
 
-    public static <K> byte[] toBinary(final Windowed<K> sessionKey, final Serializer<K> serializer, final String topic) {
+    public static <K> byte[] toBinary(final Windowed<K> sessionKey,
+                                      final Serializer<K> serializer,
+                                      final String topic) {
         final byte[] bytes = serializer.serialize(topic, sessionKey.key());
         final ByteBuffer buf = ByteBuffer.allocate(bytes.length + 2 * TIMESTAMP_SIZE);
         buf.put(bytes);

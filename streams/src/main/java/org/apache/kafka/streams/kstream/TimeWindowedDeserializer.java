@@ -51,24 +51,28 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
         this.inner = inner;
         this.windowSize = windowSize;
     }
-    
+
+    public Long getWindowSize() {
+        return this.windowSize;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
-    public void configure(Map<String, ?> configs, boolean isKey) {
+    public void configure(final Map<String, ?> configs, final boolean isKey) {
         if (inner == null) {
             final String propertyName = isKey ? StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS : StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS;
             final String value = (String) configs.get(propertyName);
             try {
                 inner = Serde.class.cast(Utils.newInstance(value, Serde.class)).deserializer();
                 inner.configure(configs, isKey);
-            } catch (ClassNotFoundException e) {
+            } catch (final ClassNotFoundException e) {
                 throw new ConfigException(propertyName, value, "Serde class " + value + " could not be found.");
             }
         }
     }
 
     @Override
-    public Windowed<T> deserialize(String topic, byte[] data) {
+    public Windowed<T> deserialize(final String topic, final byte[] data) {
         if (data == null || data.length == 0) {
             return null;
         }
@@ -82,11 +86,7 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     }
     
     // Only for testing
-    public Deserializer<T> innerDeserializer() {
+    Deserializer<T> innerDeserializer() {
         return inner;
-    }
-    
-    public Long getWindowSize() {
-        return this.windowSize;
     }
 }
