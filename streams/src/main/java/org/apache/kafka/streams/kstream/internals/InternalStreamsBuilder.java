@@ -52,6 +52,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                           consumed.valueDeserializer(),
                                           topics.toArray(new String[topics.size()]));
 
+
         return new KStreamImpl<>(this, name, Collections.singleton(name), false);
     }
 

@@ -40,6 +40,11 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
         }
     }
 
+    public MaterializedInternal(Materialized<K, V, S> materialized) {
+        super(materialized);
+        queryable = storeName() != null;
+    }
+
     public String storeName() {
         if (storeSupplier != null) {
             return storeSupplier.name();
