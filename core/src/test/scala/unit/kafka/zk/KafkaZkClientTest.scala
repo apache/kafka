@@ -19,6 +19,7 @@ package kafka.zk
 import java.util.{Collections, Properties, UUID}
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.{CountDownLatch, TimeUnit}
+import javax.security.auth.login.Configuration
 
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
@@ -56,7 +57,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   val topicPartition20 = new TopicPartition(topic2, 0)
   val topicPartitions10_11 = Seq(topicPartition10, topicPartition11)
 
-  var otherZkClient: KafkaZkClient = _
+  var otherZkClient: KafkaZkClient = null
 
   @Before
   override def setUp() {
