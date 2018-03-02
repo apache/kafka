@@ -604,7 +604,7 @@ public class NetworkClient implements KafkaClient {
         switch (disconnectState.state()) {
             case AUTHENTICATION_FAILED:
                 connectionStates.authenticationFailed(nodeId, now, disconnectState.exception());
-                log.error("Connection to node {} failed authentication due to: {}", nodeId, disconnectState.exception().getMessage());
+                log.error("Connection to node {} failed authentication due to: {}", nodeId, Utils.describe(disconnectState.exception()));
                 break;
             case AUTHENTICATE:
                 // This warning applies to older brokers which dont provide feedback on authentication failures
