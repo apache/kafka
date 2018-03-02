@@ -132,23 +132,21 @@ class StreamsBrokerBounceTest(Test):
             signal_node(self, self.kafka.nodes[num], sig)
 
         
-     def setup_system(self, start_processor=True):
-         # Setup phase
-         self.zk = ZookeeperService(self.test_context, num_nodes=1)
-         self.zk.start()
+    def setup_system(self, start_processor=True):
+        # Setup phase
+        self.zk = ZookeeperService(self.test_context, num_nodes=1)
+        self.zk.start()
 
-         self.kafka = KafkaService(self.test_context, num_nodes=self.replication,
-                                   zk=self.zk, topics=self.topics)
-         self.kafka.start()
-         # Start test harness
-         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
-         self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
+        self.kafka = KafkaService(self.test_context, num_nodes=self.replication, zk=self.zk, topics=self.topics)
+        self.kafka.start()
+        # Start test harness
+        self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
+        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
 
+        self.driver.start()
 
-         self.driver.start()
-
-         if (start_processor):
-            self.processor1.start()
+        if (start_processor):
+           self.processor1.start()
 
     def collect_results(self, sleep_time_secs):
         data = {}
