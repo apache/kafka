@@ -36,6 +36,7 @@ public class ProduceBenchSpec extends TaskSpec {
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
     private final int maxMessages;
+    private final int messageSize;
     private final Map<String, String> producerConf;
     private final int totalTopics;
     private final int activeTopics;
@@ -47,6 +48,7 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("bootstrapServers") String bootstrapServers,
                          @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
                          @JsonProperty("maxMessages") int maxMessages,
+                         @JsonProperty("messageSize") int messageSize,
                          @JsonProperty("producerConf") Map<String, String> producerConf,
                          @JsonProperty("totalTopics") int totalTopics,
                          @JsonProperty("activeTopics") int activeTopics) {
@@ -55,6 +57,7 @@ public class ProduceBenchSpec extends TaskSpec {
         this.bootstrapServers = bootstrapServers;
         this.targetMessagesPerSec = targetMessagesPerSec;
         this.maxMessages = maxMessages;
+        this.messageSize = (messageSize == 0) ? Payload.DEFAULT_MESSAGE_SIZE : messageSize;
         this.producerConf = producerConf;
         this.totalTopics = totalTopics;
         this.activeTopics = activeTopics;
@@ -78,6 +81,11 @@ public class ProduceBenchSpec extends TaskSpec {
     @JsonProperty
     public int maxMessages() {
         return maxMessages;
+    }
+
+    @JsonProperty
+    public int messageSize() {
+        return messageSize;
     }
 
     @JsonProperty
