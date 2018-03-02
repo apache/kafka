@@ -301,8 +301,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 throw new IllegalStateException("Unknown metadata version: " + usedVersion
                     + "; latest supported version: " + SubscriptionInfo.LATEST_SUPPORTED_VERSION);
             }
-            if (info.version() < minUserMetadataVersion) {
-                minUserMetadataVersion = info.version();
+            if (usedVersion < minUserMetadataVersion) {
+                minUserMetadataVersion = usedVersion;
             }
 
             // create the new client metadata if necessary
@@ -615,7 +615,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         switch (usedVersion) {
             case 1:
                 processVersionOneAssignment(info, partitions, activeTasks);
-                partitionsByHost = new HashMap<>();
+                partitionsByHost = Collections.emptyMap();
                 break;
             case 2:
                 processVersionTwoAssignment(info, partitions, activeTasks, topicToPartitionInfo);

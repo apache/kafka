@@ -93,9 +93,7 @@ public class SubscriptionInfo {
                 buf = encodeVersionOne();
                 break;
             case 2:
-                byte[] endPointBytes = null;
-                endPointBytes = prepareUserEndPoint();
-                buf = encodeVersionTwo(endPointBytes);
+                buf = encodeVersionTwo(prepareUserEndPoint());
                 break;
             default:
                 throw new IllegalStateException("Unknown metadata version: " + usedVersion

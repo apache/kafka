@@ -64,7 +64,7 @@ public class AssignmentInfoTest {
         final AssignmentInfo decoded = AssignmentInfo.decode(encodeV1(oldVersion));
         assertEquals(oldVersion.activeTasks(), decoded.activeTasks());
         assertEquals(oldVersion.standbyTasks(), decoded.standbyTasks());
-        assertNull(decoded.partitionsByHost()); // should be empty as wasn't in V1
+        assertNull(decoded.partitionsByHost()); // should be null as wasn't in V1
         assertEquals(1, decoded.version());
     }
 

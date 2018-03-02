@@ -114,10 +114,10 @@ public class AssignmentInfo {
 
     private void encodeVersionOne(final DataOutputStream out) throws IOException {
         out.writeInt(1); // version
-        encodeVersionOneData(out);
+        encodeActiveAndStandbyTaskAssignment(out);
     }
 
-    private void encodeVersionOneData(final DataOutputStream out) throws IOException {
+    private void encodeActiveAndStandbyTaskAssignment(final DataOutputStream out) throws IOException {
         // encode active tasks
         out.writeInt(activeTasks.size());
         for (final TaskId id : activeTasks) {
@@ -137,11 +137,11 @@ public class AssignmentInfo {
 
     private void encodeVersionTwo(final DataOutputStream out) throws IOException {
         out.writeInt(2); // version
-        encodeVersionOneData(out);
-        encodeVersionTwoData(out);
+        encodeActiveAndStandbyTaskAssignment(out);
+        encodePartitionsByHost(out);
     }
 
-    private void encodeVersionTwoData(final DataOutputStream out) throws IOException {
+    private void encodePartitionsByHost(final DataOutputStream out) throws IOException {
         // encode partitions by host
         out.writeInt(partitionsByHost.size());
         for (final Map.Entry<HostInfo, Set<TopicPartition>> entry : partitionsByHost.entrySet()) {
