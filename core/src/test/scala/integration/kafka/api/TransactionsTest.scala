@@ -27,8 +27,9 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{ProducerFencedException, TimeoutException}
+import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.errors.ProducerFencedException
+import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
@@ -532,20 +533,39 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
-  @Test
-  def testInitTransactionThrowTimeoutExceptionWithBadBrokers() {
-    val props = new Properties()
-    props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "test-transaction-id")
-    val producer = TestUtils.createNewProducer(
-      brokerList = "192.168.1.1:9092", retries = Integer.MAX_VALUE, requestTimeoutMs = 1000L, props = Some(props))
+  @Test(expected = classOf[FatalExitError])
+  def testInitTransactionFailWithBadBrokers() {
+    val producer = createTransactionalProducerToConnectNonExistentBrokers()
     try {
       producer.initTransactions()
-      fail("should have raised a TimeoutException since initializing the transaction expired")
-    } catch {
-      case _: TimeoutException => // expected
+      fail("should have raised a FatalExitError error since initializing the transaction expired")
     } finally {
       producer.close() // should successfully close the producer
     }
+  }
+
+  @Test(expected = classOf[KafkaException])
+  def testOnlyCanExecuteCloseAfterFailInitTransaction(): Unit = {
+    val producer = createTransactionalProducerToConnectNonExistentBrokers()
+    try {
+      producer.initTransactions()
+    } catch {
+      case _: FatalExitError => // expected
+    }
+    // other transactional operations should not be allowed even when we capture the error after initTransaction failed
+    try {
+      producer.beginTransaction()
+    } finally {
+      producer.close() // should successfully close the producer
+    }
+  }
+
+  private def createTransactionalProducerToConnectNonExistentBrokers(): KafkaProducer[Array[Byte], Array[Byte]] = {
+    val props = new Properties()
+    props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "test-transaction-id")
+    val producer = TestUtils.createNewProducer(brokerList = "192.168.1.1:9092", retries = Integer.MAX_VALUE,
+      requestTimeoutMs = 1000L, props = Some(props))
+    producer
   }
 
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,

@@ -306,6 +306,10 @@ public class TransactionManager {
         return transactionalId != null;
     }
 
+    public synchronized void transitionToFatalError(RuntimeException exception) {
+        transitionTo(State.FATAL_ERROR, exception);
+    }
+
     synchronized boolean hasPartitionsToAdd() {
         return !newPartitionsInTransaction.isEmpty() || !pendingPartitionsInTransaction.isEmpty();
     }
@@ -329,10 +333,6 @@ public class TransactionManager {
             return;
         }
         transitionTo(State.ABORTABLE_ERROR, exception);
-    }
-
-    synchronized void transitionToFatalError(RuntimeException exception) {
-        transitionTo(State.FATAL_ERROR, exception);
     }
 
     // visible for testing
