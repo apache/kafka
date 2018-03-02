@@ -1095,7 +1095,8 @@ public class StreamsPartitionAssignorTest {
         partitionAssignor.configure(config);
     }
 
-    public void shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersions() {
+    @Test
+    public void shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersions() throws Exception {
         final Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
         final Set<TaskId> emptyTasks = Collections.emptySet();
         subscriptions.put(
@@ -1113,6 +1114,11 @@ public class StreamsPartitionAssignorTest {
             )
         );
 
+        mockTaskManager(Collections.<TaskId>emptySet(),
+            Collections.<TaskId>emptySet(),
+            UUID.randomUUID(),
+            new InternalTopologyBuilder());
+        partitionAssignor.configure(configProps());
         final Map<String, PartitionAssignor.Assignment> assignment = partitionAssignor.assign(metadata, subscriptions);
 
         assertThat(assignment.size(), equalTo(2));
