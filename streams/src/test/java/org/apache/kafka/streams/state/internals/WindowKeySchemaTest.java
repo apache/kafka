@@ -197,11 +197,11 @@ public class WindowKeySchemaTest {
         assertEquals(new Windowed<>(key, new TimeWindow(startTime, Long.MAX_VALUE)), result);
     }
 
-
     @Test
     public void shouldSerializeDeserializeExpectedWindowSize() {
         final byte[] bytes = keySerde.serializer().serialize(topic, windowedKey);
-        final Windowed<String> result = keySerde.deserializer().deserialize(topic, bytes);
+        final Windowed<String> result = new TimeWindowedDeserializer<>(serde.deserializer(), endTime - startTime)
+                .deserialize(topic, bytes);
         assertEquals(windowedKey, result);
     }
 
