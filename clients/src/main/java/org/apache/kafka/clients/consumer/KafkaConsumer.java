@@ -544,6 +544,7 @@ import java.util.regex.Pattern;
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final long NO_CURRENT_THREAD = -1L;
+    private static final long DEFAULT_WAIT_TIME = Long.MAX_VALUE;
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.consumer";
     static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
@@ -1149,7 +1150,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         coordinator.poll(startMs, timeout);
 
         // Lookup positions of assigned partitions
-        boolean hasAllFetchPositions = updateFetchPositions();
+        boolean hasAllFetchPositions = updateFetchPositions(timeout);
 
         // if data is available already, return it immediately
         Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
@@ -1427,7 +1428,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             Long offset = this.subscriptions.position(partition);
             while (offset == null) {
                 // batch update fetch positions for any partitions without a valid position
-                updateFetchPositions();
+                updateFetchPositions(DEFAULT_WAIT_TIME);
                 client.poll(retryBackoffMs);
                 offset = this.subscriptions.position(partition);
             }
@@ -1772,15 +1773,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Set the fetch position to the committed position (if there is one)
      * or reset it using the offset reset policy the user has configured.
      *
+     * @param  timeout
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no offset reset policy is
      *             defined
      * @return true if all assigned positions have a position, false otherwise
      */
-    private boolean updateFetchPositions() {
+    private boolean updateFetchPositions(long timeout) {
         if (subscriptions.hasAllFetchPositions())
             return true;
 
+        long startMs = time.milliseconds();
         // If there are any partitions which do not have a valid position and are not
         // awaiting reset, then we need to fetch committed offsets. We will only do a
         // coordinator lookup if there are partitions which have missing positions, so
@@ -1793,9 +1796,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // are partitions with a missing position, then we will raise an exception.
         subscriptions.resetMissingPositions();
 
+        //time remaining is calculated here, reset offsets takes up the most amount of time
+        long finishMs = time.milliseconds();
+        long timeRemaining = Math.max(0, timeout - (finishMs - startMs));
+
         // Finally send an asynchronous request to lookup and update the positions of any
         // partitions which are awaiting reset.
-        fetcher.resetOffsetsIfNeeded();
+        fetcher.resetOffsetsIfNeeded(timeRemaining);
 
         return false;
     }

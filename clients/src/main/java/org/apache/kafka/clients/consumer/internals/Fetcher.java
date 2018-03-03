@@ -351,18 +351,24 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             return null;
     }
 
+    public void resetOffsetsIfNeeded() {
+        resetOffsetsIfNeeded(Long.MAX_VALUE);
+    }
+
     /**
      * Reset offsets for all assigned partitions that require it.
+     * @param timeRemaining 
      *
      * @throws org.apache.kafka.clients.consumer.NoOffsetForPartitionException If no offset reset strategy is defined
      *   and one or more partitions aren't awaiting a seekToBeginning() or seekToEnd().
      */
-    public void resetOffsetsIfNeeded() {
+    public void resetOffsetsIfNeeded(long timeRemaining) {
         // Raise exception from previous offset fetch if there is one
         RuntimeException exception = cachedListOffsetsException.getAndSet(null);
         if (exception != null)
             throw exception;
 
+        long startMs = time.milliseconds();
         Set<TopicPartition> partitions = subscriptions.partitionsNeedingReset(time.milliseconds());
         if (partitions.isEmpty())
             return;
@@ -374,7 +380,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 offsetResetTimestamps.put(partition, timestamp);
         }
 
-        resetOffsetsAsync(offsetResetTimestamps);
+        long finishMs = time.milliseconds();
+        long remainingTime = Math.max(0, timeRemaining - (finishMs - startMs));
+        resetOffsetsAsync(offsetResetTimestamps, remainingTime);
     }
 
     public Map<TopicPartition, OffsetAndTimestamp> offsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
@@ -569,13 +577,16 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         }
     }
 
-    private void resetOffsetsAsync(Map<TopicPartition, Long> partitionResetTimestamps) {
+    private void resetOffsetsAsync(Map<TopicPartition, Long> partitionResetTimestamps, long timeout) {
         // Add the topics to the metadata to do a single metadata fetch.
         for (TopicPartition tp : partitionResetTimestamps.keySet())
             metadata.add(tp.topic());
 
+        long timeRemaining = timeout;
         Map<Node, Map<TopicPartition, Long>> timestampsToSearchByNode = groupListOffsetRequests(partitionResetTimestamps);
         for (Map.Entry<Node, Map<TopicPartition, Long>> entry : timestampsToSearchByNode.entrySet()) {
+            if (timeRemaining < 0) break;
+            final long startMs = time.milliseconds();
             final Map<TopicPartition, Long> resetTimestamps = entry.getValue();
             subscriptions.setResetPending(resetTimestamps.keySet(), time.milliseconds() + requestTimeoutMs);
 
@@ -605,6 +616,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         log.error("Discarding error in ListOffsetResponse because another error is pending", e);
                 }
             });
+            final long finishMs = time.milliseconds();
+            final long timeSpent = finishMs - startMs;
+            timeRemaining -= timeSpent;
         }
     }
 
