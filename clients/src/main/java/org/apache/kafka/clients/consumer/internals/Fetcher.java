@@ -368,7 +368,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         if (exception != null)
             throw exception;
 
-        long startMs = time.milliseconds();
+        final long startMs = time.milliseconds();
         Set<TopicPartition> partitions = subscriptions.partitionsNeedingReset(time.milliseconds());
         if (partitions.isEmpty())
             return;
@@ -380,8 +380,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 offsetResetTimestamps.put(partition, timestamp);
         }
 
-        long finishMs = time.milliseconds();
-        long remainingTime = Math.max(0, timeRemaining - (finishMs - startMs));
+        final long finishMs = time.milliseconds();
+        final long remainingTime = Math.max(0, timeRemaining - (finishMs - startMs));
         resetOffsetsAsync(offsetResetTimestamps, remainingTime);
     }
 

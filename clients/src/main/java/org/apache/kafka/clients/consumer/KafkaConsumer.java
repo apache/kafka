@@ -1783,7 +1783,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (subscriptions.hasAllFetchPositions())
             return true;
 
-        long startMs = time.milliseconds();
+        //start time is calculated here
+        final long startMs = time.milliseconds();
+
         // If there are any partitions which do not have a valid position and are not
         // awaiting reset, then we need to fetch committed offsets. We will only do a
         // coordinator lookup if there are partitions which have missing positions, so
@@ -1797,8 +1799,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         subscriptions.resetMissingPositions();
 
         //time remaining is calculated here, reset offsets takes up the most amount of time
-        long finishMs = time.milliseconds();
-        long timeRemaining = Math.max(0, timeout - (finishMs - startMs));
+        final long finishMs = time.milliseconds();
+        final long timeRemaining = Math.max(0, timeout - (finishMs - startMs));
 
         // Finally send an asynchronous request to lookup and update the positions of any
         // partitions which are awaiting reset.
