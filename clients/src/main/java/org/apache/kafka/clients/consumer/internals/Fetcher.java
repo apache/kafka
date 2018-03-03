@@ -587,6 +587,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         for (Map.Entry<Node, Map<TopicPartition, Long>> entry : timestampsToSearchByNode.entrySet()) {
             if (timeRemaining < 0) break;
             final long startMs = time.milliseconds();
+            final long timeLeft = timeRemaining;
             final Map<TopicPartition, Long> resetTimestamps = entry.getValue();
             subscriptions.setResetPending(resetTimestamps.keySet(), time.milliseconds() + requestTimeoutMs);
 
@@ -609,6 +610,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                 @Override
                 public void onFailure(RuntimeException e) {
+                    final long finishMs = time.milliseconds();
+                    final long timeSpent = finishMs - startMs;
+                    if (timeSpent > timeLeft) return;
                     subscriptions.resetFailed(resetTimestamps.keySet(), time.milliseconds() + retryBackoffMs);
                     metadata.requestUpdate();
 
