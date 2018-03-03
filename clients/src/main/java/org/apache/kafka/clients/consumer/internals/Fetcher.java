@@ -612,7 +612,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 public void onFailure(RuntimeException e) {
                     final long finishMs = time.milliseconds();
                     final long timeSpent = finishMs - startMs;
-                    if (timeSpent > timeLeft) return;
+                    if (timeSpent > timeLeft || timeLeft - timeSpent < retryBackoffMs) return;
                     subscriptions.resetFailed(resetTimestamps.keySet(), time.milliseconds() + retryBackoffMs);
                     metadata.requestUpdate();
 
