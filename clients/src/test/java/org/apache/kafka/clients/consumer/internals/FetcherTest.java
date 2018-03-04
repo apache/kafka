@@ -199,6 +199,18 @@ public class FetcherTest {
     }
 
     @Test
+    public void testFetchSkipsBlackedOutNodes() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        client.blackout(node, 500);
+        assertEquals(0, fetcher.sendFetches());
+
+        time.sleep(500);
+        assertEquals(1, fetcher.sendFetches());
+    }
+
+    @Test
     public void testFetcherIgnoresControlRecords() {
         subscriptions.assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);
@@ -959,6 +971,30 @@ public class FetcherTest {
             assertTrue(subscriptions.isFetchable(tp0));
             assertEquals(5, subscriptions.position(tp0).longValue());
         }
+    }
+
+    @Test
+    public void testResetOffsetsSkipsBlackedOutConnections() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+
+        // Check that we skip sending the ListOffset request when the node is blacked out
+        client.blackout(node, 500);
+        fetcher.resetOffsetsIfNeeded();
+        assertEquals(0, consumerClient.pendingRequestCount());
+        consumerClient.pollNoWakeup();
+        assertTrue(subscriptions.isOffsetResetNeeded(tp0));
+        assertEquals(OffsetResetStrategy.EARLIEST, subscriptions.resetStrategy(tp0));
+
+        time.sleep(500);
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.EARLIEST_TIMESTAMP),
+                listOffsetResponse(Errors.NONE, 1L, 5L));
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertTrue(subscriptions.isFetchable(tp0));
+        assertEquals(5, subscriptions.position(tp0).longValue());
     }
 
     @Test
