@@ -37,6 +37,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -1425,12 +1426,23 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (!this.subscriptions.isAssigned(partition))
                 throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
             Long offset = this.subscriptions.position(partition);
-            while (offset == null) {
+            final long startMs = time.milliseconds();
+            long finishMs = time.milliseconds();
+            while (offset == null && finishMs - startMs < requestTimeoutMs) {
                 // batch update fetch positions for any partitions without a valid position
                 updateFetchPositions();
-                client.poll(retryBackoffMs);
-                offset = this.subscriptions.position(partition);
+                finishMs = time.milliseconds();
+                final long remainingTime = Math.max(0, requestTimeoutMs - (finishMs - startMs));
+                
+                if (remainingTime > 0) {
+                    client.poll(remainingTime);
+                    offset = this.subscriptions.position(partition);
+                    finishMs = time.milliseconds();
+                } else {
+                    break;
+                }
             }
+            if (offset == null) throw new TimeoutException("request timed out, position is unable to be acquired.");
             return offset;
         } finally {
             release();
