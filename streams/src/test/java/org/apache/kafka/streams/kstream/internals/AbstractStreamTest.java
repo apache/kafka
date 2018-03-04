@@ -16,20 +16,25 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.junit.Rule;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
+import java.util.Properties;
 import java.util.Random;
 
 import static org.easymock.EasyMock.createMock;
@@ -39,10 +44,6 @@ import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertTrue;
 
 public class AbstractStreamTest {
-
-    private final String topicName = "topic";
-    @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @Test
     public void testToInternlValueTransformerSupplierSuppliesNewTransformers() {
@@ -82,9 +83,15 @@ public class AbstractStreamTest {
 
         stream.randomFilter().process(processor);
 
-        driver.setUp(builder);
+        final Properties props = new Properties();
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "abstract-stream-test");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+
+        final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
+        final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props);
         for (int expectedKey : expectedKeys) {
-            driver.process(topicName, expectedKey, "V" + expectedKey);
+            driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
         }
 
         assertTrue(processor.processed.size() <= expectedKeys.length);

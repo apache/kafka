@@ -14,19 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams;
 
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
+import java.util.Properties;
 
 /**
- * This class is meant for testing purposes only and allows the testing of
- * topologies by using the  {@link org.apache.kafka.test.ProcessorTopologyTestDriver}
+ *  This class allows the instantiation of a {@link TopologyTestDriver} using a
+ *  {@link InternalTopologyBuilder} by exposing a protected constructor.
+ *
+ *  It should be used only for testing, and should be removed once the deprecated
+ *  classes {@link org.apache.kafka.streams.kstream.KStreamBuilder} and
+ *  {@link org.apache.kafka.streams.processor.TopologyBuilder} are removed.
  */
-public class InternalTopologyAccessor {
+public class TopologyTestDriverWrapper extends TopologyTestDriver {
 
-    public static InternalTopologyBuilder getInternalTopologyBuilder(final Topology topology) {
-        return topology.internalTopologyBuilder;
+    public TopologyTestDriverWrapper(final InternalTopologyBuilder builder,
+                                     final Properties config) {
+        super(builder, config);
     }
 }

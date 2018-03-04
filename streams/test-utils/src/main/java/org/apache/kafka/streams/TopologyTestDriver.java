@@ -216,10 +216,36 @@ public class TopologyTestDriver implements Closeable {
     public TopologyTestDriver(final Topology topology,
                               final Properties config,
                               final long initialWallClockTimeMs) {
+
+        this(topology.internalTopologyBuilder, config, initialWallClockTimeMs);
+    }
+
+    /**
+     * Create a new test diver instance.
+     *
+     * @param builder builder for the topology to be tested
+     * @param config the configuration for the topology
+     */
+    protected TopologyTestDriver(final InternalTopologyBuilder builder,
+                              final Properties config) {
+        this(builder, config,  System.currentTimeMillis());
+
+    }
+
+    /**
+     * Create a new test diver instance.
+     *
+     * @param builder builder for the topology to be tested
+     * @param config the configuration for the topology
+     * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
+     */
+    private TopologyTestDriver(final InternalTopologyBuilder builder,
+                              final Properties config,
+                              final long initialWallClockTimeMs) {
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         mockTime = new MockTime(initialWallClockTimeMs);
 
-        internalTopologyBuilder = topology.internalTopologyBuilder;
+        internalTopologyBuilder = builder;
         internalTopologyBuilder.setApplicationId(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG));
 
         processorTopology = internalTopologyBuilder.build(null);
