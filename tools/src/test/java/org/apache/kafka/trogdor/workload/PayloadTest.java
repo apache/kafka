@@ -17,7 +17,11 @@
 
 package org.apache.kafka.trogdor.workload;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.Test;
+
+import java.nio.ByteBuffer;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
@@ -28,19 +32,58 @@ public class PayloadTest {
     @Test
     public void testDefaultPayload() {
         Payload payload = new Payload();
-        assertNull(payload.nextKey());
-        byte[] value = payload.nextValue();
-        assertEquals(Payload.DEFAULT_MESSAGE_SIZE, value.length);
 
         // make sure that each time we produce a different value (except if compression rate is 0)
-        assertNotEquals(value, payload.nextKey());
+        byte[] prevValue = null;
+        for (int i = 0; i < 1000; i++) {
+            ProducerRecord<byte[], byte[]> record = payload.nextRecord("test-topic");
+            assertNull(record.key());
+            assertEquals(Payload.DEFAULT_MESSAGE_SIZE, record.value().length);
+            assertNotEquals("Iteration " + i, prevValue, record.value());
+            prevValue = record.value().clone();
+        }
     }
 
     @Test
-    public void testMessageSize() {
+    public void testNullKeyTypeValueSizeIsMessageSize() {
         final int size = 200;
         Payload payload = new Payload(size);
-        byte[] value = payload.nextValue();
-        assertEquals(size, value.length);
+        ProducerRecord<byte[], byte[]> record = payload.nextRecord("test-topic");
+        assertNull(record.key());
+        assertEquals(size, record.value().length);
+    }
+
+    @Test
+    public void testFixedSizeKeyContainingIntegerValue() {
+        final int size = 200;
+        Payload payload = new Payload(size, PayloadKeyType.KEY_INTEGER);
+        int keyVal = 2;
+        while (keyVal < 5000000) {
+            ProducerRecord<byte[], byte[]> record = payload.nextRecord("test-topic", keyVal);
+            assertEquals(4, record.key().length);
+            assertEquals(size - 4, record.value().length);
+            assertEquals(keyVal, ByteBuffer.wrap(record.key()).getInt());
+            keyVal = keyVal * 64;
+        }
+    }
+
+    @Test
+    public void testTooSmallMessageSizeCreatesPayloadWithOneByteValues() {
+        Payload payload = new Payload(2, PayloadKeyType.KEY_INTEGER);
+        ProducerRecord<byte[], byte[]> record = payload.nextRecord("test-topic", 877);
+        assertEquals(4, record.key().length);
+        assertEquals(1, record.value().length);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testNextRecordWithTopicOnlyFailsIfKeyTypeNotNull() {
+        Payload payload = new Payload(100, PayloadKeyType.KEY_INTEGER);
+        payload.nextRecord("test-topic");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testNextRecordWithIntKeyFailsIfKeyTypeNull() {
+        Payload payload = new Payload(100);
+        payload.nextRecord("test-topic", 27);
     }
 }

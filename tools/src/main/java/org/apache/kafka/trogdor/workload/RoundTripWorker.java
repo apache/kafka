@@ -33,8 +33,6 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.Platform;
@@ -44,6 +42,7 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -60,7 +59,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class RoundTripWorker implements TaskWorker {
     private static final int THROTTLE_PERIOD_MS = 100;
 
-    private static final int VALUE_SIZE = 512;
+    private static final int MESSAGE_SIZE = 512;
 
     private static final int LOG_INTERVAL_MS = 5000;
 
@@ -82,11 +81,11 @@ public class RoundTripWorker implements TaskWorker {
 
     private KafkaFutureImpl<String> doneFuture;
 
-    private KafkaProducer<String, byte[]> producer;
+    private KafkaProducer<byte[], byte[]> producer;
 
     private Payload payload;
 
-    private KafkaConsumer<String, byte[]> consumer;
+    private KafkaConsumer<byte[], byte[]> consumer;
 
     private CountDownLatch unackedSends;
 
@@ -179,12 +178,12 @@ public class RoundTripWorker implements TaskWorker {
             props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer." + id);
             props.put(ProducerConfig.ACKS_CONFIG, "all");
             props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 105000);
-            producer = new KafkaProducer<>(props, new StringSerializer(),
+            producer = new KafkaProducer<>(props, new ByteArraySerializer(),
                 new ByteArraySerializer());
             int perPeriod = WorkerUtils.
                 perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.throttle = new Throttle(perPeriod, THROTTLE_PERIOD_MS);
-            payload = new Payload(VALUE_SIZE);
+            payload = new Payload(MESSAGE_SIZE, PayloadKeyType.KEY_INTEGER);
         }
 
         @Override
@@ -206,8 +205,7 @@ public class RoundTripWorker implements TaskWorker {
                         uniqueMessagesSent++;
                     }
                     messagesSent++;
-                    ProducerRecord<String, byte[]> record =
-                        new ProducerRecord<>(TOPIC_NAME, 0, String.valueOf(messageIndex), payload.nextValue());
+                    ProducerRecord<byte[], byte[]> record = payload.nextRecord(TOPIC_NAME, messageIndex);
                     producer.send(record, new Callback() {
                         @Override
                         public void onCompletion(RecordMetadata metadata, Exception exception) {
@@ -269,7 +267,7 @@ public class RoundTripWorker implements TaskWorker {
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
             props.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, 105000);
             props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 100000);
-            consumer = new KafkaConsumer<>(props, new StringDeserializer(),
+            consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
             consumer.subscribe(Collections.singleton(TOPIC_NAME));
         }
@@ -285,9 +283,9 @@ public class RoundTripWorker implements TaskWorker {
                 while (true) {
                     try {
                         pollInvoked++;
-                        ConsumerRecords<String, byte[]> records = consumer.poll(50);
-                        for (ConsumerRecord<String, byte[]> record : records.records(TOPIC_NAME)) {
-                            int messageIndex = Integer.parseInt(record.key());
+                        ConsumerRecords<byte[], byte[]> records = consumer.poll(50);
+                        for (ConsumerRecord<byte[], byte[]> record : records.records(TOPIC_NAME)) {
+                            int messageIndex = ByteBuffer.wrap(record.key()).getInt();
                             messagesReceived++;
                             if (toReceiveTracker.removePending(messageIndex)) {
                                 uniqueMessagesReceived++;

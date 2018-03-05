@@ -199,8 +199,7 @@ public class ProduceBenchWorker implements TaskWorker {
                 try {
                     for (int m = 0; m < spec.maxMessages(); m++) {
                         for (int i = 0; i < spec.activeTopics(); i++) {
-                            ProducerRecord<byte[], byte[]> record =
-                                new ProducerRecord<>(topicIndexToName(i), payload.nextKey(), payload.nextValue());
+                            ProducerRecord<byte[], byte[]> record = payload.nextRecord(topicIndexToName(i));
                             future = producer.send(record, new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
                         }
                         throttle.increment();

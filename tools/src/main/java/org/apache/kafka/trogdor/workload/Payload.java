@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.trogdor.workload;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
+
+import java.nio.ByteBuffer;
 import java.util.Random;
 
 /**
@@ -37,14 +40,19 @@ public class Payload {
      */
     private final double valueDivergenceRatio;
     private byte[] recordValue;
+    private PayloadKeyType recordKeyType;
     private Random random = null;
 
     public Payload() {
-        this(DEFAULT_MESSAGE_SIZE, DEFAULT_VALUE_DIVERGENCE_RATIO);
+        this(DEFAULT_MESSAGE_SIZE, PayloadKeyType.KEY_NULL, DEFAULT_VALUE_DIVERGENCE_RATIO);
     }
 
     public Payload(Integer messageSize) {
-        this(messageSize, DEFAULT_VALUE_DIVERGENCE_RATIO);
+        this(messageSize, PayloadKeyType.KEY_NULL, DEFAULT_VALUE_DIVERGENCE_RATIO);
+    }
+
+    public Payload(Integer messageSize, PayloadKeyType keyType) {
+        this(messageSize, keyType, DEFAULT_VALUE_DIVERGENCE_RATIO);
     }
 
     /**
@@ -53,36 +61,57 @@ public class Payload {
      *                             value. Used to approximately control target compression rate (if
      *                             compression is used).
      */
-    public Payload(Integer messageSize, double valueDivergenceRatio) {
+    public Payload(Integer messageSize, PayloadKeyType keyType, double valueDivergenceRatio) {
         this.valueDivergenceRatio = valueDivergenceRatio;
         this.random = new Random();
-        this.recordValue = new byte[messageSize];
+
+        final int valueSize = (messageSize > keyType.maxSizeInBytes())
+                              ? messageSize - keyType.maxSizeInBytes() : 1;
+        this.recordValue = new byte[valueSize];
         // initialize value with random bytes
         for (int i = 0; i < recordValue.length; ++i) {
             recordValue[i] = (byte) (this.random.nextInt(26) + 65);
         }
+        this.recordKeyType = keyType;
+    }
+
+    /**
+     * Creates record with null key.
+     */
+    public ProducerRecord<byte[], byte[]> nextRecord(String topicName) {
+        if (recordKeyType != PayloadKeyType.KEY_NULL) {
+            // we don't know (for currently supported key types) how to create a key
+            throw new IllegalArgumentException();
+        }
+        return new ProducerRecord<>(topicName, null, nextValue());
+    }
+
+    /**
+     * Creates record with fixed size key containing given integer value.
+     */
+    public ProducerRecord<byte[], byte[]> nextRecord(String topicName, int key) {
+        if (recordKeyType.maxSizeInBytes() <= 0) {
+            // must call nextRecord(String topicName)
+            throw new IllegalArgumentException();
+        }
+        byte[] keyBytes = ByteBuffer.allocate(recordKeyType.maxSizeInBytes()).putInt(key).array();
+        return new ProducerRecord<>(topicName, keyBytes, nextValue());
+    }
+
+    @Override
+    public String toString() {
+        return "Payload(recordKeySize=" + recordKeyType.maxSizeInBytes()
+               + ", recordValueSize=" + recordValue.length
+               + ", valueDivergenceRatio=" + valueDivergenceRatio + ")";
     }
 
     /**
      * Returns producer record value
      */
-    public byte[] nextValue() {
+    private byte[] nextValue() {
         // randomize some of the payload to achieve expected compression rate
         for (int i = 0; i < recordValue.length * valueDivergenceRatio; ++i)
             recordValue[i] = (byte) (this.random.nextInt(26) + 65);
         return recordValue;
-    }
-
-    /**
-     * Returns producer record key
-     */
-    public byte[] nextKey() {
-        return null;
-    }
-
-    @Override
-    public String toString() {
-        return "Payload(recordKeySize=0" + ", recordValueSize=" + recordValue.length
-               + ", valueDivergenceRatio=" + valueDivergenceRatio + ")";
     }
 }
