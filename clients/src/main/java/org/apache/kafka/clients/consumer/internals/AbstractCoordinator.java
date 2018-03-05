@@ -88,7 +88,7 @@ import java.util.concurrent.TimeUnit;
  */
 public abstract class AbstractCoordinator implements Closeable {
 
-    enum MemberState {
+    private enum MemberState {
         UNJOINED,    // the client is not part of a group
         REBALANCING, // the client has begun rebalancing
         STABLE,      // the client has joined and is sending heartbeats
