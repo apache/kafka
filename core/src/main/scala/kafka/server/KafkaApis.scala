@@ -1135,6 +1135,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           throw new InvalidRequestException("Unknown coordinator type in FindCoordinator request")
       }
 
+      error(s"Get the metadata for '${findCoordinatorRequest.coordinatorType}': $partition, $topicMetadata")
+
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
         val responseBody = if (topicMetadata.error != Errors.NONE) {
           new FindCoordinatorResponse(requestThrottleMs, Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
