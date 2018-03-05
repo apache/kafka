@@ -53,7 +53,6 @@ public abstract class AbstractHeartbeatThreadManager implements HeartbeatThreadM
     }
 
     private class HeartbeatThread extends KafkaThread {
-        // TODO shouldn't it be volatile? disabled() reads it and it's not in a synchronized block
         private boolean enabled = false;
         private boolean closed = false;
 
@@ -65,18 +64,14 @@ public abstract class AbstractHeartbeatThreadManager implements HeartbeatThreadM
 
         private void enable() {
             log.debug("Enabling heartbeat thread");
-            synchronized (lock) {
-                this.enabled = true;
-                heartbeat.resetTimeouts(time.milliseconds());
-                lock.notify();
-            }
+            this.enabled = true;
+            heartbeat.resetTimeouts(time.milliseconds());
+            lock.notify();
         }
 
         private void disable() {
             log.debug("Disabling heartbeat thread");
-            synchronized (lock) {
-                this.enabled = false;
-            }
+            this.enabled = false;
         }
 
         private boolean disabled() {
@@ -84,10 +79,8 @@ public abstract class AbstractHeartbeatThreadManager implements HeartbeatThreadM
         }
 
         private void close() {
-            synchronized (lock) {
-                this.closed = true;
-                lock.notify();
-            }
+            this.closed = true;
+            lock.notify();
         }
 
         boolean hasFailed() {
