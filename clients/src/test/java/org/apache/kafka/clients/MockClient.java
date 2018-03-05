@@ -79,7 +79,7 @@ public class MockClient implements KafkaClient {
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
     private final Map<Node, Long> blackedOut = new HashMap<>();
-    private final Map<Node, AuthenticationException> authenticationException = new HashMap<>();
+    private final Map<Node, AuthenticationException> authenticationErrors = new HashMap<>();
     // Use concurrent queue for requests so that requests may be queried from a different thread
     private final Queue<ClientRequest> requests = new ConcurrentLinkedDeque<>();
     // Use concurrent queue for responses so that responses may be updated during poll() from a different thread.
@@ -106,8 +106,9 @@ public class MockClient implements KafkaClient {
 
     @Override
     public boolean ready(Node node, long now) {
-        if (isBlackedOut(node) || authenticationException(node) != null)
+        if (isBlackedOut(node))
             return false;
+        authenticationErrors.remove(node);
         ready.add(node.idString());
         return true;
     }
@@ -122,7 +123,7 @@ public class MockClient implements KafkaClient {
     }
 
     public void authenticationFailed(Node node, long duration) {
-        authenticationException.put(node, (AuthenticationException) Errors.SASL_AUTHENTICATION_FAILED.exception());
+        authenticationErrors.put(node, (AuthenticationException) Errors.SASL_AUTHENTICATION_FAILED.exception());
         disconnect(node.idString());
         blackout(node, duration);
     }
@@ -147,7 +148,7 @@ public class MockClient implements KafkaClient {
 
     @Override
     public AuthenticationException authenticationException(Node node) {
-        return authenticationException.get(node);
+        return authenticationErrors.get(node);
     }
 
     @Override
@@ -389,7 +390,7 @@ public class MockClient implements KafkaClient {
         responses.clear();
         futureResponses.clear();
         metadataUpdates.clear();
-        authenticationException.clear();
+        authenticationErrors.clear();
     }
 
     public boolean hasPendingMetadataUpdates() {

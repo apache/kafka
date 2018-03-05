@@ -523,6 +523,17 @@ public class ConsumerNetworkClient implements Closeable {
         }
     }
 
+    public void maybeThrowAuthFailure(Node node) {
+        lock.lock();
+        try {
+            AuthenticationException exception = client.authenticationException(node);
+            if (exception != null)
+                throw exception;
+        } finally {
+            lock.unlock();
+        }
+    }
+
     /**
      * Initiate a connection if currently possible. This is only really useful for resetting the failed
      * status of a socket. If there is an actual request to send, then {@link #send(Node, AbstractRequest.Builder)}

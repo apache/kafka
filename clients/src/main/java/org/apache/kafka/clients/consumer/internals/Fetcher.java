@@ -674,6 +674,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 log.debug("Leader for partition {} is unavailable for fetching offset", tp);
                 metadata.requestUpdate();
             } else if (client.connectionFailed(info.leader())) {
+                client.maybeThrowAuthFailure(info.leader());
+
                 // The connection has failed and we need to await the blackout period before we can
                 // try again. No need to request a metadata update since the disconnect will have
                 // done so already.
@@ -837,6 +839,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             if (node == null) {
                 metadata.requestUpdate();
             } else if (client.connectionFailed(node)) {
+                client.maybeThrowAuthFailure(node);
+
                 // If we try to send during the reconnect blackout window, then the request is just
                 // going to be failed anyway before being sent, so skip the send for now
                 log.trace("Skipping fetch for partition {} because node {} is awaiting reconnect backoff", partition, node);
