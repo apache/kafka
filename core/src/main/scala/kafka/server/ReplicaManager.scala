@@ -1384,9 +1384,13 @@ class ReplicaManager(val config: KafkaConfig,
     for ((dir, reps) <- replicasByDir) {
       val hwms = reps.map(r => r.topicPartition -> r.highWatermark.messageOffset).toMap
       try {
-        val previousHwms = highWatermarkCheckpoints.get(dir).map(_.read()).getOrElse(Map.empty[TopicPartition, Long])
-        val previousHwmsOfExistingReplicas = previousHwms.filterKeys(tp => logManager.getLog(tp).nonEmpty)
-        highWatermarkCheckpoints.get(dir).foreach(_.write(previousHwmsOfExistingReplicas ++ hwms))
+        highWatermarkCheckpoints.get(dir) match {
+          case Some(checkpointFile) =>
+            val previousHwms = checkpointFile.read()
+            val previousHwmsOfExistingReplicas = previousHwms.filterKeys(tp => logManager.getLog(tp).nonEmpty)
+            checkpointFile.write(previousHwmsOfExistingReplicas ++ hwms)
+          case None =>
+        }
       } catch {
         case e: KafkaStorageException =>
           error(s"Error while writing to highwatermark file in directory $dir", e)
