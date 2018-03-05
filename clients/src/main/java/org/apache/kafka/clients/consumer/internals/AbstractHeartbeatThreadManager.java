@@ -27,7 +27,7 @@ import org.slf4j.Logger;
 
 import java.util.concurrent.atomic.AtomicReference;
 
-public abstract class AbstractHeartbeatThreadManager {
+public abstract class AbstractHeartbeatThreadManager implements HeartbeatThreadManager {
 
     public static final String HEARTBEAT_THREAD_PREFIX = "kafka-coordinator-heartbeat-thread";
     private final Logger log;
@@ -184,6 +184,7 @@ public abstract class AbstractHeartbeatThreadManager {
         }
     }
 
+    @Override
     public void pollHeartbeat(long now) {
         synchronized (lock) {
             if (heartbeatThread != null) {
@@ -203,6 +204,7 @@ public abstract class AbstractHeartbeatThreadManager {
         }
     }
 
+    @Override
     public void startHeartbeatThreadIfNeeded() {
         synchronized(lock) {
             if (heartbeatThread == null) {
@@ -212,6 +214,7 @@ public abstract class AbstractHeartbeatThreadManager {
         }
     }
 
+    @Override
     public void disableHeartbeatThread() {
         synchronized(lock) {
             if (heartbeatThread != null)
@@ -219,6 +222,7 @@ public abstract class AbstractHeartbeatThreadManager {
         }
     }
 
+    @Override
     public void enableHeartbeatThread() {
         synchronized(lock) {
             if (heartbeatThread != null)
@@ -226,6 +230,7 @@ public abstract class AbstractHeartbeatThreadManager {
         }
     }
 
+    @Override
     public void closeHeartbeatThread() {
         HeartbeatThread thread;
         synchronized (lock) {
@@ -247,7 +252,7 @@ public abstract class AbstractHeartbeatThreadManager {
 
     protected abstract boolean isCoordinatorUnavailable();
 
-    protected abstract RequestFuture<Void> sendHeartbeatRequest();
+    public abstract RequestFuture<Void> sendHeartbeatRequest();
 
     protected abstract void onHeartbeatThreadWakeup();
 

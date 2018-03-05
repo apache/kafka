@@ -87,7 +87,6 @@ import java.util.concurrent.TimeUnit;
  * when sending a request that affects the state of the group (e.g. JoinGroup, LeaveGroup).
  */
 public abstract class AbstractCoordinator implements Closeable {
-    private final LogContext logContext;
 
     enum MemberState {
         UNJOINED,    // the client is not part of a group
@@ -105,8 +104,7 @@ public abstract class AbstractCoordinator implements Closeable {
     protected final ConsumerNetworkClient client;
     protected final Time time;
     protected final long retryBackoffMs;
-
-    private final AbstractHeartbeatThreadManager heartbeatThreadHelper;
+    private HeartbeatThreadManager heartbeatThreadManager;
     private boolean rejoinNeeded = true;
     private boolean needsJoinPrepare = true;
     private MemberState state = MemberState.UNJOINED;
@@ -115,7 +113,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private Generation generation = Generation.NO_GENERATION;
 
     private RequestFuture<Void> findCoordinatorFuture = null;
-    
+
     /**
      * Initialize the coordination manager.
      */
@@ -130,7 +128,6 @@ public abstract class AbstractCoordinator implements Closeable {
                                Time time,
                                long retryBackoffMs,
                                boolean leaveGroupOnClose) {
-        this.logContext = logContext;
         this.log = logContext.logger(AbstractCoordinator.class);
         this.client = client;
         this.time = time;
@@ -139,12 +136,13 @@ public abstract class AbstractCoordinator implements Closeable {
         this.sessionTimeoutMs = sessionTimeoutMs;
         this.leaveGroupOnClose = leaveGroupOnClose;
         this.heartbeat = new Heartbeat(sessionTimeoutMs, heartbeatIntervalMs, rebalanceTimeoutMs, retryBackoffMs);
-        this.heartbeatThreadHelper = createHeartbeatThreadHelper(logContext, groupId, time, retryBackoffMs);
+        this.heartbeatThreadManager = createDefaultHeartbeatThreadManager(logContext, groupId, time, retryBackoffMs);
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
         this.retryBackoffMs = retryBackoffMs;
     }
 
-    protected AbstractHeartbeatThreadManager createHeartbeatThreadHelper(final LogContext logContext, final String groupId, final Time time, final long retryBackoffMs) {
+    private AbstractHeartbeatThreadManager createDefaultHeartbeatThreadManager(LogContext logContext, String groupId, Time
+            time, long retryBackoffMs) {
         return new AbstractHeartbeatThreadManager(logContext, groupId, heartbeat,this, time, retryBackoffMs){
 
             protected void pollNoWakeup() {
@@ -160,19 +158,13 @@ public abstract class AbstractCoordinator implements Closeable {
                         (findCoordinatorFuture() != null || lookupCoordinator().failed());
             }
 
-            protected RequestFuture<Void> sendHeartbeatRequest() {
-                log.debug("Sending Heartbeat request to coordinator {}", coordinator());
-                Generation result;
-                synchronized (AbstractCoordinator.this) {
-                    result = generation;
-                }
-                Generation result1;
-                synchronized (AbstractCoordinator.this) {
-                    result1 = generation;
-                }
+            public RequestFuture<Void> sendHeartbeatRequest() {
+                // TODO use own logger
+                log.debug("Sending Heartbeat request to coordinator {}", coordinator);
                 HeartbeatRequest.Builder requestBuilder =
-                        new HeartbeatRequest.Builder(AbstractCoordinator.this.groupId, result1.generationId, result.memberId);
-                return AbstractCoordinator.this.client.send(coordinator(), requestBuilder)
+                        new HeartbeatRequest.Builder(AbstractCoordinator.this.groupId, AbstractCoordinator.this.generation.generationId,
+                                AbstractCoordinator.this.generation.memberId);
+                return client.send(coordinator, requestBuilder)
                         .compose(new HeartbeatResponseHandler());
             }
 
@@ -180,7 +172,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 if (!isStable()) {
                     // the group is not stable (perhaps because we left the group or because the coordinator
                     // kicked us out), so disable heartbeats and wait for the main thread to rejoin.
-                    heartbeatThreadHelper.disableHeartbeatThread();
+                    heartbeatThreadManager.disableHeartbeatThread();
                 }
             }
 
@@ -342,7 +334,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * @throws RuntimeException for unexpected errors raised from the heartbeat thread
      */
     protected void pollHeartbeat(long now) {
-        heartbeatThreadHelper.pollHeartbeat(now);
+        heartbeatThreadManager.pollHeartbeat(now);
     }
 
     protected synchronized long timeToNextHeartbeat(long now) {
@@ -364,15 +356,15 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private void startHeartbeatThreadIfNeeded() {
-        heartbeatThreadHelper.startHeartbeatThreadIfNeeded();
+        heartbeatThreadManager.startHeartbeatThreadIfNeeded();
     }
 
     private void disableHeartbeatThread() {
-        heartbeatThreadHelper.disableHeartbeatThread();
+        heartbeatThreadManager.disableHeartbeatThread();
     }
 
     private void enableHeartbeatThread() {
-        heartbeatThreadHelper.enableHeartbeatThread();
+        heartbeatThreadManager.enableHeartbeatThread();
     }
 
     // visible for testing. Joins the group without starting the heartbeat thread.
@@ -731,7 +723,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     protected void close(long timeoutMs) {
         try {
-            heartbeatThreadHelper.closeHeartbeatThread();
+            heartbeatThreadManager.closeHeartbeatThread();
         } finally {
 
             // Synchronize after closing the heartbeat thread since heartbeat thread
@@ -785,9 +777,10 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
+    // TODO check if this is ok
     // visible for testing
     synchronized RequestFuture<Void> sendHeartbeatRequest() {
-        return heartbeatThreadHelper.sendHeartbeatRequest();
+        return heartbeatThreadManager.sendHeartbeatRequest();
     }
 
     private class HeartbeatResponseHandler extends CoordinatorResponseHandler<HeartbeatResponse, Void> {
