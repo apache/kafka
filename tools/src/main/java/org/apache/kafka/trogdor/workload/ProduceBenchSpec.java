@@ -57,7 +57,7 @@ public class ProduceBenchSpec extends TaskSpec {
         this.bootstrapServers = bootstrapServers;
         this.targetMessagesPerSec = targetMessagesPerSec;
         this.maxMessages = maxMessages;
-        this.messageSize = (messageSize == 0) ? Payload.DEFAULT_MESSAGE_SIZE : messageSize;
+        this.messageSize = (messageSize == 0) ? ProducerPayload.DEFAULT_MESSAGE_SIZE : messageSize;
         this.producerConf = producerConf;
         this.totalTopics = totalTopics;
         this.activeTopics = activeTopics;

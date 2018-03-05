@@ -172,7 +172,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
         private final KafkaProducer<byte[], byte[]> producer;
 
-        private final Payload payload;
+        private final ProducerPayload producerPayload;
 
         private final Throttle throttle;
 
@@ -187,7 +187,7 @@ public class ProduceBenchWorker implements TaskWorker {
                 props.setProperty(entry.getKey(), entry.getValue());
             }
             this.producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
-            this.payload = new Payload(spec.messageSize());
+            this.producerPayload = new ProducerPayload(spec.messageSize());
             this.throttle = new SendRecordsThrottle(perPeriod, producer);
         }
 
@@ -199,7 +199,7 @@ public class ProduceBenchWorker implements TaskWorker {
                 try {
                     for (int m = 0; m < spec.maxMessages(); m++) {
                         for (int i = 0; i < spec.activeTopics(); i++) {
-                            ProducerRecord<byte[], byte[]> record = payload.nextRecord(topicIndexToName(i));
+                            ProducerRecord<byte[], byte[]> record = producerPayload.nextRecord(topicIndexToName(i));
                             future = producer.send(record, new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
                         }
                         throttle.increment();
@@ -216,7 +216,7 @@ public class ProduceBenchWorker implements TaskWorker {
                 statusUpdaterFuture.cancel(false);
                 new StatusUpdater(histogram).run();
                 long curTimeMs = Time.SYSTEM.milliseconds();
-                log.info("Produced {}", payload);
+                log.info("Produced {}", producerPayload);
                 log.info("Sent {} total record(s) in {} ms.  status: {}",
                     histogram.summarize().numSamples(), curTimeMs - startTimeMs, status.get());
             }

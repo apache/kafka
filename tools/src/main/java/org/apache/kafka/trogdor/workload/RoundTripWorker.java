@@ -83,7 +83,7 @@ public class RoundTripWorker implements TaskWorker {
 
     private KafkaProducer<byte[], byte[]> producer;
 
-    private Payload payload;
+    private ProducerPayload producerPayload;
 
     private KafkaConsumer<byte[], byte[]> consumer;
 
@@ -183,7 +183,7 @@ public class RoundTripWorker implements TaskWorker {
             int perPeriod = WorkerUtils.
                 perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.throttle = new Throttle(perPeriod, THROTTLE_PERIOD_MS);
-            payload = new Payload(MESSAGE_SIZE, PayloadKeyType.KEY_INTEGER);
+            producerPayload = new ProducerPayload(MESSAGE_SIZE, PayloadKeyType.KEY_INTEGER);
         }
 
         @Override
@@ -205,7 +205,7 @@ public class RoundTripWorker implements TaskWorker {
                         uniqueMessagesSent++;
                     }
                     messagesSent++;
-                    ProducerRecord<byte[], byte[]> record = payload.nextRecord(TOPIC_NAME, messageIndex);
+                    ProducerRecord<byte[], byte[]> record = producerPayload.nextRecord(TOPIC_NAME, messageIndex);
                     producer.send(record, new Callback() {
                         @Override
                         public void onCompletion(RecordMetadata metadata, Exception exception) {

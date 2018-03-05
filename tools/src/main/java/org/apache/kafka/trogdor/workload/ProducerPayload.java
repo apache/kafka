@@ -23,12 +23,11 @@ import java.util.Random;
 
 /**
  * Describes the payload for the producer record. Currently, we can configure message size
- * (constant) and approximately control compression ratio. Where value is of message size, and key
- * is null.
- * We will likely make this class a base class in the future and derive different payload classes
- * for various message size distributions, key assignments, etc.
+ * (constant), key type, and approximately control compression ratio. Message size determines key
+ * size and value size, such that (message size) = (key size) + (value size). Key size is determined
+ * by key type.
  */
-public class Payload {
+public class ProducerPayload {
 
     public static final double DEFAULT_VALUE_DIVERGENCE_RATIO = 0.3;
     public static final int DEFAULT_MESSAGE_SIZE = 512;
@@ -43,15 +42,15 @@ public class Payload {
     private PayloadKeyType recordKeyType;
     private Random random = null;
 
-    public Payload() {
+    public ProducerPayload() {
         this(DEFAULT_MESSAGE_SIZE, PayloadKeyType.KEY_NULL, DEFAULT_VALUE_DIVERGENCE_RATIO);
     }
 
-    public Payload(Integer messageSize) {
+    public ProducerPayload(Integer messageSize) {
         this(messageSize, PayloadKeyType.KEY_NULL, DEFAULT_VALUE_DIVERGENCE_RATIO);
     }
 
-    public Payload(Integer messageSize, PayloadKeyType keyType) {
+    public ProducerPayload(Integer messageSize, PayloadKeyType keyType) {
         this(messageSize, keyType, DEFAULT_VALUE_DIVERGENCE_RATIO);
     }
 
@@ -61,7 +60,7 @@ public class Payload {
      *                             value. Used to approximately control target compression rate (if
      *                             compression is used).
      */
-    public Payload(Integer messageSize, PayloadKeyType keyType, double valueDivergenceRatio) {
+    public ProducerPayload(Integer messageSize, PayloadKeyType keyType, double valueDivergenceRatio) {
         this.valueDivergenceRatio = valueDivergenceRatio;
         this.random = new Random();
 
@@ -100,7 +99,7 @@ public class Payload {
 
     @Override
     public String toString() {
-        return "Payload(recordKeySize=" + recordKeyType.maxSizeInBytes()
+        return "ProducerPayload(recordKeySize=" + recordKeyType.maxSizeInBytes()
                + ", recordValueSize=" + recordValue.length
                + ", valueDivergenceRatio=" + valueDivergenceRatio + ")";
     }
