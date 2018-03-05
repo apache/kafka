@@ -32,7 +32,7 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.RecordBatch
-import org.apache.kafka.common.serialization.Deserializer
+import org.apache.kafka.common.serialization.NoConfDeserializer
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
 
@@ -398,11 +398,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     createServer(fromProps(config))
   }
 
-  private class StubDeserializer extends Deserializer[Array[Byte]] {
-    override def configure(configs: java.util.Map[String, _], isKey: Boolean): Unit = {}
-
+  private class StubDeserializer extends NoConfDeserializer[Array[Byte]] {
     override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = { data }
-
-    override def close(): Unit = {}
   }
 }

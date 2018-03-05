@@ -16,14 +16,7 @@
  */
 package org.apache.kafka.common.serialization;
 
-import java.util.Map;
-
-public class FloatSerializer implements Serializer<Float> {
-
-    @Override
-    public void configure(final Map<String, ?> configs, final boolean isKey) {
-        // nothing to do
-    }
+public class FloatSerializer extends NoConfSerializer<Float> {
 
     @Override
     public byte[] serialize(final String topic, final Float data) {
@@ -37,10 +30,5 @@ public class FloatSerializer implements Serializer<Float> {
             (byte) (bits >>> 8),
             (byte) bits
         };
-    }
-
-    @Override
-    public void close() {
-        // nothing to do
     }
 }

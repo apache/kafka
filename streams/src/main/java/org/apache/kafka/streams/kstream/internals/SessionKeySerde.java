@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.NoConfDeserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -85,15 +86,11 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
         }
     }
 
-    private class SessionKeyDeserializer implements Deserializer<Windowed<K>> {
+    private class SessionKeyDeserializer extends NoConfDeserializer<Windowed<K>> {
         private final Deserializer<K> deserializer;
 
         SessionKeyDeserializer(final Deserializer<K> deserializer) {
             this.deserializer = deserializer;
-        }
-
-        @Override
-        public void configure(final Map<String, ?> configs, final boolean isKey) {
         }
 
         @Override
@@ -102,12 +99,6 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
                 return null;
             }
             return from(data, deserializer, topic);
-        }
-
-
-        @Override
-        public void close() {
-
         }
     }
 

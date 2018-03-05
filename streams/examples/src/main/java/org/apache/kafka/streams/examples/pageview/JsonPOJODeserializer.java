@@ -18,11 +18,11 @@ package org.apache.kafka.streams.examples.pageview;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.NoConfDeserializer;
 
 import java.util.Map;
 
-public class JsonPOJODeserializer<T> implements Deserializer<T> {
+public class JsonPOJODeserializer<T> extends NoConfDeserializer<T> {
     private ObjectMapper objectMapper = new ObjectMapper();
 
     private Class<T> tClass;
@@ -52,10 +52,5 @@ public class JsonPOJODeserializer<T> implements Deserializer<T> {
         }
 
         return data;
-    }
-
-    @Override
-    public void close() {
-
     }
 }

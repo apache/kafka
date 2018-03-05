@@ -18,13 +18,12 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
-import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.NoConfDeserializer;
 
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class MockDeserializer implements ClusterResourceListener, Deserializer<byte[]> {
+public class MockDeserializer extends NoConfDeserializer<byte[]> implements ClusterResourceListener {
     public static AtomicInteger initCount = new AtomicInteger(0);
     public static AtomicInteger closeCount = new AtomicInteger(0);
     public static AtomicReference<ClusterResource> clusterMeta = new AtomicReference<>();
@@ -40,10 +39,6 @@ public class MockDeserializer implements ClusterResourceListener, Deserializer<b
 
     public MockDeserializer() {
         initCount.incrementAndGet();
-    }
-
-    @Override
-    public void configure(Map<String, ?> configs, boolean isKey) {
     }
 
     @Override

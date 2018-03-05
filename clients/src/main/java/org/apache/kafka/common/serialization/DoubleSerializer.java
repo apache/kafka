@@ -16,14 +16,7 @@
  */
 package org.apache.kafka.common.serialization;
 
-import java.util.Map;
-
-public class DoubleSerializer implements Serializer<Double> {
-
-    @Override
-    public void configure(Map<String, ?> configs, boolean isKey) {
-        // nothing to do
-    }
+public class DoubleSerializer extends NoConfSerializer<Double> {
 
     @Override
     public byte[] serialize(String topic, Double data) {
@@ -41,10 +34,5 @@ public class DoubleSerializer implements Serializer<Double> {
             (byte) (bits >>> 8),
             (byte) bits
         };
-    }
-
-    @Override
-    public void close() {
-        // nothing to do
     }
 }

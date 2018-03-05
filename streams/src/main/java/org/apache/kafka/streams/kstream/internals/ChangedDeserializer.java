@@ -19,13 +19,13 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.ExtendedDeserializer;
+import org.apache.kafka.common.serialization.ExtendedNoConfDeserializer;
 
 import java.nio.ByteBuffer;
-import java.util.Map;
 
 import static org.apache.kafka.common.serialization.ExtendedDeserializer.Wrapper.ensureExtended;
 
-public class ChangedDeserializer<T> implements ExtendedDeserializer<Change<T>> {
+public class ChangedDeserializer<T> extends ExtendedNoConfDeserializer<Change<T>> {
 
     private static final int NEWFLAG_SIZE = 1;
 
@@ -41,11 +41,6 @@ public class ChangedDeserializer<T> implements ExtendedDeserializer<Change<T>> {
 
     public void setInner(Deserializer<T> inner) {
         this.inner = ensureExtended(inner);
-    }
-
-    @Override
-    public void configure(Map<String, ?> configs, boolean isKey) {
-        // do nothing
     }
 
     @Override

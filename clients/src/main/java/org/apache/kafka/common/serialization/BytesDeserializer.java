@@ -18,22 +18,12 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.utils.Bytes;
 
-import java.util.Map;
-
-public class BytesDeserializer implements Deserializer<Bytes> {
-
-    public void configure(Map<String, ?> configs, boolean isKey) {
-        // nothing to do
-    }
+public class BytesDeserializer extends NoConfDeserializer<Bytes> {
 
     public Bytes deserialize(String topic, byte[] data) {
         if (data == null)
             return null;
 
         return new Bytes(data);
-    }
-
-    public void close() {
-        // nothing to do
     }
 }

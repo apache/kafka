@@ -18,12 +18,11 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.serialization.ExtendedDeserializer;
+import org.apache.kafka.common.serialization.ExtendedNoConfDeserializer;
 import org.apache.kafka.test.MockSourceNode;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -45,21 +44,15 @@ public class SourceNodeTest {
         assertThat(deserializedValue, is("topic" + headers + "data"));
     }
 
-    public static class TheExtendedDeserializer implements ExtendedDeserializer<String> {
+    public static class TheExtendedDeserializer extends ExtendedNoConfDeserializer<String> {
         @Override
         public String deserialize(final String topic, final Headers headers, final byte[] data) {
             return topic + headers + new String(data, StandardCharsets.UTF_8);
         }
 
         @Override
-        public void configure(final Map<String, ?> configs, final boolean isKey) { }
-
-        @Override
         public String deserialize(final String topic, final byte[] data) {
             return deserialize(topic, null, data);
         }
-
-        @Override
-        public void close() { }
     }
 }
