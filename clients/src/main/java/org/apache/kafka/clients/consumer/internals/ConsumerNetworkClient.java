@@ -509,20 +509,23 @@ public class ConsumerNetworkClient implements Closeable {
         }
     }
 
+
     /**
-     * Find whether a previous connection has failed. Note that the failure state will persist until either
-     * {@link #tryConnect(Node)} or {@link #send(Node, AbstractRequest.Builder)} has been called.
-     * @param node Node to connect to if possible
+     * Check if the code is disconnected and unavailable for immediate reconnection (i.e. if it is in
+     * reconnect backoff window following the disconnect).
      */
-    public boolean connectionFailed(Node node) {
+    public boolean isUnavailable(Node node) {
         lock.lock();
         try {
-            return client.connectionFailed(node);
+            return client.connectionFailed(node) && client.connectionDelay(node, time.milliseconds()) > 0;
         } finally {
             lock.unlock();
         }
     }
 
+    /**
+     * Check for an authentication error on a given node and raise the exception if there is one.
+     */
     public void maybeThrowAuthFailure(Node node) {
         lock.lock();
         try {

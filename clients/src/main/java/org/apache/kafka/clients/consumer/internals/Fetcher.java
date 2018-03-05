@@ -673,7 +673,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             } else if (info.leader() == null) {
                 log.debug("Leader for partition {} is unavailable for fetching offset", tp);
                 metadata.requestUpdate();
-            } else if (client.connectionFailed(info.leader())) {
+            } else if (client.isUnavailable(info.leader())) {
                 client.maybeThrowAuthFailure(info.leader());
 
                 // The connection has failed and we need to await the blackout period before we can
@@ -838,7 +838,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             Node node = cluster.leaderFor(partition);
             if (node == null) {
                 metadata.requestUpdate();
-            } else if (client.connectionFailed(node)) {
+            } else if (client.isUnavailable(node)) {
                 client.maybeThrowAuthFailure(node);
 
                 // If we try to send during the reconnect blackout window, then the request is just
@@ -862,6 +862,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 long position = this.subscriptions.position(partition);
                 builder.add(partition, new FetchRequest.PartitionData(position, FetchRequest.INVALID_LOG_START_OFFSET,
                     this.fetchSize));
+
                 log.debug("Added {} fetch request for partition {} at offset {} to node {}", isolationLevel,
                     partition, position, node);
             }

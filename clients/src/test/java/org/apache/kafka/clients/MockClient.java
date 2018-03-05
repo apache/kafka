@@ -115,6 +115,9 @@ public class MockClient implements KafkaClient {
 
     @Override
     public long connectionDelay(Node node, long now) {
+        Long blackoutExpiration = blackedOut.get(node);
+        if (blackoutExpiration != null)
+            return Math.max(0, blackoutExpiration - now);
         return 0;
     }
 

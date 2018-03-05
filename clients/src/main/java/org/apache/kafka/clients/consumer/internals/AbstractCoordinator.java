@@ -228,7 +228,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     client.awaitMetadataUpdate(remainingMs);
                 } else
                     throw future.exception();
-            } else if (coordinator != null && client.connectionFailed(coordinator)) {
+            } else if (coordinator != null && client.isUnavailable(coordinator)) {
                 // we found the coordinator, but the connection has failed, so mark
                 // it dead and backoff before retrying discovery
                 markCoordinatorUnknown();
@@ -637,7 +637,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * @return the current coordinator or null if it is unknown
      */
     protected synchronized Node checkAndGetCoordinator() {
-        if (coordinator != null && client.connectionFailed(coordinator)) {
+        if (coordinator != null && client.isUnavailable(coordinator)) {
             markCoordinatorUnknown(true);
             return null;
         }
