@@ -22,7 +22,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
-import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -50,7 +49,6 @@ import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
-import sun.plugin2.main.server.HeartbeatThread;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
@@ -108,7 +106,7 @@ public abstract class AbstractCoordinator implements Closeable {
     protected final Time time;
     protected final long retryBackoffMs;
 
-    private final HeartbeatThreadHelper heartbeatThreadHelper;
+    private final AbstractHeartbeatThreadHelper heartbeatThreadHelper;
     private boolean rejoinNeeded = true;
     private boolean needsJoinPrepare = true;
     private MemberState state = MemberState.UNJOINED;
@@ -141,8 +139,50 @@ public abstract class AbstractCoordinator implements Closeable {
         this.sessionTimeoutMs = sessionTimeoutMs;
         this.leaveGroupOnClose = leaveGroupOnClose;
         this.heartbeat = new Heartbeat(sessionTimeoutMs, heartbeatIntervalMs, rebalanceTimeoutMs, retryBackoffMs);
-        // FIXME do not leak this from constructor
-        this.heartbeatThreadHelper = new HeartbeatThreadHelper(logContext, groupId, heartbeat, this, time, retryBackoffMs);
+        // FIXME do not leak 'this' from constructor
+        this.heartbeatThreadHelper = new AbstractHeartbeatThreadHelper(logContext, groupId, heartbeat,this, time, retryBackoffMs){
+
+            void pollNoWakeup() {
+                AbstractCoordinator.this.client.pollNoWakeup();
+            }
+
+            // FIXME it should be ...coordinator.findCoordinatorFuture() == null...
+            // change it to isCoordinatorAvailable
+            boolean isCoordinatorUnavailable() {
+                // the immediate future check ensures that we backoff properly in the case that no
+                // brokers are available to connect to.
+                return coordinatorUnknown() &&
+                        (findCoordinatorFuture() != null || lookupCoordinator().failed());
+            }
+
+            RequestFuture<Void> sendHeartbeatRequest() {
+                log.debug("Sending Heartbeat request to coordinator {}", coordinator());
+                HeartbeatRequest.Builder requestBuilder =
+                        new HeartbeatRequest.Builder(AbstractCoordinator.this.groupId, getGeneration().generationId, getGeneration().memberId);
+                return AbstractCoordinator.this.client.send(coordinator(), requestBuilder)
+                        .compose(new HeartbeatResponseHandler());
+            }
+
+            void onHeartbeatThreadWakeup() {
+                if (!isStable()) {
+                    // the group is not stable (perhaps because we left the group or because the coordinator
+                    // kicked us out), so disable heartbeats and wait for the main thread to rejoin.
+                    heartbeatThreadHelper.disableHeartbeatThread();
+                }
+            }
+
+            void onSessionTimeoutExpired() {
+                // the session timeout has expired without seeing a successful heartbeat, so we should
+                // probably make sure the coordinator is still healthy.
+                markCoordinatorUnknown();
+            }
+
+            void onPollTimeoutExpired() {
+                // the poll timeout has expired, which means that the foreground thread has stalled
+                // in between calls to poll(), so we explicitly leave the group.
+                maybeLeaveGroup();
+            }
+        };
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
         this.retryBackoffMs = retryBackoffMs;
     }
@@ -290,7 +330,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * @param now current time in milliseconds
      * @throws RuntimeException for unexpected errors raised from the heartbeat thread
      */
-    protected synchronized void pollHeartbeat(long now) {
+    protected void pollHeartbeat(long now) {
         heartbeatThreadHelper.pollHeartbeat(now);
     }
 
@@ -312,15 +352,15 @@ public abstract class AbstractCoordinator implements Closeable {
         joinGroupIfNeeded();
     }
 
-    private synchronized void startHeartbeatThreadIfNeeded() {
+    private void startHeartbeatThreadIfNeeded() {
         heartbeatThreadHelper.startHeartbeatThreadIfNeeded();
     }
 
-    private synchronized void disableHeartbeatThread() {
+    private void disableHeartbeatThread() {
         heartbeatThreadHelper.disableHeartbeatThread();
     }
 
-    private synchronized void enableHeartbeatThread() {
+    private void enableHeartbeatThread() {
         heartbeatThreadHelper.enableHeartbeatThread();
     }
 
@@ -622,7 +662,8 @@ public abstract class AbstractCoordinator implements Closeable {
         return this.coordinator;
     }
 
-    private synchronized Node coordinator() {
+    // TODO check if this can be private again
+    synchronized Node coordinator() {
         return this.coordinator;
     }
 
@@ -657,6 +698,10 @@ public abstract class AbstractCoordinator implements Closeable {
         return generation;
     }
 
+    // FIXME remove this
+    protected synchronized Generation getGeneration() {
+        return generation;
+    }
     /**
      * Reset the generation and memberId because we have fallen out of the group.
      */
@@ -735,13 +780,8 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     // visible for testing
-    // TODO consider moving to HeartbeatThread
     synchronized RequestFuture<Void> sendHeartbeatRequest() {
-        log.debug("Sending Heartbeat request to coordinator {}", coordinator);
-        HeartbeatRequest.Builder requestBuilder =
-                new HeartbeatRequest.Builder(this.groupId, this.generation.generationId, this.generation.memberId);
-        return client.send(coordinator, requestBuilder)
-                .compose(new HeartbeatResponseHandler());
+        return heartbeatThreadHelper.sendHeartbeatRequest();
     }
 
     private class HeartbeatResponseHandler extends CoordinatorResponseHandler<HeartbeatResponse, Void> {

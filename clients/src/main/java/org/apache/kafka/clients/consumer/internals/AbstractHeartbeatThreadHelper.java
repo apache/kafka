@@ -12,28 +12,27 @@ import org.slf4j.Logger;
 import java.util.concurrent.atomic.AtomicReference;
 
 // TODO come up with a better name
-public class HeartbeatThreadHelper {
+public abstract class AbstractHeartbeatThreadHelper {
     public static final String HEARTBEAT_THREAD_PREFIX = "kafka-coordinator-heartbeat-thread";
-    private final LogContext logContext;
     private final Logger log;
     private final String groupId;
     private final Heartbeat heartbeat;
-    private final AbstractCoordinator coordinator;
+    private Object lock;
     protected final Time time;
     protected final long retryBackoffMs;
     private HeartbeatThread heartbeatThread = null;
 
-    public HeartbeatThreadHelper(LogContext logContext,
-                                 String groupId,
-                                 Heartbeat heartbeat,
-                                 AbstractCoordinator coordinator,
-                                 Time time,
-                                 long retryBackoffMs) {
-        this.logContext = logContext;
-        this.log = logContext.logger(AbstractCoordinator.class);
+
+    public AbstractHeartbeatThreadHelper(LogContext logContext,
+                                         String groupId,
+                                         Heartbeat heartbeat,
+                                         Object lock,
+                                         Time time,
+                                         long retryBackoffMs) {
+        this.log = logContext.logger(AbstractHeartbeatThreadHelper.class);
         this.groupId = groupId;
         this.heartbeat = heartbeat;
-        this.coordinator = coordinator;
+        this.lock = lock;
         this.time = time;
         this.retryBackoffMs = retryBackoffMs;
     }
@@ -50,24 +49,28 @@ public class HeartbeatThreadHelper {
 
         public void enable() {
             log.debug("Enabling heartbeat thread");
-            synchronized (coordinator) {
+            synchronized (lock) {
                 this.enabled = true;
                 heartbeat.resetTimeouts(time.milliseconds());
-                coordinator.notify();
+                lock.notify();
             }
         }
 
         public void disable() {
             log.debug("Disabling heartbeat thread");
-            synchronized (coordinator) {
+            synchronized (lock) {
                 this.enabled = false;
             }
         }
 
+        private boolean disabled() {
+            return !enabled;
+        }
+
         public void close() {
-            synchronized (coordinator) {
+            synchronized (lock) {
                 this.closed = true;
-                coordinator.notify();
+                lock.notify();
             }
         }
 
@@ -84,55 +87,47 @@ public class HeartbeatThreadHelper {
             try {
                 log.debug("Heartbeat thread started");
                 while (true) {
-                    synchronized (coordinator) {
+                    synchronized (lock) {
                         if (closed)
                             return;
 
-                        if (!enabled) {
-                            coordinator.wait();
-                            continue;
-                        }
-                        if (!coordinator.isStable()) {
-                            // the group is not stable (perhaps because we left the group or because the coordinator
-                            // kicked us out), so disable heartbeats and wait for the main thread to rejoin.
-                            disable();
+                        if (disabled()) {
+                            lock.wait();
                             continue;
                         }
 
-                        coordinator.client.pollNoWakeup();
+                        onHeartbeatThreadWakeup();
+                        if (disabled()) {
+                            continue;
+                        }
+
+                        pollNoWakeup();
                         long now = time.milliseconds();
 
-                        if (coordinator.coordinatorUnknown()) {
-                            if (coordinator.findCoordinatorFuture() != null || coordinator.lookupCoordinator().failed())
-                                // the immediate future check ensures that we backoff properly in the case that no
-                                // brokers are available to connect to.
-                                coordinator.wait(retryBackoffMs);
+                        if (isCoordinatorUnavailable()) {
+                            lock.wait(retryBackoffMs);
                         } else if (heartbeat.sessionTimeoutExpired(now)) {
-                            // the session timeout has expired without seeing a successful heartbeat, so we should
-                            // probably make sure the coordinator is still healthy.
-                            coordinator.markCoordinatorUnknown();
+                            onSessionTimeoutExpired();
                         } else if (heartbeat.pollTimeoutExpired(now)) {
-                            // the poll timeout has expired, which means that the foreground thread has stalled
-                            // in between calls to poll(), so we explicitly leave the group.
-                            coordinator.maybeLeaveGroup();
+                            onPollTimeoutExpired();
                         } else if (!heartbeat.shouldHeartbeat(now)) {
                             // poll again after waiting for the retry backoff in case the heartbeat failed or the
                             // coordinator disconnected
-                            coordinator.wait(retryBackoffMs);
+                            lock.wait(retryBackoffMs);
                         } else {
                             heartbeat.sentHeartbeat(now);
 
-                            coordinator.sendHeartbeatRequest().addListener(new RequestFutureListener<Void>() {
+                            sendHeartbeatRequest().addListener(new RequestFutureListener<Void>() {
                                 @Override
                                 public void onSuccess(Void value) {
-                                    synchronized (coordinator) {
+                                    synchronized (lock) {
                                         heartbeat.receiveHeartbeat(time.milliseconds());
                                     }
                                 }
 
                                 @Override
                                 public void onFailure(RuntimeException e) {
-                                    synchronized (coordinator) {
+                                    synchronized (lock) {
                                         if (e instanceof RebalanceInProgressException) {
                                             // it is valid to continue heartbeating while the group is rebalancing. This
                                             // ensures that the coordinator keeps the member in the group for as long
@@ -143,7 +138,7 @@ public class HeartbeatThreadHelper {
                                             heartbeat.failHeartbeat();
 
                                             // wake up the thread if it's sleeping to reschedule the heartbeat
-                                            coordinator.notify();
+                                            lock.notify();
                                         }
                                     }
                                 }
@@ -172,44 +167,63 @@ public class HeartbeatThreadHelper {
             }
         }
     }
+    abstract void pollNoWakeup();
+
+    abstract boolean isCoordinatorUnavailable();
+
+    abstract RequestFuture<Void> sendHeartbeatRequest();
+
+    abstract void onHeartbeatThreadWakeup();
+
+    abstract void onSessionTimeoutExpired();
+
+    abstract void onPollTimeoutExpired();
 
     public void pollHeartbeat(long now) {
-        if (heartbeatThread != null) {
-            if (heartbeatThread.hasFailed()) {
-                // set the heartbeat thread to null and raise an exception. If the user catches it,
-                // the next call to ensureActiveGroup() will spawn a new heartbeat thread.
-                RuntimeException cause = heartbeatThread.failureCause();
-                heartbeatThread = null;
-                throw cause;
+        synchronized (lock) {
+            if (heartbeatThread != null) {
+                if (heartbeatThread.hasFailed()) {
+                    // set the heartbeat thread to null and raise an exception. If the user catches it,
+                    // the next call to ensureActiveGroup() will spawn a new heartbeat thread.
+                    RuntimeException cause = heartbeatThread.failureCause();
+                    heartbeatThread = null;
+                    throw cause;
+                }
+                // Awake the heartbeat thread if needed
+                if (heartbeat.shouldHeartbeat(now)) {
+                    notify();
+                }
+                heartbeat.poll(now);
             }
-            // Awake the heartbeat thread if needed
-            if (heartbeat.shouldHeartbeat(now)) {
-                notify();
-            }
-            heartbeat.poll(now);
         }
     }
 
     public void startHeartbeatThreadIfNeeded() {
-        if (heartbeatThread == null) {
-            heartbeatThread = new HeartbeatThread();
-            heartbeatThread.start();
+        synchronized(lock) {
+            if (heartbeatThread == null) {
+                heartbeatThread = new HeartbeatThread();
+                heartbeatThread.start();
+            }
         }
     }
 
     public void disableHeartbeatThread() {
-        if (heartbeatThread != null)
-            heartbeatThread.disable();
+        synchronized(lock) {
+            if (heartbeatThread != null)
+                heartbeatThread.disable();
+        }
     }
 
     public void enableHeartbeatThread() {
-        if (heartbeatThread != null)
-            heartbeatThread.enable();
+        synchronized(lock) {
+            if (heartbeatThread != null)
+                heartbeatThread.enable();
+        }
     }
 
     public void closeHeartbeatThread() {
-        HeartbeatThread thread = null;
-        synchronized (coordinator) {
+        HeartbeatThread thread;
+        synchronized (lock) {
             if (heartbeatThread == null)
                 return;
             heartbeatThread.close();
