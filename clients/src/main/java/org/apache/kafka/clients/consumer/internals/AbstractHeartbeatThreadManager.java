@@ -27,24 +27,24 @@ import org.slf4j.Logger;
 
 import java.util.concurrent.atomic.AtomicReference;
 
-// TODO come up with a better name
-public abstract class AbstractHeartbeatThreadHelper {
+public abstract class AbstractHeartbeatThreadManager {
+
     public static final String HEARTBEAT_THREAD_PREFIX = "kafka-coordinator-heartbeat-thread";
     private final Logger log;
     private final String heartbeatThreadName;
     private final Heartbeat heartbeat;
-    private Object lock;
+    private final Object lock;
     protected final Time time;
     protected final long retryBackoffMs;
     private HeartbeatThread heartbeatThread = null;
 
-    public AbstractHeartbeatThreadHelper(LogContext logContext,
-                                         String groupId,
-                                         Heartbeat heartbeat,
-                                         Object lock,
-                                         Time time,
-                                         long retryBackoffMs) {
-        this.log = logContext.logger(AbstractHeartbeatThreadHelper.class);
+    public AbstractHeartbeatThreadManager(LogContext logContext,
+                                          String groupId,
+                                          Heartbeat heartbeat,
+                                          Object lock,
+                                          Time time,
+                                          long retryBackoffMs) {
+        this.log = logContext.logger(AbstractHeartbeatThreadManager.class);
         this.heartbeatThreadName = HEARTBEAT_THREAD_PREFIX + (groupId.isEmpty() ? "" : " | " + groupId);
         this.heartbeat = heartbeat;
         this.lock = lock;
@@ -53,7 +53,7 @@ public abstract class AbstractHeartbeatThreadHelper {
     }
 
     private class HeartbeatThread extends KafkaThread {
-        // TODO shouldn't it be volatile? Disabled reads it and it's not in a synchronized block
+        // TODO shouldn't it be volatile? disabled() reads it and it's not in a synchronized block
         private boolean enabled = false;
         private boolean closed = false;
 
@@ -243,15 +243,15 @@ public abstract class AbstractHeartbeatThreadHelper {
         }
     }
 
-    abstract void pollNoWakeup();
+    protected abstract void pollNoWakeup();
 
-    abstract boolean isCoordinatorUnavailable();
+    protected abstract boolean isCoordinatorUnavailable();
 
-    abstract RequestFuture<Void> sendHeartbeatRequest();
+    protected abstract RequestFuture<Void> sendHeartbeatRequest();
 
-    abstract void onHeartbeatThreadWakeup();
+    protected abstract void onHeartbeatThreadWakeup();
 
-    abstract void onSessionTimeoutExpired();
+    protected abstract void onSessionTimeoutExpired();
 
-    abstract void onPollTimeoutExpired();
+    protected abstract void onPollTimeoutExpired();
 }

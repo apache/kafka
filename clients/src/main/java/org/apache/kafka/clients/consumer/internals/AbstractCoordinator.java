@@ -106,7 +106,7 @@ public abstract class AbstractCoordinator implements Closeable {
     protected final Time time;
     protected final long retryBackoffMs;
 
-    private final AbstractHeartbeatThreadHelper heartbeatThreadHelper;
+    private final AbstractHeartbeatThreadManager heartbeatThreadHelper;
     private boolean rejoinNeeded = true;
     private boolean needsJoinPrepare = true;
     private MemberState state = MemberState.UNJOINED;
@@ -144,23 +144,23 @@ public abstract class AbstractCoordinator implements Closeable {
         this.retryBackoffMs = retryBackoffMs;
     }
 
-    protected AbstractHeartbeatThreadHelper createHeartbeatThreadHelper(final LogContext logContext, final String groupId, final Time time, final long retryBackoffMs) {
-        return new AbstractHeartbeatThreadHelper(logContext, groupId, heartbeat,this, time, retryBackoffMs){
+    protected AbstractHeartbeatThreadManager createHeartbeatThreadHelper(final LogContext logContext, final String groupId, final Time time, final long retryBackoffMs) {
+        return new AbstractHeartbeatThreadManager(logContext, groupId, heartbeat,this, time, retryBackoffMs){
 
-            void pollNoWakeup() {
+            protected void pollNoWakeup() {
                 AbstractCoordinator.this.client.pollNoWakeup();
             }
 
             // FIXME it should be ...coordinator.findCoordinatorFuture() == null...
             // change it to isCoordinatorAvailable
-            boolean isCoordinatorUnavailable() {
+            protected boolean isCoordinatorUnavailable() {
                 // the immediate future check ensures that we backoff properly in the case that no
                 // brokers are available to connect to.
                 return coordinatorUnknown() &&
                         (findCoordinatorFuture() != null || lookupCoordinator().failed());
             }
 
-            RequestFuture<Void> sendHeartbeatRequest() {
+            protected RequestFuture<Void> sendHeartbeatRequest() {
                 log.debug("Sending Heartbeat request to coordinator {}", coordinator());
                 Generation result;
                 synchronized (AbstractCoordinator.this) {
@@ -176,7 +176,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         .compose(new HeartbeatResponseHandler());
             }
 
-            void onHeartbeatThreadWakeup() {
+            protected void onHeartbeatThreadWakeup() {
                 if (!isStable()) {
                     // the group is not stable (perhaps because we left the group or because the coordinator
                     // kicked us out), so disable heartbeats and wait for the main thread to rejoin.
@@ -184,13 +184,13 @@ public abstract class AbstractCoordinator implements Closeable {
                 }
             }
 
-            void onSessionTimeoutExpired() {
+            protected void onSessionTimeoutExpired() {
                 // the session timeout has expired without seeing a successful heartbeat, so we should
                 // probably make sure the coordinator is still healthy.
                 markCoordinatorUnknown();
             }
 
-            void onPollTimeoutExpired() {
+            protected void onPollTimeoutExpired() {
                 // the poll timeout has expired, which means that the foreground thread has stalled
                 // in between calls to poll(), so we explicitly leave the group.
                 maybeLeaveGroup();
