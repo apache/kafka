@@ -37,7 +37,7 @@ public class CogroupedKStreamImplTest {
     private static final String TOPIC_1 = "topic-1";
     private static final String TOPIC_2 = "topic-2";
     private static final String INVALID_STORE_NAME = "~foo bar~";
-    private final KStreamBuilder builder = new KStreamBuilder();
+    private final KStreamBuilder builder = null;
     private CogroupedKStream<String, String> cogroupedStream;
     private KStreamTestDriver driver = new KStreamTestDriver();
     
