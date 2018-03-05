@@ -20,34 +20,41 @@ import java.util.Random;
 
 /**
  * Describes the payload for the producer record. Currently, we can configure message size
- * (constant), expected compression rate. Where value is of message size, and key is null.
+ * (constant) and approximately control compression ratio. Where value is of message size, and key
+ * is null.
  * We will likely make this class a base class in the future and derive different payload classes
  * for various message size distributions, key assignments, etc.
  */
 public class Payload {
 
-    public static final double DEFAULT_EXPECTED_COMPRESSION_RATE = 0.3;
+    public static final double DEFAULT_VALUE_DIVERGENCE_RATIO = 0.3;
     public static final int DEFAULT_MESSAGE_SIZE = 512;
 
-    private final double expectedCompressionRate;
+    /**
+     * This is the ratio of how much each next value is different from the previous value. This
+     * is directly related to compression rate we will get. Example: 0.3 divergence ratio gets us
+     * about 0.3 - 0.45 compression rate with lz4.
+     */
+    private final double valueDivergenceRatio;
     private byte[] recordValue;
     private Random random = null;
 
     public Payload() {
-        this(DEFAULT_MESSAGE_SIZE, DEFAULT_EXPECTED_COMPRESSION_RATE);
+        this(DEFAULT_MESSAGE_SIZE, DEFAULT_VALUE_DIVERGENCE_RATIO);
     }
 
     public Payload(Integer messageSize) {
-        this(messageSize, DEFAULT_EXPECTED_COMPRESSION_RATE);
+        this(messageSize, DEFAULT_VALUE_DIVERGENCE_RATIO);
     }
 
     /**
      * @param messageSize key + value size
-     * @param expectedCompressionRate compression rate that we expect once compression is applied
-     *                                to the record (approximate)
+     * @param valueDivergenceRatio ratio of how much each next value is different from the previous
+     *                             value. Used to approximately control target compression rate (if
+     *                             compression is used).
      */
-    public Payload(Integer messageSize, double expectedCompressionRate) {
-        this.expectedCompressionRate = expectedCompressionRate;
+    public Payload(Integer messageSize, double valueDivergenceRatio) {
+        this.valueDivergenceRatio = valueDivergenceRatio;
         this.random = new Random();
         this.recordValue = new byte[messageSize];
         // initialize value with random bytes
@@ -61,7 +68,7 @@ public class Payload {
      */
     public byte[] nextValue() {
         // randomize some of the payload to achieve expected compression rate
-        for (int i = 0; i < recordValue.length * expectedCompressionRate; ++i)
+        for (int i = 0; i < recordValue.length * valueDivergenceRatio; ++i)
             recordValue[i] = (byte) (this.random.nextInt(26) + 65);
         return recordValue;
     }
@@ -76,6 +83,6 @@ public class Payload {
     @Override
     public String toString() {
         return "Payload(recordKeySize=0" + ", recordValueSize=" + recordValue.length
-               + ", expectedCompressionRate=" + expectedCompressionRate + ")";
+               + ", valueDivergenceRatio=" + valueDivergenceRatio + ")";
     }
 }
