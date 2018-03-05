@@ -176,7 +176,6 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val topicPartition = new TopicPartition(topic, 0)
     val brokerConfigs = TestUtils.createBrokerConfigs(4, zkConnect, false)
     brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
-    info("Number of brokers created: " + brokerConfigs.size)
     // create brokers
     val allServers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     this.servers = allServers
