@@ -1266,4 +1266,7 @@ public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyB
         return internalStreamsBuilder.newStoreName(prefix);
     }
 
+    public InternalStreamsBuilder internalStreamsBuilder() {
+        return internalStreamsBuilder;
+    }
 }

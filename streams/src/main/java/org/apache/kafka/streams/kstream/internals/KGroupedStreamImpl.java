@@ -20,8 +20,10 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.CogroupedKStream;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
+import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Merger;
@@ -191,6 +193,12 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                            AGGREGATE_NAME,
                            materializedInternal);
 
+    }
+    
+    @Override
+    public <VR> CogroupedKStream<K, VR> cogroup(final Aggregator<? super K, ? super V, VR> aggregator) {
+        Objects.requireNonNull(aggregator, "aggregator should not be null");
+        return new CogroupedKStreamImpl<>(new KStreamBuilder(), this, keySerde, aggregator);
     }
 
     @SuppressWarnings("deprecation")
@@ -515,7 +523,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     /**
      * @return the new sourceName if repartitioned. Otherwise the name of this stream
      */
-    private String repartitionIfRequired(final String queryableStoreName) {
+    String repartitionIfRequired(final String queryableStoreName) {
         if (!repartitionRequired) {
             return this.name;
         }

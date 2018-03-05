@@ -1594,4 +1594,5 @@ public interface KGroupedStream<K, V> {
      */
     SessionWindowedKStream<K, V> windowedBy(final SessionWindows windows);
 
+    <T> CogroupedKStream<K, T> cogroup(final Aggregator<? super K, ? super V, T> aggregator);
 }
