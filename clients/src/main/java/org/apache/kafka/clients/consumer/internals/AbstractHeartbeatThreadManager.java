@@ -190,7 +190,7 @@ public abstract class AbstractHeartbeatThreadManager implements HeartbeatThreadM
                 }
                 // Awake the heartbeat thread if needed
                 if (heartbeat.shouldHeartbeat(now)) {
-                    notify();
+                    lock.notify();
                 }
                 heartbeat.poll(now);
             }
@@ -199,7 +199,7 @@ public abstract class AbstractHeartbeatThreadManager implements HeartbeatThreadM
 
     @Override
     public void startHeartbeatThreadIfNeeded() {
-        synchronized(lock) {
+        synchronized (lock) {
             if (heartbeatThread == null) {
                 heartbeatThread = new HeartbeatThread();
                 heartbeatThread.start();
@@ -209,7 +209,7 @@ public abstract class AbstractHeartbeatThreadManager implements HeartbeatThreadM
 
     @Override
     public void disableHeartbeatThread() {
-        synchronized(lock) {
+        synchronized (lock) {
             if (heartbeatThread != null)
                 heartbeatThread.disable();
         }
@@ -217,7 +217,7 @@ public abstract class AbstractHeartbeatThreadManager implements HeartbeatThreadM
 
     @Override
     public void enableHeartbeatThread() {
-        synchronized(lock) {
+        synchronized (lock) {
             if (heartbeatThread != null)
                 heartbeatThread.enable();
         }

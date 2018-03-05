@@ -143,7 +143,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private AbstractHeartbeatThreadManager createDefaultHeartbeatThreadManager(LogContext logContext, String groupId, Time
             time, long retryBackoffMs) {
-        return new AbstractHeartbeatThreadManager(logContext, groupId, heartbeat, AbstractCoordinator.this, time, retryBackoffMs){
+        return new AbstractHeartbeatThreadManager(logContext, groupId, heartbeat, AbstractCoordinator.this, time, retryBackoffMs) {
 
             protected void pollNoWakeup() {
                 client.pollNoWakeup();
@@ -168,7 +168,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 if (state != MemberState.STABLE) {
                     // the group is not stable (perhaps because we left the group or because the coordinator
                     // kicked us out), so disable heartbeats and wait for the main thread to rejoin.
-                    heartbeatThreadManager.disableHeartbeatThread();
+                    super.disableHeartbeatThread();
                 }
             }
 
