@@ -157,6 +157,10 @@ object JmxTool extends Logging {
           (name, mbsc.getAttributes(name, mbean.getAttributes.map(_.getName)).size)}.toMap
       }
 
+    if(numExpectedAttributes.isEmpty) {
+      CommandLineUtils.printUsageAndDie(parser, "No matched object names or attributes to show.")
+    }
+
     // print csv header
     val keys = List("time") ++ queryAttributes(mbsc, names, attributesWhitelist).keys.toArray.sorted
     if(keys.size == numExpectedAttributes.values.sum + 1)
