@@ -139,8 +139,13 @@ public abstract class AbstractCoordinator implements Closeable {
         this.sessionTimeoutMs = sessionTimeoutMs;
         this.leaveGroupOnClose = leaveGroupOnClose;
         this.heartbeat = new Heartbeat(sessionTimeoutMs, heartbeatIntervalMs, rebalanceTimeoutMs, retryBackoffMs);
-        // FIXME do not leak 'this' from constructor
-        this.heartbeatThreadHelper = new AbstractHeartbeatThreadHelper(logContext, groupId, heartbeat,this, time, retryBackoffMs){
+        this.heartbeatThreadHelper = createHeartbeatThreadHelper(logContext, groupId, time, retryBackoffMs);
+        this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
+        this.retryBackoffMs = retryBackoffMs;
+    }
+
+    protected AbstractHeartbeatThreadHelper createHeartbeatThreadHelper(final LogContext logContext, final String groupId, final Time time, final long retryBackoffMs) {
+        return new AbstractHeartbeatThreadHelper(logContext, groupId, heartbeat,this, time, retryBackoffMs){
 
             void pollNoWakeup() {
                 AbstractCoordinator.this.client.pollNoWakeup();
@@ -157,8 +162,16 @@ public abstract class AbstractCoordinator implements Closeable {
 
             RequestFuture<Void> sendHeartbeatRequest() {
                 log.debug("Sending Heartbeat request to coordinator {}", coordinator());
+                Generation result;
+                synchronized (AbstractCoordinator.this) {
+                    result = generation;
+                }
+                Generation result1;
+                synchronized (AbstractCoordinator.this) {
+                    result1 = generation;
+                }
                 HeartbeatRequest.Builder requestBuilder =
-                        new HeartbeatRequest.Builder(AbstractCoordinator.this.groupId, getGeneration().generationId, getGeneration().memberId);
+                        new HeartbeatRequest.Builder(AbstractCoordinator.this.groupId, result1.generationId, result.memberId);
                 return AbstractCoordinator.this.client.send(coordinator(), requestBuilder)
                         .compose(new HeartbeatResponseHandler());
             }
@@ -183,8 +196,6 @@ public abstract class AbstractCoordinator implements Closeable {
                 maybeLeaveGroup();
             }
         };
-        this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
-        this.retryBackoffMs = retryBackoffMs;
     }
 
     /**
@@ -662,8 +673,7 @@ public abstract class AbstractCoordinator implements Closeable {
         return this.coordinator;
     }
 
-    // TODO check if this can be private again
-    synchronized Node coordinator() {
+    private synchronized Node coordinator() {
         return this.coordinator;
     }
 
@@ -698,10 +708,6 @@ public abstract class AbstractCoordinator implements Closeable {
         return generation;
     }
 
-    // FIXME remove this
-    protected synchronized Generation getGeneration() {
-        return generation;
-    }
     /**
      * Reset the generation and memberId because we have fallen out of the group.
      */

@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -15,13 +31,12 @@ import java.util.concurrent.atomic.AtomicReference;
 public abstract class AbstractHeartbeatThreadHelper {
     public static final String HEARTBEAT_THREAD_PREFIX = "kafka-coordinator-heartbeat-thread";
     private final Logger log;
-    private final String groupId;
+    private final String heartbeatThreadName;
     private final Heartbeat heartbeat;
     private Object lock;
     protected final Time time;
     protected final long retryBackoffMs;
     private HeartbeatThread heartbeatThread = null;
-
 
     public AbstractHeartbeatThreadHelper(LogContext logContext,
                                          String groupId,
@@ -30,7 +45,7 @@ public abstract class AbstractHeartbeatThreadHelper {
                                          Time time,
                                          long retryBackoffMs) {
         this.log = logContext.logger(AbstractHeartbeatThreadHelper.class);
-        this.groupId = groupId;
+        this.heartbeatThreadName = HEARTBEAT_THREAD_PREFIX + (groupId.isEmpty() ? "" : " | " + groupId);
         this.heartbeat = heartbeat;
         this.lock = lock;
         this.time = time;
@@ -38,16 +53,17 @@ public abstract class AbstractHeartbeatThreadHelper {
     }
 
     private class HeartbeatThread extends KafkaThread {
+        // TODO shouldn't it be volatile? Disabled reads it and it's not in a synchronized block
         private boolean enabled = false;
         private boolean closed = false;
 
         private AtomicReference<RuntimeException> failed = new AtomicReference<>(null);
 
         HeartbeatThread() {
-            super(HEARTBEAT_THREAD_PREFIX + (groupId.isEmpty() ? "" : " | " + groupId), true);
+            super(heartbeatThreadName, true);
         }
 
-        public void enable() {
+        private void enable() {
             log.debug("Enabling heartbeat thread");
             synchronized (lock) {
                 this.enabled = true;
@@ -56,7 +72,7 @@ public abstract class AbstractHeartbeatThreadHelper {
             }
         }
 
-        public void disable() {
+        private void disable() {
             log.debug("Disabling heartbeat thread");
             synchronized (lock) {
                 this.enabled = false;
@@ -67,7 +83,7 @@ public abstract class AbstractHeartbeatThreadHelper {
             return !enabled;
         }
 
-        public void close() {
+        private void close() {
             synchronized (lock) {
                 this.closed = true;
                 lock.notify();
@@ -167,17 +183,6 @@ public abstract class AbstractHeartbeatThreadHelper {
             }
         }
     }
-    abstract void pollNoWakeup();
-
-    abstract boolean isCoordinatorUnavailable();
-
-    abstract RequestFuture<Void> sendHeartbeatRequest();
-
-    abstract void onHeartbeatThreadWakeup();
-
-    abstract void onSessionTimeoutExpired();
-
-    abstract void onPollTimeoutExpired();
 
     public void pollHeartbeat(long now) {
         synchronized (lock) {
@@ -237,4 +242,16 @@ public abstract class AbstractHeartbeatThreadHelper {
             throw new InterruptException(e);
         }
     }
+
+    abstract void pollNoWakeup();
+
+    abstract boolean isCoordinatorUnavailable();
+
+    abstract RequestFuture<Void> sendHeartbeatRequest();
+
+    abstract void onHeartbeatThreadWakeup();
+
+    abstract void onSessionTimeoutExpired();
+
+    abstract void onPollTimeoutExpired();
 }
