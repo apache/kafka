@@ -1384,12 +1384,10 @@ class ReplicaManager(val config: KafkaConfig,
     for ((dir, reps) <- replicasByDir) {
       val hwms = reps.map(r => r.topicPartition -> r.highWatermark.messageOffset).toMap
       try {
-        highWatermarkCheckpoints.get(dir) match {
-          case Some(checkpointFile) =>
-            val previousHwms = checkpointFile.read()
-            val previousHwmsOfExistingReplicas = previousHwms.filterKeys(tp => logManager.getLog(tp).nonEmpty)
-            checkpointFile.write(previousHwmsOfExistingReplicas ++ hwms)
-          case None =>
+        highWatermarkCheckpoints.get(dir).foreach { checkpointFile =>
+          val previousHwms = checkpointFile.read()
+          val previousHwmsOfExistingReplicas = previousHwms.filterKeys(tp => logManager.getLog(tp).nonEmpty)
+          checkpointFile.write(previousHwmsOfExistingReplicas ++ hwms)
         }
       } catch {
         case e: KafkaStorageException =>
