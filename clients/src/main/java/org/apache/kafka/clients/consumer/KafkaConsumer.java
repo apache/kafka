@@ -1415,6 +1415,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
      *             this function is called
+     * @throws org.apache.kafka.common.errors.TimeoutException if the method blocks for long than requestTimoutMs
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId. See the exception for more details
