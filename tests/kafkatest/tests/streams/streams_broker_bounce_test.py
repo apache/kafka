@@ -112,6 +112,8 @@ class StreamsBrokerBounceTest(Test):
             'wcnt' : { 'partitions': self.partitions, 'replication-factor': self.replication,
                        'configs': {"min.insync.replicas": 2} },
             'tagg' : { 'partitions': self.partitions, 'replication-factor': self.replication,
+                       'configs': {"min.insync.replicas": 2} },
+            '__consumer_offsets' : { 'partitions': self.partitions, 'replication-factor': self.replication,
                        'configs': {"min.insync.replicas": 2} }
         }
 
