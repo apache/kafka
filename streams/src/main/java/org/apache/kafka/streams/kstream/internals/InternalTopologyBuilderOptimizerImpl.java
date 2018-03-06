@@ -55,7 +55,7 @@ public class InternalTopologyBuilderOptimizerImpl implements TopologyOptimizer {
             buildAndMaybeOptimize(internalTopologyBuilder, streamGraphNode);
 
             for (StreamsGraphNode descendant : streamGraphNode.getDescendants()) {
-                 graphNodeStack.push(descendant);
+                graphNodeStack.push(descendant);
             }
         }
     }
@@ -69,8 +69,8 @@ public class InternalTopologyBuilderOptimizerImpl implements TopologyOptimizer {
         switch (nodeType) {
 
             case TOPOLOGY_PARENT:
-                 LOG.info("Root of entire topology will process descendant nodes");
-                 break;
+                LOG.info("Root of entire topology will process descendant nodes");
+                break;
 
             case SOURCE:
                 final Deserializer keyDeserializer = processDetails.consumedKeySerde() == null ? null : processDetails.consumedKeySerde().deserializer();
