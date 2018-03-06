@@ -46,6 +46,10 @@ class GroupedStreamAggregateBuilder<K, V> {
         }
     };
 
+    public InternalStreamsBuilder internalStreamsBuilder() {
+        return builder;
+    }
+
     GroupedStreamAggregateBuilder(final InternalStreamsBuilder builder,
                                   final Serde<K> keySerde,
                                   final Serde<V> valueSerde,

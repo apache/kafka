@@ -50,7 +50,15 @@ import java.util.regex.Pattern;
 @Deprecated
 public class KStreamBuilder extends org.apache.kafka.streams.processor.TopologyBuilder {
 
-    private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(super.internalTopologyBuilder);
+    private final InternalStreamsBuilder internalStreamsBuilder;
+    
+    public KStreamBuilder() {
+        internalStreamsBuilder = new InternalStreamsBuilder(super.internalTopologyBuilder);
+    }
+
+    public KStreamBuilder(InternalStreamsBuilder internalStreamsBuilder) {
+        this.internalStreamsBuilder = internalStreamsBuilder;
+    }
 
     private Topology.AutoOffsetReset translateAutoOffsetReset(final org.apache.kafka.streams.processor.TopologyBuilder.AutoOffsetReset resetPolicy) {
         if (resetPolicy == null) {

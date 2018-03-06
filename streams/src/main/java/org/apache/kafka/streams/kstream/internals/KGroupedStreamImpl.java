@@ -198,7 +198,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     @Override
     public <VR> CogroupedKStream<K, VR> cogroup(final Aggregator<? super K, ? super V, VR> aggregator) {
         Objects.requireNonNull(aggregator, "aggregator should not be null");
-        return new CogroupedKStreamImpl<>(new KStreamBuilder(), this, keySerde, aggregator);
+        return new CogroupedKStreamImpl<>(new KStreamBuilder(),
+                                          this, keySerde, aggregator);
     }
 
     @SuppressWarnings("deprecation")
