@@ -145,7 +145,6 @@ class CogroupedKStreamImpl<K, V> implements CogroupedKStream<K, V> {
         final Set<String> sourceNodes = new HashSet<>();
         final Collection<KStreamAggProcessorSupplier> processors = new ArrayList<>();
         final List<String> processorNames = new ArrayList<>();
-        System.out.println("Starting adding.");
         for (final Map.Entry<KGroupedStream, Aggregator> pair : pairs.entrySet()) {
             final KGroupedStreamImpl groupedStream = (KGroupedStreamImpl) pair.getKey();
             final String sourceName = repartitionIfRequired(groupedStream);
@@ -174,11 +173,9 @@ class CogroupedKStreamImpl<K, V> implements CogroupedKStream<K, V> {
             final String processorName = topology.newName(COGROUP_AGGREGATE_NAME);
             processorNames.add(processorName);
             topology.addSource(sourceName, groupedStream.builder.internalTopologyBuilder.sourceTopicPattern());
-            System.out.println("Corresponding sourceTopicPattern: " + groupedStream.builder.internalTopologyBuilder.sourceTopicPattern().toString());
             topology.addProcessor(processorName, processor, sourceName);
         }
         final String name = topology.newName(COGROUP_NAME);
-        System.out.println("Finishing Name: " + name);
         final KStreamCogroup cogroup = new KStreamCogroup(processors);
         final String[] processorNamesArray = processorNames.toArray(new String[processorNames.size()]);
         topology.addProcessor(name, cogroup, processorNamesArray);

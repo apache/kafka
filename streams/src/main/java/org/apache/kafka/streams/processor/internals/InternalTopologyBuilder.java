@@ -493,7 +493,6 @@ public class InternalTopologyBuilder {
             }
         }
 
-        System.out.println(name + " has been added to KStreamBuilder.");
         nodeFactories.put(name, new ProcessorNodeFactory(name, predecessorNames, supplier));
         nodeGrouper.add(name);
         nodeGrouper.unite(name, predecessorNames);
