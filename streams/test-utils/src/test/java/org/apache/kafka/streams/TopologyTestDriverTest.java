@@ -838,4 +838,82 @@ public class TopologyTestDriverTest {
         @Override
         public void close() {}
     }
+
+    @Test
+    public void shouldCleanUpPersistentStateStoresOnClose() {
+        final Topology topology = new Topology();
+        topology.addSource("sourceProcessor", "input-topic");
+        topology.addProcessor(
+            "sumProcessor",
+            new ProcessorSupplier() {
+                @Override
+                public Processor get() {
+                    return new Processor<String, Long>() {
+                        private ProcessorContext context;
+                        private KeyValueStore<String, Long> store;
+
+                        @Override
+                        public void init(final ProcessorContext context) {
+                            this.context = context;
+                            //noinspection unchecked
+                            this.store = (KeyValueStore<String, Long>) context.getStateStore("sumStore");
+                        }
+
+                        @Override
+                        public void process(final String key, final Long value) {
+                            final Long oldValue = store.get(key);
+                            final Long newValue = (oldValue == null) ? value : oldValue + value;
+                            store.put(key, newValue);
+                            context.forward(key, newValue);
+                        }
+
+                        @Override
+                        public void punctuate(final long timestamp) {}
+
+                        @Override
+                        public void close() {}
+                    };
+                }
+            },
+            "sourceProcessor"
+        );
+        topology.addStateStore(Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("sumStore"), Serdes.String(), Serdes.Long()), "sumProcessor");
+        topology.addSink("sinkProcessor", "result-topic", "sumProcessor");
+        final Properties config = new Properties();
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver-cleanup");
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
+
+
+        // Simulating a simple test... Just demonstrating that the aggregator maintains a sum of the values per key
+        //noinspection Duplicates
+        {
+            final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config);
+            testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L));
+            OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 1L);
+            Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+
+            testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L));
+            OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 2L);
+            Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+            testDriver.close();
+        }
+
+        // Since we closed the testDriver, the next test should start over from a clean slate and see the exact same progression of values
+        // I.e., the results should be 1 and 2 again, not 3 and 4.
+        //noinspection Duplicates
+        {
+            final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config);
+            testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L));
+            OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 1L);
+            Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+
+            testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L));
+            OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 2L);
+            Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+            testDriver.close();
+        }
+    }
 }
