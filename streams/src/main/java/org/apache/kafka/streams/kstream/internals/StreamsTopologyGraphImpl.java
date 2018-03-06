@@ -28,7 +28,7 @@ public class StreamsTopologyGraphImpl extends StreamsTopologyGraph {
 
         final StreamsGraphNode predecessorNode = node.getPredecessorName() != null ? nameToGraphNode.get(node.getPredecessorName()) : null;
 
-        if (predecessorNode == null && node.getType() != StreamsGraphNode.TopologyNodeType.SOURCE) {
+        if (predecessorNode == null && node.isSourceNode()) {
             throw new TopologyException("Only SOURCE nodes can have a null predecessor.  Type" + node.getType() + " predecessor name" + node.getPredecessorName());
         }
 
