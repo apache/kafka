@@ -22,10 +22,11 @@ import java.nio.ByteBuffer;
 import java.util.Random;
 
 /**
- * Describes the payload for the producer record. Currently, we can configure message size
- * (constant), key type, and approximately control compression ratio. Message size determines key
- * size and value size, such that (message size) = (key size) + (value size). Key size is determined
- * by key type.
+ * Describes the payload for the producer record. Currently, it generates constant size values
+ * and either null keys or constant size key (depending on requested key type). The generator
+ * is deterministic -- two generator objects created with the same key type, message size, and
+ * value divergence ratio (see `valueDivergenceRatio` description) will generate the same sequence
+ * of key/value pairs.
  */
 public class PayloadGenerator {
 
@@ -47,10 +48,19 @@ public class PayloadGenerator {
         this(DEFAULT_MESSAGE_SIZE, PayloadKeyType.KEY_NULL, DEFAULT_VALUE_DIVERGENCE_RATIO);
     }
 
+    /**
+     * Generator will generate null keys and values of size `messageSize`
+     * @param messageSize number of bytes used for key + value
+     */
     public PayloadGenerator(Integer messageSize) {
         this(messageSize, PayloadKeyType.KEY_NULL, DEFAULT_VALUE_DIVERGENCE_RATIO);
     }
 
+    /**
+     * Generator will generate keys of given type and values of size 'messageSize' - (key size).
+     * @param messageSize number of bytes used for key + value
+     * @param keyType type of keys generated
+     */
     public PayloadGenerator(Integer messageSize, PayloadKeyType keyType) {
         this(messageSize, keyType, DEFAULT_VALUE_DIVERGENCE_RATIO);
     }
