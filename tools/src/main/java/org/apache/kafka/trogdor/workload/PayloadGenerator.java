@@ -43,6 +43,7 @@ public class PayloadGenerator {
     private long currentPosition;
     private byte[] recordValue;
     private PayloadKeyType recordKeyType;
+    private Random random;
 
     public PayloadGenerator() {
         this(DEFAULT_MESSAGE_SIZE, PayloadKeyType.KEY_NULL, DEFAULT_VALUE_DIVERGENCE_RATIO);
@@ -76,12 +77,12 @@ public class PayloadGenerator {
         this.baseSeed = 856;  // some random number, may later let pass seed to constructor
         this.currentPosition = 0;
         this.valueDivergenceRatio = valueDivergenceRatio;
+        this.random = new Random(this.baseSeed);
 
         final int valueSize = (messageSize > keyType.maxSizeInBytes())
                               ? messageSize - keyType.maxSizeInBytes() : 1;
         this.recordValue = new byte[valueSize];
         // initialize value with random bytes
-        Random random = new Random(baseSeed);
         for (int i = 0; i < recordValue.length; ++i) {
             recordValue[i] = (byte) (random.nextInt(26) + 65);
         }
@@ -128,7 +129,7 @@ public class PayloadGenerator {
      */
     private byte[] nextValue(long position) {
         // randomize some of the payload to achieve expected compression rate
-        Random random = new Random(baseSeed + 31 * position + 1);
+        random.setSeed(baseSeed + 31 * position + 1);
         for (int i = 0; i < recordValue.length * valueDivergenceRatio; ++i)
             recordValue[i] = (byte) (random.nextInt(26) + 65);
         return recordValue;

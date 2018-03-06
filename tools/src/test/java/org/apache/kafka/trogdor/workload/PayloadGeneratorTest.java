@@ -39,12 +39,13 @@ public class PayloadGeneratorTest {
 
     @Test
     public void testDefaultPayload() {
+        final long numRecords = 262;
         PayloadGenerator payloadGenerator = new PayloadGenerator();
 
         // make sure that each time we produce a different value (except if compression rate is 0)
         byte[] prevValue = null;
         long expectedPosition = 0;
-        for (int i = 0; i < 262; i++) {
+        for (int i = 0; i < numRecords; i++) {
             ProducerRecord<byte[], byte[]> record = payloadGenerator.nextRecord("test-topic");
             assertNull(record.key());
             assertEquals(PayloadGenerator.DEFAULT_MESSAGE_SIZE, record.value().length);
@@ -66,9 +67,10 @@ public class PayloadGeneratorTest {
 
     @Test
     public void testKeyContainsGeneratorPosition() {
+        final long numRecords = 10;
         final int size = 200;
         PayloadGenerator generator = new PayloadGenerator(size, PayloadKeyType.KEY_MESSAGE_INDEX);
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < numRecords; i++) {
             assertEquals(i, generator.position());
             ProducerRecord<byte[], byte[]> record = generator.nextRecord("test-topic");
             assertEquals(8, record.key().length);
