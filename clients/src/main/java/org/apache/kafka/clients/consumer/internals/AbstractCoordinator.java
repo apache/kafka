@@ -149,11 +149,14 @@ public abstract class AbstractCoordinator implements Closeable {
                 client.pollNoWakeup();
             }
 
-            protected boolean isCoordinatorUnavailable() {
+            protected boolean coordinatorUnavailable() {
                 // the immediate future check ensures that we backoff properly in the case that no
                 // brokers are available to connect to.
-                return coordinatorUnknown() &&
-                        (findCoordinatorFuture() != null || lookupCoordinator().failed());
+                return findCoordinatorFuture() != null || lookupCoordinator().failed();
+            }
+
+            protected boolean coordinatorUnknown() {
+                return AbstractCoordinator.this.coordinatorUnknown();
             }
 
             public RequestFuture<Void> sendHeartbeatRequest() {

@@ -113,8 +113,9 @@ public abstract class AbstractHeartbeatThreadManager implements HeartbeatThreadM
                         pollNoWakeup();
                         long now = time.milliseconds();
 
-                        if (isCoordinatorUnavailable()) {
-                            lock.wait(retryBackoffMs);
+                        if (coordinatorUnknown()) {
+                            if (coordinatorUnavailable())
+                                lock.wait(retryBackoffMs);
                         } else if (heartbeat.sessionTimeoutExpired(now)) {
                             onSessionTimeoutExpired();
                         } else if (heartbeat.pollTimeoutExpired(now)) {
@@ -243,7 +244,9 @@ public abstract class AbstractHeartbeatThreadManager implements HeartbeatThreadM
 
     protected abstract void pollNoWakeup();
 
-    protected abstract boolean isCoordinatorUnavailable();
+    protected abstract boolean coordinatorUnavailable();
+
+    protected abstract boolean coordinatorUnknown();
 
     public abstract RequestFuture<Void> sendHeartbeatRequest();
 
