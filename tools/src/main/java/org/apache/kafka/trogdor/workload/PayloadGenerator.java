@@ -38,9 +38,10 @@ public class PayloadGenerator {
      * about 0.3 - 0.45 compression rate with lz4.
      */
     private final double valueDivergenceRatio;
+    private final long baseSeed;
+    private long currentPosition;
     private byte[] recordValue;
     private PayloadKeyType recordKeyType;
-    private Random random = null;
 
     public PayloadGenerator() {
         this(DEFAULT_MESSAGE_SIZE, PayloadKeyType.KEY_NULL, DEFAULT_VALUE_DIVERGENCE_RATIO);
@@ -62,40 +63,47 @@ public class PayloadGenerator {
      */
     public PayloadGenerator(Integer messageSize, PayloadKeyType keyType,
                             double valueDivergenceRatio) {
+        this.baseSeed = 856;  // some random number, may later let pass seed to constructor
+        this.currentPosition = 0;
         this.valueDivergenceRatio = valueDivergenceRatio;
-        this.random = new Random();
 
         final int valueSize = (messageSize > keyType.maxSizeInBytes())
                               ? messageSize - keyType.maxSizeInBytes() : 1;
         this.recordValue = new byte[valueSize];
         // initialize value with random bytes
+        Random random = new Random(baseSeed);
         for (int i = 0; i < recordValue.length; ++i) {
-            recordValue[i] = (byte) (this.random.nextInt(26) + 65);
+            recordValue[i] = (byte) (random.nextInt(26) + 65);
         }
         this.recordKeyType = keyType;
     }
 
     /**
-     * Creates record with null key.
+     * Returns current position of the payload generator.
      */
-    public ProducerRecord<byte[], byte[]> nextRecord(String topicName) {
-        if (recordKeyType != PayloadKeyType.KEY_NULL) {
-            // we don't know (for currently supported key types) how to create a key
-            throw new IllegalArgumentException();
-        }
-        return new ProducerRecord<>(topicName, null, nextValue());
+    public long position() {
+        return currentPosition;
     }
 
     /**
-     * Creates record with fixed size key containing given integer value.
+     * Creates record based on the current position, and increments current position.
      */
-    public ProducerRecord<byte[], byte[]> nextRecord(String topicName, int key) {
-        if (recordKeyType.maxSizeInBytes() <= 0) {
-            // must call nextRecord(String topicName)
-            throw new IllegalArgumentException();
+    public ProducerRecord<byte[], byte[]> nextRecord(String topicName) {
+        return nextRecord(topicName, currentPosition++);
+    }
+
+    /**
+     * Creates record based on the given position. Does not change the current position.
+     */
+    public ProducerRecord<byte[], byte[]> nextRecord(String topicName, long position) {
+        byte[] keyBytes = null;
+        if (recordKeyType == PayloadKeyType.KEY_MESSAGE_INDEX) {
+            keyBytes = ByteBuffer.allocate(recordKeyType.maxSizeInBytes()).putLong(position).array();
+        } else if (recordKeyType != PayloadKeyType.KEY_NULL) {
+            throw new UnsupportedOperationException(
+                "PayloadGenerator does not know how to generate key for key type " + recordKeyType);
         }
-        byte[] keyBytes = ByteBuffer.allocate(recordKeyType.maxSizeInBytes()).putInt(key).array();
-        return new ProducerRecord<>(topicName, keyBytes, nextValue());
+        return new ProducerRecord<>(topicName, keyBytes, nextValue(position));
     }
 
     @Override
@@ -108,10 +116,11 @@ public class PayloadGenerator {
     /**
      * Returns producer record value
      */
-    private byte[] nextValue() {
+    private byte[] nextValue(long position) {
         // randomize some of the payload to achieve expected compression rate
+        Random random = new Random(baseSeed + 31 * position + 1);
         for (int i = 0; i < recordValue.length * valueDivergenceRatio; ++i)
-            recordValue[i] = (byte) (this.random.nextInt(26) + 65);
+            recordValue[i] = (byte) (random.nextInt(26) + 65);
         return recordValue;
     }
 }

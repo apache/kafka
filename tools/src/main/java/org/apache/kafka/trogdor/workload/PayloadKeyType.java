@@ -23,8 +23,9 @@ package org.apache.kafka.trogdor.workload;
 public enum PayloadKeyType {
     // null key
     KEY_NULL(0),
-    // fixed size key containing an integer
-    KEY_INTEGER(4);
+    // fixed size key containing a long integer represending a message index (i.e., position of
+    // the payload generator
+    KEY_MESSAGE_INDEX(8);
 
     private final int maxSizeInBytes;
 

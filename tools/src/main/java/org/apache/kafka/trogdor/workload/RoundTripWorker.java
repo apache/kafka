@@ -183,7 +183,7 @@ public class RoundTripWorker implements TaskWorker {
             int perPeriod = WorkerUtils.
                 perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.throttle = new Throttle(perPeriod, THROTTLE_PERIOD_MS);
-            payloadGenerator = new PayloadGenerator(MESSAGE_SIZE, PayloadKeyType.KEY_INTEGER);
+            payloadGenerator = new PayloadGenerator(MESSAGE_SIZE, PayloadKeyType.KEY_MESSAGE_INDEX);
         }
 
         @Override
@@ -205,6 +205,7 @@ public class RoundTripWorker implements TaskWorker {
                         uniqueMessagesSent++;
                     }
                     messagesSent++;
+                    // we explicitly specify generator position based on message index
                     ProducerRecord<byte[], byte[]> record = payloadGenerator.nextRecord(TOPIC_NAME, messageIndex);
                     producer.send(record, new Callback() {
                         @Override

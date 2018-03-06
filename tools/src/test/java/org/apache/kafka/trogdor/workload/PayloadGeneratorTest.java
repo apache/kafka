@@ -21,13 +21,21 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 
 public class PayloadGeneratorTest {
+
+    @Test
+    public void testGeneratorStartsAtPositionZero() {
+        PayloadGenerator payloadGenerator = new PayloadGenerator();
+        assertEquals(0, payloadGenerator.position());
+    }
 
     @Test
     public void testDefaultPayload() {
@@ -35,11 +43,14 @@ public class PayloadGeneratorTest {
 
         // make sure that each time we produce a different value (except if compression rate is 0)
         byte[] prevValue = null;
-        for (int i = 0; i < 1000; i++) {
+        long expectedPosition = 0;
+        for (int i = 0; i < 262; i++) {
             ProducerRecord<byte[], byte[]> record = payloadGenerator.nextRecord("test-topic");
             assertNull(record.key());
             assertEquals(PayloadGenerator.DEFAULT_MESSAGE_SIZE, record.value().length);
-            assertNotEquals("Iteration " + i, prevValue, record.value());
+            assertEquals(++expectedPosition, payloadGenerator.position());
+            assertFalse("Position " + payloadGenerator.position(),
+                        Arrays.equals(prevValue, record.value()));
             prevValue = record.value().clone();
         }
     }
@@ -54,36 +65,70 @@ public class PayloadGeneratorTest {
     }
 
     @Test
-    public void testFixedSizeKeyContainingIntegerValue() {
+    public void testKeyContainsGeneratorPosition() {
         final int size = 200;
-        PayloadGenerator payloadGenerator = new PayloadGenerator(size, PayloadKeyType.KEY_INTEGER);
-        int keyVal = 2;
-        while (keyVal < 5000000) {
-            ProducerRecord<byte[], byte[]> record = payloadGenerator.nextRecord("test-topic", keyVal);
-            assertEquals(4, record.key().length);
-            assertEquals(size - 4, record.value().length);
-            assertEquals(keyVal, ByteBuffer.wrap(record.key()).getInt());
-            keyVal = keyVal * 64;
+        PayloadGenerator generator = new PayloadGenerator(size, PayloadKeyType.KEY_MESSAGE_INDEX);
+        for (int i = 0; i < 10; i++) {
+            assertEquals(i, generator.position());
+            ProducerRecord<byte[], byte[]> record = generator.nextRecord("test-topic");
+            assertEquals(8, record.key().length);
+            assertEquals(size - 8, record.value().length);
+            assertEquals("i=" + i, i, ByteBuffer.wrap(record.key()).getLong());
+        }
+    }
+
+    @Test
+    public void testGeneratePayloadWithExplicitPosition() {
+        final int size = 200;
+        PayloadGenerator generator = new PayloadGenerator(size, PayloadKeyType.KEY_MESSAGE_INDEX);
+        int position = 2;
+        while (position < 5000000) {
+            ProducerRecord<byte[], byte[]> record = generator.nextRecord("test-topic", position);
+            assertEquals(8, record.key().length);
+            assertEquals(size - 8, record.value().length);
+            assertEquals(position, ByteBuffer.wrap(record.key()).getLong());
+            position = position * 64;
+        }
+    }
+
+    public void testSamePositionGeneratesSameKeyAndValue() {
+        final int size = 100;
+        PayloadGenerator generator = new PayloadGenerator(size, PayloadKeyType.KEY_MESSAGE_INDEX);
+        ProducerRecord<byte[], byte[]> record1 = generator.nextRecord("test-topic");
+        assertEquals(1, generator.position());
+        ProducerRecord<byte[], byte[]> record2 = generator.nextRecord("test-topic");
+        assertEquals(2, generator.position());
+        ProducerRecord<byte[], byte[]> record3 = generator.nextRecord("test-topic", 0);
+        // position should not change if we generated record with specific position
+        assertEquals(2, generator.position());
+        assertFalse("Values at different positions should not match.",
+                    Arrays.equals(record1.value(), record2.value()));
+        assertFalse("Values at different positions should not match.",
+                    Arrays.equals(record3.value(), record2.value()));
+        assertTrue("Values at the same position should match.",
+                   Arrays.equals(record1.value(), record3.value()));
+    }
+
+    @Test
+    public void testGeneratesDeterministicKeyValues() {
+        final long numRecords = 194;
+        final int size = 100;
+        PayloadGenerator generator1 = new PayloadGenerator(size, PayloadKeyType.KEY_MESSAGE_INDEX);
+        PayloadGenerator generator2 = new PayloadGenerator(size, PayloadKeyType.KEY_MESSAGE_INDEX);
+        for (int i = 0; i < numRecords; ++i) {
+            ProducerRecord<byte[], byte[]> record1 = generator1.nextRecord("test-topic");
+            ProducerRecord<byte[], byte[]> record2 = generator2.nextRecord("test-topic");
+            assertTrue(Arrays.equals(record1.value(), record2.value()));
+            assertTrue(Arrays.equals(record1.key(), record2.key()));
         }
     }
 
     @Test
     public void testTooSmallMessageSizeCreatesPayloadWithOneByteValues() {
-        PayloadGenerator payloadGenerator = new PayloadGenerator(2, PayloadKeyType.KEY_INTEGER);
+        PayloadGenerator payloadGenerator = new PayloadGenerator(2, PayloadKeyType.KEY_MESSAGE_INDEX);
         ProducerRecord<byte[], byte[]> record = payloadGenerator.nextRecord("test-topic", 877);
-        assertEquals(4, record.key().length);
+        assertEquals(8, record.key().length);
         assertEquals(1, record.value().length);
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void testNextRecordWithTopicOnlyFailsIfKeyTypeNotNull() {
-        PayloadGenerator payloadGenerator = new PayloadGenerator(100, PayloadKeyType.KEY_INTEGER);
-        payloadGenerator.nextRecord("test-topic");
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void testNextRecordWithIntKeyFailsIfKeyTypeNull() {
-        PayloadGenerator payloadGenerator = new PayloadGenerator(100);
-        payloadGenerator.nextRecord("test-topic", 27);
-    }
 }
