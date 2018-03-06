@@ -37,12 +37,14 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 public class NetworkClientTest {
@@ -82,6 +84,7 @@ public class NetworkClientTest {
 
     @Before
     public void setup() {
+        selector.reset();
         metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
     }
 
@@ -348,6 +351,55 @@ public class NetworkClientTest {
         // The failed ApiVersion request should not be forwarded to upper layers
         List<ClientResponse> responses = client.poll(0, time.milliseconds());
         assertTrue(responses.isEmpty());
+    }
+
+    @Test
+    public void testDisconnectWithMultipleInFlights() throws Exception {
+        NetworkClient client = this.clientWithNoVersionDiscovery;
+        awaitReady(client, node);
+        assertTrue("Expected NetworkClient to be ready to send to node " + node.idString(),
+                client.isReady(node, time.milliseconds()));
+
+        MetadataRequest.Builder builder = new MetadataRequest.Builder(Collections.<String>emptyList(), true);
+        long now = time.milliseconds();
+
+        final List<ClientResponse> callbackResponses = new ArrayList<>();
+        RequestCompletionHandler callback = new RequestCompletionHandler() {
+            @Override
+            public void onComplete(ClientResponse response) {
+                callbackResponses.add(response);
+            }
+        };
+
+        ClientRequest request1 = client.newClientRequest(node.idString(), builder, now, true, callback);
+        client.send(request1, now);
+        client.poll(0, now);
+
+        ClientRequest request2 = client.newClientRequest(node.idString(), builder, now, true, callback);
+        client.send(request2, now);
+        client.poll(0, now);
+
+        assertNotEquals(request1.correlationId(), request2.correlationId());
+
+        assertEquals(2, client.inFlightRequestCount());
+        assertEquals(2, client.inFlightRequestCount(node.idString()));
+
+        client.disconnect(node.idString());
+
+        List<ClientResponse> responses = client.poll(0, time.milliseconds());
+        assertEquals(2, responses.size());
+        assertEquals(responses, callbackResponses);
+        assertEquals(0, client.inFlightRequestCount());
+        assertEquals(0, client.inFlightRequestCount(node.idString()));
+
+        // Ensure that the responses are returned in the order they were sent
+        ClientResponse response1 = responses.get(0);
+        assertTrue(response1.wasDisconnected());
+        assertEquals(request1.correlationId(), response1.requestHeader().correlationId());
+
+        ClientResponse response2 = responses.get(1);
+        assertTrue(response2.wasDisconnected());
+        assertEquals(request2.correlationId(), response2.requestHeader().correlationId());
     }
 
     @Test
