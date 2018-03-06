@@ -216,7 +216,7 @@ object JmxTool extends Logging {
     }
   }
 
-  def queryAttributes(mbsc: MBeanServerConnection, names: Iterable[ObjectName], attributesWhitelist: Option[Array[String]]): Map[String, Any] = {
+  def queryAttributes(mbsc: MBeanServerConnection, names: Iterable[ObjectName], attributesWhitelist: Option[Array[String]]): mutable.Map[String, Any] = {
     val attributes = new mutable.HashMap[String, Any]()
     for (name <- names) {
       val mbean = mbsc.getMBeanInfo(name)
@@ -230,10 +230,10 @@ object JmxTool extends Logging {
         }
       }
     }
-    attributes.toMap
+    attributes
   }
 
-  def parseFormat(reportFormatOpt : String) = reportFormatOpt match {
+  def parseFormat(reportFormatOpt : String): String = reportFormatOpt match {
     case "properties" => "properties"
     case "csv" => "csv"
     case "tsv" => "tsv"

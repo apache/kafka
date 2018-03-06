@@ -27,7 +27,7 @@ class JmxMixin(object):
     - we assume the service using JmxMixin also uses KafkaPathResolverMixin
     - this uses the --wait option for JmxTool, so the list of object names must be explicit; no patterns are permitted
     """
-    def __init__(self, num_nodes, jmx_object_names=None, jmx_attributes=None, root="/mnt"):
+    def __init__(self, num_nodes, jmx_object_names=None, jmx_attributes=None, root="/mnt", report_interval=1000):
         self.jmx_object_names = jmx_object_names
         self.jmx_attributes = jmx_attributes or []
         self.jmx_port = 9192
@@ -36,6 +36,7 @@ class JmxMixin(object):
         self.jmx_stats = [{} for x in range(num_nodes)]
         self.maximum_jmx_value = {}  # map from object_attribute_name to maximum value observed over time
         self.average_jmx_value = {}  # map from object_attribute_name to average value observed over time
+        self.report_interval = report_interval
 
         self.jmx_tool_log = os.path.join(root, "jmx_tool.log")
         self.jmx_tool_err_log = os.path.join(root, "jmx_tool.err.log")
@@ -70,9 +71,8 @@ class JmxMixin(object):
         use_jmxtool_version = get_version(node)
         if use_jmxtool_version <= V_0_11_0_0:
             use_jmxtool_version = DEV_BRANCH
-        cmd = "%s %s " % (self.path.script("kafka-run-class.sh", use_jmxtool_version),
-                          self.jmx_class_name())
-        cmd += "--reporting-interval 1000 --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % self.jmx_port
+        cmd = "%s %s " % (self.path.script("kafka-run-class.sh", use_jmxtool_version), self.jmx_class_name())
+        cmd += "--reporting-interval %d --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % (self.report_interval, self.jmx_port)
         cmd += " --wait"
         for jmx_object_name in self.jmx_object_names:
             cmd += " --object-name %s" % jmx_object_name
@@ -110,7 +110,7 @@ class JmxMixin(object):
                 object_attribute_names = line.strip()[1:-1].split("\",\"")[1:]
                 continue
             stats = [float(field) for field in line.split(',')]
-            time_sec = int(stats[0]/1000)
+            time_sec = int(stats[0]/self.report_interval)
             self.jmx_stats[idx-1][time_sec] = {name: stats[i+1] for i, name in enumerate(object_attribute_names)}
 
         # do not calculate average and maximum of jmx stats until we have read output from all nodes
@@ -124,7 +124,7 @@ class JmxMixin(object):
 
         for name in object_attribute_names:
             aggregates_per_time = []
-            for time_sec in xrange(start_time_sec, end_time_sec + 1):
+            for time_sec in xrange(start_time_sec, end_time_sec + int(self.report_interval/100) + 1):
                 # assume that value is 0 if it is not read by jmx tool at the given time. This is appropriate for metrics such as bandwidth
                 values_per_node = [time_to_stats.get(time_sec, {}).get(name, 0) for time_to_stats in self.jmx_stats]
                 # assume that value is aggregated across nodes by sum. This is appropriate for metrics such as bandwidth

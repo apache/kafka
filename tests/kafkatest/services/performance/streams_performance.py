@@ -13,14 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.streams import StreamsTestBaseService
-
+from kafkatest.services.monitor.jmx import JmxMixin
 
 #
 # Class used to start the simple Kafka Streams benchmark
 #
-class StreamsSimpleBenchmarkService(StreamsTestBaseService):
+class StreamsSimpleBenchmarkService(KafkaPathResolverMixin, JmxMixin, StreamsTestBaseService):
     """Base class for simple Kafka Streams benchmark"""
+
+    PERSISTENT_ROOT = "/mnt/streams_benchmark"
 
     def __init__(self, test_context, kafka, numrecs, load_phase, test_name, num_threads):
         super(StreamsSimpleBenchmarkService, self).__init__(test_context,
@@ -30,6 +33,16 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
                                                             load_phase,
                                                             test_name,
                                                             num_threads)
+        JmxMixin.__init__(self, num_nodes=1,
+                          jmx_object_names=['kafka.streams:type=stream-metrics,client-id=simple-benchmark-StreamThread-%d' %i for i in range(num_threads)],
+                          jmx_attributes=['process-latency-avg',
+                                          'process-rate',
+                                          'commit-latency-avg',
+                                          'commit-rate',
+                                          'poll-latency-avg',
+                                          'poll-rate'],
+                          root=StreamsSimpleBenchmarkService.PERSISTENT_ROOT,
+                          report_interval=5000)
 
     def collect_data(self, node, tag = None):
         # Collect the data and return it to the framework

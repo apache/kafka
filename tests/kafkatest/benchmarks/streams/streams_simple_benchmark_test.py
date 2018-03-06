@@ -75,6 +75,8 @@ class StreamsSimpleBenchmarkTest(Test):
         self.load_driver.wait()
         self.load_driver.stop()
 
+
+
         ################
         # RUN PHASE
         ################
@@ -83,6 +85,7 @@ class StreamsSimpleBenchmarkTest(Test):
                                                              self.num_records/(scale), "false", test,
                                                              self.num_threads)
             self.driver[num].start()
+            self.driver[num].start_jmx_tool(self.idx(num), node)
 
         #######################
         # STOP + COLLECT PHASE
@@ -93,7 +96,8 @@ class StreamsSimpleBenchmarkTest(Test):
             node[num] = self.driver[num].node
             node[num].account.ssh("grep Performance %s" % self.driver[num].STDOUT_FILE, allow_fail=False)
             data[num] = self.driver[num].collect_data(node[num], "" )
-                
+            self.driver[num].read_jmx_output_all_nodes()
+
 
         final = {}
         for num in range(0, scale):
