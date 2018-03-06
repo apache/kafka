@@ -109,9 +109,9 @@ class TaskManager {
         active.closeNonAssignedSuspendedTasks(assignedActiveTasks);
         addStreamTasks(assignment);
         addStandbyTasks();
-        final Set<TopicPartition> partitions = active.uninitializedPartitions();
-        log.trace("Pausing partitions: {}", partitions);
-        consumer.pause(partitions);
+        // Pause all the partitions until the underlying state store is ready for all the active tasks.
+        log.trace("Pausing partitions: {}", assignment);
+        consumer.pause(assignment);
     }
 
     /**
@@ -322,18 +322,17 @@ class TaskManager {
      * @throws TaskMigratedException if another thread wrote to the changelog topic that is currently restored
      */
     boolean updateNewAndRestoringTasks() {
-        final Set<TopicPartition> resumed = active.initializeNewTasks();
+        active.initializeNewTasks();
         standby.initializeNewTasks();
 
         final Collection<TopicPartition> restored = changelogReader.restore(active);
 
-        resumed.addAll(active.updateRestored(restored));
+        active.updateRestored(restored);
 
-        if (!resumed.isEmpty()) {
-            log.trace("Resuming partitions {}", resumed);
-            consumer.resume(resumed);
-        }
         if (active.allTasksRunning()) {
+            Set<TopicPartition> assignment = consumer.assignment();
+            log.trace("Resuming partitions {}", assignment);
+            consumer.resume(assignment);
             assignStandbyPartitions();
             return true;
         }

@@ -30,6 +30,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
+import org.easymock.IAnswer;
 import org.easymock.Mock;
 import org.easymock.MockType;
 import org.junit.Before;
@@ -117,7 +118,7 @@ public class TaskManagerTest {
     public final TemporaryFolder testFolder = new TemporaryFolder();
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         taskManager = new TaskManager(changeLogReader,
                                       UUID.randomUUID(),
                                       "",
@@ -324,11 +325,9 @@ public class TaskManagerTest {
         verify(standby, standbyTaskCreator);
     }
 
-
     @Test
-    public void shouldPauseActiveUninitializedPartitions() {
+    public void shouldPauseActivePartitions() {
         mockSingleActiveTask();
-        EasyMock.expect(active.uninitializedPartitions()).andReturn(taskId0Partitions);
         consumer.pause(taskId0Partitions);
         EasyMock.expectLastCall();
         replay();
@@ -455,6 +454,9 @@ public class TaskManagerTest {
         EasyMock.expect(changeLogReader.restore(active)).andReturn(taskId0Partitions);
         EasyMock.expect(active.updateRestored(taskId0Partitions)).
                 andReturn(taskId0Partitions);
+        EasyMock.expect(active.allTasksRunning()).andReturn(true);
+        EasyMock.expect(consumer.assignment()).andReturn(taskId0Partitions);
+        EasyMock.expect(standby.running()).andReturn(Collections.<StandbyTask>emptySet());
 
         consumer.resume(taskId0Partitions);
         EasyMock.expectLastCall();
@@ -626,13 +628,19 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldResumeConsumptionOfInitializedPartitions() {
+    public void shouldNotResumeConsumptionUntilAllStoresRestored() {
         final Set<TopicPartition> resumed = Collections.singleton(new TopicPartition("topic", 0));
         EasyMock.expect(active.initializeNewTasks()).andReturn(resumed);
         EasyMock.expect(active.updateRestored(EasyMock.<Collection<TopicPartition>>anyObject())).
                 andReturn(Collections.<TopicPartition>emptySet());
         consumer.resume(resumed);
-        EasyMock.expectLastCall();
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() {
+                fail("Shouldn't resume partitions until all the stores are restored");
+                return null;
+            }
+        }).anyTimes();
 
         EasyMock.replay(active, consumer);
 
