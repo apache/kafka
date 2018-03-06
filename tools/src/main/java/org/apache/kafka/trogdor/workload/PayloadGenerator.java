@@ -27,7 +27,7 @@ import java.util.Random;
  * size and value size, such that (message size) = (key size) + (value size). Key size is determined
  * by key type.
  */
-public class ProducerPayload {
+public class PayloadGenerator {
 
     public static final double DEFAULT_VALUE_DIVERGENCE_RATIO = 0.3;
     public static final int DEFAULT_MESSAGE_SIZE = 512;
@@ -42,15 +42,15 @@ public class ProducerPayload {
     private PayloadKeyType recordKeyType;
     private Random random = null;
 
-    public ProducerPayload() {
+    public PayloadGenerator() {
         this(DEFAULT_MESSAGE_SIZE, PayloadKeyType.KEY_NULL, DEFAULT_VALUE_DIVERGENCE_RATIO);
     }
 
-    public ProducerPayload(Integer messageSize) {
+    public PayloadGenerator(Integer messageSize) {
         this(messageSize, PayloadKeyType.KEY_NULL, DEFAULT_VALUE_DIVERGENCE_RATIO);
     }
 
-    public ProducerPayload(Integer messageSize, PayloadKeyType keyType) {
+    public PayloadGenerator(Integer messageSize, PayloadKeyType keyType) {
         this(messageSize, keyType, DEFAULT_VALUE_DIVERGENCE_RATIO);
     }
 
@@ -60,7 +60,8 @@ public class ProducerPayload {
      *                             value. Used to approximately control target compression rate (if
      *                             compression is used).
      */
-    public ProducerPayload(Integer messageSize, PayloadKeyType keyType, double valueDivergenceRatio) {
+    public PayloadGenerator(Integer messageSize, PayloadKeyType keyType,
+                            double valueDivergenceRatio) {
         this.valueDivergenceRatio = valueDivergenceRatio;
         this.random = new Random();
 
@@ -99,7 +100,7 @@ public class ProducerPayload {
 
     @Override
     public String toString() {
-        return "ProducerPayload(recordKeySize=" + recordKeyType.maxSizeInBytes()
+        return "PayloadGenerator(recordKeySize=" + recordKeyType.maxSizeInBytes()
                + ", recordValueSize=" + recordValue.length
                + ", valueDivergenceRatio=" + valueDivergenceRatio + ")";
     }

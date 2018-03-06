@@ -27,18 +27,18 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 
 
-public class PayloadTest {
+public class PayloadGeneratorTest {
 
     @Test
     public void testDefaultPayload() {
-        ProducerPayload producerPayload = new ProducerPayload();
+        PayloadGenerator payloadGenerator = new PayloadGenerator();
 
         // make sure that each time we produce a different value (except if compression rate is 0)
         byte[] prevValue = null;
         for (int i = 0; i < 1000; i++) {
-            ProducerRecord<byte[], byte[]> record = producerPayload.nextRecord("test-topic");
+            ProducerRecord<byte[], byte[]> record = payloadGenerator.nextRecord("test-topic");
             assertNull(record.key());
-            assertEquals(ProducerPayload.DEFAULT_MESSAGE_SIZE, record.value().length);
+            assertEquals(PayloadGenerator.DEFAULT_MESSAGE_SIZE, record.value().length);
             assertNotEquals("Iteration " + i, prevValue, record.value());
             prevValue = record.value().clone();
         }
@@ -47,8 +47,8 @@ public class PayloadTest {
     @Test
     public void testNullKeyTypeValueSizeIsMessageSize() {
         final int size = 200;
-        ProducerPayload producerPayload = new ProducerPayload(size);
-        ProducerRecord<byte[], byte[]> record = producerPayload.nextRecord("test-topic");
+        PayloadGenerator payloadGenerator = new PayloadGenerator(size);
+        ProducerRecord<byte[], byte[]> record = payloadGenerator.nextRecord("test-topic");
         assertNull(record.key());
         assertEquals(size, record.value().length);
     }
@@ -56,10 +56,10 @@ public class PayloadTest {
     @Test
     public void testFixedSizeKeyContainingIntegerValue() {
         final int size = 200;
-        ProducerPayload producerPayload = new ProducerPayload(size, PayloadKeyType.KEY_INTEGER);
+        PayloadGenerator payloadGenerator = new PayloadGenerator(size, PayloadKeyType.KEY_INTEGER);
         int keyVal = 2;
         while (keyVal < 5000000) {
-            ProducerRecord<byte[], byte[]> record = producerPayload.nextRecord("test-topic", keyVal);
+            ProducerRecord<byte[], byte[]> record = payloadGenerator.nextRecord("test-topic", keyVal);
             assertEquals(4, record.key().length);
             assertEquals(size - 4, record.value().length);
             assertEquals(keyVal, ByteBuffer.wrap(record.key()).getInt());
@@ -69,21 +69,21 @@ public class PayloadTest {
 
     @Test
     public void testTooSmallMessageSizeCreatesPayloadWithOneByteValues() {
-        ProducerPayload producerPayload = new ProducerPayload(2, PayloadKeyType.KEY_INTEGER);
-        ProducerRecord<byte[], byte[]> record = producerPayload.nextRecord("test-topic", 877);
+        PayloadGenerator payloadGenerator = new PayloadGenerator(2, PayloadKeyType.KEY_INTEGER);
+        ProducerRecord<byte[], byte[]> record = payloadGenerator.nextRecord("test-topic", 877);
         assertEquals(4, record.key().length);
         assertEquals(1, record.value().length);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testNextRecordWithTopicOnlyFailsIfKeyTypeNotNull() {
-        ProducerPayload producerPayload = new ProducerPayload(100, PayloadKeyType.KEY_INTEGER);
-        producerPayload.nextRecord("test-topic");
+        PayloadGenerator payloadGenerator = new PayloadGenerator(100, PayloadKeyType.KEY_INTEGER);
+        payloadGenerator.nextRecord("test-topic");
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testNextRecordWithIntKeyFailsIfKeyTypeNull() {
-        ProducerPayload producerPayload = new ProducerPayload(100);
-        producerPayload.nextRecord("test-topic", 27);
+        PayloadGenerator payloadGenerator = new PayloadGenerator(100);
+        payloadGenerator.nextRecord("test-topic", 27);
     }
 }
