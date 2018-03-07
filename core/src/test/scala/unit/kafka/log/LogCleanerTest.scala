@@ -1086,7 +1086,7 @@ class LogCleanerTest extends JUnitSuite {
     val end = 2
     val offsetSeq = Seq(0L, 7206178L)
     writeToLog(log, (start until end) zip (start until end), offsetSeq)
-    cleaner.buildOffsetMap(log, start, end, map, new CleanerStats())
+    cleaner.buildOffsetMap(log, start, 7206178L + 1L, map, new CleanerStats())
     val endOffset = map.latestOffset
     assertEquals("Last offset should be the end offset.", 7206178L, endOffset)
     assertEquals("Should have the expected number of messages in the map.", end - start, map.size)

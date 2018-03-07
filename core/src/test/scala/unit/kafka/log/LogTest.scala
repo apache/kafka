@@ -1919,17 +1919,96 @@ class LogTest {
     //Writes into an empty log with baseOffset 0
     log.appendAsFollower(set1)
     assertEquals(0L, log.activeSegment.baseOffset)
-    //This write will roll the segment, yielding a new segment with base offset = max(2, 1) = 2
+    //This write will roll the segment, yielding a new segment with base offset = max(1, Integer.MAX_VALUE+2) = 2
     log.appendAsFollower(set2)
-    assertEquals(2L, log.activeSegment.baseOffset)
-    assertTrue(Log.producerSnapshotFile(logDir, 2L).exists)
-    //This will also roll the segment, yielding a new segment with base offset = max(3, Integer.MAX_VALUE+3) = Integer.MAX_VALUE+3
+    assertEquals(Integer.MAX_VALUE.toLong + 2, log.activeSegment.baseOffset)
+    assertTrue(Log.producerSnapshotFile(logDir, Integer.MAX_VALUE.toLong + 2).exists)
+    //This will go into the existing log
     log.appendAsFollower(set3)
-    assertEquals(Integer.MAX_VALUE.toLong + 3, log.activeSegment.baseOffset)
-    assertTrue(Log.producerSnapshotFile(logDir, Integer.MAX_VALUE.toLong + 3).exists)
+    assertEquals(Integer.MAX_VALUE.toLong + 2, log.activeSegment.baseOffset)
     //This will go into the existing log
     log.appendAsFollower(set4)
-    assertEquals(Integer.MAX_VALUE.toLong + 3, log.activeSegment.baseOffset)
+    assertEquals(Integer.MAX_VALUE.toLong + 2, log.activeSegment.baseOffset)
+    log.close()
+    val indexFiles = logDir.listFiles.filter(file => file.getName.contains(".index"))
+    assertEquals(2, indexFiles.length)
+    for (file <- indexFiles) {
+      val offsetIndex = new OffsetIndex(file, file.getName.replace(".index","").toLong)
+      assertTrue(offsetIndex.lastOffset >= 0)
+      offsetIndex.close()
+    }
+    Utils.delete(logDir)
+  }
+
+  @Test
+  def testOverCompactedLogRecoveryMultiRecord(): Unit = {
+    // append some messages to create some segments
+    val logConfig = createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
+    val log = createLog(logDir, logConfig)
+    val set1 = MemoryRecords.withRecords(0, CompressionType.NONE, 0, new SimpleRecord("v1".getBytes(), "k1".getBytes()))
+    val set2 = MemoryRecords.withRecords(Integer.MAX_VALUE.toLong + 2, CompressionType.GZIP, 0,
+      new SimpleRecord("v3".getBytes(), "k3".getBytes()),
+      new SimpleRecord("v4".getBytes(), "k4".getBytes()))
+    val set3 = MemoryRecords.withRecords(Integer.MAX_VALUE.toLong + 4, CompressionType.GZIP, 0,
+      new SimpleRecord("v5".getBytes(), "k5".getBytes()),
+      new SimpleRecord("v6".getBytes(), "k6".getBytes()))
+    val set4 = MemoryRecords.withRecords(Integer.MAX_VALUE.toLong + 6, CompressionType.GZIP, 0,
+      new SimpleRecord("v7".getBytes(), "k7".getBytes()),
+      new SimpleRecord("v8".getBytes(), "k8".getBytes()))
+    //Writes into an empty log with baseOffset 0
+    log.appendAsFollower(set1)
+    assertEquals(0L, log.activeSegment.baseOffset)
+    //This write will roll the segment, yielding a new segment with base offset = max(1, Integer.MAX_VALUE+2) = Integer.MAX_VALUE+2
+    log.appendAsFollower(set2)
+    assertEquals(Integer.MAX_VALUE.toLong + 2, log.activeSegment.baseOffset)
+    assertTrue(Log.producerSnapshotFile(logDir, Integer.MAX_VALUE.toLong + 2).exists)
+    //This will go into the existing log
+    log.appendAsFollower(set3)
+    assertEquals(Integer.MAX_VALUE.toLong + 2, log.activeSegment.baseOffset)
+    //This will go into the existing log
+    log.appendAsFollower(set4)
+    assertEquals(Integer.MAX_VALUE.toLong + 2, log.activeSegment.baseOffset)
+    log.close()
+    val indexFiles = logDir.listFiles.filter(file => file.getName.contains(".index"))
+    assertEquals(2, indexFiles.length)
+    for (file <- indexFiles) {
+      val offsetIndex = new OffsetIndex(file, file.getName.replace(".index","").toLong)
+      assertTrue(offsetIndex.lastOffset >= 0)
+      offsetIndex.close()
+    }
+    Utils.delete(logDir)
+  }
+
+  @Test
+  def testOverCompactedLogRecoveryMultiRecordV1(): Unit = {
+    // append some messages to create some segments
+    val logConfig = createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
+    val log = createLog(logDir, logConfig)
+    val set1 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0, CompressionType.NONE,
+      new SimpleRecord("v1".getBytes(), "k1".getBytes()))
+    val set2 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, Integer.MAX_VALUE.toLong + 2, CompressionType.GZIP,
+      new SimpleRecord("v3".getBytes(), "k3".getBytes()),
+      new SimpleRecord("v4".getBytes(), "k4".getBytes()))
+    val set3 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, Integer.MAX_VALUE.toLong + 4, CompressionType.GZIP,
+      new SimpleRecord("v5".getBytes(), "k5".getBytes()),
+      new SimpleRecord("v6".getBytes(), "k6".getBytes()))
+    val set4 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, Integer.MAX_VALUE.toLong + 6, CompressionType.GZIP,
+      new SimpleRecord("v7".getBytes(), "k7".getBytes()),
+      new SimpleRecord("v8".getBytes(), "k8".getBytes()))
+    //Writes into an empty log with baseOffset 0
+    log.appendAsFollower(set1)
+    assertEquals(0L, log.activeSegment.baseOffset)
+    //This write will roll the segment, yielding a new segment with base offset = max(1, 3) = 3
+    log.appendAsFollower(set2)
+    assertEquals(3, log.activeSegment.baseOffset)
+    assertTrue(Log.producerSnapshotFile(logDir, 3).exists)
+    //This will also roll the segment, yielding a new segment with base offset = max(5, Integer.MAX_VALUE+4) = Integer.MAX_VALUE+4
+    log.appendAsFollower(set3)
+    assertEquals(Integer.MAX_VALUE.toLong + 4, log.activeSegment.baseOffset)
+    assertTrue(Log.producerSnapshotFile(logDir, Integer.MAX_VALUE.toLong + 4).exists)
+    //This will go into the existing log
+    log.appendAsFollower(set4)
+    assertEquals(Integer.MAX_VALUE.toLong + 4, log.activeSegment.baseOffset)
     log.close()
     val indexFiles = logDir.listFiles.filter(file => file.getName.contains(".index"))
     assertEquals(3, indexFiles.length)
