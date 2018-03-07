@@ -169,11 +169,7 @@ Kafka request. SASL/GSSAPI authentication is performed starting with this packet
 
 <p><b>Variable Length Primitives</b><p>
 
-<p>varint, varlong - Signed integers following the variable-length zig-zag encoding from <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>.</p>
-
 <p>bytes, string - These types consist of a signed integer giving a length N followed by N bytes of content. A length of -1 indicates null. string uses an int16 for its size, and bytes uses an int32.</p>
-
-<p>data - raw byte sequence. When this type is used, the preceding field of the structure specifies its length.
 
 <p><b>Arrays</b><p>
 
@@ -188,8 +184,8 @@ Kafka request. SASL/GSSAPI authentication is performed starting with this packet
 <p>All requests and responses originate from the following grammar which will be incrementally describe through the rest of this document:</p>
 
 <pre>
-RequestOrResponse => message_size (RequestMessage | ResponseMessage)
-  message_size => INT32
+RequestOrResponse => Size (RequestMessage | ResponseMessage)
+  Size => int32
 </pre>
 
 <table class="data-table"><tbody>
@@ -197,177 +193,8 @@ RequestOrResponse => message_size (RequestMessage | ResponseMessage)
 <tr><td>message_size</td><td>The message_size field gives the size of the subsequent request or response message in bytes. The client can read requests by first reading this 4 byte size as an integer N, and then reading and parsing the subsequent N bytes of the request.</td></tr>
 </table>
 
-<h5><a id="protocol_message_sets" href="#protocol_message_sets">Message Sets / Record Sets</a></h5>
-
-<p>One structure common to both the produce and fetch requests is the message set format. A message in kafka is a key-value pair with a small amount of associated metadata. A message set is just a sequence of messages with offset and size information. This format happens to be used both for the on-disk storage on the broker and the on-the-wire format.</p>
-<p>A message set is also the unit of compression in Kafka, and we allow messages to recursively contain compressed message sets to allow batch compression.</p>
-<p> N.B., MessageSets are not preceded by an int32 like other array elements in the protocol.</p>
-
-<b>Message Set:</b><br>
-<p><pre>MessageSet (Version: 0) => [offset message_size message]
-  offset => INT64
-  message_size => INT32
-  message => crc magic_byte attributes key value
-    crc => INT32
-    magic_byte => INT8
-    attributes => INT8
-    key => BYTES
-    value => BYTES
-</pre><table class="data-table"><tbody>
-    <tr><th>Field</th>
-        <th>Description</th>
-    </tr><tr>
-        <td>offset</td><td>This is the offset used in kafka as the log sequence number. When the producer is sending non compressed messages, it can set the offsets to anything. When the producer is sending compressed messages, to avoid server side recompression, each compressed message should have offset starting from 0 and increasing by one for each inner message in the compressed message. (see more details about compressed messages in Kafka below)</td></tr>
-    <tr>
-        <td>crc</td><td>The crc field contains the CRC32 of the remainder of the message bytes. This is used to check the integrity of the message on the broker and consumer.</td></tr>
-    <tr>
-        <td>magic_byte</td><td>This is a version id used to allow backwards compatible evolution of the message binary format. In this version the value is 0.</td></tr>
-    <tr>
-        <td>attributes</td><td><p>This byte holds metadata attributes about the message.</p><p>The lowest 3 bits contain the compression codec used for the message.</p><p>All other bits should be set to 0.</p></td></tr>
-    <tr>
-        <td>key</td><td>The key is an optional message key that was used for partition assignment. The key can be null.</td></tr>
-    <tr>
-        <td>value</td><td>The value is the actual message contents as an opaque byte array. Kafka supports recursive messages in which case this may itself contain a message set. The message can be null.</td></tr>
-    </tbody></table>
- <p><pre>MessageSet (Version: 1) => [offset message_size message]
-  offset => INT64
-  message_size => INT32
-  message => crc magic_byte attributes key value
-    crc => INT32
-    magic_byte => INT8
-    attributes => INT8
-    timestamp =>INT64
-    key => BYTES
-    value => BYTES
-</pre><table class="data-table"><tbody>
-    <tr><th>Field</th>
-        <th>Description</th>
-    </tr><tr>
-        <td>offset</td><td>This is the offset used in kafka as the log sequence number. When the producer is sending non compressed messages, it can set the offsets to anything. When the producer is sending compressed messages, to avoid server side recompression, each compressed message should have offset starting from 0 and increasing by one for each inner message in the compressed message. (see more details about compressed messages in Kafka below)</td></tr>
-    <tr>
-        <td>crc</td><td>The crc field contains the CRC32 of the remainder of the message bytes. This is used to check the integrity of the message on the broker and consumer.</td></tr>
-    <tr>
-        <td>magic_byte</td><td>This is a version id used to allow backwards compatible evolution of the message binary format. In this version the value is 1.</td></tr>
-    <tr>
-        <td>attributes</td><td><p>This byte holds metadata attributes about the message.</p><p>The lowest 3 bits contain the compression codec used for the message.</p><p>The fourth lowest bit represents the timestamp type. 0 stands for CreateTime and 1 stands for LogAppendTime. The producer should always set this bit to 0.</p><p>All other bits should be set to 0.</p></td></tr>
-    <tr>
-        <td>timestamp</td><td>TThis is the timestamp of the message. The timestamp type is indicated in the attributes. Unit is milliseconds since beginning of the epoch (midnight Jan 1, 1970 (UTC)).</td></tr>
-    <tr>
-        <td>key</td><td>The key is an optional message key that was used for partition assignment. The key can be null.</td></tr>
-    <tr>
-        <td>value</td><td>The value is the actual message contents as an opaque byte array. Kafka supports recursive messages in which case this may itself contain a message set. The message can be null.</td></tr>
-    </tbody></table>
-
-<p>In Kafka 0.11, the structure of the 'MessageSet' and 'Message' were significantly changed. Not only were new fields added to support new features like exactly once semantics and record headers, but the recursive nature of the previous versions of the message format was eliminated in favor of a flat structure.
-    A 'MessageSet' is now called a 'RecordBatch', which contains one or more 'Records' (and not 'Messages'). When compression is enabled, the RecordBatch header remains uncompressed, but the Records are compressed together. Further, multiple fields in the 'Record' are varint encoded, which leads to significant space savings for larger batches.</p>
-<p>The new message format has a Magic value of 2. Its structure is as follows:</p>
-<p><pre>RecordBatch (Version: 2) => first_offset recordbatch_length partition_leader_epoch magic_byte crc recordbatch_attributes last_offset_delta first_timestamp max_timestamp producer_id producer_epoch first_sequence records
-  first_offset => INT64
-  recordbatch_length => INT32
-  partition_leader_epoch => INT32
-  magic_byte => INT8
-  crc => INT32
-  recordbatch_attributes => INT16
-  last_offset_delta => INT32
-  first_timestamp => INT64
-  max_timestamp => INT64
-  producer_id => INT64
-  producer_epoch => INT16
-  first_sequence => INT32
-  records => [record_length record_attributes timestamp_delta offset_delta key_length key value_length value headers]
-    record_length => VARINT
-    record_attributes => INT8
-    timestamp_delta => VARLONG
-    offset_delta => VARINT
-    key_length => VARINT
-    key => DATA
-    value_length => VARINT
-    value => DATA
-    headers => [header_key_length header_key header_value_length header_value]
-      header_key_length => VARINT
-      header_key => STRING
-      header_value_length => VARINT
-      header_value => DATA
-
-</pre><table class="data-table"><tbody>
-    <tr><th>Field</th>
-        <th>Description</th>
-    </tr><tr>
-        <td>first_offset</td><td>Denotes the first offset in the RecordBatch. The 'offset' of each Record in the batch would be be computed relative to this first_offset. In particular, the offset of each Record in the Batch is its 'offset_delta' + 'first_offset'.</td>
-    </tr><tr>
-        <td>recordbatch_length</td><td></td>
-    </tr><tr>
-        <td>partition_leader_epoch</td><td>Introduced with KIP-101, this is set by the broker upon receipt of a produce request and is used to ensure no loss of data when there are leader changes with log truncation. Client developers do not need to worry about setting this value.</td>
-    </tr><tr>
-        <td>magic_byte</td><td>This is a version id used to allow backwards compatible evolution of the message binary format. In this version the value is 2.</td>
-    <tr>
-        <td>crc</td><td>The crc field contains the CRC32 of the remainder of the message bytes. This is used to check the integrity of the message on the broker and consumer.</td>
-    </tr><tr>
-        <td>recordbatch_attributes</td><td><p>This byte holds metadata attributes about the message.</p>
-        <p>The lowest 3 bits contain the compression codec used for the message.</p>
-        <p>The fourth lowest bit represents the timestamp type. 0 stands for CreateTime and 1 stands for LogAppendTime. The producer should always set this bit to 0. (since 0.10.0)</p>
-        <p>The fifth lowest bit indicates whether the RecordBatch is part of a transaction or not. 0 indicates that the RecordBatch is not transactional, while 1 indicates that it is. (since 0.11.0.0).</p>
-        <p>The sixth lowest bit indicates whether the RecordBatch includes a control message. 1 indicates that the RecordBatch is contains a control message, 0 indicates that it doesn't. Control messages are used to enable transactions in Kafka and are generated by the broker. Clients should not return control batches (ie. those with this bit set) to applications. (since 0.11.0.0)</p></td>
-    </tr><tr>
-        <td>last_offset_delta</td><td>The offset of the last message in the RecordBatch. This is used by the broker to ensure correct behavior even when Records within a batch are compacted out.</td>
-    </tr><tr>
-        <td>first_timestamp</td><td>The timestamp of the first Record in the batch. The timestamp of each Record in the RecordBatch is its 'timestamp_delta' + 'first_timestamp'.</td>
-    </tr><tr>
-        <td>max_timestamp</td><td>The timestamp of the last Record in the batch. This is used by the broker to ensure the correct behavior even when Records within the batch are compacted out.</td>
-    </tr><tr>
-        <td>producer_id</td><td>Introduced in 0.11.0.0 for KIP-98, this is the broker assigned producerId received by the 'InitProducerId' request. Clients which want to support idempotent message delivery and transactions must set this field.</td>
-    </tr><tr>
-        <td>producer_epoch</td><td>Introduced in 0.11.0.0 for KIP-98, this is the broker assigned producerEpoch received by the 'InitProducerId' request. Clients which want to support idempotent message delivery and transactions must set this field.</td>
-    </tr><tr>
-        <td>first_sequence</td><td>Introduced in 0.11.0.0 for KIP-98, this is the producer assigned sequence number which is used by the broker to deduplicate messages. Clients which want to support idempotent message delivery and transactions must set this field. The sequence number for each Record in the RecordBatch is its 'offset_delta' + 'first_sequence'.</td>
-    </tr><tr>
-        <td>records</td><td>An array of Records. The number of elements is encoded as INT32.</td>
-    </tr><tr>
-        <td>record_length</td><td>The size of the record in bytes.</td>
-    </tr><tr>
-        <td>record_attributes</td><td>Record level attributes are presently unused.</td>
-    </tr><tr>
-        <td>timestamp_delta</td><td>The relative timestamp of the Record. The timestamp of each Record in the RecordBatch is its 'timestamp_delta' + 'first_timestamp'.</td>
-    </tr><tr>
-        <td>offset_delta</td><td>The relative offset of the Record. The 'offset' of each Record in the batch would be be computed as 'offset_delta' + 'first_offset'.</td>
-    </tr><tr>
-        <td>key_length</td><td>Length of the record key in bytes, or -1 if the record key is null.</td>
-    </tr><tr>
-        <td>key</td><td>The record key bytes.</td>
-    </tr><tr>
-        <td>value_length</td><td>Length of the record value in bytes, or -1 if the record value is null.</td>
-    </tr><tr>
-        <td>value</td><td>The record value bytes.</td>
-    </tr><tr>
-        <td>headers</td><td><p>Introduced in 0.11.0.0 for KIP-82, Kafka now supports application level record level headers. The Producer and Consumer APIS have been accordingly updated to write and read these headers.</p>
-          <p>The size of the array is encoded as VARINT.</p></td>
-    </tr><tr>
-        <td>header_key_length</td><td>The length of the header key encoded in UTF-8.</td>
-    </tr><tr>
-        <td>header_key</td><td>The header key encoded as a UTF-8 string, without its length.</td>
-    </tr><tr>
-        <td>header_value_length</td><td>The length of the header value. In case the value is null, -1.</td>
-    </tr><tr>
-        <td>header_value</td><td>The value of this header.</td>
-    </tbody></table>
-
-<b>Compression</b>
-<p>Kafka supports compressing messages for additional efficiency, however this is more complex than just compressing a raw message.
-    Because individual messages may not have sufficient redundancy to enable good compression ratios, compressed messages must be sent in special batches
-    (although you may use a batch of one if you truly wish to compress a message on its own). The messages to be sent are wrapped (uncompressed) in a MessageSet structure,
-    which is then compressed and stored in the Value field of a single "Message" with the appropriate compression codec set.
-    The receiving system parses the actual MessageSet from the decompressed value. The outer MessageSet should contain only one compressed "Message" (see KAFKA-1718 for details).</p>
-<p>Kafka currently supports two compression codecs with the following codec numbers:</p>
-<table class="data-table"><tbody>
-    <tr><th>Compression</th>
-        <th>Codec</th>
-    </tr><tr>
-        <td>None</td><td>0</td>
-    </tr><tr>
-        <td>GZIP</td><td>1</td>
-    </tr><tr>
-        <td>Snappy</td><td>2</td>
-    </tbody></table>
+<h5><a id="protocol_recordbatch" href="#protocol_recordbatch">Record Batch</a></h5>
+<p>A description of the record batch format can be found <a href="documentation/#recordbatch">here</a>.</p>
 
 <h4><a id="protocol_constants" href="#protocol_constants">Constants</a></h4>
 
