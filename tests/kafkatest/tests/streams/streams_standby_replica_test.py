@@ -32,11 +32,12 @@ class StreamsStandbyTask(Test):
     streams_source_topic = "standbyTaskSource1"
     streams_sink_topic_1 = "standbyTaskSink1"
     streams_sink_topic_2 = "standbyTaskSink2"
+    client_id = "streams-broker-resilience-verify-consumer"
 
     num_messages = 60000
 
     def __init__(self, test_context):
-        super(StreamsStandbyTask, self).__init__(test_context=test_context)
+        super(StreamsStandbyTask, self).__init__(test_context)
         self.zk = ZookeeperService(test_context, num_nodes=1)
         self.kafka = KafkaService(test_context,
                                   num_nodes=3,
@@ -46,22 +47,6 @@ class StreamsStandbyTask(Test):
                                       self.streams_sink_topic_1: {'partitions': 1, 'replication-factor': 1},
                                       self.streams_sink_topic_2: {'partitions': 1, 'replication-factor': 1}
                                   })
-
-    def get_consumer(self, topic, num_messages):
-        return VerifiableConsumer(self.test_context,
-                                  1,
-                                  self.kafka,
-                                  topic,
-                                  "stream-broker-resilience-verify-consumer",
-                                  max_messages=num_messages)
-
-    def assert_consume(self, test_state, topic, num_messages=5):
-        consumer = self.get_consumer(topic, num_messages)
-        consumer.start()
-
-        wait_until(lambda: consumer.total_consumed() >= num_messages,
-                   timeout_sec=120,
-                   err_msg="At %s streams did not process messages in 60 seconds " % test_state)
 
     @staticmethod
     def get_configs(extra_configs=""):
@@ -80,6 +65,22 @@ class StreamsStandbyTask(Test):
         wait_until(lambda: self.verify_from_file(processor, message, file) >= num_lines,
                    timeout_sec=timeout_sec,
                    err_msg="Did expect to read '%s' from %s" % (message, processor.node.account))
+
+    def get_consumer(self, client_id, topic, num_messages):
+        return VerifiableConsumer(self.test_context,
+                                  1,
+                                  self.kafka,
+                                  topic,
+                                  client_id,
+                                  max_messages=num_messages)
+
+    def assert_consume(self, client_id, test_state, topic, num_messages=5):
+        consumer = self.get_consumer(client_id, topic, num_messages)
+        consumer.start()
+
+        wait_until(lambda: consumer.total_consumed() >= num_messages,
+                   timeout_sec=60,
+                   err_msg="At %s streams did not process messages in 60 seconds " % test_state)
 
     @staticmethod
     def verify_from_file(processor, message, file):
@@ -157,8 +158,8 @@ class StreamsStandbyTask(Test):
         self.wait_for_verification(processor_3, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_3.STDOUT_FILE)
         self.wait_for_verification(processor_2, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_2.STDOUT_FILE, num_lines=2)
 
-        self.assert_consume("assert all messages consumed from %s" % self.streams_sink_topic_1, self.streams_sink_topic_1, self.num_messages)
-        self.assert_consume("assert all messages consumed from %s" % self.streams_sink_topic_2, self.streams_sink_topic_2, self.num_messages)
+        self.assert_consume(self.client_id, "assert all messages consumed from %s" % self.streams_sink_topic_1, self.streams_sink_topic_1, self.num_messages)
+        self.assert_consume(self.client_id, "assert all messages consumed from %s" % self.streams_sink_topic_2, self.streams_sink_topic_2, self.num_messages)
 
         self.wait_for_verification(driver, "Producer shut down now, sent total {0} of requested {0}".format(str(self.num_messages)),
                                    driver.STDOUT_FILE)

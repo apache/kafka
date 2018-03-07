@@ -252,3 +252,11 @@ class StreamsRepeatingIntegerKeyProducerService(StreamsTestBaseService):
                                                                         kafka,
                                                                         "org.apache.kafka.streams.tests.StreamsRepeatingIntegerKeyProducer",
                                                                         configs)
+
+
+class StreamsRollingUpgradeService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka, configs):
+        super(StreamsRollingUpgradeService, self).__init__(test_context,
+                                                           kafka,
+                                                           "org.apache.kafka.streams.tests.StreamsBrokerDownResilienceTest",
+                                                           configs)
