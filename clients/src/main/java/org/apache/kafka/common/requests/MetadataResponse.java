@@ -104,7 +104,7 @@ public class MetadataResponse extends AbstractResponse {
 
     private static final Schema METADATA_RESPONSE_V0 = new Schema(
             new Field(BROKERS_KEY_NAME, new ArrayOf(METADATA_BROKER_V0), "Host and port information for all brokers."),
-            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V0)));
+            new Field(TOPIC_METADATA_KEY_NAME, new ArrayOf(TOPIC_METADATA_V0), "Metadata for each topic."));
 
     private static final Schema METADATA_BROKER_V1 = new Schema(
             new Field(NODE_ID_KEY_NAME, INT32, "The broker id."),

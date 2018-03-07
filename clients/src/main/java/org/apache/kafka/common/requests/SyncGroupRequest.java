@@ -41,12 +41,14 @@ public class SyncGroupRequest extends AbstractRequest {
 
     private static final Schema SYNC_GROUP_REQUEST_MEMBER_V0 = new Schema(
             MEMBER_ID,
-            new Field(MEMBER_ASSIGNMENT_KEY_NAME, BYTES));
+            new Field(MEMBER_ASSIGNMENT_KEY_NAME, BYTES, "Protocol specific state (e.g. partition assignments)"));
     private static final Schema SYNC_GROUP_REQUEST_V0 = new Schema(
             GROUP_ID,
             GENERATION_ID,
             MEMBER_ID,
-            new Field(GROUP_ASSIGNMENT_KEY_NAME, new ArrayOf(SYNC_GROUP_REQUEST_MEMBER_V0)));
+            new Field(GROUP_ASSIGNMENT_KEY_NAME, new ArrayOf(SYNC_GROUP_REQUEST_MEMBER_V0),
+                    "All members send SyncGroup immediately after joining the group, " +
+                            "but only the leader provides the group's assignment."));
 
     /* v1 request is the same as v0. Throttle time has been added to response */
     private static final Schema SYNC_GROUP_REQUEST_V1 = SYNC_GROUP_REQUEST_V0;

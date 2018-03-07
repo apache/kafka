@@ -52,7 +52,8 @@ public class AlterReplicaLogDirsResponse extends AbstractResponse {
                     TOPIC_NAME,
                     new Field(PARTITIONS_KEY_NAME, new ArrayOf(new Schema(
                             PARTITION_ID,
-                            ERROR_CODE)))))));
+                            ERROR_CODE)), "Error codes for each partition."))),
+                    "The result of the operation for each topic."));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{ALTER_REPLICA_LOG_DIRS_RESPONSE_V0};

@@ -50,7 +50,8 @@ public class AlterConfigsResponse extends AbstractResponse {
 
     private static final Schema ALTER_CONFIGS_RESPONSE_V0 = new Schema(
             THROTTLE_TIME_MS,
-            new Field(RESOURCES_KEY_NAME, new ArrayOf(ALTER_CONFIGS_RESPONSE_ENTITY_V0)));
+            new Field(RESOURCES_KEY_NAME, new ArrayOf(ALTER_CONFIGS_RESPONSE_ENTITY_V0),
+                    "The result of the change for each resource."));
 
     public static Schema[] schemaVersions() {
         return new Schema[]{ALTER_CONFIGS_RESPONSE_V0};

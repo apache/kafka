@@ -40,14 +40,14 @@ public class ListGroupsResponse extends AbstractResponse {
 
     private static final Schema LIST_GROUPS_RESPONSE_GROUP_V0 = new Schema(
             GROUP_ID,
-            new Field(PROTOCOL_TYPE_KEY_NAME, STRING));
+            new Field(PROTOCOL_TYPE_KEY_NAME, STRING, "The current group protocol."));
     private static final Schema LIST_GROUPS_RESPONSE_V0 = new Schema(
             ERROR_CODE,
-            new Field(GROUPS_KEY_NAME, new ArrayOf(LIST_GROUPS_RESPONSE_GROUP_V0)));
+            new Field(GROUPS_KEY_NAME, new ArrayOf(LIST_GROUPS_RESPONSE_GROUP_V0), "Information about each group managed by this broker."));
     private static final Schema LIST_GROUPS_RESPONSE_V1 = new Schema(
             THROTTLE_TIME_MS,
             ERROR_CODE,
-            new Field(GROUPS_KEY_NAME, new ArrayOf(LIST_GROUPS_RESPONSE_GROUP_V0)));
+            new Field(GROUPS_KEY_NAME, new ArrayOf(LIST_GROUPS_RESPONSE_GROUP_V0), "Information about each group managed by this broker."));
 
     public static Schema[] schemaVersions() {
         return new Schema[] {LIST_GROUPS_RESPONSE_V0, LIST_GROUPS_RESPONSE_V1};

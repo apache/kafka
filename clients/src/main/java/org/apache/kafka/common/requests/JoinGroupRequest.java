@@ -45,8 +45,8 @@ public class JoinGroupRequest extends AbstractRequest {
 
     /* Join group api */
     private static final Schema JOIN_GROUP_REQUEST_PROTOCOL_V0 = new Schema(
-            new Field(PROTOCOL_NAME_KEY_NAME, STRING),
-            new Field(PROTOCOL_METADATA_KEY_NAME, BYTES));
+            new Field(PROTOCOL_NAME_KEY_NAME, STRING, "Protocol type name."),
+            new Field(PROTOCOL_METADATA_KEY_NAME, BYTES, "Protocol type specific member metadata."));
 
     private static final Schema JOIN_GROUP_REQUEST_V0 = new Schema(
             GROUP_ID,

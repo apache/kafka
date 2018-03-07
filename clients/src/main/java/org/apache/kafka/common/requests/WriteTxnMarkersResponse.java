@@ -49,7 +49,8 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
             new Field(PRODUCER_ID_KEY_NAME, INT64, "Current producer id in use by the transactional id."),
             new Field(TOPICS_KEY_NAME, new ArrayOf(new Schema(
                     TOPIC_NAME,
-                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(WRITE_TXN_MARKERS_PARTITION_ERROR_RESPONSE_V0)))),
+                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(WRITE_TXN_MARKERS_PARTITION_ERROR_RESPONSE_V0),
+                            "Error codes for each partition."))),
                     "Errors per partition from writing markers."));
 
     private static final Schema WRITE_TXN_MARKERS_RESPONSE_V0 = new Schema(

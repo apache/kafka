@@ -47,7 +47,7 @@ public class JoinGroupResponse extends AbstractResponse {
 
     private static final Schema JOIN_GROUP_RESPONSE_MEMBER_V0 = new Schema(
             MEMBER_ID,
-            new Field(MEMBER_METADATA_KEY_NAME, BYTES));
+            new Field(MEMBER_METADATA_KEY_NAME, BYTES, "The metadata supplied in this member's join group request."));
 
     private static final Schema JOIN_GROUP_RESPONSE_V0 = new Schema(
             ERROR_CODE,
@@ -55,7 +55,9 @@ public class JoinGroupResponse extends AbstractResponse {
             new Field(GROUP_PROTOCOL_KEY_NAME, STRING, "The group protocol selected by the coordinator"),
             new Field(LEADER_ID_KEY_NAME, STRING, "The leader of the group"),
             MEMBER_ID,
-            new Field(MEMBERS_KEY_NAME, new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0)));
+            new Field(MEMBERS_KEY_NAME, new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0),
+                    "The leader will receive the full list of members along with the associated metadata for the protocol chosen. " +
+                            "Other members, followers, will receive an empty array of members."));
 
     private static final Schema JOIN_GROUP_RESPONSE_V1 = JOIN_GROUP_RESPONSE_V0;
 
@@ -66,7 +68,9 @@ public class JoinGroupResponse extends AbstractResponse {
             new Field(GROUP_PROTOCOL_KEY_NAME, STRING, "The group protocol selected by the coordinator"),
             new Field(LEADER_ID_KEY_NAME, STRING, "The leader of the group"),
             MEMBER_ID,
-            new Field(MEMBERS_KEY_NAME, new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0)));
+            new Field(MEMBERS_KEY_NAME, new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0),
+                    "The leader will receive the full list of members along with the associated metadata for the protocol chosen. " +
+                            "Other members, followers, will receive an empty array of members."));
 
 
     public static Schema[] schemaVersions() {
