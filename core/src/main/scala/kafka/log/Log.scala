@@ -869,7 +869,7 @@ class Log(@volatile var dir: File,
     var monotonic = true
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
-    var hasAccurateFirstOffset = true
+    var hasAccurateFirstOffset = false
 
     for (batch <- records.batches.asScala) {
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
@@ -881,6 +881,7 @@ class Log(@volatile var dir: File,
       // For magic version 2, we can get the first offset directly from the batch header.
       // When appending to the leader, we will update LogAppendInfo.baseOffset with the correct value. In the follower
       // case, validation will be more lenient.
+      // Also indicate whether we have the accurate first offset or not
       if (firstOffset < 0) {
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
           firstOffset = batch.baseOffset
@@ -1304,7 +1305,7 @@ class Log(@volatile var dir: File,
           s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
           s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
 
-      if (hasAccurateMinOffset == true) {
+      if (hasAccurateMinOffset) {
         // V2 and beyond, we have the true first offset in message set available in the header
         roll(minOffsetInMessages)
       } else {
