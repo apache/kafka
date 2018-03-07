@@ -53,26 +53,31 @@ public class PayloadGenerator {
      * Generator will generate null keys and values of size `messageSize`
      * @param messageSize number of bytes used for key + value
      */
-    public PayloadGenerator(Integer messageSize) {
+    public PayloadGenerator(int messageSize) {
         this(messageSize, PayloadKeyType.KEY_NULL, DEFAULT_VALUE_DIVERGENCE_RATIO);
     }
 
     /**
      * Generator will generate keys of given type and values of size 'messageSize' - (key size).
+     * If the given key type requires more bytes than messageSize, then the resulting payload
+     * will be keys of size required for the given key type and 0-length values.
      * @param messageSize number of bytes used for key + value
      * @param keyType type of keys generated
      */
-    public PayloadGenerator(Integer messageSize, PayloadKeyType keyType) {
+    public PayloadGenerator(int messageSize, PayloadKeyType keyType) {
         this(messageSize, keyType, DEFAULT_VALUE_DIVERGENCE_RATIO);
     }
 
     /**
+     * Generator will generate keys of given type and values of size 'messageSize' - (key size).
+     * If the given key type requires more bytes than messageSize, then the resulting payload
+     * will be keys of size required for the given key type and 0-length values.
      * @param messageSize key + value size
      * @param valueDivergenceRatio ratio of how much each next value is different from the previous
      *                             value. Used to approximately control target compression rate (if
      *                             compression is used).
      */
-    public PayloadGenerator(Integer messageSize, PayloadKeyType keyType,
+    public PayloadGenerator(int messageSize, PayloadKeyType keyType,
                             double valueDivergenceRatio) {
         this.baseSeed = 856;  // some random number, may later let pass seed to constructor
         this.currentPosition = 0;
@@ -80,7 +85,7 @@ public class PayloadGenerator {
         this.random = new Random(this.baseSeed);
 
         final int valueSize = (messageSize > keyType.maxSizeInBytes())
-                              ? messageSize - keyType.maxSizeInBytes() : 1;
+                              ? messageSize - keyType.maxSizeInBytes() : 0;
         this.recordValue = new byte[valueSize];
         // initialize value with random bytes
         for (int i = 0; i < recordValue.length; ++i) {
@@ -128,8 +133,10 @@ public class PayloadGenerator {
      * Returns producer record value
      */
     private byte[] nextValue(long position) {
-        // randomize some of the payload to achieve expected compression rate
+        // set the seed based on the given position to make sure that the same value is generated
+        // for the same position.
         random.setSeed(baseSeed + 31 * position + 1);
+        // randomize some of the payload to achieve expected compression rate
         for (int i = 0; i < recordValue.length * valueDivergenceRatio; ++i)
             recordValue[i] = (byte) (random.nextInt(26) + 65);
         return recordValue;

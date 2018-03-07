@@ -130,7 +130,7 @@ public class PayloadGeneratorTest {
         PayloadGenerator payloadGenerator = new PayloadGenerator(2, PayloadKeyType.KEY_MESSAGE_INDEX);
         ProducerRecord<byte[], byte[]> record = payloadGenerator.nextRecord("test-topic", 877);
         assertEquals(8, record.key().length);
-        assertEquals(1, record.value().length);
+        assertEquals(0, record.value().length);
     }
 
 }
