@@ -15,7 +15,7 @@
  limitations under the License.
 -->
 
-<p id="implementation-template" type="text/x-handlebars-template">
+<script id="implementation-template" type="text/x-handlebars-template">
     <h3><a id="networklayer" href="#networklayer">5.1 Network Layer</a></h3>
     <p>
     The network layer is a fairly straight-forward NIO server, and will not be described in great detail. The sendfile implementation is done by giving the <code>MessageSet</code> interface a <code>writeTo</code> method. This allows the file-backed message set to use the more efficient <code>transferTo</code> implementation instead of an in-process buffered write. The threading model is a single acceptor thread and <i>N</i> processor threads which handle a fixed number of connections each. This design has been pretty thoroughly tested <a href="http://sna-projects.com/blog/2009/08/introducing-the-nio-socketserver-implementation">elsewhere</a> and found to be simple to implement and fast. The protocol is kept quite simple to allow for future implementation of clients in other languages.
@@ -28,7 +28,7 @@
     <h3><a id="messageformat" href="#messageformat">5.3 Message Format</a></h3>
     <p>
     Messages (aka Records) are always written in batches. The technical term for a batch of messages is a record batch, and a record batch contains one or more records. In the degenerate case, we could have a record batch containing a single record.
-    Record batches and records have their own headers. The format of each is described below for Kafka version 0.11.0 and later (message format version v2, or magic=2). </p>
+    Record batches and records have their own headers. The format of each is described below. </p>
 
     <h4><a id="recordbatch" href="#recordbatch">5.3.1 Record Batch</a></h4>
 	<p> The following is the on-disk format of a RecordBatch. </p>
