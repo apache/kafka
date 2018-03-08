@@ -70,7 +70,6 @@ public class ChangeLoggingSessionBytesStoreTest {
     @Before
     public void setUp() {
         store = new ChangeLoggingSessionBytesStore(inner);
-
     }
 
     private void init() {

@@ -474,7 +474,7 @@ public enum Errors {
             }
         }),
     INVALID_TRANSACTION_TIMEOUT(50, "The transaction timeout is larger than the maximum value allowed by " +
-                "the broker (as configured by max.transaction.timeout.ms).",
+                "the broker (as configured by transaction.max.timeout.ms).",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
