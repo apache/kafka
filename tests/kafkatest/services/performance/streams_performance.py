@@ -21,8 +21,6 @@ from kafkatest.services.streams import StreamsTestBaseService
 class StreamsSimpleBenchmarkService(StreamsTestBaseService):
     """Base class for simple Kafka Streams benchmark"""
 
-    PERSISTENT_ROOT = "/mnt/streams_benchmark"
-
     def __init__(self, test_context, kafka, numrecs, load_phase, test_name, num_threads):
         super(StreamsSimpleBenchmarkService, self).__init__(test_context,
                                                             kafka,
@@ -40,7 +38,7 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
                                           'commit-rate',
                                           'poll-latency-avg',
                                           'poll-rate'],
-                          root=StreamsSimpleBenchmarkService.PERSISTENT_ROOT,
+                          root=StreamsTestBaseService.PERSISTENT_ROOT,
                           report_interval=5000)
 
 
