@@ -576,10 +576,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
         Map<Node, Map<TopicPartition, Long>> timestampsToSearchByNode = groupListOffsetRequests(partitionResetTimestamps);
         for (Map.Entry<Node, Map<TopicPartition, Long>> entry : timestampsToSearchByNode.entrySet()) {
+            Node node = entry.getKey();
             final Map<TopicPartition, Long> resetTimestamps = entry.getValue();
             subscriptions.setResetPending(resetTimestamps.keySet(), time.milliseconds() + requestTimeoutMs);
 
-            RequestFuture<ListOffsetResult> future = sendListOffsetRequest(entry.getKey(), resetTimestamps, false);
+            RequestFuture<ListOffsetResult> future = sendListOffsetRequest(node, resetTimestamps, false);
             future.addListener(new RequestFutureListener<ListOffsetResult>() {
                 @Override
                 public void onSuccess(ListOffsetResult result) {
@@ -667,11 +668,19 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             PartitionInfo info = metadata.fetch().partition(tp);
             if (info == null) {
                 metadata.add(tp.topic());
-                log.debug("Partition {} is unknown for fetching offset", tp);
+                log.debug("Leader for partition {} is unknown for fetching offset", tp);
                 metadata.requestUpdate();
             } else if (info.leader() == null) {
-                log.debug("Leader for partition {} unavailable for fetching offset", tp);
+                log.debug("Leader for partition {} is unavailable for fetching offset", tp);
                 metadata.requestUpdate();
+            } else if (client.isUnavailable(info.leader())) {
+                client.maybeThrowAuthFailure(info.leader());
+
+                // The connection has failed and we need to await the blackout period before we can
+                // try again. No need to request a metadata update since the disconnect will have
+                // done so already.
+                log.debug("Leader {} for partition {} is unavailable for fetching offset until reconnect backoff expires",
+                        info.leader(), tp);
             } else {
                 Node node = info.leader();
                 Map<TopicPartition, Long> topicData = timestampsToSearchByNode.get(node);
@@ -823,14 +832,21 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * that have no existing requests in flight.
      */
     private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
-        // create the fetch info
         Cluster cluster = metadata.fetch();
         Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
         for (TopicPartition partition : fetchablePartitions()) {
             Node node = cluster.leaderFor(partition);
             if (node == null) {
                 metadata.requestUpdate();
-            } else if (!this.client.hasPendingRequests(node)) {
+            } else if (client.isUnavailable(node)) {
+                client.maybeThrowAuthFailure(node);
+
+                // If we try to send during the reconnect blackout window, then the request is just
+                // going to be failed anyway before being sent, so skip the send for now
+                log.trace("Skipping fetch for partition {} because node {} is awaiting reconnect backoff", partition, node);
+            } else if (client.hasPendingRequests(node)) {
+                log.trace("Skipping fetch for partition {} because there is an in-flight request to {}", partition, node);
+            } else {
                 // if there is a leader and no in-flight requests, issue a new fetch
                 FetchSessionHandler.Builder builder = fetchable.get(node);
                 if (builder == null) {
@@ -846,10 +862,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 long position = this.subscriptions.position(partition);
                 builder.add(partition, new FetchRequest.PartitionData(position, FetchRequest.INVALID_LOG_START_OFFSET,
                     this.fetchSize));
+
                 log.debug("Added {} fetch request for partition {} at offset {} to node {}", isolationLevel,
                     partition, position, node);
-            } else {
-                log.trace("Skipping fetch for partition {} because there is an in-flight request to {}", partition, node);
             }
         }
         Map<Node, FetchSessionHandler.FetchRequestData> reqs = new LinkedHashMap<>();

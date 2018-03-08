@@ -106,15 +106,15 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     @Override
     public V fetch(final K key, final long timestamp) {
         final long startNs = time.nanoseconds();
-        V ret;
         try {
             final byte[] result = inner.fetch(keyBytes(key), timestamp);
-            ret = serdes.valueFrom(result);
+            if (result == null) {
+                return null;
+            }
+            return serdes.valueFrom(result);
         } finally {
             metrics.recordLatency(this.fetchTime, startNs, time.nanoseconds());
         }
-
-        return ret;
     }
 
     @Override
