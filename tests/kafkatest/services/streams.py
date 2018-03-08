@@ -18,7 +18,6 @@ import signal
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
-
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
 
@@ -236,3 +235,19 @@ class StreamsBrokerDownResilienceService(StreamsTestBaseService):
               " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
         return cmd
+
+
+class StreamsStandbyTaskService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka, configs):
+        super(StreamsStandbyTaskService, self).__init__(test_context,
+                                                        kafka,
+                                                        "org.apache.kafka.streams.tests.StreamsStandByReplicaTest",
+                                                        configs)
+
+
+class StreamsRepeatingIntegerKeyProducerService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka, configs):
+        super(StreamsRepeatingIntegerKeyProducerService, self).__init__(test_context,
+                                                                        kafka,
+                                                                        "org.apache.kafka.streams.tests.StreamsRepeatingIntegerKeyProducer",
+                                                                        configs)
