@@ -69,9 +69,8 @@ public class ChangeLoggingSessionBytesStoreTest {
     private final Windowed<Bytes> key1 = new Windowed<>(bytesKey, new SessionWindow(0, 0));
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         store = new ChangeLoggingSessionBytesStore(inner);
-
     }
 
     private void init() {
