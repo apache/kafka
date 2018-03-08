@@ -178,9 +178,7 @@ class CogroupedKStreamImpl<K, V> implements CogroupedKStream<K, V> {
                 sourceNameNodes[index++] = (String) node;
             }
             topology.addSource(sourceName, sourceNameNodes);
-            System.out.println("Source name added: " + sourceName + " Source nodes " + sourceNameNodes.length + " First element " + sourceNameNodes[0].toString());
             topology.addProcessor(processorName, processor, sourceName);
-            System.out.println("Processor name added: " + processorName + " ProcessorSupplier " + processor.toString());
         }
         final String name = topology.newName(COGROUP_NAME);
         final KStreamCogroup cogroup = new KStreamCogroup(processors);
