@@ -16,8 +16,12 @@
  */
 package kafka.common
 
+import java.util
+import java.util.Collections
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue}
+
 import kafka.utils.ShutdownableThread
-import org.apache.kafka.clients.{ClientResponse, NetworkClient, RequestCompletionHandler}
+import org.apache.kafka.clients.{NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.requests.AbstractRequest
@@ -34,6 +38,7 @@ abstract class InterBrokerSendThread(name: String,
   extends ShutdownableThread(name, isInterruptible) {
 
   def generateRequests(): Iterable[RequestAndCompletionHandler]
+  var unsentRequests = new UnsentRequests
 
   override def shutdown(): Unit = {
     initiateShutdown()
@@ -47,28 +52,27 @@ abstract class InterBrokerSendThread(name: String,
     var pollTimeout = Long.MaxValue
 
     try {
-      for (request: RequestAndCompletionHandler <- generateRequests()) {
-        val destination = Integer.toString(request.destination.id())
-        val completionHandler = request.handler
-        val clientRequest = networkClient.newClientRequest(destination,
-          request.request,
-          now,
-          true,
-          completionHandler)
+      generateRequests()
+      if (unsentRequests.hasRequests) {
+        unsentRequests.nodes.toArray.toList.foreach { reqNode =>
+          val node = reqNode.asInstanceOf[Node]
+          val requestIterator = unsentRequests.requestIterator(node)
+          while (requestIterator.hasNext) {
+            val request = requestIterator.next
+            val destination = Integer.toString(request.destination.id())
+            val completionHandler = request.handler
+            val clientRequest = networkClient.newClientRequest(destination,
+              request.request,
+              now,
+              true,
+              completionHandler)
 
-        if (networkClient.ready(request.destination, now)) {
-          networkClient.send(clientRequest, now)
-        } else {
-          val header = clientRequest.makeHeader(request.request.latestAllowedVersion)
-          val disconnectResponse: ClientResponse = new ClientResponse(header, completionHandler, destination,
-            now /* createdTimeMs */ , now /* receivedTimeMs */ , true /* disconnected */ , null /* versionMismatch */ ,
-            null /* responseBody */)
-
-          // poll timeout would be the minimum of connection delay if there are any dest yet to be reached;
-          // otherwise it is infinity
-          pollTimeout = Math.min(pollTimeout, networkClient.connectionDelay(request.destination, now))
-
-          completionHandler.onComplete(disconnectResponse)
+            if (networkClient.ready(request.destination, now)) {
+              networkClient.send(clientRequest, now)
+              requestIterator.remove()
+              unsentRequests.clean()
+            }
+          }
         }
       }
       networkClient.poll(pollTimeout, now)
@@ -90,3 +94,48 @@ abstract class InterBrokerSendThread(name: String,
 
 case class RequestAndCompletionHandler(destination: Node, request: AbstractRequest.Builder[_ <: AbstractRequest],
                                        handler: RequestCompletionHandler)
+
+class UnsentRequests {
+  private var unsent = new ConcurrentHashMap[Node, ConcurrentLinkedQueue[RequestAndCompletionHandler]]
+
+  def put(node: Node, request: RequestAndCompletionHandler): Unit = { // the lock protects the put from a concurrent removal of the queue for the node
+    this.synchronized {
+      var requests: ConcurrentLinkedQueue[RequestAndCompletionHandler] = unsent.get(node)
+      if (requests == null) {
+        requests = new ConcurrentLinkedQueue[RequestAndCompletionHandler]
+        unsent.putIfAbsent(node, requests)
+      }
+      requests.add(request)
+    }
+  }
+
+  def hasRequests: Boolean = {
+    import scala.collection.JavaConversions._
+    for (requests <- unsent.values) {
+      if (!requests.isEmpty) return true
+    }
+    false
+  }
+
+  def clean(): Unit = {
+    // the lock protects removal from a concurrent put which could otherwise mutate the
+    // queue after it has been removed from the map
+    this.synchronized {
+      val iterator: util.Iterator[ConcurrentLinkedQueue[RequestAndCompletionHandler]] = unsent.values.iterator
+      while ( {
+        iterator.hasNext
+      }) {
+        val requests: ConcurrentLinkedQueue[RequestAndCompletionHandler] = iterator.next
+        if (requests.isEmpty) iterator.remove()
+      }
+    }
+  }
+
+  def requestIterator(node: Node): util.Iterator[RequestAndCompletionHandler] = {
+    val requests: ConcurrentLinkedQueue[RequestAndCompletionHandler] = unsent.get(node)
+    if (requests == null) Collections.emptyIterator[RequestAndCompletionHandler]
+    else requests.iterator
+  }
+
+  def nodes: util.Collection[Node] = unsent.keySet
+}

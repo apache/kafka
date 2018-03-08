@@ -214,7 +214,9 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     }.filter { case (_, entries) => !entries.isEmpty }.map { case (node, entries) =>
       val markersToSend = entries.asScala.map(_.txnMarkerEntry).asJava
       val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(node.id, txnStateManager, this, entries)
-      RequestAndCompletionHandler(node, new WriteTxnMarkersRequest.Builder(markersToSend), requestCompletionHandler)
+      val requestAndCompletionHandler = new WriteTxnMarkersRequest.Builder(markersToSend)
+      unsentRequests.put(node, RequestAndCompletionHandler(node, requestAndCompletionHandler, requestCompletionHandler))
+      RequestAndCompletionHandler(node, requestAndCompletionHandler, requestCompletionHandler)
     }
   }
 
