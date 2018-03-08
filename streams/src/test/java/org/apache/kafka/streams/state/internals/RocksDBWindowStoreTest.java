@@ -796,6 +796,19 @@ public class RocksDBWindowStoreTest {
     }
 
     @Test
+    public void shouldNoNullPointerWhenSerdeDoesntHandleNull() {
+        windowStore = new RocksDBWindowStore<>(
+                new RocksDBSegmentedBytesStore(windowName, retentionPeriod, numSegments, new WindowKeySchema()),
+                Serdes.Integer(),
+                new SerdeThatDoesntHandleNull(),
+                false,
+                windowSize);
+        windowStore.init(context, windowStore);
+
+        assertNull(windowStore.fetch(1, 0));
+    }
+
+    @Test
     public void shouldFetchAndIterateOverExactBinaryKeys() {
         final WindowStore<Bytes, String> windowStore = Stores.windowStoreBuilder(
                 Stores.persistentWindowStore(windowName,
