@@ -24,6 +24,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -133,4 +134,11 @@ public class PayloadGeneratorTest {
         assertEquals(0, record.value().length);
     }
 
+    @Test
+    public void testNextRecordGeneratesNewByteArrayForValue() {
+        PayloadGenerator payloadGenerator = new PayloadGenerator(2, PayloadKeyType.KEY_MESSAGE_INDEX);
+        ProducerRecord<byte[], byte[]> record1 = payloadGenerator.nextRecord("test-topic", 877);
+        ProducerRecord<byte[], byte[]> record2 = payloadGenerator.nextRecord("test-topic", 877);
+        assertNotEquals(record1.value(), record2.value());
+    }
 }
