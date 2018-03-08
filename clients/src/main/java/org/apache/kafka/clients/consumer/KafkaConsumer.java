@@ -1214,12 +1214,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync() {
-        final long startMs = time.milliseconds();
         acquireAndEnsureOpen();
-        final long remainingTime = Math.max(0, requestTimeoutMs - (time.milliseconds() - startMs));
-        if (remainingTime == 0) throw new TimeoutException("Commit sync has blocked for too long.");
         try {
-            coordinator.commitOffsetsSync(subscriptions.allConsumed(), remainingTime);
+            coordinator.commitOffsetsSync(subscriptions.allConsumed(), Long.MAX_VALUE);
         } finally {
             release();
         }
@@ -1256,12 +1253,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        final long startMs = time.milliseconds();
         acquireAndEnsureOpen();
-        final long remainingTime = Math.max(0, requestTimeoutMs - (time.milliseconds() - startMs));
-        if (remainingTime == 0) throw new TimeoutException("Commit sync has blocked for too long.");
         try {
-            coordinator.commitOffsetsSync(new HashMap<>(offsets), remainingTime);
+            coordinator.commitOffsetsSync(new HashMap<>(offsets), Long.MAX_VALUE);
         } finally {
             release();
         }
