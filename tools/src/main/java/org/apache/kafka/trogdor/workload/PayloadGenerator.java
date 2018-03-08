@@ -19,6 +19,7 @@ package org.apache.kafka.trogdor.workload;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Random;
 
 /**
@@ -41,7 +42,7 @@ public class PayloadGenerator {
     private final double valueDivergenceRatio;
     private final long baseSeed;
     private long currentPosition;
-    private byte[] recordValue;
+    private byte[] baseRecordValue;
     private PayloadKeyType recordKeyType;
     private Random random;
 
@@ -86,10 +87,10 @@ public class PayloadGenerator {
 
         final int valueSize = (messageSize > keyType.maxSizeInBytes())
                               ? messageSize - keyType.maxSizeInBytes() : 0;
-        this.recordValue = new byte[valueSize];
+        this.baseRecordValue = new byte[valueSize];
         // initialize value with random bytes
-        for (int i = 0; i < recordValue.length; ++i) {
-            recordValue[i] = (byte) (random.nextInt(26) + 65);
+        for (int i = 0; i < baseRecordValue.length; ++i) {
+            baseRecordValue[i] = (byte) (random.nextInt(26) + 65);
         }
         this.recordKeyType = keyType;
     }
@@ -125,7 +126,7 @@ public class PayloadGenerator {
     @Override
     public String toString() {
         return "PayloadGenerator(recordKeySize=" + recordKeyType.maxSizeInBytes()
-               + ", recordValueSize=" + recordValue.length
+               + ", recordValueSize=" + baseRecordValue.length
                + ", valueDivergenceRatio=" + valueDivergenceRatio + ")";
     }
 
@@ -137,6 +138,7 @@ public class PayloadGenerator {
         // for the same position.
         random.setSeed(baseSeed + 31 * position + 1);
         // randomize some of the payload to achieve expected compression rate
+        byte[] recordValue = Arrays.copyOf(baseRecordValue, baseRecordValue.length);
         for (int i = 0; i < recordValue.length * valueDivergenceRatio; ++i)
             recordValue[i] = (byte) (random.nextInt(26) + 65);
         return recordValue;
