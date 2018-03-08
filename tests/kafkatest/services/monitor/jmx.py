@@ -110,7 +110,7 @@ class JmxMixin(object):
                 object_attribute_names = line.strip()[1:-1].split("\",\"")[1:]
                 continue
             stats = [float(field) for field in line.split(',')]
-            time_sec = int(stats[0]/self.report_interval)
+            time_sec = int(stats[0]/1000)
             self.jmx_stats[idx-1][time_sec] = {name: stats[i+1] for i, name in enumerate(object_attribute_names)}
 
         # do not calculate average and maximum of jmx stats until we have read output from all nodes
@@ -124,7 +124,7 @@ class JmxMixin(object):
 
         for name in object_attribute_names:
             aggregates_per_time = []
-            for time_sec in xrange(start_time_sec, end_time_sec + int(self.report_interval/100) + 1):
+            for time_sec in xrange(start_time_sec, end_time_sec + 1):
                 # assume that value is 0 if it is not read by jmx tool at the given time. This is appropriate for metrics such as bandwidth
                 values_per_node = [time_to_stats.get(time_sec, {}).get(name, 0) for time_to_stats in self.jmx_stats]
                 # assume that value is aggregated across nodes by sum. This is appropriate for metrics such as bandwidth

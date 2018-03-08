@@ -103,5 +103,6 @@ class StreamsSimpleBenchmarkTest(Test):
         for num in range(0, scale):
             for key in data[num]:
                 final[key + str(num)] = data[num][key]
+                final["jmx" + str(num)] = self.driver[num].jmx_stats
         
         return final

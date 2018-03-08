@@ -19,9 +19,10 @@ import signal
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.services.monitor.jmx import JmxMixin
 
 
-class StreamsTestBaseService(KafkaPathResolverMixin, Service):
+class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
     """Base class for Streams Test services providing some common settings and functionality"""
 
     PERSISTENT_ROOT = "/mnt/streams"
@@ -111,6 +112,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
 
     def start_cmd(self, node):
         args = self.args.copy()
+        args['jmx_port'] = self.jmx_port
         args['kafka'] = self.kafka.bootstrap_servers()
         args['state_dir'] = self.PERSISTENT_ROOT
         args['stdout'] = self.STDOUT_FILE
@@ -119,7 +121,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
         args['log4j'] = self.LOG4J_CONFIG_FILE
         args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
 
-        cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
+        cmd = "( export JMX_PORT=%(jmx_port); export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
               " %(kafka)s %(state_dir)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
               " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
