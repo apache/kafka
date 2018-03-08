@@ -1431,7 +1431,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             long finishMs = time.milliseconds();
             while (offset == null && finishMs - startMs < requestTimeoutMs) {
                 // batch update fetch positions for any partitions without a valid position
-                updateFetchPositions();
+                updateFetchPositions(time.milliseconds(), requestTimeoutMs - (time.milliseconds() - startMs));
                 finishMs = time.milliseconds();
                 final long remainingTime = Math.max(0, requestTimeoutMs - (finishMs - startMs));
                 
@@ -1808,6 +1808,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         // Finally send an asynchronous request to lookup and update the positions of any
         // partitions which are awaiting reset.
+        fetcher.resetOffsetsIfNeeded();
+
+        return false;
+    }
+
+    //Duplicate for keeping times
+    private boolean updateFetchPositions(long start, long timeoutMs) {
+        if (subscriptions.hasAllFetchPositions())
+            return true;
+
+        coordinator.refreshCommittedOffsetsIfNeeded(start, timeoutMs, time);
+        subscriptions.resetMissingPositions();
         fetcher.resetOffsetsIfNeeded();
 
         return false;
