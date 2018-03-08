@@ -172,14 +172,21 @@ class CogroupedKStreamImpl<K, V> implements CogroupedKStream<K, V> {
             
             final String processorName = topology.newName(COGROUP_AGGREGATE_NAME);
             processorNames.add(processorName);
-            topology.addSource(sourceName, groupedStream.builder.internalTopologyBuilder.sourceTopicPattern());
+            final String[] sourceNameNodes = new String[groupedStream.sourceNodes.size()];
+            int index = 0;
+            for (Object node : groupedStream.sourceNodes) {
+                sourceNameNodes[index++] = (String) node;
+            }
+            topology.addSource(sourceName, sourceNameNodes);
+            System.out.println("Source name added: " + sourceName + " Source nodes " + sourceNameNodes.length + " First element " + sourceNameNodes[0].toString());
             topology.addProcessor(processorName, processor, sourceName);
+            System.out.println("Processor name added: " + processorName + " ProcessorSupplier " + processor.toString());
         }
         final String name = topology.newName(COGROUP_NAME);
         final KStreamCogroup cogroup = new KStreamCogroup(processors);
         final String[] processorNamesArray = processorNames.toArray(new String[processorNames.size()]);
-        topology.addProcessor(name, cogroup, processorNamesArray);
-        topology.addStateStore(storeSupplier, processorNamesArray);
+        topology.internalTopologyBuilder.addProcessor(name, cogroup, processorNamesArray);
+        topology.internalTopologyBuilder.addStateStore(storeSupplier, processorNamesArray);
         topology.copartitionSources(sourceNodes);
         return new KTableImpl<K, String, V>(topology.internalStreamsBuilder(), name, cogroup, sourceNodes, storeSupplier.name(), true);
     }
