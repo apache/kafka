@@ -22,15 +22,16 @@ package org.apache.kafka.streams.processor;
  */
 public class To {
     protected String childName;
-    protected long timestamp = -1;
+    protected long timestamp;
 
-    private To(final String childName) {
+    private To(final String childName,
+               final long timestamp) {
         this.childName = childName;
+        this.timestamp = timestamp;
     }
 
     protected To(final To to) {
-        childName = to.childName;
-        timestamp = to.timestamp;
+        this(to.childName, to.timestamp);
     }
 
     protected void update(final To to) {
@@ -44,7 +45,7 @@ public class To {
      * @return a new {@link To} instance configured with {@code childName}
      */
     public static To child(final String childName) {
-        return new To(childName);
+        return new To(childName, -1);
     }
 
     /**
@@ -52,7 +53,7 @@ public class To {
      * @return a new {@link To} instance configured for all downstream processor
      */
     public static To all() {
-        return new To((String) null);
+        return new To((String) null, -1);
     }
 
     /**

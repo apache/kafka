@@ -109,23 +109,28 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             final String sendTo = toAccessor.child();
             if (sendTo != null) {
                 final ProcessorNode child = currentNode().getChild(sendTo);
-                setCurrentNode(child);
-                child.process(key, value);
+                forward(child, key, value);
             } else {
                 if (children.size() == 1) {
                     final ProcessorNode child = children.get(0);
-                    setCurrentNode(child);
-                    child.process(key, value);
+                    forward(child, key, value);
                 } else {
                     for (final ProcessorNode child : children) {
-                        setCurrentNode(child);
-                        child.process(key, value);
+                        forward(child, key, value);
                     }
                 }
             }
         } finally {
             setCurrentNode(previousNode);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private <K, V> void forward(final ProcessorNode child,
+                                final K key,
+                                final V value) {
+        setCurrentNode(child);
+        child.process(key, value);
     }
 
     @Override
