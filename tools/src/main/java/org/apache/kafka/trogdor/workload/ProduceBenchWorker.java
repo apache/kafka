@@ -37,8 +37,7 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Callable;
@@ -51,11 +50,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class ProduceBenchWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ProduceBenchWorker.class);
-
-    private static final short NUM_PARTITIONS = 1;
-
-    private static final short REPLICATION_FACTOR = 3;
-
+    
     private static final int THROTTLE_PERIOD_MS = 100;
 
     private final String id;
@@ -76,8 +71,8 @@ public class ProduceBenchWorker implements TaskWorker {
      * @param topicIndex        The topic number.
      * @return                  The topic name.
      */
-    public static String topicIndexToName(int topicIndex) {
-        return String.format("topic%05d", topicIndex);
+    public String topicIndexToName(int topicIndex) {
+        return String.format("%s%05d", spec.topicsPrefix(), topicIndex);
     }
 
     public ProduceBenchWorker(String id, ProduceBenchSpec spec) {
@@ -111,11 +106,14 @@ public class ProduceBenchWorker implements TaskWorker {
                         "activeTopics was %d, but totalTopics was only %d.  activeTopics must " +
                             "be less than or equal to totalTopics.", spec.activeTopics(), spec.totalTopics()));
                 }
-                List<NewTopic> newTopics = new ArrayList<>();
+                Map<String, NewTopic> newTopics = new HashMap<>();
                 for (int i = 0; i < spec.totalTopics(); i++) {
-                    newTopics.add(new NewTopic(topicIndexToName(i), NUM_PARTITIONS, REPLICATION_FACTOR));
+                    String name = topicIndexToName(i);
+                    newTopics.put(name, new NewTopic(name, spec.numPartitions(), spec.replicationFactor()));
                 }
-                WorkerUtils.createTopics(log, spec.bootstrapServers(), newTopics);
+                WorkerUtils.verifyTopicsAndCreateNonExistingTopics(
+                    log, spec.bootstrapServers(), newTopics);
+
                 executor.submit(new SendRecords());
             } catch (Throwable e) {
                 WorkerUtils.abort(log, "Prepare", e, doneFuture);

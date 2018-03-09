@@ -19,7 +19,12 @@ package org.apache.kafka.trogdor.common;
 
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.DescribeTopicsOptions;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
+import org.apache.kafka.clients.admin.ListTopicsOptions;
+import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -85,58 +90,142 @@ public final class WorkerUtils {
      */
     public static void createTopics(Logger log, String bootstrapServers,
             Collection<NewTopic> topics) throws Throwable {
+        try (AdminClient adminClient = createAdminClient(log, bootstrapServers)) {
+            createTopics(log, adminClient, topics);
+        }
+    }
+
+    static void createTopics(Logger log, AdminClient adminClient,
+                             Collection<NewTopic> topics) throws Throwable {
+        long startMs = Time.SYSTEM.milliseconds();
+        int tries = 0;
+
+        Map<String, NewTopic> newTopics = new HashMap<>();
+        for (NewTopic newTopic : topics) {
+            newTopics.put(newTopic.name(), newTopic);
+        }
+        List<String> topicsToCreate = new ArrayList<>(newTopics.keySet());
+        while (true) {
+            log.info("Attemping to create {} topics (try {})...", topicsToCreate.size(), ++tries);
+            Map<String, Future<Void>> creations = new HashMap<>();
+            while (!topicsToCreate.isEmpty()) {
+                List<NewTopic> newTopicsBatch = new ArrayList<>();
+                for (int i = 0; (i < MAX_CREATE_TOPICS_BATCH_SIZE) &&
+                                !topicsToCreate.isEmpty(); i++) {
+                    String topicName = topicsToCreate.remove(0);
+                    newTopicsBatch.add(newTopics.get(topicName));
+                }
+                creations.putAll(adminClient.createTopics(newTopicsBatch).values());
+            }
+            // We retry cases where the topic creation failed with a
+            // timeout.  This is a workaround for KAFKA-6368.
+            for (Map.Entry<String, Future<Void>> entry : creations.entrySet()) {
+                String topicName = entry.getKey();
+                Future<Void> future = entry.getValue();
+                try {
+                    future.get();
+                    log.debug("Successfully created {}.", topicName);
+                } catch (ExecutionException e) {
+                    if (e.getCause() instanceof TimeoutException) {
+                        log.warn("Timed out attempting to create {}: {}", topicName, e.getCause().getMessage());
+                        topicsToCreate.add(topicName);
+                    } else {
+                        log.warn("Failed to create {}", topicName, e.getCause());
+                        throw e.getCause();
+                    }
+                }
+            }
+            if (topicsToCreate.isEmpty()) {
+                break;
+            }
+            if (Time.SYSTEM.milliseconds() > startMs + CREATE_TOPICS_CALL_TIMEOUT) {
+                String str = "Unable to create topic(s): " +
+                             Utils.join(topicsToCreate, ", ") + "after " + tries + " attempt(s)";
+                log.warn(str);
+                throw new TimeoutException(str);
+            }
+        }
+    }
+
+    /**
+     * Verifies that topics exist with the same number of partitions. If any of the topics do not
+     * exist, the method will create them. If any topic exists, but has a different number of
+     * partitions, the method throws an exception.
+     *
+     * @param log                  The logger to use.
+     * @param bootstrapServers     The bootstrap server list.
+     * @param topics               topic name to topic description map representing a list of
+     *                             topics to verify/create
+     */
+    public static void verifyTopicsAndCreateNonExistingTopics(
+        Logger log, String bootstrapServers, Map<String, NewTopic> topics) throws Throwable {
+        try (AdminClient adminClient = createAdminClient(log, bootstrapServers)) {
+            verifyTopicsAndCreateNonExistingTopics(log, adminClient, topics);
+        }
+    }
+
+    static void verifyTopicsAndCreateNonExistingTopics(
+        Logger log, AdminClient adminClient, Map<String, NewTopic> topics) throws Throwable {
+        if (topics.isEmpty()) {
+            log.warn("Request to create topics has an empty topic list.");
+            return;
+        }
+
+        ListTopicsOptions listTopicsOpts =
+            new ListTopicsOptions().timeoutMs(CREATE_TOPICS_REQUEST_TIMEOUT);
+        ListTopicsResult result = adminClient.listTopics(listTopicsOpts);
+        Collection<String> topicNames = result.names().get();
+
+        // verify that existing topics have the same number of partitions that was requested
+        topicNames.retainAll(topics.keySet());
+        verifyTopicsPartitions(log, adminClient, topicNames, topics);
+
+        // create topics that do not exist
+        Collection<NewTopic> topicsToCreate = new ArrayList<>();
+        for (Map.Entry<String, NewTopic> topic: topics.entrySet()) {
+            if (!topicNames.contains(topic.getKey())) {
+                topicsToCreate.add(topic.getValue());
+            }
+        }
+        if (topicsToCreate.size() > 0) {
+            createTopics(log, adminClient, topicsToCreate);
+        }
+    }
+
+    /**
+     * Verifies that all topics in the list have given number of partitions
+     * @param log                     The logger to use.
+     * @param existingTopics          List of topics to verify
+     * @param requestedTopicConfigs   Topic name to topic description. This map must contain all
+     *                                topics in existingTopics list
+     */
+    private static void verifyTopicsPartitions(
+        Logger log, AdminClient adminClient, Collection<String> existingTopics,
+        Map<String, NewTopic> requestedTopicConfigs) throws Exception {
+        if (existingTopics.isEmpty()) {
+            return;
+        }
+        DescribeTopicsResult topicsResult = adminClient.describeTopics(
+            existingTopics, new DescribeTopicsOptions().timeoutMs(CREATE_TOPICS_REQUEST_TIMEOUT));
+        Map<String, TopicDescription> topicDescriptionMap = topicsResult.all().get();
+        for (TopicDescription desc: topicDescriptionMap.values()) {
+            // map will always contain the topic since we get the intersection of requested
+            // topics and existing topics before calling this method.
+            int partitions = requestedTopicConfigs.get(desc.name()).numPartitions();
+            if (desc.partitions().size() != partitions) {
+                String str = "Topic '" + desc.name() + "' exists, but has "
+                             + desc.partitions().size() + " partitions, while requested "
+                             + " number of partitions is " + partitions;
+                log.warn(str);
+                throw new IllegalArgumentException(str);
+            }
+        }
+    }
+
+    private static AdminClient createAdminClient(Logger log, String bootstrapServers) {
         Properties props = new Properties();
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, CREATE_TOPICS_REQUEST_TIMEOUT);
-        try (AdminClient adminClient = AdminClient.create(props)) {
-            long startMs = Time.SYSTEM.milliseconds();
-            int tries = 0;
-
-            Map<String, NewTopic> newTopics = new HashMap<>();
-            for (NewTopic newTopic : topics) {
-                newTopics.put(newTopic.name(), newTopic);
-            }
-            List<String> topicsToCreate = new ArrayList<>(newTopics.keySet());
-            while (true) {
-                log.info("Attemping to create {} topics (try {})...", topicsToCreate.size(), ++tries);
-                Map<String, Future<Void>> creations = new HashMap<>();
-                while (!topicsToCreate.isEmpty()) {
-                    List<NewTopic> newTopicsBatch = new ArrayList<>();
-                    for (int i = 0; (i < MAX_CREATE_TOPICS_BATCH_SIZE) &&
-                            !topicsToCreate.isEmpty(); i++) {
-                        String topicName = topicsToCreate.remove(0);
-                        newTopicsBatch.add(newTopics.get(topicName));
-                    }
-                    creations.putAll(adminClient.createTopics(newTopicsBatch).values());
-                }
-                // We retry cases where the topic creation failed with a
-                // timeout.  This is a workaround for KAFKA-6368.
-                for (Map.Entry<String, Future<Void>> entry : creations.entrySet()) {
-                    String topicName = entry.getKey();
-                    Future<Void> future = entry.getValue();
-                    try {
-                        future.get();
-                        log.debug("Successfully created {}.", topicName);
-                    } catch (ExecutionException e) {
-                        if (e.getCause() instanceof TimeoutException) {
-                            log.warn("Timed out attempting to create {}: {}", topicName, e.getCause().getMessage());
-                            topicsToCreate.add(topicName);
-                        } else {
-                            log.warn("Failed to create {}", topicName, e.getCause());
-                            throw e.getCause();
-                        }
-                    }
-                }
-                if (topicsToCreate.isEmpty()) {
-                    break;
-                }
-                if (Time.SYSTEM.milliseconds() > startMs + CREATE_TOPICS_CALL_TIMEOUT) {
-                    String str = "Unable to create topic(s): " +
-                            Utils.join(topicsToCreate, ", ") + "after " + tries + " attempt(s)";
-                    log.warn(str);
-                    throw new TimeoutException(str);
-                }
-            }
-        }
+        return AdminClient.create(props);
     }
 }
