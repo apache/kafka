@@ -148,7 +148,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
 
   private def getController() : (KafkaServer, Int) = {
     val controllerId = zkClient.getControllerId.getOrElse(fail("Controller doesn't exist"))
-    val controller = servers.filter(s => s.config.brokerId == controllerId).head
+    val controller = servers.find(s => s.config.brokerId == controllerId).get
     (controller, controllerId)
   }
 
@@ -189,7 +189,6 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val leaderIdOpt = zkClient.getLeaderForPartition(topicPartition)
     assertTrue("Leader should exist for partition [test,0]", leaderIdOpt.isDefined)
     val follower = servers.filter(s => s.config.brokerId != leaderIdOpt.get).last
-    info("Shutting down the follower " + follower.config.brokerId)
     follower.shutdown()
     // start topic deletion
     adminZkClient.deleteTopic(topic)
@@ -212,7 +211,6 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val previousControllerId = controllerId
 
     controller.shutdown()
-    info("Shutting down the controller " + controller.config.brokerId)
 
     ensureControllerExists()
     // wait until a new controller to show up

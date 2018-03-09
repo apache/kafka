@@ -1325,15 +1325,13 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         !controllerContext.partitionReplicaAssignment.contains(p._1))
       if (topicDeletionManager.isTopicQueuedUpForDeletion(topic))
         if (partitionsToBeAdded.nonEmpty) {
-          error("Skipping adding partitions %s for topic %s since it is currently being deleted"
+          warn("Skipping adding partitions %s for topic %s since it is currently being deleted"
             .format(partitionsToBeAdded.map(_._1.partition).mkString(","), topic))
 
           restorePartitionReplicaAssignment(topic, partitionReplicaAssignment)
         } else {
-          info("Ignoring partition change since no new partitions are added."
-            + "This can happen in the following cases" +
-            "1. existing partition replica assignment are restored to prevent increasing partition count during topic deletion " +
-            "2. the topic zk path is recursively deleted in the final stage of topic deletion.")
+          // This can happen if existing partition replica assignment are restored to prevent increasing partition count during topic deletion
+          info("Ignoring partition change since no new partitions are added")
         }
       else {
         if (partitionsToBeAdded.nonEmpty) {
