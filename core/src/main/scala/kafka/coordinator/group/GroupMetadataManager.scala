@@ -558,9 +558,8 @@ class GroupMetadataManager(brokerId: Int,
               var batchBaseOffset: Option[Long] = None
               for (record <- batch.asScala) {
                 require(record.hasKey, "Group metadata/offset entry key should not be null")
-                if (batchBaseOffset.isEmpty) {
-                  batchBaseOffset = Some(record.offset())
-                }
+                if (batchBaseOffset.isEmpty)
+                  batchBaseOffset = Some(record.offset)
                 GroupMetadataManager.readMessageKey(record.key) match {
 
                   case offsetKey: OffsetKey =>
