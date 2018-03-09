@@ -28,7 +28,6 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.requests.AbstractRequest;
-import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -510,15 +509,29 @@ public class ConsumerNetworkClient implements Closeable {
         }
     }
 
+
     /**
-     * Find whether a previous connection has failed. Note that the failure state will persist until either
-     * {@link #tryConnect(Node)} or {@link #send(Node, AbstractRequest.Builder)} has been called.
-     * @param node Node to connect to if possible
+     * Check if the code is disconnected and unavailable for immediate reconnection (i.e. if it is in
+     * reconnect backoff window following the disconnect).
      */
-    public boolean connectionFailed(Node node) {
+    public boolean isUnavailable(Node node) {
         lock.lock();
         try {
-            return client.connectionFailed(node);
+            return client.connectionFailed(node) && client.connectionDelay(node, time.milliseconds()) > 0;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Check for an authentication error on a given node and raise the exception if there is one.
+     */
+    public void maybeThrowAuthFailure(Node node) {
+        lock.lock();
+        try {
+            AuthenticationException exception = client.authenticationException(node);
+            if (exception != null)
+                throw exception;
         } finally {
             lock.unlock();
         }
@@ -552,10 +565,8 @@ public class ConsumerNetworkClient implements Closeable {
             if (e != null) {
                 future.raise(e);
             } else if (response.wasDisconnected()) {
-                RequestHeader requestHeader = response.requestHeader();
-                int correlation = requestHeader.correlationId();
-                log.debug("Cancelled {} request {} with correlation id {} due to node {} being disconnected",
-                        requestHeader.apiKey(), requestHeader, correlation, response.destination());
+                log.debug("Cancelled request with header {} due to node {} being disconnected",
+                        response.requestHeader(), response.destination());
                 future.raise(DisconnectException.INSTANCE);
             } else if (response.versionMismatch() != null) {
                 future.raise(response.versionMismatch());
