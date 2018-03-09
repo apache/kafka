@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
@@ -44,7 +43,7 @@ import static org.junit.Assert.assertTrue;
 public class ChangeLoggingSessionBytesStoreTest {
 
     private final TaskId taskId = new TaskId(0, 0);
-    private final Map sent = new HashMap<>();
+    private final Map<Object, Object> sent = new HashMap<>();
     private final NoOpRecordCollector collector = new NoOpRecordCollector() {
         @Override
         public <K, V> void send(final String topic,
@@ -84,7 +83,7 @@ public class ChangeLoggingSessionBytesStoreTest {
     }
 
     @Test
-    public void shouldLogPuts() throws Exception {
+    public void shouldLogPuts() {
         inner.put(key1, value1);
         EasyMock.expectLastCall();
 
@@ -92,26 +91,26 @@ public class ChangeLoggingSessionBytesStoreTest {
 
         store.put(key1, value1);
 
-        assertArrayEquals(value1, (byte[]) sent.get(SessionKeySerde.bytesToBinary(key1)));
+        assertArrayEquals(value1, (byte[]) sent.get(Bytes.wrap(SessionKeySchema.toBinary(key1))));
         EasyMock.verify(inner);
     }
 
     @Test
-    public void shouldLogRemoves() throws Exception {
+    public void shouldLogRemoves() {
         inner.remove(key1);
         EasyMock.expectLastCall();
 
         init();
         store.remove(key1);
 
-        final Bytes binaryKey = SessionKeySerde.bytesToBinary(key1);
+        final Bytes binaryKey = Bytes.wrap(SessionKeySchema.toBinary(key1));
         assertTrue(sent.containsKey(binaryKey));
         assertNull(sent.get(binaryKey));
         EasyMock.verify(inner);
     }
 
     @Test
-    public void shouldDelegateToUnderlyingStoreWhenFetching() throws Exception {
+    public void shouldDelegateToUnderlyingStoreWhenFetching() {
         EasyMock.expect(inner.findSessions(bytesKey, 0, Long.MAX_VALUE)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
 
         init();
@@ -121,7 +120,7 @@ public class ChangeLoggingSessionBytesStoreTest {
     }
 
     @Test
-    public void shouldDelegateToUnderlyingStoreWhenFetchingRange() throws Exception {
+    public void shouldDelegateToUnderlyingStoreWhenFetchingRange() {
         EasyMock.expect(inner.findSessions(bytesKey, bytesKey, 0, Long.MAX_VALUE)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
 
         init();
@@ -131,7 +130,7 @@ public class ChangeLoggingSessionBytesStoreTest {
     }
 
     @Test
-    public void shouldDelegateToUnderlyingStoreWhenFindingSessions() throws Exception {
+    public void shouldDelegateToUnderlyingStoreWhenFindingSessions() {
         EasyMock.expect(inner.findSessions(bytesKey, 0, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
 
         init();
@@ -141,7 +140,7 @@ public class ChangeLoggingSessionBytesStoreTest {
     }
 
     @Test
-    public void shouldDelegateToUnderlyingStoreWhenFindingSessionRange() throws Exception {
+    public void shouldDelegateToUnderlyingStoreWhenFindingSessionRange() {
         EasyMock.expect(inner.findSessions(bytesKey, bytesKey, 0, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
 
         init();
@@ -151,7 +150,7 @@ public class ChangeLoggingSessionBytesStoreTest {
     }
 
     @Test
-    public void shouldFlushUnderlyingStore() throws Exception {
+    public void shouldFlushUnderlyingStore() {
         inner.flush();
         EasyMock.expectLastCall();
 
@@ -162,7 +161,7 @@ public class ChangeLoggingSessionBytesStoreTest {
     }
 
     @Test
-    public void shouldCloseUnderlyingStore() throws Exception {
+    public void shouldCloseUnderlyingStore() {
         inner.close();
         EasyMock.expectLastCall();
 

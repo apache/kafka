@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -30,45 +29,15 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 
 public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateStore implements WindowStore<K, V> {
 
-    // this is optimizing the case when this store is already a bytes store, in which we can avoid Bytes.wrap() costs
-    private static class RocksDBWindowBytesStore extends RocksDBWindowStore<Bytes, byte[]> {
-        RocksDBWindowBytesStore(final SegmentedBytesStore inner, final boolean retainDuplicates, final long windowSize) {
-            super(inner, Serdes.Bytes(), Serdes.ByteArray(), retainDuplicates, windowSize);
-        }
-
-        @Override
-        public void put(Bytes key, byte[] value, long timestamp) {
-            maybeUpdateSeqnumForDups();
-
-            bytesStore.put(WindowStoreUtils.toBinaryKey(key.get(), timestamp, seqnum), value);
-        }
-
-        @Override
-        public WindowStoreIterator<byte[]> fetch(Bytes key, long timeFrom, long timeTo) {
-            final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(key, timeFrom, timeTo);
-            return WindowStoreIteratorWrapper.bytesIterator(bytesIterator, serdes, windowSize).valuesIterator();
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(Bytes from, Bytes to, long timeFrom, long timeTo) {
-            final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(from, to, timeFrom, timeTo);
-            return WindowStoreIteratorWrapper.bytesIterator(bytesIterator, serdes, windowSize).keyValueIterator();
-        }
-    }
-
-    static RocksDBWindowStore<Bytes, byte[]> bytesStore(final SegmentedBytesStore inner, final boolean retainDuplicates, final long windowSize) {
-        return new RocksDBWindowBytesStore(inner, retainDuplicates, windowSize);
-    }
-
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final boolean retainDuplicates;
-    protected final long windowSize;
-    protected final SegmentedBytesStore bytesStore;
+    private final long windowSize;
+    private final SegmentedBytesStore bytesStore;
 
     private ProcessorContext context;
-    protected StateSerdes<K, V> serdes;
-    protected int seqnum = 0;
+    private StateSerdes<K, V> serdes;
+    private int seqnum = 0;
 
     RocksDBWindowStore(final SegmentedBytesStore bytesStore,
                        final Serde<K> keySerde,
@@ -104,12 +73,12 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     public void put(final K key, final V value, final long timestamp) {
         maybeUpdateSeqnumForDups();
 
-        bytesStore.put(WindowStoreUtils.toBinaryKey(key, timestamp, seqnum, serdes), serdes.rawValue(value));
+        bytesStore.put(WindowKeySchema.toStoreKeyBinary(key, timestamp, seqnum, serdes), serdes.rawValue(value));
     }
 
     @Override
     public V fetch(final K key, final long timestamp) {
-        final byte[] bytesValue = bytesStore.get(WindowStoreUtils.toBinaryKey(key, timestamp, seqnum, serdes));
+        final byte[] bytesValue = bytesStore.get(WindowKeySchema.toStoreKeyBinary(key, timestamp, seqnum, serdes));
         if (bytesValue == null) {
             return null;
         }
@@ -127,7 +96,7 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
         final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to)), timeFrom, timeTo);
         return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
     }
-    
+
     @Override
     public KeyValueIterator<Windowed<K>, V> all() {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.all();
@@ -140,7 +109,7 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
         return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
     }
 
-    void maybeUpdateSeqnumForDups() {
+    private void maybeUpdateSeqnumForDups() {
         if (retainDuplicates) {
             seqnum = (seqnum + 1) & 0x7FFFFFFF;
         }
