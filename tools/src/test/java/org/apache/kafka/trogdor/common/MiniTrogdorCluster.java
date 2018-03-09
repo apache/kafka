@@ -235,7 +235,10 @@ public class MiniTrogdorCluster implements AutoCloseable {
         if (coordinator == null) {
             throw new RuntimeException("No coordinator configured.");
         }
-        return new CoordinatorClient(10, "localhost", coordinator.port());
+        return new CoordinatorClient.Builder().
+            maxTries(10).
+            target("localhost", coordinator.port()).
+            build();
     }
 
     public AgentClient agentClient(String nodeName) {
@@ -243,7 +246,10 @@ public class MiniTrogdorCluster implements AutoCloseable {
         if (agent == null) {
             throw new RuntimeException("No agent configured on node " + nodeName);
         }
-        return new AgentClient(10, "localhost", agent.port());
+        return new AgentClient.Builder().
+            maxTries(10).
+            target("localhost", agent.port()).
+            build();
     }
 
     @Override
