@@ -461,4 +461,51 @@ public class UtilsTest {
         Utils.delete(tempDir);
         assertFalse(Files.exists(tempDir.toPath()));
     }
+
+    @Test
+    public void testFullStackTrace() throws Exception {
+        RuntimeException inner = new RuntimeException("Foo, bar, and also baz");
+        RuntimeException outer = new RuntimeException("quux", inner);
+        RuntimeException outer2 = new RuntimeException(null, outer);
+        RuntimeException suppressed1Cause = new RuntimeException("cause of suppressed1");
+        RuntimeException suppressed1 = new RuntimeException("suppressed1", suppressed1Cause);
+        outer2.addSuppressed(suppressed1);
+        String exceptionText = "";
+        try {
+            throw outer2;
+        } catch (Throwable e) {
+            exceptionText = Utils.fullStackTrace(e);
+        }
+        String[] exceptionLines = exceptionText.split("\\r?\\n");
+        assertEquals("java.lang.RuntimeException: null", exceptionLines[0]);
+        assertStartsWith(exceptionLines[1],
+            "        org.apache.kafka.common.utils.UtilsTest.testFullStackTrace(UtilsTest.java:");
+        int i = 2;
+        while (!exceptionLines[i].startsWith(" Suppressed: java.lang.RuntimeException: suppressed1")) {
+            i++;
+            assertFalse(i == exceptionLines.length);
+        }
+        assertStartsWith(exceptionLines[++i],
+            "         org.apache.kafka.common.utils.UtilsTest.testFullStackTrace(UtilsTest.java:");
+        while (!exceptionLines[i].startsWith(" Caused by: java.lang.RuntimeException: cause of suppressed1")) {
+            i++;
+            assertFalse(i == exceptionLines.length);
+        }
+        while (!exceptionLines[i].startsWith("Caused by: java.lang.RuntimeException: quux")) {
+            i++;
+            assertFalse(i == exceptionLines.length);
+        }
+        assertStartsWith(exceptionLines[++i],
+            "        org.apache.kafka.common.utils.UtilsTest.testFullStackTrace(UtilsTest.java:");
+        while (!exceptionLines[i].startsWith("Caused by: java.lang.RuntimeException: Foo, bar, and also baz")) {
+            i++;
+            assertFalse(i == exceptionLines.length);
+        }
+        assertStartsWith(exceptionLines[++i],
+            "        org.apache.kafka.common.utils.UtilsTest.testFullStackTrace(UtilsTest.java:");
+    }
+
+    private static void assertStartsWith(String actual, String expected) {
+        assertEquals(expected, actual.substring(0, expected.length()));
+    }
 }
