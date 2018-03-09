@@ -73,6 +73,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val groupResource = new Resource(Group, group)
   val deleteTopicResource = new Resource(Topic, deleteTopic)
   val transactionalIdResource = new Resource(TransactionalId, transactionalId)
+  val createTopicResource = new Resource(Topic, createTopic)
 
   val groupReadAcl = Map(groupResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)))
   val groupDescribeAcl = Map(groupResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)))
@@ -82,6 +83,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val clusterAlterAcl = Map(Resource.ClusterResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Alter)))
   val clusterDescribeAcl = Map(Resource.ClusterResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)))
   val clusterIdempotentWriteAcl = Map(Resource.ClusterResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, IdempotentWrite)))
+  val topicCreateAcl = Map(createTopicResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Create)))
   val topicReadAcl = Map(topicResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)))
   val topicWriteAcl = Map(topicResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)))
   val topicDescribeAcl = Map(topicResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)))
@@ -207,7 +209,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.LEADER_AND_ISR -> clusterAcl,
     ApiKeys.STOP_REPLICA -> clusterAcl,
     ApiKeys.CONTROLLED_SHUTDOWN -> clusterAcl,
-    ApiKeys.CREATE_TOPICS -> clusterCreateAcl,
+    ApiKeys.CREATE_TOPICS -> topicCreateAcl,
     ApiKeys.DELETE_TOPICS -> topicDeleteAcl,
     ApiKeys.DELETE_RECORDS -> topicDeleteAcl,
     ApiKeys.OFFSET_FOR_LEADER_EPOCH -> clusterAcl,
@@ -489,6 +491,37 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       for ((resource, acls) <- resourceToAcls)
         addAndVerifyAcls(acls, resource)
       sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = true, topicExists = false)
+    }
+  }
+
+  @Test
+  def testCreateTopicAuthorizationWithClusterCreate() {
+    val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
+      ApiKeys.CREATE_TOPICS -> createTopicsRequest
+    )
+
+    val requestKeysToAcls = Map[ApiKeys, Map[Resource, Set[Acl]]](
+      ApiKeys.CREATE_TOPICS -> clusterCreateAcl,
+    )
+
+    for ((key, request) <- requestKeyToRequest) {
+      removeAllAcls()
+      val resources = Set[ResourceType](Topic)
+
+      sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false)
+
+      val resourceToAcls = requestKeysToAcls(key)
+      resourceToAcls.get(topicResource).foreach { acls =>
+        val describeAcls = topicDescribeAcl(topicResource)
+        val isAuthorized =  describeAcls == acls
+        addAndVerifyAcls(describeAcls, topicResource)
+        sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = isAuthorized)
+        removeAllAcls()
+      }
+
+      for ((resource, acls) <- resourceToAcls)
+        addAndVerifyAcls(acls, resource)
+      sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = true)
     }
   }
 
