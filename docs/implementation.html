@@ -15,7 +15,7 @@
  limitations under the License.
 -->
 
-<script id="implementation-template" type="text/x-handlebars-template">
+<p id="implementation-template" type="text/x-handlebars-template">
     <h3><a id="networklayer" href="#networklayer">5.1 Network Layer</a></h3>
     <p>
     The network layer is a fairly straight-forward NIO server, and will not be described in great detail. The sendfile implementation is done by giving the <code>MessageSet</code> interface a <code>writeTo</code> method. This allows the file-backed message set to use the more efficient <code>transferTo</code> implementation instead of an in-process buffered write. The threading model is a single acceptor thread and <i>N</i> processor threads which handle a fixed number of connections each. This design has been pretty thoroughly tested <a href="http://sna-projects.com/blog/2009/08/introducing-the-nio-socketserver-implementation">elsewhere</a> and found to be simple to implement and fast. The protocol is kept quite simple to allow for future implementation of clients in other languages.
@@ -78,7 +78,31 @@
     </pre></p>
     <p>The schema for the value of a control record is dependent on the type. The value is opaque to clients.</p>
 
-    <h5><a id="messageset" href="#messageset">5.3.1.2 Old Message Format</a></h5>
+    <h4><a id="record" href="#record">5.3.2 Record</a></h4>
+	<p>Record level headers were introduced in Kafka 0.11.0. The on-disk format of a record with Headers is delineated below. </p>
+	<p><pre class="brush: java;">
+		length: varint
+		attributes: int8
+			bit 0~7: unused
+		timestampDelta: varint
+		offsetDelta: varint
+		keyLength: varint
+		key: byte[]
+		valueLen: varint
+		value: byte[]
+		Headers => [Header]
+	</pre></p>
+	<h5><a id="recordheader" href="#recordheader">5.3.2.1 Record Header</a></h5>
+	<p><pre class="brush: java;">
+		headerKeyLength: varint
+		headerKey: String
+		headerValueLength: varint
+		Value: byte[]
+	</pre></p>
+    <p>We use the same varint encoding as Protobuf. More information on the latter can be found <a href="https://developers.google.com/protocol-buffers/docs/encoding#varints">here</a>. The count of headers in a record
+    is also encoded as a varint.</p>
+
+    <h4><a id="messageset" href="#messageset">5.3.3 Old Message Format</a></h4>
     <p>
         Prior to Kafka 0.11 messages were transferred and stored in a format called MessageSets. In MessageSets each message has its own metadata. Note that although MessageSets are formally arrays,
         they are not preceded by an int32 array size like other array elements in the protocol.
@@ -109,40 +133,24 @@
             value => BYTES
     </pre></p>
     <p>
-        When the producer is sending non compressed messages, it can set the offsets to anything.
-        When the producer is sending compressed messages, to avoid server side re-compression, each compressed message should have offset starting from 0 and increasing by one for each inner message in the compressed message.
-    </p>
-    <p>
-        In versions until Kafka 0.10 the magic byte value was 0. Value 1 i.e. message format version 1 was introduced with timestamp support in version 0.10 .
-        In version 1 the fourth lowest bit of attributes byte represents the timestamp type. 0 stands for CreateTime and 1 stands for LogAppendTime.
-        The producer should always set this bit to 0. Similarly to version 2 above, the lowest bits of attributes mean compression type and the highest bits must be set to 0.
-    </p>
-    <p>In message format versions 0 and 1 Kafka supports recursive messages in which case the value field may itself contain a message set.</p>
-    <p>The crc field contains the CRC32 (and not CRC-32C) of the message bytes.</p>
+        In versions prior to Kafka 0.10 the magic byte value was 0. Message format version 1 was introduced with timestamp support in version 0.10 .
+    <ul>
+        <li>Similarly to version 2 above, the lowest bits of attributes mean compression type.</li>
+        <li>In version 1 the fourth lowest bit of attributes byte represents the timestamp type.<br>
+            0 stands for CreateTime and 1 stands for LogAppendTime. The producer should always set this bit to 0 and if the topic is configured to contain log append times
+            (through either broker level config log.message.timestamp.type = LogAppendTime or topic level config message.timestamp.type = LogAppendTime), the broker will overwrite the timestamp type and the timestamp in the message set.</li>
 
-    <h4><a id="record" href="#record">5.3.2 Record</a></h4>
-	<p>Record level headers were introduced in Kafka 0.11.0. The on-disk format of a record with Headers is delineated below. </p>
-	<p><pre class="brush: java;">
-		length: varint
-		attributes: int8
-			bit 0~7: unused
-		timestampDelta: varint
-		offsetDelta: varint
-		keyLength: varint
-		key: byte[]
-		valueLen: varint
-		value: byte[]
-		Headers => [Header]
-	</pre></p>
-	<h5><a id="recordheader" href="#recordheader">5.4.2.1 Record Header</a></h5>
-	<p><pre class="brush: java;">
-		headerKeyLength: varint
-		headerKey: String
-		headerValueLength: varint
-		Value: byte[]
-	</pre></p>
-    <p>We use the same varint encoding as Protobuf. More information on the latter can be found <a href="https://developers.google.com/protocol-buffers/docs/encoding#varints">here</a>. The count of headers in a record
-    is also encoded as a varint.</p>
+        <li>The highest bits of attributes must be set to 0.</li>
+    </ul>
+    </p>
+    <p>In message format versions 0 and 1 Kafka supports recursive messages for efficiency. In this case the message's attributes show that it is compressed and its value field contains a message set compressed with the appropriate compression type.</p>
+    <p>
+        When receiving recursive version 0 messages, the broker decompresses them and each inner message is assigned an offset.
+        In version 1, to avoid server side re-compression, each compressed message must have offset starting from 0 and increasing by one for each inner message in the compressed message.
+        When the producer is sending non compressed messages, it can set the offsets to anything.
+    </p>
+
+    <p>The crc field contains the CRC32 (and not CRC-32C) of the message bytes.</p>
 
     <h3><a id="log" href="#log">5.4 Log</a></h3>
     <p>
@@ -356,6 +364,6 @@
     <p>
     When rebalancing is triggered at one consumer, rebalancing should be triggered in other consumers within the same group about the same time.
     </p>
-</script>
+</p>
 
 <div class="p-implementation"></div>
