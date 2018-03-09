@@ -56,7 +56,7 @@ public final class WorkerUtils {
     public static void abort(Logger log, String what, Throwable exception,
             KafkaFutureImpl<String> doneFuture) throws KafkaException {
         log.warn("{} caught an exception: ", what, exception);
-        doneFuture.complete(exception.getMessage());
+        doneFuture.complete(Utils.fullStackTrace(exception));
         throw new KafkaException(exception);
     }
 

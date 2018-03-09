@@ -530,13 +530,59 @@ public final class Utils {
     }
 
     /**
-     * Get the stack trace from an exception as a string
+     * Get the stack trace from an exception as a string, using
+     * Throwable#printStackTrace.
+     *
+     * @param e     The exception.
+     * @return      The exception as a string.
      */
     public static String stackTrace(Throwable e) {
         StringWriter sw = new StringWriter();
         PrintWriter pw = new PrintWriter(sw);
         e.printStackTrace(pw);
         return sw.toString();
+    }
+
+    /**
+     * Get the full stack trace from an exception as a string.
+     *
+     * This includes the full stack trace-- we don't omit any frames.
+     * Every "cause" exception is also included.
+     *
+     * @param e     The exception.
+     * @return      The exception as a string.
+     */
+    public static String fullStackTrace(Throwable e) {
+        StringWriter sw = new StringWriter();
+        fullStackTraceHelper(sw, 0, "", e);
+        return sw.toString();
+    }
+
+    private static void fullStackTraceHelper(StringWriter sw, int indent, String prefix, Throwable e) {
+        sw.append(String.format("%s%s%s: %s%n",
+            repeatedString(indent, ' '),
+            prefix,
+            e.getClass().getCanonicalName().toString(),
+            e.getMessage()));
+        for (StackTraceElement element : e.getStackTrace()) {
+            sw.append(String.format("%s%s%n",
+                repeatedString(8 + indent, ' '),
+                element.toString()));
+        }
+        for (Throwable suppressed : e.getSuppressed()) {
+            fullStackTraceHelper(sw, indent + 1, "Suppressed: ", suppressed);
+        }
+        if (e.getCause() != null) {
+            fullStackTraceHelper(sw, indent, "Caused by: ", e.getCause());
+        }
+    }
+
+    private static String repeatedString(int length, char c) {
+        StringBuffer buf = new StringBuffer(length);
+        for (int i = 0; i < length; i++) {
+            buf.append(c);
+        }
+        return buf.toString();
     }
 
     /**
@@ -892,5 +938,4 @@ public final class Utils {
             res.add(iterator.next());
         return res;
     }
-
 }
