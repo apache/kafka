@@ -313,7 +313,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 if (!shouldRetry) {
                     HashMap<String, List<PartitionInfo>> topicsPartitionInfos = new HashMap<>();
                     for (String topic : cluster.topics())
-                        topicsPartitionInfos.put(topic, cluster.availablePartitionsForTopic(topic));
+                        topicsPartitionInfos.put(topic, cluster.partitionsForTopic(topic));
                     return topicsPartitionInfos;
                 }
             }
