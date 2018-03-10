@@ -376,8 +376,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     debug(s"Register BrokerModifications handler for $brokerIds")
     brokerIds.foreach { brokerId =>
       val brokerModificationsHandler = new BrokerModificationsHandler(this, eventManager, brokerId)
-      zkClient.registerZNodeChangeHandler(brokerModificationsHandler)
-      zkClient.pathExists(brokerModificationsHandler.path) // Ensure watch is set for the path
+      zkClient.registerZNodeChangeHandlerAndCheckExistence(brokerModificationsHandler)
       brokerModificationsHandlers.put(brokerId, brokerModificationsHandler)
     }
   }
@@ -1253,7 +1252,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       val newMetadata = zkClient.getBroker(brokerId)
       val oldMetadata = controllerContext.liveBrokers.find(_.id == brokerId)
       if (newMetadata.nonEmpty && oldMetadata.nonEmpty && newMetadata.map(_.endPoints) != oldMetadata.map(_.endPoints)) {
-        info(s"Updated broker: $newMetadata")
+        info(s"Updated broker: ${newMetadata.get}")
 
         val curBrokers = controllerContext.liveBrokers -- oldMetadata ++ newMetadata
         controllerContext.liveBrokers = curBrokers // Update broker metadata
