@@ -124,7 +124,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       val securityProtocol = endpoint.securityProtocol
       val listenerProcessors = new ArrayBuffer[Processor]()
 
-      for (i <- 0 until newProcessorsPerListener) {
+      for (_ <- 0 until newProcessorsPerListener) {
         val processor = newProcessor(nextProcessorId, connectionQuotas, listenerName, securityProtocol, memoryPool)
         listenerProcessors += processor
         requestChannel.addProcessor(processor)

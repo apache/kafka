@@ -48,6 +48,4 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
         // hash the keyBytes to choose a partition
         return toPositive(Utils.murmur2(keyBytes)) % numPartitions;
     }
-
-
 }

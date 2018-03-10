@@ -130,6 +130,7 @@ private[kafka] object LogValidator extends Logging {
                                                    toMagicValue: Byte,
                                                    partitionLeaderEpoch: Int,
                                                    isFromClient: Boolean): ValidationAndOffsetAssignResult = {
+    val startNanos = time.nanoseconds
     val sizeInBytesAfterConversion = AbstractRecords.estimateSizeInBytes(toMagicValue, offsetCounter.value,
       CompressionType.NONE, records.records)
 
@@ -155,7 +156,7 @@ private[kafka] object LogValidator extends Logging {
 
     val info = builder.info
     val recordsProcessingStats = new RecordsProcessingStats(builder.uncompressedBytesWritten,
-      builder.numRecords, time.nanoseconds - now)
+      builder.numRecords, time.nanoseconds - startNanos)
     ValidationAndOffsetAssignResult(
       validatedRecords = convertedRecords,
       maxTimestamp = info.maxTimestamp,
