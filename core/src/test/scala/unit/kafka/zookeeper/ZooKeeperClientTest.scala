@@ -16,6 +16,7 @@
  */
 package kafka.zookeeper
 
+import java.net.UnknownHostException
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -57,7 +58,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test(expected = classOf[UnknownHostException])
   def testUnresolvableConnectString(): Unit = {
     new ZooKeeperClient("some.invalid.hostname.foo.bar.local", -1, -1, Int.MaxValue, time, "testMetricGroup",
       "testMetricType").close()
