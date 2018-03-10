@@ -190,7 +190,7 @@ public class StreamsPartitionAssignorTest {
         Set<TaskId> standbyTasks = new HashSet<>(cachedTasks);
         standbyTasks.removeAll(prevTasks);
 
-        SubscriptionInfo info = new SubscriptionInfo(processId, prevTasks, standbyTasks, null);
+        SubscriptionInfo info = SubscriptionInfo.createSubsriptionInfo(processId, prevTasks, standbyTasks, null);
         assertEquals(info.encode(), subscription.userData());
     }
 
@@ -219,11 +219,11 @@ public class StreamsPartitionAssignorTest {
 
         Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
         subscriptions.put("consumer10",
-                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, prevTasks10, standbyTasks10, userEndPoint).encode()));
+                new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid1, prevTasks10, standbyTasks10, userEndPoint).encode()));
         subscriptions.put("consumer11",
-                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, prevTasks11, standbyTasks11, userEndPoint).encode()));
+                new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid1, prevTasks11, standbyTasks11, userEndPoint).encode()));
         subscriptions.put("consumer20",
-                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid2, prevTasks20, standbyTasks20, userEndPoint).encode()));
+                new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid2, prevTasks20, standbyTasks20, userEndPoint).encode()));
 
 
         Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(metadata, subscriptions);
@@ -303,9 +303,9 @@ public class StreamsPartitionAssignorTest {
 
         final Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
         subscriptions.put("consumer10",
-                          new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, new HashSet<TaskId>(), new HashSet<TaskId>(), userEndPoint).encode()));
+                          new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid1, new HashSet<TaskId>(), new HashSet<TaskId>(), userEndPoint).encode()));
         subscriptions.put("consumer11",
-                          new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, new HashSet<TaskId>(), new HashSet<TaskId>(), userEndPoint).encode()));
+                          new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid1, new HashSet<TaskId>(), new HashSet<TaskId>(), userEndPoint).encode()));
 
         final Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(localMetadata, subscriptions);
 
@@ -345,7 +345,7 @@ public class StreamsPartitionAssignorTest {
         partitionAssignor.setInternalTopicManager(new MockInternalTopicManager(streamsConfig, mockClientSupplier.restoreConsumer));
         Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
         subscriptions.put("consumer10",
-            new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, Collections.<TaskId>emptySet(), Collections.<TaskId>emptySet(), userEndPoint).encode()));
+            new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid1, Collections.<TaskId>emptySet(), Collections.<TaskId>emptySet(), userEndPoint).encode()));
 
 
         // will throw exception if it fails
@@ -382,7 +382,7 @@ public class StreamsPartitionAssignorTest {
 
         Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
         subscriptions.put("consumer10",
-            new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, prevTasks10, standbyTasks10, userEndPoint).encode()));
+            new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid1, prevTasks10, standbyTasks10, userEndPoint).encode()));
 
         // initially metadata is empty
         Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(emptyMetadata, subscriptions);
@@ -439,11 +439,11 @@ public class StreamsPartitionAssignorTest {
 
         Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
         subscriptions.put("consumer10",
-                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, prevTasks10, Collections.<TaskId>emptySet(), userEndPoint).encode()));
+                new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid1, prevTasks10, Collections.<TaskId>emptySet(), userEndPoint).encode()));
         subscriptions.put("consumer11",
-                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, prevTasks11, Collections.<TaskId>emptySet(), userEndPoint).encode()));
+                new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid1, prevTasks11, Collections.<TaskId>emptySet(), userEndPoint).encode()));
         subscriptions.put("consumer20",
-                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid2, prevTasks20, Collections.<TaskId>emptySet(), userEndPoint).encode()));
+                new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid2, prevTasks20, Collections.<TaskId>emptySet(), userEndPoint).encode()));
 
         Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(metadata, subscriptions);
 
@@ -507,11 +507,11 @@ public class StreamsPartitionAssignorTest {
 
         Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
         subscriptions.put("consumer10",
-                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, Collections.<TaskId>emptySet(), Collections.<TaskId>emptySet(), userEndPoint).encode()));
+                new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid1, Collections.<TaskId>emptySet(), Collections.<TaskId>emptySet(), userEndPoint).encode()));
         subscriptions.put("consumer11",
-                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, Collections.<TaskId>emptySet(), Collections.<TaskId>emptySet(), userEndPoint).encode()));
+                new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid1, Collections.<TaskId>emptySet(), Collections.<TaskId>emptySet(), userEndPoint).encode()));
         subscriptions.put("consumer20",
-                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid2, Collections.<TaskId>emptySet(), Collections.<TaskId>emptySet(), userEndPoint).encode()));
+                new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid2, Collections.<TaskId>emptySet(), Collections.<TaskId>emptySet(), userEndPoint).encode()));
 
         Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(metadata, subscriptions);
 
@@ -590,11 +590,11 @@ public class StreamsPartitionAssignorTest {
 
         Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
         subscriptions.put("consumer10",
-                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, prevTasks00, standbyTasks01, userEndPoint).encode()));
+                new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid1, prevTasks00, standbyTasks01, userEndPoint).encode()));
         subscriptions.put("consumer11",
-                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, prevTasks01, standbyTasks02, userEndPoint).encode()));
+                new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid1, prevTasks01, standbyTasks02, userEndPoint).encode()));
         subscriptions.put("consumer20",
-                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid2, prevTasks02, standbyTasks00, "any:9097").encode()));
+                new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid2, prevTasks02, standbyTasks00, "any:9097").encode()));
 
         Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(metadata, subscriptions);
 
@@ -687,7 +687,7 @@ public class StreamsPartitionAssignorTest {
         Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
         Set<TaskId> emptyTasks = Collections.emptySet();
         subscriptions.put("consumer10",
-                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, emptyTasks, emptyTasks, userEndPoint).encode()));
+                new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid1, emptyTasks, emptyTasks, userEndPoint).encode()));
 
         partitionAssignor.assign(metadata, subscriptions);
 
@@ -722,7 +722,7 @@ public class StreamsPartitionAssignorTest {
         Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
         Set<TaskId> emptyTasks = Collections.emptySet();
         subscriptions.put("consumer10",
-                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, emptyTasks, emptyTasks, userEndPoint).encode()));
+                new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid1, emptyTasks, emptyTasks, userEndPoint).encode()));
 
         partitionAssignor.assign(metadata, subscriptions);
 
@@ -794,7 +794,7 @@ public class StreamsPartitionAssignorTest {
             client,
             new PartitionAssignor.Subscription(
                 Utils.mkList("topic1", "topic3"),
-                new SubscriptionInfo(uuid, emptyTasks, emptyTasks, userEndPoint).encode()
+                SubscriptionInfo.createSubsriptionInfo(uuid, emptyTasks, emptyTasks, userEndPoint).encode()
             )
         );
 
@@ -869,7 +869,7 @@ public class StreamsPartitionAssignorTest {
         final Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
         final Set<TaskId> emptyTasks = Collections.emptySet();
         subscriptions.put("consumer1",
-                new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, emptyTasks, emptyTasks, userEndPoint).encode()));
+                new PartitionAssignor.Subscription(topics, SubscriptionInfo.createSubsriptionInfo(uuid1, emptyTasks, emptyTasks, userEndPoint).encode()));
 
         final Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(metadata, subscriptions);
         final PartitionAssignor.Assignment consumerAssignment = assignments.get("consumer1");
@@ -987,7 +987,7 @@ public class StreamsPartitionAssignorTest {
             client,
             new PartitionAssignor.Subscription(
                 Collections.singletonList("unknownTopic"),
-                new SubscriptionInfo(uuid, emptyTasks, emptyTasks, userEndPoint).encode()
+                SubscriptionInfo.createSubsriptionInfo(uuid, emptyTasks, emptyTasks, userEndPoint).encode()
             )
         );
 
@@ -1057,7 +1057,7 @@ public class StreamsPartitionAssignorTest {
                 "consumer1",
                 new PartitionAssignor.Subscription(
                         Collections.singletonList("topic1"),
-                        new SubscriptionInfo(uuid, emptyTasks, emptyTasks, userEndPoint).encode()
+                        SubscriptionInfo.createSubsriptionInfo(uuid, emptyTasks, emptyTasks, userEndPoint).encode()
                 )
         );
 
@@ -1065,7 +1065,7 @@ public class StreamsPartitionAssignorTest {
                 "consumer2",
                 new PartitionAssignor.Subscription(
                         Collections.singletonList("topic1"),
-                        new SubscriptionInfo(UUID.randomUUID(), emptyTasks, emptyTasks, "other:9090").encode()
+                        SubscriptionInfo.createSubsriptionInfo(UUID.randomUUID(), emptyTasks, emptyTasks, "other:9090").encode()
                 )
         );
         final Set<TopicPartition> allPartitions = Utils.mkSet(t1p0, t1p1, t1p2);
@@ -1103,14 +1103,14 @@ public class StreamsPartitionAssignorTest {
             "consumer1",
             new PartitionAssignor.Subscription(
                 Collections.singletonList("topic1"),
-                new SubscriptionInfo(1, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
+                SubscriptionInfo.createSubsriptionInfo(1, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
             )
         );
         subscriptions.put(
             "consumer2",
             new PartitionAssignor.Subscription(
                 Collections.singletonList("topic1"),
-                new SubscriptionInfo(2, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
+                SubscriptionInfo.createSubsriptionInfo(2, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
             )
         );
 

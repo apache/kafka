@@ -254,7 +254,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Set<TaskId> previousActiveTasks = taskManager.prevActiveTaskIds();
         final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
         standbyTasks.removeAll(previousActiveTasks);
-        final SubscriptionInfo data = new SubscriptionInfo(
+        final SubscriptionInfo data = SubscriptionInfo.createSubsriptionInfo(
             taskManager.processId(),
             previousActiveTasks,
             standbyTasks,
