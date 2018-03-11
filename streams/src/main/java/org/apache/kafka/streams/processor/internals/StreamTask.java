@@ -149,14 +149,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         partitionGroup = new PartitionGroup(partitionQueues);
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
+
+        // initialize transactions if eos is turned on, which will block if the previous transaction has not
+        // completed yet; do not start the first transaction until the topology has been initialized later
         if (eosEnabled) {
-            try {
-                this.producer.initTransactions();
-                this.producer.beginTransaction();
-            } catch (final ProducerFencedException fatal) {
-                throw new TaskMigratedException(this, fatal);
-            }
-            transactionInFlight = true;
+            this.producer.initTransactions();
         }
     }
 
@@ -170,6 +167,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     @Override
     public void initializeTopology() {
         initTopology();
+
+        // if (eos) begin new transaction
+        if (eosEnabled) {
+            try {
+                this.producer.beginTransaction();
+            } catch (final ProducerFencedException fatal) {
+                throw new TaskMigratedException(this, fatal);
+            }
+            transactionInFlight = true;
+        }
+
         processorContext.initialized();
         taskInitialized = true;
     }
@@ -177,21 +185,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     /**
      * <pre>
      * - re-initialize the task
-     * - if (eos) begin new transaction
      * </pre>
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     @Override
     public void resume() {
+        // nothing to do; new transaction will be started only after topology is initialized
         log.debug("Resuming");
-        if (eosEnabled) {
-            try {
-                producer.beginTransaction();
-            } catch (final ProducerFencedException fatal) {
-                throw new TaskMigratedException(this, fatal);
-            }
-            transactionInFlight = true;
-        }
     }
 
     /**
