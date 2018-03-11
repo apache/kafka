@@ -22,6 +22,7 @@ import java.util.LinkedHashSet;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.FLATMAP;
+import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.GLOBAL_KTABLE;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.GROUP_BY;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.MAP;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.SOURCE;
@@ -37,17 +38,31 @@ import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.Topolo
 public class StreamsGraphNode {
 
     public enum TopologyNodeType {
-        MAP, GROUP_BY, SOURCE, TABLE, SINK, JOIN, FLATMAP, PROCESSING, FILTER, TRANSFORM, KTABLE, TOPOLOGY_PARENT, TO_STREAM, AGGREGATE_TYPE
+        MAP,
+        GROUP_BY,
+        SOURCE,
+        TABLE,
+        SINK,
+        JOIN,
+        FLATMAP,
+        PROCESSING,
+        FILTER,
+        TRANSFORM,
+        KTABLE,
+        TOPOLOGY_PARENT,
+        TO_STREAM,
+        AGGREGATE_TYPE,
+        GLOBAL_KTABLE
     }
 
 
-    private final TopologyNodeType topologyNodeType;
-    private StreamsGraphNode predecessor;
-    private final Collection<StreamsGraphNode> descendants = new LinkedHashSet<>();
-    private boolean repartitionRequired;
-    private ProcessDetails processDetails;
-    private String name;
-    private String predecessorName;
+    protected final TopologyNodeType topologyNodeType;
+    protected StreamsGraphNode predecessor;
+    protected final Collection<StreamsGraphNode> descendants = new LinkedHashSet<>();
+    protected boolean repartitionRequired;
+    protected ProcessDetails processDetails;
+    protected String name;
+    protected String predecessorName;
 
     public StreamsGraphNode(final String name, final TopologyNodeType topologyNodeType) {
         this(name, topologyNodeType, false, null, null);
@@ -90,7 +105,7 @@ public class StreamsGraphNode {
     }
 
     public boolean isSourceNode() {
-        return topologyNodeType == SOURCE || topologyNodeType == TABLE;
+        return topologyNodeType == SOURCE || topologyNodeType == TABLE || topologyNodeType == GLOBAL_KTABLE;
     }
 
 

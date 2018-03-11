@@ -26,8 +26,11 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -39,6 +42,7 @@ import java.util.regex.Pattern;
  * Class used to hold the implementation details when making calls to inheritors of
  * {@link AbstractStream} when building a topology
  */
+@SuppressWarnings("deprecation")
 public class ProcessDetails<K, V, S extends StateStore> {
 
     private final Collection<String> sourceTopics;
@@ -51,6 +55,8 @@ public class ProcessDetails<K, V, S extends StateStore> {
     private MaterializedInternal<K, V, S> materializedInternal;
     private ProducedInternal<K, V> producedInternal;
     private ConsumedInternal<K, V> consumedInternal;
+    private final StateStoreSupplier<KeyValueStore<K, V>> storeSupplier;
+    private final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
 
 
     private ProcessDetails(final Collection<String> sourceTopics,
@@ -59,7 +65,9 @@ public class ProcessDetails<K, V, S extends StateStore> {
                            final Produced<K, V> produced,
                            final Consumed<K, V> consumed,
                            final Materialized<K, V, S> materialized,
-                           final ProcessorSupplier<K, V> processorSupplier) {
+                           final ProcessorSupplier<K, V> processorSupplier,
+                           final StateStoreSupplier<KeyValueStore<K, V>> storeSupplier,
+                           final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
         this.sourceTopics = sourceTopics;
         this.sinkTopic = sinkTopic;
         this.sourcePattern = sourcePattern;
@@ -67,6 +75,8 @@ public class ProcessDetails<K, V, S extends StateStore> {
         this.consumed = consumed;
         this.materialized = materialized;
         this.processorSupplier = processorSupplier;
+        this.storeSupplier = storeSupplier;
+        this.storeBuilder = storeBuilder;
         if (this.materialized != null) {
             this.materializedInternal = new MaterializedInternal(materialized);
         }
@@ -155,6 +165,13 @@ public class ProcessDetails<K, V, S extends StateStore> {
         return processorSupplier;
     }
 
+    public StateStoreSupplier<KeyValueStore<K, V>> getStoreSupplier() {
+        return storeSupplier;
+    }
+
+    public StoreBuilder<KeyValueStore<K, V>> getStoreBuilder() {
+        return storeBuilder;
+    }
 
     public static Builder builder() {
         return new Builder<>();
@@ -169,6 +186,8 @@ public class ProcessDetails<K, V, S extends StateStore> {
         private Consumed<K, V> consumed;
         private Materialized<K, V, S> materialized;
         private ProcessorSupplier<K, V> processorSupplier;
+        private StateStoreSupplier<KeyValueStore<K, V>> storeSupplier;
+        private StoreBuilder<KeyValueStore<K, V>> storeBuilder;
 
         private Builder() {
         }
@@ -208,8 +227,26 @@ public class ProcessDetails<K, V, S extends StateStore> {
             return this;
         }
 
-        public ProcessDetails build() {
-            return new ProcessDetails(sourceTopics, sinkTopic, sourcePattern, produced, consumed, materialized, processorSupplier);
+        public Builder withStoreSupplier(StateStoreSupplier<KeyValueStore<K, V>> storeSupplier) {
+            this.storeSupplier = storeSupplier;
+            return this;
+        }
+
+        public Builder withStoreBuilder(StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
+            this.storeBuilder = storeBuilder;
+            return this;
+        }
+
+        public ProcessDetails<K, V, S> build() {
+            return new ProcessDetails<>(sourceTopics,
+                                      sinkTopic,
+                                      sourcePattern,
+                                      produced,
+                                      consumed,
+                                      materialized,
+                                      processorSupplier,
+                                      storeSupplier,
+                                      storeBuilder);
         }
     }
 }

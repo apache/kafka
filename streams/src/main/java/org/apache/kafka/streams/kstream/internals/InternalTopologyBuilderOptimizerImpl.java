@@ -65,6 +65,7 @@ public class InternalTopologyBuilderOptimizerImpl implements TopologyOptimizer {
 
         final StreamsGraphNode.TopologyNodeType nodeType = descendant.getType();
         final ProcessDetails processDetails = descendant.getProcessed();
+        String topic;
 
         switch (nodeType) {
 
@@ -95,7 +96,7 @@ public class InternalTopologyBuilderOptimizerImpl implements TopologyOptimizer {
                 final Serializer keySerializer = processDetails.producedKeySerde() == null ? null : processDetails.producedKeySerde().serializer();
                 final Serializer valSerializer = processDetails.producedValueSerde() == null ? null : processDetails.producedValueSerde().serializer();
                 final StreamPartitioner partitioner = processDetails.streamPartitioner();
-                String topic = processDetails.getSinkTopic();
+                topic = processDetails.getSinkTopic();
 
                 internalTopologyBuilder.addSink(descendant.name(),
                                                 topic,
@@ -103,6 +104,31 @@ public class InternalTopologyBuilderOptimizerImpl implements TopologyOptimizer {
                                                 valSerializer,
                                                 partitioner,
                                                 descendant.getPredecessorName());
+                break;
+
+            case KTABLE:
+                topic = processDetails.getSourceTopicArray()[0];
+
+                internalTopologyBuilder.addSource(processDetails.getConsumedResetPolicy(),
+                                                  descendant.name,
+                                                  processDetails.getConsumedTimestampExtractor(),
+                                                  processDetails.consumedKeySerde().deserializer(),
+                                                  processDetails.consumedValueSerde().deserializer(),
+                                                  topic);
+
+                internalTopologyBuilder.addProcessor(descendant.name(),
+                                                     processDetails.getProcessorSupplier(),
+                                                     descendant.getPredecessorName());
+
+                if (processDetails.getStoreBuilder() != null) {
+                    internalTopologyBuilder.addStateStore(processDetails.getStoreBuilder(), descendant.name());
+                    internalTopologyBuilder.connectSourceStoreAndTopic(processDetails.getStoreBuilder().name(), topic);
+
+                } else if (processDetails.getStoreSupplier() != null) {
+                    internalTopologyBuilder.addStateStore(processDetails.getStoreSupplier(), descendant.name());
+                    internalTopologyBuilder.connectSourceStoreAndTopic(processDetails.getStoreSupplier().name(), topic);
+                }
+
                 break;
 
             case GROUP_BY:
