@@ -65,13 +65,11 @@ public class SubscriptionInfoTest {
 
         final ByteBuffer v1Encoding = encodePreviousVersion(processId, activeTasks, standbyTasks);
         final SubscriptionInfo decode = SubscriptionInfo.decode(v1Encoding);
-        assertEquals(activeTasks, decode.prevTasks);
-        assertEquals(standbyTasks, decode.standbyTasks);
-        assertEquals(processId, decode.processId);
-        assertNull(decode.userEndPoint);
-
+        assertEquals(activeTasks, decode.prevTasks());
+        assertEquals(standbyTasks, decode.standbyTasks());
+        assertEquals(processId, decode.processId());
+        assertNull(decode.userEndPoint());
     }
-
 
     /**
      * This is a clone of what the V1 encoding did. The encode method has changed for V2

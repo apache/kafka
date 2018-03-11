@@ -22,7 +22,6 @@ import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
 import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
-import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.security.scram.ScramMechanism;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
@@ -119,7 +118,6 @@ public class DefaultKafkaPrincipalBuilderTest extends EasyMockSupport {
 
         EasyMock.expect(server.getMechanismName()).andReturn(ScramMechanism.SCRAM_SHA_256.mechanismName());
         EasyMock.expect(server.getAuthorizationID()).andReturn("foo");
-        EasyMock.expect(server.getNegotiatedProperty(ScramLoginModule.TOKEN_AUTH_CONFIG)).andReturn(false);
 
         replayAll();
 

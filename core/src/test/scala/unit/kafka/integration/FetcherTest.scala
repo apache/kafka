@@ -19,15 +19,16 @@ package kafka.integration
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-import org.junit.{Test, After, Before}
+
+import org.junit.{After, Before, Test}
 
 import scala.collection._
 import org.junit.Assert._
-
 import kafka.cluster._
 import kafka.server._
 import kafka.consumer._
-import kafka.utils.TestUtils
+import kafka.utils.{CoreUtils, TestUtils, ZkUtils}
+import org.apache.kafka.common.security.JaasUtils
 
 @deprecated("This test has been deprecated and will be removed in a future release.", "0.11.0.0")
 class FetcherTest extends KafkaServerTestHarness {
@@ -39,10 +40,13 @@ class FetcherTest extends KafkaServerTestHarness {
   val queue = new LinkedBlockingQueue[FetchedDataChunk]
 
   var fetcher: ConsumerFetcherManager = null
+  var zkUtils: ZkUtils = null
 
   @Before
   override def setUp() {
     super.setUp
+    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
+
     createTopic(topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)))
 
     val cluster = new Cluster(servers.map { s =>
@@ -65,6 +69,8 @@ class FetcherTest extends KafkaServerTestHarness {
   @After
   override def tearDown() {
     fetcher.stopConnections()
+    if (zkUtils != null)
+     CoreUtils.swallow(zkUtils.close(), this)
     super.tearDown
   }
 

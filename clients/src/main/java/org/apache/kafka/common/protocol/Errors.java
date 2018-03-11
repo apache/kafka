@@ -378,14 +378,14 @@ public enum Errors {
                 return new TopicExistsException(message);
             }
         }),
-    INVALID_PARTITIONS(37, "Number of partitions is invalid.",
+    INVALID_PARTITIONS(37, "Number of partitions is below 1.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
                 return new InvalidPartitionsException(message);
             }
         }),
-    INVALID_REPLICATION_FACTOR(38, "Replication-factor is invalid.",
+    INVALID_REPLICATION_FACTOR(38, "Replication factor is below 1 or larger than the number of available brokers.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
@@ -474,7 +474,7 @@ public enum Errors {
             }
         }),
     INVALID_TRANSACTION_TIMEOUT(50, "The transaction timeout is larger than the maximum value allowed by " +
-                "the broker (as configured by max.transaction.timeout.ms).",
+                "the broker (as configured by transaction.max.timeout.ms).",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {

@@ -255,6 +255,15 @@ public class StoreChangelogReader implements ChangelogReader {
                 throw new TaskMigratedException(task, topicPartition, endOffset, pos);
             }
 
+            // need to check for changelog topic
+            if (restorer.offsetLimit() == Long.MAX_VALUE) {
+                final Long updatedEndOffset = restoreConsumer.endOffsets(Collections.singletonList(topicPartition)).get(topicPartition);
+                if (!restorer.hasCompleted(pos, updatedEndOffset)) {
+                    throw new TaskMigratedException(task, topicPartition, updatedEndOffset, pos);
+                }
+            }
+
+
             log.debug("Completed restoring state from changelog {} with {} records ranging from offset {} to {}",
                       topicPartition,
                       restorer.restoredNumRecords(),
@@ -273,12 +282,14 @@ public class StoreChangelogReader implements ChangelogReader {
         long nextPosition = -1;
         int numberRecords = records.size();
         int numberRestored = 0;
+        long lastRestoredOffset = -1;
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             final long offset = record.offset();
             if (restorer.hasCompleted(offset, endOffset)) {
                 nextPosition = record.offset();
                 break;
             }
+            lastRestoredOffset = offset;
             numberRestored++;
             if (record.key() != null) {
                 restoreRecords.add(KeyValue.pair(record.key(), record.value()));
@@ -295,8 +306,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
         if (!restoreRecords.isEmpty()) {
             restorer.restore(restoreRecords);
-            restorer.restoreBatchCompleted(nextPosition, records.size());
-
+            restorer.restoreBatchCompleted(lastRestoredOffset, records.size());
         }
 
         return nextPosition;

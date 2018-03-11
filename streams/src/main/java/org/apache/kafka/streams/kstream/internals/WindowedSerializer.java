@@ -16,73 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.Windowed;
 
-import java.nio.ByteBuffer;
-import java.util.Map;
+public interface WindowedSerializer<T> extends Serializer<Windowed<T>> {
 
-/**
- *  The inner serializer class can be specified by setting the property key.serializer.inner.class,
- *  value.serializer.inner.class or serializer.inner.class,
- *  if the no-arg constructor is called and hence it is not passed during initialization.
- *  Note that the first two take precedence over the last.
- */
-public class WindowedSerializer<T> implements Serializer<Windowed<T>> {
-
-    private static final int TIMESTAMP_SIZE = 8;
-
-    private Serializer<T> inner;
-
-    public WindowedSerializer(Serializer<T> inner) {
-        this.inner = inner;
-    }
-
-    // Default constructor needed by Kafka
-    public WindowedSerializer() {}
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public void configure(Map<String, ?> configs, boolean isKey) {
-        if (inner == null) {
-            String propertyName = isKey ? "key.serializer.inner.class" : "value.serializer.inner.class";
-            Object innerSerializerClass = configs.get(propertyName);
-            propertyName = (innerSerializerClass == null) ? "serializer.inner.class" : propertyName;
-            String value = null;
-            try {
-                value = (String) configs.get(propertyName);
-                inner = Serializer.class.cast(Utils.newInstance(value, Serializer.class));
-                inner.configure(configs, isKey);
-            } catch (ClassNotFoundException e) {
-                throw new ConfigException(propertyName, value, "Class " + value + " could not be found.");
-            }
-        }
-    }
-
-    @Override
-    public byte[] serialize(String topic, Windowed<T> data) {
-        byte[] serializedKey = inner.serialize(topic, data.key());
-
-        ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + TIMESTAMP_SIZE);
-        buf.put(serializedKey);
-        buf.putLong(data.window().start());
-
-        return buf.array();
-    }
-
-    @Override
-    public void close() {
-        inner.close();
-    }
-
-    byte[] serializeBaseKey(String topic, Windowed<T> data) {
-        return inner.serialize(topic, data.key());
-    }
-
-    // Only for testing
-    Serializer<T> innerSerializer() {
-        return inner;
-    }
+    byte[] serializeBaseKey(String topic, Windowed<T> data);
 }

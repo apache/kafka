@@ -15,18 +15,25 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.scram;
+package org.apache.kafka.trogdor.workload;
 
-import javax.security.auth.callback.Callback;
+/**
+ * Describes a key in producer payload
+ */
+public enum PayloadKeyType {
+    // null key
+    KEY_NULL(0),
+    // fixed size key containing a long integer representing a message index (i.e., position of
+    // the payload generator)
+    KEY_MESSAGE_INDEX(8);
 
-public class DelegationTokenAuthenticationCallback implements Callback {
-    private boolean tokenauth;
+    private final int maxSizeInBytes;
 
-    public String extension() {
-        return ScramLoginModule.TOKEN_AUTH_CONFIG + "=" +  Boolean.toString(tokenauth);
+    PayloadKeyType(int maxSizeInBytes) {
+        this.maxSizeInBytes = maxSizeInBytes;
     }
 
-    public void tokenauth(Boolean tokenauth) {
-        this.tokenauth = tokenauth;
+    public int maxSizeInBytes() {
+        return maxSizeInBytes;
     }
 }

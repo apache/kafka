@@ -28,8 +28,9 @@ import kafka.serializer._
 import kafka.server._
 import kafka.utils.TestUtils._
 import kafka.utils._
+import org.apache.kafka.common.security.JaasUtils
 import org.apache.log4j.{Level, Logger}
-import org.junit.{Test, After, Before}
+import org.junit.{After, Before, Test}
 
 import scala.collection._
 
@@ -43,6 +44,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
   val topic = "topic1"
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
+  var zkUtils: ZkUtils = null
 
   override def generateConfigs =
     TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps(_, overridingProps))
@@ -57,11 +59,14 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
   @Before
   override def setUp() {
     super.setUp()
+    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
     dirs = new ZKGroupTopicDirs(group, topic)
   }
 
   @After
   override def tearDown() {
+    if (zkUtils != null)
+     CoreUtils.swallow(zkUtils.close(), this)
     super.tearDown()
   }
 

@@ -110,7 +110,7 @@ public class SaslServerAuthenticatorTest {
         TestJaasConfig jaasConfig = new TestJaasConfig();
         jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<String, Object>());
         Map<String, JaasContext> jaasContexts = Collections.singletonMap(mechanism,
-                new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig));
+                new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig, null));
         Map<String, Subject> subjects = Collections.singletonMap(mechanism, new Subject());
         return new SaslServerAuthenticator(configs, "node", jaasContexts, subjects, null, new CredentialCache(),
                 new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer, new DelegationTokenCache(ScramMechanism.mechanismNames()));

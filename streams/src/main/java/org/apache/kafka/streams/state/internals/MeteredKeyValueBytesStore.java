@@ -62,9 +62,7 @@ public class MeteredKeyValueBytesStore<K, V> extends WrappedStateStore.AbstractS
 
             @Override
             public byte[] innerValue(final V value) {
-                if (value == null) {
-                    return null;
-                }
+                // do not check on null, but rely on user serde to handle it
                 return serdes.rawValue(value);
             }
 
@@ -80,12 +78,12 @@ public class MeteredKeyValueBytesStore<K, V> extends WrappedStateStore.AbstractS
 
             @Override
             public V outerValue(final byte[] value) {
-                return serdes.valueFrom(value);
+                return value == null ? null : serdes.valueFrom(value);
             }
 
             @Override
-            public KeyValue<K, V> outerKeyValue(final KeyValue<Bytes, byte[]> from) {
-                return KeyValue.pair(serdes.keyFrom(from.key.get()), serdes.valueFrom(from.value));
+            public KeyValue<K, V> outerKeyValue(final KeyValue<Bytes, byte[]> keyValue) {
+                return KeyValue.pair(serdes.keyFrom(keyValue.key.get()), keyValue.value == null ? null : serdes.valueFrom(keyValue.value));
             }
 
             @Override

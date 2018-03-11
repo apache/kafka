@@ -20,7 +20,17 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Meter;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.junit.Test;
 
 public class SensorTest {
@@ -58,5 +68,30 @@ public class SensorTest {
         debugSensor = new Sensor(null, "debugSensor", null, infoConfig, new SystemTime(),
             0, Sensor.RecordingLevel.DEBUG);
         assertFalse(debugSensor.shouldRecord());
+    }
+
+    @Test
+    public void testExpiredSensor() {
+        MetricConfig config = new MetricConfig();
+        Time mockTime = new MockTime();
+        Metrics metrics =  new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), mockTime, true);
+
+        long inactiveSensorExpirationTimeSeconds = 60L;
+        Sensor sensor = new Sensor(metrics, "sensor", null, config, mockTime,
+            inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel.INFO);
+
+        assertTrue(sensor.add(metrics.metricName("test1", "grp1"), new Avg()));
+
+        Map<String, String> emptyTags = Collections.emptyMap();
+        MetricName rateMetricName = new MetricName("rate", "test", "", emptyTags);
+        MetricName totalMetricName = new MetricName("total", "test", "", emptyTags);
+        Meter meter = new Meter(rateMetricName, totalMetricName);
+        assertTrue(sensor.add(meter));
+
+        mockTime.sleep(TimeUnit.SECONDS.toMillis(inactiveSensorExpirationTimeSeconds + 1));
+        assertFalse(sensor.add(metrics.metricName("test3", "grp1"), new Avg()));
+        assertFalse(sensor.add(meter));
+
+        metrics.close();
     }
 }

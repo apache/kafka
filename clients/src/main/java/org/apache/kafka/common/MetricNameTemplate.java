@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common;
 
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -65,9 +66,8 @@ public class MetricNameTemplate {
 
     private static LinkedHashSet<String> getTags(String... keys) {
         LinkedHashSet<String> tags = new LinkedHashSet<>();
-        
-        for (int i = 0; i < keys.length; i++)
-            tags.add(keys[i]);
+
+        Collections.addAll(tags, keys);
 
         return tags;
     }

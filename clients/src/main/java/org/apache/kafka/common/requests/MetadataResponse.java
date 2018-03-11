@@ -431,6 +431,14 @@ public class MetadataResponse extends AbstractResponse {
             return partitionMetadata;
         }
 
+        @Override
+        public String toString() {
+            return "(type=TopicMetadata" +
+                    ", error=" + error +
+                    ", topic=" + topic +
+                    ", isInternal=" + isInternal +
+                    ", partitionMetadata=" + partitionMetadata + ')';
+        }
     }
 
     // This is used to describe per-partition state in the MetadataResponse
