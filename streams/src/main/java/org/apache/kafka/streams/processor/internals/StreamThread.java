@@ -222,7 +222,7 @@ public class StreamThread extends Thread {
 
     public boolean isRunning() {
         synchronized (stateLock) {
-            return state == State.RUNNING || state == State.PARTITIONS_REVOKED || state == State.PARTITIONS_ASSIGNED;
+            return state.isRunning();
         }
     }
 
@@ -394,7 +394,7 @@ public class StreamThread extends Thread {
                   taskCreatedSensor,
                   storeChangelogReader,
                   time,
-                    log);
+                  log);
             this.cache = cache;
             this.clientSupplier = clientSupplier;
             this.threadProducer = threadProducer;
@@ -463,7 +463,7 @@ public class StreamThread extends Thread {
                   taskCreatedSensor,
                   storeChangelogReader,
                   time,
-                    log);
+                  log);
         }
 
         @Override
