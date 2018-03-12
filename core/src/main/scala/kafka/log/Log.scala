@@ -59,7 +59,7 @@ object LogAppendInfo {
  * Struct to hold various quantities we compute about each message set before appending to the log
  *
  * @param _firstOffset The first offset in the message set unless the message format is less than V2 and we are appending
- *                    to the follower. In that case, this will be the last offset for performance reasons.
+ *                    to the follower.
  * @param lastOffset The last offset in the message set
  * @param maxTimestamp The maximum timestamp of the message set.
  * @param offsetOfMaxTimestamp The offset of the message with the maximum timestamp.
@@ -86,8 +86,30 @@ case class LogAppendInfo(private var _firstOffset: Option[Long],
                          offsetsMonotonic: Boolean) {
   def firstOffset_= (firstOffset: Long) {_firstOffset = Some(firstOffset)}
   def firstOffset: Long = _firstOffset.get
-  def hasAccurateFirstOffset: Boolean = _firstOffset.isDefined
-  def firstOrLastOffset: Long = _firstOffset.getOrElse(lastOffset)
+
+  /**
+    * Check if we know the offset of first message. First offset may not exist when the message format is less than V2
+    * and we are appending to the follower.
+    * @return true if we know the offset of first message; false otherwise
+    */
+  def hasFirstOffset: Boolean = _firstOffset.isDefined
+
+  /**
+    * Get the first offset if it exists, else get the last offset.
+    * @return The offset of first message if it exists; else offset of the last message.
+    */
+  def firstOrLastOffset: Long = {if (hasFirstOffset) firstOffset else lastOffset}
+
+  /**
+    * Get the (maximum) number of messages described by LogAppendInfo
+    * @return Maximum possible number of messages described by LogAppendInfo
+    */
+  def numMessages: Long = {
+    if (hasFirstOffset && (firstOffset >= 0) && (lastOffset >= 0))
+      lastOffset - firstOffset + 1
+    else
+      0
+  }
 }
 
 /**
@@ -736,8 +758,7 @@ class Log(@volatile var dir: File,
           segmentBaseOffset = segment.baseOffset,
           relativePositionInSegment = segment.size)
 
-        segment.append(firstOffset = appendInfo.firstOrLastOffset,
-          largestOffset = appendInfo.lastOffset,
+        segment.append(largestOffset = appendInfo.lastOffset,
           largestTimestamp = appendInfo.maxTimestamp,
           shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
           records = validRecords)
@@ -765,8 +786,9 @@ class Log(@volatile var dir: File,
         // update the first unstable offset (which is used to compute LSO)
         updateFirstUnstableOffset()
 
-        trace("Appended message set to log %s with first offset: %d, next offset: %d, and messages: %s"
-          .format(this.name, appendInfo.firstOrLastOffset, nextOffsetMetadata.messageOffset, validRecords))
+        trace(s"Appended message set to log ${this.name} with last offset: ${appendInfo.lastOffset}, " +
+              s"first offset: ${if (appendInfo.hasFirstOffset) Some(appendInfo.firstOffset) else None}, " +
+              s"next offset: ${nextOffsetMetadata.messageOffset}, and messages: $validRecords")
 
         if (unflushedMessages >= config.flushInterval)
           flush()
@@ -869,7 +891,6 @@ class Log(@volatile var dir: File,
     var monotonic = true
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
-    var hasAccurateFirstOffset = false
 
     for (batch <- records.batches.asScala) {
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
@@ -882,7 +903,7 @@ class Log(@volatile var dir: File,
       // When appending to the leader, we will update LogAppendInfo.baseOffset with the correct value. In the follower
       // case, validation will be more lenient.
       // Also indicate whether we have the accurate first offset or not
-      if (firstOffset == (Some(-1L)))
+      if (firstOffset.contains(-1L))
         firstOffset = if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) Some(batch.baseOffset) else None
 
       // check that offsets are monotonically increasing
@@ -1298,7 +1319,7 @@ class Log(@volatile var dir: File,
           s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
           s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
 
-      if (appendInfo.hasAccurateFirstOffset) {
+      if (appendInfo.hasFirstOffset) {
         // V2 and beyond, we have the true first offset in message set available in the header
         roll(appendInfo.firstOffset)
       } else {

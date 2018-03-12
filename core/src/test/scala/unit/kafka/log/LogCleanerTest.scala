@@ -1082,16 +1082,17 @@ class LogCleanerTest extends JUnitSuite {
     val logConfig = LogConfig(logProps)
     val log = makeLog(config = logConfig)
     val cleaner = makeCleaner(Int.MaxValue)
-    val start = 0
-    val end = 2
-    val offsetSeq = Seq(0L, 7206178L)
-    writeToLog(log, (start until end) zip (start until end), offsetSeq)
-    cleaner.buildOffsetMap(log, start, 7206178L + 1L, map, new CleanerStats())
-    val endOffset = map.latestOffset
-    assertEquals("Last offset should be the end offset.", 7206178L, endOffset)
-    assertEquals("Should have the expected number of messages in the map.", end - start, map.size)
+    val keyStart = 0
+    val keyEnd = 2
+    val offsetStart = 0L
+    val offsetEnd = 7206178L
+    val offsetSeq = Seq(offsetStart, offsetEnd)
+    writeToLog(log, (keyStart until keyEnd) zip (keyStart until keyEnd), offsetSeq)
+    cleaner.buildOffsetMap(log, keyStart, offsetEnd + 1L, map, new CleanerStats())
+    assertEquals("Last offset should be the end offset.", offsetEnd, map.latestOffset)
+    assertEquals("Should have the expected number of messages in the map.", keyEnd - keyStart, map.size)
     assertEquals("Map should contain first value", 0L, map.get(key(0)))
-    assertEquals("Map should contain second value", 7206178L, map.get(key(1)))
+    assertEquals("Map should contain second value", offsetEnd, map.get(key(1)))
   }
 
   /**
