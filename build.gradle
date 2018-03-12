@@ -1328,7 +1328,8 @@ project(':connect:runtime') {
 
   dependencies {
     compile project(':connect:api')
-    compile project(":connect:transforms")
+    compile project(':connect:json')
+    compile project(':connect:transforms')
     compile project(':clients')
     compile project(':tools')
     compile libs.slf4jApi
