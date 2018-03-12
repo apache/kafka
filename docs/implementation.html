@@ -15,7 +15,7 @@
  limitations under the License.
 -->
 
-<p id="implementation-template" type="text/x-handlebars-template">
+<script id="implementation-template" type="text/x-handlebars-template">
     <h3><a id="networklayer" href="#networklayer">5.1 Network Layer</a></h3>
     <p>
     The network layer is a fairly straight-forward NIO server, and will not be described in great detail. The sendfile implementation is done by giving the <code>MessageSet</code> interface a <code>writeTo</code> method. This allows the file-backed message set to use the more efficient <code>transferTo</code> implementation instead of an in-process buffered write. The threading model is a single acceptor thread and <i>N</i> processor threads which handle a fixed number of connections each. This design has been pretty thoroughly tested <a href="http://sna-projects.com/blog/2009/08/introducing-the-nio-socketserver-implementation">elsewhere</a> and found to be simple to implement and fast. The protocol is kept quite simple to allow for future implementation of clients in other languages.
@@ -104,7 +104,7 @@
 
     <h4><a id="messageset" href="#messageset">5.3.3 Old Message Format</a></h4>
     <p>
-        Prior to Kafka 0.11 messages were transferred and stored in a format called MessageSets. In MessageSets each message has its own metadata. Note that although MessageSets are formally arrays,
+        Prior to Kafka 0.11 messages were transferred and stored in a format called MessageSet. In MessageSets each message has its own metadata. Note that although MessageSets are formally arrays,
         they are not preceded by an int32 array size like other array elements in the protocol.
     </p>
 
@@ -117,6 +117,11 @@
             crc => INT32
             magic_byte => INT8
             attributes => INT8
+                bit 0~2:
+                    0: no compression
+                    1: gzip
+                    2: snappy
+                bit 3~7: unused
             key => BYTES
             value => BYTES
     </pre></p>
@@ -128,18 +133,25 @@
             crc => INT32
             magic_byte => INT8
             attributes => INT8
+                bit 0~2:
+                    0: no compression
+                    1: gzip
+                    2: snappy
+                    3: lz4
+                bit 3: timestampType
+                    0: create time
+                    1: log append time
+                bit 4~7: unused
             timestamp =>INT64
             key => BYTES
             value => BYTES
     </pre></p>
     <p>
-        In versions prior to Kafka 0.10 the magic byte value was 0. Message format version 1 was introduced with timestamp support in version 0.10 .
+        In versions prior to Kafka 0.10 the only supported message format version (which is indicated in the magic value) was 0. Message format version 1 was introduced with timestamp support in version 0.10 .
     <ul>
         <li>Similarly to version 2 above, the lowest bits of attributes mean compression type.</li>
-        <li>In version 1 the fourth lowest bit of attributes byte represents the timestamp type.<br>
-            0 stands for CreateTime and 1 stands for LogAppendTime. The producer should always set this bit to 0 and if the topic is configured to contain log append times
+        <li>In version 1 the producer should always set timestampType bit to 0 and if the topic is configured to contain log append times
             (through either broker level config log.message.timestamp.type = LogAppendTime or topic level config message.timestamp.type = LogAppendTime), the broker will overwrite the timestamp type and the timestamp in the message set.</li>
-
         <li>The highest bits of attributes must be set to 0.</li>
     </ul>
     </p>
@@ -150,7 +162,7 @@
         When the producer is sending non compressed messages, it can set the offsets to anything.
     </p>
 
-    <p>The crc field contains the CRC32 (and not CRC-32C) of the message bytes.</p>
+    <p>The crc field contains the CRC32 (and not CRC-32C) of the subsequent message bytes (i.e. from magic byte to the value).</p>
 
     <h3><a id="log" href="#log">5.4 Log</a></h3>
     <p>
