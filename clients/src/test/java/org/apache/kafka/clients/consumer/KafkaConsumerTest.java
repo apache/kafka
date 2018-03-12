@@ -1139,7 +1139,6 @@ public class KafkaConsumerTest {
         // verify consumer's assignment
         assertTrue(consumer.assignment().equals(partitions));
 
-        System.out.println("Pause and seek operations has begun.");
         consumer.pause(partitions);
         consumer.seekToEnd(partitions);
 
