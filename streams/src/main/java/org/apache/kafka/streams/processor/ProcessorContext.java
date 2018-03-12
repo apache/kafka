@@ -169,6 +169,7 @@ public interface ProcessorContext {
      * @param childIndex index in list of children of this node
      * @deprecated please use {@link #forward(Object, Object, To)} instead
      */
+    // TODO when we remove this method, we can also remove `ProcessorNode#children`
     @Deprecated
     <K, V> void forward(final K key, final V value, final int childIndex);
 

@@ -18,8 +18,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.To;
 
-public class ToAccessor extends To {
-    public ToAccessor() {
+public class ToInternal extends To {
+    public ToInternal() {
         super(To.all());
     }
 

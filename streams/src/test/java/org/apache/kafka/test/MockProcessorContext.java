@@ -35,7 +35,7 @@ import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.processor.internals.ToAccessor;
+import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.WrappedBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -55,7 +55,7 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
     private final RecordCollector.Supplier recordCollectorSupplier;
     private final Map<String, StateStore> storeMap = new LinkedHashMap<>();
     private final Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
-    private final ToAccessor toAccessor = new ToAccessor();
+    private final ToInternal toInternal = new ToInternal();
 
     private Serde<?> keySerde;
     private Serde<?> valSerde;
@@ -200,17 +200,17 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        toAccessor.update(to);
-        if (toAccessor.hasTimestamp()) {
-            setTime(toAccessor.timestamp());
+        toInternal.update(to);
+        if (toInternal.hasTimestamp()) {
+            setTime(toInternal.timestamp());
         }
         final ProcessorNode thisNode = currentNode;
         try {
             for (final ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-                if (toAccessor.child() == null || toAccessor.child().equals(childNode.name())) {
+                if (toInternal.child() == null || toInternal.child().equals(childNode.name())) {
                     currentNode = childNode;
                     childNode.process(key, value);
-                    toAccessor.update(to); // need to reset because MockProcessorContext is shared over multiple Processors and toAccessor might have been modified
+                    toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple Processors and toInternal might have been modified
                 }
             }
         } finally {

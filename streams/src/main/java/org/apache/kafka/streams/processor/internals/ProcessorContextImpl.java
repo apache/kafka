@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -33,7 +34,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     private final StreamTask task;
     private final RecordCollector collector;
-    private final ToAccessor toAccessor = new ToAccessor();
+    private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
     ProcessorContextImpl(final TaskId id,
@@ -99,16 +100,19 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        toAccessor.update(to);
-        if (toAccessor.hasTimestamp()) {
-            recordContext.setTimestamp(toAccessor.timestamp());
+        toInternal.update(to);
+        if (toInternal.hasTimestamp()) {
+            recordContext.setTimestamp(toInternal.timestamp());
         }
         final ProcessorNode previousNode = currentNode();
         try {
             final List<ProcessorNode<K, V>> children = (List<ProcessorNode<K, V>>) currentNode().children();
-            final String sendTo = toAccessor.child();
+            final String sendTo = toInternal.child();
             if (sendTo != null) {
                 final ProcessorNode child = currentNode().getChild(sendTo);
+                if (child == null) {
+                    throw new StreamsException("Unknown processor name: " + sendTo);
+                }
                 forward(child, key, value);
             } else {
                 if (children.size() == 1) {

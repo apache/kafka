@@ -409,14 +409,6 @@ public class ProcessorTopologyTest {
             .addSink("sink1", OUTPUT_TOPIC_2, "processor");
     }
 
-    private TopologyBuilder createMultiplexByNameNewTopology() {
-        return builder
-            .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-            .addProcessor("processor", define(new MultiplexByNameProcessorNew(2)), "source")
-            .addSink("sink0", OUTPUT_TOPIC_1, "processor")
-            .addSink("sink1", OUTPUT_TOPIC_2, "processor");
-    }
-
     private TopologyBuilder createStatefulTopology(final String storeName) {
         return builder
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
@@ -480,7 +472,7 @@ public class ProcessorTopologyTest {
     }
 
     /**
-     * A processor that simply forwards all messages to all children.
+     * A processor that simply forwards all messages to all children with advanced timestamps.
      */
     protected static class TimestampProcessor extends AbstractProcessor<String, String> {
         @Override
@@ -551,32 +543,6 @@ public class ProcessorTopologyTest {
         public void punctuate(final long streamTime) {
             for (int i = 0; i != numChildren; ++i) {
                 context().forward(Long.toString(streamTime), "punctuate(" + (i + 1) + ")", "sink" + i);
-            }
-        }
-    }
-
-    /**
-     * A processor that forwards slightly-modified messages to each named child.
-     * Note: the children are assumed to be named "sink{child number}", e.g., sink1, or sink2, etc.
-     */
-    protected static class MultiplexByNameProcessorNew extends AbstractProcessor<String, String> {
-        private final int numChildren;
-
-        MultiplexByNameProcessorNew(final int numChildren) {
-            this.numChildren = numChildren;
-        }
-
-        @Override
-        public void process(final String key, final String value) {
-            for (int i = 0; i != numChildren; ++i) {
-                context().forward(key, value + "(" + (i + 1) + ")",  To.child("sink" + i));
-            }
-        }
-
-        @Override
-        public void punctuate(final long streamTime) {
-            for (int i = 0; i != numChildren; ++i) {
-                context().forward(Long.toString(streamTime), "punctuate(" + (i + 1) + ")", To.child("sink" + i));
             }
         }
     }

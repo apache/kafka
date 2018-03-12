@@ -63,8 +63,9 @@ class LRUCacheEntry implements RecordContext {
         return timestamp;
     }
 
+    @Override
     public void setTimestamp(final long timestamp) {
-        this.timestamp = timestamp;
+        throw new UnsupportedOperationException();
     }
 
     @Override

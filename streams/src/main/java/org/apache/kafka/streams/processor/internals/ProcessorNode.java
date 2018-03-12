@@ -33,6 +33,7 @@ import java.util.Set;
 
 public class ProcessorNode<K, V> {
 
+    // TODO: 'children' can be removed when #forward() via index is removed
     private final List<ProcessorNode<?, ?>> children;
     private final Map<String, ProcessorNode<?, ?>> childByName;
 
