@@ -123,14 +123,55 @@ class LogSegment private[log] (val log: FileRecords,
              largestTimestamp: Long,
              shallowOffsetOfMaxTimestamp: Long,
              records: MemoryRecords): Unit = {
+    append(firstOffset, largestOffset, largestTimestamp, shallowOffsetOfMaxTimestamp, records,
+           false)
+  }
+
+  /**
+   * Append the given messages starting with the given offset. Add
+   * an entry to the index if needed.
+   *
+   * It is assumed this method is being called from within a lock.
+   *
+   * @param firstOffset The first offset in the message set.
+   * @param largestOffset The last offset in the message set
+   * @param largestTimestamp The largest timestamp in the message set.
+   * @param shallowOffsetOfMaxTimestamp The offset of the message that has the largest timestamp in the messages to append.
+   * @param records The log entries to append.
+   * @param fromLogCleaner Is append being called from log cleaner?
+   *
+   * @return the physical position in the file of the appended records
+   */
+  @nonthreadsafe
+  private[log] def append(firstOffset: Long,
+                          largestOffset: Long,
+                          largestTimestamp: Long,
+                          shallowOffsetOfMaxTimestamp: Long,
+                          records: MemoryRecords,
+                          fromLogCleaner: Boolean = false): Unit = {
     if (records.sizeInBytes > 0) {
       trace(s"Inserting ${records.sizeInBytes} bytes at end offset $largestOffset at position ${log.sizeInBytes} " +
             s"with largest timestamp $largestTimestamp at shallow offset $shallowOffsetOfMaxTimestamp")
       val physicalPosition = log.sizeInBytes()
       if (physicalPosition == 0)
         rollingBasedTimestamp = Some(largestTimestamp)
+
+      // Must be able to convert the largest offset to base-relative offset.
+      // Because of KAFKA-5413, a log segment could contain messages larger than firstOffset +
+      // Integer.MAX_VALUE. If that is the case, silently ignore the fact that we cannot convert
+      // all message offsets to the base-relative form. Also make sure we do not generate an index
+      // entry for such messages, so that there is no further issue downstream.
+      if (!canConvertToRelativeOffset(largestOffset)) {
+        if (fromLogCleaner)
+          trace(("Offset overflow during log cleaning. Ignoring overflow and continuing. " +
+                 "largest: %d first: %d")
+              .format(largestOffset, firstOffset))
+        else
+          require(false,
+                  "largest offset in message set can not be safely converted to relative offset.")
+      }
+
       // append the messages
-      require(canConvertToRelativeOffset(largestOffset), "largest offset in message set can not be safely converted to relative offset.")
       val appendedBytes = log.append(records)
       trace(s"Appended $appendedBytes to ${log.file()} at end offset $largestOffset")
       // Update the in memory max timestamp and corresponding offset.
@@ -138,6 +179,7 @@ class LogSegment private[log] (val log: FileRecords,
         maxTimestampSoFar = largestTimestamp
         offsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp
       }
+
       // append an entry to the index (if needed)
       if(bytesSinceLastIndexEntry > indexIntervalBytes) {
         offsetIndex.append(largestOffset, physicalPosition)

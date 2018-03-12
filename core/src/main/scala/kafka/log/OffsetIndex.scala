@@ -139,8 +139,10 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
     inLock(lock) {
       require(!isFull, "Attempt to append to a full index (size = " + _entries + ").")
       if (_entries == 0 || offset > _lastOffset) {
+        val relativeOffset = offset - baseOffset
+        require(relativeOffset <= Integer.MAX_VALUE, "index offset overflow")
         debug("Adding index entry %d => %d to %s.".format(offset, position, file.getName))
-        mmap.putInt((offset - baseOffset).toInt)
+        mmap.putInt(relativeOffset.toInt)
         mmap.putInt(position)
         _entries += 1
         _lastOffset = offset

@@ -502,7 +502,9 @@ private[log] class Cleaner(val id: Int,
     try {
       // clean segments into the new destination segment
       val iter = segments.iterator
+      val numSegments = segments.length
       var currentSegmentOpt: Option[LogSegment] = Some(iter.next())
+
       while (currentSegmentOpt.isDefined) {
         val currentSegment = currentSegmentOpt.get
         val nextSegmentOpt = if (iter.hasNext) Some(iter.next()) else None
@@ -516,7 +518,7 @@ private[log] class Cleaner(val id: Int,
         info(s"Cleaning segment $startOffset in log ${log.name} (largest timestamp ${new Date(currentSegment.largestTimestamp)}) " +
           s"into ${cleaned.baseOffset}, ${if(retainDeletes) "retaining" else "discarding"} deletes.")
         cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletes, log.config.maxMessageSize,
-          transactionMetadata, log.activeProducersWithLastSequence, stats)
+          transactionMetadata, log.activeProducersWithLastSequence, stats, numSegments)
 
         currentSegmentOpt = nextSegmentOpt
       }
@@ -554,6 +556,7 @@ private[log] class Cleaner(val id: Int,
    * @param retainDeletes Should delete tombstones be retained while cleaning this segment
    * @param maxLogMessageSize The maximum message size of the corresponding topic
    * @param stats Collector for cleaning statistics
+   * @param numSegmentsInGroup Number of segments in source group, being cleaned into 'dest'
    */
   private[log] def cleanInto(topicPartition: TopicPartition,
                              sourceRecords: FileRecords,
@@ -563,7 +566,8 @@ private[log] class Cleaner(val id: Int,
                              maxLogMessageSize: Int,
                              transactionMetadata: CleanedTransactionMetadata,
                              activeProducers: Map[Long, Int],
-                             stats: CleanerStats) {
+                             stats: CleanerStats,
+                             numSegmentsInGroup: Int) {
     val logCleanerFilter = new RecordFilter {
       var discardBatchRecords: Boolean = _
 
@@ -612,12 +616,19 @@ private[log] class Cleaner(val id: Int,
       if (outputBuffer.position() > 0) {
         outputBuffer.flip()
         val retained = MemoryRecords.readableRecords(outputBuffer)
+        val firstOffset = retained.batches.iterator.next.baseOffset
+        val largestOffset = result.maxOffset
+
+        if ((largestOffset - firstOffset) >= Integer.MAX_VALUE)
+          require(numSegmentsInGroup == 1, "Constructed segment group causes index offset overflow")
+
         // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
         // after `Log.replaceSegments` (which acquires the lock) is called
         dest.append(largestOffset = result.maxOffset,
           largestTimestamp = result.maxTimestamp,
           shallowOffsetOfMaxTimestamp = result.shallowOffsetOfMaxTimestamp,
-          records = retained)
+          records = retained,
+          fromLogCleaner = true)
         throttler.maybeThrottle(outputBuffer.limit())
       }
 
