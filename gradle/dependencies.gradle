@@ -71,7 +71,7 @@ versions += [
   slf4j: "1.7.25",
   snappy: "1.1.7.1",
   zkclient: "0.10",
-  zookeeper: "3.4.11",
+  zookeeper: "3.4.10",
   jfreechart: "1.0.0",
   mavenArtifact: "3.5.2"
 ]
