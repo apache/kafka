@@ -14,12 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.kstream.Windowed;
+package org.apache.kafka.trogdor.workload;
 
-public interface WindowedSerializer<T> extends Serializer<Windowed<T>> {
+/**
+ * Describes a key in producer payload
+ */
+public enum PayloadKeyType {
+    // null key
+    KEY_NULL(0),
+    // fixed size key containing a long integer representing a message index (i.e., position of
+    // the payload generator)
+    KEY_MESSAGE_INDEX(8);
 
-    byte[] serializeBaseKey(String topic, Windowed<T> data);
+    private final int maxSizeInBytes;
+
+    PayloadKeyType(int maxSizeInBytes) {
+        this.maxSizeInBytes = maxSizeInBytes;
+    }
+
+    public int maxSizeInBytes() {
+        return maxSizeInBytes;
+    }
 }

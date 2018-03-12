@@ -56,8 +56,6 @@ public class ProduceBenchWorker implements TaskWorker {
 
     private static final short REPLICATION_FACTOR = 3;
 
-    private static final int MESSAGE_SIZE = 512;
-
     private static final int THROTTLE_PERIOD_MS = 100;
 
     private final String id;
@@ -174,6 +172,8 @@ public class ProduceBenchWorker implements TaskWorker {
 
         private final KafkaProducer<byte[], byte[]> producer;
 
+        private final PayloadGenerator payloadGenerator;
+
         private final Throttle throttle;
 
         SendRecords() {
@@ -187,6 +187,7 @@ public class ProduceBenchWorker implements TaskWorker {
                 props.setProperty(entry.getKey(), entry.getValue());
             }
             this.producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
+            this.payloadGenerator = new PayloadGenerator(spec.messageSize());
             this.throttle = new SendRecordsThrottle(perPeriod, producer);
         }
 
@@ -194,13 +195,11 @@ public class ProduceBenchWorker implements TaskWorker {
         public Void call() throws Exception {
             long startTimeMs = Time.SYSTEM.milliseconds();
             try {
-                byte[] key = new byte[MESSAGE_SIZE];
-                byte[] value = new byte[MESSAGE_SIZE];
                 Future<RecordMetadata> future = null;
                 try {
                     for (int m = 0; m < spec.maxMessages(); m++) {
                         for (int i = 0; i < spec.activeTopics(); i++) {
-                            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(topicIndexToName(i), key, value);
+                            ProducerRecord<byte[], byte[]> record = payloadGenerator.nextRecord(topicIndexToName(i));
                             future = producer.send(record, new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
                         }
                         throttle.increment();
@@ -217,6 +216,7 @@ public class ProduceBenchWorker implements TaskWorker {
                 statusUpdaterFuture.cancel(false);
                 new StatusUpdater(histogram).run();
                 long curTimeMs = Time.SYSTEM.milliseconds();
+                log.info("Produced {}", payloadGenerator);
                 log.info("Sent {} total record(s) in {} ms.  status: {}",
                     histogram.summarize().numSamples(), curTimeMs - startTimeMs, status.get());
             }

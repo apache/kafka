@@ -301,13 +301,17 @@ class ZooKeeperClient(connectString: String,
     stateChangeHandlers.remove(name)
   }
 
-  def close(): Unit = inWriteLock(initializationLock) {
+  def close(): Unit = {
     info("Closing.")
-    zNodeChangeHandlers.clear()
-    zNodeChildChangeHandlers.clear()
-    stateChangeHandlers.clear()
-    zooKeeper.close()
-    metricNames.foreach(removeMetric(_))
+    inWriteLock(initializationLock) {
+      zNodeChangeHandlers.clear()
+      zNodeChildChangeHandlers.clear()
+      stateChangeHandlers.clear()
+      zooKeeper.close()
+      metricNames.foreach(removeMetric(_))
+    }
+    // Shutdown scheduler outside of lock to avoid deadlock if scheduler
+    // is waiting for lock to process session expiry
     expiryScheduler.shutdown()
     info("Closed.")
   }
@@ -348,6 +352,18 @@ class ZooKeeperClient(connectString: String,
     initialize()
   }
 
+  // Visibility for testing
+  private[zookeeper] def scheduleSessionExpiryHandler(): Unit = {
+    expiryScheduler.schedule("zk-session-expired", () => {
+      inWriteLock(initializationLock) {
+        info("Session expired.")
+        stateChangeHandlers.values.foreach(_.beforeInitializingSession())
+        initialize()
+        stateChangeHandlers.values.foreach(_.afterInitializingSession())
+      }
+    }, delay = 0L, period = -1L, unit = TimeUnit.MILLISECONDS)
+  }
+
   // package level visibility for testing only
   private[zookeeper] object ZooKeeperClientWatcher extends Watcher {
     override def process(event: WatchedEvent): Unit = {
@@ -363,14 +379,7 @@ class ZooKeeperClient(connectString: String,
             error("Auth failed.")
             stateChangeHandlers.values.foreach(_.onAuthFailure())
           } else if (state == KeeperState.Expired) {
-            expiryScheduler.schedule("zk-session-expired", () => {
-              inWriteLock(initializationLock) {
-                info("Session expired.")
-                stateChangeHandlers.values.foreach(_.beforeInitializingSession())
-                initialize()
-                stateChangeHandlers.values.foreach(_.afterInitializingSession())
-              }
-            }, delay = 0L, period = -1L, unit = TimeUnit.MILLISECONDS)
+            scheduleSessionExpiryHandler()
           }
         case Some(path) =>
           (event.getType: @unchecked) match {
