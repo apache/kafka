@@ -21,12 +21,11 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
-import org.apache.kafka.clients.admin.ListTopicsOptions;
-import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -38,7 +37,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 /**
@@ -90,15 +88,21 @@ public final class WorkerUtils {
      */
     public static void createTopics(Logger log, String bootstrapServers,
             Collection<NewTopic> topics) throws Throwable {
+        Collection<String> topicsExists;
         try (AdminClient adminClient = createAdminClient(log, bootstrapServers)) {
-            createTopics(log, adminClient, topics);
+            topicsExists = createTopics(log, adminClient, topics);
+        }
+        if ((topicsExists != null) && !topicsExists.isEmpty()) {
+            log.warn("Topic(s) {} already exist.", topicsExists);
+            throw new TopicExistsException("One or more topics already exist.");
         }
     }
 
-    static void createTopics(Logger log, AdminClient adminClient,
+    static Collection<String> createTopics(Logger log, AdminClient adminClient,
                              Collection<NewTopic> topics) throws Throwable {
         long startMs = Time.SYSTEM.milliseconds();
         int tries = 0;
+        List<String> existingTopics = new ArrayList<>();
 
         Map<String, NewTopic> newTopics = new HashMap<>();
         for (NewTopic newTopic : topics) {
@@ -106,7 +110,7 @@ public final class WorkerUtils {
         }
         List<String> topicsToCreate = new ArrayList<>(newTopics.keySet());
         while (true) {
-            log.info("Attemping to create {} topics (try {})...", topicsToCreate.size(), ++tries);
+            log.info("Attempting to create {} topics (try {})...", topicsToCreate.size(), ++tries);
             Map<String, Future<Void>> creations = new HashMap<>();
             while (!topicsToCreate.isEmpty()) {
                 List<NewTopic> newTopicsBatch = new ArrayList<>();
@@ -125,10 +129,14 @@ public final class WorkerUtils {
                 try {
                     future.get();
                     log.debug("Successfully created {}.", topicName);
-                } catch (ExecutionException e) {
+                } catch (Exception e) {
                     if (e.getCause() instanceof TimeoutException) {
-                        log.warn("Timed out attempting to create {}: {}", topicName, e.getCause().getMessage());
+                        log.warn("Timed out attempting to create {}: {}", topicName,
+                                 e.getCause().getMessage());
                         topicsToCreate.add(topicName);
+                    } else if (e.getCause() instanceof TopicExistsException) {
+                        log.info("Topic {} already exists.", topicName);
+                        existingTopics.add(topicName);
                     } else {
                         log.warn("Failed to create {}", topicName, e.getCause());
                         throw e.getCause();
@@ -145,6 +153,7 @@ public final class WorkerUtils {
                 throw new TimeoutException(str);
             }
         }
+        return existingTopics;
     }
 
     /**
@@ -156,6 +165,8 @@ public final class WorkerUtils {
      * @param bootstrapServers     The bootstrap server list.
      * @param topics               topic name to topic description map representing a list of
      *                             topics to verify/create
+     * throws IllegalArgumentException if one or more existing topics have a different number of
+     *                             partitions than requested (in 'topics' map).
      */
     public static void verifyTopicsAndCreateNonExistingTopics(
         Logger log, String bootstrapServers, Map<String, NewTopic> topics) throws Throwable {
@@ -171,47 +182,22 @@ public final class WorkerUtils {
             return;
         }
 
-        ListTopicsOptions listTopicsOpts =
-            new ListTopicsOptions().timeoutMs(CREATE_TOPICS_REQUEST_TIMEOUT);
-        ListTopicsResult result = adminClient.listTopics(listTopicsOpts);
-        Collection<String> topicNames = result.names().get();
-
-        // verify that existing topics have the same number of partitions that was requested
-        topicNames.retainAll(topics.keySet());
-        verifyTopicsPartitions(log, adminClient, topicNames, topics);
-
-        // create topics that do not exist
-        Collection<NewTopic> topicsToCreate = new ArrayList<>();
-        for (Map.Entry<String, NewTopic> topic: topics.entrySet()) {
-            if (!topicNames.contains(topic.getKey())) {
-                topicsToCreate.add(topic.getValue());
-            }
-        }
-        if (topicsToCreate.size() > 0) {
-            createTopics(log, adminClient, topicsToCreate);
-        }
-    }
-
-    /**
-     * Verifies that all topics in the list have given number of partitions
-     * @param log                     The logger to use.
-     * @param existingTopics          List of topics to verify
-     * @param requestedTopicConfigs   Topic name to topic description. This map must contain all
-     *                                topics in existingTopics list
-     */
-    private static void verifyTopicsPartitions(
-        Logger log, AdminClient adminClient, Collection<String> existingTopics,
-        Map<String, NewTopic> requestedTopicConfigs) throws Exception {
-        if (existingTopics.isEmpty()) {
+        // first try to create all topics
+        Collection<String> topicsExists = createTopics(log, adminClient, topics.values());
+        if (topicsExists.isEmpty()) {
+            // we are done
             return;
         }
+
+        // verify that topics that already exist have exactly the same number of partitions that
+        // was requested
         DescribeTopicsResult topicsResult = adminClient.describeTopics(
-            existingTopics, new DescribeTopicsOptions().timeoutMs(CREATE_TOPICS_REQUEST_TIMEOUT));
+            topicsExists, new DescribeTopicsOptions().timeoutMs(CREATE_TOPICS_REQUEST_TIMEOUT));
         Map<String, TopicDescription> topicDescriptionMap = topicsResult.all().get();
         for (TopicDescription desc: topicDescriptionMap.values()) {
-            // map will always contain the topic since we get the intersection of requested
-            // topics and existing topics before calling this method.
-            int partitions = requestedTopicConfigs.get(desc.name()).numPartitions();
+            // map will always contain the topic since all topics in 'topicsExists' are in given
+            // 'topics' map
+            int partitions = topics.get(desc.name()).numPartitions();
             if (desc.partitions().size() != partitions) {
                 String str = "Topic '" + desc.name() + "' exists, but has "
                              + desc.partitions().size() + " partitions, while requested "

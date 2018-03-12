@@ -25,7 +25,6 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.clients.admin.MockAdminClient;
 
-import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +35,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -77,7 +77,8 @@ public class WorkerUtilsTest {
     public void testCreateOneTopic() throws Throwable {
         Set<NewTopic> newTopics = Collections.singleton(NEW_TEST_TOPIC);
 
-        WorkerUtils.createTopics(log, adminClient, newTopics);
+        Collection<String> topicsExist = WorkerUtils.createTopics(log, adminClient, newTopics);
+        assertEquals(0, topicsExist.size());
         assertEquals(Collections.singleton(TEST_TOPIC), adminClient.listTopics().names().get());
         assertEquals(new TopicDescription(TEST_TOPIC, false, new ArrayList<TopicPartitionInfo>() {
             {
@@ -92,7 +93,7 @@ public class WorkerUtilsTest {
         assertEquals(0, adminClient.listTopics().names().get().size());
     }
 
-    @Test(expected = TopicExistsException.class)
+    @Test
     public void testCreateTopicsFailsIfAtLeastOneTopicExists() throws Throwable {
         adminClient.addTopic(
             false,
@@ -106,7 +107,8 @@ public class WorkerUtilsTest {
         newTopics.add(new NewTopic("another-topic", TEST_PARTITIONS, TEST_REPLICATION_FACTOR));
         newTopics.add(new NewTopic("one-more-topic", TEST_PARTITIONS, TEST_REPLICATION_FACTOR));
 
-        WorkerUtils.createTopics(log, adminClient, newTopics);
+        Collection<String> topicsExist = WorkerUtils.createTopics(log, adminClient, newTopics);
+        assertEquals(1, topicsExist.size());
     }
 
     @Test(expected = IllegalArgumentException.class)
