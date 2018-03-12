@@ -93,15 +93,6 @@ public class StreamsBrokerDownResilienceTest {
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
 
-        streams.setStateListener(new KafkaStreams.StateListener() {
-            @Override
-            public void onChange(KafkaStreams.State newState, KafkaStreams.State oldState) {
-                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
-                    System.out.println("Streams running -> REBALANCING to RUNNING");
-                }
-            }
-    });
-
         streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(final Thread t, final Throwable e) {
