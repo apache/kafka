@@ -100,7 +100,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @param cache                 the {@link ThreadCache} created by the thread
      * @param time                  the system {@link Time} of the thread
      * @param producer              the instance of {@link Producer} used to produce records
-     * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     public StreamTask(final TaskId id,
                       final Collection<TopicPartition> partitions,
@@ -164,11 +163,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         return changelogPartitions().isEmpty();
     }
 
+    /**
+     * <pre>
+     * - (re-)initialize the topology of the task
+     * </pre>
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     */
     @Override
     public void initializeTopology() {
         initTopology();
 
-        // if (eos) begin new transaction
         if (eosEnabled) {
             try {
                 this.producer.beginTransaction();
@@ -184,9 +188,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     /**
      * <pre>
-     * - re-initialize the task
+     * - resume the task
      * </pre>
-     * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     @Override
     public void resume() {
