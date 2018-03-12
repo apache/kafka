@@ -1150,7 +1150,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         coordinator.poll(startMs, timeout);
 
         // Lookup positions of assigned partitions
-        boolean hasAllFetchPositions = updateFetchPositions();
+        boolean hasAllFetchPositions = updateFetchPositions(0, Long.MAX_VALUE);
 
         // if data is available already, return it immediately
         Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
@@ -1794,35 +1794,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             defined
      * @return true if all assigned positions have a position, false otherwise
      */
-    private boolean updateFetchPositions() {
-        if (subscriptions.hasAllFetchPositions())
-            return true;
-
-        // If there are any partitions which do not have a valid position and are not
-        // awaiting reset, then we need to fetch committed offsets. We will only do a
-        // coordinator lookup if there are partitions which have missing positions, so
-        // a consumer with manually assigned partitions can avoid a coordinator dependence
-        // by always ensuring that assigned partitions have an initial position.
-        coordinator.refreshCommittedOffsetsIfNeeded();
-
-        // If there are partitions still needing a position and a reset policy is defined,
-        // request reset using the default policy. If no reset strategy is defined and there
-        // are partitions with a missing position, then we will raise an exception.
-        subscriptions.resetMissingPositions();
-
-        // Finally send an asynchronous request to lookup and update the positions of any
-        // partitions which are awaiting reset.
-        fetcher.resetOffsetsIfNeeded();
-
-        return false;
-    }
-
-    //Duplicate for keeping times
     private boolean updateFetchPositions(long start, long timeoutMs) {
         if (subscriptions.hasAllFetchPositions())
             return true;
 
-        coordinator.refreshCommittedOffsetsIfNeeded(start, timeoutMs, time);
+        coordinator.refreshCommittedOffsetsIfNeeded(start, timeoutMs);
         subscriptions.resetMissingPositions();
         fetcher.resetOffsetsIfNeeded();
 

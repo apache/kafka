@@ -442,18 +442,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     /**
      * Refresh the committed offsets for provided partitions.
      */
-    public void refreshCommittedOffsetsIfNeeded() {
-        Set<TopicPartition> missingFetchPositions = subscriptions.missingFetchPositions();
-        Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(missingFetchPositions);
-        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
-            TopicPartition tp = entry.getKey();
-            long offset = entry.getValue().offset();
-            log.debug("Setting offset for partition {} to the committed offset {}", tp, offset);
-            this.subscriptions.seek(tp, offset);
-        }
-    }
-
-    public void refreshCommittedOffsetsIfNeeded(long startMs, long timeout, Time time) {
+    public void refreshCommittedOffsetsIfNeeded(long startMs, long timeout) {
         Set<TopicPartition> missingFetchPositions = subscriptions.missingFetchPositions();
         try {
             Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(missingFetchPositions, startMs, timeout, time);
@@ -466,6 +455,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         } catch (TimeoutException exc) {
             throw new TimeoutException("Coordinator is not ready in alloted time slot");
         }
+    }
+
+    public void refreshCommittedOffsetsIfNeeded() {
+        refreshCommittedOffsetsIfNeeded(0, Long.MAX_VALUE);
     }
 
     /**
@@ -510,10 +503,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (future.succeeded())
                     return future.value();
 
-                if (!future.isRetriable())
-                    throw future.exception();
-
-                time.sleep(retryBackoffMs);
+                if (time.milliseconds() + retryBackoffMs < startMs + timeoutMs)
+                    time.sleep(retryBackoffMs);
+                else 
+                    throw new TimeoutException("Error, retry wait will take too long.");
             }
         } catch (TimeoutException exc) {
             throw new TimeoutException("Fetching committed offsets took too long.");
