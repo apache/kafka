@@ -328,6 +328,14 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("deserializer for values")
       .ofType(classOf[String])
+    val innerKeyDeserializerOpt = parser.accepts("key.deserializer.inner.class")
+      .withRequiredArg
+      .describedAs("inner deserializer for key")
+      .ofType(classOf[String])
+    val innerValueDeserializerOpt = parser.accepts("value.deserializer.inner.class")
+      .withRequiredArg
+      .describedAs("inner deserializer for values")
+      .ofType(classOf[String])
     val enableSystestEventsLoggingOpt = parser.accepts("enable-systest-events",
                                                        "Log lifecycle events of the consumer in addition to logging consumed " +
                                                        "messages. (This is specific for system tests.)")
@@ -372,6 +380,8 @@ object ConsoleConsumer extends Logging {
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
     val keyDeserializer = options.valueOf(keyDeserializerOpt)
     val valueDeserializer = options.valueOf(valueDeserializerOpt)
+    val innerKeyDeserializer = options.valueOf(innerKeyDeserializerOpt)
+    val innerValueDeserializer = options.valueOf(innerValueDeserializerOpt)
     val isolationLevel = options.valueOf(isolationLevelOpt).toString
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
 
@@ -380,6 +390,12 @@ object ConsoleConsumer extends Logging {
     }
     if (valueDeserializer != null && !valueDeserializer.isEmpty) {
       formatterArgs.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer)
+    }
+    if (innerKeyDeserializer != null && !innerKeyDeserializer.isEmpty) {
+      formatterArgs.setProperty("key.deserializer.inner.class", innerKeyDeserializer)
+    }
+    if (innerValueDeserializer != null && !innerValueDeserializer.isEmpty) {
+      formatterArgs.setProperty("value.deserializer.inner.class", innerValueDeserializer)
     }
     formatter.init(formatterArgs)
 
@@ -521,11 +537,19 @@ class DefaultMessageFormatter extends MessageFormatter {
     if (props.containsKey("line.separator"))
       lineSeparator = props.getProperty("line.separator").getBytes(StandardCharsets.UTF_8)
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
-    if (props.containsKey("key.deserializer"))
+    if (props.containsKey("key.deserializer")) {
       keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
+      // Instantiate the inner key class if `key.deserializer.inner.class` is specified
+      if (props.containsKey("key.deserializer.inner.class"))
+        keyDeserializer.get.configure(Map("key.deserializer.inner.class" -> props.get("key.deserializer.inner.class")).asJava, true)
+    }
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
-    if (props.containsKey("value.deserializer"))
+    if (props.containsKey("value.deserializer")) {
       valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
+      // Instantiate the inner value class if `value.deserializer.inner.class` is specified
+      if (props.containsKey("value.deserializer.inner.class"))
+        valueDeserializer.get.configure(Map("value.deserializer.inner.class" -> props.get("value.deserializer.inner.class")).asJava, false)
+    }
   }
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
