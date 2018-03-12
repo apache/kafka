@@ -1427,13 +1427,30 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (!this.subscriptions.isAssigned(partition))
                 throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
             Long offset = this.subscriptions.position(partition);
+            while (offset == null) {
+                // batch update fetch positions for any partitions without a valid position
+                updateFetchPositions();
+                offset = this.subscriptions.position(partition);
+            }
+            return offset;
+        } finally {
+            release();
+        }
+    }
+
+    public long position(TopicPartition partition, final long timeout) {
+        acquireAndEnsureOpen();
+        try {
+            if (!this.subscriptions.isAssigned(partition))
+                throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
+            Long offset = this.subscriptions.position(partition);
             final long startMs = time.milliseconds();
             long finishMs = time.milliseconds();
-            while (offset == null && finishMs - startMs < requestTimeoutMs) {
+            while (offset == null && finishMs - startMs < timeout) {
                 // batch update fetch positions for any partitions without a valid position
-                updateFetchPositions(time.milliseconds(), requestTimeoutMs - (time.milliseconds() - startMs));
+                updateFetchPositions(time.milliseconds(), timeout - (time.milliseconds() - startMs));
                 finishMs = time.milliseconds();
-                final long remainingTime = Math.max(0, requestTimeoutMs - (finishMs - startMs));
+                final long remainingTime = Math.max(0, timeout - (finishMs - startMs));
                 
                 if (remainingTime > 0) {
                     client.poll(remainingTime);
