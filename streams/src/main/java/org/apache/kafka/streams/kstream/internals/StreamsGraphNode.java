@@ -25,6 +25,7 @@ import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.Topolo
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.GLOBAL_KTABLE;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.GROUP_BY;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.MAP;
+import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.SELECT_KEY;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.SOURCE;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.TABLE;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.TRANSFORM;
@@ -52,7 +53,9 @@ public class StreamsGraphNode {
         TOPOLOGY_PARENT,
         TO_STREAM,
         AGGREGATE_TYPE,
-        GLOBAL_KTABLE
+        GLOBAL_KTABLE,
+        SELECT_KEY,
+        MAP_VALUES
     }
 
 
@@ -101,7 +104,8 @@ public class StreamsGraphNode {
 
 
     public boolean triggersRepartitioning() {
-        return topologyNodeType == MAP || topologyNodeType == GROUP_BY || topologyNodeType == FLATMAP || topologyNodeType == TRANSFORM;
+        return topologyNodeType == MAP || topologyNodeType == GROUP_BY ||
+               topologyNodeType == FLATMAP || topologyNodeType == TRANSFORM || topologyNodeType == SELECT_KEY;
     }
 
     public boolean isSourceNode() {
