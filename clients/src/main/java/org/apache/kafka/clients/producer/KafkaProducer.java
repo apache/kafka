@@ -50,7 +50,6 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.internals.FatalExitError;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -562,6 +561,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
      *         transactional.id is not authorized. See the exception for more details
      * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
+     * @throws TimeoutException if the time taken for initialize the transaction has surpassed <code>max.block.ms</code>.
      * @throws InterruptException if the thread is interrupted while blocked
      */
     public void initTransactions() {
@@ -569,13 +569,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         TransactionalRequestResult result = transactionManager.initializeTransactions();
         sender.wakeup();
         try {
-            if (!result.await(requestTimeoutMs, TimeUnit.MILLISECONDS)) {
-                transactionManager.transitionToFatalError(
-                        new TimeoutException("Timeout expired while initializing the transaction in " + requestTimeoutMs + "ms."));
-                throw new FatalExitError();
+            if (!result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS)) {
+                TimeoutException e = new TimeoutException("Timeout expired while initializing transactional state in " +
+                        maxBlockTimeMs + "ms.");
+                transactionManager.transitionToFatalError(e);
+                throw e;
             }
         } catch (InterruptedException e) {
             throw new InterruptException("Initialize transactions interrupted.", e);
+        } catch (KafkaException e) {
+            transactionManager.transitionToFatalError(e);
+            throw e;
         }
     }
 
