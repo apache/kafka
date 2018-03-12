@@ -70,7 +70,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return new KStreamImpl<>(this, name, Collections.singleton(name), false);
     }
 
-    @SuppressWarnings({"deprecation","unchecked"})
+    @SuppressWarnings({"deprecation", "unchecked"})
     public <K, V> KTable<K, V> table(final String topic,
                                      final ConsumedInternal<K, V> consumed,
                                      final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
@@ -79,7 +79,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final String name = newProcessorName(KTableImpl.SOURCE_NAME);
 
         ProcessDetails.Builder processDetailsBuilder = ProcessDetails.builder();
-
 
         final KTable<K, V> kTable = createKTable(consumed,
                                                  topic,
@@ -92,7 +91,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         processDetailsBuilder.withSourceTopics(Collections.singleton(topic))
             .withStoreSupplier(storeSupplier)
             .withConsumed(consumed);
-        StreamsGraphNode graphNode = new StreamsGraphNode(name, KTABLE,false, processDetailsBuilder.build(), source);
+        StreamsGraphNode graphNode = new StreamsGraphNode(name, KTABLE, false, processDetailsBuilder.build(), source);
         topologyGraph.addNode(graphNode);
 
         return kTable;
@@ -103,7 +102,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                      final ConsumedInternal<K, V> consumed,
                                      final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         final StoreBuilder<KeyValueStore<K, V>> storeBuilder = new KeyValueStoreMaterializer<>(materialized)
-                .materialize();
+            .materialize();
 
         final String source = newProcessorName(KStreamImpl.SOURCE_NAME);
         final String name = newProcessorName(KTableImpl.SOURCE_NAME);
@@ -121,7 +120,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         processDetailsBuilder.withSourceTopics(Collections.singleton(topic))
             .withStoreBuilder(storeBuilder)
             .withConsumed(consumed);
-        StreamsGraphNode graphNode = new StreamsGraphNode(name, KTABLE,false, processDetailsBuilder.build(), source);
+        StreamsGraphNode graphNode = new StreamsGraphNode(name, KTABLE, false, processDetailsBuilder.build(), source);
         topologyGraph.addNode(graphNode);
 
         return kTable;
@@ -166,9 +165,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         ProcessDetails processDetails = ProcessDetails.builder().withConsumed(consumed)
             .withStoreBuilder(storeBuilder)
+            .withKTableSource(tableSource)
             .withSourceTopics(Collections.singleton(topic)).build();
 
-        StreamsGraphNode streamsGraphNode = new StreamsGraphNode(sourceName,GLOBAL_KTABLE, false, processDetails, processorName );
+        StreamsGraphNode streamsGraphNode = new StreamsGraphNode(sourceName, GLOBAL_KTABLE, false, processDetails, processorName);
 
         topologyGraph.addNode(streamsGraphNode);
 
@@ -214,7 +214,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                processorName,
                                                stateUpdateSupplier);
     }
-    
+
     public synchronized void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,
                                             final String topic,
                                             final ConsumedInternal consumed,

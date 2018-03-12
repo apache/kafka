@@ -57,6 +57,7 @@ public class ProcessDetails<K, V, S extends StateStore> {
     private ConsumedInternal<K, V> consumedInternal;
     private final StateStoreSupplier<KeyValueStore<K, V>> storeSupplier;
     private final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
+    private final KTableSource<K, V> kTableSource;
 
 
     private ProcessDetails(final Collection<String> sourceTopics,
@@ -67,7 +68,8 @@ public class ProcessDetails<K, V, S extends StateStore> {
                            final Materialized<K, V, S> materialized,
                            final ProcessorSupplier<K, V> processorSupplier,
                            final StateStoreSupplier<KeyValueStore<K, V>> storeSupplier,
-                           final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
+                           final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
+                           final KTableSource<K, V> kTableSource) {
         this.sourceTopics = sourceTopics;
         this.sinkTopic = sinkTopic;
         this.sourcePattern = sourcePattern;
@@ -77,6 +79,7 @@ public class ProcessDetails<K, V, S extends StateStore> {
         this.processorSupplier = processorSupplier;
         this.storeSupplier = storeSupplier;
         this.storeBuilder = storeBuilder;
+        this.kTableSource = kTableSource;
         if (this.materialized != null) {
             this.materializedInternal = new MaterializedInternal(materialized);
         }
@@ -188,6 +191,7 @@ public class ProcessDetails<K, V, S extends StateStore> {
         private ProcessorSupplier<K, V> processorSupplier;
         private StateStoreSupplier<KeyValueStore<K, V>> storeSupplier;
         private StoreBuilder<KeyValueStore<K, V>> storeBuilder;
+        private KTableSource<K, V> kTableSource;
 
         private Builder() {
         }
@@ -237,16 +241,22 @@ public class ProcessDetails<K, V, S extends StateStore> {
             return this;
         }
 
+        public Builder withKTableSource(KTableSource<K, V> kTableSource) {
+            this.kTableSource = kTableSource;
+            return this;
+        }
+
         public ProcessDetails<K, V, S> build() {
             return new ProcessDetails<>(sourceTopics,
-                                      sinkTopic,
-                                      sourcePattern,
-                                      produced,
-                                      consumed,
-                                      materialized,
-                                      processorSupplier,
-                                      storeSupplier,
-                                      storeBuilder);
+                                        sinkTopic,
+                                        sourcePattern,
+                                        produced,
+                                        consumed,
+                                        materialized,
+                                        processorSupplier,
+                                        storeSupplier,
+                                        storeBuilder,
+                                        kTableSource);
         }
     }
 }
