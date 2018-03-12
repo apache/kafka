@@ -52,7 +52,7 @@ case object TransactionalId extends ResourceType {
 case object DelegationToken extends ResourceType {
   val name = "DelegationToken"
   val error = Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED
-  val toJava = JResourceType.DELEGATION_TOKEN;
+  val toJava = JResourceType.DELEGATION_TOKEN
 }
 
 object ResourceType {
