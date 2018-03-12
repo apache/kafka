@@ -1422,20 +1422,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
     public long position(TopicPartition partition) {
-        acquireAndEnsureOpen();
-        try {
-            if (!this.subscriptions.isAssigned(partition))
-                throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
-            Long offset = this.subscriptions.position(partition);
-            while (offset == null) {
-                // batch update fetch positions for any partitions without a valid position
-                updateFetchPositions();
-                offset = this.subscriptions.position(partition);
-            }
-            return offset;
-        } finally {
-            release();
-        }
+        return position(partition, requestTimeoutMs);
     }
 
     public long position(TopicPartition partition, final long timeout) {
