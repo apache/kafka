@@ -748,7 +748,7 @@ class ReplicaManager(val config: KafkaConfig,
           }
 
           val numAppendedMessages =
-            if (info.firstOffset == -1L || info.lastOffset == -1L)
+            if (!info.hasAccurateFirstOffset || info.firstOffset == -1L || info.lastOffset == -1L)
               0
             else
               info.lastOffset - info.firstOffset + 1
@@ -760,7 +760,7 @@ class ReplicaManager(val config: KafkaConfig,
           brokerTopicStats.allTopicsStats.messagesInRate.mark(numAppendedMessages)
 
           trace("%d bytes written to log %s-%d beginning at offset %d and ending at offset %d"
-            .format(records.sizeInBytes, topicPartition.topic, topicPartition.partition, info.firstOffset, info.lastOffset))
+            .format(records.sizeInBytes, topicPartition.topic, topicPartition.partition, info.firstOrLastOffset, info.lastOffset))
           (topicPartition, LogAppendResult(info))
         } catch {
           // NOTE: Failed produce requests metric is not incremented for known exceptions
