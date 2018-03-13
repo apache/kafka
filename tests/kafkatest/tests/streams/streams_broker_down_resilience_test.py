@@ -66,7 +66,8 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         self.assert_produce_consume(self.inputTopic,
                                     self.outputTopic,
                                     self.client_id,
-                                    "after_broker_stop")
+                                    "after_broker_stop",
+                                    timeout_sec=120)
 
         self.kafka.stop()
 
