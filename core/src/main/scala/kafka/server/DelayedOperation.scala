@@ -47,6 +47,7 @@ abstract class DelayedOperation(override val delayMs: Long,
     lockOpt: Option[Lock] = None) extends TimerTask with Logging {
 
   private val completed = new AtomicBoolean(false)
+  private val tryCompletePending = new AtomicBoolean(false)
   // Visible for testing
   private[server] val lock: Lock = lockOpt.getOrElse(new ReentrantLock)
 
@@ -103,14 +104,25 @@ abstract class DelayedOperation(override val delayMs: Long,
    * without blocking.
    */
   private[server] def maybeTryComplete(): Boolean = {
+    val done = tryCompleteIfLockIsFree()
+    if (!done && tryCompletePending.get())
+      tryCompleteIfLockIsFree()
+    else
+      done
+  }
+
+  private def tryCompleteIfLockIsFree(): Boolean = {
     if (lock.tryLock()) {
       try {
+        tryCompletePending.set(false)
         tryComplete()
       } finally {
         lock.unlock()
       }
-    } else
+    } else {
+      tryCompletePending.set(true)
       false
+    }
   }
 
   /*

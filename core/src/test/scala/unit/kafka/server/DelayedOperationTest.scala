@@ -17,11 +17,12 @@
 
 package kafka.server
 
-import java.util.concurrent.{Executors, Future}
+import java.util.concurrent._
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 
 import kafka.utils.CoreUtils.inLock
-
+import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Time
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
@@ -29,6 +30,7 @@ import org.junit.Assert._
 class DelayedOperationTest {
 
   var purgatory: DelayedOperationPurgatory[MockDelayedOperation] = null
+  var executorService: ExecutorService = null
 
   @Before
   def setUp() {
@@ -38,6 +40,8 @@ class DelayedOperationTest {
   @After
   def tearDown() {
     purgatory.shutdown()
+    if (executorService != null)
+      executorService.shutdown()
   }
 
   @Test
@@ -122,6 +126,44 @@ class DelayedOperationTest {
     assertEquals(Nil, cancelledOperations)
   }
 
+  /**
+    * Verify that if there is lock contention between two threads attempting to complete,
+    * completion is performed without any blocking in either thread.
+    */
+  @Test
+  def testTryCompleteLockContention(): Unit = {
+    executorService = Executors.newSingleThreadExecutor()
+    val completionAttemptsRemaining = new AtomicInteger(Int.MaxValue)
+    val tryCompleteSemaphore = new Semaphore(1)
+    val key = "key"
+
+    val op = new MockDelayedOperation(100000L, None, None) {
+      override def tryComplete() = {
+        val shouldComplete = completionAttemptsRemaining.decrementAndGet <= 0
+        tryCompleteSemaphore.acquire()
+        try {
+          if (shouldComplete)
+            forceComplete()
+          else
+            false
+        } finally {
+          tryCompleteSemaphore.release()
+        }
+      }
+    }
+
+    purgatory.tryCompleteElseWatch(op, Seq(key))
+    completionAttemptsRemaining.set(2)
+    tryCompleteSemaphore.acquire()
+    val future = runOnAnotherThread(purgatory.checkAndComplete(key), false)
+    TestUtils.waitUntilTrue(() => tryCompleteSemaphore.hasQueuedThreads, "Not attempting to complete")
+    purgatory.checkAndComplete(key) // this should not block even though lock is not free
+    assertFalse("Operation not have completed", op.isCompleted)
+    tryCompleteSemaphore.release()
+    future.get(10, TimeUnit.SECONDS)
+    assertTrue("Operation should have completed", op.isCompleted)
+  }
+
   @Test
   def testDelayedOperationLock() {
     verifyDelayedOperationLock(new MockDelayedOperation(100000L), mismatchedLocks = false)
@@ -141,102 +183,97 @@ class DelayedOperationTest {
 
   def verifyDelayedOperationLock(mockDelayedOperation: => MockDelayedOperation, mismatchedLocks: Boolean) {
     val key = "key"
-    val executorService = Executors.newSingleThreadExecutor
-    try {
-      def createDelayedOperations(count: Int): Seq[MockDelayedOperation] = {
-        (1 to count).map { _ =>
-          val op = mockDelayedOperation
-          purgatory.tryCompleteElseWatch(op, Seq(key))
-          assertFalse("Not completable", op.isCompleted)
-          op
-        }
+    executorService = Executors.newSingleThreadExecutor
+    def createDelayedOperations(count: Int): Seq[MockDelayedOperation] = {
+      (1 to count).map { _ =>
+        val op = mockDelayedOperation
+        purgatory.tryCompleteElseWatch(op, Seq(key))
+        assertFalse("Not completable", op.isCompleted)
+        op
       }
+    }
 
-      def createCompletableOperations(count: Int): Seq[MockDelayedOperation] = {
-        (1 to count).map { _ =>
-          val op = mockDelayedOperation
-          op.completable = true
-          op
-        }
+    def createCompletableOperations(count: Int): Seq[MockDelayedOperation] = {
+      (1 to count).map { _ =>
+        val op = mockDelayedOperation
+        op.completable = true
+        op
       }
+    }
 
-      def runOnAnotherThread(fun: => Unit, shouldComplete: Boolean): Future[_] = {
-        val future = executorService.submit(new Runnable {
-          def run() = fun
-        })
-        if (shouldComplete)
-          future.get()
-        else
-          assertFalse("Should not have completed", future.isDone)
-        future
-      }
+    def checkAndComplete(completableOps: Seq[MockDelayedOperation], expectedComplete: Seq[MockDelayedOperation]): Unit = {
+      completableOps.foreach(op => op.completable = true)
+      val completed = purgatory.checkAndComplete(key)
+      assertEquals(expectedComplete.size, completed)
+      expectedComplete.foreach(op => assertTrue("Should have completed", op.isCompleted))
+      val expectedNotComplete = completableOps.toSet -- expectedComplete
+      expectedNotComplete.foreach(op => assertFalse("Should not have completed", op.isCompleted))
+    }
 
-      def checkAndComplete(completableOps: Seq[MockDelayedOperation], expectedComplete: Seq[MockDelayedOperation]): Unit = {
-        completableOps.foreach(op => op.completable = true)
-        val completed = purgatory.checkAndComplete(key)
-        assertEquals(expectedComplete.size, completed)
-        expectedComplete.foreach(op => assertTrue("Should have completed", op.isCompleted))
-        val expectedNotComplete = completableOps.toSet -- expectedComplete
-        expectedNotComplete.foreach(op => assertFalse("Should not have completed", op.isCompleted))
-      }
+    // If locks are free all completable operations should complete
+    var ops = createDelayedOperations(2)
+    checkAndComplete(ops, ops)
 
-      // If locks are free all completable operations should complete
-      var ops = createDelayedOperations(2)
+    // Lock held by current thread, completable operations should complete
+    ops = createDelayedOperations(2)
+    inLock(ops(1).lock) {
       checkAndComplete(ops, ops)
+    }
 
-      // Lock held by current thread, completable operations should complete
-      ops = createDelayedOperations(2)
-      inLock(ops(1).lock) {
-        checkAndComplete(ops, ops)
-      }
+    // Lock held by another thread, should not block, only operations that can be
+    // locked without blocking on the current thread should complete
+    ops = createDelayedOperations(2)
+    runOnAnotherThread(ops(0).lock.lock(), true)
+    try {
+      checkAndComplete(ops, Seq(ops(1)))
+    } finally {
+      runOnAnotherThread(ops(0).lock.unlock(), true)
+      checkAndComplete(Seq(ops(0)), Seq(ops(0)))
+    }
 
-      // Lock held by another thread, should not block, only operations that can be
-      // locked without blocking on the current thread should complete
-      ops = createDelayedOperations(2)
-      runOnAnotherThread(ops(0).lock.lock(), true)
+    // Lock acquired by response callback held by another thread, should not block
+    // if the response lock is used as operation lock, only operations
+    // that can be locked without blocking on the current thread should complete
+    ops = createDelayedOperations(2)
+    ops(0).responseLockOpt.foreach { lock =>
+      runOnAnotherThread(lock.lock(), true)
       try {
-        checkAndComplete(ops, Seq(ops(1)))
+        try {
+          checkAndComplete(ops, Seq(ops(1)))
+          assertFalse("Should have failed with mismatched locks", mismatchedLocks)
+        } catch {
+          case e: IllegalStateException =>
+            assertTrue("Should not have failed with valid locks", mismatchedLocks)
+        }
       } finally {
-        runOnAnotherThread(ops(0).lock.unlock(), true)
+        runOnAnotherThread(lock.unlock(), true)
         checkAndComplete(Seq(ops(0)), Seq(ops(0)))
       }
+    }
 
-      // Lock acquired by response callback held by another thread, should not block
-      // if the response lock is used as operation lock, only operations
-      // that can be locked without blocking on the current thread should complete
-      ops = createDelayedOperations(2)
-      ops(0).responseLockOpt.foreach { lock =>
-        runOnAnotherThread(lock.lock(), true)
-        try {
-          try {
-            checkAndComplete(ops, Seq(ops(1)))
-            assertFalse("Should have failed with mismatched locks", mismatchedLocks)
-          } catch {
-            case e: IllegalStateException =>
-              assertTrue("Should not have failed with valid locks", mismatchedLocks)
-          }
-        } finally {
-          runOnAnotherThread(lock.unlock(), true)
-          checkAndComplete(Seq(ops(0)), Seq(ops(0)))
-        }
-      }
-
-      // Immediately completable operations should complete without locking
-      ops = createCompletableOperations(2)
-      ops.foreach { op =>
-        assertTrue("Should have completed", purgatory.tryCompleteElseWatch(op, Seq(key)))
-        assertTrue("Should have completed", op.isCompleted)
-      }
-
-    } finally {
-      executorService.shutdown()
+    // Immediately completable operations should complete without locking
+    ops = createCompletableOperations(2)
+    ops.foreach { op =>
+      assertTrue("Should have completed", purgatory.tryCompleteElseWatch(op, Seq(key)))
+      assertTrue("Should have completed", op.isCompleted)
     }
   }
 
+  private def runOnAnotherThread(fun: => Unit, shouldComplete: Boolean): Future[_] = {
+    val future = executorService.submit(new Runnable {
+      def run() = fun
+    })
+    if (shouldComplete)
+      future.get()
+    else
+      assertFalse("Should not have completed", future.isDone)
+    future
+  }
 
   class MockDelayedOperation(delayMs: Long,
-      lockOpt: Option[ReentrantLock] = None,
-      val responseLockOpt: Option[ReentrantLock] = None) extends DelayedOperation(delayMs, lockOpt) {
+                             lockOpt: Option[ReentrantLock] = None,
+                             val responseLockOpt: Option[ReentrantLock] = None)
+                             extends DelayedOperation(delayMs, lockOpt) {
     var completable = false
 
     def awaitExpiration() {
