@@ -329,7 +329,8 @@ public class StateDirectory {
     private FileChannel getOrCreateFileChannel(final TaskId taskId,
                                                final Path lockPath) throws IOException {
         if (!channels.containsKey(taskId)) {
-            channels.put(taskId, FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE));
+            channels.put(taskId, FileChannel.open(lockPath, StandardOpenOption.CREATE,
+                StandardOpenOption.WRITE, StandardOpenOption.DELETE_ON_CLOSE));
         }
         return channels.get(taskId);
     }
