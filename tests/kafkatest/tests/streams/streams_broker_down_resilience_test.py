@@ -53,8 +53,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         self.assert_produce_consume(self.inputTopic,
                                     self.outputTopic,
                                     self.client_id,
-                                    "before_broker_stop",
-                                    timeout_sec=120)
+                                    "before_broker_stop")
 
         node = self.kafka.leader(self.inputTopic)
 
@@ -67,8 +66,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         self.assert_produce_consume(self.inputTopic,
                                     self.outputTopic,
                                     self.client_id,
-                                    "after_broker_stop",
-                                    timeout_sec=120)
+                                    "after_broker_stop")
 
         self.kafka.stop()
 

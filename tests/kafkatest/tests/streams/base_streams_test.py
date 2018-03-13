@@ -47,16 +47,16 @@ class BaseStreamsTest(KafkaTest):
                                   acks=1)
 
     def assert_produce_consume(self,
-                               source_topic,
-                               sink_topic,
+                               streams_source_topic,
+                               streams_sink_topic,
                                client_id,
                                test_state,
                                num_messages=5,
                                timeout_sec=60):
 
-        self.assert_produce(sink_topic, test_state, num_messages, timeout_sec)
+        self.assert_produce(streams_source_topic, test_state, num_messages, timeout_sec)
 
-        self.assert_consume(client_id, test_state, source_topic, num_messages, timeout_sec)
+        self.assert_consume(client_id, test_state, streams_sink_topic, num_messages, timeout_sec)
 
     def assert_produce(self, topic, test_state, num_messages=5, timeout_sec=60):
         producer = self.get_producer(topic, num_messages)
@@ -72,7 +72,7 @@ class BaseStreamsTest(KafkaTest):
 
         wait_until(lambda: consumer.total_consumed() >= num_messages,
                    timeout_sec=timeout_sec,
-                   err_msg="At %s streams did not process messages in 60 seconds " % test_state)
+                   err_msg="At %s streams did not process messages in %s seconds " % (test_state, timeout_sec))
 
     @staticmethod
     def get_configs(extra_configs=""):
