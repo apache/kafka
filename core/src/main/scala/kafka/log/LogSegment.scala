@@ -153,6 +153,8 @@ class LogSegment private[log] (val log: FileRecords,
       trace(s"Inserting ${records.sizeInBytes} bytes at end offset $largestOffset at position ${log.sizeInBytes} " +
             s"with largest timestamp $largestTimestamp at shallow offset $shallowOffsetOfMaxTimestamp")
       val physicalPosition = log.sizeInBytes()
+      var canAppendToIndex = true
+
       if (physicalPosition == 0)
         rollingBasedTimestamp = Some(largestTimestamp)
 
@@ -162,13 +164,15 @@ class LogSegment private[log] (val log: FileRecords,
       // all message offsets to the base-relative form. Also make sure we do not generate an index
       // entry for such messages, so that there is no further issue downstream.
       if (!canConvertToRelativeOffset(largestOffset)) {
-        if (fromLogCleaner)
-          trace(("Offset overflow during log cleaning. Ignoring overflow and continuing. " +
-                 "largest: %d first: %d")
-              .format(largestOffset, firstOffset))
-        else
+        if (fromLogCleaner) {
+          trace("Offset overflow during log cleaning. Ignoring overflow and continuing. " +
+                s"largest: $largestOffset first: $firstOffset base: $baseOffset")
+          canAppendToIndex = false
+        }
+        else {
           require(false,
                   "largest offset in message set can not be safely converted to relative offset.")
+        }
       }
 
       // append the messages
@@ -181,7 +185,7 @@ class LogSegment private[log] (val log: FileRecords,
       }
 
       // append an entry to the index (if needed)
-      if(bytesSinceLastIndexEntry > indexIntervalBytes) {
+      if (canAppendToIndex && (bytesSinceLastIndexEntry > indexIntervalBytes)) {
         offsetIndex.append(largestOffset, physicalPosition)
         timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp)
         bytesSinceLastIndexEntry = 0

@@ -1214,6 +1214,51 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
   }
 
+  /**
+    * Verify that cleaner does not crash, and handles the case where a log segment has messages
+    * with offsets that overflow base_offset + Integer.MAX_VALUE due to KAFKA-5413.
+    */
+  @Test
+  def testLogSegmentWithIndexOffsetOverflow(): Unit = {
+    val tp = new TopicPartition("test", 0)
+    val cleaner = makeCleaner(Int.MaxValue)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, Integer.MAX_VALUE: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val keys = List(1, 2, 1, 2)
+    val values = List(1, 2, 1, 2)
+    val offsets = List(0L, 1L, Integer.MAX_VALUE + 2L, Integer.MAX_VALUE + 3L)
+
+    // Create a "legacy" log segment, consisting of messages that would result in index overflow
+    var i = 0
+    while (i < offsets.length) {
+      val set = MemoryRecords.withRecords(offsets(i), CompressionType.NONE, 0,
+                                          new SimpleRecord(keys(i).toString.getBytes,
+                                                           values(i).toString.getBytes))
+      if (i == 0)
+        log.appendAsFollower(set)        // write the first record using log.append API
+      else
+        log.activeSegment.log.append(set)  // write all records directly to the file
+      i += 1
+    }
+
+    // Sanity check to make sure records were written into a single log segment
+    assertEquals(1, log.numberOfSegments)
+    assertEquals(keys, keysInLog(log))
+    assertEquals(offsets, offsetsInLog(log))
+
+    // Roll the log so that the segment we are interested in becomes inactive
+    log.roll()
+    cleaner.doClean(LogToClean(tp, log, 0, Long.MaxValue), Long.MaxValue)
+
+    // We must have now cleaned up duplicate keys, and should have still retained those messages
+    // whose offset resulted in overflow
+    assertEquals(keys.drop(keys.length / 2), keysInLog(log))
+    assertEquals(keys.length / 2, keysInLog(log).size)
+    assertEquals(offsets.drop(offsets.length / 2), offsetsInLog(log))
+  }
+
   private def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
     for(((key, value), offset) <- keysAndValues.zip(offsetSeq))
       yield log.appendAsFollower(messageWithOffset(key, value, offset)).lastOffset
