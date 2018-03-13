@@ -172,7 +172,7 @@ class Replica(val brokerId: Int,
    * Convert hw to local offset metadata by reading the log at the hw offset.
    * If the hw offset is out of range, return the first offset of the first log segment as the offset metadata.
    */
-  def convertHWToLocalOffsetMetadata() = {
+  def convertHWToLocalOffsetMetadata() {
     if (isLocal) {
       highWatermarkMetadata = log.get.convertToOffsetMetadata(highWatermarkMetadata.messageOffset).getOrElse {
         val firstOffset = log.get.logSegments.head.baseOffset
