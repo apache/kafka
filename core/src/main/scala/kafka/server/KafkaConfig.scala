@@ -1088,7 +1088,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   def logIndexSizeMaxBytes = getInt(KafkaConfig.LogIndexSizeMaxBytesProp)
   def logIndexIntervalBytes = getInt(KafkaConfig.LogIndexIntervalBytesProp)
   def logDeleteDelayMs = getLong(KafkaConfig.LogDeleteDelayMsProp)
-  def logRollTimeMillis: java.lang.Long = Option(getLong(KafkaConfig.LogRollTimeMillisProp)).getOrElse(60 * 60 * 1000L * getInt(KafkaConfig.LogRollTimeHoursProp))
+  def logRollTimeMillis: java.lang.Long = Option(getLong(KafkaConfig.LogRollTimeMillisProp)) match {
+    case Some(rollMs) if rollMs > 0 => rollMs
+    case _ => 60 * 60 * 1000L * getInt(KafkaConfig.LogRollTimeHoursProp)
+  }
   def logRollTimeJitterMillis: java.lang.Long = Option(getLong(KafkaConfig.LogRollTimeJitterMillisProp)).getOrElse(60 * 60 * 1000L * getInt(KafkaConfig.LogRollTimeJitterHoursProp))
   def logFlushIntervalMs: java.lang.Long = Option(getLong(KafkaConfig.LogFlushIntervalMsProp)).getOrElse(getLong(KafkaConfig.LogFlushSchedulerIntervalMsProp))
   def minInSyncReplicas = getInt(KafkaConfig.MinInSyncReplicasProp)
