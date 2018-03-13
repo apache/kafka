@@ -1133,7 +1133,9 @@ class Log(@volatile var dir: File,
       val fetchDataInfo = readUncommitted(offset, 1)
       fetchDataInfo.fetchOffsetMetadata
     } catch {
-      case _: OffsetOutOfRangeException => LogOffsetMetadata.UnknownOffsetMetadata
+      case _: OffsetOutOfRangeException =>
+        val firstOffset = segments.firstEntry.getValue.baseOffset
+        new LogOffsetMetadata(firstOffset, firstOffset, 0)
     }
   }
 

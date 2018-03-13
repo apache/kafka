@@ -76,6 +76,32 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     super.tearDown()
   }
 
+
+  @Test
+  def testHw(): Unit = {
+    //Given a single replica on server 100
+    startBrokers(Seq(100, 101, 102))
+    adminClient = createAdminClient(servers)
+    createTopic(zkClient, topicName, Map(0 -> Seq(100)), servers = servers)
+
+    val topicPartition = new TopicPartition(topicName, 0)
+    val leaderServer = servers.find(_.config.brokerId == 100).get
+    leaderServer.replicaManager.logManager.truncateFullyAndStartAt(topicPartition, 100L, false)
+
+    val topicJson: String = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101, 102]}]}"""
+    ReassignPartitionsCommand.executeAssignment(zkClient, Some(adminClient), topicJson, NoThrottle)
+
+    val newLeaderServer = servers.find(_.config.brokerId == 101).get
+
+    TestUtils.waitUntilTrue (
+      () => newLeaderServer.replicaManager.getPartition(topicPartition).flatMap(_.leaderReplicaIfLocal).isDefined,
+      "broker 101 should be the new leader", pause = 1L
+    )
+
+    assertTrue(newLeaderServer.replicaManager.getReplicaOrException(topicPartition).highWatermark.messageOffset >= 0)
+  }
+
+
   @Test
   def shouldMoveSinglePartition(): Unit = {
     //Given a single replica on server 100
