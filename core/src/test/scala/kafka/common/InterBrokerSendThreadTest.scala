@@ -16,10 +16,11 @@
  */
 package kafka.common
 
-import org.junit.{Assert, Test}
+import org.junit.Test
 import kafka.utils.MockTime
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.errors.AuthenticationException
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.utils.Utils
@@ -55,10 +56,7 @@ class InterBrokerSendThreadTest {
     val node = new Node(1, "", 8080)
     val handler = RequestAndCompletionHandler(node, request, completionHandler)
     val sendThread = new InterBrokerSendThread("name", networkClient, time) {
-      override def generateRequests() = {
-        unsentRequests.put(node, handler)
-        List[RequestAndCompletionHandler](handler)
-      }
+      override def generateRequests() = List[RequestAndCompletionHandler](handler)
     }
 
     val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, handler.handler)
@@ -92,10 +90,7 @@ class InterBrokerSendThreadTest {
     val node = new Node(1, "", 8080)
     val requestAndCompletionHandler = RequestAndCompletionHandler(node, request, completionHandler)
     val sendThread = new InterBrokerSendThread("name", networkClient, time) {
-      override def generateRequests() = {
-        unsentRequests.put(node, requestAndCompletionHandler)
-        List[RequestAndCompletionHandler](requestAndCompletionHandler)
-      }
+      override def generateRequests() = List[RequestAndCompletionHandler](requestAndCompletionHandler)
     }
 
     val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestAndCompletionHandler.handler)
@@ -110,18 +105,23 @@ class InterBrokerSendThreadTest {
     EasyMock.expect(networkClient.ready(node, time.milliseconds()))
       .andReturn(false)
 
-    //EasyMock.expect(networkClient.connectionDelay(EasyMock.anyObject(), EasyMock.anyLong()))
-    //.andReturn(0)
+    EasyMock.expect(networkClient.connectionDelay(EasyMock.anyObject(), EasyMock.anyLong()))
+    .andReturn(0)
 
     EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
       .andReturn(Utils.mkList())
+
+    EasyMock.expect(networkClient.connectionFailed(node))
+      .andReturn(true)
+
+    EasyMock.expect(networkClient.authenticationException(node))
+      .andReturn(new AuthenticationException(""))
 
     EasyMock.replay(networkClient)
 
     sendThread.doWork()
 
     EasyMock.verify(networkClient)
-    //Assert.assertTrue(completionHandler.response.wasDisconnected())
   }
 
 

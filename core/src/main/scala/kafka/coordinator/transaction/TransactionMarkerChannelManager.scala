@@ -135,6 +135,8 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
   private val txnLogAppendRetryQueue = new LinkedBlockingQueue[TxnLogAppend]()
 
+  override val unsentExpiryMs: Int = config.requestTimeoutMs
+
   newGauge(
     "UnknownDestinationQueueSize",
     new Gauge[Int] {
@@ -214,9 +216,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     }.filter { case (_, entries) => !entries.isEmpty }.map { case (node, entries) =>
       val markersToSend = entries.asScala.map(_.txnMarkerEntry).asJava
       val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(node.id, txnStateManager, this, entries)
-      val requestAndCompletionHandler = new WriteTxnMarkersRequest.Builder(markersToSend)
-      unsentRequests.put(node, RequestAndCompletionHandler(node, requestAndCompletionHandler, requestCompletionHandler))
-      RequestAndCompletionHandler(node, requestAndCompletionHandler, requestCompletionHandler)
+      RequestAndCompletionHandler(node, new WriteTxnMarkersRequest.Builder(markersToSend), requestCompletionHandler)
     }
   }
 
