@@ -15,10 +15,10 @@
 
 from kafkatest.services.streams import StreamsRepeatingIntegerKeyProducerService
 from kafkatest.services.streams import StreamsStandbyTaskService
-from kafkatest.tests.streams.streams_test import StreamsTest
+from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
 
 
-class StreamsStandbyTask(StreamsTest):
+class StreamsStandbyTask(BaseStreamsTest):
     """
     This test validates using standby tasks helps with rebalance times
     additionally verifies standby replicas continue to work in the

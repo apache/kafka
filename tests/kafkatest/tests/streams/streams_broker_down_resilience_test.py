@@ -15,10 +15,10 @@
 
 import time
 from kafkatest.services.streams import StreamsBrokerDownResilienceService
-from kafkatest.tests.streams.streams_test import StreamsTest
+from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
 
 
-class StreamsBrokerDownResilience(StreamsTest):
+class StreamsBrokerDownResilience(BaseStreamsTest):
     """
     This test validates that Streams is resilient to a broker
     being down longer than specified timeouts in configs

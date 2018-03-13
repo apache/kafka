@@ -17,11 +17,11 @@
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
-from kafkatest.tests.streams.streams_test import StreamsTest
+from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
 from kafkatest.version import LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0,  DEV_BRANCH, KafkaVersion
 
 
-class StreamsMultipleRollingUpgradeTest(StreamsTest):
+class StreamsMultipleRollingUpgradeTest(BaseStreamsTest):
     """
      This test will verify a rolling upgrade of multiple streams
      applications against all versions of streams against a single

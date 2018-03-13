@@ -19,7 +19,7 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.tests.kafka_test import KafkaTest
 
 
-class StreamsTest(KafkaTest):
+class BaseStreamsTest(KafkaTest):
     """
     Helper class that contains methods for producing and consuming
     messages and verification of results from log files
@@ -28,7 +28,7 @@ class StreamsTest(KafkaTest):
     see tests/kafkatest/tests/kafka_test.py for more info
     """
     def __init__(self, test_context,  topics, num_zk=1, num_brokers=3):
-        super(StreamsTest, self).__init__(test_context, num_zk, num_brokers, topics)
+        super(BaseStreamsTest, self).__init__(test_context, num_zk, num_brokers, topics)
 
     def get_consumer(self, client_id, topic, num_messages):
         return VerifiableConsumer(self.test_context,
