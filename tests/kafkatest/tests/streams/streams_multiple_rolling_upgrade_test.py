@@ -28,7 +28,7 @@ class StreamsMultipleRollingUpgradeTest(BaseStreamsTest):
      broker version.
 
      As new releases come out, just update the streams_upgrade_versions array to have the latest version
-     included in the list, and the array in the @matrix(broker_version=[....} in the actual test.
+     included in the list.
 
      A prerequisite for this test to succeed
      is the inclusion of all parametrized versions of kafka in kafka/vagrant/base.sh
@@ -40,6 +40,8 @@ class StreamsMultipleRollingUpgradeTest(BaseStreamsTest):
 
      aws s3api list-objects --bucket kafka-packages --query 'Contents[].{Key:Key}
     """
+    # adding new version to this list will cover broker and streams version
+    streams_upgrade_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(DEV_BRANCH)]
 
     def __init__(self, test_context):
         super(StreamsMultipleRollingUpgradeTest, self).__init__(test_context,
@@ -60,9 +62,6 @@ class StreamsMultipleRollingUpgradeTest(BaseStreamsTest):
         self.processor_1 = StreamsSmokeTestJobRunnerService(test_context, self.kafka)
         self.processor_2 = StreamsSmokeTestJobRunnerService(test_context, self.kafka)
         self.processor_3 = StreamsSmokeTestJobRunnerService(test_context, self.kafka)
-
-        # always add new version as the SECOND TO LAST version before DEV_BRANCH
-        self.streams_upgrade_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(DEV_BRANCH)]
 
         # already on trunk version at end of upgrades so get rid of it
         self.streams_downgrade_versions = self.streams_upgrade_versions[:-1]
@@ -99,7 +98,7 @@ class StreamsMultipleRollingUpgradeTest(BaseStreamsTest):
         self.driver.stop()
 
     @cluster(num_nodes=9)
-    @matrix(broker_version=[str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(DEV_BRANCH)])
+    @matrix(broker_version=streams_upgrade_versions)
     def test_rolling_upgrade_downgrade_multiple_apps(self, broker_version):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
