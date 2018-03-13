@@ -14,7 +14,7 @@
 # limitations under the License.
 
 
-from ducktape.mark import parametrize
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
 from kafkatest.tests.streams.streams_test import StreamsTest
@@ -27,14 +27,14 @@ class StreamsMultipleRollingUpgradeTest(StreamsTest):
      applications against all versions of streams against a single
      broker version.
 
-     As new releases come out, just update the streams_upgrade_versions to have the latest version
-     as the SECOND TO LAST ITEM in the list, i.e Always before the version on trunk
+     As new releases come out, just update the streams_upgrade_versions array to have the latest version
+     included in the list, and the array in the @matrix(broker_version=[....} in the actual test.
 
-     a prerequisite for this test to succeed
-     if the inclusion of all parametrized versions of kafka in kafka/vagrant/base.sh
-     (search for get_kafka()). For streams in particular, that means that someone has manually
-     copies the kafka-stream-$version-test.jar in the right S3 bucket as shown in base.sh.
-     As new versions are released  kafka/tests/kafkatest/version.py needs to be updated as well
+     A prerequisite for this test to succeed
+     is the inclusion of all parametrized versions of kafka in kafka/vagrant/base.sh
+     (search for get_kafka()).
+     As new versions are released the kafka/tests/kafkatest/version.py file
+     needs to be updated as well.
 
      You can find what's been uploaded to S3 with the following command
 
@@ -99,10 +99,7 @@ class StreamsMultipleRollingUpgradeTest(StreamsTest):
         self.driver.stop()
 
     @cluster(num_nodes=9)
-    @parametrize(broker_version=str(LATEST_0_10_2))
-    @parametrize(broker_version=str(LATEST_0_11_0))
-    @parametrize(broker_version=str(LATEST_1_0))
-    @parametrize(broker_version=str(DEV_BRANCH))
+    @matrix(broker_version=[str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(DEV_BRANCH)])
     def test_rolling_upgrade_downgrade_multiple_apps(self, broker_version):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
