@@ -110,6 +110,7 @@ class AssignedTasks implements RestoringTasks {
      * @return partitions that are ready to be resumed
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     Set<TopicPartition> initializeNewTasks() {
         final Set<TopicPartition> readyPartitions = new HashSet<>();
@@ -259,14 +260,15 @@ class AssignedTasks implements RestoringTasks {
             log.trace("found suspended {} {}", taskTypeName, taskId);
             if (task.partitions().equals(partitions)) {
                 suspended.remove(taskId);
+                task.resume();
                 try {
-                    task.resume();
+                    transitionToRunning(task, new HashSet<TopicPartition>());
                 } catch (final TaskMigratedException e) {
                     closeZombieTask(task);
                     suspended.remove(taskId);
+                    running.remove(task.id());
                     throw e;
                 }
-                transitionToRunning(task, new HashSet<TopicPartition>());
                 log.trace("resuming suspended {} {}", taskTypeName, task.id());
                 return true;
             } else {
@@ -286,6 +288,9 @@ class AssignedTasks implements RestoringTasks {
         }
     }
 
+    /**
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     */
     private void transitionToRunning(final Task task, final Set<TopicPartition> readyPartitions) {
         log.debug("transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);

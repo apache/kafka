@@ -68,9 +68,6 @@ class TaskManager {
         this.log = logContext.logger(getClass());
     }
 
-    /**
-     * @throws TaskMigratedException if the task producer got fenced (EOS only)
-     */
     void createTasks(final Collection<TopicPartition> assignment) {
         if (threadMetadataProvider == null) {
             throw new IllegalStateException(logPrefix + "taskIdProvider has not been initialized while adding stream tasks. This should not happen.");
@@ -96,9 +93,6 @@ class TaskManager {
         this.threadMetadataProvider = threadMetadataProvider;
     }
 
-    /**
-     * @throws TaskMigratedException if the task producer got fenced (EOS only)
-     */
     private void addStreamTasks(final Collection<TopicPartition> assignment) {
         Map<TaskId, Set<TopicPartition>> assignedTasks = threadMetadataProvider.activeTasks();
         if (assignedTasks.isEmpty()) {
@@ -139,9 +133,6 @@ class TaskManager {
         }
     }
 
-    /**
-     * @throws TaskMigratedException if the task producer got fenced (EOS only)
-     */
     private void addStandbyTasks() {
         final Map<TaskId, Set<TopicPartition>> assignedStandbyTasks = threadMetadataProvider.standbyTasks();
         if (assignedStandbyTasks.isEmpty()) {
@@ -156,7 +147,6 @@ class TaskManager {
             if (!standby.maybeResumeSuspendedTask(taskId, partitions)) {
                 newStandbyTasks.put(taskId, partitions);
             }
-
         }
 
         if (newStandbyTasks.isEmpty()) {
@@ -254,7 +244,7 @@ class TaskManager {
     /**
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
-     * @throws TaskMigratedException if another thread wrote to the changelog topic that is currently restored
+     * @throws TaskMigratedException if the task producer got fenced or consumer discovered changelog offset changes (EOS only)
      */
     boolean updateNewAndRestoringTasks() {
         final Set<TopicPartition> resumed = active.initializeNewTasks();

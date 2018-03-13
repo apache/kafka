@@ -344,6 +344,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
          */
         Collection<Task> createTasks(final Consumer<byte[], byte[]> consumer, final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
             final List<Task> createdTasks = new ArrayList<>();
+
             for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
                 final TaskId taskId = newTaskAndPartitions.getKey();
                 final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
@@ -394,9 +395,6 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             this.threadClientId = threadClientId;
         }
 
-        /**
-         * @throws TaskMigratedException if the task producer got fenced (EOS only)
-         */
         @Override
         StreamTask createTask(final Consumer<byte[], byte[]> consumer, final TaskId taskId, final Set<TopicPartition> partitions) {
             taskCreatedSensor.record();
