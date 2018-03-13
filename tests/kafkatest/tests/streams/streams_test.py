@@ -47,7 +47,7 @@ class StreamsTest(KafkaTest):
                                   acks=1)
 
     def assert_produce_consume(self, source_topic, sink_topic, client_id, test_state, num_messages=5):
-        self.assert_produce_consume(sink_topic, test_state, num_messages)
+        self.assert_produce(sink_topic, test_state, num_messages)
 
         self.assert_consume(client_id, test_state, source_topic, num_messages)
 
