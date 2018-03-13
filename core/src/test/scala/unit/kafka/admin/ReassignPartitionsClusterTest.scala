@@ -76,7 +76,6 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     super.tearDown()
   }
 
-
   @Test
   def testHwAfterPartitionReassignment(): Unit = {
     //Given a single replica on server 100
@@ -98,7 +97,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       "broker 101 should be the new leader", pause = 1L
     )
 
-    assertTrue(newLeaderServer.replicaManager.getReplicaOrException(topicPartition).highWatermark.messageOffset >= 0)
+    assertEquals(100, leaderServer.replicaManager.getReplicaOrException(topicPartition).highWatermark.messageOffset)
+    servers.foreach(server => waitUntilTrue(() => server.replicaManager.getReplicaOrException(topicPartition).highWatermark.messageOffset == 100, ""))
   }
 
 
