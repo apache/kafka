@@ -51,6 +51,7 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
+import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.JOIN;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.PROCESSING;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.SINK;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.TRANSFORM;
@@ -1053,14 +1054,26 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
             KStreamPassThrough<K1, R> joinMerge = new KStreamPassThrough<>();
 
+            JoinGraphNode.Builder joinGraphBuilder = JoinGraphNode.Builder.builder();
 
-            builder.internalTopologyBuilder.addProcessor(thisWindowStreamName, thisWindowedStream, ((AbstractStream) lhs).name);
-            builder.internalTopologyBuilder.addProcessor(otherWindowStreamName, otherWindowedStream, ((AbstractStream) other).name);
-            builder.internalTopologyBuilder.addProcessor(joinThisName, joinThis, thisWindowStreamName);
-            builder.internalTopologyBuilder.addProcessor(joinOtherName, joinOther, otherWindowStreamName);
-            builder.internalTopologyBuilder.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
-            builder.internalTopologyBuilder.addStateStore(thisWindow, thisWindowStreamName, joinOtherName);
-            builder.internalTopologyBuilder.addStateStore(otherWindow, otherWindowStreamName, joinThisName);
+            joinGraphBuilder.withTopologyNodeType(JOIN)
+                .withThisWindowedStreamProcessor(thisWindowedStream)
+                .withOtherWindowedStreamProcessor(otherWindowedStream)
+                .withJoinThisProcessor(joinThis)
+                .withJoinOtherProcessor(joinOther)
+                .withJoinMergeProcessor(joinMerge)
+                .withThisWindowStreamName(thisWindowStreamName)
+                .withOtherWindowStreamName(otherWindowStreamName)
+                .withLeftHandSideCallingStream(((AbstractStream) lhs).name)
+                .withOtherStreamName(((AbstractStream) other).name)
+                .withJoinThisName(joinThisName)
+                .withJoinOtherName(joinOtherName)
+                .withJoinMergeName(joinMergeName)
+                .withThisWindowBuilder(thisWindow)
+                .withOtherWindowBuilder(otherWindow);
+
+
+            builder.internalTopologyBuilder.getStreamsTopologyGraph().addNode(joinGraphBuilder.build());
 
             Set<String> allSourceNodes = new HashSet<>(((AbstractStream<K>) lhs).sourceNodes);
             allSourceNodes.addAll(((KStreamImpl<K1, V2>) other).sourceNodes);

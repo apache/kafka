@@ -51,7 +51,7 @@
               files="(Utils|Topic|KafkaLZ4BlockOutputStream|AclData).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|InternalTopologyBuilderOptimizerImpl).java"/>
+              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|InternalTopologyBuilderOptimizerImpl|JoinGraphNode).java"/>
 
     <suppress checks="JavaNCSS"
               files="AbstractRequest.java|KerberosLogin.java|WorkerSinkTaskTest.java|TransactionManagerTest.java"/>
@@ -81,6 +81,8 @@
 
     <suppress checks="ParameterNumber"
               files="WorkerSourceTask.java"/>
+    <suppress checks="ParameterNumber"
+              files="JoinGraphNode"/>
     <suppress checks="ParameterNumber"
               files="WorkerCoordinator.java"/>
     <suppress checks="ParameterNumber"

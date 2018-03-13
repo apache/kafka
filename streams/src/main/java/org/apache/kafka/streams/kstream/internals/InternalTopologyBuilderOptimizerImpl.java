@@ -156,6 +156,18 @@ public class InternalTopologyBuilderOptimizerImpl implements TopologyOptimizer {
                     internalTopologyBuilder.connectProcessorAndStateStores(descendant.name(), processDetails.getStoreNames());
                 }
                 break;
+            case JOIN:
+                JoinGraphNode jgn = (JoinGraphNode) descendant;
+
+                internalTopologyBuilder.addProcessor(jgn.thisWindowStreamName, jgn.thisWindowedStreamProcessor, jgn.leftHandSideCallingStream);
+                internalTopologyBuilder.addProcessor(jgn.otherWindowStreamName, jgn.otherWindowedStreamProcessor, jgn.otherStreamName);
+                internalTopologyBuilder.addProcessor(jgn.joinThisName, jgn.joinThisProcessor, jgn.thisWindowStreamName);
+                internalTopologyBuilder.addProcessor(jgn.joinOtherName, jgn.joinOtherProcessor, jgn.otherWindowStreamName);
+                internalTopologyBuilder.addProcessor(jgn.joinMergeName, jgn.joinMergeProcessor, jgn.joinThisName, jgn.joinOtherName);
+                internalTopologyBuilder.addStateStore(jgn.thisWindowBuilder, jgn.thisWindowStreamName, jgn.joinOtherName);
+                internalTopologyBuilder.addStateStore(jgn.otherWindowBuilder, jgn.otherWindowStreamName, jgn.joinThisName);
+
+                break;
             case GROUP_BY:
                 //TODO Need to figure out how to handle this case
                 break;

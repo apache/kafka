@@ -24,6 +24,7 @@ import java.util.Objects;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.FLATMAP;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.GLOBAL_KTABLE;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.GROUP_BY;
+import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.JOIN;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.MAP;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.SELECT_KEY;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.SOURCE;
@@ -69,6 +70,10 @@ public class StreamsGraphNode {
     protected String name;
     protected String predecessorName;
 
+    public StreamsGraphNode(TopologyNodeType nodeType) {
+        this.topologyNodeType = nodeType;
+    }
+
     public StreamsGraphNode(final String name, final TopologyNodeType topologyNodeType) {
         this(name, topologyNodeType, false, null, null);
     }
@@ -111,7 +116,7 @@ public class StreamsGraphNode {
     }
 
     public boolean isSourceNode() {
-        return topologyNodeType == SOURCE || topologyNodeType == TABLE || topologyNodeType == GLOBAL_KTABLE;
+        return topologyNodeType == SOURCE || topologyNodeType == TABLE || topologyNodeType == GLOBAL_KTABLE || topologyNodeType == JOIN;
     }
 
 
