@@ -570,16 +570,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         sender.wakeup();
         try {
             if (!result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS)) {
-                TimeoutException e = new TimeoutException("Timeout expired while initializing transactional state in " +
+                throw new TimeoutException("Timeout expired while initializing transactional state in " +
                         maxBlockTimeMs + "ms.");
-                transactionManager.transitionToFatalError(e);
-                throw e;
             }
         } catch (InterruptedException e) {
             throw new InterruptException("Initialize transactions interrupted.", e);
-        } catch (KafkaException e) {
-            transactionManager.transitionToFatalError(e);
-            throw e;
         }
     }
 

@@ -2213,6 +2213,43 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasOngoingTransaction());
     }
 
+    @Test
+    public void testShouldResetProducerStateAfterResolvingSequences() throws InterruptedException, ExecutionException {
+        // Create a TransactionManager without a transactionalId to test
+        // shouldResetProducerStateAfterResolvingSequences.
+        TransactionManager manager = new TransactionManager(logContext, null, transactionTimeoutMs,
+            DEFAULT_RETRY_BACKOFF_MS);
+        assertFalse(manager.shouldResetProducerStateAfterResolvingSequences());
+        TopicPartition tp0 = new TopicPartition("foo", 0);
+        TopicPartition tp1 = new TopicPartition("foo", 1);
+        assertEquals(Integer.valueOf(0), manager.sequenceNumber(tp0));
+        assertEquals(Integer.valueOf(0), manager.sequenceNumber(tp1));
+
+        manager.incrementSequenceNumber(tp0, 1);
+        manager.incrementSequenceNumber(tp1, 1);
+        manager.maybeUpdateLastAckedSequence(tp0, 0);
+        manager.maybeUpdateLastAckedSequence(tp1, 0);
+        manager.markSequenceUnresolved(tp0);
+        manager.markSequenceUnresolved(tp1);
+        assertFalse(manager.shouldResetProducerStateAfterResolvingSequences());
+
+        manager.maybeUpdateLastAckedSequence(tp0, 5);
+        manager.incrementSequenceNumber(tp0, 1);
+        manager.markSequenceUnresolved(tp0);
+        manager.markSequenceUnresolved(tp1);
+        assertTrue(manager.shouldResetProducerStateAfterResolvingSequences());
+    }
+
+    @Test
+    public void verifyInitializeTransactionsCacheRequestResult() {
+        assertNull(transactionManager.transactionalRequestResult);
+        transactionManager.initializeTransactions();
+        assertNotNull(transactionManager.transactionalRequestResult);
+        assertFalse(transactionManager.transactionalRequestResult.isCompleted());
+        TransactionalRequestResult result = transactionManager.initializeTransactions(); // should cache the incomplete result
+        assertEquals(result, transactionManager.transactionalRequestResult);
+    }
+
     private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {
         final long pid = 1L;
         final short epoch = 1;

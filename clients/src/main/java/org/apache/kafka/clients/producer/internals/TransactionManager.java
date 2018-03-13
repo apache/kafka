@@ -51,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
@@ -111,6 +112,8 @@ public class TransactionManager {
     private int inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     private Node transactionCoordinator;
     private Node consumerGroupCoordinator;
+    // only visible for testing
+    TransactionalRequestResult transactionalRequestResult;
 
     private volatile State currentState = State.UNINITIALIZED;
     private volatile RuntimeException lastError = null;
@@ -200,13 +203,16 @@ public class TransactionManager {
 
     public synchronized TransactionalRequestResult initializeTransactions() {
         ensureTransactional();
-        transitionTo(State.INITIALIZING);
-        setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
-        this.nextSequence.clear();
-        InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(transactionalId, transactionTimeoutMs);
-        InitProducerIdHandler handler = new InitProducerIdHandler(builder);
-        enqueueRequest(handler);
-        return handler.result;
+        if (transactionalRequestResult == null || transactionalRequestResult.isCompleted()) {
+            transitionTo(State.INITIALIZING);
+            setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
+            this.nextSequence.clear();
+            InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(transactionalId, transactionTimeoutMs);
+            InitProducerIdHandler handler = new InitProducerIdHandler(builder);
+            enqueueRequest(handler);
+            transactionalRequestResult = handler.result;
+        }
+        return transactionalRequestResult;
     }
 
     public synchronized void beginTransaction() {
@@ -306,10 +312,6 @@ public class TransactionManager {
         return transactionalId != null;
     }
 
-    public synchronized void transitionToFatalError(RuntimeException exception) {
-        transitionTo(State.FATAL_ERROR, exception);
-    }
-
     synchronized boolean hasPartitionsToAdd() {
         return !newPartitionsInTransaction.isEmpty() || !pendingPartitionsInTransaction.isEmpty();
     }
@@ -333,6 +335,10 @@ public class TransactionManager {
             return;
         }
         transitionTo(State.ABORTABLE_ERROR, exception);
+    }
+
+    synchronized void transitionToFatalError(RuntimeException exception) {
+        transitionTo(State.FATAL_ERROR, exception);
     }
 
     // visible for testing
@@ -568,14 +574,15 @@ public class TransactionManager {
         if (isTransactional())
             // We should not reset producer state if we are transactional. We will transition to a fatal error instead.
             return false;
-        for (TopicPartition topicPartition : partitionsWithUnresolvedSequences) {
+        for (Iterator<TopicPartition> iter = partitionsWithUnresolvedSequences.iterator(); iter.hasNext(); ) {
+            TopicPartition topicPartition = iter.next();
             if (!hasInflightBatches(topicPartition)) {
                 // The partition has been fully drained. At this point, the last ack'd sequence should be once less than
                 // next sequence destined for the partition. If so, the partition is fully resolved. If not, we should
                 // reset the sequence number if necessary.
                 if (isNextSequence(topicPartition, sequenceNumber(topicPartition))) {
                     // This would happen when a batch was expired, but subsequent batches succeeded.
-                    partitionsWithUnresolvedSequences.remove(topicPartition);
+                    iter.remove();
                 } else {
                     // We would enter this branch if all in flight batches were ultimately expired in the producer.
                     log.info("No inflight batches remaining for {}, last ack'd sequence for partition is {}, next sequence is {}. " +
