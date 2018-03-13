@@ -138,6 +138,9 @@ class Replica(val brokerId: Int,
 
   def highWatermark_=(newHighWatermark: LogOffsetMetadata) {
     if (isLocal) {
+      if (newHighWatermark.messageOffset < 0)
+        throw new IllegalArgumentException("High watermark offset should be non-negative")
+
       highWatermarkMetadata = newHighWatermark
       log.foreach(_.onHighWatermarkIncremented(newHighWatermark.messageOffset))
       trace(s"Setting high watermark for replica $brokerId partition $topicPartition to [$newHighWatermark]")
