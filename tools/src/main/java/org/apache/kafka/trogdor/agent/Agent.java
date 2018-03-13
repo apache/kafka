@@ -44,6 +44,8 @@ import static net.sourceforge.argparse4j.impl.Arguments.store;
 public final class Agent {
     private static final Logger log = LoggerFactory.getLogger(Agent.class);
 
+    public static final int DEFAULT_PORT = 8888;
+
     /**
      * The time at which this server was started.
      */

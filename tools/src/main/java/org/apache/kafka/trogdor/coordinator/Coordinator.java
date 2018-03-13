@@ -45,6 +45,8 @@ import static net.sourceforge.argparse4j.impl.Arguments.store;
 public final class Coordinator {
     private static final Logger log = LoggerFactory.getLogger(Coordinator.class);
 
+    public static final int DEFAULT_PORT = 8889;
+
     /**
      * The start time of the Coordinator in milliseconds.
      */
