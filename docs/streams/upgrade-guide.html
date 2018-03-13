@@ -43,8 +43,8 @@
         If you want to upgrade from 1.0.x to 1.1.0 and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
         you'd need to update your code to incorporate the newly added public APIs.
         Otherwise, if you are using Java 7 you don't need to make any code changes as the public API is fully backward compatible;
-        byt if you are using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
-	    Hot-swaping the jar-file only might not work for this case.
+        but if you are using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
+        Hot-swaping the jar-file only might not work for this case.
         See <a href="#streams_api_changes_110">below</a> for a complete list of 1.1.0 API and semantic changes that allow you to advance your application and/or simplify your code base.
     </p>
 
@@ -87,11 +87,11 @@
         For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-265%3A+Make+Windowed+Serde+to+public+APIs">KIP-265</a>.
     </p>
 
-
     <h3><a id="streams_api_changes_110" href="#streams_api_changes_110">Streams API changes in 1.1.0</a></h3>
     <p>
-	    We have added support for methods in <code>ReadOnlyWindowStore</code> which allows for querying <code>WindowStore</code>s without the necessity of providing keys.
+        We have added support for methods in <code>ReadOnlyWindowStore</code> which allows for querying <code>WindowStore</code>s without the necessity of providing keys.
         For users who have customized window store implementations on the above interface, they'd need to update their code to implement the newly added method as well.
+        For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-205%3A+Add+all%28%29+and+range%28%29+API+to+ReadOnlyWindowStore">KIP-205</a>.
     </p>
 
     <p>

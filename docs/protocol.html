@@ -185,7 +185,7 @@ Kafka request. SASL/GSSAPI authentication is performed starting with this packet
 
 <pre>
 RequestOrResponse => Size (RequestMessage | ResponseMessage)
-Size => int32
+  Size => int32
 </pre>
 
 <table class="data-table"><tbody>
@@ -193,9 +193,8 @@ Size => int32
 <tr><td>message_size</td><td>The message_size field gives the size of the subsequent request or response message in bytes. The client can read requests by first reading this 4 byte size as an integer N, and then reading and parsing the subsequent N bytes of the request.</td></tr>
 </table>
 
-<h5><a id="protocol_message_sets" href="#protocol_message_sets">Message Sets</a></h5>
-
-<p>A description of the message set format can be found <a href="https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-Messagesets">here</a>. (KAFKA-3368)</p>
+<h5><a id="protocol_recordbatch" href="#protocol_recordbatch">Record Batch</a></h5>
+<p>A description of the record batch format can be found <a href="/documentation/#recordbatch">here</a>.</p>
 
 <h4><a id="protocol_constants" href="#protocol_constants">Constants</a></h4>
 
