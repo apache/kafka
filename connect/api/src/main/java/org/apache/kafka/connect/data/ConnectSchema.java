@@ -299,11 +299,25 @@ public class ConnectSchema implements Schema {
 
     @Override
     public int hashCode() {
-        if (this.hash == null) {
-            this.hash = Objects.hash(type, optional, defaultValue, fields, keySchema, valueSchema, name, version, doc,
-                parameters);
+        int result = (type != null ? type.hashCode() : 0);
+        result = 31 * result + (optional ? 1 : 0);
+        result = 31 * result + (defaultValue != null ? defaultValue.hashCode() : 0);
+        if (fields != null) {
+            for (Field f : fields) {
+                result = 31 * result + f.hashCode();
+            }
         }
-        return this.hash;
+        result = 31 * result + (keySchema != null ? keySchema.hashCode() : 0);
+        result = 31 * result + (valueSchema != null ? valueSchema.hashCode() : 0);
+        result = 31 * result + (name != null ? name.hashCode() : 0);
+        result = 31 * result + (version != null ? version : 0);
+        result = 31 * result + (doc != null ? doc.hashCode() : 0);
+        if (parameters != null) {
+            for (Map.Entry<String, String> e : parameters.entrySet()) {
+                result = 31 * result + e.getKey().hashCode() + e.getValue().hashCode();
+            }
+        }
+        return result;
     }
 
     @Override
