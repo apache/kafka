@@ -259,7 +259,7 @@ class Partition(val topic: String,
       val newInSyncReplicas = partitionStateInfo.basePartitionState.isr.asScala.map(r => getOrCreateReplica(r, partitionStateInfo.isNew)).toSet
       // remove assigned replicas that have been removed by the controller
       (assignedReplicas.map(_.brokerId) -- newAssignedReplicas).foreach(removeReplica)
-      inSyncReplicas = newInSyncReplicas
+      inSyncReplicas = newInSyncReplicas.filter(replica => newAssignedReplicas.contains(replica.brokerId))
 
       info(s"$topicPartition starts at Leader Epoch ${partitionStateInfo.basePartitionState.leaderEpoch} from offset ${getReplica().get.logEndOffset.messageOffset}. Previous Leader Epoch was: $leaderEpoch")
 
