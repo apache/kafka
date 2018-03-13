@@ -78,7 +78,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
 
   @Test
-  def testHw(): Unit = {
+  def testHwAfterPartitionReassignment(): Unit = {
     //Given a single replica on server 100
     startBrokers(Seq(100, 101, 102))
     adminClient = createAdminClient(servers)

@@ -1128,14 +1128,12 @@ class Log(@volatile var dir: File,
    * Given a message offset, find its corresponding offset metadata in the log.
    * If the message offset is out of range, return unknown offset metadata
    */
-  def convertToOffsetMetadata(offset: Long): LogOffsetMetadata = {
+  def convertToOffsetMetadata(offset: Long): Option[LogOffsetMetadata] = {
     try {
       val fetchDataInfo = readUncommitted(offset, 1)
-      fetchDataInfo.fetchOffsetMetadata
+      Some(fetchDataInfo.fetchOffsetMetadata)
     } catch {
-      case _: OffsetOutOfRangeException =>
-        val firstOffset = segments.firstEntry.getValue.baseOffset
-        new LogOffsetMetadata(firstOffset, firstOffset, 0)
+      case _: OffsetOutOfRangeException => None
     }
   }
 
