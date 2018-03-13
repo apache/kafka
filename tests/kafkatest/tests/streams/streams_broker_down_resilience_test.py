@@ -50,7 +50,11 @@ class StreamsBrokerDownResilience(StreamsTest):
 
         # until KIP-91 is merged we'll only send 5 messages to assert Kafka Streams is running before taking the broker down
         # After KIP-91 is merged we'll continue to send messages the duration of the test
-        self.assert_produce_consume(self.inputTopic, self.outputTopic, self.client_id, "before_broker_stop")
+        self.assert_produce_consume(self.inputTopic,
+                                    self.outputTopic,
+                                    self.client_id,
+                                    "before_broker_stop",
+                                    timeout_sec=120)
 
         node = self.kafka.leader(self.inputTopic)
 
@@ -60,7 +64,11 @@ class StreamsBrokerDownResilience(StreamsTest):
 
         self.kafka.start_node(node)
 
-        self.assert_produce_consume(self.inputTopic, self.outputTopic, self.client_id, "after_broker_stop")
+        self.assert_produce_consume(self.inputTopic,
+                                    self.outputTopic,
+                                    self.client_id,
+                                    "after_broker_stop",
+                                    timeout_sec=120)
 
         self.kafka.stop()
 
@@ -92,7 +100,12 @@ class StreamsBrokerDownResilience(StreamsTest):
         self.kafka.start_node(node)
 
         # assert streams can process when starting with broker down
-        self.assert_produce_consume(self.inputTopic, self.outputTopic, self.client_id, "running_with_broker_down_initially", num_messages=9)
+        self.assert_produce_consume(self.inputTopic,
+                                    self.outputTopic,
+                                    self.client_id,
+                                    "running_with_broker_down_initially",
+                                    num_messages=9,
+                                    timeout_sec=120)
 
         message = "processed3messages"
         # need to show all 3 instances processed messages
@@ -120,7 +133,12 @@ class StreamsBrokerDownResilience(StreamsTest):
         self.wait_for_verification(processor_3, "State transition from REBALANCING to RUNNING", processor_3.LOG_FILE)
 
         # assert streams can process when starting with broker up
-        self.assert_produce_consume(self.inputTopic, self.outputTopic, self.client_id, "waiting for rebalance to complete", num_messages=9)
+        self.assert_produce_consume(self.inputTopic,
+                                    self.outputTopic,
+                                    self.client_id,
+                                    "waiting for rebalance to complete",
+                                    num_messages=9,
+                                    timeout_sec=120)
 
         message = "processed3messages"
 
@@ -140,9 +158,12 @@ class StreamsBrokerDownResilience(StreamsTest):
 
         self.kafka.start_node(node)
 
-        self.assert_produce_consume(self.inputTopic, self.outputTopic, self.client_id,
+        self.assert_produce_consume(self.inputTopic,
+                                    self.outputTopic,
+                                    self.client_id,
                                     "sending_message_after_stopping_streams_instance_bouncing_broker",
-                                    num_messages=9)
+                                    num_messages=9,
+                                    timeout_sec=120)
 
         self.wait_for_verification(processor_3, "processed9messages", processor_3.STDOUT_FILE)
 
@@ -166,7 +187,12 @@ class StreamsBrokerDownResilience(StreamsTest):
         self.wait_for_verification(processor_3, "State transition from REBALANCING to RUNNING", processor_3.LOG_FILE)
 
         # assert streams can process when starting with broker up
-        self.assert_produce_consume(self.inputTopic, self.outputTopic, self.client_id, "waiting for rebalance to complete", num_messages=9)
+        self.assert_produce_consume(self.inputTopic,
+                                    self.outputTopic,
+                                    self.client_id,
+                                    "waiting for rebalance to complete",
+                                    num_messages=9,
+                                    timeout_sec=120)
 
         message = "processed3messages"
 
@@ -183,8 +209,11 @@ class StreamsBrokerDownResilience(StreamsTest):
 
         self.kafka.start_node(node)
 
-        self.assert_produce_consume(self.inputTopic, self.outputTopic, self.client_id,
+        self.assert_produce_consume(self.inputTopic,
+                                    self.outputTopic,
+                                    self.client_id,
                                     "sending_message_after_hard_bouncing_streams_instance_bouncing_broker",
-                                    num_messages=9)
+                                    num_messages=9,
+                                    timeout_sec=120)
 
         self.kafka.stop()

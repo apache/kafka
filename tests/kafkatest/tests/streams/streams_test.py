@@ -46,25 +46,32 @@ class StreamsTest(KafkaTest):
                                   max_messages=num_messages,
                                   acks=1)
 
-    def assert_produce_consume(self, source_topic, sink_topic, client_id, test_state, num_messages=5):
-        self.assert_produce(sink_topic, test_state, num_messages)
+    def assert_produce_consume(self,
+                               source_topic,
+                               sink_topic,
+                               client_id,
+                               test_state,
+                               num_messages=5,
+                               timeout_sec=60):
 
-        self.assert_consume(client_id, test_state, source_topic, num_messages)
+        self.assert_produce(sink_topic, test_state, num_messages, timeout_sec)
 
-    def assert_produce(self, topic, test_state, num_messages):
+        self.assert_consume(client_id, test_state, source_topic, num_messages, timeout_sec)
+
+    def assert_produce(self, topic, test_state, num_messages=5, timeout_sec=60):
         producer = self.get_producer(topic, num_messages)
         producer.start()
 
         wait_until(lambda: producer.num_acked >= num_messages,
-                   timeout_sec=30,
+                   timeout_sec=timeout_sec,
                    err_msg="At %s failed to send messages " % test_state)
 
-    def assert_consume(self, client_id, test_state, topic, num_messages=5):
+    def assert_consume(self, client_id, test_state, topic, num_messages=5, timeout_sec=60):
         consumer = self.get_consumer(client_id, topic, num_messages)
         consumer.start()
 
         wait_until(lambda: consumer.total_consumed() >= num_messages,
-                   timeout_sec=60,
+                   timeout_sec=timeout_sec,
                    err_msg="At %s streams did not process messages in 60 seconds " % test_state)
 
     @staticmethod
