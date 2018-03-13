@@ -299,7 +299,7 @@ public class ConnectSchema implements Schema {
 
     @Override
     public int hashCode() {
-        int result = (type != null ? type.hashCode() : 0);
+        int result = type != null ? type.hashCode() : 0;
         result = 31 * result + (optional ? 1 : 0);
         result = 31 * result + (defaultValue != null ? defaultValue.hashCode() : 0);
         if (fields != null) {
