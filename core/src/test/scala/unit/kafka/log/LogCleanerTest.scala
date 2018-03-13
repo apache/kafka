@@ -56,6 +56,7 @@ class LogCleanerTest extends JUnitSuite {
     Utils.delete(tmpdir)
   }
 
+
   /**
    * Test simple log cleaning
    */
@@ -118,7 +119,9 @@ class LogCleanerTest extends JUnitSuite {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 2048: java.lang.Integer)
-    var log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val config = LogConfig.fromProps(logConfig.originals, logProps)
+    var log = makeLog(config = config)
 
     val producerEpoch = 0.toShort
     val pid1 = 1
@@ -137,13 +140,7 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(List(2, 3, 1, 4), keysInLog(log))
     assertEquals(List(1, 3, 6, 7), offsetsInLog(log))
 
-    // we have to reload the log to validate that the cleaner maintained sequence numbers correctly
-    def reloadLog(): Unit = {
-      log.close()
-      log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps), recoveryPoint = 0L)
-    }
-
-    reloadLog()
+    log = reloadLog(log, config)
 
     // check duplicate append from producer 1
     var logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch)(Seq(1, 2, 3))
@@ -169,7 +166,7 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(List(3, 1, 4, 2), keysInLog(log))
     assertEquals(List(3, 6, 7, 8), offsetsInLog(log))
 
-    reloadLog()
+    log = reloadLog(log, config)
 
     // duplicate append from producer1 should still be fine
     logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch)(Seq(1, 2, 3))
@@ -1224,7 +1221,8 @@ class LogCleanerTest extends JUnitSuite {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, Integer.MAX_VALUE: java.lang.Integer)
-    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+    val config = LogConfig.fromProps(logConfig.originals, logProps)
+    var log = makeLog(config = config)
 
     val keys = List(1, 2, 1, 2)
     val values = List(1, 2, 1, 2)
@@ -1243,10 +1241,14 @@ class LogCleanerTest extends JUnitSuite {
       i += 1
     }
 
+    log.close
+    log = reloadLog(log, config)
+
     // Sanity check to make sure records were written into a single log segment
     assertEquals(1, log.numberOfSegments)
     assertEquals(keys, keysInLog(log))
     assertEquals(offsets, offsetsInLog(log))
+    assertEquals(offsets.last + 1L, log.logEndOffset)
 
     // Roll the log so that the segment we are interested in becomes inactive
     log.roll()
@@ -1254,8 +1256,9 @@ class LogCleanerTest extends JUnitSuite {
 
     // We must have now cleaned up duplicate keys, and should have still retained those messages
     // whose offset resulted in overflow
-    assertEquals(keys.drop(keys.length / 2), keysInLog(log))
-    assertEquals(keys.length / 2, keysInLog(log).size)
+    val logKeys = keysInLog(log)
+    assertEquals(keys.drop(keys.length / 2), logKeys)
+    assertEquals(keys.length / 2, logKeys.size)
     assertEquals(offsets.drop(offsets.length / 2), offsetsInLog(log))
   }
 
@@ -1312,6 +1315,11 @@ class LogCleanerTest extends JUnitSuite {
 
   private def writeToLog(log: Log, seq: Iterable[(Int, Int)]): Iterable[Long] = {
     for ((key, value) <- seq) yield log.appendAsLeader(record(key, value), leaderEpoch = 0).firstOffset.get
+  }
+
+  private def reloadLog(log: Log, config: LogConfig): Log = {
+    log.close()
+    makeLog(config = LogConfig.fromProps(logConfig.originals, logProps), recoveryPoint = 0L)
   }
 
   private def key(id: Int) = ByteBuffer.wrap(id.toString.getBytes)

@@ -596,6 +596,7 @@ private[log] class Cleaner(val id: Int,
     }
 
     var position = 0
+    var mayBeLegacySegment = false
     while (position < sourceRecords.sizeInBytes) {
       checkDone(topicPartition)
       // read a chunk of messages and copy any that are to be retained to the write buffer to be written out
@@ -616,19 +617,26 @@ private[log] class Cleaner(val id: Int,
       if (outputBuffer.position() > 0) {
         outputBuffer.flip()
         val retained = MemoryRecords.readableRecords(outputBuffer)
-        val firstOffset = retained.batches.iterator.next.baseOffset
-        val largestOffset = result.maxOffset
+        val baseOffsetOfLog = dest.baseOffset
+        val firstOffsetToAppend = retained.batches.iterator.next.baseOffset
+        val largestOffsetToAppend = result.maxOffset
 
-        if ((largestOffset - firstOffset) >= Integer.MAX_VALUE)
+        if ((largestOffsetToAppend - baseOffsetOfLog) > Integer.MAX_VALUE) {
           require(numSegmentsInGroup == 1, "Constructed segment group causes index offset overflow")
+          mayBeLegacySegment = true
+
+          debug("Offset overflow during log cleaning " +
+                s"topic: ${topicPartition.topic} largest: $largestOffsetToAppend " +
+                s"first: $firstOffsetToAppend base: $firstOffsetToAppend")
+        }
 
         // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
         // after `Log.replaceSegments` (which acquires the lock) is called
-        dest.append(largestOffset = result.maxOffset,
+        dest.append(largestOffset = largestOffsetToAppend,
           largestTimestamp = result.maxTimestamp,
           shallowOffsetOfMaxTimestamp = result.shallowOffsetOfMaxTimestamp,
           records = retained,
-          fromLogCleaner = true)
+          mayBeLegacySegment = mayBeLegacySegment)
         throttler.maybeThrottle(outputBuffer.limit())
       }
 

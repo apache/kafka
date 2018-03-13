@@ -138,7 +138,11 @@ class LogSegment private[log] (val log: FileRecords,
    * @param largestTimestamp The largest timestamp in the message set.
    * @param shallowOffsetOfMaxTimestamp The offset of the message that has the largest timestamp in the messages to append.
    * @param records The log entries to append.
-   * @param fromLogCleaner Is append being called from log cleaner?
+   * @param mayBeLegacySegment The segment might be a pre KAFKA-5413 "legacy" segment, which
+   *                           potentially contains messages that could overflow the index. Note
+   *                           that this only affects log segments that were created before
+   *                           the patch for KAFKA-5413. Typically, the compactor might encounter
+   *                           such log segments.
    *
    * @return the physical position in the file of the appended records
    */
@@ -148,7 +152,7 @@ class LogSegment private[log] (val log: FileRecords,
                           largestTimestamp: Long,
                           shallowOffsetOfMaxTimestamp: Long,
                           records: MemoryRecords,
-                          fromLogCleaner: Boolean = false): Unit = {
+                          mayBeLegacySegment: Boolean): Unit = {
     if (records.sizeInBytes > 0) {
       trace(s"Inserting ${records.sizeInBytes} bytes at end offset $largestOffset at position ${log.sizeInBytes} " +
             s"with largest timestamp $largestTimestamp at shallow offset $shallowOffsetOfMaxTimestamp")
@@ -164,15 +168,12 @@ class LogSegment private[log] (val log: FileRecords,
       // all message offsets to the base-relative form. Also make sure we do not generate an index
       // entry for such messages, so that there is no further issue downstream.
       if (!canConvertToRelativeOffset(largestOffset)) {
-        if (fromLogCleaner) {
-          trace("Offset overflow during log cleaning. Ignoring overflow and continuing. " +
-                s"largest: $largestOffset first: $firstOffset base: $baseOffset")
+        if (mayBeLegacySegment)
           canAppendToIndex = false
-        }
-        else {
-          require(false,
-                  "largest offset in message set can not be safely converted to relative offset.")
-        }
+        else
+          throw new IllegalArgumentException("requirement failed: " +
+                                             "largest offset in message set can not be safely " +
+                                             "converted to relative offset.")
       }
 
       // append the messages
@@ -185,10 +186,14 @@ class LogSegment private[log] (val log: FileRecords,
       }
 
       // append an entry to the index (if needed)
-      if (canAppendToIndex && (bytesSinceLastIndexEntry > indexIntervalBytes)) {
-        offsetIndex.append(largestOffset, physicalPosition)
-        timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp)
-        bytesSinceLastIndexEntry = 0
+      if (bytesSinceLastIndexEntry > indexIntervalBytes) {
+        if (canAppendToIndex) {
+          offsetIndex.append(largestOffset, physicalPosition)
+          timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp)
+          bytesSinceLastIndexEntry = 0
+        } else {
+          debug("Skipping append to offset index to prevent offset overflow")
+        }
       }
       bytesSinceLastIndexEntry += records.sizeInBytes
     }
