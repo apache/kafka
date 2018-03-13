@@ -18,7 +18,6 @@ import signal
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
-
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
 
@@ -154,11 +153,17 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
 class StreamsEosTestBaseService(StreamsTestBaseService):
     """Base class for Streams EOS Test services providing some common settings and functionality"""
 
+    clean_node_enabled = True
+
     def __init__(self, test_context, kafka, command):
         super(StreamsEosTestBaseService, self).__init__(test_context,
                                                         kafka,
                                                         "org.apache.kafka.streams.tests.StreamsEosTest",
                                                         command)
+
+    def clean_node(self, node):
+        if self.clean_node_enabled:
+            super.clean_node(self, node)
 
 
 class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
@@ -180,11 +185,9 @@ class StreamsEosTestJobRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsEosTestJobRunnerService, self).__init__(test_context, kafka, "process")
 
-
 class StreamsComplexEosTestJobRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsComplexEosTestJobRunnerService, self).__init__(test_context, kafka, "process-complex")
-
 
 class StreamsEosTestVerifyRunnerService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
@@ -232,3 +235,19 @@ class StreamsBrokerDownResilienceService(StreamsTestBaseService):
               " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
         return cmd
+
+
+class StreamsStandbyTaskService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka, configs):
+        super(StreamsStandbyTaskService, self).__init__(test_context,
+                                                        kafka,
+                                                        "org.apache.kafka.streams.tests.StreamsStandByReplicaTest",
+                                                        configs)
+
+
+class StreamsRepeatingIntegerKeyProducerService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka, configs):
+        super(StreamsRepeatingIntegerKeyProducerService, self).__init__(test_context,
+                                                                        kafka,
+                                                                        "org.apache.kafka.streams.tests.StreamsRepeatingIntegerKeyProducer",
+                                                                        configs)

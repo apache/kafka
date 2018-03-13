@@ -192,7 +192,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             }
             transactionInFlight = true;
         }
-        initTopology();
     }
 
     /**
@@ -542,6 +541,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
 
         closeSuspended(clean, isZombie, firstException);
+
+        taskClosed = true;
     }
 
     /**

@@ -115,6 +115,13 @@ object DynamicBrokerConfig {
         config.displayName, config.dependents, config.recommender)
     }
   }
+
+  private[server] def dynamicConfigUpdateModes: util.Map[String, String] = {
+    AllDynamicConfigs.map { name =>
+      val mode = if (PerBrokerConfigs.contains(name)) "per-broker" else "cluster-wide"
+      (name -> mode)
+    }.toMap.asJava
+  }
 }
 
 class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging {
@@ -744,7 +751,7 @@ class DynamicListenerConfig(server: KafkaServer) extends BrokerReconfigurable wi
     if (listenersAdded.nonEmpty)
       server.socketServer.addListeners(listenersAdded)
 
-    server.zkClient.updateBrokerInfoInZk(server.createBrokerInfo)
+    server.kafkaController.updateBrokerInfo(server.createBrokerInfo)
   }
 
   private def listenersToMap(listeners: Seq[EndPoint]): Map[ListenerName, EndPoint] =

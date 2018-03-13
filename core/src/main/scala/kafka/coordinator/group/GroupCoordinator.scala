@@ -375,9 +375,11 @@ class GroupCoordinator(val brokerId: Int,
       }
 
       if (eligibleGroups.nonEmpty) {
-        groupManager.cleanupGroupMetadata(None, eligibleGroups, Long.MaxValue)
+        val offsetsRemoved = groupManager.cleanupGroupMetadata(eligibleGroups, group => {
+          group.removeAllOffsets()
+        })
         groupErrors ++= eligibleGroups.map(_.groupId -> Errors.NONE).toMap
-        info(s"The following groups were deleted: ${eligibleGroups.map(_.groupId).mkString(", ")}")
+        info(s"The following groups were deleted: ${eligibleGroups.map(_.groupId).mkString(", ")}. A total of $offsetsRemoved offsets were removed.")
       }
 
       groupErrors
@@ -568,7 +570,10 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def handleDeletedPartitions(topicPartitions: Seq[TopicPartition]) {
-    groupManager.cleanupGroupMetadata(Some(topicPartitions), groupManager.currentGroups, time.milliseconds())
+    val offsetsRemoved = groupManager.cleanupGroupMetadata(groupManager.currentGroups, group => {
+      group.removeOffsets(topicPartitions)
+    })
+    info(s"Removed $offsetsRemoved offsets associated with deleted partitions: ${topicPartitions.mkString(", ")}.")
   }
 
   private def validateGroup(groupId: String): Option[Errors] = {

@@ -17,6 +17,7 @@
 package kafka.log
 
 import java.nio.ByteBuffer
+import java.util.concurrent.TimeUnit
 
 import kafka.common.LongRef
 import kafka.message.{CompressionCodec, DefaultCompressionCodec, GZIPCompressionCodec, NoCompressionCodec, SnappyCompressionCodec}
@@ -26,6 +27,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.test.TestUtils
 import org.junit.Assert._
 import org.junit.Test
+import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
 
@@ -145,6 +147,50 @@ class LogValidatorTest {
 
     verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, numConvertedRecords = 0, records,
       compressed = true)
+  }
+
+  @Test
+  def testInvalidOffsetRangeAndRecordCount(): Unit = {
+    // The batch to be written contains 3 records, so the correct lastOffsetDelta is 2
+    validateRecordBatchWithCountOverrides(lastOffsetDelta = 2, count = 3)
+
+    // Count and offset range are inconsistent or invalid
+    assertInvalidBatchCountOverrides(lastOffsetDelta = 0, count = 3)
+    assertInvalidBatchCountOverrides(lastOffsetDelta = 15, count = 3)
+    assertInvalidBatchCountOverrides(lastOffsetDelta = -3, count = 3)
+    assertInvalidBatchCountOverrides(lastOffsetDelta = 2, count = -3)
+    assertInvalidBatchCountOverrides(lastOffsetDelta = 2, count = 6)
+    assertInvalidBatchCountOverrides(lastOffsetDelta = 2, count = 0)
+    assertInvalidBatchCountOverrides(lastOffsetDelta = -3, count = -2)
+
+    // Count and offset range are consistent, but do not match the actual number of records
+    assertInvalidBatchCountOverrides(lastOffsetDelta = 5, count = 6)
+    assertInvalidBatchCountOverrides(lastOffsetDelta = 1, count = 2)
+  }
+
+  private def assertInvalidBatchCountOverrides(lastOffsetDelta: Int, count: Int): Unit = {
+    intercept[InvalidRecordException] {
+      validateRecordBatchWithCountOverrides(lastOffsetDelta, count)
+    }
+  }
+
+  private def validateRecordBatchWithCountOverrides(lastOffsetDelta: Int, count: Int) {
+    val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V2, timestamp = 1234L, codec = CompressionType.NONE)
+    records.buffer.putInt(DefaultRecordBatch.RECORDS_COUNT_OFFSET, count)
+    records.buffer.putInt(DefaultRecordBatch.LAST_OFFSET_DELTA_OFFSET, lastOffsetDelta)
+    LogValidator.validateMessagesAndAssignOffsets(
+      records,
+      offsetCounter = new LongRef(0),
+      time = time,
+      now = time.milliseconds(),
+      sourceCodec = DefaultCompressionCodec,
+      targetCodec = DefaultCompressionCodec,
+      compactedTopic = false,
+      magic = RecordBatch.MAGIC_VALUE_V2,
+      timestampType = TimestampType.LOG_APPEND_TIME,
+      timestampDiffMaxMs = 1000L,
+      partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
+      isFromClient = true)
   }
 
   @Test
@@ -638,7 +684,7 @@ class LogValidatorTest {
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V0, codec = CompressionType.NONE)
     checkOffsets(records, 0)
     val offset = 1234567
-    checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+    val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -649,7 +695,10 @@ class LogValidatorTest {
       timestampType = TimestampType.LOG_APPEND_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true).validatedRecords, offset)
+      isFromClient = true)
+    checkOffsets(validatedResults.validatedRecords, offset)
+    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, numConvertedRecords = 3, records,
+      compressed = false)
   }
 
   @Test
@@ -657,7 +706,7 @@ class LogValidatorTest {
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V0, codec = CompressionType.NONE)
     checkOffsets(records, 0)
     val offset = 1234567
-    checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+    val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -668,7 +717,10 @@ class LogValidatorTest {
       timestampType = TimestampType.LOG_APPEND_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true).validatedRecords, offset)
+      isFromClient = true)
+    checkOffsets(validatedResults.validatedRecords, offset)
+    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, numConvertedRecords = 3, records,
+      compressed = false)
   }
 
   @Test
@@ -676,7 +728,7 @@ class LogValidatorTest {
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V0, codec = CompressionType.GZIP)
     val offset = 1234567
     checkOffsets(records, 0)
-    checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+    val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -687,7 +739,10 @@ class LogValidatorTest {
       timestampType = TimestampType.LOG_APPEND_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true).validatedRecords, offset)
+      isFromClient = true)
+    checkOffsets(validatedResults.validatedRecords, offset)
+    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, numConvertedRecords = 3, records,
+      compressed = true)
   }
 
   @Test
@@ -695,7 +750,7 @@ class LogValidatorTest {
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V0, codec = CompressionType.GZIP)
     val offset = 1234567
     checkOffsets(records, 0)
-    checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+    val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -706,7 +761,10 @@ class LogValidatorTest {
       timestampType = TimestampType.LOG_APPEND_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true).validatedRecords, offset)
+      isFromClient = true)
+    checkOffsets(validatedResults.validatedRecords, offset)
+    verifyRecordsProcessingStats(validatedResults.recordsProcessingStats, numConvertedRecords = 3, records,
+      compressed = true)
   }
 
   @Test(expected = classOf[InvalidRecordException])
@@ -1077,8 +1135,10 @@ class LogValidatorTest {
                                    compressed: Boolean): Unit = {
     assertNotNull("Records processing info is null", stats)
     assertEquals(numConvertedRecords, stats.numRecordsConverted)
-    if (numConvertedRecords > 0)
+    if (numConvertedRecords > 0) {
       assertTrue(s"Conversion time not recorded $stats", stats.conversionTimeNanos >= 0)
+      assertTrue(s"Conversion time not valid $stats", stats.conversionTimeNanos <= TimeUnit.MINUTES.toNanos(1))
+    }
     val originalSize = records.sizeInBytes
     val tempBytes = stats.temporaryMemoryBytes
     if (numConvertedRecords > 0 && compressed)

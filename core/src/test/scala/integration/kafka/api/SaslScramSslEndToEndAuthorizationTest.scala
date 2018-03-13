@@ -18,7 +18,8 @@ package kafka.api
 
 import org.apache.kafka.common.security.scram.ScramMechanism
 import kafka.utils.JaasTestUtils
-import kafka.utils.ZkUtils
+import kafka.zk.ConfigEntityChangeNotificationZNode
+
 import scala.collection.JavaConverters._
 import org.junit.Before
 
@@ -32,7 +33,7 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
 
   override def configureSecurityBeforeServersStart() {
     super.configureSecurityBeforeServersStart()
-    zkClient.makeSurePersistentPathExists(ZkUtils.ConfigChangesPath)
+    zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create broker credentials before starting brokers
     createScramCredentials(zkConnect, kafkaPrincipal, kafkaPassword)
   }
