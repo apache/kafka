@@ -42,7 +42,7 @@ import java.util.regex.Pattern;
  * Class used to hold the implementation details when making calls to inheritors of
  * {@link AbstractStream} when building a topology
  */
-@SuppressWarnings("deprecation")
+@SuppressWarnings({"deprecation", "unchecked"})
 public class ProcessDetails<K, V, S extends StateStore> {
 
     private final Collection<String> sourceTopics;
@@ -58,6 +58,7 @@ public class ProcessDetails<K, V, S extends StateStore> {
     private final StateStoreSupplier<KeyValueStore<K, V>> storeSupplier;
     private final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
     private final KTableSource<K, V> kTableSource;
+    private final String[] storeNames;
 
 
     private ProcessDetails(final Collection<String> sourceTopics,
@@ -69,7 +70,8 @@ public class ProcessDetails<K, V, S extends StateStore> {
                            final ProcessorSupplier<K, V> processorSupplier,
                            final StateStoreSupplier<KeyValueStore<K, V>> storeSupplier,
                            final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
-                           final KTableSource<K, V> kTableSource) {
+                           final KTableSource<K, V> kTableSource,
+                           final String[] storeNames) {
         this.sourceTopics = sourceTopics;
         this.sinkTopic = sinkTopic;
         this.sourcePattern = sourcePattern;
@@ -80,6 +82,7 @@ public class ProcessDetails<K, V, S extends StateStore> {
         this.storeSupplier = storeSupplier;
         this.storeBuilder = storeBuilder;
         this.kTableSource = kTableSource;
+        this.storeNames = storeNames;
         if (this.materialized != null) {
             this.materializedInternal = new MaterializedInternal(materialized);
         }
@@ -99,6 +102,9 @@ public class ProcessDetails<K, V, S extends StateStore> {
     }
 
     public String[] getSourceTopicArray() {
+        if (sourceTopics == null) {
+            return new String[]{};
+        }
         final String[] topics = new String[sourceTopics.size()];
         sourceTopics.toArray(topics);
         return topics;
@@ -176,6 +182,14 @@ public class ProcessDetails<K, V, S extends StateStore> {
         return storeBuilder;
     }
 
+    public KTableSource<K, V> getkTableSource() {
+        return kTableSource;
+    }
+
+    public String[] getStoreNames() {
+        return storeNames;
+    }
+
     public static Builder builder() {
         return new Builder<>();
     }
@@ -192,6 +206,7 @@ public class ProcessDetails<K, V, S extends StateStore> {
         private StateStoreSupplier<KeyValueStore<K, V>> storeSupplier;
         private StoreBuilder<KeyValueStore<K, V>> storeBuilder;
         private KTableSource<K, V> kTableSource;
+        private String[] storeNames;
 
         private Builder() {
         }
@@ -246,6 +261,12 @@ public class ProcessDetails<K, V, S extends StateStore> {
             return this;
         }
 
+
+        public Builder withStoreNames(String[] storeNames) {
+            this.storeNames = storeNames;
+            return this;
+        }
+
         public ProcessDetails<K, V, S> build() {
             return new ProcessDetails<>(sourceTopics,
                                         sinkTopic,
@@ -256,7 +277,8 @@ public class ProcessDetails<K, V, S extends StateStore> {
                                         processorSupplier,
                                         storeSupplier,
                                         storeBuilder,
-                                        kTableSource);
+                                        kTableSource,
+                                        storeNames);
         }
     }
 }

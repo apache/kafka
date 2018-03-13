@@ -33,6 +33,7 @@ import java.util.Deque;
  * This implementation traverses the graph and makes calls to the {@link InternalTopologyBuilder} instead
  * of calls from ineritors of {@link AbstractStream}
  */
+@SuppressWarnings("unchecked")
 public class InternalTopologyBuilderOptimizerImpl implements TopologyOptimizer {
 
     private final InternalTopologyBuilder internalTopologyBuilder;
@@ -76,19 +77,22 @@ public class InternalTopologyBuilderOptimizerImpl implements TopologyOptimizer {
             case SOURCE:
                 final Deserializer keyDeserializer = processDetails.consumedKeySerde() == null ? null : processDetails.consumedKeySerde().deserializer();
                 final Deserializer valDeserializer = processDetails.consumedValueSerde() == null ? null : processDetails.consumedValueSerde().deserializer();
-                internalTopologyBuilder.addSource(processDetails.getConsumedResetPolicy(),
-                                                  descendant.name(),
-                                                  processDetails.getConsumedTimestampExtractor(),
-                                                  keyDeserializer,
-                                                  valDeserializer,
-                                                  processDetails.getSourceTopicArray());
 
-                break;
-
-            case MAP:
-                internalTopologyBuilder.addProcessor(descendant.name(),
-                                                     processDetails.getProcessorSupplier(),
-                                                     descendant.getPredecessorName());
+                if (processDetails.getSourcePattern() != null) {
+                    internalTopologyBuilder.addSource(processDetails.getConsumedResetPolicy(),
+                                                      descendant.name(),
+                                                      processDetails.getConsumedTimestampExtractor(),
+                                                      keyDeserializer,
+                                                      valDeserializer,
+                                                      processDetails.getSourcePattern());
+                } else {
+                    internalTopologyBuilder.addSource(processDetails.getConsumedResetPolicy(),
+                                                      descendant.name(),
+                                                      processDetails.getConsumedTimestampExtractor(),
+                                                      keyDeserializer,
+                                                      valDeserializer,
+                                                      processDetails.getSourceTopicArray());
+                }
 
                 break;
 
@@ -131,6 +135,27 @@ public class InternalTopologyBuilderOptimizerImpl implements TopologyOptimizer {
 
                 break;
 
+            case PROCESSING:
+            case SELECT_KEY:
+            case MAP:
+            case FLATMAP:
+
+                internalTopologyBuilder.addProcessor(descendant.name(),
+                                                     processDetails.getProcessorSupplier(),
+                                                     descendant.getPredecessorName());
+
+                break;
+            case PROCESSOR:
+            case TRANSFORM:
+            case TRANSFORM_VALUES:
+                internalTopologyBuilder.addProcessor(descendant.name(),
+                                                     processDetails.getProcessorSupplier(),
+                                                     descendant.getPredecessorName());
+
+                if (processDetails.getStoreNames() != null && processDetails.getStoreNames().length > 0) {
+                    internalTopologyBuilder.connectProcessorAndStateStores(descendant.name(), processDetails.getStoreNames());
+                }
+                break;
             case GROUP_BY:
                 //TODO Need to figure out how to handle this case
                 break;

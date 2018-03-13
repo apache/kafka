@@ -49,6 +49,8 @@ public class StreamsGraphNode {
         PROCESSING,
         FILTER,
         TRANSFORM,
+        TRANSFORM_VALUES,
+        PROCESSOR,
         KTABLE,
         TOPOLOGY_PARENT,
         TO_STREAM,
