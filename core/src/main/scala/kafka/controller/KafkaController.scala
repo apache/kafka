@@ -1331,7 +1331,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
           restorePartitionReplicaAssignment(topic, partitionReplicaAssignment)
         } else {
           // This can happen if existing partition replica assignment are restored to prevent increasing partition count during topic deletion
-          info("Ignoring partition change since no new partitions are added")
+          info("Ignoring partition change during topic deletion as no new partitions are added")
         }
       else {
         if (partitionsToBeAdded.nonEmpty) {
