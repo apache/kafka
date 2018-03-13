@@ -346,9 +346,6 @@ public class StreamThread extends Thread {
             return stateDirectory;
         }
 
-        /**
-         * @throws TaskMigratedException if the task producer got fenced (EOS only)
-         */
         Collection<T> createTasks(final Consumer<byte[], byte[]> consumer, final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
             final List<T> createdTasks = new ArrayList<>();
             for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
@@ -401,9 +398,6 @@ public class StreamThread extends Thread {
             this.threadClientId = threadClientId;
         }
 
-        /**
-         * @throws TaskMigratedException if the task producer got fenced (EOS only)
-         */
         @Override
         StreamTask createTask(final Consumer<byte[], byte[]> consumer, final TaskId taskId, final Set<TopicPartition> partitions) {
             taskCreatedSensor.record();
