@@ -299,25 +299,28 @@ public class ConnectSchema implements Schema {
 
     @Override
     public int hashCode() {
-        int result = type != null ? type.hashCode() : 0;
-        result = 31 * result + (optional ? 1 : 0);
-        result = 31 * result + (defaultValue != null ? defaultValue.hashCode() : 0);
-        if (fields != null) {
-            for (Field f : fields) {
-                result = 31 * result + f.hashCode();
+        if (this.hash == null) {
+            int result = type != null ? type.hashCode() : 0;
+            result = 31 * result + (optional ? 1 : 0);
+            result = 31 * result + (defaultValue != null ? defaultValue.hashCode() : 0);
+            if (fields != null) {
+                for (Field f : fields) {
+                    result = 31 * result + f.hashCode();
+                }
             }
-        }
-        result = 31 * result + (keySchema != null ? keySchema.hashCode() : 0);
-        result = 31 * result + (valueSchema != null ? valueSchema.hashCode() : 0);
-        result = 31 * result + (name != null ? name.hashCode() : 0);
-        result = 31 * result + (version != null ? version : 0);
-        result = 31 * result + (doc != null ? doc.hashCode() : 0);
-        if (parameters != null) {
-            for (Map.Entry<String, String> e : parameters.entrySet()) {
-                result = 31 * result + e.getKey().hashCode() + e.getValue().hashCode();
+            result = 31 * result + (keySchema != null ? keySchema.hashCode() : 0);
+            result = 31 * result + (valueSchema != null ? valueSchema.hashCode() : 0);
+            result = 31 * result + (name != null ? name.hashCode() : 0);
+            result = 31 * result + (version != null ? version : 0);
+            result = 31 * result + (doc != null ? doc.hashCode() : 0);
+            if (parameters != null) {
+                for (Map.Entry<String, String> e : parameters.entrySet()) {
+                    result = 31 * result + e.getKey().hashCode() + e.getValue().hashCode();
+                }
             }
+            this.hash = result;
         }
-        return result;
+        return this.hash;
     }
 
     @Override
