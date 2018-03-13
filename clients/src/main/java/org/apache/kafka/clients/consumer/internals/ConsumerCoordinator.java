@@ -458,7 +458,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     public void refreshCommittedOffsetsIfNeeded() {
-        refreshCommittedOffsetsIfNeeded(0, Long.MAX_VALUE);
+        refreshCommittedOffsetsIfNeeded(time.milliseconds(), autoCommitIntervalMs);
     }
 
     /**
