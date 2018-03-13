@@ -85,19 +85,57 @@ public final class WorkerUtils {
      * @param log               The logger to use.
      * @param bootstrapServers  The bootstrap server list.
      * @param topics            Maps topic names to partition assignments.
+     * @param failOnExisting    If true, the method will throw TopicExistsException if one or
+     *                          more topics already exist. Otherwise, the existing topics are
+     *                          verified for number of partitions. In this case, if number of
+     *                          partitions of an existing topic does not match the requested
+     *                          number of partitions, the method throws RuntimeException.
      */
-    public static void createTopics(Logger log, String bootstrapServers,
-            Collection<NewTopic> topics) throws Throwable {
-        Collection<String> topicsExists;
-        try (AdminClient adminClient = createAdminClient(log, bootstrapServers)) {
-            topicsExists = createTopics(log, adminClient, topics);
-        }
-        if ((topicsExists != null) && !topicsExists.isEmpty()) {
-            log.warn("Topic(s) {} already exist.", topicsExists);
-            throw new TopicExistsException("One or more topics already exist.");
+    public static void createTopics(
+        Logger log, String bootstrapServers,
+        Map<String, NewTopic> topics, boolean failOnExisting) throws Throwable {
+        // this method wraps the call to createTopics() that takes admin client, so that we can
+        // unit test the functionality with MockAdminClient. The exception is caught and
+        // re-thrown so that admin client is closed when the method returns.
+        try (AdminClient adminClient = createAdminClient(bootstrapServers)) {
+            createTopics(log, adminClient, topics, failOnExisting);
+        } catch (Exception e) {
+            log.warn("Failed to create or verify topics {}", topics, e);
+            throw e;
         }
     }
 
+    /**
+     * The actual create topics functionality is separated into this method and called from the
+     * above method to be able to unit test with mock adminClient.
+     */
+    static void createTopics(
+        Logger log, AdminClient adminClient,
+        Map<String, NewTopic> topics, boolean failOnExisting) throws Throwable {
+        if (topics.isEmpty()) {
+            log.warn("Request to create topics has an empty topic list.");
+            return;
+        }
+
+        Collection<String> topicsExists = createTopics(log, adminClient, topics.values());
+        if (!topicsExists.isEmpty()) {
+            if (failOnExisting) {
+                log.warn("Topic(s) {} already exist.", topicsExists);
+                throw new TopicExistsException("One or more topics already exist.");
+            } else {
+                verifyTopics(log, adminClient, topicsExists, topics);
+            }
+        }
+    }
+
+    /**
+     * Creates Kafka topics and returns a list of topics that already exist
+     * @param log             The logger to use
+     * @param adminClient     AdminClient
+     * @param topics          List of topics to create
+     * @return                Collection of topics names that already exist.
+     * @throws Throwable if creation of one or more topics fails (except for topic exists case).
+     */
     static Collection<String> createTopics(Logger log, AdminClient adminClient,
                              Collection<NewTopic> topics) throws Throwable {
         long startMs = Time.SYSTEM.milliseconds();
@@ -157,58 +195,37 @@ public final class WorkerUtils {
     }
 
     /**
-     * Verifies that topics exist with the same number of partitions. If any of the topics do not
-     * exist, the method will create them. If any topic exists, but has a different number of
-     * partitions, the method throws an exception.
-     *
-     * @param log                  The logger to use.
-     * @param bootstrapServers     The bootstrap server list.
-     * @param topics               topic name to topic description map representing a list of
-     *                             topics to verify/create
-     * throws IllegalArgumentException if one or more existing topics have a different number of
-     *                             partitions than requested (in 'topics' map).
+     * Verifies that topics in 'topicsToVerify' list have the same number of partitions as
+     * described in 'topicsInfo'
+     * @param log                The logger to use
+     * @param adminClient        AdminClient
+     * @param topicsToVerify     List of topics to verify
+     * @param topicsInfo         Map of topic name to topic description, which includes topics in
+     *                           'topicsToVerify' list.
+     * @throws RuntimeException  If one or more topics have different number of partitions than
+     * described in 'topicsInfo'
      */
-    public static void verifyTopicsAndCreateNonExistingTopics(
-        Logger log, String bootstrapServers, Map<String, NewTopic> topics) throws Throwable {
-        try (AdminClient adminClient = createAdminClient(log, bootstrapServers)) {
-            verifyTopicsAndCreateNonExistingTopics(log, adminClient, topics);
-        }
-    }
-
-    static void verifyTopicsAndCreateNonExistingTopics(
-        Logger log, AdminClient adminClient, Map<String, NewTopic> topics) throws Throwable {
-        if (topics.isEmpty()) {
-            log.warn("Request to create topics has an empty topic list.");
-            return;
-        }
-
-        // first try to create all topics
-        Collection<String> topicsExists = createTopics(log, adminClient, topics.values());
-        if (topicsExists.isEmpty()) {
-            // we are done
-            return;
-        }
-
-        // verify that topics that already exist have exactly the same number of partitions that
-        // was requested
+    static void verifyTopics(
+        Logger log, AdminClient adminClient,
+        Collection<String> topicsToVerify, Map<String, NewTopic> topicsInfo) throws Throwable {
         DescribeTopicsResult topicsResult = adminClient.describeTopics(
-            topicsExists, new DescribeTopicsOptions().timeoutMs(CREATE_TOPICS_REQUEST_TIMEOUT));
+            topicsToVerify, new DescribeTopicsOptions().timeoutMs(CREATE_TOPICS_REQUEST_TIMEOUT));
         Map<String, TopicDescription> topicDescriptionMap = topicsResult.all().get();
         for (TopicDescription desc: topicDescriptionMap.values()) {
             // map will always contain the topic since all topics in 'topicsExists' are in given
             // 'topics' map
-            int partitions = topics.get(desc.name()).numPartitions();
+            int partitions = topicsInfo.get(desc.name()).numPartitions();
             if (desc.partitions().size() != partitions) {
                 String str = "Topic '" + desc.name() + "' exists, but has "
                              + desc.partitions().size() + " partitions, while requested "
                              + " number of partitions is " + partitions;
                 log.warn(str);
-                throw new IllegalArgumentException(str);
+                throw new RuntimeException(str);
             }
         }
     }
 
-    private static AdminClient createAdminClient(Logger log, String bootstrapServers) {
+    private static AdminClient createAdminClient(String bootstrapServers) {
         Properties props = new Properties();
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, CREATE_TOPICS_REQUEST_TIMEOUT);
