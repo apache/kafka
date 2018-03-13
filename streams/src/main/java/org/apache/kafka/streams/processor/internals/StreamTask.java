@@ -139,10 +139,11 @@ public class StreamTask extends AbstractTask implements Punctuator {
         this.time = time;
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
+
+        // initialize transactions if eos is turned on, which will block if the previous transaction has not
+        // completed yet; do not start the first transaction until the topology has been initialized later
         if (eosEnabled) {
             this.producer.initTransactions();
-            this.producer.beginTransaction();
-            transactionInFlight = true;
         }
     }
 
@@ -153,26 +154,33 @@ public class StreamTask extends AbstractTask implements Punctuator {
         return changelogPartitions().isEmpty();
     }
 
+    /**
+     * <pre>
+     * - (re-)initialize the topology of the task
+     * </pre>
+     * @throws ProducerFencedException
+     */
     @Override
     public void initializeTopology() {
         initTopology();
+
+        if (eosEnabled) {
+            this.producer.beginTransaction();
+            transactionInFlight = true;
+        }
+
         processorContext.initialized();
         taskInitialized = true;
     }
 
     /**
      * <pre>
-     * - re-initialize the task
-     * - if (eos) begin new transaction
+     * - resume the task
      * </pre>
      */
     @Override
     public void resume() {
         log.debug("{} Resuming", logPrefix);
-        if (eosEnabled) {
-            producer.beginTransaction();
-            transactionInFlight = true;
-        }
         initTopology();
     }
 

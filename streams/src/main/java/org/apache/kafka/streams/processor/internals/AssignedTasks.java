@@ -226,7 +226,14 @@ class AssignedTasks<T extends AbstractTask> {
                 suspended.remove(taskId);
                 log.trace("{} Resuming suspended {} {} with assigned partitions {}", logPrefix, taskTypeName, taskId, partitions);
                 task.resume();
-                transitionToRunning(task);
+                try {
+                    transitionToRunning(task);
+                } catch (final ProducerFencedException e) {
+                    closeZombieTask(task);
+                    suspended.remove(taskId);
+                    running.remove(task.id());
+                    throw e;
+                }
                 return true;
             } else {
                 log.trace("{} couldn't resume task {} assigned partitions {}, task partitions", logPrefix, taskId, partitions, task.partitions);
