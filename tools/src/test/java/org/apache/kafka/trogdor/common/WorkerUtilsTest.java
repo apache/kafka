@@ -86,6 +86,20 @@ public class WorkerUtilsTest {
     }
 
     @Test
+    public void testCreateRetriesOnTimeout() throws Throwable {
+        adminClient.timeoutNextRequest(1);
+
+        WorkerUtils.createTopics(
+            log, adminClient, Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), true);
+
+        assertEquals(new TopicDescription(TEST_TOPIC, false, new ArrayList<TopicPartitionInfo>() {
+            {
+                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()));
+            }
+        }), adminClient.describeTopics(Collections.singleton(TEST_TOPIC)).values().get(TEST_TOPIC).get());
+    }
+
+    @Test
     public void testCreateZeroTopicsDoesNothing() throws Throwable {
         WorkerUtils.createTopics(log, adminClient, Collections.<String, NewTopic>emptyMap(), true);
         assertEquals(0, adminClient.listTopics().names().get().size());
