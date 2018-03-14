@@ -140,8 +140,8 @@
 
   <span class="nd">@Override</span>
   <span class="kd">public</span> <span class="kt">void</span> <span class="nf">close</span><span class="o">()</span> <span class="o">{</span>
-      <span class="c1">// close the key-value store</span>
-      <span class="n">kvStore</span><span class="o">.</span><span class="na">close</span><span class="o">();</span>
+      <span class="c1">// close any resources managed by this processor</span>
+      <span class="c1">// Note: Do not close any StateStores as these are managed by the library</span>
   <span class="o">}</span>
 
 <span class="o">}</span>

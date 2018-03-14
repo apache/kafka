@@ -55,7 +55,7 @@ import java.util.Objects;
  * KeyValueBytesStoreSupplier storeSupplier = Stores.inMemoryKeyValueStore("queryable-store-name");
  * KTable<Long,String> table = builder.table(
  *   "topicName",
- *   Materialized.as(storeSupplier)
+ *   Materialized.<Long,String>as(storeSupplier)
  *               .withKeySerde(Serdes.Long())
  *               .withValueSerde(Serdes.String())
  *               .withCachingDisabled());

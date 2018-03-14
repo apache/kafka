@@ -28,7 +28,7 @@
     <h3><a id="messageformat" href="#messageformat">5.3 Message Format</a></h3>
     <p>
     Messages (aka Records) are always written in batches. The technical term for a batch of messages is a record batch, and a record batch contains one or more records. In the degenerate case, we could have a record batch containing a single record.
-    Record batches and records have their own headers. The format of each is described below for Kafka version 0.11.0 and later (message format version v2, or magic=2). <a href="https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-Messagesets">Click here</a> for details about message formats 0 and 1.</p>
+    Record batches and records have their own headers. The format of each is described below. </p>
 
     <h4><a id="recordbatch" href="#recordbatch">5.3.1 Record Batch</a></h4>
 	<p> The following is the on-disk format of a RecordBatch. </p>
@@ -78,7 +78,7 @@
     </pre></p>
     <p>The schema for the value of a control record is dependent on the type. The value is opaque to clients.</p>
 
-	<h4><a id="record" href="#record">5.3.2 Record</a></h4>
+    <h4><a id="record" href="#record">5.3.2 Record</a></h4>
 	<p>Record level headers were introduced in Kafka 0.11.0. The on-disk format of a record with Headers is delineated below. </p>
 	<p><pre class="brush: java;">
 		length: varint
@@ -92,7 +92,7 @@
 		value: byte[]
 		Headers => [Header]
 	</pre></p>
-	<h5><a id="recordheader" href="#recordheader">5.4.2.1 Record Header</a></h5>
+	<h5><a id="recordheader" href="#recordheader">5.3.2.1 Record Header</a></h5>
 	<p><pre class="brush: java;">
 		headerKeyLength: varint
 		headerKey: String
@@ -101,6 +101,73 @@
 	</pre></p>
     <p>We use the same varint encoding as Protobuf. More information on the latter can be found <a href="https://developers.google.com/protocol-buffers/docs/encoding#varints">here</a>. The count of headers in a record
     is also encoded as a varint.</p>
+
+    <h4><a id="messageset" href="#messageset">5.3.3 Old Message Format</a></h4>
+    <p>
+        Prior to Kafka 0.11, messages were transferred and stored in <i>message sets</i>. In a message set, each message has its own metadata. Note that although message sets are represented as an array,
+        they are not preceded by an int32 array size like other array elements in the protocol.
+    </p>
+
+    <b>Message Set:</b><br>
+    <p><pre class="brush: java;">
+    MessageSet (Version: 0) => [offset message_size message]
+        offset => INT64
+        message_size => INT32
+        message => crc magic_byte attributes key value
+            crc => INT32
+            magic_byte => INT8
+            attributes => INT8
+                bit 0~2:
+                    0: no compression
+                    1: gzip
+                    2: snappy
+                bit 3~7: unused
+            key => BYTES
+            value => BYTES
+    </pre></p>
+    <p><pre class="brush: java;">
+    MessageSet (Version: 1) => [offset message_size message]
+        offset => INT64
+        message_size => INT32
+        message => crc magic_byte attributes key value
+            crc => INT32
+            magic_byte => INT8
+            attributes => INT8
+                bit 0~2:
+                    0: no compression
+                    1: gzip
+                    2: snappy
+                    3: lz4
+                bit 3: timestampType
+                    0: create time
+                    1: log append time
+                bit 4~7: unused
+            timestamp =>INT64
+            key => BYTES
+            value => BYTES
+    </pre></p>
+    <p>
+        In versions prior to Kafka 0.10, the only supported message format version (which is indicated in the magic value) was 0. Message format version 1 was introduced with timestamp support in version 0.10.
+    <ul>
+        <li>Similarly to version 2 above, the lowest bits of attributes represent the compression type.</li>
+        <li>In version 1, the producer should always set the timestamp type bit to 0. If the topic is configured to use log append time,
+            (through either broker level config log.message.timestamp.type = LogAppendTime or topic level config message.timestamp.type = LogAppendTime),
+	    the broker will overwrite the timestamp type and the timestamp in the message set.</li>
+        <li>The highest bits of attributes must be set to 0.</li>
+    </ul>
+    </p>
+    <p>In message format versions 0 and 1 Kafka supports recursive messages to enable compression. In this case the message's attributes must be set
+      to indicate one of the compression types and the value field will contain a message set compressed with that type. We often refer
+      to the nested messages as "inner messages" and the wrapping message as the "outer message." Note that the key should be null
+      for the outer message and its offset will be the offset of the last inner message.
+    </p>
+    <p>When receiving recursive version 0 messages, the broker decompresses them and each inner message is assigned an offset individually.
+      In version 1, to avoid server side re-compression, only the wrapper message will be assigned an offset. The inner messages
+      will have relative offsets. The absolute offset can be computed using the offset from the outer message, which corresponds
+      to the offset assigned to the last inner message.
+    </p>
+
+    <p>The crc field contains the CRC32 (and not CRC-32C) of the subsequent message bytes (i.e. from magic byte to the value).</p>
 
     <h3><a id="log" href="#log">5.4 Log</a></h3>
     <p>

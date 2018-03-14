@@ -16,6 +16,7 @@
  */
 package kafka.zookeeper
 
+import java.net.UnknownHostException
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -57,7 +58,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test(expected = classOf[UnknownHostException])
   def testUnresolvableConnectString(): Unit = {
     new ZooKeeperClient("some.invalid.hostname.foo.bar.local", -1, -1, Int.MaxValue, time, "testMetricGroup",
       "testMetricType").close()
@@ -484,6 +485,28 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       responseExecutor.shutdownNow()
     }
     assertFalse("Expiry executor not shutdown", zooKeeperClient.expiryScheduler.isStarted)
+  }
+
+  @Test
+  def testSessionExpiryDuringClose(): Unit = {
+    val semaphore = new Semaphore(0)
+    val closeExecutor = Executors.newSingleThreadExecutor
+    try {
+      zooKeeperClient.expiryScheduler.schedule("test", () => semaphore.acquireUninterruptibly(),
+        delay = 0, period = -1, TimeUnit.SECONDS)
+      zooKeeperClient.scheduleSessionExpiryHandler()
+      val closeFuture = closeExecutor.submit(new Runnable {
+        override def run(): Unit = {
+          zooKeeperClient.close()
+        }
+      })
+      assertFalse("Close completed without shutting down expiry scheduler gracefully", closeFuture.isDone)
+      semaphore.release()
+      closeFuture.get(10, TimeUnit.SECONDS)
+      assertFalse("Expiry executor not shutdown", zooKeeperClient.expiryScheduler.isStarted)
+    } finally {
+      closeExecutor.shutdownNow()
+    }
   }
 
   def isExpectedMetricName(metricName: MetricName, name: String): Boolean =

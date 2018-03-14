@@ -838,4 +838,63 @@ public class TopologyTestDriverTest {
         @Override
         public void close() {}
     }
+
+    @Test
+    public void shouldCleanUpPersistentStateStoresOnClose() {
+        final Topology topology = new Topology();
+        topology.addSource("sourceProcessor", "input-topic");
+        topology.addProcessor(
+            "storeProcessor",
+            new ProcessorSupplier() {
+                @Override
+                public Processor get() {
+                    return new Processor<String, Long>() {
+                        private KeyValueStore<String, Long> store;
+
+                        @Override
+                        public void init(final ProcessorContext context) {
+                            //noinspection unchecked
+                            this.store = (KeyValueStore<String, Long>) context.getStateStore("storeProcessorStore");
+                        }
+
+                        @Override
+                        public void process(final String key, final Long value) {
+                            store.put(key, value);
+                        }
+
+                        @Override
+                        public void punctuate(final long timestamp) {}
+
+                        @Override
+                        public void close() {}
+                    };
+                }
+            },
+            "sourceProcessor"
+        );
+        topology.addStateStore(Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("storeProcessorStore"), Serdes.String(), Serdes.Long()), "storeProcessor");
+
+        final Properties config = new Properties();
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver-cleanup");
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+        config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
+
+        {
+            final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config);
+            Assert.assertNull(testDriver.getKeyValueStore("storeProcessorStore").get("a"));
+            testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L));
+            Assert.assertEquals(1L, testDriver.getKeyValueStore("storeProcessorStore").get("a"));
+            testDriver.close();
+        }
+
+        {
+            final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config);
+            Assert.assertNull(
+                "Closing the prior test driver should have cleaned up this store and value.",
+                testDriver.getKeyValueStore("storeProcessorStore").get("a")
+            );
+        }
+    }
 }

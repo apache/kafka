@@ -35,7 +35,6 @@ import java.util.List;
 
 class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore implements WindowStore<Bytes, byte[]>, CachedStateStore<Windowed<K>, V> {
 
-
     private final WindowStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
@@ -92,11 +91,10 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
                 for (ThreadCache.DirtyEntry entry : entries) {
                     final byte[] binaryWindowKey = cacheFunction.key(entry.key()).get();
-                    final long timestamp = WindowStoreUtils.timestampFromBinaryKey(binaryWindowKey);
+                    final long timestamp = WindowKeySchema.extractStoreTimestamp(binaryWindowKey);
 
-                    final Windowed<K> windowedKey = new Windowed<>(WindowStoreUtils.keyFromBinaryKey(binaryWindowKey, serdes),
-                            WindowStoreUtils.timeWindowForSize(timestamp, windowSize));
-                    final Bytes key = WindowStoreUtils.bytesKeyFromBinaryKey(binaryWindowKey);
+                    final Windowed<K> windowedKey = WindowKeySchema.fromStoreKey(binaryWindowKey, windowSize, serdes);
+                    final Bytes key = Bytes.wrap(WindowKeySchema.extractStoreKeyBytes(binaryWindowKey));
                     maybeForward(entry, key, windowedKey, (InternalProcessorContext) context);
                     underlying.put(key, entry.newValue(), timestamp);
                 }
@@ -151,7 +149,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         // if store is open outside as well.
         validateStoreOpen();
         
-        final Bytes keyBytes = WindowStoreUtils.toBinaryKey(key.get(), timestamp, 0);
+        final Bytes keyBytes = WindowKeySchema.toStoreKeyBinary(key, timestamp, 0);
         final LRUCacheEntry entry = new LRUCacheEntry(value, true, context.offset(),
                                                       timestamp, context.partition(), context.topic());
         cache.put(name, cacheFunction.cacheKey(keyBytes), entry);
@@ -160,7 +158,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     @Override
     public byte[] fetch(final Bytes key, final long timestamp) {
         validateStoreOpen();
-        final Bytes bytesKey = WindowStoreUtils.toBinaryKey(key.get(), timestamp, 0);
+        final Bytes bytesKey = WindowKeySchema.toStoreKeyBinary(key, timestamp, 0);
         final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
         final LRUCacheEntry entry = cache.get(name, cacheKey);
         if (entry == null) {
