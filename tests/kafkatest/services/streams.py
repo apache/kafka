@@ -46,7 +46,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
     }
 
     def __init__(self, test_context, kafka, streams_class_name, user_test_args, user_test_args1=None, user_test_args2=None, user_test_args3=None):
-        super(StreamsTestBaseService, self).__init__(test_context, 1)
+        Service.__init__(self, test_context, 1)
         self.kafka = kafka
         self.args = {'streams_class_name': streams_class_name,
                      'user_test_args': user_test_args,

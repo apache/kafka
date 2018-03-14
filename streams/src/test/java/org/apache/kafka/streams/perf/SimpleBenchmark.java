@@ -679,11 +679,9 @@ public class SimpleBenchmark {
             } else {
                 System.err.println("Unknown value type in CountDownAction");
             }
-            /*
             if (processedRecords.get() == numRecords) {
                 this.latch.countDown();
             }
-            */
         }
     }
 
