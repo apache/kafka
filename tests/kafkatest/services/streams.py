@@ -130,6 +130,8 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
               " %(kafka)s %(config_file)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
               " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
+        self.logger.info("Executing Streams cmd: " + cmd)
+
         return cmd
 
     def prop_file(self, node):
@@ -235,7 +237,7 @@ class StreamsBrokerDownResilienceService(StreamsTestBaseService):
     def start_cmd(self, node):
         args = self.args.copy()
         args['kafka'] = self.kafka.bootstrap_servers(validate=False)
-        args['state_dir'] = self.PERSISTENT_ROOT
+        args['config_file'] = self.CONFIG_FILE
         args['stdout'] = self.STDOUT_FILE
         args['stderr'] = self.STDERR_FILE
         args['pidfile'] = self.PID_FILE
@@ -244,8 +246,10 @@ class StreamsBrokerDownResilienceService(StreamsTestBaseService):
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
-              " %(kafka)s %(state_dir)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
+              " %(kafka)s %(config_file)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
               " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+
+        self.logger.info("Executing StreamsBrokerDownResilience cmd: " + cmd)
 
         return cmd
 
