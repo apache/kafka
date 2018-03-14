@@ -112,29 +112,28 @@ abstract class DelayedOperation(override val delayMs: Long,
    * the operation is actually completed.
    */
   private[server] def maybeTryComplete(): Boolean = {
-    val done = tryCompleteIfLockIsFree()
-    if (!done && tryCompletePending.get())
-      tryCompleteIfLockIsFree()
-    else
-      done
-  }
-
-  private def tryCompleteIfLockIsFree(): Boolean = {
-    if (lock.tryLock()) {
-      try {
-        var done = false
-        do {
+    var retry = false
+    var done = false
+    do {
+      if (lock.tryLock()) {
+        try {
           tryCompletePending.set(false)
           done = tryComplete()
-        } while (!done && tryCompletePending.get())
-        done
-      } finally {
-        lock.unlock()
+        } finally {
+          lock.unlock()
+        }
+        // While we were holding the lock, another thread may have invoked `maybeTryComplete` and set
+        // `tryCompletePending`. In this case we should retry.
+        retry = tryCompletePending.get()
+      } else {
+        // Another thread is holding the lock. If `tryCompletePending` is already set and this thread failed to
+        // acquire the lock, then the thread that is holding the lock is guaranteed to see the flag and retry.
+        // Otherwise, we should set the flag and retry on this thread since the thread holding the lock may have
+        // released the lock and returned by the time the flag is set.
+        retry = !tryCompletePending.getAndSet(true)
       }
-    } else {
-      tryCompletePending.set(true)
-      false
-    }
+    } while (!isCompleted && retry)
+    done
   }
 
   /*
