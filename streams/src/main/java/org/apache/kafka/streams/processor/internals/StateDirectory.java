@@ -138,7 +138,7 @@ public class StateDirectory {
         }
 
         try {
-            lockFile = new File(stateDir, taskId+LOCK_FILE_NAME);
+            lockFile = new File(stateDir, taskId + LOCK_FILE_NAME);
         } catch (ProcessorStateException e) {
             // directoryForTask could be throwing an exception if another thread
             // has concurrently deleted the directory
