@@ -126,6 +126,8 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
               " %(kafka)s %(state_dir)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
               " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
+        self.logger.info("Executing streams cmd: " + cmd)
+
         return cmd
 
     def start_node(self, node):
