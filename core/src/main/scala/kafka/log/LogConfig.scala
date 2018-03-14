@@ -98,7 +98,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   val FollowerReplicationThrottledReplicas = getList(LogConfig.FollowerReplicationThrottledReplicasProp)
 
   def randomSegmentJitter: Long =
-    if (segmentJitterMs == 0 || segmentMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
+    if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
 }
 
 object LogConfig {
@@ -214,7 +214,7 @@ object LogConfig {
     new LogConfigDef()
       .define(SegmentBytesProp, INT, Defaults.SegmentSize, atLeast(Message.MinMessageOverhead), MEDIUM,
         SegmentSizeDoc, KafkaConfig.LogSegmentBytesProp)
-      .define(SegmentMsProp, LONG, Defaults.SegmentMs, atLeast(0), MEDIUM, SegmentMsDoc,
+      .define(SegmentMsProp, LONG, Defaults.SegmentMs, atLeast(1), MEDIUM, SegmentMsDoc,
         KafkaConfig.LogRollTimeMillisProp)
       .define(SegmentJitterMsProp, LONG, Defaults.SegmentJitterMs, atLeast(0), MEDIUM, SegmentJitterMsDoc,
         KafkaConfig.LogRollTimeJitterMillisProp)
