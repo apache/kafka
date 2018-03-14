@@ -87,8 +87,7 @@ object ConfigCommand extends Config {
           describeConfig(zkClient, opts, adminZkClient)
       } catch {
         case e: Throwable =>
-          println("Error while executing config command " + e.getMessage)
-          println(Utils.stackTrace(e))
+          throw new RuntimeException("Error while executing config command", e)
       } finally {
         zkClient.close()
       }
@@ -219,12 +218,10 @@ object ConfigCommand extends Config {
         describeBrokerConfig(adminClient, opts, entityName)
     } catch {
       case e: Throwable =>
-        println("Error while executing config command " + e.getMessage)
-        println(Utils.stackTrace(e))
+        throw new RuntimeException("Error while executing config command", e)
     } finally {
       adminClient.close()
     }
-
   }
 
   private[admin] def alterBrokerConfig(adminClient: JAdminClient, opts: ConfigCommandOptions, entityName: String) {
