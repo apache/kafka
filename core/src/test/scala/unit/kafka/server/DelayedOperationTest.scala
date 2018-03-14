@@ -155,10 +155,10 @@ class DelayedOperationTest {
     purgatory.tryCompleteElseWatch(op, Seq(key))
     completionAttemptsRemaining.set(2)
     tryCompleteSemaphore.acquire()
-    val future = runOnAnotherThread(purgatory.checkAndComplete(key), false)
+    val future = runOnAnotherThread(purgatory.checkAndComplete(key), shouldComplete = false)
     TestUtils.waitUntilTrue(() => tryCompleteSemaphore.hasQueuedThreads, "Not attempting to complete")
     purgatory.checkAndComplete(key) // this should not block even though lock is not free
-    assertFalse("Operation not have completed", op.isCompleted)
+    assertFalse("Operation should not have completed", op.isCompleted)
     tryCompleteSemaphore.release()
     future.get(10, TimeUnit.SECONDS)
     assertTrue("Operation should have completed", op.isCompleted)

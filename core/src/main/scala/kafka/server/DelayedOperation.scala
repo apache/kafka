@@ -102,6 +102,14 @@ abstract class DelayedOperation(override val delayMs: Long,
   /**
    * Thread-safe variant of tryComplete() that attempts completion only if the lock can be acquired
    * without blocking.
+   *
+   * If threadA acquires the lock and performs the check for completion before completion criteria is met
+   * and threadB satisfies the completion criteria, but fails to acquire the lock because threadA has not
+   * yet released the lock, we need to ensure that completion is attempted again without blocking threadA
+   * or threadB. `tryCompletePending` is set by threadB when it fails to acquire the lock and at least one
+   * of threadA or threadB will attempt completion of the operation if this flag is set. This ensures that
+   * every invocation of `maybeTryComplete` is followed by at least one invocation of `tryComplete` until
+   * the operation is actually completed.
    */
   private[server] def maybeTryComplete(): Boolean = {
     val done = tryCompleteIfLockIsFree()
