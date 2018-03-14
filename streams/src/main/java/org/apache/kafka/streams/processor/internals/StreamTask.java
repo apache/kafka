@@ -177,7 +177,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final Producer<byte[], byte[]> producer,
                       final RecordCollector recordCollector,
                       final Sensor closeSensor) {
-        super(id, partitions, topology, consumer, changelogReader, false, stateDirectory, config);
+        super(id, partitions, topology, consumer, changelogReader, false, false, stateDirectory, config);
 
         this.time = time;
         this.producer = producer;
@@ -430,10 +430,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     @Override
     protected Map<TopicPartition, Long> activeTaskCheckpointableOffsets() {
         final Map<TopicPartition, Long> checkpointableOffsets = recordCollector.offsets();
-        for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
-            checkpointableOffsets.putIfAbsent(entry.getKey(), entry.getValue());
-        }
-
+        checkpointableOffsets.putAll(consumedOffsets);
         return checkpointableOffsets;
     }
 

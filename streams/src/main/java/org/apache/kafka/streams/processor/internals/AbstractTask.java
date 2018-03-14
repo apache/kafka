@@ -66,6 +66,7 @@ public abstract class AbstractTask implements Task {
                  final Consumer<byte[], byte[]> consumer,
                  final ChangelogReader changelogReader,
                  final boolean isStandby,
+                 final boolean isPrepareStoreForUpgrade,
                  final StateDirectory stateDirectory,
                  final StreamsConfig config) {
         this.id = id;
@@ -76,7 +77,7 @@ public abstract class AbstractTask implements Task {
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         this.stateDirectory = stateDirectory;
 
-        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id);
+        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : isPrepareStoreForUpgrade ? "store-upgrade-task" : "task", id);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 

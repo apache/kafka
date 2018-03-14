@@ -239,7 +239,7 @@ public class StandbyTaskTest {
         final StandbyTask task = new StandbyTask(
             taskId,
             partitions,
-            internalTopologyBuilder.build(0),
+            internalTopologyBuilder.build(0, false, false),
             consumer,
             new StoreChangelogReader(
                 restoreStateConsumer,
@@ -337,7 +337,7 @@ public class StandbyTaskTest {
         final StandbyTask task = new StandbyTask(
             taskId,
             partitions,
-            internalTopologyBuilder.build(0),
+            internalTopologyBuilder.build(0, false, false),
             consumer,
             changelogReader,
             createConfig(baseDir),
@@ -485,7 +485,7 @@ public class StandbyTaskTest {
         final StreamsConfig config = createConfig(baseDir);
         builder.buildAndOptimizeTopology();
         final InternalTopologyBuilder internalTopologyBuilder = InternalStreamsBuilderTest.internalTopologyBuilder(builder);
-        final ProcessorTopology topology = internalTopologyBuilder.setApplicationId(applicationId).build(0);
+        final ProcessorTopology topology = internalTopologyBuilder.setApplicationId(applicationId).build(0, false, false);
 
         final StandbyTask standbyTask = new StandbyTask(
             taskId,

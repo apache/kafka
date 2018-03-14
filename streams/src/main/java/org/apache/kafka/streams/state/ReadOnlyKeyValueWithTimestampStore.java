@@ -16,28 +16,12 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.streams.KeyValue;
-
-import java.io.Closeable;
-import java.util.Iterator;
-
 /**
- * Iterator interface of {@link KeyValue}.
- * <p>
- * Users must call its {@link #close()} method explicitly upon completeness to release resources,
- * or use try-with-resources statement (available since JDK7) for this {@link Closeable} class.
+ * A key-(value/timestamp) store that only supports read operations.
+ * Implementations should be thread-safe as concurrent reads and writes are expected.
  *
- * @param <K> Type of keys
- * @param <V> Type of values
+ * @param <K> the key type
+ * @param <V> the value type
  */
-public interface KeyValueIterator<K, V> extends Iterator<KeyValue<K, V>>, Closeable {
-
-    @Override
-    void close();
-
-    /**
-     * Peek at the next key without advancing the iterator.
-     * @return the key of the next value that would be returned from the next call to next
-     */
-    K peekNextKey();
+public interface ReadOnlyKeyValueWithTimestampStore<K, V> extends ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> {
 }

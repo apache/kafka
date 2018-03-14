@@ -295,7 +295,10 @@ public class StoreChangelogReader implements ChangelogReader {
             lastRestoredOffset = offset;
             numberRestored++;
             if (record.key() != null) {
-                restoreRecords.add(KeyValue.pair(record.key(), record.value()));
+                final KeyValue<byte[], byte[]> keyValue = restorer.mkKeyValuePair(record);
+                if (keyValue != null) {
+                    restoreRecords.add(keyValue);
+                }
             }
         }
 

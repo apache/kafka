@@ -14,30 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state;
+package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.common.utils.LogContext;
 
-import java.io.Closeable;
-import java.util.Iterator;
+class AssignedStoreUpgradeTasks extends AssignedTasks<StoreUpgradeTask> {
 
-/**
- * Iterator interface of {@link KeyValue}.
- * <p>
- * Users must call its {@link #close()} method explicitly upon completeness to release resources,
- * or use try-with-resources statement (available since JDK7) for this {@link Closeable} class.
- *
- * @param <K> Type of keys
- * @param <V> Type of values
- */
-public interface KeyValueIterator<K, V> extends Iterator<KeyValue<K, V>>, Closeable {
+    AssignedStoreUpgradeTasks(final LogContext logContext,
+                              final TaskManager taskManager) {
+        super(logContext, "store upgrade task");
+    }
 
-    @Override
-    void close();
-
-    /**
-     * Peek at the next key without advancing the iterator.
-     * @return the key of the next value that would be returned from the next call to next
-     */
-    K peekNextKey();
 }

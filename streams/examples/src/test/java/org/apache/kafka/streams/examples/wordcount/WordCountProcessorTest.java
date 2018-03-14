@@ -16,55 +16,103 @@
  */
 package org.apache.kafka.streams.examples.wordcount;
 
-import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.MockProcessorContext;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.StateDirectory;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.internals.RocksDBStore;
 import org.junit.Test;
 
-import java.util.Iterator;
+import java.util.Collections;
+import java.util.Properties;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-/**
- * Demonstrate the use of {@link MockProcessorContext} for testing the {@link Processor} in the {@link WordCountProcessorDemo}.
- */
 public class WordCountProcessorTest {
+    StringDeserializer deserializer = new StringDeserializer();
     @Test
-    public void test() {
-        final MockProcessorContext context = new MockProcessorContext();
+    public void test() throws Exception {
+        KafkaStreams streams;
 
-        // Create, initialize, and register the state store.
-        final KeyValueStore<String, Integer> store =
-            Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("Counts"), Serdes.String(), Serdes.Integer())
-                .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
-                .build();
-        store.init(context, store);
-        context.register(store, null);
+        streams = WordCountProcessorDemo.getStreamsClient(new String[]{"--run-with-old-store"});
+        streams.start();
 
-        // Create and initialize the processor under test
-        final Processor<String, String> processor = new WordCountProcessorDemo.MyProcessorSupplier().get();
-        processor.init(context);
+        streams.close();
 
-        // send a record to the processor
-        processor.process("key", "alpha beta gamma alpha");
+        inspectCountsStore(false);
+        streams = WordCountProcessorDemo.getStreamsClient(new String[]{"--run-with-upgrade-store", StreamsConfig.IN_PLACE_UPGRADE});
+        streams.start();
 
-        // note that the processor commits, but does not forward, during process()
-        assertTrue(context.committed());
-        assertTrue(context.forwarded().isEmpty());
+        streams.close();
 
-        // now, we trigger the punctuator, which iterates over the state store and forwards the contents.
-        context.scheduledPunctuators().get(0).getPunctuator().punctuate(0L);
+        inspectCountsStore(false);
+        inspectCountsStore(true);
 
-        // finally, we can verify the output.
-        final Iterator<MockProcessorContext.CapturedForward> capturedForwards = context.forwarded().iterator();
-        assertEquals(new KeyValue<>("alpha", "2"), capturedForwards.next().keyValue());
-        assertEquals(new KeyValue<>("beta", "1"), capturedForwards.next().keyValue());
-        assertEquals(new KeyValue<>("gamma", "1"), capturedForwards.next().keyValue());
-        assertFalse(capturedForwards.hasNext());
+        streams = WordCountProcessorDemo.getStreamsClient(new String[]{"--run-with-upgrade-store"});
+        streams.start();
+
+        streams.close();
+
+        inspectCountsStore(false);
+
+        streams = WordCountProcessorDemo.getStreamsClient(new String[]{"--run-with-new-store"});
+        streams.start();
+
+        streams.close();
+
+        inspectCountsStore(false);
+    }
+
+    @Test
+    public void xxx() throws Exception {
+        inspectCountsStore(false);
+    }
+
+    private void inspectCountsStore(boolean prepare) throws Exception {
+        StreamsConfig config = new StreamsConfig(new Properties() {
+            {
+                put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount-processor");
+                put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+            }
+        });
+        RocksDBStore store = new RocksDBStore("Counts");
+        store.openDB(new ProcessorContextImpl(
+            null,
+            null,
+            config,
+            null,
+            new ProcessorStateManager(
+                new TaskId(0, 0, prepare),
+                Collections.singleton(new TopicPartition("streams-plaintext-input", 0)),
+                prepare,
+                new StateDirectory(config, Time.SYSTEM),
+                null,
+                null,
+                false,
+                new LogContext()
+            ),
+            null,
+            null
+        ));
+
+        KeyValueIterator<Bytes, byte[]> iter = store.all();
+        int count = 0;
+        while (iter.hasNext()) {
+            ++count;
+            KeyValue<Bytes, byte[]> record = iter.next();
+            System.out.println(deserializer.deserialize(null, record.key.get()) + " : " + record.value.length);
+        }
+        System.out.println("# " + count);
+
+        iter.close();
+        store.close();
+
     }
 }

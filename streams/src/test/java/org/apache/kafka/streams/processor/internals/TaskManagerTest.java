@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -41,7 +42,6 @@ import org.junit.runner.RunWith;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -72,7 +72,7 @@ public class TaskManagerTest {
     private InternalTopologyBuilder.SubscriptionUpdates subscriptionUpdates;
     @Mock(type = MockType.STRICT)
     private InternalTopologyBuilder topologyBuilder;
-    @Mock(type = MockType.STRICT)
+    @Mock(type = MockType.NICE)
     private StateDirectory stateDirectory;
     @Mock(type = MockType.NICE)
     private ChangelogReader changeLogReader;
@@ -87,6 +87,8 @@ public class TaskManagerTest {
     @Mock(type = MockType.NICE)
     private StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
     @Mock(type = MockType.NICE)
+    private StreamThread.AbstractTaskCreator<StoreUpgradeTask> storeUpgradeTaskCreator;
+    @Mock(type = MockType.NICE)
     private AdminClient adminClient;
     @Mock(type = MockType.NICE)
     private StreamTask streamTask;
@@ -96,6 +98,8 @@ public class TaskManagerTest {
     private AssignedStreamsTasks active;
     @Mock(type = MockType.NICE)
     private AssignedStandbyTasks standby;
+    @Mock(type = MockType.NICE)
+    private AssignedStoreUpgradeTasks storeUpgrade;
 
     private TaskManager taskManager;
 
@@ -118,16 +122,22 @@ public class TaskManagerTest {
 
     @Before
     public void setUp() {
+        expect(activeTaskCreator.stateDirectory()).andReturn(stateDirectory).anyTimes();
+        expect(storeUpgradeTaskCreator.stateDirectory()).andReturn(stateDirectory).anyTimes();
+        expect(storeUpgrade.running()).andReturn(Collections.emptySet()).anyTimes();
         taskManager = new TaskManager(changeLogReader,
                                       UUID.randomUUID(),
-                                      "",
+                                      new LogContext(""),
                                       restoreConsumer,
                                       streamsMetadataState,
                                       activeTaskCreator,
                                       standbyTaskCreator,
+                                      storeUpgradeTaskCreator,
                                       adminClient,
+                                      false,
                                       active,
-                                      standby);
+                                      standby,
+                                      storeUpgrade);
         taskManager.setConsumer(consumer);
     }
 
@@ -137,6 +147,8 @@ public class TaskManagerTest {
                         consumer,
                         activeTaskCreator,
                         standbyTaskCreator,
+                        storeUpgradeTaskCreator,
+                        storeUpgrade,
                         active,
                         standby,
                         adminClient);
@@ -222,7 +234,6 @@ public class TaskManagerTest {
         assertTrue((new File(taskFolders[1], ProcessorStateManager.CHECKPOINT_FILE_NAME)).createNewFile());
         assertTrue((new File(taskFolders[3], ProcessorStateManager.CHECKPOINT_FILE_NAME)).createNewFile());
 
-        expect(activeTaskCreator.stateDirectory()).andReturn(stateDirectory).once();
         expect(stateDirectory.listTaskDirectories()).andReturn(taskFolders).once();
 
         EasyMock.replay(activeTaskCreator, stateDirectory);
@@ -241,7 +252,7 @@ public class TaskManagerTest {
         expectLastCall();
         replay();
 
-        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.emptyMap());
         taskManager.createTasks(taskId0Partitions);
 
         verify(active);
@@ -254,7 +265,7 @@ public class TaskManagerTest {
         expectLastCall();
         replay();
 
-        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.emptyMap());
         taskManager.createTasks(taskId0Partitions);
 
         verify(active);
@@ -267,7 +278,7 @@ public class TaskManagerTest {
         EasyMock.expectLastCall();
         replay();
 
-        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.emptyMap());
         taskManager.createTasks(taskId0Partitions);
         verify(changeLogReader);
     }
@@ -279,7 +290,7 @@ public class TaskManagerTest {
         active.addNewTask(EasyMock.same(streamTask));
         replay();
 
-        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.emptyMap());
         taskManager.createTasks(taskId0Partitions);
 
         verify(activeTaskCreator, active);
@@ -291,7 +302,7 @@ public class TaskManagerTest {
         EasyMock.expect(active.maybeResumeSuspendedTask(taskId0, taskId0Partitions)).andReturn(true);
         replay();
 
-        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.emptyMap());
         taskManager.createTasks(taskId0Partitions);
 
         // should be no calls to activeTaskCreator and no calls to active.addNewTasks(..)
@@ -305,7 +316,7 @@ public class TaskManagerTest {
         standby.addNewTask(EasyMock.same(standbyTask));
         replay();
 
-        taskManager.setAssignmentMetadata(Collections.<TaskId, Set<TopicPartition>>emptyMap(), taskId0Assignment);
+        taskManager.setAssignmentMetadata(Collections.emptyMap(), taskId0Assignment);
         taskManager.createTasks(taskId0Partitions);
 
         verify(standbyTaskCreator, active);
@@ -317,7 +328,7 @@ public class TaskManagerTest {
         EasyMock.expect(standby.maybeResumeSuspendedTask(taskId0, taskId0Partitions)).andReturn(true);
         replay();
 
-        taskManager.setAssignmentMetadata(Collections.<TaskId, Set<TopicPartition>>emptyMap(), taskId0Assignment);
+        taskManager.setAssignmentMetadata(Collections.emptyMap(), taskId0Assignment);
         taskManager.createTasks(taskId0Partitions);
 
         // should be no calls to standbyTaskCreator and no calls to standby.addNewTasks(..)
@@ -331,7 +342,7 @@ public class TaskManagerTest {
         EasyMock.expectLastCall();
         replay();
 
-        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.emptyMap());
         taskManager.createTasks(taskId0Partitions);
         verify(consumer);
     }
@@ -375,9 +386,7 @@ public class TaskManagerTest {
         try {
             taskManager.suspendTasksAndState();
             fail("Should have thrown streams exception");
-        } catch (final StreamsException e) {
-            // expected
-        }
+        } catch (final StreamsException expected) { }
         verify(restoreConsumer, active, standby);
     }
 
@@ -413,7 +422,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldInitializeNewActiveTasks() {
-        active.updateRestored(EasyMock.<Collection<TopicPartition>>anyObject());
+        active.updateRestored(EasyMock.anyObject());
         EasyMock.expectLastCall();
         replay();
 
@@ -423,7 +432,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldInitializeNewStandbyTasks() {
-        active.updateRestored(EasyMock.<Collection<TopicPartition>>anyObject());
+        active.updateRestored(EasyMock.anyObject());
         EasyMock.expectLastCall();
         replay();
 
@@ -447,7 +456,7 @@ public class TaskManagerTest {
         EasyMock.expect(changeLogReader.restore(active)).andReturn(taskId0Partitions);
         EasyMock.expect(active.allTasksRunning()).andReturn(true);
         EasyMock.expect(consumer.assignment()).andReturn(taskId0Partitions);
-        EasyMock.expect(standby.running()).andReturn(Collections.<StandbyTask>emptySet());
+        EasyMock.expect(standby.running()).andReturn(Collections.emptySet());
 
         consumer.resume(taskId0Partitions);
         EasyMock.expectLastCall();
@@ -518,9 +527,8 @@ public class TaskManagerTest {
         try {
             taskManager.commitAll();
             fail("should have thrown first exception");
-        } catch (final Exception e) {
-            // ok
-        }
+        } catch (final Exception expected) { }
+
         verify(active, standby);
     }
 
@@ -532,9 +540,8 @@ public class TaskManagerTest {
         try {
             taskManager.commitAll();
             fail("should have thrown exception");
-        } catch (final Exception e) {
-            // ok
-        }
+        } catch (final Exception expected) { }
+
         verify(standby);
     }
 
@@ -542,7 +549,7 @@ public class TaskManagerTest {
     public void shouldSendPurgeData() {
         final KafkaFutureImpl<DeletedRecords> futureDeletedRecords = new KafkaFutureImpl<>();
         final Map<TopicPartition, RecordsToDelete> recordsToDelete = Collections.singletonMap(t1p1, RecordsToDelete.beforeOffset(5L));
-        final DeleteRecordsResult deleteRecordsResult = new DeleteRecordsResult(Collections.singletonMap(t1p1, (KafkaFuture<DeletedRecords>) futureDeletedRecords));
+        final DeleteRecordsResult deleteRecordsResult = new DeleteRecordsResult(Collections.singletonMap(t1p1, futureDeletedRecords));
 
         futureDeletedRecords.complete(null);
 
@@ -550,8 +557,8 @@ public class TaskManagerTest {
         EasyMock.expect(adminClient.deleteRecords(recordsToDelete)).andReturn(deleteRecordsResult).times(2);
         replay();
 
-        taskManager.maybePurgeCommitedRecords();
-        taskManager.maybePurgeCommitedRecords();
+        taskManager.maybePurgeCommittedRecords();
+        taskManager.maybePurgeCommittedRecords();
         verify(active, adminClient);
     }
 
@@ -565,9 +572,9 @@ public class TaskManagerTest {
         EasyMock.expect(adminClient.deleteRecords(recordsToDelete)).andReturn(deleteRecordsResult).once();
         replay();
 
-        taskManager.maybePurgeCommitedRecords();
+        taskManager.maybePurgeCommittedRecords();
         // second call should be no-op as the previous one is not done yet
-        taskManager.maybePurgeCommitedRecords();
+        taskManager.maybePurgeCommittedRecords();
         verify(active, adminClient);
     }
 
@@ -575,7 +582,7 @@ public class TaskManagerTest {
     public void shouldIgnorePurgeDataErrors() {
         final KafkaFutureImpl<DeletedRecords> futureDeletedRecords = new KafkaFutureImpl<>();
         final Map<TopicPartition, RecordsToDelete> recordsToDelete = Collections.singletonMap(t1p1, RecordsToDelete.beforeOffset(5L));
-        final DeleteRecordsResult deleteRecordsResult = new DeleteRecordsResult(Collections.singletonMap(t1p1, (KafkaFuture<DeletedRecords>) futureDeletedRecords));
+        final DeleteRecordsResult deleteRecordsResult = new DeleteRecordsResult(Collections.singletonMap(t1p1, futureDeletedRecords));
 
         futureDeletedRecords.completeExceptionally(new Exception("KABOOM!"));
 
@@ -583,8 +590,8 @@ public class TaskManagerTest {
         EasyMock.expect(adminClient.deleteRecords(recordsToDelete)).andReturn(deleteRecordsResult).times(2);
         replay();
 
-        taskManager.maybePurgeCommitedRecords();
-        taskManager.maybePurgeCommitedRecords();
+        taskManager.maybePurgeCommittedRecords();
+        taskManager.maybePurgeCommittedRecords();
         verify(active, adminClient);
     }
 
@@ -659,14 +666,14 @@ public class TaskManagerTest {
     }
 
     private void mockStandbyTaskExpectations() {
-        expect(standbyTaskCreator.createTasks(EasyMock.<Consumer<byte[], byte[]>>anyObject(),
+        expect(standbyTaskCreator.createTasks(EasyMock.anyObject(),
                                                    EasyMock.eq(taskId0Assignment)))
                 .andReturn(Collections.singletonList(standbyTask));
 
     }
 
     private void mockSingleActiveTask() {
-        expect(activeTaskCreator.createTasks(EasyMock.<Consumer<byte[], byte[]>>anyObject(),
+        expect(activeTaskCreator.createTasks(EasyMock.anyObject(),
                                                   EasyMock.eq(taskId0Assignment)))
                 .andReturn(Collections.singletonList(streamTask));
 

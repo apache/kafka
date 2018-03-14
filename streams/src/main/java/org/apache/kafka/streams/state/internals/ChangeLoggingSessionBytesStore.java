@@ -16,12 +16,16 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -33,23 +37,35 @@ import org.apache.kafka.streams.state.StateSerdes;
 class ChangeLoggingSessionBytesStore extends WrappedStateStore.AbstractStateStore implements SessionStore<Bytes, byte[]> {
 
     private final SessionStore<Bytes, byte[]> bytesStore;
+    private final Headers dataFormatVersionHeader;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
 
     ChangeLoggingSessionBytesStore(final SessionStore<Bytes, byte[]> bytesStore) {
+        this(bytesStore, null);
+    }
+
+    ChangeLoggingSessionBytesStore(final SessionStore<Bytes, byte[]> bytesStore,
+                                   final byte[] dataFormatVersion) {
         super(bytesStore);
         this.bytesStore = bytesStore;
+        if (dataFormatVersion != null) {
+            dataFormatVersionHeader = new RecordHeaders(new Header[]{new RecordHeader("v", dataFormatVersion)});
+        } else {
+            dataFormatVersionHeader = new RecordHeaders();
+        }
     }
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         bytesStore.init(context, root);
         final String topic = ProcessorStateManager.storeChangelogTopic(
-                context.applicationId(),
-                bytesStore.name());
+            context.applicationId(),
+            bytesStore.name());
         changeLogger = new StoreChangeLogger<>(
-                name(),
-                context,
-                new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray()));
+            name(),
+            context,
+            new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray()),
+            dataFormatVersionHeader);
     }
 
 

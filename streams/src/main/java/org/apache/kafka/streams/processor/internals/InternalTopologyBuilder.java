@@ -24,6 +24,7 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StoreUpgradeBuilder;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
@@ -128,13 +129,31 @@ public class InternalTopologyBuilder {
 
     public static class StateStoreFactory {
         private final StoreBuilder builder;
+
         private final Set<String> users = new HashSet<>();
 
         private StateStoreFactory(final StoreBuilder<?> builder) {
             this.builder = builder;
         }
 
-        public StateStore build() {
+        public StateStore build(final boolean useUpgradeProxy,
+                                final boolean isPrepareForUpgradeTask) {
+            if (useUpgradeProxy) {
+                if (!(builder instanceof StoreUpgradeBuilder)) {
+                    throw new TopologyException("Store upgrade mode enabled, but store with name " + builder.name()
+                        + " does not support a store upgrade (needs to implement "
+                        + StoreUpgradeBuilder.class.getName() + ")");
+                }
+                return ((StoreUpgradeBuilder) builder).storeProxy();
+            }
+            if (isPrepareForUpgradeTask) {
+                if (!(builder instanceof StoreUpgradeBuilder)) {
+                    throw new TopologyException("Store upgrade mode enabled, but store with name " + builder.name()
+                        + " does not support a store upgrade (needs to implement "
+                        + StoreUpgradeBuilder.class.getName() + ")");
+                }
+                return ((StoreUpgradeBuilder) builder).converterStore();
+            }
             return builder.build();
         }
 
@@ -787,10 +806,12 @@ public class InternalTopologyBuilder {
     }
 
     public synchronized ProcessorTopology build() {
-        return build((Integer) null);
+        return build((Integer) null, false, false);
     }
 
-    public synchronized ProcessorTopology build(final Integer topicGroupId) {
+    public synchronized ProcessorTopology build(final Integer topicGroupId,
+                                                final boolean useStoreUpgradeProxy,
+                                                final boolean isPrepareForUpgradeTask) {
         final Set<String> nodeGroup;
         if (topicGroupId != null) {
             nodeGroup = nodeGroups().get(topicGroupId);
@@ -804,7 +825,7 @@ public class InternalTopologyBuilder {
             }
             nodeGroup.removeAll(globalNodeGroups);
         }
-        return build(nodeGroup);
+        return build(nodeGroup, useStoreUpgradeProxy, isPrepareForUpgradeTask);
     }
 
     /**
@@ -812,11 +833,15 @@ public class InternalTopologyBuilder {
      * @return ProcessorTopology
      */
     public synchronized ProcessorTopology buildGlobalStateTopology() {
+        return buildGlobalStateTopology(false);
+    }
+
+    public synchronized ProcessorTopology buildGlobalStateTopology(final boolean useStoreUpgradeProxy) {
         final Set<String> globalGroups = globalNodeGroups();
         if (globalGroups.isEmpty()) {
             return null;
         }
-        return build(globalGroups);
+        return build(globalGroups, useStoreUpgradeProxy, false); // TODO
     }
 
     private Set<String> globalNodeGroups() {
@@ -832,7 +857,9 @@ public class InternalTopologyBuilder {
         return globalGroups;
     }
 
-    private ProcessorTopology build(final Set<String> nodeGroup) {
+    private ProcessorTopology build(final Set<String> nodeGroup,
+                                    final boolean useStoreUpgradeProxy,
+                                    final boolean isPrepareForUpgradeTask) {
         final Map<String, ProcessorNode> processorMap = new LinkedHashMap<>();
         final Map<String, SourceNode> topicSourceMap = new HashMap<>();
         final Map<String, SinkNode> topicSinkMap = new HashMap<>();
@@ -850,7 +877,9 @@ public class InternalTopologyBuilder {
                     buildProcessorNode(processorMap,
                                        stateStoreMap,
                                        (ProcessorNodeFactory) factory,
-                                       node);
+                                       node,
+                                       useStoreUpgradeProxy,
+                                       isPrepareForUpgradeTask);
 
                 } else if (factory instanceof SourceNodeFactory) {
                     buildSourceNode(topicSourceMap,
@@ -928,7 +957,9 @@ public class InternalTopologyBuilder {
     private void buildProcessorNode(final Map<String, ProcessorNode> processorMap,
                                     final Map<String, StateStore> stateStoreMap,
                                     final ProcessorNodeFactory factory,
-                                    final ProcessorNode node) {
+                                    final ProcessorNode node,
+                                    final boolean useStoreUpgradeProxy,
+                                    final boolean isPrepareForUpgradeTask) {
 
         for (final String predecessor : factory.predecessors) {
             final ProcessorNode<?, ?> predecessorNode = processorMap.get(predecessor);
@@ -944,7 +975,7 @@ public class InternalTopologyBuilder {
                         final String changelogTopic = ProcessorStateManager.storeChangelogTopic(applicationId, stateStoreName);
                         storeToChangelogTopic.put(stateStoreName, changelogTopic);
                     }
-                    stateStoreMap.put(stateStoreName, stateStoreFactory.build());
+                    stateStoreMap.put(stateStoreName, stateStoreFactory.build(useStoreUpgradeProxy, isPrepareForUpgradeTask));
                 } else {
                     stateStoreMap.put(stateStoreName, globalStateStores.get(stateStoreName));
                 }
@@ -998,7 +1029,7 @@ public class InternalTopologyBuilder {
                         if (internalTopicNames.contains(topic)) {
                             // prefix the internal topic name with the application id
                             final String internalTopic = decorateTopic(topic);
-                            repartitionTopics.put(internalTopic, new RepartitionTopicConfig(internalTopic, Collections.<String, String>emptyMap()));
+                            repartitionTopics.put(internalTopic, new RepartitionTopicConfig(internalTopic, Collections.emptyMap()));
                             sourceTopics.add(internalTopic);
                         } else {
                             sourceTopics.add(topic);
@@ -1242,7 +1273,9 @@ public class InternalTopologyBuilder {
         return description;
     }
 
-    private void describeGlobalStore(final TopologyDescription description, final Set<String> nodes, final int id) {
+    private void describeGlobalStore(final TopologyDescription description,
+                                     final Set<String> nodes,
+                                     final int id) {
         final Iterator<String> it = nodes.iterator();
         while (it.hasNext()) {
             final String node = it.next();
@@ -1324,7 +1357,7 @@ public class InternalTopologyBuilder {
 
         description.addSubtopology(new Subtopology(
                 subtopologyId,
-                new HashSet<TopologyDescription.Node>(nodesByName.values())));
+                new HashSet<>(nodesByName.values())));
     }
 
     public final static class GlobalStore implements TopologyDescription.GlobalStore {

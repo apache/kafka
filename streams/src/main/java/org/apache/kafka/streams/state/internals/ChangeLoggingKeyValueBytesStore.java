@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -29,28 +33,38 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.List;
 
 public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractStateStore implements KeyValueStore<Bytes, byte[]> {
-    private final KeyValueStore<Bytes, byte[]> inner;
-    private StoreChangeLogger<Bytes, byte[]> changeLogger;
+    final Headers dataFormatVersionHeader;
+    final KeyValueStore<Bytes, byte[]> inner;
+
+    StoreChangeLogger<Bytes, byte[]> changeLogger;
 
     ChangeLoggingKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
+        this(inner, null);
+    }
+
+    ChangeLoggingKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner,
+                                    final byte[] dataFormatVersion) {
         super(inner);
         this.inner = inner;
+        if (dataFormatVersion != null) {
+            dataFormatVersionHeader = new RecordHeaders(new Header[]{new RecordHeader("v", dataFormatVersion)});
+        } else {
+            dataFormatVersionHeader = new RecordHeaders();
+        }
     }
 
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
+    public void init(final ProcessorContext context,
+                     final StateStore root) {
         inner.init(context, root);
         final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), inner.name());
-        this.changeLogger = new StoreChangeLogger<>(inner.name(), context, new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray()));
+        this.changeLogger = new StoreChangeLogger<>(inner.name(), context, new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray()), dataFormatVersionHeader);
 
         // if the inner store is an LRU cache, add the eviction listener to log removed record
         if (inner instanceof MemoryLRUCache) {
-            ((MemoryLRUCache<Bytes, byte[]>) inner).whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<Bytes, byte[]>() {
-                @Override
-                public void apply(final Bytes key, final byte[] value) {
-                    // pass null to indicate removal
-                    changeLogger.logChange(key, null);
-                }
+            ((MemoryLRUCache<Bytes, byte[]>) inner).whenEldestRemoved((key, value) -> {
+                // pass null to indicate removal
+                changeLogger.logChange(key, null);
             });
         }
     }
@@ -61,13 +75,15 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
     }
 
     @Override
-    public void put(final Bytes key, final byte[] value) {
+    public void put(final Bytes key,
+                    final byte[] value) {
         inner.put(key, value);
         changeLogger.logChange(key, value);
     }
 
     @Override
-    public byte[] putIfAbsent(final Bytes key, final byte[] value) {
+    public byte[] putIfAbsent(final Bytes key,
+                              final byte[] value) {
         final byte[] previous = get(key);
         if (previous == null) {
             put(key, value);
@@ -96,7 +112,8 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+    public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                 final Bytes to) {
         return inner.range(from, to);
     }
 
@@ -104,4 +121,5 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
     public KeyValueIterator<Bytes, byte[]> all() {
         return inner.all();
     }
+
 }

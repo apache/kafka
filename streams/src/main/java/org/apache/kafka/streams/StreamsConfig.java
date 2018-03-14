@@ -250,6 +250,16 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_11 = "1.1";
 
     /**
+     * Config value for parameter {@link #UPGRADE_MODE_CONFIG "upgrade.mode"} for in-place upgrading a state store from an old to a new format.
+     */
+    public static final String IN_PLACE_UPGRADE = "in_place";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_MODE_CONFIG "upgrade.mode"} for upgrading a state store from an old to a new format on a new Kafka Streams instance..
+     */
+    public static final String ROLL_OVER_UPGRAGE = "roll_over";
+
+    /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
      */
     @SuppressWarnings("WeakerAccess")
@@ -455,6 +465,10 @@ public class StreamsConfig extends AbstractConfig {
     private static final String UPGRADE_FROM_DOC = "Allows upgrading from versions 0.10.0/0.10.1/0.10.2/0.11.0/1.0/1.1 to version 1.2 (or newer) in a backward compatible way. " +
         "When upgrading from 1.2 to a newer version it is not required to specify this config." +
         "Default is null. Accepted values are \"" + UPGRADE_FROM_0100 + "\", \"" + UPGRADE_FROM_0101 + "\", \"" + UPGRADE_FROM_0102 + "\", \"" + UPGRADE_FROM_0110 + "\", \"" + UPGRADE_FROM_10 + "\", \"" + UPGRADE_FROM_11 + "\" (for upgrading from the corresponding old version).";
+
+    /** {@code upgrade.mode} */
+    public static final String UPGRADE_MODE_CONFIG = "upgrade.mode";
+    public static final String UPGRADE_MODE_DOC = "Allows online upgrading from an old store format to a new store format.";
 
     /** {@code windowstore.changelog.additional.retention.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -675,6 +689,12 @@ public class StreamsConfig extends AbstractConfig {
                     in(null, UPGRADE_FROM_0100, UPGRADE_FROM_0101, UPGRADE_FROM_0102, UPGRADE_FROM_0110, UPGRADE_FROM_10, UPGRADE_FROM_11),
                     Importance.LOW,
                     UPGRADE_FROM_DOC)
+            .define(UPGRADE_MODE_CONFIG,
+                    ConfigDef.Type.STRING,
+                    null,
+                    in(null, IN_PLACE_UPGRADE, ROLL_OVER_UPGRAGE),
+                    Importance.LOW,
+                    UPGRADE_MODE_DOC)
             .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
                     Type.LONG,
                     24 * 60 * 60 * 1000L,

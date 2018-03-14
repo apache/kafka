@@ -23,6 +23,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.KeyValueWithTimestampStoreBuilder;
+import org.apache.kafka.streams.state.internals.KeyValueWithTimestampUpgradeFromKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
 import org.apache.kafka.streams.state.internals.RocksDbKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier;
@@ -70,7 +72,7 @@ import java.util.Objects;
  * }</pre>
  */
 @InterfaceStability.Evolving
-public class Stores {
+public final class Stores {
 
     /**
      * Create a persistent {@link KeyValueBytesStoreSupplier}.
@@ -238,7 +240,6 @@ public class Stores {
         return new RocksDbSessionBytesStoreSupplier(name, retentionPeriod);
     }
 
-
     /**
      * Creates a {@link StoreBuilder} that can be used to build a {@link WindowStore}.
      * @param supplier      a {@link WindowBytesStoreSupplier} (cannot be {@code null})
@@ -273,6 +274,20 @@ public class Stores {
         return new KeyValueStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
+    public static <K, V> StoreBuilder<KeyValueWithTimestampStore<K, V>> keyValueWithTimestampStoreBuilder(final KeyValueBytesStoreSupplier supplier,
+                                                                                                          final Serde<K> keySerde,
+                                                                                                          final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
+        return new KeyValueWithTimestampStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    public static <K, V> StoreBuilder<KeyValueWithTimestampStore<K, V>> keyValueToKeyValueWithTimestampUpgradeStoreBuilder(final KeyValueBytesStoreSupplier supplier,
+                                                                                                                           final Serde<K> keySerde,
+                                                                                                                           final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
+        return new KeyValueWithTimestampUpgradeFromKeyValueStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
     /**
      * Creates a {@link StoreBuilder} that can be used to build a {@link SessionStore}.
      * @param supplier      a {@link SessionBytesStoreSupplier} (cannot be {@code null})
@@ -290,4 +305,3 @@ public class Stores {
         return new SessionStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 }
-

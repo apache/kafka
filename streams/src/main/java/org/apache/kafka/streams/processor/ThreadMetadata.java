@@ -35,14 +35,18 @@ public class ThreadMetadata {
 
     private final Set<TaskMetadata> standbyTasks;
 
+    private final Set<TaskMetadata> storeUpgradeTasks;
+
     public ThreadMetadata(final String threadName,
                           final String threadState,
                           final Set<TaskMetadata> activeTasks,
-                          final Set<TaskMetadata> standbyTasks) {
+                          final Set<TaskMetadata> standbyTasks,
+                          final Set<TaskMetadata> storeUpgradeTasks) {
         this.threadName = threadName;
         this.threadState = threadState;
         this.activeTasks = Collections.unmodifiableSet(activeTasks);
         this.standbyTasks = Collections.unmodifiableSet(standbyTasks);
+        this.storeUpgradeTasks = Collections.unmodifiableSet(storeUpgradeTasks);
     }
 
     public String threadState() {
@@ -61,6 +65,10 @@ public class ThreadMetadata {
         return standbyTasks;
     }
 
+    public Set<TaskMetadata> storeUpgradeTasks() {
+        return storeUpgradeTasks;
+    }
+
     @Override
     public boolean equals(final Object o) {
         if (this == o) {
@@ -73,12 +81,13 @@ public class ThreadMetadata {
         return Objects.equals(threadName, that.threadName) &&
                Objects.equals(threadState, that.threadState) &&
                Objects.equals(activeTasks, that.activeTasks) &&
-               Objects.equals(standbyTasks, that.standbyTasks);
+               Objects.equals(standbyTasks, that.standbyTasks) &&
+               Objects.equals(storeUpgradeTasks, storeUpgradeTasks);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(threadName, threadState, activeTasks, standbyTasks);
+        return Objects.hash(threadName, threadState, activeTasks, standbyTasks, storeUpgradeTasks);
     }
 
     @Override
@@ -88,6 +97,7 @@ public class ThreadMetadata {
                 ", threadState=" + threadState +
                 ", activeTasks=" + activeTasks +
                 ", standbyTasks=" + standbyTasks +
+                ", storeUpgradeTasks=" + storeUpgradeTasks +
                 '}';
     }
 }

@@ -16,55 +16,35 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.StateStore;
-
-import java.util.List;
-
 /**
- * A key-value store that supports put/get/delete and range queries.
+ * A key-(value/timestamp) store that supports put/get/delete and range queries.
  *
  * @param <K> The key type
  * @param <V> The value type
  */
-public interface KeyValueStore<K, V> extends StateStore, ReadOnlyKeyValueStore<K, V> {
+public interface KeyValueWithTimestampStore<K, V> extends KeyValueStore<K, ValueAndTimestamp<V>> {
 
     /**
-     * Update the value associated with this key.
+     * Update the value and timestamp associated with this key.
      *
      * @param key The key to associate the value to
      * @param value The value to update, it can be {@code null};
      *              if the serialized bytes are also {@code null} it is interpreted as deletes
+     * @param timestamp the timestamp to be stored next to the value
      * @throws NullPointerException If {@code null} is used for key.
      */
-    void put(K key, V value);
+    void put(K key, V value, long timestamp);
 
     /**
      * Update the value associated with this key, unless a value is already associated with the key.
      *
      * @param key The key to associate the value to
      * @param value The value to update, it can be {@code null};
-     *              if the serialized bytes are also {@code null} it is interpreted as deletes
-     * @return The old value or {@code null} if there is no such key.
+     *              if the serialized bytes are also null it is interpreted as deletes
+     * @param timestamp the timestamp to be stored next to the value
+     * @return The old value and timestamp or {@code null} if there is no such key.
      * @throws NullPointerException If {@code null} is used for key.
      */
-    V putIfAbsent(K key, V value);
+    ValueAndTimestamp<V> putIfAbsent(K key, V value, long timestamp);
 
-    /**
-     * Update all the given key/value pairs.
-     *
-     * @param entries A list of entries to put into the store;
-     *                if the serialized bytes are also {@code null} it is interpreted as deletes
-     * @throws NullPointerException If {@code null} is used for key.
-     */
-    void putAll(List<KeyValue<K, V>> entries);
-
-    /**
-     * Delete the value from the store (if there is one).
-     *
-     * @param key The key
-     * @return The old value or {@code null} if there is no such key.
-     * @throws NullPointerException If {@code null} is used for key.
-     */
-    V delete(K key);
 }

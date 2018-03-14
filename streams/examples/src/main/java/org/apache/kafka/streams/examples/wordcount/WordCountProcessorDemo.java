@@ -26,9 +26,13 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.KeyValueWithTimestampStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Locale;
 import java.util.Properties;
@@ -102,7 +106,65 @@ public final class WordCountProcessorDemo {
         }
     }
 
-    public static void main(final String[] args) {
+    static class MyProcessorSupplierNew implements ProcessorSupplier<String, String> {
+
+        @Override
+        public Processor<String, String> get() {
+            return new Processor<String, String>() {
+                private ProcessorContext context;
+                private KeyValueWithTimestampStore<String, Integer> kvStore;
+
+                @Override
+                @SuppressWarnings("unchecked")
+                public void init(final ProcessorContext context) {
+                    this.context = context;
+                    this.context.schedule(1000, PunctuationType.STREAM_TIME, new Punctuator() {
+                        @Override
+                        public void punctuate(long timestamp) {
+                            try (KeyValueIterator<String, ValueAndTimestamp<Integer>> iter = kvStore.all()) {
+                                System.out.println("----------- " + timestamp + " ----------- ");
+
+                                while (iter.hasNext()) {
+                                    KeyValue<String, ValueAndTimestamp<Integer>> entry = iter.next();
+
+                                    System.out.println("[" + entry.key + ", " + entry.value.value() + "]:" + entry.value.timestamp());
+
+                                    context.forward(entry.key,
+                                                    entry.value.value().toString(),
+                                                    To.all().withTimestamp(entry.value.timestamp()));
+                                }
+                            }
+                        }
+                    });
+                    this.kvStore = (KeyValueWithTimestampStore<String, Integer>) context.getStateStore("Counts");
+                }
+
+                @Override
+                public void process(String dummy, String line) {
+                    String[] words = line.toLowerCase(Locale.getDefault()).split(" ");
+
+                    for (String word : words) {
+                        ValueAndTimestamp<Integer> oldValue = this.kvStore.get(word);
+
+                        if (oldValue.value() == null) {
+                            this.kvStore.put(word, 1, context.timestamp());
+                        } else {
+                            this.kvStore.put(word,
+                                             oldValue.value() + 1,
+                                             Math.max(oldValue.timestamp(), context.timestamp()));
+                        }
+                    }
+
+                    context.commit();
+                }
+
+                @Override
+                public void close() {}
+            };
+        }
+    }
+
+    static KafkaStreams getStreamsClient(final String[] args) {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount-processor");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
@@ -117,16 +179,44 @@ public final class WordCountProcessorDemo {
 
         builder.addSource("Source", "streams-plaintext-input");
 
-        builder.addProcessor("Process", new MyProcessorSupplier(), "Source");
-        builder.addStateStore(Stores.keyValueStoreBuilder(
-                Stores.inMemoryKeyValueStore("Counts"),
-                Serdes.String(),
-                Serdes.Integer()),
+        if (args.length > 0 && args[0].equals("--run-with-old-store")) {
+            builder.addProcessor("Process", new MyProcessorSupplier(), "Source");
+            builder.addStateStore(
+                Stores.keyValueStoreBuilder(
+                    Stores.persistentKeyValueStore("Counts"),
+                    Serdes.String(),
+                    Serdes.Integer()),
                 "Process");
+        } else if (args.length > 0 && args[0].equals("--run-with-upgrade-store")) {
+            if (args.length > 1) {
+                props.put(StreamsConfig.UPGRADE_MODE_CONFIG, args[1]);
+            }
+            builder.addProcessor("Process", new MyProcessorSupplierNew(), "Source");
+            builder.addStateStore(
+                Stores.keyValueToKeyValueWithTimestampUpgradeStoreBuilder(
+                    Stores.persistentKeyValueStore("Counts"),
+                    Serdes.String(),
+                    Serdes.Integer()),
+                "Process");
+        } else if (args.length > 0 && args[0].equals("--run-with-new-store")) {
+            builder.addProcessor("Process", new MyProcessorSupplierNew(), "Source");
+            builder.addStateStore(
+                Stores.keyValueWithTimestampStoreBuilder(
+                    Stores.persistentKeyValueStore("Counts"),
+                    Serdes.String(),
+                    Serdes.Integer()),
+                "Process");
+        } else {
+            throw new RuntimeException("Required argument missing");
+        }
 
         builder.addSink("Sink", "streams-wordcount-processor-output", "Process");
 
-        final KafkaStreams streams = new KafkaStreams(builder, props);
+        return new KafkaStreams(builder, props);
+    }
+
+    public static void main(final String[] args) {
+        final KafkaStreams streams = getStreamsClient(args);
         final CountDownLatch latch = new CountDownLatch(1);
 
         // attach shutdown handler to catch control-c
@@ -137,6 +227,10 @@ public final class WordCountProcessorDemo {
                 latch.countDown();
             }
         });
+
+        if (args[0].equals("--run-with-old-store")) {
+            streams.cleanUp();
+        }
 
         try {
             streams.start();

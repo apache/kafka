@@ -241,7 +241,7 @@ public class TopologyTestDriver implements Closeable {
         internalTopologyBuilder = builder;
         internalTopologyBuilder.setApplicationId(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG));
 
-        processorTopology = internalTopologyBuilder.build(null);
+        processorTopology = internalTopologyBuilder.build();
         globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
 
         final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();

@@ -20,6 +20,8 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueWithTimestampStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.List;
 import java.util.Objects;
@@ -31,15 +33,15 @@ import java.util.Objects;
  * @param <K> key type
  * @param <V> value type
  */
-public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueStore<K, V> {
+public class CompositeReadOnlyKeyValueWithTimestampsStore<K, V> implements ReadOnlyKeyValueWithTimestampStore<K, V> {
 
     private final StateStoreProvider storeProvider;
-    private final QueryableStoreType<ReadOnlyKeyValueStore<K, V>> storeType;
+    private final QueryableStoreType<ReadOnlyKeyValueWithTimestampStore<K, V>> storeType;
     private final String storeName;
 
-    public CompositeReadOnlyKeyValueStore(final StateStoreProvider storeProvider,
-                                          final QueryableStoreType<ReadOnlyKeyValueStore<K, V>> storeType,
-                                          final String storeName) {
+    public CompositeReadOnlyKeyValueWithTimestampsStore(final StateStoreProvider storeProvider,
+                                                        final QueryableStoreType<ReadOnlyKeyValueWithTimestampStore<K, V>> storeType,
+                                                        final String storeName) {
         this.storeProvider = storeProvider;
         this.storeType = storeType;
         this.storeName = storeName;
@@ -47,12 +49,12 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
 
 
     @Override
-    public V get(final K key) {
+    public ValueAndTimestamp<V> get(final K key) {
         Objects.requireNonNull(key);
-        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
-        for (final ReadOnlyKeyValueStore<K, V> store : stores) {
+        final List<ReadOnlyKeyValueWithTimestampStore<K, V>> stores = storeProvider.stores(storeName, storeType);
+        for (final ReadOnlyKeyValueWithTimestampStore<K, V> store : stores) {
             try {
-                final V result = store.get(key);
+                final ValueAndTimestamp<V> result = store.get(key);
                 if (result != null) {
                     return result;
                 }
@@ -65,38 +67,39 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
     }
 
     @Override
-    public KeyValueIterator<K, V> range(final K from, final K to) {
+    public KeyValueIterator<K, ValueAndTimestamp<V>> range(final K from,
+                                                           final K to) {
         Objects.requireNonNull(from);
         Objects.requireNonNull(to);
-        final NextIteratorFunction<K, V, ReadOnlyKeyValueStore<K, V>> nextIteratorFunction = store -> {
+        final NextIteratorFunction<K, ValueAndTimestamp<V>, ReadOnlyKeyValueWithTimestampStore<K, V>> nextIteratorFunction = store -> {
             try {
                 return store.range(from, to);
             } catch (final InvalidStateStoreException e) {
                 throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
             }
         };
-        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
+        final List<ReadOnlyKeyValueWithTimestampStore<K, V>> stores = storeProvider.stores(storeName, storeType);
         return new DelegatingPeekingKeyValueIterator<>(storeName, new CompositeKeyValueIterator<>(stores.iterator(), nextIteratorFunction));
     }
 
     @Override
-    public KeyValueIterator<K, V> all() {
-        final NextIteratorFunction<K, V, ReadOnlyKeyValueStore<K, V>> nextIteratorFunction = store -> {
+    public KeyValueIterator<K, ValueAndTimestamp<V>> all() {
+        final NextIteratorFunction<K, ValueAndTimestamp<V>, ReadOnlyKeyValueWithTimestampStore<K, V>> nextIteratorFunction = store -> {
             try {
                 return store.all();
             } catch (final InvalidStateStoreException e) {
                 throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
             }
         };
-        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
+        final List<ReadOnlyKeyValueWithTimestampStore<K, V>> stores = storeProvider.stores(storeName, storeType);
         return new DelegatingPeekingKeyValueIterator<>(storeName, new CompositeKeyValueIterator<>(stores.iterator(), nextIteratorFunction));
     }
 
     @Override
     public long approximateNumEntries() {
-        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
+        final List<ReadOnlyKeyValueWithTimestampStore<K, V>> stores = storeProvider.stores(storeName, storeType);
         long total = 0;
-        for (final ReadOnlyKeyValueStore<K, V> store : stores) {
+        for (final ReadOnlyKeyValueWithTimestampStore<K, V> store : stores) {
             total += store.approximateNumEntries();
             if (total < 0) {
                 return Long.MAX_VALUE;

@@ -570,3 +570,37 @@ class ChecksumMessageFormatter extends MessageFormatter {
     output.println(topicStr + "checksum:" + consumerRecord.checksum)
   }
 }
+
+class KafkaStreamsChangelogFormatter extends DefaultMessageFormatter {
+
+  override def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
+    def writeSeparator(columnSeparator: Boolean): Unit = {
+      if (columnSeparator)
+        output.write(keySeparator)
+      else
+        output.write(lineSeparator)
+    }
+
+    def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte]) {
+      val nonNullBytes = Option(sourceBytes).getOrElse("null".getBytes(StandardCharsets.UTF_8))
+      val convertedBytes = deserializer.map(_.deserialize(null, nonNullBytes).toString.
+        getBytes(StandardCharsets.UTF_8)).getOrElse(nonNullBytes)
+      output.write(convertedBytes)
+    }
+
+    import consumerRecord._
+
+    output.write(s"$headers".getBytes(StandardCharsets.UTF_8))
+    writeSeparator(true)
+    output.write(s"$timestampType:$timestamp".getBytes(StandardCharsets.UTF_8))
+    writeSeparator(true)
+
+    write(keyDeserializer, key)
+    writeSeparator(printValue)
+
+//    write(valueDeserializer, value)
+    output.write(("" + value.length).getBytes(StandardCharsets.UTF_8))
+    output.write(lineSeparator)
+  }
+
+}

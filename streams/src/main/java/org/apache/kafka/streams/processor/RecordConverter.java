@@ -14,30 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state;
+package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.KeyValue;
 
-import java.io.Closeable;
-import java.util.Iterator;
-
 /**
- * Iterator interface of {@link KeyValue}.
- * <p>
- * Users must call its {@link #close()} method explicitly upon completeness to release resources,
- * or use try-with-resources statement (available since JDK7) for this {@link Closeable} class.
- *
- * @param <K> Type of keys
- * @param <V> Type of values
+ * {@code RecordConverter} translates a {@link ConsumerRecord} into a {@link KeyValue} pair.
  */
-public interface KeyValueIterator<K, V> extends Iterator<KeyValue<K, V>>, Closeable {
-
-    @Override
-    void close();
+public interface RecordConverter {
 
     /**
-     * Peek at the next key without advancing the iterator.
-     * @return the key of the next value that would be returned from the next call to next
+     * Convert a given record into a key-value pair.
+     *
+     * @param record the consumer record
+     * @return the record as key-value pair
      */
-    K peekNextKey();
+    KeyValue<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record);
+
 }

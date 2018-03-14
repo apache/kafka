@@ -96,7 +96,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
     protected volatile boolean open = false;
 
-    RocksDBStore(final String name) {
+    // TODO: revert `public`
+    public RocksDBStore(final String name) {
         this(name, DB_FILE_DIR);
     }
 
@@ -160,6 +161,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         open = true;
     }
 
+    @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
         // open the DB dir

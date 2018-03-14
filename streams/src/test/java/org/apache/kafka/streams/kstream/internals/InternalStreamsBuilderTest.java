@@ -132,7 +132,7 @@ public class InternalStreamsBuilderTest {
         final KTable table1 = builder.table("topic2", consumed, materializedInternal);
 
         builder.buildAndOptimizeTopology();
-        final ProcessorTopology topology = builder.internalTopologyBuilder.build(null);
+        final ProcessorTopology topology = builder.internalTopologyBuilder.build();
 
         assertEquals(1, topology.stateStores().size());
         final String storeName = "prefix-STATE-STORE-0000000000";
@@ -239,7 +239,7 @@ public class InternalStreamsBuilderTest {
 
         final Map<Integer, Set<String>> nodeGroups = builder.internalTopologyBuilder.nodeGroups();
         for (final Integer groupId : nodeGroups.keySet()) {
-            final ProcessorTopology topology = builder.internalTopologyBuilder.build(groupId);
+            final ProcessorTopology topology = builder.internalTopologyBuilder.build(groupId, false, false);
             final List<StateStore> stateStores = topology.globalStateStores();
             final Set<String> names = new HashSet<>();
             for (final StateStore stateStore : stateStores) {
@@ -359,7 +359,7 @@ public class InternalStreamsBuilderTest {
     public void shouldHaveNullTimestampExtractorWhenNoneSupplied() {
         builder.stream(Collections.singleton("topic"), consumed);
         builder.buildAndOptimizeTopology();
-        final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build(null);
+        final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build();
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
@@ -368,7 +368,7 @@ public class InternalStreamsBuilderTest {
         final ConsumedInternal consumed = new ConsumedInternal<>(Consumed.with(new MockTimestampExtractor()));
         builder.stream(Collections.singleton("topic"), consumed);
         builder.buildAndOptimizeTopology();
-        final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build(null);
+        final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build();
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
@@ -376,7 +376,7 @@ public class InternalStreamsBuilderTest {
     public void ktableShouldHaveNullTimestampExtractorWhenNoneSupplied() {
         builder.table("topic", consumed, materialized);
         builder.buildAndOptimizeTopology();
-        final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build(null);
+        final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build();
         assertNull(processorTopology.source("topic").getTimestampExtractor());
     }
 
@@ -385,7 +385,7 @@ public class InternalStreamsBuilderTest {
         final ConsumedInternal<String, String> consumed = new ConsumedInternal<>(Consumed.<String, String>with(new MockTimestampExtractor()));
         builder.table("topic", consumed, materialized);
         builder.buildAndOptimizeTopology();
-        final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build(null);
+        final ProcessorTopology processorTopology = builder.internalTopologyBuilder.build();
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 

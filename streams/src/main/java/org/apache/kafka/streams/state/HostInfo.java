@@ -18,23 +18,24 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 
 /**
- * Represents a user defined endpoint in a {@link org.apache.kafka.streams.KafkaStreams} application.
+ * Represents a user defined endpoint in a {@link KafkaStreams} application.
  * Instances of this class can be obtained by calling one of:
- *  {@link KafkaStreams#allMetadata()}
- *  {@link KafkaStreams#allMetadataForStore(String)}
- *  {@link KafkaStreams#metadataForKey(String, Object, StreamPartitioner)}
- *  {@link KafkaStreams#metadataForKey(String, Object, Serializer)}
- *
- *  The HostInfo is constructed during Partition Assignment
- *  see {@link StreamsPartitionAssignor}
- *  It is extracted from the config {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_SERVER_CONFIG}
- *
- *  If developers wish to expose an endpoint in their KafkaStreams applications they should provide the above
- *  config.
+ * <ul>
+ *   <li>{@link KafkaStreams#allMetadata()}</li>
+ *   <li>{@link KafkaStreams#allMetadataForStore(String)}</li>
+ *   <li>{@link KafkaStreams#metadataForKey(String, Object, StreamPartitioner)}</li>
+ *   <li>{@link KafkaStreams#metadataForKey(String, Object, Serializer)}</li>
+ * </ul>
+ * The HostInfo is constructed during Partition Assignment (see {@link StreamsPartitionAssignor}).
+ * It is extracted from the config {@link StreamsConfig#APPLICATION_SERVER_CONFIG}
+ * <p>
+ * If developers wish to expose an endpoint in their {@link KafkaStreams} applications they
+ * should provide the above config.
  */
 public class HostInfo {
     private final String host;

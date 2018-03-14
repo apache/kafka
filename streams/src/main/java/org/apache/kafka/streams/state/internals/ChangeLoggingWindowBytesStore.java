@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -35,15 +39,27 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
 
     private final WindowStore<Bytes, byte[]> bytesStore;
     private final boolean retainDuplicates;
+    private final Headers dataFormatVersionHeader;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
     private ProcessorContext context;
     private int seqnum = 0;
 
     ChangeLoggingWindowBytesStore(final WindowStore<Bytes, byte[]> bytesStore,
                                   final boolean retainDuplicates) {
+        this(bytesStore, retainDuplicates, null);
+    }
+
+    ChangeLoggingWindowBytesStore(final WindowStore<Bytes, byte[]> bytesStore,
+                                  final boolean retainDuplicates,
+                                  final byte[] dataFormatVersion) {
         super(bytesStore);
         this.bytesStore = bytesStore;
         this.retainDuplicates = retainDuplicates;
+        if (dataFormatVersion != null) {
+            dataFormatVersionHeader = new RecordHeaders(new Header[]{new RecordHeader("v", dataFormatVersion)});
+        } else {
+            dataFormatVersionHeader = new RecordHeaders();
+        }
     }
 
     @Override
@@ -90,7 +106,8 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
         changeLogger = new StoreChangeLogger<>(
             name(),
             context,
-            new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray()));
+            new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray()),
+            dataFormatVersionHeader);
     }
 
     private int maybeUpdateSeqnumForDups() {

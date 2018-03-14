@@ -1274,7 +1274,24 @@ public class StreamsPartitionAssignorTest {
                 standbyTaskMap,
                 Collections.<HostInfo, Set<TopicPartition>>emptyMap()
             )));
-        assertThat(assignment.get("consumer1").partitions(), equalTo(Utils.mkList(t1p0, t1p1)));
+        final List<TopicPartition> assignedPartitions = assignment.get("consumer1").partitions();
+        assignedPartitions.sort((tp1, tp2) -> {
+            final int topicComparison = tp1.topic().compareTo(tp2.topic());
+            if (topicComparison != 0) {
+                return topicComparison;
+            }
+            return tp1.partition() - tp2.partition();
+        });
+        final List<TopicPartition> expectedPartitions = Utils.mkList(t1p0, t1p1);
+        expectedPartitions.sort((tp1, tp2) -> {
+            final int topicComparison = tp1.topic().compareTo(tp2.topic());
+            if (topicComparison != 0) {
+                return topicComparison;
+            }
+            return tp1.partition() - tp2.partition();
+        });
+
+        assertThat(assignedPartitions, equalTo(expectedPartitions));
 
         assertThat(AssignmentInfo.decode(assignment.get("future-consumer").userData()), equalTo(new AssignmentInfo()));
         assertThat(assignment.get("future-consumer").partitions().size(), equalTo(0));

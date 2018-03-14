@@ -326,6 +326,16 @@ public class StateDirectory {
         });
     }
 
+    File[] listPrepareTaskDirectories() {
+        return stateDir.listFiles(new FileFilter() {
+            @Override
+            public boolean accept(final File pathname) {
+                final String name = pathname.getName();
+                return pathname.isDirectory() && name.matches("\\d+_\\d+_prepare");
+            }
+        });
+    }
+
     private FileChannel getOrCreateFileChannel(final TaskId taskId,
                                                final Path lockPath) throws IOException {
         if (!channels.containsKey(taskId)) {

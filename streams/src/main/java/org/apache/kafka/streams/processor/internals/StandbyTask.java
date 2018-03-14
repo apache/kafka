@@ -19,6 +19,8 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -59,9 +61,25 @@ public class StandbyTask extends AbstractTask {
                 final StreamsConfig config,
                 final StreamsMetricsImpl metrics,
                 final StateDirectory stateDirectory) {
-        super(id, partitions, topology, consumer, changelogReader, true, stateDirectory, config);
+        this(id, partitions, topology, consumer, changelogReader, false, config, metrics, stateDirectory);
+    }
 
-        processorContext = standbyContext = new StandbyContextImpl(id, config, stateMgr, metrics);
+    StandbyTask(final TaskId id,
+                final Collection<TopicPartition> partitions,
+                final ProcessorTopology topology,
+                final Consumer<byte[], byte[]> consumer,
+                final ChangelogReader changelogReader,
+                final boolean isPrepareStoreForUpgrade,
+                final StreamsConfig config,
+                final StreamsMetricsImpl metrics,
+                final StateDirectory stateDirectory) {
+        super(id, partitions, topology, consumer, changelogReader, true, isPrepareStoreForUpgrade, stateDirectory, config);
+
+        standbyContext = new StandbyContextImpl(id, config, stateMgr, metrics);
+        if (!isPrepareStoreForUpgrade) {
+            processorContext = standbyContext;
+        } else {
+        }
     }
 
     @Override
@@ -172,9 +190,13 @@ public class StandbyTask extends AbstractTask {
         final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>(records.size());
         final List<ConsumerRecord<byte[], byte[]>> remainingRecords = new ArrayList<>();
 
+        final Headers headers = new RecordHeaders();
+
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             if (record.offset() < limit) {
-                restoreRecords.add(KeyValue.pair(record.key(), record.value()));
+                if (record.headers().equals(headers)) { // compare data format version
+                    restoreRecords.add(mkKeyValuePair(record));
+                }
                 lastOffset = record.offset();
                 // ideally, we'd use the stream time at the time of the change logging, but we'll settle for
                 // record timestamp for now.
@@ -186,6 +208,10 @@ public class StandbyTask extends AbstractTask {
 
         stateMgr.updateStandbyStates(partition, restoreRecords, lastOffset);
         return remainingRecords;
+    }
+
+    KeyValue<byte[], byte[]> mkKeyValuePair(final ConsumerRecord<byte[], byte[]> record) {
+        return KeyValue.pair(record.key(), record.value());
     }
 
     Map<TopicPartition, Long> checkpointedOffsets() {

@@ -21,8 +21,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 
 /**
  * A session store that only supports read operations.
- * Implementations should be thread-safe as concurrent reads and writes
- * are expected.
+ * Implementations should be thread-safe as concurrent reads and writes are expected.
  *
  * @param <K> the key type
  * @param <AGG> the aggregated value type

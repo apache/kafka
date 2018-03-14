@@ -1079,8 +1079,10 @@ project(':streams:examples') {
     compile libs.slf4jlog4j
 
     testCompile project(':streams:test-utils')
+    testCompile project(':streams').sourceSets.test.output
     testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
     testCompile libs.junit
+    testCompile libs.easymock
   }
 
   javadoc {

@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -30,16 +34,31 @@ import java.util.List;
 public class InMemoryKeyValueLoggedStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V> {
 
     private final KeyValueStore<K, V> inner;
+    private final Headers dataFormatVersionHeader;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
 
     private StoreChangeLogger<K, V> changeLogger;
 
-    public InMemoryKeyValueLoggedStore(final KeyValueStore<K, V> inner, final Serde<K> keySerde, final Serde<V> valueSerde) {
+    public InMemoryKeyValueLoggedStore(final KeyValueStore<K, V> inner,
+                                       final Serde<K> keySerde,
+                                       final Serde<V> valueSerde) {
+        this(inner, keySerde, valueSerde, null);
+    }
+
+    public InMemoryKeyValueLoggedStore(final KeyValueStore<K, V> inner,
+                                       final Serde<K> keySerde,
+                                       final Serde<V> valueSerde,
+                                       final byte[] dataFormatVersion) {
         super(inner);
         this.inner = inner;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
+        if (dataFormatVersion != null) {
+            dataFormatVersionHeader = new RecordHeaders(new Header[]{new RecordHeader("v", dataFormatVersion)});
+        } else {
+            dataFormatVersionHeader = new RecordHeaders();
+        }
     }
 
     @Override
@@ -53,7 +72,7 @@ public class InMemoryKeyValueLoggedStore<K, V> extends WrappedStateStore.Abstrac
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
-        this.changeLogger = new StoreChangeLogger<>(inner.name(), context, serdes);
+        this.changeLogger = new StoreChangeLogger<>(inner.name(), context, serdes, dataFormatVersionHeader);
 
         // if the inner store is an LRU cache, add the eviction listener to log removed record
         if (inner instanceof MemoryLRUCache) {

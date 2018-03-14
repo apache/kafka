@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
+import org.apache.kafka.streams.processor.RecordConverter;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -43,10 +44,12 @@ public class ProcessorStateManager extends AbstractStateManager {
     private final TaskId taskId;
     private final String logPrefix;
     private final boolean isStandby;
+//    private final boolean isPrepareStoreForUpgrade;
     private final ChangelogReader changelogReader;
     private final Map<TopicPartition, Long> offsetLimits;
     private final Map<TopicPartition, Long> standbyRestoredOffsets;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
+    final Map<String, RecordConverter> recordConverters; // used for store preparing standby tasks, keyed by state topic name
     private final Map<String, String> storeToChangelogTopic;
     private final List<TopicPartition> changelogPartitions = new ArrayList<>();
 
@@ -81,6 +84,7 @@ public class ProcessorStateManager extends AbstractStateManager {
         standbyRestoredOffsets = new HashMap<>();
         this.isStandby = isStandby;
         restoreCallbacks = isStandby ? new HashMap<>() : null;
+        recordConverters = taskId.isPrepareStoreForUpgradeTask ? new HashMap<>() : null;
         this.storeToChangelogTopic = storeToChangelogTopic;
 
         // load the checkpoint information
@@ -107,6 +111,7 @@ public class ProcessorStateManager extends AbstractStateManager {
     @Override
     public void register(final StateStore store,
                          final StateRestoreCallback stateRestoreCallback) {
+        //final String storeName = getStoreName(store);
         final String storeName = store.name();
         log.debug("Registering state store {} to its state manager", storeName);
 
@@ -127,10 +132,13 @@ public class ProcessorStateManager extends AbstractStateManager {
 
         final TopicPartition storePartition = new TopicPartition(topic, getPartition(topic));
 
-        if (isStandby) {
+        if (isStandby && !taskId.isPrepareStoreForUpgradeTask) {
             log.trace("Preparing standby replica of persistent state store {} with changelog topic {}", storeName, topic);
             restoreCallbacks.put(topic, stateRestoreCallback);
-
+        } else if (taskId.isPrepareStoreForUpgradeTask) {
+            log.trace("Preparing store upgrade of persistent state store {} with changelog topic {}", storeName, topic);
+            restoreCallbacks.put(topic, stateRestoreCallback);
+            recordConverters.put(topic, (RecordConverter) store);
         } else {
             log.trace("Restoring state store {} from changelog topic {}", storeName, topic);
             final StateRestorer restorer = new StateRestorer(storePartition,

@@ -19,13 +19,15 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.utils.Bytes;
 
 /**
- * A store supplier that can be used to create one or more {@link KeyValueStore KeyValueStore<Bytes, byte[]>} instances of type &lt;Byte, byte[]&gt;.
- *
- * For any stores implementing the {@link KeyValueStore KeyValueStore<Bytes, byte[]>} interface, null value bytes are considered as "not exist". This means:
- *
- * 1. Null value bytes in put operations should be treated as delete.
- * 2. If the key does not exist, get operations should return null value bytes.
+ * A store supplier that can be used to create one or more {@link KeyValueStore KeyValueStore&lt;Byte, byte[]&gt;}
+ * instances.
+ * <p>
+ * For any stores implementing the {@link KeyValueStore KeyValueStore&lt;Byte, byte[]&gt;} interface, {@code null} value
+ * bytes are considered as "not exist". This means:
+ * <ol>
+ *  <li>{@code null} value bytes in put operations should be treated as delete.</li>
+ *  <li>If the key does not exist, get operations should return {@code null} value bytes.</li>
+ * </ol>
  */
 public interface KeyValueBytesStoreSupplier extends StoreSupplier<KeyValueStore<Bytes, byte[]>> {
-
 }

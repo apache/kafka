@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -75,8 +76,13 @@ public class StateRestorer {
         compositeRestoreListener.onRestoreEnd(partition, storeName, restoredNumRecords());
     }
 
-    void restoreBatchCompleted(final long currentRestoredOffset, final int numRestored) {
+    void restoreBatchCompleted(final long currentRestoredOffset,
+                               final int numRestored) {
         compositeRestoreListener.onBatchRestored(partition, storeName, currentRestoredOffset, numRestored);
+    }
+
+    KeyValue<byte[], byte[]> mkKeyValuePair(final ConsumerRecord<byte[], byte[]> record) {
+        return compositeRestoreListener.recordConverter.convert(record);
     }
 
     void restore(final Collection<KeyValue<byte[], byte[]>> records) {

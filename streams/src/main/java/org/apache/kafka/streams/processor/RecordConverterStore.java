@@ -14,30 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state;
-
-import org.apache.kafka.streams.KeyValue;
-
-import java.io.Closeable;
-import java.util.Iterator;
+package org.apache.kafka.streams.processor;
 
 /**
- * Iterator interface of {@link KeyValue}.
- * <p>
- * Users must call its {@link #close()} method explicitly upon completeness to release resources,
- * or use try-with-resources statement (available since JDK7) for this {@link Closeable} class.
- *
- * @param <K> Type of keys
- * @param <V> Type of values
+ * {@code RecordConverterStore} translates a changelog record from old store format to new store format.
  */
-public interface KeyValueIterator<K, V> extends Iterator<KeyValue<K, V>>, Closeable {
-
-    @Override
-    void close();
-
-    /**
-     * Peek at the next key without advancing the iterator.
-     * @return the key of the next value that would be returned from the next call to next
-     */
-    K peekNextKey();
+public interface RecordConverterStore extends StateStore, RecordConverter {
 }

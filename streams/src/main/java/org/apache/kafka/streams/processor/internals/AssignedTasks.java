@@ -40,8 +40,8 @@ abstract class AssignedTasks<T extends Task> {
     private final Logger log;
     private final String taskTypeName;
     private final TaskAction<T> commitAction;
-    private final Map<TaskId, T> created = new HashMap<>();
-    private final Map<TaskId, T> suspended = new HashMap<>();
+    final Map<TaskId, T> created = new HashMap<>();
+    final Map<TaskId, T> suspended = new HashMap<>();
     private final Map<TaskId, T> restoring = new HashMap<>();
     private final Set<TopicPartition> restoredPartitions = new HashSet<>();
     private final Set<TaskId> previousActiveTasks = new HashSet<>();

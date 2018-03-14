@@ -37,7 +37,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
-    ProcessorContextImpl(final TaskId id,
+    // TODO revert `public`
+    public ProcessorContextImpl(final TaskId id,
                          final StreamTask task,
                          final StreamsConfig config,
                          final RecordCollector collector,

@@ -19,10 +19,13 @@ package org.apache.kafka.streams.processor.internals;
 
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallback;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
+import org.apache.kafka.streams.processor.RecordConverter;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 
@@ -31,7 +34,9 @@ import java.util.Collection;
 public class CompositeRestoreListener implements BatchingStateRestoreCallback, StateRestoreListener {
 
     public static final NoOpStateRestoreListener NO_OP_STATE_RESTORE_LISTENER = new NoOpStateRestoreListener();
+    private static final Headers EMPTY_HEADER = new RecordHeaders();
     private final BatchingStateRestoreCallback internalBatchingRestoreCallback;
+    final RecordConverter recordConverter;
     private final StateRestoreListener storeRestoreListener;
     private StateRestoreListener userRestoreListener = NO_OP_STATE_RESTORE_LISTENER;
 
@@ -41,6 +46,12 @@ public class CompositeRestoreListener implements BatchingStateRestoreCallback, S
             storeRestoreListener = (StateRestoreListener) stateRestoreCallback;
         } else {
             storeRestoreListener = NO_OP_STATE_RESTORE_LISTENER;
+        }
+
+        if (stateRestoreCallback instanceof RecordConverter) {
+            recordConverter = (RecordConverter) stateRestoreCallback;
+        } else {
+            recordConverter = record -> record.headers().equals(EMPTY_HEADER) ? KeyValue.pair(record.key(), record.value()) : null;
         }
 
         internalBatchingRestoreCallback = getBatchingRestoreCallback(stateRestoreCallback);

@@ -236,6 +236,7 @@ public class AbstractTaskTest {
                                 consumer,
                                 new StoreChangelogReader(consumer, Duration.ZERO, new MockStateRestoreListener(), new LogContext("stream-task-test ")),
                                 false,
+                                false,
                                 stateDirectory,
                                 config) {
 

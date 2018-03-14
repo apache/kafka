@@ -86,7 +86,7 @@ public class KStreamTestDriver extends ExternalResource {
         final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(builder.build());
 
         internalTopologyBuilder.setApplicationId("TestDriver");
-        topology = internalTopologyBuilder.build(null);
+        topology = internalTopologyBuilder.build();
         globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSize, new MockStreamsMetrics(new Metrics()));

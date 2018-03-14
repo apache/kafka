@@ -50,12 +50,15 @@ public class TaskManager {
     private final UUID processId;
     private final AssignedStreamsTasks active;
     private final AssignedStandbyTasks standby;
+    private final AssignedStoreUpgradeTasks storeUpgrade;
     private final ChangelogReader changelogReader;
     private final String logPrefix;
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final StreamThread.AbstractTaskCreator<StreamTask> taskCreator;
     private final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator;
+    private final StreamThread.AbstractTaskCreator<StoreUpgradeTask> storeUpgradeTaskCreator;
     private final StreamsMetadataState streamsMetadataState;
+    private final boolean prepareStoresForUpgrade;
 
     final AdminClient adminClient;
     private DeleteRecordsResult deleteRecordsResult;
@@ -69,29 +72,58 @@ public class TaskManager {
 
     TaskManager(final ChangelogReader changelogReader,
                 final UUID processId,
-                final String logPrefix,
+                final LogContext logContext,
                 final Consumer<byte[], byte[]> restoreConsumer,
                 final StreamsMetadataState streamsMetadataState,
                 final StreamThread.AbstractTaskCreator<StreamTask> taskCreator,
                 final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator,
+                final StreamThread.AbstractTaskCreator<StoreUpgradeTask> storeUpgradeTaskCreator,
                 final AdminClient adminClient,
-                final AssignedStreamsTasks active,
-                final AssignedStandbyTasks standby) {
+                final boolean prepareStoresForUpgrade) {
         this.changelogReader = changelogReader;
         this.processId = processId;
-        this.logPrefix = logPrefix;
-        this.streamsMetadataState = streamsMetadataState;
+        this.log = logContext.logger(getClass());
+        this.logPrefix = logContext.logPrefix();
         this.restoreConsumer = restoreConsumer;
+        this.streamsMetadataState = streamsMetadataState;
         this.taskCreator = taskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
+        this.storeUpgradeTaskCreator = storeUpgradeTaskCreator;
+        this.adminClient = adminClient;
+        this.active = new AssignedStreamsTasks(logContext);
+        this.standby = new AssignedStandbyTasks(logContext);
+        this.storeUpgrade = new AssignedStoreUpgradeTasks(logContext, this);
+        this.prepareStoresForUpgrade = prepareStoresForUpgrade;
+    }
+
+    // for testing
+    TaskManager(final ChangelogReader changelogReader,
+                final UUID processId,
+                final LogContext logContext,
+                final Consumer<byte[], byte[]> restoreConsumer,
+                final StreamsMetadataState streamsMetadataState,
+                final StreamThread.AbstractTaskCreator<StreamTask> taskCreator,
+                final StreamThread.AbstractTaskCreator<StandbyTask> standbyTaskCreator,
+                final StreamThread.AbstractTaskCreator<StoreUpgradeTask> storeUpgradeTaskCreator,
+                final AdminClient adminClient,
+                final boolean prepareStoresForUpgrade,
+                final AssignedStreamsTasks active,
+                final AssignedStandbyTasks standby,
+                final AssignedStoreUpgradeTasks storeUpgrade) {
+        this.changelogReader = changelogReader;
+        this.processId = processId;
+        this.log = logContext.logger(getClass());
+        this.logPrefix = logContext.logPrefix();
+        this.restoreConsumer = restoreConsumer;
+        this.streamsMetadataState = streamsMetadataState;
+        this.taskCreator = taskCreator;
+        this.standbyTaskCreator = standbyTaskCreator;
+        this.storeUpgradeTaskCreator = storeUpgradeTaskCreator;
+        this.adminClient = adminClient;
         this.active = active;
         this.standby = standby;
-
-        final LogContext logContext = new LogContext(logPrefix);
-
-        this.log = logContext.logger(getClass());
-
-        this.adminClient = adminClient;
+        this.storeUpgrade = storeUpgrade;
+        this.prepareStoresForUpgrade = prepareStoresForUpgrade;
     }
 
     void createTasks(final Collection<TopicPartition> assignment) {
@@ -102,13 +134,27 @@ public class TaskManager {
         changelogReader.reset();
         // do this first as we may have suspended standby tasks that
         // will become active or vice versa
+        storeUpgrade.closeNonAssignedSuspendedTasks(assignedActiveTasks);
         standby.closeNonAssignedSuspendedTasks(assignedStandbyTasks);
         active.closeNonAssignedSuspendedTasks(assignedActiveTasks);
         addStreamTasks(assignment);
         addStandbyTasks();
+        addStoreUpgradeTasks();
+        migratePreparedStoresToActiveTasks();
         // Pause all the partitions until the underlying state store is ready for all the active tasks.
         log.trace("Pausing partitions: {}", assignment);
         consumer.pause(assignment);
+    }
+
+    private void migratePreparedStoresToActiveTasks() {
+        if (this.prepareStoresForUpgrade) {
+            return;
+        }
+
+        final Collection<TaskId> storePrepareTasksIds = preparedTasksIds();
+        if (!storePrepareTasksIds.isEmpty()) {
+            active.migrateStoreForTasks(storePrepareTasksIds);
+        }
     }
 
     private void addStreamTasks(final Collection<TopicPartition> assignment) {
@@ -152,17 +198,17 @@ public class TaskManager {
 
     private void addStandbyTasks() {
         final Map<TaskId, Set<TopicPartition>> assignedStandbyTasks = this.assignedStandbyTasks;
-        if (assignedStandbyTasks.isEmpty()) {
-            return;
-        }
-        log.debug("Adding assigned standby tasks {}", assignedStandbyTasks);
         final Map<TaskId, Set<TopicPartition>> newStandbyTasks = new HashMap<>();
-        // collect newly assigned standby tasks and reopen re-assigned standby tasks
-        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : assignedStandbyTasks.entrySet()) {
-            final TaskId taskId = entry.getKey();
-            final Set<TopicPartition> partitions = entry.getValue();
-            if (!standby.maybeResumeSuspendedTask(taskId, partitions)) {
-                newStandbyTasks.put(taskId, partitions);
+
+        if (!assignedStandbyTasks.isEmpty()) {
+            log.debug("Adding assigned standby tasks {}", assignedStandbyTasks);
+            // collect newly assigned standby tasks and reopen re-assigned standby tasks
+            for (final Map.Entry<TaskId, Set<TopicPartition>> entry : assignedStandbyTasks.entrySet()) {
+                final TaskId taskId = entry.getKey();
+                final Set<TopicPartition> partitions = entry.getValue();
+                if (!standby.maybeResumeSuspendedTask(taskId, partitions)) {
+                    newStandbyTasks.put(taskId, partitions);
+                }
             }
         }
 
@@ -179,12 +225,44 @@ public class TaskManager {
         }
     }
 
+    private void addStoreUpgradeTasks() {
+        final Map<TaskId, Set<TopicPartition>> newStoreUpgradeTasks = new HashMap<>();
+
+        if (this.prepareStoresForUpgrade) {
+            log.debug("Adding store upgrade tasks to prepare stores for upgrade {}", assignedActiveTasks);
+            for (final Map.Entry<TaskId, Set<TopicPartition>> entry : assignedActiveTasks.entrySet()) {
+                final TaskId taskId = entry.getKey();
+                final TaskId storeUpgradeTaskId = new TaskId(taskId);
+                final Set<TopicPartition> partitions = entry.getValue();
+                if (!storeUpgrade.maybeResumeSuspendedTask(storeUpgradeTaskId, partitions)) {
+                    newStoreUpgradeTasks.put(storeUpgradeTaskId, partitions);
+                }
+            }
+        }
+
+        if (newStoreUpgradeTasks.isEmpty()) {
+            return;
+        }
+
+        // create all newly assigned store upgrade tasks (guard against race condition with other thread via backoff and retry)
+        // -> other thread will call removeSuspendedStandbyTasks(); eventually
+        log.trace("New store upgrade tasks to be created: {}", newStoreUpgradeTasks);
+
+        for (final StoreUpgradeTask task : storeUpgradeTaskCreator.createTasks(consumer, newStoreUpgradeTasks)) {
+            storeUpgrade.addNewTask(task);
+        }
+    }
+
     Set<TaskId> activeTaskIds() {
         return active.allAssignedTaskIds();
     }
 
     Set<TaskId> standbyTaskIds() {
         return standby.allAssignedTaskIds();
+    }
+
+    Set<TaskId> storeUpgradeTaskIds() {
+        return storeUpgrade.allAssignedTaskIds();
     }
 
     public Set<TaskId> prevActiveTaskIds() {
@@ -221,6 +299,28 @@ public class TaskManager {
         return tasks;
     }
 
+    Set<TaskId> preparedTasksIds() {
+        final HashSet<TaskId> tasks = new HashSet<>();
+
+        final File[] stateDirs = storeUpgradeTaskCreator.stateDirectory().listPrepareTaskDirectories();
+        if (stateDirs != null) {
+            for (final File dir : stateDirs) {
+                try {
+                    final TaskId id = TaskId.parsePrepare(dir.getName());
+                    // if the checkpoint file exists, the state is valid.
+                    if (new File(dir, ProcessorStateManager.CHECKPOINT_FILE_NAME).exists()) {
+                        tasks.add(id);
+                    }
+                } catch (final TaskIdFormatException e) {
+                    // there may be some unknown files that sits in the same directory,
+                    // we should ignore these files instead trying to delete them as well
+                }
+            }
+        }
+
+        return tasks;
+    }
+
     public UUID processId() {
         return processId;
     }
@@ -235,12 +335,14 @@ public class TaskManager {
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     void suspendTasksAndState()  {
-        log.debug("Suspending all active tasks {} and standby tasks {}", active.runningTaskIds(), standby.runningTaskIds());
+        log.debug("Suspending all active tasks {}, standby tasks {}, and store upgrade tasks {}",
+            active.runningTaskIds(), standby.runningTaskIds(), storeUpgrade.runningTaskIds());
 
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
         firstException.compareAndSet(null, active.suspend());
         firstException.compareAndSet(null, standby.suspend());
+        firstException.compareAndSet(null, storeUpgrade.suspend());
         // remove the changelog partitions from restore consumer
         restoreConsumer.unsubscribe();
 
@@ -253,8 +355,8 @@ public class TaskManager {
     void shutdown(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
-        log.debug("Shutting down all active tasks {}, standby tasks {}, suspended tasks {}, and suspended standby tasks {}", active.runningTaskIds(), standby.runningTaskIds(),
-                  active.previousTaskIds(), standby.previousTaskIds());
+        log.debug("Shutting down all active tasks {}, standby tasks {}, store upgrade tasks {}, suspended tasks {}, and suspended standby tasks {}",
+            active.runningTaskIds(), standby.runningTaskIds(), storeUpgrade.runningTaskIds(), active.previousTaskIds(), standby.previousTaskIds());
 
         try {
             active.close(clean);
@@ -262,6 +364,7 @@ public class TaskManager {
             firstException.compareAndSet(null, fatalException);
         }
         standby.close(clean);
+        storeUpgrade.close(clean);
 
         // remove the changelog partitions from restore consumer
         try {
@@ -290,6 +393,10 @@ public class TaskManager {
         return standby.previousTaskIds();
     }
 
+    Set<TaskId> suspendedStoreUpgradeTaskIds() {
+        return storeUpgrade.previousTaskIds();
+    }
+
     StreamTask activeTask(final TopicPartition partition) {
         return active.runningTaskFor(partition);
     }
@@ -298,12 +405,20 @@ public class TaskManager {
         return standby.runningTaskFor(partition);
     }
 
+    StoreUpgradeTask storeUpgradeTask(final TopicPartition partition) {
+        return storeUpgrade.runningTaskFor(partition);
+    }
+
     Map<TaskId, StreamTask> activeTasks() {
         return active.runningTaskMap();
     }
 
     Map<TaskId, StandbyTask> standbyTasks() {
         return standby.runningTaskMap();
+    }
+
+    Map<TaskId, StoreUpgradeTask> storeUpgradeTasks() {
+        return storeUpgrade.runningTaskMap();
     }
 
     void setConsumer(final Consumer<byte[], byte[]> consumer) {
@@ -317,6 +432,7 @@ public class TaskManager {
     boolean updateNewAndRestoringTasks() {
         active.initializeNewTasks();
         standby.initializeNewTasks();
+        storeUpgrade.initializeNewTasks();
 
         final Collection<TopicPartition> restored = changelogReader.restore(active);
 
@@ -326,7 +442,7 @@ public class TaskManager {
             final Set<TopicPartition> assignment = consumer.assignment();
             log.trace("Resuming partitions {}", assignment);
             consumer.resume(assignment);
-            assignStandbyPartitions();
+            assignStandbyAndStoreUpgradePartitions();
             return true;
         }
         return false;
@@ -337,14 +453,16 @@ public class TaskManager {
     }
 
     boolean hasStandbyRunningTasks() {
-        return standby.hasRunningTasks();
+        return standby.hasRunningTasks() || storeUpgrade.hasRunningTasks();
     }
 
-    private void assignStandbyPartitions() {
-        final Collection<StandbyTask> running = standby.running();
+    private void assignStandbyAndStoreUpgradePartitions() {
         final Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
-        for (final StandbyTask standbyTask : running) {
+        for (final StandbyTask standbyTask : standby.running()) {
             checkpointedOffsets.putAll(standbyTask.checkpointedOffsets());
+        }
+        for (final StoreUpgradeTask storeUpgradeTask : storeUpgrade.running()) {
+            checkpointedOffsets.putAll(storeUpgradeTask.checkpointedOffsets());
         }
 
         restoreConsumer.assign(checkpointedOffsets.keySet());
@@ -402,8 +520,10 @@ public class TaskManager {
      *                               or if the task producer got fenced (EOS)
      */
     int commitAll() {
-        final int committed = active.commit();
-        return committed + standby.commit();
+        int committed = active.commit();
+        committed += standby.commit();
+        committed += storeUpgrade.commit();
+        return committed;
     }
 
     /**
@@ -428,7 +548,7 @@ public class TaskManager {
         return active.maybeCommit();
     }
 
-    void maybePurgeCommitedRecords() {
+    void maybePurgeCommittedRecords() {
         // we do not check any possible exceptions since none of them are fatal
         // that should cause the application to fail, and we will try delete with
         // newer offsets anyways.
@@ -468,6 +588,8 @@ public class TaskManager {
         builder.append(active.toString(indent + "\t\t"));
         builder.append(indent).append("\tStandby tasks:\n");
         builder.append(standby.toString(indent + "\t\t"));
+        builder.append(indent).append("\tStore upgrade tasks:\n");
+        builder.append(storeUpgrade.toString(indent + "\t\t"));
         return builder.toString();
     }
 

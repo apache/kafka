@@ -208,9 +208,9 @@ public class StreamThread extends Thread {
 
             state = newState;
             if (newState == State.RUNNING) {
-                updateThreadMetadata(taskManager.activeTasks(), taskManager.standbyTasks());
+                updateThreadMetadata(taskManager.activeTasks(), taskManager.standbyTasks(), taskManager.storeUpgradeTasks());
             } else {
-                updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap());
+                updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
             }
         }
 
@@ -252,11 +252,13 @@ public class StreamThread extends Thread {
         public void onPartitionsAssigned(final Collection<TopicPartition> assignment) {
             log.debug("at state {}: partitions {} assigned at the end of consumer rebalance.\n" +
                     "\tcurrent suspended active tasks: {}\n" +
-                    "\tcurrent suspended standby tasks: {}\n",
+                    "\tcurrent suspended standby tasks: {}\n" +
+                    "\tcurrent suspended store upgrade tasks: {}",
                 streamThread.state,
                 assignment,
                 taskManager.suspendedActiveTaskIds(),
-                taskManager.suspendedStandbyTaskIds());
+                taskManager.suspendedStandbyTaskIds(),
+                taskManager.suspendedStoreUpgradeTaskIds());
 
             if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
                 log.debug("Received error code {} - shutdown", streamThread.assignmentErrorCode.get());
@@ -283,10 +285,12 @@ public class StreamThread extends Thread {
                 log.info("partition assignment took {} ms.\n" +
                         "\tcurrent active tasks: {}\n" +
                         "\tcurrent standby tasks: {}\n" +
-                        "\tprevious active tasks: {}\n",
+                        "\tcurrent store upgrade tasks: {}\n" +
+                        "\tprevious active tasks: {}",
                     time.milliseconds() - start,
                     taskManager.activeTaskIds(),
                     taskManager.standbyTaskIds(),
+                    taskManager.storeUpgradeTaskIds(),
                     taskManager.prevActiveTaskIds());
             }
         }
@@ -295,11 +299,13 @@ public class StreamThread extends Thread {
         public void onPartitionsRevoked(final Collection<TopicPartition> assignment) {
             log.debug("at state {}: partitions {} revoked at the beginning of consumer rebalance.\n" +
                     "\tcurrent assigned active tasks: {}\n" +
-                    "\tcurrent assigned standby tasks: {}\n",
+                    "\tcurrent assigned standby tasks: {}\n" +
+                    "\tcurrent assigned store upgrade tasks: {}",
                 streamThread.state,
                 assignment,
                 taskManager.activeTaskIds(),
-                taskManager.standbyTaskIds());
+                taskManager.standbyTaskIds(),
+                taskManager.storeUpgradeTaskIds());
 
             if (streamThread.setState(State.PARTITIONS_REVOKED) != null) {
                 final long start = time.milliseconds();
@@ -322,10 +328,12 @@ public class StreamThread extends Thread {
 
                     log.info("partition revocation took {} ms.\n" +
                             "\tsuspended active tasks: {}\n" +
-                            "\tsuspended standby tasks: {}",
+                            "\tsuspended standby tasks: {}\n" +
+                            "\tsuspended store upgrade tasks: {}",
                         time.milliseconds() - start,
                         taskManager.suspendedActiveTaskIds(),
-                        taskManager.suspendedStandbyTaskIds());
+                        taskManager.suspendedStandbyTaskIds(),
+                        taskManager.suspendedStoreUpgradeTaskIds());
                 }
             }
         }
@@ -428,7 +436,7 @@ public class StreamThread extends Thread {
             return new StreamTask(
                 taskId,
                 partitions,
-                builder.build(taskId.topicGroupId),
+                builder.build(taskId.topicGroupId, config.getString(StreamsConfig.UPGRADE_MODE_CONFIG) != null, false),
                 consumer,
                 storeChangelogReader,
                 config,
@@ -488,7 +496,7 @@ public class StreamThread extends Thread {
                                final Set<TopicPartition> partitions) {
             streamsMetrics.taskCreatedSensor.record();
 
-            final ProcessorTopology topology = builder.build(taskId.topicGroupId);
+            final ProcessorTopology topology = builder.build(taskId.topicGroupId, config.getString(StreamsConfig.UPGRADE_MODE_CONFIG) != null, false);
 
             if (!topology.stateStores().isEmpty()) {
                 return new StandbyTask(
@@ -508,6 +516,76 @@ public class StreamThread extends Thread {
                 );
                 return null;
             }
+        }
+    }
+
+    static class StoreUpgradeTaskCreator extends AbstractTaskCreator<StoreUpgradeTask> {
+        private final KafkaClientSupplier clientSupplier;
+        private final String threadClientId;
+        private final Producer<byte[], byte[]> threadProducer;
+
+        StoreUpgradeTaskCreator(final InternalTopologyBuilder builder,
+                                final StreamsConfig config,
+                                final StreamsMetricsThreadImpl streamsMetrics,
+                                final StateDirectory stateDirectory,
+                                final ChangelogReader storeChangelogReader,
+                                final Time time,
+                                final KafkaClientSupplier clientSupplier,
+                                final Producer<byte[], byte[]> threadProducer,
+                                final String threadClientId,
+                                final Logger log) {
+            super(
+                builder,
+                config,
+                streamsMetrics,
+                stateDirectory,
+                storeChangelogReader,
+                time,
+                log);
+            this.clientSupplier = clientSupplier;
+            this.threadProducer = threadProducer;
+            this.threadClientId = threadClientId;
+        }
+
+        @Override
+        StoreUpgradeTask createTask(final Consumer<byte[], byte[]> consumer,
+                                    final TaskId taskId,
+                                    final Set<TopicPartition> partitions) {
+            streamsMetrics.taskCreatedSensor.record();
+
+            final ProcessorTopology topology = builder.build(taskId.topicGroupId, false, true);
+
+            if (!topology.stateStores().isEmpty()) {
+                return new StoreUpgradeTask(
+                    taskId,
+                    partitions,
+                    topology,
+                    consumer,
+                    storeChangelogReader,
+                    config,
+                    streamsMetrics,
+                    stateDirectory,
+                    createProducer(taskId));
+            } else {
+                log.trace(
+                    "Skipped standby task {} with assigned partitions {} " +
+                        "since it does not have any state stores to materialize",
+                    taskId, partitions
+                );
+                return null;
+            }
+        }
+
+        private Producer<byte[], byte[]> createProducer(final TaskId id) {
+            // eos
+            if (threadProducer == null) {
+                final Map<String, Object> producerConfigs = config.getProducerConfigs(threadClientId + "-" + id);
+                log.info("Creating producer client for task {}", id);
+                producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + id);
+                return clientSupplier.getProducer(producerConfigs);
+            }
+
+            return threadProducer;
         }
     }
 
@@ -638,17 +716,28 @@ public class StreamThread extends Thread {
             changelogReader,
             time,
             log);
+        final AbstractTaskCreator<StoreUpgradeTask> storeUpgradeTaskCreator = new StoreUpgradeTaskCreator(
+            builder,
+            config,
+            streamsMetrics,
+            stateDirectory,
+            changelogReader,
+            time,
+            clientSupplier,
+            threadProducer,
+            threadClientId,
+            log);
         final TaskManager taskManager = new TaskManager(
             changelogReader,
             processId,
-            logPrefix,
+            logContext,
             restoreConsumer,
             streamsMetadataState,
             activeTaskCreator,
             standbyTaskCreator,
+            storeUpgradeTaskCreator,
             adminClient,
-            new AssignedStreamsTasks(logContext),
-            new AssignedStandbyTasks(logContext));
+            StreamsConfig.IN_PLACE_UPGRADE.equals(config.getString(StreamsConfig.UPGRADE_MODE_CONFIG)));
 
         log.info("Creating consumer client");
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
@@ -712,7 +801,7 @@ public class StreamThread extends Thread {
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
-        updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap());
+        updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
     }
 
     /**
@@ -843,7 +932,7 @@ public class StreamThread extends Thread {
 
         punctuate();
         maybeCommit(timerStartedMs);
-        maybeUpdateStandbyTasks(timerStartedMs);
+        maybeUpdateStandbyAndStoreUpgradeTasks(timerStartedMs);
         return processedBeforeCommit;
     }
 
@@ -1037,7 +1126,7 @@ public class StreamThread extends Thread {
                 streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
 
                 // try to purge the committed records for repartition topics if possible
-                taskManager.maybePurgeCommitedRecords();
+                taskManager.maybePurgeCommittedRecords();
             }
             if (log.isDebugEnabled()) {
                 log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
@@ -1050,7 +1139,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    private void maybeUpdateStandbyTasks(final long now) {
+    private void maybeUpdateStandbyAndStoreUpgradeTasks(final long now) {
         if (state == State.RUNNING && taskManager.hasStandbyRunningTasks()) {
             if (processStandbyRecords) {
                 if (!standbyRecords.isEmpty()) {
@@ -1060,7 +1149,10 @@ public class StreamThread extends Thread {
                         final TopicPartition partition = entry.getKey();
                         List<ConsumerRecord<byte[], byte[]>> remaining = entry.getValue();
                         if (remaining != null) {
-                            final StandbyTask task = taskManager.standbyTask(partition);
+                            StandbyTask task = taskManager.standbyTask(partition);
+                            if (task == null) {
+                                task = taskManager.storeUpgradeTask(partition);
+                            }
 
                             if (task.isClosed()) {
                                 log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
@@ -1093,7 +1185,10 @@ public class StreamThread extends Thread {
 
                 if (!records.isEmpty()) {
                     for (final TopicPartition partition : records.partitions()) {
-                        final StandbyTask task = taskManager.standbyTask(partition);
+                        StandbyTask task = taskManager.standbyTask(partition);
+                        if (task == null) {
+                            task = taskManager.storeUpgradeTask(partition);
+                        }
 
                         if (task == null) {
                             throw new StreamsException(logPrefix + "Missing standby task for partition " + partition);
@@ -1202,7 +1297,9 @@ public class StreamThread extends Thread {
         return threadMetadata;
     }
 
-    private void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks, final Map<TaskId, StandbyTask> standbyTasks) {
+    private void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks,
+                                      final Map<TaskId, StandbyTask> standbyTasks,
+                                      final Map<TaskId, StoreUpgradeTask> storeUpgradeTasks) {
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, StreamTask> task : activeTasks.entrySet()) {
             activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
@@ -1211,8 +1308,12 @@ public class StreamThread extends Thread {
         for (final Map.Entry<TaskId, StandbyTask> task : standbyTasks.entrySet()) {
             standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
         }
+        final Set<TaskMetadata> storedUpgradeTasksMetadata = new HashSet<>();
+        for (final Map.Entry<TaskId, StoreUpgradeTask> task : storeUpgradeTasks.entrySet()) {
+            storedUpgradeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
+        }
 
-        threadMetadata = new ThreadMetadata(this.getName(), this.state().name(), activeTasksMetadata, standbyTasksMetadata);
+        threadMetadata = new ThreadMetadata(this.getName(), this.state().name(), activeTasksMetadata, standbyTasksMetadata, storedUpgradeTasksMetadata);
     }
 
     public Map<TaskId, StreamTask> tasks() {

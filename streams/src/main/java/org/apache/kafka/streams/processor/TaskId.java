@@ -22,6 +22,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 /**
  * The task ID representation composed as topic group ID plus the assigned partition ID.
@@ -32,14 +33,32 @@ public class TaskId implements Comparable<TaskId> {
     public final int topicGroupId;
     /** The ID of the partition. */
     public final int partition;
+    public final boolean isPrepareStoreForUpgradeTask;
 
-    public TaskId(final int topicGroupId, final int partition) {
-        this.topicGroupId = topicGroupId;
-        this.partition = partition;
+    public TaskId(final TaskId taskId) {
+        this(taskId.topicGroupId, taskId.partition, true);
     }
 
+    public TaskId(final int topicGroupId,
+                  final int partition) {
+        this(topicGroupId, partition, false);
+    }
+
+    public TaskId(final int topicGroupId,
+                  final int partition,
+                   final boolean isPrepareStoreForUpgradeTask) {
+        this.topicGroupId = topicGroupId;
+        this.partition = partition;
+        this.isPrepareStoreForUpgradeTask = isPrepareStoreForUpgradeTask;
+    }
+
+    @Override
     public String toString() {
-        return topicGroupId + "_" + partition;
+        if (isPrepareStoreForUpgradeTask) {
+            return topicGroupId + "_" + partition + "_prepare";
+        } else {
+            return topicGroupId + "_" + partition;
+        }
     }
 
     /**
@@ -52,6 +71,25 @@ public class TaskId implements Comparable<TaskId> {
         try {
             final int topicGroupId = Integer.parseInt(string.substring(0, index));
             final int partition = Integer.parseInt(string.substring(index + 1));
+
+            return new TaskId(topicGroupId, partition);
+        } catch (final Exception e) {
+            throw new TaskIdFormatException(string);
+        }
+    }
+
+    /**
+     * @throws TaskIdFormatException if the string is not a valid {@link TaskId}
+     */
+    public static TaskId parsePrepare(final String string) {
+        final String[] tokens = string.split("_");
+        if (tokens.length != 3 || tokens[0].length() == 0 || tokens[1].length() == 0 || !tokens[2].equals("prepare")) {
+            throw new TaskIdFormatException(string);
+        }
+
+        try {
+            final int topicGroupId = Integer.parseInt(tokens[0]);
+            final int partition = Integer.parseInt(tokens[1]);
 
             return new TaskId(topicGroupId, partition);
         } catch (final Exception e) {
@@ -90,7 +128,9 @@ public class TaskId implements Comparable<TaskId> {
 
         if (o instanceof TaskId) {
             final TaskId other = (TaskId) o;
-            return other.topicGroupId == this.topicGroupId && other.partition == this.partition;
+            return other.topicGroupId == this.topicGroupId
+                && other.partition == this.partition
+                && other.isPrepareStoreForUpgradeTask == this.isPrepareStoreForUpgradeTask;
         } else {
             return false;
         }
@@ -98,8 +138,7 @@ public class TaskId implements Comparable<TaskId> {
 
     @Override
     public int hashCode() {
-        final long n = ((long) topicGroupId << 32) | (long) partition;
-        return (int) (n % 0xFFFFFFFFL);
+        return Objects.hash(topicGroupId, partition, isPrepareStoreForUpgradeTask);
     }
 
     @Override
@@ -109,6 +148,8 @@ public class TaskId implements Comparable<TaskId> {
                 (this.topicGroupId > other.topicGroupId ? 1 :
                     (this.partition < other.partition ? -1 :
                         (this.partition > other.partition ? 1 :
-                            0)));
+                            this.isPrepareStoreForUpgradeTask == other.isPrepareStoreForUpgradeTask ? 0 :
+                                this.isPrepareStoreForUpgradeTask ? 1 : -1)));
     }
+
 }
