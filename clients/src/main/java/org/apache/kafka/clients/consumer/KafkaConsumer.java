@@ -828,6 +828,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.assignors = assignors;
     }
 
+    public long requestTimeoutMs() {
+        return requestTimeoutMs;
+    }
+
     /**
      * Get the set of partitions currently assigned to this consumer. If subscription happened by directly assigning
      * partitions using {@link #assign(Collection)} then this will simply return the same partitions that
@@ -1150,7 +1154,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         coordinator.poll(startMs, timeout);
 
         // Lookup positions of assigned partitions
-        boolean hasAllFetchPositions = updateFetchPositions(0, Long.MAX_VALUE);
+        boolean hasAllFetchPositions = updateFetchPositions();
 
         // if data is available already, return it immediately
         Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
@@ -1415,16 +1419,52 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
      *             this function is called
-     * @throws org.apache.kafka.common.errors.TimeoutException if the method blocks for long than requestTimoutMs
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId. See the exception for more details
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
     public long position(TopicPartition partition) {
-        return position(partition, requestTimeoutMs);
+        acquireAndEnsureOpen();
+        try {
+            if (!this.subscriptions.isAssigned(partition))
+                throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
+            Long offset = this.subscriptions.position(partition);
+            while (offset == null) {
+                // batch update fetch positions for any partitions without a valid position
+                updateFetchPositions();
+                offset = this.subscriptions.position(partition);
+            }
+            return offset;
+        } finally {
+            release();
+        }
     }
 
+    /**
+     * Get the offset of the <i>next record</i> that will be fetched (if a record with that offset exists).
+     * This method may issue a remote call to the server if there is no current position for the given partition.
+     * <p>
+     * This call will block until either the position could be determined or an unrecoverable error is
+     * encountered (in which case it is thrown to the caller). However, if offset position is not retrieved
+     * within a given amount of time, the process will be terminated.
+     *
+     * @param partition The partition to get the position for
+     * @param timeout   The maximum duration in which the method can block
+     * @return The current position of the consumer (that is, the offset of the next record to be fetched)
+     * @throws IllegalArgumentException if the provided TopicPartition is not assigned to this consumer
+     * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if no offset is currently defined for
+     *             the partition
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
+     * @throws org.apache.kafka.common.errors.TimeoutException if the method blocks for longer than requestTimoutMs
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
+     *             configured groupId. See the exception for more details
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
+     */
     public long position(TopicPartition partition, final long timeout) {
         acquireAndEnsureOpen();
         try {
@@ -1793,6 +1833,41 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no offset reset policy is
      *             defined
      * @return true if all assigned positions have a position, false otherwise
+     */
+    private boolean updateFetchPositions() {
+        if (subscriptions.hasAllFetchPositions())
+            return true;
+
+        // If there are any partitions which do not have a valid position and are not
+        // awaiting reset, then we need to fetch committed offsets. We will only do a
+        // coordinator lookup if there are partitions which have missing positions, so
+        // a consumer with manually assigned partitions can avoid a coordinator dependence
+        // by always ensuring that assigned partitions have an initial position.
+        coordinator.refreshCommittedOffsetsIfNeeded();
+
+        // If there are partitions still needing a position and a reset policy is defined,
+        // request reset using the default policy. If no reset strategy is defined and there
+        // are partitions with a missing position, then we will raise an exception.
+        subscriptions.resetMissingPositions();
+
+        // Finally send an asynchronous request to lookup and update the positions of any
+        // partitions which are awaiting reset.
+        fetcher.resetOffsetsIfNeeded();
+
+        return false;
+    }
+
+    /**
+     * Set the fetch position to the committed position (if there is one) 
+     * or reset it using the offset reset policy the user has configured
+     * within a given time limit.
+     * 
+     * @param start        the time at which the operation begins
+     * @param timeoutMs    the maximum duration of the method
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no offset reset policy is
+     *             defined
+     * @return true if all assigned positions have a position
      */
     private boolean updateFetchPositions(long start, long timeoutMs) {
         if (subscriptions.hasAllFetchPositions())

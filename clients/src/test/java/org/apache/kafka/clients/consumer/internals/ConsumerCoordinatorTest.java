@@ -1442,7 +1442,7 @@ public class ConsumerCoordinatorTest {
         assertEquals(100L, subscriptions.position(t1p).longValue());
     }
 
-    @Test(expected = org.apache.kafka.common.errors.TimeoutException.class)
+    @Test
     public void testRefreshOffsetsGroupNotAuthorized() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();
@@ -1457,7 +1457,7 @@ public class ConsumerCoordinatorTest {
         }
     }
 
-    @Test(expected = org.apache.kafka.common.errors.TimeoutException.class)
+    @Test(expected = KafkaException.class)
     public void testRefreshOffsetUnknownTopicOrPartition() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();

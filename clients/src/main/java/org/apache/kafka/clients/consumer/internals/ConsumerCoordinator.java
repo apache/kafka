@@ -442,6 +442,24 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     /**
      * Refresh the committed offsets for provided partitions.
      */
+    public void refreshCommittedOffsetsIfNeeded() {
+        Set<TopicPartition> missingFetchPositions = subscriptions.missingFetchPositions();
+        Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(missingFetchPositions);
+        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+            TopicPartition tp = entry.getKey();
+            long offset = entry.getValue().offset();
+            log.debug("Setting offset for partition {} to the committed offset {}", tp, offset);
+            this.subscriptions.seek(tp, offset);
+        }
+    }
+
+    /**
+     * Refresh the committed offsets for provided partitions.
+     * 
+     * @param startMs   The time in which the operation starts
+     * @param timeout   The maximum allowable duration of the method
+     * @throws TimeoutException if committed offsets cannot be retrieved within set amount of time
+     */
     public void refreshCommittedOffsetsIfNeeded(long startMs, long timeout) {
         Set<TopicPartition> missingFetchPositions = subscriptions.missingFetchPositions();
         try {
@@ -455,10 +473,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         } catch (TimeoutException exc) {
             throw new TimeoutException("Coordinator is not ready in alloted time slot");
         }
-    }
-
-    public void refreshCommittedOffsetsIfNeeded() {
-        refreshCommittedOffsetsIfNeeded(time.milliseconds(), autoCommitIntervalMs);
     }
 
     /**
@@ -487,6 +501,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
     
+    /**
+     * Fetch the current committed offsets from the coordinator for a set of partitions 
+     * within a given set of time.
+     * @param partitions The partitions to fetch offsets for
+     * @param startMs    The start time of the operation
+     * @param timeoutMs    The maximum duration of the method
+     * @param time       Java utility which keeps track of time in form of long (milliseconds)
+     * @throws TimeoutException if offsets cannot be retrieved within set amount of time
+     * @return A map from partition to the committed offset
+     */
     public Map<TopicPartition, OffsetAndMetadata> fetchCommittedOffsets(Set<TopicPartition> partitions, 
                                                                         long startMs, long timeoutMs, Time time) {
         if (partitions.isEmpty())
@@ -494,7 +518,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         try {
             while (time.milliseconds() < startMs + timeoutMs) {
                 ensureCoordinatorReady(startMs, timeoutMs);
-                if (time.milliseconds() >= startMs + timeoutMs) throw new TimeoutException("Error, coordinator is not ready in allocated time!");
+                if (time.milliseconds() > startMs + timeoutMs) throw new TimeoutException("Error, coordinator is not ready in allocated time!");
 
                 // contact coordinator to fetch committed offsets
                 RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future = sendOffsetFetchRequest(partitions);
@@ -503,10 +527,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (future.succeeded())
                     return future.value();
 
-                if (time.milliseconds() + retryBackoffMs < startMs + timeoutMs)
-                    time.sleep(retryBackoffMs);
-                else 
-                    throw new TimeoutException("Error, retry wait will take too long.");
+                if (future.isDone())
+                    throw future.exception();
+
+                time.sleep(retryBackoffMs);
             }
         } catch (TimeoutException exc) {
             throw new TimeoutException("Fetching committed offsets took too long.");
