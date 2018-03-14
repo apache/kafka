@@ -35,6 +35,7 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -62,6 +63,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Collection;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -390,7 +396,6 @@ public class KafkaStreamsTest {
         } catch (final StreamsException expected) {
             // This is a result of not being able to connect to the broker.
         }
-        // There's nothing to assert... We're testing that this operation actually completes.
     }
 
     @Test
@@ -540,7 +545,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldReturnFalseOnCloseWhenThreadsHaventTerminated() throws Exception {
+    public void shouldReturnFalseOnCloseWhenThreadsHaveNotTerminated() throws Exception {
         final AtomicBoolean keepRunning = new AtomicBoolean(true);
         KafkaStreams streams = null;
         try {
@@ -611,6 +616,232 @@ public class KafkaStreamsTest {
             globalStreams.close();
         }
         globalStreams.cleanUp();
+    }
+
+    @Test
+    public void shouldAllowCleanupIfApplicationIsDown() throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+
+        final File taskDir = new File(
+            props.getProperty(StreamsConfig.STATE_DIR_CONFIG)
+                + File.separator + props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG)
+                + File.separator + new TaskId(0, 0));
+        final File testFile = new File(taskDir, "test-file");
+
+        assertTrue(taskDir.mkdirs());
+        assertTrue(testFile.createNewFile());
+
+        streams.cleanUp();
+        assertFalse(testFile.exists());
+        assertFalse(taskDir.exists());
+
+        streams.start();
+        streams.close();
+
+        assertTrue(taskDir.mkdirs());
+        assertTrue(testFile.createNewFile());
+
+        streams.cleanUp();
+        assertFalse(testFile.exists());
+        assertFalse(taskDir.exists());
+    }
+
+    @Test
+    public void shouldAllowCleanupIfLockIsReleased() throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+
+        final File taskDir = new File(
+            props.getProperty(StreamsConfig.STATE_DIR_CONFIG)
+                + File.separator + props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG)
+                + File.separator + new TaskId(0, 0));
+        final File testFile = new File(taskDir, "test-file");
+        assertTrue(taskDir.mkdirs());
+        assertTrue(testFile.createNewFile());
+
+        final File lockFile = new File(taskDir, ".lock");
+        final FileChannel channel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+
+        final FileLock lock;
+        try {
+            lock = channel.tryLock();
+        } catch (final Exception e) {
+            if (channel != null) {
+                channel.close();
+            }
+            throw e;
+        }
+        try {
+            lock.release();
+        } finally {
+            channel.close();
+        }
+
+        assertTrue(lockFile.exists());
+
+        streams.cleanUp();
+
+        assertFalse(testFile.exists());
+        assertFalse(taskDir.exists());
+    }
+
+    @Test
+    public void shouldAllowCleanupIfLockIsReleasedFromDifferentThread() throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+
+        final File taskDir = new File(
+            props.getProperty(StreamsConfig.STATE_DIR_CONFIG)
+                + File.separator + props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG)
+                + File.separator + new TaskId(0, 0));
+        final File testFile = new File(taskDir, "test-file");
+        assertTrue(taskDir.mkdirs());
+        assertTrue(testFile.createNewFile());
+
+        final File lockFile = new File(taskDir, ".lock");
+
+        final LockThread lockThread = new LockThread(lockFile);
+        lockThread.start();
+
+        while (!lockThread.lockAcquired) {
+            Utils.sleep(100);
+        }
+
+        lockThread.releaseLock = true;
+
+        while (lockThread.lockAcquired) {
+            Utils.sleep(100);
+        }
+        assertNull(lockThread.error);
+
+        assertTrue(lockFile.exists());
+
+        streams.cleanUp();
+
+        assertFalse(testFile.exists());
+        assertFalse(taskDir.exists());
+
+        lockThread.isRunning = false;
+        lockThread.join();
+    }
+
+    @Test
+    public void shouldFailWithOverlappingFileLockException() throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+
+        final File taskDir = new File(
+            props.getProperty(StreamsConfig.STATE_DIR_CONFIG)
+                + File.separator + props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG)
+                + File.separator + new TaskId(0, 0));
+        assertTrue(taskDir.mkdirs());
+
+        final File lockFile = new File(taskDir, ".lock");
+
+        try (final FileChannel channel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+            channel.tryLock();
+            try {
+                streams.cleanUp();
+                fail("Should have throw StreamsException");
+            } catch (final StreamsException expected) {
+                assertTrue(expected.getCause() instanceof OverlappingFileLockException);
+            }
+        }
+    }
+
+    @Test
+    public void shouldFailWithOverlappingFileLockExceptionWhenLockedByDifferentThread() throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+
+        final File taskDir = new File(
+            props.getProperty(StreamsConfig.STATE_DIR_CONFIG)
+                + File.separator + props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG)
+                + File.separator + new TaskId(0, 0));
+        assertTrue(taskDir.mkdirs());
+
+        final File lockFile = new File(taskDir, ".lock");
+
+        final LockThread lockThread = new LockThread(lockFile);
+        lockThread.start();
+
+        while (!lockThread.lockAcquired) {
+            Utils.sleep(100);
+        }
+
+        try {
+            try {
+                streams.cleanUp();
+                fail("Should have throw StreamsException");
+            } catch (final StreamsException expected) {
+                assertTrue(expected.getCause() instanceof OverlappingFileLockException);
+            }
+        } finally {
+            lockThread.releaseLock = true;
+            lockThread.isRunning = false;
+            lockThread.join();
+        }
+        assertNull(lockThread.error);
+    }
+
+    @Test
+    public void shouldFailWithOverlappingFileLockExceptionForGlobalTask() throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+
+        final File taskDir = new File(
+            props.getProperty(StreamsConfig.STATE_DIR_CONFIG)
+                + File.separator + props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG)
+                + File.separator + "global");
+        assertTrue(taskDir.mkdirs());
+
+        final File lockFile = new File(taskDir, ".lock");
+
+        try (final FileChannel channel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+            channel.tryLock();
+            try {
+                streams.cleanUp();
+                fail("Should have throw StreamsException");
+            } catch (final StreamsException expected) {
+                assertTrue(expected.getCause() instanceof OverlappingFileLockException);
+            }
+        }
+    }
+
+    @Test
+    public void shouldFailWithOverlappingFileLockExceptionForGlobalTaskWhenLockedByDifferentThread() throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+
+        final File taskDir = new File(
+            props.getProperty(StreamsConfig.STATE_DIR_CONFIG)
+                + File.separator + props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG)
+                + File.separator + "global");
+        assertTrue(taskDir.mkdirs());
+
+        final File lockFile = new File(taskDir, ".lock");
+
+        final LockThread lockThread = new LockThread(lockFile);
+        lockThread.start();
+
+        while (!lockThread.lockAcquired) {
+            Utils.sleep(100);
+        }
+
+        try {
+            try {
+                streams.cleanUp();
+                fail("Should have throw StreamsException");
+            } catch (final StreamsException expected) {
+                assertTrue(expected.getCause() instanceof OverlappingFileLockException);
+            }
+        } finally {
+            lockThread.releaseLock = true;
+            lockThread.isRunning = false;
+            lockThread.join();
+        }
+        assertNull(lockThread.error);
     }
 
     @Test
@@ -843,6 +1074,37 @@ public class KafkaStreamsTest {
             this.oldState = oldState;
             this.newState = newState;
             mapStates.put(newState, prevCount + 1);
+        }
+    }
+
+    private class LockThread extends Thread {
+        private final File lockFile;
+        volatile boolean isRunning = true;
+        volatile boolean releaseLock = false;
+        volatile boolean lockAcquired = false;
+        volatile Exception error = null;
+
+        LockThread(final File lockFile) {
+            this.lockFile = lockFile;
+        }
+
+        @Override
+        public void run() {
+            try {
+                try (final FileChannel channel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+                    channel.tryLock();
+                    lockAcquired = true;
+                    while (!releaseLock) {
+                        Utils.sleep(100);
+                    }
+                }
+                lockAcquired = false;
+            } catch (final Exception e) {
+                error = e;
+            }
+            while (isRunning) {
+                Utils.sleep(100);
+            }
         }
     }
 

@@ -125,11 +125,16 @@ public class StateDirectory {
 
     /**
      * Get the lock for the {@link TaskId}s directory if it is available
-     * @param taskId
+     * @param taskId the id of the task to get a lock on
      * @return true if successful
-     * @throws IOException
+     * @throws IOException if lock could not be aquired
      */
     synchronized boolean lock(final TaskId taskId) throws IOException {
+        return lock(taskId, false);
+    }
+
+    private synchronized boolean lock(final TaskId taskId,
+                                      final boolean throwOverlappingFileLockException) throws IOException {
         if (!createStateDirectory) {
             return true;
         }
@@ -164,7 +169,12 @@ public class StateDirectory {
             return false;
         }
 
-        final FileLock lock = tryLock(channel);
+        final FileLock lock;
+        if (throwOverlappingFileLockException) {
+            lock = channel.tryLock();
+        } else {
+            lock = tryLock(channel);
+        }
         if (lock != null) {
             locks.put(taskId, new LockAndOwner(Thread.currentThread().getName(), lock));
 
@@ -174,10 +184,13 @@ public class StateDirectory {
     }
 
     synchronized boolean lockGlobalState() throws IOException {
+        return lockGlobalState(false);
+    }
+
+    private synchronized boolean lockGlobalState(final boolean throwOverlappingFileLockException) throws IOException {
         if (!createStateDirectory) {
             return true;
         }
-
         if (globalStateLock != null) {
             log.trace("{} Found cached state dir lock for the global task", logPrefix());
             return true;
@@ -193,7 +206,12 @@ public class StateDirectory {
             // file, in this case we will return immediately indicating locking failed.
             return false;
         }
-        final FileLock fileLock = tryLock(channel);
+        final FileLock fileLock;
+        if (throwOverlappingFileLockException) {
+            fileLock = channel.tryLock();
+        } else {
+            fileLock = tryLock(channel);
+        }
         if (fileLock == null) {
             channel.close();
             return false;
@@ -235,6 +253,7 @@ public class StateDirectory {
         }
     }
 
+    @SuppressWarnings("ThrowFromFinallyBlock")
     public synchronized void clean() {
         try {
             cleanRemovedTasks(0, true);
@@ -242,13 +261,24 @@ public class StateDirectory {
             // this is already logged within cleanRemovedTasks
             throw new StreamsException(e);
         }
+
         try {
-            if (stateDir.exists()) {
+            if (stateDir.exists() && lockGlobalState(true)) {
                 Utils.delete(globalStateDir().getAbsoluteFile());
             }
+        } catch (final OverlappingFileLockException e) {
+            log.error("{} Failed to get the global state directory lock.", logPrefix(), e);
+            throw new StreamsException(e);
         } catch (final IOException e) {
             log.error("{} Failed to delete global state directory due to an unexpected exception", logPrefix(), e);
             throw new StreamsException(e);
+        } finally {
+            try {
+                unlockGlobalState();
+            } catch (final IOException e) {
+                log.error("{} Failed to release global state directory lock.", logPrefix());
+                throw new StreamsException(e);
+            }
         }
     }
 
@@ -267,6 +297,7 @@ public class StateDirectory {
         }
     }
 
+    @SuppressWarnings("ThrowFromFinallyBlock")
     private synchronized void cleanRemovedTasks(final long cleanupDelayMs,
                                                 final boolean manualUserCall) throws Exception {
         final File[] taskDirs = listTaskDirectories();
@@ -279,7 +310,7 @@ public class StateDirectory {
             final TaskId id = TaskId.parse(dirName);
             if (!locks.containsKey(id)) {
                 try {
-                    if (lock(id)) {
+                    if (lock(id, manualUserCall)) {
                         final long now = time.milliseconds();
                         final long lastModifiedMs = taskDir.lastModified();
                         if (now > lastModifiedMs + cleanupDelayMs || manualUserCall) {
@@ -302,11 +333,8 @@ public class StateDirectory {
                         }
                     }
                 } catch (final OverlappingFileLockException e) {
-                    // locked by another thread
-                    if (manualUserCall) {
-                        log.error("{} Failed to get the state directory lock.", logPrefix(), e);
-                        throw e;
-                    }
+                    log.error("{} Failed to get the state directory lock.", logPrefix(), e);
+                    throw e;
                 } catch (final IOException e) {
                     log.error("{} Failed to delete the state directory.", logPrefix(), e);
                     if (manualUserCall) {
