@@ -122,8 +122,12 @@ abstract class DelayedOperation(override val delayMs: Long,
   private def tryCompleteIfLockIsFree(): Boolean = {
     if (lock.tryLock()) {
       try {
-        tryCompletePending.set(false)
-        tryComplete()
+        var done = false
+        do {
+          tryCompletePending.set(false)
+          done = tryComplete()
+        } while (!done && tryCompletePending.get())
+        done
       } finally {
         lock.unlock()
       }
