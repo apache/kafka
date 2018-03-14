@@ -17,128 +17,110 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Arrays;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 
 public class PayloadGeneratorTest {
+    @Rule
+    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
-    public void testGeneratorStartsAtPositionZero() {
-        PayloadGenerator payloadGenerator = new PayloadGenerator();
-        assertEquals(0, payloadGenerator.position());
-    }
-
-    @Test
-    public void testDefaultPayload() {
-        final long numRecords = 262;
-        PayloadGenerator payloadGenerator = new PayloadGenerator();
-
-        // make sure that each time we produce a different value (except if compression rate is 0)
-        byte[] prevValue = null;
-        long expectedPosition = 0;
-        for (int i = 0; i < numRecords; i++) {
-            ProducerRecord<byte[], byte[]> record = payloadGenerator.nextRecord("test-topic");
-            assertNull(record.key());
-            assertEquals(PayloadGenerator.DEFAULT_MESSAGE_SIZE, record.value().length);
-            assertEquals(++expectedPosition, payloadGenerator.position());
-            assertFalse("Position " + payloadGenerator.position(),
-                        Arrays.equals(prevValue, record.value()));
-            prevValue = record.value().clone();
+    public void testConstantPayloadGenerator() {
+        byte[] alphabet = new byte[26];
+        for (int i = 0; i < alphabet.length; i++) {
+            alphabet[i] = (byte) ('a' + i);
+        }
+        byte[] expectedSuperset = new byte[512];
+        for (int i = 0; i < expectedSuperset.length; i++) {
+            expectedSuperset[i] = (byte) ('a' + (i % 26));
+        }
+        for (int i : new int[] {1, 5, 10, 100, 511, 512}) {
+            ConstantPayloadGenerator generator = new ConstantPayloadGenerator(i, alphabet);
+            assertArrayContains(expectedSuperset, generator.generate(0));
+            assertArrayContains(expectedSuperset, generator.generate(10));
+            assertArrayContains(expectedSuperset, generator.generate(100));
         }
     }
 
-    @Test
-    public void testNullKeyTypeValueSizeIsMessageSize() {
-        final int size = 200;
-        PayloadGenerator payloadGenerator = new PayloadGenerator(size);
-        ProducerRecord<byte[], byte[]> record = payloadGenerator.nextRecord("test-topic");
-        assertNull(record.key());
-        assertEquals(size, record.value().length);
+    private static void assertArrayContains(byte[] expectedSuperset, byte[] actual) {
+        byte[] expected = new byte[actual.length];
+        System.arraycopy(expectedSuperset, 0, expected, 0, expected.length);
+        assertArrayEquals(expected, actual);
     }
 
     @Test
-    public void testKeyContainsGeneratorPosition() {
-        final long numRecords = 10;
-        final int size = 200;
-        PayloadGenerator generator = new PayloadGenerator(size, PayloadKeyType.KEY_MESSAGE_INDEX);
-        for (int i = 0; i < numRecords; i++) {
-            assertEquals(i, generator.position());
-            ProducerRecord<byte[], byte[]> record = generator.nextRecord("test-topic");
-            assertEquals(8, record.key().length);
-            assertEquals(size - 8, record.value().length);
-            assertEquals("i=" + i, i, ByteBuffer.wrap(record.key()).getLong());
+    public void testSequentialPayloadGenerator() {
+        SequentialPayloadGenerator g4 = new SequentialPayloadGenerator(4, 1);
+        assertLittleEndianArrayEquals(1, g4.generate(0));
+        assertLittleEndianArrayEquals(2, g4.generate(1));
+
+        SequentialPayloadGenerator g8 = new SequentialPayloadGenerator(8, 0);
+        assertLittleEndianArrayEquals(0, g8.generate(0));
+        assertLittleEndianArrayEquals(1, g8.generate(1));
+        assertLittleEndianArrayEquals(123123123123L, g8.generate(123123123123L));
+
+        SequentialPayloadGenerator g2 = new SequentialPayloadGenerator(2, 0);
+        assertLittleEndianArrayEquals(0, g2.generate(0));
+        assertLittleEndianArrayEquals(1, g2.generate(1));
+        assertLittleEndianArrayEquals(1, g2.generate(1));
+        assertLittleEndianArrayEquals(1, g2.generate(131073));
+    }
+
+    private static void assertLittleEndianArrayEquals(long expected, byte[] actual) {
+        byte[] longActual = new byte[8];
+        System.arraycopy(actual, 0, longActual, 0, Math.min(actual.length, longActual.length));
+        ByteBuffer buf = ByteBuffer.wrap(longActual).order(ByteOrder.LITTLE_ENDIAN);
+        assertEquals(expected, buf.getLong());
+    }
+
+    @Test
+    public void testUniformRandomPayloadGenerator() {
+        PayloadGeneratorManager manager = new PayloadGeneratorManager(
+            new UniformRandomPayloadGenerator(1234, 456, 0));
+        byte[] prev = manager.next();
+        for (int uniques = 0; uniques < 1000; ) {
+            byte[] cur = manager.next();
+            assertEquals(prev.length, cur.length);
+            if (!Arrays.equals(prev, cur)) {
+                uniques++;
+            }
         }
+        testReproducible(new UniformRandomPayloadGenerator(1234, 456, 0));
+        testReproducible(new UniformRandomPayloadGenerator(1, 0, 0));
+        testReproducible(new UniformRandomPayloadGenerator(10, 6, 5));
+        testReproducible(new UniformRandomPayloadGenerator(512, 123, 100));
+    }
+
+    private static void testReproducible(PayloadGenerator generator) {
+        byte[] val = generator.generate(123);
+        generator.generate(456);
+        byte[] val2 = generator.generate(123);
+        assertArrayEquals(val, val2);
     }
 
     @Test
-    public void testGeneratePayloadWithExplicitPosition() {
-        final int size = 200;
-        PayloadGenerator generator = new PayloadGenerator(size, PayloadKeyType.KEY_MESSAGE_INDEX);
-        int position = 2;
-        while (position < 5000000) {
-            ProducerRecord<byte[], byte[]> record = generator.nextRecord("test-topic", position);
-            assertEquals(8, record.key().length);
-            assertEquals(size - 8, record.value().length);
-            assertEquals(position, ByteBuffer.wrap(record.key()).getLong());
-            position = position * 64;
-        }
-    }
-
-    public void testSamePositionGeneratesSameKeyAndValue() {
-        final int size = 100;
-        PayloadGenerator generator = new PayloadGenerator(size, PayloadKeyType.KEY_MESSAGE_INDEX);
-        ProducerRecord<byte[], byte[]> record1 = generator.nextRecord("test-topic");
-        assertEquals(1, generator.position());
-        ProducerRecord<byte[], byte[]> record2 = generator.nextRecord("test-topic");
-        assertEquals(2, generator.position());
-        ProducerRecord<byte[], byte[]> record3 = generator.nextRecord("test-topic", 0);
-        // position should not change if we generated record with specific position
-        assertEquals(2, generator.position());
-        assertFalse("Values at different positions should not match.",
-                    Arrays.equals(record1.value(), record2.value()));
-        assertFalse("Values at different positions should not match.",
-                    Arrays.equals(record3.value(), record2.value()));
-        assertTrue("Values at the same position should match.",
-                   Arrays.equals(record1.value(), record3.value()));
-    }
-
-    @Test
-    public void testGeneratesDeterministicKeyValues() {
-        final long numRecords = 194;
-        final int size = 100;
-        PayloadGenerator generator1 = new PayloadGenerator(size, PayloadKeyType.KEY_MESSAGE_INDEX);
-        PayloadGenerator generator2 = new PayloadGenerator(size, PayloadKeyType.KEY_MESSAGE_INDEX);
-        for (int i = 0; i < numRecords; ++i) {
-            ProducerRecord<byte[], byte[]> record1 = generator1.nextRecord("test-topic");
-            ProducerRecord<byte[], byte[]> record2 = generator2.nextRecord("test-topic");
-            assertTrue(Arrays.equals(record1.value(), record2.value()));
-            assertTrue(Arrays.equals(record1.key(), record2.key()));
-        }
-    }
-
-    @Test
-    public void testTooSmallMessageSizeCreatesPayloadWithOneByteValues() {
-        PayloadGenerator payloadGenerator = new PayloadGenerator(2, PayloadKeyType.KEY_MESSAGE_INDEX);
-        ProducerRecord<byte[], byte[]> record = payloadGenerator.nextRecord("test-topic", 877);
-        assertEquals(8, record.key().length);
-        assertEquals(0, record.value().length);
-    }
-
-    @Test
-    public void testNextRecordGeneratesNewByteArrayForValue() {
-        PayloadGenerator payloadGenerator = new PayloadGenerator(2, PayloadKeyType.KEY_MESSAGE_INDEX);
-        ProducerRecord<byte[], byte[]> record1 = payloadGenerator.nextRecord("test-topic", 877);
-        ProducerRecord<byte[], byte[]> record2 = payloadGenerator.nextRecord("test-topic", 877);
-        assertNotEquals(record1.value(), record2.value());
+    public void testUniformRandomPayloadGeneratorPaddingBytes() {
+        UniformRandomPayloadGenerator generator =
+            new UniformRandomPayloadGenerator(1000, 456, 100);
+        byte[] val1 = generator.generate(0);
+        byte[] val1End = new byte[100];
+        System.arraycopy(val1, 900, val1End, 0, 100);
+        byte[] val2 = generator.generate(100);
+        byte[] val2End = new byte[100];
+        System.arraycopy(val2, 900, val2End, 0, 100);
+        byte[] val3 = generator.generate(200);
+        byte[] val3End = new byte[100];
+        System.arraycopy(val3, 900, val3End, 0, 100);
+        assertArrayEquals(val1End, val2End);
+        assertArrayEquals(val1End, val3End);
     }
 }
