@@ -147,7 +147,10 @@ public final class NodeManager {
     NodeManager(Node node, TaskManager taskManager) {
         this.node = node;
         this.taskManager = taskManager;
-        this.client = new AgentClient(1, node.hostname(), Node.Util.getTrogdorAgentPort(node));
+        this.client = new AgentClient.Builder().
+            maxTries(1).
+            target(node.hostname(), Node.Util.getTrogdorAgentPort(node)).
+            build();
         this.workers = new HashMap<>();
         this.executor = Executors.newSingleThreadScheduledExecutor(
             ThreadUtils.createThreadFactory("NodeManager(" + node.name() + ")",

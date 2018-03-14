@@ -90,7 +90,8 @@ public class AgentTest {
     @Test
     public void testAgentProgrammaticShutdown() throws Exception {
         Agent agent = createAgent(Scheduler.SYSTEM);
-        AgentClient client = new AgentClient(10, "localhost", agent.port());
+        AgentClient client = new AgentClient.Builder().
+            maxTries(10).target("localhost", agent.port()).build();
         client.invokeShutdown();
         agent.waitForShutdown();
     }
@@ -98,7 +99,8 @@ public class AgentTest {
     @Test
     public void testAgentGetStatus() throws Exception {
         Agent agent = createAgent(Scheduler.SYSTEM);
-        AgentClient client = new AgentClient(10, "localhost", agent.port());
+        AgentClient client = new AgentClient.Builder().
+            maxTries(10).target("localhost", agent.port()).build();
         AgentStatusResponse status = client.status();
         assertEquals(agent.status(), status);
         agent.beginShutdown();
@@ -110,7 +112,8 @@ public class AgentTest {
         MockTime time = new MockTime(0, 0, 0);
         MockScheduler scheduler = new MockScheduler(time);
         Agent agent = createAgent(scheduler);
-        AgentClient client = new AgentClient(10, "localhost", agent.port());
+        AgentClient client = new AgentClient.Builder().
+            maxTries(10).target("localhost", agent.port()).build();
         AgentStatusResponse status = client.status();
         assertEquals(Collections.emptyMap(), status.workers());
         new ExpectedTasks().waitFor(client);
@@ -158,7 +161,8 @@ public class AgentTest {
         MockTime time = new MockTime(0, 0, 0);
         MockScheduler scheduler = new MockScheduler(time);
         Agent agent = createAgent(scheduler);
-        AgentClient client = new AgentClient(10, "localhost", agent.port());
+        AgentClient client = new AgentClient.Builder().
+            maxTries(10).target("localhost", agent.port()).build();
         new ExpectedTasks().waitFor(client);
 
         final NoOpTaskSpec fooSpec = new NoOpTaskSpec(10, 2);
@@ -213,7 +217,8 @@ public class AgentTest {
         MockTime time = new MockTime(0, 0, 0);
         MockScheduler scheduler = new MockScheduler(time);
         Agent agent = createAgent(scheduler);
-        AgentClient client = new AgentClient(10, "localhost", agent.port());
+        AgentClient client = new AgentClient.Builder().
+            maxTries(10).target("localhost", agent.port()).build();
         new ExpectedTasks().waitFor(client);
 
         SampleTaskSpec fooSpec = new SampleTaskSpec(0, 900000, 1, "");
@@ -273,7 +278,8 @@ public class AgentTest {
         MockTime time = new MockTime(0, 0, 0);
         MockScheduler scheduler = new MockScheduler(time);
         Agent agent = createAgent(scheduler);
-        AgentClient client = new AgentClient(10, "localhost", agent.port());
+        AgentClient client = new AgentClient.Builder().
+            maxTries(10).target("localhost", agent.port()).build();
         new ExpectedTasks().waitFor(client);
 
         try (MockKibosh mockKibosh = new MockKibosh()) {
