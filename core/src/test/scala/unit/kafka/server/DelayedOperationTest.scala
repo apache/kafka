@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util.Random
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
@@ -162,6 +163,56 @@ class DelayedOperationTest {
     tryCompleteSemaphore.release()
     future.get(10, TimeUnit.SECONDS)
     assertTrue("Operation should have completed", op.isCompleted)
+  }
+
+  /**
+    * Test `tryComplete` with multiple threads to verify that there are no timing windows
+    * when completion is not performed even if the thread that makes the operation completable
+    * may not be able to acquire the operation lock. Since it is difficult to test all scenarios,
+    * this test uses random delays with a large number of threads.
+    */
+  @Test
+  def testTryCompleteWithMultipleThreads(): Unit = {
+    val executor = Executors.newScheduledThreadPool(20)
+    this.executorService = executor
+    val random = new Random
+    val maxDelayMs = 10
+    val completionAttempts = 20
+
+    class TestDelayOperation(index: Int) extends MockDelayedOperation(10000L) {
+      val key = s"key$index"
+      val completionAttemptsRemaining = new AtomicInteger(completionAttempts)
+
+      override def tryComplete(): Boolean = {
+        val shouldComplete = completable
+        Thread.sleep(random.nextInt(maxDelayMs))
+        if (shouldComplete)
+          forceComplete()
+        else
+          false
+      }
+    }
+    val ops = (0 until 100).map { index =>
+      val op = new TestDelayOperation(index)
+      purgatory.tryCompleteElseWatch(op, Seq(op.key))
+      op
+    }
+
+    def scheduleTryComplete(op: TestDelayOperation, delayMs: Long): Future[_] = {
+      executor.schedule(new Runnable {
+        override def run(): Unit = {
+          if (op.completionAttemptsRemaining.decrementAndGet() == 0)
+            op.completable = true
+          purgatory.checkAndComplete(op.key)
+        }
+      }, delayMs, TimeUnit.MILLISECONDS)
+    }
+
+    (1 to completionAttempts).flatMap { _ =>
+      ops.map { op => scheduleTryComplete(op, random.nextInt(maxDelayMs)) }
+    }.foreach { future => future.get }
+
+    ops.foreach { op => assertTrue("Operation should have completed", op.isCompleted) }
   }
 
   @Test
