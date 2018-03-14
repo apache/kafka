@@ -164,7 +164,6 @@ public class StateDirectory {
         if (lock != null) {
             locks.put(taskId, new LockAndOwner(Thread.currentThread().getName(), lock));
 
-            System.out.println("locked " + lockFile);
             log.debug("{} Acquired state dir lock for task {}", logPrefix(), taskId);
         }
         return lock != null;
