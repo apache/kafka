@@ -70,9 +70,9 @@ object ConfigCommand extends Config {
     if (args.length == 0)
       CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity config for a topic, client, user or broker")
 
-    opts.checkArgs()
-
     try {
+      opts.checkArgs()
+
       if (opts.options.has(opts.zkConnectOpt)) {
         processCommandWithZk(opts.options.valueOf(opts.zkConnectOpt), opts)
       } else {
@@ -85,7 +85,7 @@ object ConfigCommand extends Config {
         Exit.exit(1)
 
       case t: Throwable =>
-        System.err.println("Error while executing config command")
+        System.err.println(s"Error while executing config command with args $args")
         t.printStackTrace(System.err)
         Exit.exit(1)
     }
