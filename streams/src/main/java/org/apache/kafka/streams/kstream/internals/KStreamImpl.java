@@ -499,7 +499,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final Serializer<V> valSerializer = produced.valueSerde() == null ? null : produced.valueSerde().serializer();
         final StreamPartitioner<? super K, ? super V> partitioner = produced.streamPartitioner();
 
-        if (partitioner == null && keySerializer != null && keySerializer instanceof WindowedSerializer) {
+        if (partitioner == null && keySerializer instanceof WindowedSerializer) {
             final StreamPartitioner<K, V> windowedPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>(topic, (WindowedSerializer) keySerializer);
             builder.internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, windowedPartitioner, this.name);
         } else {
