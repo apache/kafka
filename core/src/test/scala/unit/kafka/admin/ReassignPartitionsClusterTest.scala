@@ -27,13 +27,12 @@ import org.junit.{After, Before, Test}
 import kafka.admin.ReplicationQuotaUtils._
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.admin.{AdminClient => JAdminClient}
-import org.apache.kafka.common.TopicPartitionReplica
+import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
 
 import scala.collection.JavaConverters._
 import scala.collection.Map
 import scala.collection.Seq
 import scala.util.Random
-
 import java.io.File
 
 class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
@@ -77,6 +76,32 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     TestUtils.shutdownServers(servers)
     super.tearDown()
   }
+
+  @Test
+  def testHwAfterPartitionReassignment(): Unit = {
+    //Given a single replica on server 100
+    startBrokers(Seq(100, 101, 102))
+    adminClient = createAdminClient(servers)
+    createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
+
+    val topicPartition = new TopicPartition(topicName, 0)
+    val leaderServer = servers.find(_.config.brokerId == 100).get
+    leaderServer.replicaManager.logManager.truncateFullyAndStartAt(topicPartition, 100L)
+
+    val topicJson: String = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101, 102]}]}"""
+    ReassignPartitionsCommand.executeAssignment(zkUtils, Some(adminClient), topicJson, NoThrottle)
+
+    val newLeaderServer = servers.find(_.config.brokerId == 101).get
+
+    TestUtils.waitUntilTrue (
+      () => newLeaderServer.replicaManager.getPartition(topicPartition).flatMap(_.leaderReplicaIfLocal).isDefined,
+      "broker 101 should be the new leader", pause = 1L
+    )
+
+    assertEquals(100, newLeaderServer.replicaManager.getReplicaOrException(topicPartition).highWatermark.messageOffset)
+    servers.foreach(server => waitUntilTrue(() => server.replicaManager.getReplicaOrException(topicPartition).highWatermark.messageOffset == 100, ""))
+  }
+
 
   @Test
   def shouldMoveSinglePartition(): Unit = {
