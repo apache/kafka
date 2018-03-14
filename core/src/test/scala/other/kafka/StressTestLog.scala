@@ -92,7 +92,7 @@ object StressTestLog {
     @volatile var offset = 0
     override def work() {
       val logAppendInfo = log.appendAsFollower(TestUtils.singletonRecords(offset.toString.getBytes))
-      require(logAppendInfo.firstOffset == offset && logAppendInfo.lastOffset == offset)
+      require(logAppendInfo.firstOrLastOffset == offset && logAppendInfo.lastOffset == offset)
       offset += 1
       if(offset % 1000 == 0)
         Thread.sleep(500)

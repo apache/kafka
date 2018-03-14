@@ -58,7 +58,7 @@ object LogAppendInfo {
 /**
  * Struct to hold various quantities we compute about each message set before appending to the log
  *
- * @param _firstOffset The first offset in the message set unless the message format is less than V2 and we are appending
+ * @param firstOffset The first offset in the message set unless the message format is less than V2 and we are appending
  *                    to the follower.
  * @param lastOffset The last offset in the message set
  * @param maxTimestamp The maximum timestamp of the message set.
@@ -72,7 +72,7 @@ object LogAppendInfo {
  * @param validBytes The number of valid bytes
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
  */
-case class LogAppendInfo(private var _firstOffset: Option[Long],
+case class LogAppendInfo(var firstOffset: Option[Long],
                          var lastOffset: Long,
                          var maxTimestamp: Long,
                          var offsetOfMaxTimestamp: Long,
@@ -84,31 +84,28 @@ case class LogAppendInfo(private var _firstOffset: Option[Long],
                          shallowCount: Int,
                          validBytes: Int,
                          offsetsMonotonic: Boolean) {
-  def firstOffset_= (firstOffset: Long) {_firstOffset = Some(firstOffset)}
-  def firstOffset: Long = _firstOffset.get
-
   /**
     * Check if we know the offset of first message. First offset may not exist when the message format is less than V2
     * and we are appending to the follower.
     * @return true if we know the offset of first message; false otherwise
     */
-  def hasFirstOffset: Boolean = _firstOffset.isDefined
+  def hasFirstOffset: Boolean = firstOffset.isDefined
 
   /**
     * Get the first offset if it exists, else get the last offset.
     * @return The offset of first message if it exists; else offset of the last message.
     */
-  def firstOrLastOffset: Long = {if (hasFirstOffset) firstOffset else lastOffset}
+  def firstOrLastOffset: Long = firstOffset.getOrElse(lastOffset)
 
   /**
     * Get the (maximum) number of messages described by LogAppendInfo
     * @return Maximum possible number of messages described by LogAppendInfo
     */
   def numMessages: Long = {
-    if (hasFirstOffset && (firstOffset >= 0) && (lastOffset >= 0))
-      lastOffset - firstOffset + 1
-    else
-      0
+    firstOffset match {
+      case Some(firstOffsetVal) if (firstOffsetVal >= 0 && lastOffset >= 0) => (lastOffset - firstOffsetVal + 1)
+      case _ => 0
+    }
   }
 }
 
@@ -680,7 +677,7 @@ class Log(@volatile var dir: File,
         if (assignOffsets) {
           // assign offsets to the message set
           val offset = new LongRef(nextOffsetMetadata.messageOffset)
-          appendInfo.firstOffset = offset.value
+          appendInfo.firstOffset = Some(offset.value)
           val now = time.milliseconds
           val validateAndOffsetAssignResult = try {
             LogValidator.validateMessagesAndAssignOffsets(validRecords,
@@ -742,7 +739,7 @@ class Log(@volatile var dir: File,
         // validate the idempotent/transactional state of the producers and collect some metadata
         val (updatedProducers, completedTxns, maybeDuplicate) = analyzeAndValidateProducerState(validRecords, isFromClient)
         maybeDuplicate.foreach { duplicate =>
-          appendInfo.firstOffset = duplicate.firstOffset
+          appendInfo.firstOffset = Some(duplicate.firstOffset)
           appendInfo.lastOffset = duplicate.lastOffset
           appendInfo.logAppendTime = duplicate.timestamp
           appendInfo.logStartOffset = logStartOffset
@@ -1323,23 +1320,21 @@ class Log(@volatile var dir: File,
           s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
           s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
 
-      if (appendInfo.hasFirstOffset) {
-        // V2 and beyond, we have the true first offset in message set available in the header
-        roll(appendInfo.firstOffset)
-      } else {
-        /*
-          maxOffsetInMessages - Integer.MAX_VALUE is a heuristic value for the first offset in the set of messages.
-          Since the offset in messages will not differ by more than Integer.MAX_VALUE, this is guaranteed <= the real
-          first offset in the set. Determining the true first offset in the set requires decompression, which the follower
-          is trying to avoid during log append. Prior behavior assigned new baseOffset = logEndOffset from old segment.
-          This was problematic in the case that two consecutive messages differed in offset by
-          Integer.MAX_VALUE.toLong + 2 or more.  In this case, the prior behavior would roll a new log segment whose
-          base offset was too low to contain the next message.  This edge case is possible when a replica is recovering a
-          highly compacted topic from scratch.
-          Note that this is only required for pre-V2 message formats because these do not store the first message offset
-          in the header.
-         */
-        roll(maxOffsetInMessages - Integer.MAX_VALUE)
+      /*
+        maxOffsetInMessages - Integer.MAX_VALUE is a heuristic value for the first offset in the set of messages.
+        Since the offset in messages will not differ by more than Integer.MAX_VALUE, this is guaranteed <= the real
+        first offset in the set. Determining the true first offset in the set requires decompression, which the follower
+        is trying to avoid during log append. Prior behavior assigned new baseOffset = logEndOffset from old segment.
+        This was problematic in the case that two consecutive messages differed in offset by
+        Integer.MAX_VALUE.toLong + 2 or more.  In this case, the prior behavior would roll a new log segment whose
+        base offset was too low to contain the next message.  This edge case is possible when a replica is recovering a
+        highly compacted topic from scratch.
+        Note that this is only required for pre-V2 message formats because these do not store the first message offset
+        in the header.
+      */
+      appendInfo.firstOffset match {
+        case Some(firstOffset) => roll(firstOffset)
+        case None => roll(maxOffsetInMessages - Integer.MAX_VALUE)
       }
     } else {
       segment
