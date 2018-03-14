@@ -80,12 +80,13 @@ object ConfigCommand extends Config {
       }
     } catch {
       case e @ (_: IllegalArgumentException | _: InvalidConfigException) =>
+        logger.debug(s"Failed config command with args $args", e)
         System.err.println(e.getMessage)
         Exit.exit(1)
 
       case t: Throwable =>
         System.err.println("Error while executing config command")
-        t.printStackTrace()
+        t.printStackTrace(System.err)
         Exit.exit(1)
     }
   }
