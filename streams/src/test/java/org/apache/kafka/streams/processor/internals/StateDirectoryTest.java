@@ -29,6 +29,7 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
@@ -91,16 +92,18 @@ public class StateDirectoryTest {
     @Test
     public void shouldLockTaskStateDirectory() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
-        final File taskDirectory = directory.directoryForTask(taskId);
+        final File taskDirectory = directory.stateDir();
 
         directory.lock(taskId);
 
+        File f = new File(taskDirectory, taskId + StateDirectory.LOCK_FILE_NAME);
         try (
             final FileChannel channel = FileChannel.open(
-                new File(taskDirectory, StateDirectory.LOCK_FILE_NAME).toPath(),
+                f.toPath(),
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE)
         ) {
-            channel.tryLock();
+            FileLock lock = channel.tryLock();
+            System.out.println("l ocked " + f + " " + lock);
             fail("shouldn't be able to lock already locked directory");
         } catch (final OverlappingFileLockException e) {
             // pass
@@ -140,17 +143,18 @@ public class StateDirectoryTest {
     @Test
     public void shouldLockMulitpleTaskDirectories() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
-        final File task1Dir = directory.directoryForTask(taskId);
+        final File task1Dir = directory.stateDir();
         final TaskId taskId2 = new TaskId(1, 0);
-        final File task2Dir = directory.directoryForTask(taskId2);
+        final File task2Dir = directory.stateDir();
 
 
         try (
             final FileChannel channel1 = FileChannel.open(
-                new File(task1Dir, StateDirectory.LOCK_FILE_NAME).toPath(),
+                new File(task1Dir, taskId + StateDirectory.LOCK_FILE_NAME).toPath(),
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE);
-            final FileChannel channel2 = FileChannel.open(new File(task2Dir, StateDirectory.LOCK_FILE_NAME).toPath(),
+            final FileChannel channel2 = FileChannel.open(
+                new File(task2Dir, taskId2 + StateDirectory.LOCK_FILE_NAME).toPath(),
                 StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE)
         ) {
