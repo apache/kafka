@@ -25,11 +25,11 @@ import kafka.common.Config
 import kafka.common.InvalidConfigException
 import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
-import kafka.utils.CommandLineUtils
+import kafka.utils.{CommandLineUtils, Exit}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{AlterConfigsOptions, Config => JConfig, ConfigEntry, DescribeConfigsOptions, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{AlterConfigsOptions, ConfigEntry, DescribeConfigsOptions, AdminClient => JAdminClient, Config => JConfig}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram._
@@ -65,34 +65,42 @@ object ConfigCommand extends Config {
     DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp)
 
   def main(args: Array[String]): Unit = {
-
     val opts = new ConfigCommandOptions(args)
 
-    if(args.length == 0)
+    if (args.length == 0)
       CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity config for a topic, client, user or broker")
 
     opts.checkArgs()
 
-    val time = Time.SYSTEM
-
-    if (opts.options.has(opts.zkConnectOpt)) {
-      val zkClient = KafkaZkClient(opts.options.valueOf(opts.zkConnectOpt), JaasUtils.isZkSecurityEnabled, 30000, 30000,
-        Int.MaxValue, time)
-      val adminZkClient = new AdminZkClient(zkClient)
-
-      try {
-        if (opts.options.has(opts.alterOpt))
-          alterConfig(zkClient, opts, adminZkClient)
-        else if (opts.options.has(opts.describeOpt))
-          describeConfig(zkClient, opts, adminZkClient)
-      } catch {
-        case e: Throwable =>
-          throw new RuntimeException("Error while executing config command", e)
-      } finally {
-        zkClient.close()
+    try {
+      if (opts.options.has(opts.zkConnectOpt)) {
+        processCommandWithZk(opts.options.valueOf(opts.zkConnectOpt), opts)
+      } else {
+        processBrokerConfig(opts)
       }
-    } else {
-      processBrokerConfig(opts)
+    } catch {
+      case e @ (_: IllegalArgumentException | _: InvalidConfigException) =>
+        System.err.println(e.getMessage)
+        Exit.exit(1)
+
+      case t: Throwable =>
+        System.err.println("Error while executing config command")
+        t.printStackTrace()
+        Exit.exit(1)
+    }
+  }
+
+  private def processCommandWithZk(zkConnectString: String, opts: ConfigCommandOptions): Unit = {
+    val zkClient = KafkaZkClient(zkConnectString, JaasUtils.isZkSecurityEnabled, 30000, 30000,
+      Int.MaxValue, Time.SYSTEM)
+    val adminZkClient = new AdminZkClient(zkClient)
+    try {
+      if (opts.options.has(opts.alterOpt))
+        alterConfig(zkClient, opts, adminZkClient)
+      else if (opts.options.has(opts.describeOpt))
+        describeConfig(zkClient, opts, adminZkClient)
+    } finally {
+      zkClient.close()
     }
   }
 
@@ -216,9 +224,6 @@ object ConfigCommand extends Config {
         alterBrokerConfig(adminClient, opts, entityName)
       else if (opts.options.has(opts.describeOpt))
         describeBrokerConfig(adminClient, opts, entityName)
-    } catch {
-      case e: Throwable =>
-        throw new RuntimeException("Error while executing config command", e)
     } finally {
       adminClient.close()
     }
