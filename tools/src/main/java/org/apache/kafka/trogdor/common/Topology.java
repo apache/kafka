@@ -33,7 +33,7 @@ public interface Topology {
         public static Set<String> agentNodeNames(Topology topology) {
             Set<String> set = new HashSet<>();
             for (Map.Entry<String, Node> entry : topology.nodes().entrySet()) {
-                if (Node.Util.getTrogdorAgentPort(entry.getValue()) > 0) {
+                if (entry.getValue().getConfig(Platform.Config.TROGDOR_AGENT_PORT) != null) {
                     set.add(entry.getKey());
                 }
             }
