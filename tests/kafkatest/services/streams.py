@@ -125,6 +125,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
               " %(kafka)s %(state_dir)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
               " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+        self.logger.info("Executing: " + cmd)
 
         self.logger.info("Executing streams cmd: " + cmd)
 
@@ -239,7 +240,7 @@ class StreamsBrokerDownResilienceService(StreamsTestBaseService):
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
               " %(kafka)s %(state_dir)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
               " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
-
+        self.logger.info("Executing: " + cmd)
         return cmd
 
 

@@ -22,7 +22,7 @@ import java.util.Properties
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.common.InvalidConfigException
 import kafka.server.ConfigEntityName
-import kafka.utils.Logging
+import kafka.utils.{Exit, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient, ZooKeeperTestHarness}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.config.ConfigResource
@@ -38,6 +38,49 @@ import scala.collection.mutable
 import scala.collection.JavaConverters._
 
 class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
+
+  @Test
+  def shouldExitWithNonZeroStatusOnArgError(): Unit = {
+    assertNonZeroStatusExit(Array("--blah"))
+  }
+
+  @Test
+  def shouldExitWithNonZeroStatusOnZkCommandError(): Unit = {
+    assertNonZeroStatusExit(Array(
+      "--zookeeper", zkConnect,
+      "--entity-name", "1",
+      "--entity-type", "brokers",
+      "--alter",
+      "--add-config", "message.max.size=100000"))
+  }
+
+  @Test
+  def shouldExitWithNonZeroStatusOnBrokerCommandError(): Unit = {
+    assertNonZeroStatusExit(Array(
+      "--bootstrap-server", "invalid host",
+      "--entity-type", "brokers",
+      "--entity-name", "1",
+      "--describe"))
+  }
+
+  private def assertNonZeroStatusExit(args: Array[String]): Unit = {
+    var exitStatus: Option[Int] = None
+    Exit.setExitProcedure { (status, _) =>
+      exitStatus = Some(status)
+      throw new RuntimeException
+    }
+
+    try {
+      ConfigCommand.main(args)
+    } catch {
+      case e: RuntimeException =>
+    } finally {
+      Exit.resetExitProcedure()
+    }
+
+    assertEquals(Some(1), exitStatus)
+  }
+
   @Test
   def shouldParseArgumentsForClientsEntityType() {
     testArgumentParse("clients")
@@ -111,7 +154,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--alter",
       "--add-config", "a=b,c=d"))
 
-    case class TestAdminZkClient(val zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
+    class TestAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
       override def changeClientIdConfig(clientId: String, configChange: Properties): Unit = {
         assertEquals("my-client-id", clientId)
         assertEquals("b", configChange.get("a"))
@@ -130,7 +173,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--alter",
       "--add-config", "a=b,c=d"))
 
-    case class TestAdminZkClient(val zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
+    class TestAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
       override def changeTopicConfig(topic: String, configChange: Properties): Unit = {
         assertEquals("my-topic", topic)
         assertEquals("b", configChange.get("a"))
@@ -149,7 +192,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--alter",
       "--add-config", "leader.replication.throttled.rate=10,follower.replication.throttled.rate=20"))
 
-    case class TestAdminZkClient(val zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
+    class TestAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
       override def changeBrokerConfig(brokerIds: Seq[Int], configChange: Properties): Unit = {
         assertEquals(Seq(1), brokerIds)
         assertEquals("10", configChange.get("leader.replication.throttled.rate"))
@@ -225,7 +268,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--alter",
       "--add-config", "a=b,c=[d,e ,f],g=[h,i]"))
 
-    case class TestAdminZkClient(val zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
+    class TestAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
       override def changeBrokerConfig(brokerIds: Seq[Int], configChange: Properties): Unit = {
         assertEquals(Seq(1), brokerIds)
         assertEquals("b", configChange.get("a"))
@@ -297,7 +340,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       "--alter",
       "--delete-config", "a,c"))
 
-    case class TestAdminZkClient(val zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
+    class TestAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
       override def fetchEntityConfig(entityType: String, entityName: String): Properties = {
         val properties: Properties = new Properties
         properties.put("a", "b")
@@ -332,7 +375,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         "--delete-config", mechanism))
 
     val credentials = mutable.Map[String, Properties]()
-    case class CredentialChange(val user: String, val mechanisms: Set[String], val iterations: Int) extends AdminZkClient(zkClient) {
+    case class CredentialChange(user: String, mechanisms: Set[String], iterations: Int) extends AdminZkClient(zkClient) {
       override def fetchEntityConfig(entityType: String, entityName: String): Properties = {
         credentials.getOrElse(entityName, new Properties())
       }
@@ -536,7 +579,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         Seq("<default>/clients/client-3", sanitizedPrincipal + "/clients/client-2"))
   }
 
-  case class DummyAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
+  class DummyAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
     override def changeBrokerConfig(brokerIds: Seq[Int], configs: Properties): Unit = {}
     override def fetchEntityConfig(entityType: String, entityName: String): Properties = {new Properties}
     override def changeClientIdConfig(clientId: String, configs: Properties): Unit = {}
