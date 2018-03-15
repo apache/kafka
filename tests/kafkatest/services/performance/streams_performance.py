@@ -42,6 +42,9 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
                           root=StreamsTestBaseService.PERSISTENT_ROOT,
                           report_interval=5000)
 
+    def clean_node(self, node):
+        JmxMixin.clean_node(self, node)
+        super.clean_node(self, node)
 
     def collect_data(self, node, tag = None):
         # Collect the data and return it to the framework

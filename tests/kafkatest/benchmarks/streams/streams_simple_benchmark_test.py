@@ -85,7 +85,6 @@ class StreamsSimpleBenchmarkTest(Test):
                                                              self.num_records/(scale), "false", test,
                                                              self.num_threads)
             self.driver[num].start()
-            self.driver[num].start_jmx_tool(self.idx(num), node)
 
         #######################
         # STOP + COLLECT PHASE

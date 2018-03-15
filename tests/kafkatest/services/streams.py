@@ -46,7 +46,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
     }
 
     def __init__(self, test_context, kafka, streams_class_name, user_test_args, user_test_args1=None, user_test_args2=None, user_test_args3=None):
-        Service.__init__(self, test_context, 1)
+        Service.__init__(self, test_context, num_nodes=1)
         self.kafka = kafka
         self.args = {'streams_class_name': streams_class_name,
                      'user_test_args': user_test_args,
@@ -142,6 +142,8 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
+
+        self.start_jmx_tool(1, node)
 
 
 class StreamsSmokeTestBaseService(StreamsTestBaseService):
