@@ -122,7 +122,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
         args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
 
         self.logger.info("Before executing cmd....")
-        self.logger.info("jmx_port=" + args['jmx_port'])
+        self.logger.info("jmx_port=" + `args['jmx_port']`)
         self.logger.info("kafka=" + args['kafka'])
         self.logger.info("state_dir=" + args['state_dir'])
         self.logger.info("stdout=" + args['stdout'])
