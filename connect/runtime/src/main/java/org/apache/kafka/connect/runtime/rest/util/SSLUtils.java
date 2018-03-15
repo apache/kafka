@@ -25,6 +25,7 @@ import org.eclipse.jetty.util.ssl.SslContextFactory;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Helper class for setting up SSL for RestServer and RestClient
@@ -97,11 +98,14 @@ public class SSLUtils {
             ssl.setTrustStorePassword(sslTruststorePassword.value());
     }
 
+    /** Statically compiled pattern for finding commas with potentially unlimited whitespace before and/or after the comma. */
+    private static final Pattern SPLIT_COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
+
     /**
      * Configures Protocol, Algorithm and Provider related settings in SslContextFactory
      */
     protected static void configureSslContextFactoryAlgorithms(SslContextFactory ssl, Map<String, Object> sslConfigValues) {
-        List<String> sslEnabledProtocols = (List<String>) getOrDefault(sslConfigValues, SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS.split("\\s*,\\s*")));
+        List<String> sslEnabledProtocols = (List<String>) getOrDefault(sslConfigValues, SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(SPLIT_COMMA_WITH_WHITESPACE.split(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS)));
         ssl.setIncludeProtocols(sslEnabledProtocols.toArray(new String[sslEnabledProtocols.size()]));
 
         String sslProvider = (String) sslConfigValues.get(SslConfigs.SSL_PROVIDER_CONFIG);
