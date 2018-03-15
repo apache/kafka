@@ -16,10 +16,10 @@
 import os.path
 import signal
 
-from kafkatest.services.kafka.config import KafkaConfig
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.services.kafka import KafkaConfig
 
 
 STATE_DIR = "state.dir"
