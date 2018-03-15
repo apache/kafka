@@ -20,21 +20,24 @@ package org.apache.kafka.trogdor.rest;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.Collections;
+import java.util.Map;
 import java.util.TreeMap;
 
 /**
  * The response to /coordinator/tasks
  */
 public class TasksResponse extends Message {
-    private final TreeMap<String, TaskState> tasks;
+    private final Map<String, TaskState> tasks;
 
     @JsonCreator
     public TasksResponse(@JsonProperty("tasks") TreeMap<String, TaskState> tasks) {
-        this.tasks = tasks;
+        this.tasks = Collections.unmodifiableMap((tasks == null) ?
+            new TreeMap<String, TaskState>() : tasks);
     }
 
     @JsonProperty
-    public TreeMap<String, TaskState> tasks() {
+    public Map<String, TaskState> tasks() {
         return tasks;
     }
 }

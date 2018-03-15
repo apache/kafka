@@ -28,6 +28,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.NavigableMap;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * The specification for a workload that sends messages to a broker and then
@@ -49,10 +50,11 @@ public class RoundTripWorkloadSpec extends TaskSpec {
              @JsonProperty("partitionAssignments") NavigableMap<Integer, List<Integer>> partitionAssignments,
              @JsonProperty("maxMessages") int maxMessages) {
         super(startMs, durationMs);
-        this.clientNode = clientNode;
-        this.bootstrapServers = bootstrapServers;
+        this.clientNode = clientNode == null ? "" : clientNode;
+        this.bootstrapServers = bootstrapServers == null ? "" : bootstrapServers;
         this.targetMessagesPerSec = targetMessagesPerSec;
-        this.partitionAssignments = partitionAssignments;
+        this.partitionAssignments = partitionAssignments == null ?
+            new TreeMap<Integer, List<Integer>>() : partitionAssignments;
         this.maxMessages = maxMessages;
     }
 

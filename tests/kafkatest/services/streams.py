@@ -176,7 +176,7 @@ class StreamsEosTestBaseService(StreamsTestBaseService):
 
     def clean_node(self, node):
         if self.clean_node_enabled:
-            super.clean_node(self, node)
+            super(StreamsEosTestBaseService, self).clean_node(node)
 
 
 class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
@@ -247,7 +247,7 @@ class StreamsBrokerDownResilienceService(StreamsTestBaseService):
               " %(kafka)s %(config_file)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
               " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
-        self.logger.info("Executing StreamsBrokerDownResilience cmd: " + cmd)
+        self.logger.info("Executing: " + cmd)
 
         return cmd
 
