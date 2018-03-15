@@ -172,9 +172,9 @@ public class ProduceBenchWorker implements TaskWorker {
 
         private final KafkaProducer<byte[], byte[]> producer;
 
-        private final PayloadGeneratorManager keys;
+        private final PayloadIterator keys;
 
-        private final PayloadGeneratorManager values;
+        private final PayloadIterator values;
 
         private final Throttle throttle;
 
@@ -189,8 +189,8 @@ public class ProduceBenchWorker implements TaskWorker {
                 props.setProperty(entry.getKey(), entry.getValue());
             }
             this.producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
-            this.keys = new PayloadGeneratorManager(spec.keyGenerator());
-            this.values = new PayloadGeneratorManager(spec.valueGenerator());
+            this.keys = new PayloadIterator(spec.keyGenerator());
+            this.values = new PayloadIterator(spec.valueGenerator());
             this.throttle = new SendRecordsThrottle(perPeriod, producer);
         }
 

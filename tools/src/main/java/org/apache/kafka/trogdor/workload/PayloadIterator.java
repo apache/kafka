@@ -17,19 +17,32 @@
 
 package org.apache.kafka.trogdor.workload;
 
+import java.util.Iterator;
+
 /**
- * Maintains the position number for a PayloadGenerator.
+ * An iterator which wraps a PayloadGenerator.
  */
-public final class PayloadGeneratorManager {
+public final class PayloadIterator implements Iterator<byte[]> {
     private final PayloadGenerator generator;
     private long position = 0;
 
-    public PayloadGeneratorManager(PayloadGenerator generator) {
+    public PayloadIterator(PayloadGenerator generator) {
         this.generator = generator;
     }
 
+    @Override
+    public boolean hasNext() {
+        return true;
+    }
+
+    @Override
     public synchronized byte[] next() {
         return generator.generate(position++);
+    }
+
+    @Override
+    public void remove() {
+        throw new UnsupportedOperationException();
     }
 
     public synchronized void setPosition(long position) {
