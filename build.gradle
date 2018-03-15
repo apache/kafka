@@ -721,7 +721,7 @@ project(':core') {
     from(configurations.archives.artifacts.files) { into("libs/") }
     from(project.siteDocsTar) { into("site-docs/") }
     from(project(':tools').jar) { into("libs/") }
-    from(project(':tools').configurations.runtime) { into("libs/") }
+    from(project(':tools').configurations.runtime) { into("libs/") exclude '**/*javassist*'}
     from(project(':connect:api').jar) { into("libs/") }
     from(project(':connect:api').configurations.runtime) { into("libs/") }
     from(project(':connect:runtime').jar) { into("libs/") }
