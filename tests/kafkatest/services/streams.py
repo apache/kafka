@@ -135,9 +135,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
         return cmd
 
     def prop_file(self, node):
-        cfg = KafkaConfig(**node.config)
-        cfg[STATE_DIR] = self.PERSISTENT_ROOT
-
+        cfg = KafkaConfig(**{STATE_DIR: self.PERSISTENT_ROOT})
         return cfg.render()
 
     def start_node(self, node):
