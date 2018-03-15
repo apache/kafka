@@ -33,7 +33,6 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.TestUtils;
 
 import java.io.IOException;
 import java.util.Map;
@@ -62,10 +61,6 @@ public class StreamsStandByReplicaTest {
         streamsProperties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsProperties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsProperties.put(StreamsConfig.producerPrefix(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG), true);
-
-        if (streamsProperties.containsKey(StreamsConfig.STATE_DIR_CONFIG)) {
-            streamsProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        }
 
         final Map<String, String> updated = SystemTestUtil.parseConfigs(additionalConfigs);
         System.out.println("Updating configs with " + updated);

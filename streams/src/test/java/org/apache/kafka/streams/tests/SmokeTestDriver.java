@@ -36,7 +36,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -78,7 +77,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     // This main() is not used by the system test. It is intended to be used for local debugging.
-    public static void main(String[] args) throws InterruptedException, IOException {
+    public static void main(String[] args) throws InterruptedException {
         final String kafka = "localhost:9092";
         final File stateDir = TestUtils.tempDirectory();
 
