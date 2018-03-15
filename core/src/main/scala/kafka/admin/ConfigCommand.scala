@@ -24,7 +24,7 @@ import kafka.common.Config
 import kafka.common.InvalidConfigException
 import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
-import kafka.utils.{CommandLineUtils, ZkUtils}
+import kafka.utils.{CommandLineUtils, Exit, ZkUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram._
@@ -53,30 +53,37 @@ object ConfigCommand extends Config {
   val DefaultScramIterations = 4096
 
   def main(args: Array[String]): Unit = {
-
-    val opts = new ConfigCommandOptions(args)
-
-    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity config for a topic, client, user or broker")
-
-    opts.checkArgs()
-
-    val zkUtils = ZkUtils(opts.options.valueOf(opts.zkConnectOpt),
-                          30000,
-                          30000,
-                          JaasUtils.isZkSecurityEnabled())
-
     try {
-      if (opts.options.has(opts.alterOpt))
-        alterConfig(zkUtils, opts)
-      else if (opts.options.has(opts.describeOpt))
-        describeConfig(zkUtils, opts)
+      val opts = new ConfigCommandOptions(args)
+
+      if (args.length == 0)
+        CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity config for a topic, client, user or broker")
+
+      opts.checkArgs()
+
+      val zkUtils = ZkUtils(opts.options.valueOf(opts.zkConnectOpt),
+        30000,
+        30000,
+        JaasUtils.isZkSecurityEnabled())
+
+      try {
+        if (opts.options.has(opts.alterOpt))
+          alterConfig(zkUtils, opts)
+        else if (opts.options.has(opts.describeOpt))
+          describeConfig(zkUtils, opts)
+      } finally {
+        zkUtils.close()
+      }
     } catch {
-      case e: Throwable =>
-        println("Error while executing config command " + e.getMessage)
-        println(Utils.stackTrace(e))
-    } finally {
-      zkUtils.close()
+      case e @ (_: IllegalArgumentException | _: InvalidConfigException | _: OptionException) =>
+        logger.debug(s"Failed config command with args $args", e)
+        System.err.println(e.getMessage)
+        Exit.exit(1)
+
+      case t: Throwable =>
+        System.err.println(s"Error while executing config command with args $args")
+        t.printStackTrace(System.err)
+        Exit.exit(1)
     }
   }
 
