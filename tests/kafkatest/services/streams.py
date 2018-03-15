@@ -121,23 +121,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
         args['log4j'] = self.LOG4J_CONFIG_FILE
         args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
 
-        self.logger.info("Before executing cmd....")
-        self.logger.info("jmx_port=" + `args['jmx_port']`)
-        self.logger.info("kafka=" + args['kafka'])
-        self.logger.info("state_dir=" + args['state_dir'])
-        self.logger.info("stdout=" + args['stdout'])
-        self.logger.info("stderr=" + args['stderr'])
-        self.logger.info("pidfile=" + args['pidfile'])
-        self.logger.info("kafka_run_class=" + args['kafka_run_class'])
-        self.logger.info("user_test_args=" + `args['user_test_args']`)
-        self.logger.info("user_test_args1=" + `args['user_test_args1']`)
-        self.logger.info("user_test_args2=" + `args['user_test_args2']`)
-        self.logger.info("user_test_args3=" + `args['user_test_args3']`)
-
-        self.logger.info("args=" + `args`)
-
-
-        cmd = "( export JMX_PORT=%(jmx_port); export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
+        cmd = "( export JMX_PORT=%(jmx_port)s; export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
               " %(kafka)s %(state_dir)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
               " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
@@ -249,7 +233,7 @@ class StreamsBrokerDownResilienceService(StreamsTestBaseService):
         args['log4j'] = self.LOG4J_CONFIG_FILE
         args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
 
-        cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
+        cmd = "( export JMX_PORT=%(jmx_port)s; export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
               " %(kafka)s %(state_dir)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
               " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
