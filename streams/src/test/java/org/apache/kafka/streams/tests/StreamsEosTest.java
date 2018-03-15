@@ -25,7 +25,7 @@ import java.util.Properties;
 public class StreamsEosTest {
 
     /**
-     *  args ::= command kafka zookeeper stateDir
+     *  args ::= kafka propFileName command
      *  command := "run" | "process" | "verify"
      */
     public static void main(final String[] args) throws IOException {
