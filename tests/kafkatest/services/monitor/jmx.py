@@ -76,8 +76,9 @@ class JmxMixin(object):
         cmd += " --wait"
         for jmx_object_name in self.jmx_object_names:
             cmd += " --object-name %s" % jmx_object_name
+        cmd += " --attributes "
         for jmx_attribute in self.jmx_attributes:
-            cmd += " --attributes %s" % jmx_attribute
+            cmd += "%s," % jmx_attribute
         cmd += " 1>> %s" % self.jmx_tool_log
         cmd += " 2>> %s &" % self.jmx_tool_err_log
 
