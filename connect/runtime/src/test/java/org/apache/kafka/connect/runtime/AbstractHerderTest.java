@@ -17,11 +17,8 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
-<<<<<<< HEAD
 import org.apache.kafka.common.config.types.Password;
-=======
 import org.apache.kafka.common.config.ConfigException;
->>>>>>> trunk
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
