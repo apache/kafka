@@ -18,7 +18,7 @@ from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
 from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
-from kafkatest.version import LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0,  DEV_BRANCH, KafkaVersion
+from kafkatest.version import LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0,  DEV_BRANCH, KafkaVersion
 
 
 class StreamsMultipleRollingUpgradeTest(BaseStreamsTest):
@@ -41,7 +41,7 @@ class StreamsMultipleRollingUpgradeTest(BaseStreamsTest):
      aws s3api list-objects --bucket kafka-packages --query 'Contents[].{Key:Key}
     """
     # adding new version to this list will cover broker and streams version
-    streams_upgrade_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(DEV_BRANCH)]
+    streams_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(DEV_BRANCH)]
 
     def __init__(self, test_context):
         super(StreamsMultipleRollingUpgradeTest, self).__init__(test_context,
