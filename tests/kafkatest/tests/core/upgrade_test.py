@@ -14,8 +14,7 @@
 # limitations under the License.
 
 from ducktape.mark import parametrize
-
-import json
+from ducktape.mark.resource import cluster
 
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService
@@ -24,8 +23,7 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10, LATEST_0_10_0, TRUNK, KafkaVersion
-
+from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, DEV_BRANCH, KafkaVersion
 
 class TestUpgrade(ProduceConsumeValidateTest):
 
@@ -46,7 +44,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
         self.logger.info("First pass bounce - rolling upgrade")
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
-            node.version = TRUNK
+            node.version = DEV_BRANCH
             node.config[config_property.INTER_BROKER_PROTOCOL_VERSION] = from_kafka_version
             node.config[config_property.MESSAGE_FORMAT_VERSION] = from_kafka_version
             self.kafka.start_node(node)
@@ -61,24 +59,36 @@ class TestUpgrade(ProduceConsumeValidateTest):
                 node.config[config_property.MESSAGE_FORMAT_VERSION] = to_message_format_version
             self.kafka.start_node(node)
 
-
-    @parametrize(from_kafka_version=str(LATEST_0_10_0), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["none"], new_consumer=True, security_protocol="SASL_SSL")
-    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["snappy"], new_consumer=True)
+    @cluster(num_nodes=6)
+    @parametrize(from_kafka_version=str(LATEST_0_11_0), to_message_format_version=None, compression_types=["gzip"], new_consumer=False)
+    @parametrize(from_kafka_version=str(LATEST_0_11_0), to_message_format_version=None, compression_types=["lz4"])
+    @parametrize(from_kafka_version=str(LATEST_0_10_2), to_message_format_version=str(LATEST_0_9), compression_types=["none"])
+    @parametrize(from_kafka_version=str(LATEST_0_10_2), to_message_format_version=str(LATEST_0_10), compression_types=["snappy"], new_consumer=False)
+    @parametrize(from_kafka_version=str(LATEST_0_10_2), to_message_format_version=None, compression_types=["lz4"])
+    @parametrize(from_kafka_version=str(LATEST_0_10_2), to_message_format_version=None, compression_types=["none"])
+    @parametrize(from_kafka_version=str(LATEST_0_10_2), to_message_format_version=None, compression_types=["snappy"])
+    @parametrize(from_kafka_version=str(LATEST_0_10_2), to_message_format_version=None, compression_types=["lz4"], new_consumer=False)
+    @parametrize(from_kafka_version=str(LATEST_0_10_1), to_message_format_version=None, compression_types=["lz4"])
+    @parametrize(from_kafka_version=str(LATEST_0_10_1), to_message_format_version=None, compression_types=["snappy"], new_consumer=False)
+    @parametrize(from_kafka_version=str(LATEST_0_10_0), to_message_format_version=None, compression_types=["snappy"], new_consumer=False)
+    @parametrize(from_kafka_version=str(LATEST_0_10_0), to_message_format_version=None, compression_types=["lz4"])
+    @cluster(num_nodes=7)
+    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["none"], security_protocol="SASL_SSL")
+    @cluster(num_nodes=6)
+    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["snappy"])
+    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["lz4"], new_consumer=False)
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["lz4"])
-    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["lz4"], new_consumer=True)
-    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=str(LATEST_0_9), compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=str(LATEST_0_9), compression_types=["snappy"], new_consumer=True)
+    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=str(LATEST_0_9), compression_types=["none"], new_consumer=False)
+    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=str(LATEST_0_9), compression_types=["snappy"])
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=str(LATEST_0_9), compression_types=["lz4"])
-    @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=str(LATEST_0_9), compression_types=["lz4"], new_consumer=True)
-    @parametrize(from_kafka_version=str(LATEST_0_8_2), to_message_format_version=None, compression_types=["none"])
-    @parametrize(from_kafka_version=str(LATEST_0_8_2), to_message_format_version=None, compression_types=["snappy"])
+    @cluster(num_nodes=7)
+    @parametrize(from_kafka_version=str(LATEST_0_8_2), to_message_format_version=None, compression_types=["none"], new_consumer=False)
+    @parametrize(from_kafka_version=str(LATEST_0_8_2), to_message_format_version=None, compression_types=["snappy"], new_consumer=False)
     def test_upgrade(self, from_kafka_version, to_message_format_version, compression_types,
-                     new_consumer=False, security_protocol="PLAINTEXT"):
-        """Test upgrade of Kafka broker cluster from 0.8.2, 0.9.0 or 0.10.0 to the current version
+                     new_consumer=True, security_protocol="PLAINTEXT"):
+        """Test upgrade of Kafka broker cluster from 0.8.2, 0.9.0, 0.10.0, 0.10.1, 0.10.2 to the current version
 
-        from_kafka_version is a Kafka version to upgrade from: either 0.8.2.X, 0.9.0.x or 0.10.0.x
+        from_kafka_version is a Kafka version to upgrade from
 
         If to_message_format_version is None, it means that we will upgrade to default (latest)
         message format version. It is possible to upgrade to 0.10 brokers but still use message
@@ -108,7 +118,8 @@ class TestUpgrade(ProduceConsumeValidateTest):
                                            compression_types=compression_types,
                                            version=KafkaVersion(from_kafka_version))
 
-        assert self.zk.query("/cluster/id") is None
+        if from_kafka_version <= LATEST_0_10_0:
+            assert self.kafka.cluster_id() is None
 
         # TODO - reduce the timeout
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
@@ -118,12 +129,6 @@ class TestUpgrade(ProduceConsumeValidateTest):
         self.run_produce_consume_validate(core_test_action=lambda: self.perform_upgrade(from_kafka_version,
                                                                                         to_message_format_version))
 
-        cluster_id_json = self.zk.query("/cluster/id")
-        assert cluster_id_json is not None
-        try:
-            cluster_id = json.loads(cluster_id_json)
-        except :
-            self.logger.debug("Data in /cluster/id znode could not be parsed. Data = %s" % cluster_id_json)
-
-        self.logger.debug("Cluster id [%s]", cluster_id)
-        assert len(cluster_id["id"]) == 22
+        cluster_id = self.kafka.cluster_id()
+        assert cluster_id is not None
+        assert len(cluster_id) == 22

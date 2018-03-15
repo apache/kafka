@@ -25,10 +25,9 @@ import java.nio.file.Files
 import java.text.MessageFormat
 import java.util.{Locale, Properties, UUID}
 
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.{CoreUtils, Exit, Logging}
 
 import scala.collection.JavaConverters._
-import org.apache.commons.io.IOUtils
 import org.apache.commons.lang.text.StrSubstitutor
 import org.apache.directory.api.ldap.model.entry.{DefaultEntry, Entry}
 import org.apache.directory.api.ldap.model.ldif.LdifReader
@@ -50,7 +49,7 @@ import org.apache.directory.server.kerberos.shared.keytab.{Keytab, KeytabEntry}
 import org.apache.directory.server.protocol.shared.transport.{TcpTransport, UdpTransport}
 import org.apache.directory.server.xdbm.Index
 import org.apache.directory.shared.kerberos.KerberosTime
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Java, Utils}
 
 /**
   * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone
@@ -102,13 +101,13 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
 
   private val orgName = config.getProperty(MiniKdc.OrgName)
   private val orgDomain = config.getProperty(MiniKdc.OrgDomain)
-  private val dnString = s"dc=$orgName,dc=$orgDomain"
   private val realm = s"${orgName.toUpperCase(Locale.ENGLISH)}.${orgDomain.toUpperCase(Locale.ENGLISH)}"
   private val krb5conf = new File(workDir, "krb5.conf")
 
   private var _port = config.getProperty(MiniKdc.KdcPort).toInt
   private var ds: DirectoryService = null
   private var kdc: KdcServer = null
+  private var closed = false
 
   def port: Int = _port
 
@@ -117,6 +116,8 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
   def start() {
     if (kdc != null)
       throw new RuntimeException("KDC already started")
+    if (closed)
+      throw new RuntimeException("KDC is closed")
     initDirectoryService()
     initKdcServer()
     initJvmKerberosConfig()
@@ -163,7 +164,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     val partition = new JdbmPartition(ds.getSchemaManager, ds.getDnFactory)
     partition.setId(orgName)
     partition.setPartitionPath(new File(ds.getInstanceLayout.getPartitionsDirectory, orgName).toURI)
-    val dn = new Dn(dnString)
+    val dn = new Dn(s"dc=$orgName,dc=$orgDomain")
     partition.setSuffixDn(dn)
     ds.addPartition(partition)
 
@@ -196,9 +197,15 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
         "3" -> orgDomain.toUpperCase(Locale.ENGLISH),
         "4" -> bindAddress
       )
-      val inputStream = MiniKdc.getResourceAsStream("minikdc.ldiff")
-      try addEntriesToDirectoryService(StrSubstitutor.replace(IOUtils.toString(inputStream), map.asJava))
-      finally CoreUtils.swallow(inputStream.close())
+      val reader = new BufferedReader(new InputStreamReader(MiniKdc.getResourceAsStream("minikdc.ldiff")))
+      try {
+        var line: String = null
+        val builder = new StringBuilder
+        while ({line = reader.readLine(); line != null})
+          builder.append(line).append("\n")
+        addEntriesToDirectoryService(StrSubstitutor.replace(builder, map.asJava))
+      }
+      finally CoreUtils.swallow(reader.close(), this)
     }
 
     val bindAddress = config.getProperty(MiniKdc.KdcBindAddress)
@@ -207,7 +214,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     val kerberosConfig = new KerberosConfig
     kerberosConfig.setMaximumRenewableLifetime(config.getProperty(MiniKdc.MaxRenewableLifetime).toLong)
     kerberosConfig.setMaximumTicketLifetime(config.getProperty(MiniKdc.MaxTicketLifetime).toLong)
-    kerberosConfig.setSearchBaseDn(dnString)
+    kerberosConfig.setSearchBaseDn(s"dc=$orgName,dc=$orgDomain")
     kerberosConfig.setPaEncTimestampRequired(false)
     kdc = new KdcServer(kerberosConfig)
     kdc.setDirectoryService(ds)
@@ -247,14 +254,14 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
       while ({line = reader.readLine(); line != null}) {
         stringBuilder.append(line).append("{3}")
       }
-    } finally CoreUtils.swallow(reader.close())
+    } finally CoreUtils.swallow(reader.close(), this)
     val output = MessageFormat.format(stringBuilder.toString, realm, host, port.toString, System.lineSeparator())
     Files.write(krb5conf.toPath, output.getBytes(StandardCharsets.UTF_8))
   }
 
   private def refreshJvmKerberosConfig(): Unit = {
     val klass =
-      if (System.getProperty("java.vendor").contains("IBM"))
+      if (Java.isIbmJdk)
         Class.forName("com.ibm.security.krb5.internal.Config")
       else
         Class.forName("sun.security.krb5.Config")
@@ -262,13 +269,16 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
   }
 
   def stop() {
-    if (kdc != null) {
-      System.clearProperty(MiniKdc.JavaSecurityKrb5Conf)
-      System.clearProperty(MiniKdc.SunSecurityKrb5Debug)
-      kdc.stop()
-      try ds.shutdown()
-      catch {
-        case ex: Exception => error("Could not shutdown ApacheDS properly", ex)
+    if (!closed) {
+      closed = true
+      if (kdc != null) {
+        System.clearProperty(MiniKdc.JavaSecurityKrb5Conf)
+        System.clearProperty(MiniKdc.SunSecurityKrb5Debug)
+        kdc.stop()
+        try ds.shutdown()
+        catch {
+          case ex: Exception => error("Could not shutdown ApacheDS properly", ex)
+        }
       }
     }
   }
@@ -327,7 +337,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     try {
       for (ldifEntry <- reader.asScala)
         ds.getAdminSession.add(new DefaultEntry(ds.getSchemaManager, ldifEntry.getEntry))
-    } finally CoreUtils.swallow(reader.close())
+    } finally CoreUtils.swallow(reader.close(), this)
   }
 
 }
@@ -356,7 +366,7 @@ object MiniKdc {
         start(workDir, config, keytabFile, principals)
       case _ =>
         println("Arguments: <WORKDIR> <MINIKDCPROPERTIES> <KEYTABFILE> [<PRINCIPALS>]+")
-        sys.exit(1)
+        Exit.exit(1)
     }
   }
 

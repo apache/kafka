@@ -21,6 +21,7 @@ import java.nio.ByteBuffer
 import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.common.protocol.Errors
 
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
 object GroupCoordinatorResponse {
   val CurrentVersion = 0
 
@@ -28,19 +29,20 @@ object GroupCoordinatorResponse {
 
   def readFrom(buffer: ByteBuffer) = {
     val correlationId = buffer.getInt
-    val errorCode = buffer.getShort
+    val error = Errors.forCode(buffer.getShort)
     val broker = BrokerEndPoint.readFrom(buffer)
-    val coordinatorOpt = if (errorCode == Errors.NONE.code)
+    val coordinatorOpt = if (error == Errors.NONE)
       Some(broker)
     else
       None
 
-    GroupCoordinatorResponse(coordinatorOpt, errorCode, correlationId)
+    GroupCoordinatorResponse(coordinatorOpt, error, correlationId)
   }
 
 }
 
-case class GroupCoordinatorResponse (coordinatorOpt: Option[BrokerEndPoint], errorCode: Short, correlationId: Int)
+@deprecated("This object has been deprecated and will be removed in a future release.", "1.0.0")
+case class GroupCoordinatorResponse (coordinatorOpt: Option[BrokerEndPoint], error: Errors, correlationId: Int)
   extends RequestOrResponse() {
 
   def sizeInBytes =
@@ -50,7 +52,7 @@ case class GroupCoordinatorResponse (coordinatorOpt: Option[BrokerEndPoint], err
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(correlationId)
-    buffer.putShort(errorCode)
+    buffer.putShort(error.code)
     coordinatorOpt.orElse(GroupCoordinatorResponse.NoBrokerEndpointOpt).foreach(_.writeTo(buffer))
   }
 

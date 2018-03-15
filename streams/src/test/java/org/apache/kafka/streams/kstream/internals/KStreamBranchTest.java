@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,16 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.junit.After;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.lang.reflect.Array;
@@ -34,21 +34,13 @@ public class KStreamBranchTest {
 
     private String topicName = "topic";
 
-    private KStreamTestDriver driver = null;
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    @Rule
+    public final KStreamTestDriver driver = new KStreamTestDriver();
 
     @SuppressWarnings("unchecked")
     @Test
     public void testKStreamBranch() {
-        KStreamBuilder builder = new KStreamBuilder();
-        builder.setApplicationId("X");
+        final StreamsBuilder builder = new StreamsBuilder();
 
         Predicate<Integer, String> isEven = new Predicate<Integer, String>() {
             @Override
@@ -75,7 +67,7 @@ public class KStreamBranchTest {
         KStream<Integer, String>[] branches;
         MockProcessorSupplier<Integer, String>[] processors;
 
-        stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
+        stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         branches = stream.branch(isEven, isMultipleOfThree, isOdd);
 
         assertEquals(3, branches.length);
@@ -86,13 +78,35 @@ public class KStreamBranchTest {
             branches[i].process(processors[i]);
         }
 
-        driver = new KStreamTestDriver(builder);
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
+        driver.setUp(builder);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, "V" + expectedKey);
         }
 
         assertEquals(3, processors[0].processed.size());
         assertEquals(1, processors[1].processed.size());
         assertEquals(2, processors[2].processed.size());
+    }
+
+    @Test
+    public void testTypeVariance() {
+        Predicate<Number, Object> positive = new Predicate<Number, Object>() {
+            @Override
+            public boolean test(Number key, Object value) {
+                return key.doubleValue() > 0;
+            }
+        };
+
+        Predicate<Number, Object> negative = new Predicate<Number, Object>() {
+            @Override
+            public boolean test(Number key, Object value) {
+                return key.doubleValue() < 0;
+            }
+        };
+
+        @SuppressWarnings("unchecked")
+        final KStream<Integer, String>[] branches = new StreamsBuilder()
+            .<Integer, String>stream("empty")
+            .branch(positive, negative);
     }
 }

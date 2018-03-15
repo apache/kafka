@@ -16,7 +16,9 @@
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.connect import ConnectDistributedService, ConnectRestError
 from ducktape.utils.util import wait_until
-import subprocess
+from ducktape.mark.resource import cluster
+from ducktape.cluster.remoteaccount import RemoteCommandError
+
 import json
 import itertools
 
@@ -29,17 +31,23 @@ class ConnectRestApiTest(KafkaTest):
     FILE_SOURCE_CONNECTOR = 'org.apache.kafka.connect.file.FileStreamSourceConnector'
     FILE_SINK_CONNECTOR = 'org.apache.kafka.connect.file.FileStreamSinkConnector'
 
-    FILE_SOURCE_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'topic', 'file'}
-    FILE_SINK_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'topics', 'file'}
+    FILE_SOURCE_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'header.converter', 'batch.size', 'topic', 'file', 'transforms'}
+    FILE_SINK_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'header.converter', 'topics', 'file', 'transforms', 'topics.regex'}
 
     INPUT_FILE = "/mnt/connect.input"
     INPUT_FILE2 = "/mnt/connect.input2"
     OUTPUT_FILE = "/mnt/connect.output"
 
     TOPIC = "test"
+    DEFAULT_BATCH_SIZE = "2000"
     OFFSETS_TOPIC = "connect-offsets"
+    OFFSETS_REPLICATION_FACTOR = "1"
+    OFFSETS_PARTITIONS = "1"
     CONFIG_TOPIC = "connect-configs"
+    CONFIG_REPLICATION_FACTOR = "1"
     STATUS_TOPIC = "connect-status"
+    STATUS_REPLICATION_FACTOR = "1"
+    STATUS_PARTITIONS = "1"
 
     # Since tasks can be assigned to any node and we're testing with files, we need to make sure the content is the same
     # across all nodes.
@@ -57,6 +65,7 @@ class ConnectRestApiTest(KafkaTest):
 
         self.cc = ConnectDistributedService(test_context, 2, self.kafka, [self.INPUT_FILE, self.INPUT_FILE2, self.OUTPUT_FILE])
 
+    @cluster(num_nodes=4)
     def test_rest_api(self):
         # Template parameters
         self.key_converter = "org.apache.kafka.connect.json.JsonConverter"
@@ -107,7 +116,8 @@ class ConnectRestApiTest(KafkaTest):
         expected_source_info = {
             'name': 'local-file-source',
             'config': self._config_dict_from_props(source_connector_props),
-            'tasks': [{'connector': 'local-file-source', 'task': 0}]
+            'tasks': [{'connector': 'local-file-source', 'task': 0}],
+            'type': 'source'
         }
         source_info = self.cc.get_connector("local-file-source")
         assert expected_source_info == source_info, "Incorrect info:" + json.dumps(source_info)
@@ -116,7 +126,8 @@ class ConnectRestApiTest(KafkaTest):
         expected_sink_info = {
             'name': 'local-file-sink',
             'config': self._config_dict_from_props(sink_connector_props),
-            'tasks': [{'connector': 'local-file-sink', 'task': 0}]
+            'tasks': [{'connector': 'local-file-sink', 'task': 0}],
+            'type': 'sink'
         }
         sink_info = self.cc.get_connector("local-file-sink")
         assert expected_sink_info == sink_info, "Incorrect info:" + json.dumps(sink_info)
@@ -131,7 +142,8 @@ class ConnectRestApiTest(KafkaTest):
             'config': {
                 'task.class': 'org.apache.kafka.connect.file.FileStreamSourceTask',
                 'file': self.INPUT_FILE,
-                'topic': self.TOPIC
+                'topic': self.TOPIC,
+                'batch.size': self.DEFAULT_BATCH_SIZE
             }
         }]
         source_task_info = self.cc.get_connector_tasks("local-file-source")
@@ -171,10 +183,10 @@ class ConnectRestApiTest(KafkaTest):
 
     def file_contents(self, node, file):
         try:
-            # Convert to a list here or the CalledProcessError may be returned during a call to the generator instead of
+            # Convert to a list here or the RemoteCommandError may be returned during a call to the generator instead of
             # immediately
             return list(node.account.ssh_capture("cat " + file))
-        except subprocess.CalledProcessError:
+        except RemoteCommandError:
             return []
 
     def _config_dict_from_props(self, connector_props):

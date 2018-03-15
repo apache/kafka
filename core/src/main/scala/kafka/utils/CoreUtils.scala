@@ -22,18 +22,16 @@ import java.nio._
 import java.nio.channels._
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
-import java.util.UUID
+import java.util.{Properties, UUID}
 import javax.management._
-import javax.xml.bind.DatatypeConverter
-
-import org.apache.kafka.common.protocol.SecurityProtocol
 
 import scala.collection._
 import scala.collection.mutable
 import kafka.cluster.EndPoint
-import org.apache.kafka.common.utils.Crc32
-import org.apache.kafka.common.utils.Utils
-
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.utils.{Base64, KafkaThread, Utils}
+import org.slf4j.event.Level
 
 /**
  * General helper functions!
@@ -47,6 +45,12 @@ import org.apache.kafka.common.utils.Utils
  * 3. You have tests for it if it is nontrivial in any way
  */
 object CoreUtils extends Logging {
+
+  /**
+   * Return the smallest element in `traversable` if it is not empty. Otherwise return `ifEmpty`.
+   */
+  def min[A, B >: A](traversable: TraversableOnce[A], ifEmpty: A)(implicit cmp: Ordering[B]): A =
+    if (traversable.isEmpty) ifEmpty else traversable.min(cmp)
 
   /**
    * Wrap the given function in a java.lang.Runnable
@@ -67,18 +71,26 @@ object CoreUtils extends Logging {
     * @return The unstarted thread
     */
   def newThread(name: String, daemon: Boolean)(fun: => Unit): Thread =
-    Utils.newThread(name, runnable(fun), daemon)
+    new KafkaThread(name, runnable(fun), daemon)
 
   /**
-   * Do the given action and log any exceptions thrown without rethrowing them
-   * @param log The log method to use for logging. E.g. logger.warn
-   * @param action The action to execute
-   */
-  def swallow(log: (Object, Throwable) => Unit, action: => Unit) {
+    * Do the given action and log any exceptions thrown without rethrowing them.
+    *
+    * @param action The action to execute.
+    * @param logging The logging instance to use for logging the thrown exception.
+    * @param logLevel The log level to use for logging.
+    */
+  def swallow(action: => Unit, logging: Logging, logLevel: Level = Level.WARN) {
     try {
       action
     } catch {
-      case e: Throwable => log(e.getMessage(), e)
+      case e: Throwable => logLevel match {
+        case Level.ERROR => logger.error(e.getMessage, e)
+        case Level.WARN => logger.warn(e.getMessage, e)
+        case Level.INFO => logger.info(e.getMessage, e)
+        case Level.DEBUG => logger.debug(e.getMessage, e)
+        case Level.TRACE => logger.trace(e.getMessage, e)
+      }
     }
   }
 
@@ -87,6 +99,30 @@ object CoreUtils extends Logging {
    * @param files sequence of files to be deleted
    */
   def delete(files: Seq[String]): Unit = files.foreach(f => Utils.delete(new File(f)))
+
+  /**
+   * Invokes every function in `all` even if one or more functions throws an exception.
+   *
+   * If any of the functions throws an exception, the first one will be rethrown at the end with subsequent exceptions
+   * added as suppressed exceptions.
+   */
+  // Note that this is a generalised version of `Utils.closeAll`. We could potentially make it more general by
+  // changing the signature to `def tryAll[R](all: Seq[() => R]): Seq[R]`
+  def tryAll(all: Seq[() => Unit]): Unit = {
+    var exception: Throwable = null
+    all.foreach { element =>
+      try element.apply()
+      catch {
+        case e: Throwable =>
+          if (exception != null)
+            exception.addSuppressed(e)
+          else
+            exception = e
+      }
+    }
+    if (exception != null)
+      throw exception
+  }
 
   /**
    * Register the given mbean with the platform mbean server,
@@ -127,26 +163,6 @@ object CoreUtils extends Logging {
       if(mbs.isRegistered(objName))
         mbs.unregisterMBean(objName)
     }
-  }
-
-  /**
-   * Compute the CRC32 of the byte array
-   * @param bytes The array to compute the checksum for
-   * @return The CRC32
-   */
-  def crc32(bytes: Array[Byte]): Long = crc32(bytes, 0, bytes.length)
-
-  /**
-   * Compute the CRC32 of the segment of the byte array given by the specified size and offset
-   * @param bytes The bytes to checksum
-   * @param offset the offset at which to begin checksumming
-   * @param size the number of bytes to checksum
-   * @return The CRC32
-   */
-  def crc32(bytes: Array[Byte], offset: Int, size: Int): Long = {
-    val crc = new Crc32()
-    crc.update(bytes, offset, size)
-    crc.getValue()
   }
 
   /**
@@ -192,7 +208,7 @@ object CoreUtils extends Logging {
   /**
    * Create an instance of the class with the given class name
    */
-  def createObject[T<:AnyRef](className: String, args: AnyRef*): T = {
+  def createObject[T <: AnyRef](className: String, args: AnyRef*): T = {
     val klass = Class.forName(className, true, Utils.getContextOrKafkaClassLoader()).asInstanceOf[Class[T]]
     val constructor = klass.getConstructor(args.map(_.getClass): _*)
     constructor.newInstance(args: _*)
@@ -271,19 +287,36 @@ object CoreUtils extends Logging {
    */
   def duplicates[T](s: Traversable[T]): Iterable[T] = {
     s.groupBy(identity)
-      .map{ case (k,l) => (k,l.size)}
-      .filter{ case (k,l) => l > 1 }
+      .map { case (k, l) => (k, l.size)}
+      .filter { case (_, l) => l > 1 }
       .keys
   }
 
-  def listenerListToEndPoints(listeners: String): immutable.Map[SecurityProtocol, EndPoint] = {
-    val listenerList = parseCsvList(listeners)
-    listenerList.map(listener => EndPoint.createEndPoint(listener)).map(ep => ep.protocolType -> ep).toMap
+  def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[EndPoint] = {
+    def validate(endPoints: Seq[EndPoint]): Unit = {
+      // filter port 0 for unit tests
+      val portsExcludingZero = endPoints.map(_.port).filter(_ != 0)
+      val distinctPorts = portsExcludingZero.distinct
+      val distinctListenerNames = endPoints.map(_.listenerName).distinct
+
+      require(distinctPorts.size == portsExcludingZero.size, s"Each listener must have a different port, listeners: $listeners")
+      require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
+    }
+
+    val endPoints = try {
+      val listenerList = parseCsvList(listeners)
+      listenerList.map(EndPoint.createEndPoint(_, Some(securityProtocolMap)))
+    } catch {
+      case e: Exception =>
+        throw new IllegalArgumentException(s"Error creating broker listeners from '$listeners': ${e.getMessage}", e)
+    }
+    validate(endPoints)
+    endPoints
   }
 
   def generateUuidAsBase64(): String = {
     val uuid = UUID.randomUUID()
-    urlSafeBase64EncodeNoPadding(getBytesFromUuid(uuid))
+    Base64.urlEncoderNoPadding.encodeToString(getBytesFromUuid(uuid))
   }
 
   def getBytesFromUuid(uuid: UUID): Array[Byte] = {
@@ -294,11 +327,32 @@ object CoreUtils extends Logging {
     uuidBytes.array
   }
 
-  def urlSafeBase64EncodeNoPadding(data: Array[Byte]): String = {
-    val base64EncodedUUID = DatatypeConverter.printBase64Binary(data)
-    //Convert to URL safe variant by replacing + and / with - and _ respectively.
-    val urlSafeBase64EncodedUUID = base64EncodedUUID.replace("+", "-").replace("/", "_")
-    // Remove the "==" padding at the end.
-    urlSafeBase64EncodedUUID.substring(0, urlSafeBase64EncodedUUID.length - 2)
+  def propsWith(key: String, value: String): Properties = {
+    propsWith((key, value))
+  }
+
+  def propsWith(props: (String, String)*): Properties = {
+    val properties = new Properties()
+    props.foreach { case (k, v) => properties.put(k, v) }
+    properties
+  }
+
+  /**
+   * Atomic `getOrElseUpdate` for concurrent maps. This is optimized for the case where
+   * keys often exist in the map, avoiding the need to create a new value. `createValue`
+   * may be invoked more than once if multiple threads attempt to insert a key at the same
+   * time, but the same inserted value will be returned to all threads.
+   *
+   * In Scala 2.12, `ConcurrentMap.getOrElse` has the same behaviour as this method, but that
+   * is not the case in Scala 2.11. We can remove this method once we drop support for Scala
+   * 2.11.
+   */
+  def atomicGetOrUpdate[K, V](map: concurrent.Map[K, V], key: K, createValue: => V): V = {
+    map.get(key) match {
+      case Some(value) => value
+      case None =>
+        val value = createValue
+        map.putIfAbsent(key, value).getOrElse(value)
+    }
   }
 }

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,14 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.record;
 
-import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.ByteUtils;
 
 import net.jpountz.lz4.LZ4Compressor;
 import net.jpountz.lz4.LZ4Factory;
@@ -31,9 +29,11 @@ import net.jpountz.xxhash.XXHashFactory;
 /**
  * A partial implementation of the v1.5.1 LZ4 Frame format.
  *
- * @see <a href="http://cyan4973.github.io/lz4/lz4_Frame_format.html">LZ4 Frame Format</a>
+ * @see <a href="https://github.com/lz4/lz4/wiki/lz4_Frame_format.md">LZ4 Frame Format</a>
+ *
+ * This class is not thread-safe.
  */
-public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
+public final class KafkaLZ4BlockOutputStream extends OutputStream {
 
     public static final int MAGIC = 0x184D2204;
     public static final int LZ4_MAX_HEADER_LENGTH = 19;
@@ -51,9 +51,10 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
     private final boolean useBrokenFlagDescriptorChecksum;
     private final FLG flg;
     private final BD bd;
-    private final byte[] buffer;
-    private final byte[] compressedBuffer;
     private final int maxBlockSize;
+    private OutputStream out;
+    private byte[] buffer;
+    private byte[] compressedBuffer;
     private int bufferOffset;
     private boolean finished;
 
@@ -70,7 +71,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
      * @throws IOException
      */
     public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize, boolean blockChecksum, boolean useBrokenFlagDescriptorChecksum) throws IOException {
-        super(out);
+        this.out = out;
         compressor = LZ4Factory.fastestInstance().fastCompressor();
         checksum = XXHashFactory.fastestInstance().hash32();
         this.useBrokenFlagDescriptorChecksum = useBrokenFlagDescriptorChecksum;
@@ -139,7 +140,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
      * @throws IOException
      */
     private void writeHeader() throws IOException {
-        Utils.writeUnsignedIntLE(buffer, 0, MAGIC);
+        ByteUtils.writeUnsignedIntLE(buffer, 0, MAGIC);
         bufferOffset = 4;
         buffer[bufferOffset++] = flg.toByte();
         buffer[bufferOffset++] = bd.toByte();
@@ -183,13 +184,13 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
         }
 
         // Write content
-        Utils.writeUnsignedIntLE(out, compressedLength | compressMethod);
+        ByteUtils.writeUnsignedIntLE(out, compressedLength | compressMethod);
         out.write(bufferToWrite, 0, compressedLength);
 
         // Calculate and write block checksum
         if (flg.isBlockChecksumSet()) {
             int hash = checksum.hash(bufferToWrite, 0, compressedLength, 0);
-            Utils.writeUnsignedIntLE(out, hash);
+            ByteUtils.writeUnsignedIntLE(out, hash);
         }
         bufferOffset = 0;
     }
@@ -201,9 +202,8 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
      * @throws IOException
      */
     private void writeEndMark() throws IOException {
-        Utils.writeUnsignedIntLE(out, 0);
+        ByteUtils.writeUnsignedIntLE(out, 0);
         // TODO implement content checksum, update flg.validate()
-        finished = true;
     }
 
     @Override
@@ -258,14 +258,26 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
 
     @Override
     public void close() throws IOException {
-        if (!finished) {
-            writeEndMark();
-            flush();
-            finished = true;
-        }
-        if (out != null) {
-            out.close();
-            out = null;
+        try {
+            if (!finished) {
+                // basically flush the buffer writing the last block
+                writeBlock();
+                // write the end block
+                writeEndMark();
+            }
+        } finally {
+            try {
+                if (out != null) {
+                    try (OutputStream outStream = out) {
+                        outStream.flush();
+                    }
+                }
+            } finally {
+                out = null;
+                buffer = null;
+                compressedBuffer = null;
+                finished = true;
+            }
         }
     }
 

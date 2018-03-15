@@ -33,6 +33,7 @@ NUM_RECOVERY_THREADS_PER_DATA_DIR = "num.recovery.threads.per.data.dir"
 LOG_RETENTION_HOURS = "log.retention.hours"
 LOG_SEGMENT_BYTES = "log.segment.bytes"
 LOG_RETENTION_CHECK_INTERVAL_MS = "log.retention.check.interval.ms"
+LOG_RETENTION_MS = "log.retention.ms"
 LOG_CLEANER_ENABLE = "log.cleaner.enable"
 
 AUTO_CREATE_TOPICS_ENABLE = "auto.create.topics.enable"
@@ -42,7 +43,11 @@ ZOOKEEPER_CONNECTION_TIMEOUT_MS = "zookeeper.connection.timeout.ms"
 INTER_BROKER_PROTOCOL_VERSION = "inter.broker.protocol.version"
 MESSAGE_FORMAT_VERSION = "log.message.format.version"
 MESSAGE_TIMESTAMP_TYPE = "message.timestamp.type"
+THROTTLING_REPLICATION_RATE_LIMIT = "replication.quota.throttled.rate"
 
+LOG_FLUSH_INTERVAL_MESSAGE = "log.flush.interval.messages"
+REPLICA_HIGHWATERMARK_CHECKPOINT_INTERVAL_MS = "replica.high.watermark.checkpoint.interval.ms"
+LOG_ROLL_TIME_MS = "log.roll.ms"
 
 """
 From KafkaConfig.scala

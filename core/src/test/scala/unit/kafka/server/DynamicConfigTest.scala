@@ -16,43 +16,34 @@
   */
 package kafka.server
 
-import kafka.admin.AdminUtils
-import kafka.utils.TestUtils._
-import kafka.utils.ZkUtils
-import org.I0Itec.zkclient.ZkClient
+import kafka.utils.CoreUtils._
+import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.config._
-import org.easymock.EasyMock
-import org.junit.{Before, Test}
+import org.junit.Test
 
-class DynamicConfigTest {
+class DynamicConfigTest  extends ZooKeeperTestHarness {
   private final val nonExistentConfig: String = "some.config.that.does.not.exist"
   private final val someValue: String = "some interesting value"
 
-  var zkUtils: ZkUtils = _
-
-  @Before
-  def setUp() {
-    val zkClient = EasyMock.createMock(classOf[ZkClient])
-    zkUtils = ZkUtils(zkClient, isZkSecurityEnabled = false)
-  }
-
-  @Test(expected = classOf[IllegalArgumentException])
-  def shouldFailWhenChangingBrokerUnknownConfig() {
-    AdminUtils.changeBrokerConfig(zkUtils, Seq(0), wrapInProps(nonExistentConfig, someValue))
-  }
-
   @Test(expected = classOf[IllegalArgumentException])
   def shouldFailWhenChangingClientIdUnknownConfig() {
-    AdminUtils.changeClientIdConfig(zkUtils, "ClientId", wrapInProps(nonExistentConfig, someValue))
+    adminZkClient.changeClientIdConfig("ClientId", propsWith(nonExistentConfig, someValue))
   }
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldFailWhenChangingUserUnknownConfig() {
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, "UserId", wrapInProps(nonExistentConfig, someValue))
+    adminZkClient.changeUserOrUserClientIdConfig("UserId", propsWith(nonExistentConfig, someValue))
   }
 
   @Test(expected = classOf[ConfigException])
-  def shouldFailConfigsWithInvalidValues() {
-    AdminUtils.changeBrokerConfig(zkUtils, Seq(0), wrapInProps(DynamicConfig.Broker.ThrottledReplicationRateLimitProp, "-100"))
+  def shouldFailLeaderConfigsWithInvalidValues() {
+    adminZkClient.changeBrokerConfig(Seq(0),
+      propsWith(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "-100"))
+  }
+
+  @Test(expected = classOf[ConfigException])
+  def shouldFailFollowerConfigsWithInvalidValues() {
+    adminZkClient.changeBrokerConfig(Seq(0),
+      propsWith(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "-100"))
   }
 }

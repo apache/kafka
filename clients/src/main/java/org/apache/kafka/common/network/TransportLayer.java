@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.network;
 
 /*
@@ -26,12 +25,14 @@ package org.apache.kafka.common.network;
  */
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.ScatteringByteChannel;
 import java.nio.channels.GatheringByteChannel;
 
 import java.security.Principal;
 
+import org.apache.kafka.common.errors.AuthenticationException;
 
 public interface TransportLayer extends ScatteringByteChannel, GatheringByteChannel {
 
@@ -60,13 +61,19 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
      */
     SocketChannel socketChannel();
 
+    /**
+     * Get the underlying selection key
+     */
+    SelectionKey selectionKey();
 
     /**
-     * Performs SSL handshake hence is a no-op for the non-secure
-     * implementation
-     * @throws IOException
+     * This a no-op for the non-secure PLAINTEXT implementation. For SSL, this performs
+     * SSL handshake. The SSL handshake includes client authentication if configured using
+     * {@link org.apache.kafka.common.config.SslConfigs#SSL_CLIENT_AUTH_CONFIG}.
+     * @throws AuthenticationException if handshake fails due to an {@link javax.net.ssl.SSLException}.
+     * @throws IOException if read or write fails with an I/O error.
     */
-    void handshake() throws IOException;
+    void handshake() throws AuthenticationException, IOException;
 
     /**
      * Returns true if there are any pending writes
@@ -86,6 +93,11 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
     boolean isMute();
 
     /**
+     * @return true if channel has bytes to be read in any intermediate buffers
+     */
+    boolean hasBytesBuffered();
+
+    /**
      * Transfers bytes from `fileChannel` to this `TransportLayer`.
      *
      * This method will delegate to {@link FileChannel#transferTo(long, long, java.nio.channels.WritableByteChannel)},
@@ -100,5 +112,4 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
      * @see FileChannel#transferTo(long, long, java.nio.channels.WritableByteChannel)
      */
     long transferFrom(FileChannel fileChannel, long position, long count) throws IOException;
-
 }

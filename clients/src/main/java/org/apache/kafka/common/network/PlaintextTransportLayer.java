@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.network;
 
 /*
@@ -65,6 +64,11 @@ public class PlaintextTransportLayer implements TransportLayer {
     }
 
     @Override
+    public SelectionKey selectionKey() {
+        return key;
+    }
+
+    @Override
     public boolean isOpen() {
         return socketChannel.isOpen();
     }
@@ -74,20 +78,10 @@ public class PlaintextTransportLayer implements TransportLayer {
         return socketChannel.isConnected();
     }
 
-    /**
-     * Closes this channel
-     *
-     * @throws IOException If I/O error occurs
-     */
     @Override
     public void close() throws IOException {
-        try {
-            socketChannel.socket().close();
-            socketChannel.close();
-        } finally {
-            key.attach(null);
-            key.cancel();
-        }
+        socketChannel.socket().close();
+        socketChannel.close();
     }
 
     /**
@@ -192,7 +186,6 @@ public class PlaintextTransportLayer implements TransportLayer {
 
     /**
      * Adds the interestOps to selectionKey.
-     * @param ops
      */
     @Override
     public void addInterestOps(int ops) {
@@ -202,7 +195,6 @@ public class PlaintextTransportLayer implements TransportLayer {
 
     /**
      * Removes the interestOps from selectionKey.
-     * @param ops
      */
     @Override
     public void removeInterestOps(int ops) {
@@ -212,6 +204,11 @@ public class PlaintextTransportLayer implements TransportLayer {
     @Override
     public boolean isMute() {
         return key.isValid() && (key.interestOps() & SelectionKey.OP_READ) == 0;
+    }
+
+    @Override
+    public boolean hasBytesBuffered() {
+        return false;
     }
 
     @Override

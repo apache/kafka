@@ -1,36 +1,45 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.metrics;
+
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.utils.KafkaThread;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A registry of sensors and metrics.
@@ -97,7 +106,7 @@ public class Metrics implements Closeable {
      * @param defaultConfig The default config to use for all metrics that don't override their config
      */
     public Metrics(MetricConfig defaultConfig) {
-        this(defaultConfig, new ArrayList<MetricsReporter>(0), new SystemTime());
+        this(defaultConfig, new ArrayList<MetricsReporter>(0), Time.SYSTEM);
     }
 
     /**
@@ -134,7 +143,7 @@ public class Metrics implements Closeable {
             // Creating a daemon thread to not block shutdown
             this.metricsScheduler.setThreadFactory(new ThreadFactory() {
                 public Thread newThread(Runnable runnable) {
-                    return Utils.newThread("SensorExpiryThread", runnable, true);
+                    return KafkaThread.daemon("SensorExpiryThread", runnable);
                 }
             });
             this.metricsScheduler.scheduleAtFixedRate(new ExpireSensorTask(), 30, 30, TimeUnit.SECONDS);
@@ -223,6 +232,75 @@ public class Metrics implements Closeable {
         return tags;
     }
 
+    /**
+     * Use the specified domain and metric name templates to generate an HTML table documenting the metrics. A separate table section
+     * will be generated for each of the MBeans and the associated attributes. The MBean names are lexicographically sorted to
+     * determine the order of these sections. This order is therefore dependent upon the order of the
+     * tags in each {@link MetricNameTemplate}.
+     *
+     * @param domain the domain or prefix for the JMX MBean names; may not be null
+     * @param allMetrics the collection of all {@link MetricNameTemplate} instances each describing one metric; may not be null
+     * @return the string containing the HTML table; never null
+     */
+    public static String toHtmlTable(String domain, Iterable<MetricNameTemplate> allMetrics) {
+        Map<String, Map<String, String>> beansAndAttributes = new TreeMap<String, Map<String, String>>();
+    
+        try (Metrics metrics = new Metrics()) {
+            for (MetricNameTemplate template : allMetrics) {
+                Map<String, String> tags = new LinkedHashMap<>();
+                for (String s : template.tags()) {
+                    tags.put(s, "{" + s + "}");
+                }
+    
+                MetricName metricName = metrics.metricName(template.name(), template.group(), template.description(), tags);
+                String mBeanName = JmxReporter.getMBeanName(domain, metricName);
+                if (!beansAndAttributes.containsKey(mBeanName)) {
+                    beansAndAttributes.put(mBeanName, new TreeMap<String, String>());
+                }
+                Map<String, String> attrAndDesc = beansAndAttributes.get(mBeanName);
+                if (!attrAndDesc.containsKey(template.name())) {
+                    attrAndDesc.put(template.name(), template.description());
+                } else {
+                    throw new IllegalArgumentException("mBean '" + mBeanName + "' attribute '" + template.name() + "' is defined twice.");
+                }
+            }
+        }
+        
+        StringBuilder b = new StringBuilder();
+        b.append("<table class=\"data-table\"><tbody>\n");
+    
+        for (Entry<String, Map<String, String>> e : beansAndAttributes.entrySet()) {
+            b.append("<tr>\n");
+            b.append("<td colspan=3 class=\"mbeanName\" style=\"background-color:#ccc; font-weight: bold;\">");
+            b.append(e.getKey());
+            b.append("</td>");
+            b.append("</tr>\n");
+            
+            b.append("<tr>\n");
+            b.append("<th style=\"width: 90px\"></th>\n");
+            b.append("<th>Attribute name</th>\n");
+            b.append("<th>Description</th>\n");
+            b.append("</tr>\n");
+            
+            for (Entry<String, String> e2 : e.getValue().entrySet()) {
+                b.append("<tr>\n");
+                b.append("<td></td>");
+                b.append("<td>");
+                b.append(e2.getKey());
+                b.append("</td>");
+                b.append("<td>");
+                b.append(e2.getValue());
+                b.append("</td>");
+                b.append("</tr>\n");
+            }
+    
+        }
+        b.append("</tbody></table>");
+    
+        return b.toString();
+    
+    }
+
     public MetricConfig config() {
         return config;
     }
@@ -237,35 +315,74 @@ public class Metrics implements Closeable {
     }
 
     /**
-     * Get or create a sensor with the given unique name and no parent sensors.
+     * Get or create a sensor with the given unique name and no parent sensors. This uses
+     * a default recording level of INFO.
      * @param name The sensor name
      * @return The sensor
      */
     public Sensor sensor(String name) {
-        return sensor(name, null, (Sensor[]) null);
+        return this.sensor(name, Sensor.RecordingLevel.INFO);
     }
 
     /**
+     * Get or create a sensor with the given unique name and no parent sensors and with a given
+     * recording level.
+     * @param name The sensor name.
+     * @param recordingLevel The recording level.
+     * @return The sensor
+     */
+    public Sensor sensor(String name, Sensor.RecordingLevel recordingLevel) {
+        return sensor(name, null, recordingLevel, (Sensor[]) null);
+    }
+
+
+    /**
      * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
-     * receive every value recorded with this sensor.
+     * receive every value recorded with this sensor. This uses a default recording level of INFO.
      * @param name The name of the sensor
      * @param parents The parent sensors
      * @return The sensor that is created
      */
     public Sensor sensor(String name, Sensor... parents) {
-        return sensor(name, null, parents);
+        return this.sensor(name, Sensor.RecordingLevel.INFO, parents);
     }
 
     /**
      * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
      * receive every value recorded with this sensor.
+     * @param name The name of the sensor.
+     * @param parents The parent sensors.
+     * @param recordingLevel The recording level.
+     * @return The sensor that is created
+     */
+    public Sensor sensor(String name, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
+        return sensor(name, null, recordingLevel, parents);
+    }
+
+    /**
+     * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
+     * receive every value recorded with this sensor. This uses a default recording level of INFO.
      * @param name The name of the sensor
      * @param config A default configuration to use for this sensor for metrics that don't have their own config
      * @param parents The parent sensors
      * @return The sensor that is created
      */
     public synchronized Sensor sensor(String name, MetricConfig config, Sensor... parents) {
-        return sensor(name, config, Long.MAX_VALUE, parents);
+        return this.sensor(name, config, Sensor.RecordingLevel.INFO, parents);
+    }
+
+
+    /**
+     * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
+     * receive every value recorded with this sensor.
+     * @param name The name of the sensor
+     * @param config A default configuration to use for this sensor for metrics that don't have their own config
+     * @param recordingLevel The recording level.
+     * @param parents The parent sensors
+     * @return The sensor that is created
+     */
+    public synchronized Sensor sensor(String name, MetricConfig config, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
+        return sensor(name, config, Long.MAX_VALUE, recordingLevel, parents);
     }
 
     /**
@@ -276,12 +393,13 @@ public class Metrics implements Closeable {
      * @param inactiveSensorExpirationTimeSeconds If no value if recorded on the Sensor for this duration of time,
      *                                        it is eligible for removal
      * @param parents The parent sensors
+     * @param recordingLevel The recording level.
      * @return The sensor that is created
      */
-    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor... parents) {
+    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
         Sensor s = getSensor(name);
         if (s == null) {
-            s = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds);
+            s = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds, recordingLevel);
             this.sensors.put(name, s);
             if (parents != null) {
                 for (Sensor parent : parents) {
@@ -296,6 +414,20 @@ public class Metrics implements Closeable {
             log.debug("Added sensor with name {}", name);
         }
         return s;
+    }
+
+    /**
+     * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
+     * receive every value recorded with this sensor. This uses a default recording level of INFO.
+     * @param name The name of the sensor
+     * @param config A default configuration to use for this sensor for metrics that don't have their own config
+     * @param inactiveSensorExpirationTimeSeconds If no value if recorded on the Sensor for this duration of time,
+     *                                        it is eligible for removal
+     * @param parents The parent sensors
+     * @return The sensor that is created
+     */
+    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor... parents) {
+        return this.sensor(name, config, inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel.INFO, parents);
     }
 
     /**
@@ -327,6 +459,10 @@ public class Metrics implements Closeable {
     /**
      * Add a metric to monitor an object that implements measurable. This metric won't be associated with any sensor.
      * This is a way to expose existing values as metrics.
+     *
+     * This method is kept for binary compatibility purposes, it has the same behaviour as
+     * {@link #addMetric(MetricName, MetricValueProvider)}.
+     *
      * @param metricName The name of the metric
      * @param measurable The measurable that will be measured by this metric
      */
@@ -335,19 +471,45 @@ public class Metrics implements Closeable {
     }
 
     /**
-     * Add a metric to monitor an object that implements measurable. This metric won't be associated with any sensor.
+     * Add a metric to monitor an object that implements Measurable. This metric won't be associated with any sensor.
      * This is a way to expose existing values as metrics.
+     *
+     * This method is kept for binary compatibility purposes, it has the same behaviour as
+     * {@link #addMetric(MetricName, MetricConfig, MetricValueProvider)}.
+     *
      * @param metricName The name of the metric
      * @param config The configuration to use when measuring this measurable
      * @param measurable The measurable that will be measured by this metric
      */
-    public synchronized void addMetric(MetricName metricName, MetricConfig config, Measurable measurable) {
+    public void addMetric(MetricName metricName, MetricConfig config, Measurable measurable) {
+        addMetric(metricName, config, (MetricValueProvider<?>) measurable);
+    }
+
+    /**
+     * Add a metric to monitor an object that implements MetricValueProvider. This metric won't be associated with any
+     * sensor. This is a way to expose existing values as metrics.
+     *
+     * @param metricName The name of the metric
+     * @param metricValueProvider The metric value provider associated with this metric
+     */
+    public void addMetric(MetricName metricName, MetricConfig config, MetricValueProvider<?> metricValueProvider) {
         KafkaMetric m = new KafkaMetric(new Object(),
                                         Utils.notNull(metricName),
-                                        Utils.notNull(measurable),
+                                        Utils.notNull(metricValueProvider),
                                         config == null ? this.config : config,
                                         time);
         registerMetric(m);
+    }
+
+    /**
+     * Add a metric to monitor an object that implements MetricValueProvider. This metric won't be associated with any
+     * sensor. This is a way to expose existing values as metrics.
+     *
+     * @param metricName The name of the metric
+     * @param metricValueProvider The metric value provider associated with this metric
+     */
+    public void addMetric(MetricName metricName, MetricValueProvider<?> metricValueProvider) {
+        addMetric(metricName, null, metricValueProvider);
     }
 
     /**
@@ -374,6 +536,15 @@ public class Metrics implements Closeable {
         this.reporters.add(reporter);
     }
 
+    /**
+     * Remove a MetricReporter
+     */
+    public synchronized void removeReporter(MetricsReporter reporter) {
+        if (this.reporters.remove(reporter)) {
+            reporter.close();
+        }
+    }
+
     synchronized void registerMetric(KafkaMetric metric) {
         MetricName metricName = metric.metricName();
         if (this.metrics.containsKey(metricName))
@@ -388,6 +559,14 @@ public class Metrics implements Closeable {
      */
     public Map<MetricName, KafkaMetric> metrics() {
         return this.metrics;
+    }
+
+    public List<MetricsReporter> reporters() {
+        return this.reporters;
+    }
+
+    public KafkaMetric metric(MetricName metricName) {
+        return this.metrics.get(metricName);
     }
 
     /**
@@ -419,6 +598,25 @@ public class Metrics implements Closeable {
         return Collections.unmodifiableMap(childrenSensors);
     }
 
+    public MetricName metricInstance(MetricNameTemplate template, String... keyValue) {
+        return metricInstance(template, getTags(keyValue));
+    }
+
+    public MetricName metricInstance(MetricNameTemplate template, Map<String, String> tags) {
+        // check to make sure that the runtime defined tags contain all the template tags.
+        Set<String> runtimeTagKeys = new HashSet<>(tags.keySet());
+        runtimeTagKeys.addAll(config().tags().keySet());
+        
+        Set<String> templateTagKeys = template.tags();
+        
+        if (!runtimeTagKeys.equals(templateTagKeys)) {
+            throw new IllegalArgumentException("For '" + template.name() + "', runtime-defined metric tags do not match the tags in the template. "
+                    + "Runtime = " + runtimeTagKeys.toString() + " Template = " + templateTagKeys.toString());
+        }
+                
+        return this.metricName(template.name(), template.group(), template.description(), tags);
+    }
+
     /**
      * Close this metrics repository.
      */
@@ -430,6 +628,7 @@ public class Metrics implements Closeable {
                 this.metricsScheduler.awaitTermination(30, TimeUnit.SECONDS);
             } catch (InterruptedException ex) {
                 // ignore and continue shutdown
+                Thread.currentThread().interrupt();
             }
         }
 

@@ -17,7 +17,6 @@
 
 package kafka.metrics
 
-
 import java.util.concurrent.TimeUnit
 
 import com.yammer.metrics.Metrics
@@ -25,8 +24,10 @@ import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.consumer.{ConsumerTopicStatsRegistry, FetchRequestAndResponseStatsRegistry}
 import kafka.producer.{ProducerRequestStatsRegistry, ProducerStatsRegistry, ProducerTopicStatsRegistry}
 import kafka.utils.Logging
+import org.apache.kafka.common.utils.Sanitizer
 
 import scala.collection.immutable
+import scala.collection.JavaConverters._
 
 
 trait KafkaMetricsGroup extends Logging {
@@ -38,7 +39,7 @@ trait KafkaMetricsGroup extends Logging {
    * @param tags Additional attributes which mBean will have.
    * @return Sanitized metric name object.
    */
-  private def metricName(name: String, tags: scala.collection.Map[String, String] = Map.empty) = {
+  def metricName(name: String, tags: scala.collection.Map[String, String]): MetricName = {
     val klass = this.getClass
     val pkg = if (klass.getPackage == null) "" else klass.getPackage.getName
     val simpleName = klass.getSimpleName.replaceAll("\\$$", "")
@@ -47,7 +48,9 @@ trait KafkaMetricsGroup extends Logging {
   }
 
 
-  private def explicitMetricName(group: String, typeName: String, name: String, tags: scala.collection.Map[String, String] = Map.empty) = {
+  protected def explicitMetricName(group: String, typeName: String, name: String,
+                                   tags: scala.collection.Map[String, String]): MetricName = {
+
     val nameBuilder: StringBuilder = new StringBuilder
 
     nameBuilder.append(group)
@@ -63,13 +66,9 @@ trait KafkaMetricsGroup extends Logging {
 
     val scope: String = KafkaMetricsGroup.toScope(tags).getOrElse(null)
     val tagsName = KafkaMetricsGroup.toMBeanName(tags)
-    tagsName match {
-      case Some(tn) =>
-        nameBuilder.append(",").append(tn)
-      case None =>
-    }
+    tagsName.foreach(nameBuilder.append(",").append(_))
 
-    new MetricName(group, typeName, name, scope, nameBuilder.toString())
+    new MetricName(group, typeName, name, scope, nameBuilder.toString)
   }
 
   def newGauge[T](name: String, metric: Gauge[T], tags: scala.collection.Map[String, String] = Map.empty) =
@@ -154,23 +153,16 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
   )
 
   private def toMBeanName(tags: collection.Map[String, String]): Option[String] = {
-    val filteredTags = tags
-      .filter { case (tagKey, tagValue) => tagValue != ""}
+    val filteredTags = tags.filter { case (_, tagValue) => tagValue != "" }
     if (filteredTags.nonEmpty) {
-      val tagsString = filteredTags
-        .map { case (key, value) => "%s=%s".format(key, value)}
-        .mkString(",")
-
+      val tagsString = filteredTags.map { case (key, value) => "%s=%s".format(key, Sanitizer.jmxSanitize(value)) }.mkString(",")
       Some(tagsString)
     }
-    else {
-      None
-    }
+    else None
   }
 
   private def toScope(tags: collection.Map[String, String]): Option[String] = {
-    val filteredTags = tags
-      .filter { case (tagKey, tagValue) => tagValue != ""}
+    val filteredTags = tags.filter { case (_, tagValue) => tagValue != ""}
     if (filteredTags.nonEmpty) {
       // convert dot to _ since reporters like Graphite typically use dot to represent hierarchy
       val tagsString = filteredTags
@@ -180,11 +172,10 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
 
       Some(tagsString)
     }
-    else {
-      None
-    }
+    else None
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
   def removeAllConsumerMetrics(clientId: String) {
     FetchRequestAndResponseStatsRegistry.removeConsumerFetchRequestAndResponseStats(clientId)
     ConsumerTopicStatsRegistry.removeConsumerTopicStat(clientId)
@@ -203,7 +194,7 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
   private def removeAllMetricsInList(metricNameList: immutable.List[MetricName], clientId: String) {
     metricNameList.foreach(metric => {
       val pattern = (".*clientId=" + clientId + ".*").r
-      val registeredMetrics = scala.collection.JavaConversions.asScalaSet(Metrics.defaultRegistry().allMetrics().keySet())
+      val registeredMetrics = Metrics.defaultRegistry().allMetrics().keySet().asScala
       for (registeredMetric <- registeredMetrics) {
         if (registeredMetric.getGroup == metric.getGroup &&
           registeredMetric.getName == metric.getName &&

@@ -28,7 +28,7 @@ object TopicMetadata {
   val NoLeaderNodeId = -1
 
   def readFrom(buffer: ByteBuffer, brokers: Map[Int, BrokerEndPoint]): TopicMetadata = {
-    val errorCode = readShortInRange(buffer, "error code", (-1, Short.MaxValue))
+    val error = Errors.forCode(readShortInRange(buffer, "error code", (-1, Short.MaxValue)))
     val topic = readShortString(buffer)
     val numPartitions = readIntInRange(buffer, "number of partitions", (0, Int.MaxValue))
     val partitionsMetadata: Array[PartitionMetadata] = new Array[PartitionMetadata](numPartitions)
@@ -36,11 +36,11 @@ object TopicMetadata {
       val partitionMetadata = PartitionMetadata.readFrom(buffer, brokers)
       partitionsMetadata(i) = partitionMetadata
     }
-    new TopicMetadata(topic, partitionsMetadata, errorCode)
+    new TopicMetadata(topic, partitionsMetadata, error)
   }
 }
 
-case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadata], errorCode: Short = Errors.NONE.code) extends Logging {
+case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadata], error: Errors = Errors.NONE) extends Logging {
   def sizeInBytes: Int = {
     2 /* error code */ +
     shortStringLength(topic) +
@@ -49,7 +49,7 @@ case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadat
 
   def writeTo(buffer: ByteBuffer) {
     /* error code */
-    buffer.putShort(errorCode)
+    buffer.putShort(error.code)
     /* topic */
     writeShortString(buffer, topic)
     /* number of partitions */
@@ -60,10 +60,10 @@ case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadat
   override def toString: String = {
     val topicMetadataInfo = new StringBuilder
     topicMetadataInfo.append("{TopicMetadata for topic %s -> ".format(topic))
-    Errors.forCode(errorCode) match {
+    error match {
       case Errors.NONE =>
         partitionsMetadata.foreach { partitionMetadata =>
-          Errors.forCode(partitionMetadata.errorCode) match {
+          partitionMetadata.error match {
             case Errors.NONE =>
               topicMetadataInfo.append("\nMetadata for partition [%s,%d] is %s".format(topic,
                 partitionMetadata.partitionId, partitionMetadata.toString()))
@@ -89,7 +89,7 @@ case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadat
 object PartitionMetadata {
 
   def readFrom(buffer: ByteBuffer, brokers: Map[Int, BrokerEndPoint]): PartitionMetadata = {
-    val errorCode = readShortInRange(buffer, "error code", (-1, Short.MaxValue))
+    val error = Errors.forCode(readShortInRange(buffer, "error code", (-1, Short.MaxValue)))
     val partitionId = readIntInRange(buffer, "partition id", (0, Int.MaxValue)) /* partition id */
     val leaderId = buffer.getInt
     val leader = brokers.get(leaderId)
@@ -104,7 +104,7 @@ object PartitionMetadata {
     val isrIds = (0 until numIsr).map(_ => buffer.getInt)
     val isr = isrIds.map(brokers)
 
-    new PartitionMetadata(partitionId, leader, replicas, isr, errorCode)
+    new PartitionMetadata(partitionId, leader, replicas, isr, error)
   }
 }
 
@@ -112,7 +112,7 @@ case class PartitionMetadata(partitionId: Int,
                              leader: Option[BrokerEndPoint],
                              replicas: Seq[BrokerEndPoint],
                              isr: Seq[BrokerEndPoint] = Seq.empty,
-                             errorCode: Short = Errors.NONE.code) extends Logging {
+                             error: Errors = Errors.NONE) extends Logging {
   def sizeInBytes: Int = {
     2 /* error code */ +
     4 /* partition id */ +
@@ -122,11 +122,11 @@ case class PartitionMetadata(partitionId: Int,
   }
 
   def writeTo(buffer: ByteBuffer) {
-    buffer.putShort(errorCode)
+    buffer.putShort(error.code)
     buffer.putInt(partitionId)
 
     /* leader */
-    val leaderId = if(leader.isDefined) leader.get.id else TopicMetadata.NoLeaderNodeId
+    val leaderId = leader.fold(TopicMetadata.NoLeaderNodeId)(leader => leader.id)
     buffer.putInt(leaderId)
 
     /* number of replicas */
@@ -141,10 +141,10 @@ case class PartitionMetadata(partitionId: Int,
   override def toString: String = {
     val partitionMetadataString = new StringBuilder
     partitionMetadataString.append("\tpartition " + partitionId)
-    partitionMetadataString.append("\tleader: " + (if(leader.isDefined) leader.get.toString else "none"))
+    partitionMetadataString.append("\tleader: " + leader.getOrElse("none"))
     partitionMetadataString.append("\treplicas: " + replicas.mkString(","))
     partitionMetadataString.append("\tisr: " + isr.mkString(","))
-    partitionMetadataString.append("\tisUnderReplicated: %s".format(if(isr.size < replicas.size) "true" else "false"))
+    partitionMetadataString.append("\tisUnderReplicated: " + (isr.size < replicas.size))
     partitionMetadataString.toString()
   }
 

@@ -34,7 +34,8 @@ class KafkaLog4jAppender(KafkaPathResolverMixin, BackgroundThreadService):
         self.topic = topic
         self.max_messages = max_messages
         self.security_protocol = security_protocol
-        self.security_config = SecurityConfig(security_protocol)
+        self.security_config = SecurityConfig(self.context, security_protocol)
+        self.stop_timeout_sec = 30
 
     def _worker(self, idx, node):
         cmd = self.start_cmd(node)
@@ -44,7 +45,8 @@ class KafkaLog4jAppender(KafkaPathResolverMixin, BackgroundThreadService):
 
     def start_cmd(self, node):
         cmd = self.path.script("kafka-run-class.sh", node)
-        cmd += " org.apache.kafka.tools.VerifiableLog4jAppender"
+        cmd += " "
+        cmd += self.java_class_name()
         cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_protocol))
 
         if self.max_messages > 0:
@@ -66,12 +68,16 @@ class KafkaLog4jAppender(KafkaPathResolverMixin, BackgroundThreadService):
         return cmd
 
     def stop_node(self, node):
-        node.account.kill_process("VerifiableLog4jAppender", allow_fail=False)
+        node.account.kill_java_processes(self.java_class_name(), allow_fail=False)
 
         stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
         assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
                         (str(node.account), str(self.stop_timeout_sec))
 
     def clean_node(self, node):
-        node.account.kill_process("VerifiableLog4jAppender", clean_shutdown=False, allow_fail=False)
+        node.account.kill_java_processes(self.java_class_name(), clean_shutdown=False,
+                                         allow_fail=False)
         node.account.ssh("rm -rf /mnt/kafka_log4j_appender.log", allow_fail=False)
+
+    def java_class_name(self):
+        return "org.apache.kafka.tools.VerifiableLog4jAppender"

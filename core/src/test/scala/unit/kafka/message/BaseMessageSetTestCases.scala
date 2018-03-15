@@ -23,12 +23,12 @@ import java.nio.file.StandardOpenOption
 
 import org.junit.Assert._
 import kafka.utils.TestUtils._
-import kafka.log.FileMessageSet
-import kafka.utils.TestUtils
+import org.apache.kafka.common.record.FileRecords
 import org.scalatest.junit.JUnitSuite
 import org.junit.Test
 
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.JavaConverters._
 
 trait BaseMessageSetTestCases extends JUnitSuite {
 
@@ -63,7 +63,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   @Test
   def testWrittenEqualsRead() {
     val messageSet = createMessageSet(messages)
-    checkEquals(messages.iterator, messageSet.map(m => m.message).iterator)
+    assertEquals(messages.toVector, messageSet.toVector.map(m => m.message))
   }
 
   @Test
@@ -94,7 +94,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   @Test
   def testWriteToChannelThatConsumesPartially() {
     val bytesToConsumePerBuffer = 50
-    val messages = (0 until 10).map(_ => new Message(TestUtils.randomString(100).getBytes))
+    val messages = (0 until 10).map(_ => new Message(randomString(100).getBytes))
     val messageSet = createMessageSet(messages)
     val messageSetSize = messageSet.sizeInBytes
 
@@ -103,7 +103,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
     var remaining = messageSetSize
     var iterations = 0
     while (remaining > 0) {
-      remaining -= messageSet.writeTo(channel, messageSetSize - remaining, remaining)
+      remaining -= messageSet.asRecords.writeTo(channel, messageSetSize - remaining, remaining).toInt
       iterations += 1
     }
 
@@ -112,7 +112,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   }
 
   def checkWriteToWithMessageSet(messageSet: MessageSet) {
-    checkWriteWithMessageSet(messageSet, messageSet.writeTo(_, 0, messageSet.sizeInBytes))
+    checkWriteWithMessageSet(messageSet, messageSet.asRecords.writeTo(_, 0, messageSet.sizeInBytes))
   }
 
   def checkWriteWithMessageSet(set: MessageSet, write: GatheringByteChannel => Long) {
@@ -123,11 +123,11 @@ trait BaseMessageSetTestCases extends JUnitSuite {
       try {
         val written = write(channel)
         assertEquals("Expect to write the number of bytes in the set.", set.sizeInBytes, written)
-        val newSet = new FileMessageSet(file, channel)
-        checkEquals(set.iterator, newSet.iterator)
+        val fileRecords = new FileRecords(file, channel, 0, Integer.MAX_VALUE, false)
+        assertEquals(set.asRecords.records.asScala.toVector, fileRecords.records.asScala.toVector)
+        checkEquals(set.asRecords.records.iterator, fileRecords.records.iterator)
       } finally channel.close()
     }
   }
   
 }
-

@@ -19,18 +19,16 @@ package kafka.server
 
 import java.util.Properties
 
-import kafka.admin.AdminUtils
-import kafka.admin.AdminUtils._
-import kafka.common._
 import kafka.log.LogConfig._
 import kafka.server.KafkaConfig.fromProps
 import kafka.server.QuotaType._
-import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
+import kafka.utils.CoreUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.{After, Test}
 import scala.collection.JavaConverters._
 
 /**
@@ -42,7 +40,6 @@ import scala.collection.JavaConverters._
   *
   * Anything over 100MB/s tends to fail as this is the non-throttled replication rate
   */
-
 class ReplicationQuotasTest extends ZooKeeperTestHarness {
   def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100)
 
@@ -51,15 +48,10 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
   val topic = "topic1"
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
 
-  @Before
-  override def setUp() {
-    super.setUp()
-  }
-
   @After
   override def tearDown() {
-    brokers.par.foreach(_.shutdown())
     producer.close()
+    shutdownServers(brokers)
     super.tearDown()
   }
 
@@ -86,7 +78,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     //Given six partitions, led on nodes 0,1,2,3,4,5 but with followers on node 6,7 (not started yet)
     //And two extra partitions 6,7, which we don't intend on throttling.
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, Map(
+    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, Map(
       0 -> Seq(100, 106), //Throttled
       1 -> Seq(101, 106), //Throttled
       2 -> Seq(102, 106), //Throttled
@@ -105,16 +97,22 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     //Set the throttle limit on all 8 brokers, but only assign throttled replicas to the six leaders, or two followers
     (100 to 107).foreach { brokerId =>
-      changeBrokerConfig(zkUtils, Seq(brokerId), wrapInProps(DynamicConfig.Broker.ThrottledReplicationRateLimitProp, throttle.toString))
+      adminZkClient.changeBrokerConfig(Seq(brokerId),
+        propsWith(
+          (DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttle.toString),
+          (DynamicConfig.Broker.FollowerReplicationThrottledRateProp, throttle.toString)
+        ))
     }
 
     //Either throttle the six leaders or the two followers
-    val throttledReplicas = if (leaderThrottle) "0:100,1:101,2:102,3:103,4:104,5:105" else "0:106,1:106,2:106,3:107,4:107,5:107"
-    changeTopicConfig(zkUtils, topic, wrapInProps(ThrottledReplicasListProp, throttledReplicas))
+    if (leaderThrottle)
+      adminZkClient.changeTopicConfig(topic, propsWith(LeaderReplicationThrottledReplicasProp, "0:100,1:101,2:102,3:103,4:104,5:105" ))
+    else
+      adminZkClient.changeTopicConfig(topic, propsWith(FollowerReplicationThrottledReplicasProp, "0:106,1:106,2:106,3:107,4:107,5:107"))
 
     //Add data equally to each partition
-    producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
-    (0 until msgCount).foreach { x =>
+    producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 1)
+    (0 until msgCount).foreach { _ =>
       (0 to 7).foreach { partition =>
         producer.send(new ProducerRecord(topic, partition, null, msg))
       }
@@ -166,7 +164,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     assertTrue(s"Expected ${rate} > $rateLowerBound", rate > rateLowerBound)
   }
 
-  def tp(partition: Int): TopicAndPartition = new TopicAndPartition(topic, partition)
+  def tp(partition: Int): TopicPartition = new TopicPartition(topic, partition)
 
   @Test
   def shouldThrottleOldSegments(): Unit = {
@@ -178,7 +176,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     val config: Properties = createBrokerConfig(100, zkConnect)
     config.put("log.segment.bytes", (1024 * 1024).toString)
     brokers = Seq(createServer(fromProps(config)))
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, Map(0 -> Seq(100, 101)))
+    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, Map(0 -> Seq(100, 101)))
 
     //Write 20MBs and throttle at 5MB/s
     val msg = msg100KB
@@ -186,9 +184,9 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     val expectedDuration = 4
     val throttle: Long = msg.length * msgCount / expectedDuration
 
-    //Set the throttle limit leader
-    changeBrokerConfig(zkUtils, Seq(100), wrapInProps(DynamicConfig.Broker.ThrottledReplicationRateLimitProp, throttle.toString))
-    changeTopicConfig(zkUtils, topic, wrapInProps(ThrottledReplicasListProp, "0:100"))
+    //Set the throttle to only limit leader
+    adminZkClient.changeBrokerConfig(Seq(100), propsWith(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttle.toString))
+    adminZkClient.changeTopicConfig(topic, propsWith(LeaderReplicationThrottledReplicasProp, "0:100"))
 
     //Add data
     addData(msgCount, msg)
@@ -196,6 +194,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     val start = System.currentTimeMillis()
 
     //Start the new broker (and hence start replicating)
+    debug("Starting new broker")
     brokers = brokers :+ createServer(fromProps(createBrokerConfig(101, zkConnect)))
     waitForOffsetsToMatch(msgCount, 0, 101)
 
@@ -207,15 +206,15 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
       throttledTook < expectedDuration * 1000 * 1.5)
   }
 
-  def addData(msgCount: Int, msg: Array[Byte]): Boolean = {
+  def addData(msgCount: Int, msg: Array[Byte]): Unit = {
     producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
-    (0 until msgCount).foreach { x => producer.send(new ProducerRecord(topic, msg)).get }
+    (0 until msgCount).map(_ => producer.send(new ProducerRecord(topic, msg))).foreach(_.get)
     waitForOffsetsToMatch(msgCount, 0, 100)
   }
 
-  private def waitForOffsetsToMatch(offset: Int, partitionId: Int, brokerId: Int): Boolean = {
+  private def waitForOffsetsToMatch(offset: Int, partitionId: Int, brokerId: Int): Unit = {
     waitUntilTrue(() => {
-      offset == brokerFor(brokerId).getLogManager.getLog(TopicAndPartition(topic, partitionId))
+      offset == brokerFor(brokerId).getLogManager.getLog(new TopicPartition(topic, partitionId))
         .map(_.logEndOffset).getOrElse(0)
     }, s"Offsets did not match for partition $partitionId on broker $brokerId", 60000)
   }

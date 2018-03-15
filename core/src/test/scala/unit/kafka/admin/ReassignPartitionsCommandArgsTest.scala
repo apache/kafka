@@ -16,9 +16,8 @@
   */
 package kafka.admin
 
-import kafka.utils.CommandLineUtils
-import kafka.utils.CommandLineUtils.ExitPolicy
-import org.junit.Assert.assertTrue
+import kafka.utils.Exit
+import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.junit.JUnitSuite
 
@@ -26,14 +25,12 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
 
   @Before
   def setUp() {
-    CommandLineUtils.exitPolicy(new ExitPolicy {
-      override def exit(msg: String): Nothing = throw new IllegalArgumentException(msg)
-    })
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
   }
 
   @After
   def tearDown() {
-    CommandLineUtils.exitPolicy(CommandLineUtils.DEFAULT_EXIT_POLICY)
+    Exit.resetExitProcedure()
   }
 
   /**
@@ -76,6 +73,17 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
       "--throttle", "100",
       "--reassignment-json-file", "myfile.json")
     ReassignPartitionsCommand.validateAndParseArgs(args)
+  }
+
+  @Test
+  def shouldUseDefaultsIfEnabled(): Unit = {
+    val args = Array(
+      "--zookeeper", "localhost:1234",
+      "--execute",
+      "--reassignment-json-file", "myfile.json")
+    val opts = ReassignPartitionsCommand.validateAndParseArgs(args)
+    assertEquals(10000L, opts.options.valueOf(opts.timeoutOpt))
+    assertEquals(-1L, opts.options.valueOf(opts.interBrokerThrottleOpt))
   }
 
   /**

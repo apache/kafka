@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,20 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream;
 
+
 /**
- * The {@link Initializer} interface for creating an initial value in aggregations.
+ * The {@code Initializer} interface for creating an initial value in aggregations.
+ * {@code Initializer} is used in combination with {@link Aggregator}.
  *
- * @param <T>   aggregate value type
+ * @param <VA> aggregate value type
+ * @see Aggregator
+ * @see KGroupedStream#aggregate(Initializer, Aggregator)
+ * @see KGroupedStream#aggregate(Initializer, Aggregator, Materialized)
+ * @see TimeWindowedKStream#aggregate(Initializer, Aggregator)
+ * @see TimeWindowedKStream#aggregate(Initializer, Aggregator, Materialized)
+ * @see SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger)
+ * @see SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger, Materialized)
  */
-public interface Initializer<T> {
+public interface Initializer<VA> {
 
     /**
      * Return the initial value for an aggregation.
      *
-     * @return  the initial value for an aggregation
+     * @return the initial value for an aggregation
      */
-    T apply();
+    VA apply();
 }

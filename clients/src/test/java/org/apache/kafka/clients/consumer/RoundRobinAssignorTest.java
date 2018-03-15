@@ -1,17 +1,22 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
 
@@ -36,7 +41,7 @@ public class RoundRobinAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, Collections.<String>emptyList()));
+                Collections.singletonMap(consumerId, new Subscription(Collections.<String>emptyList())));
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(assignment.get(consumerId).isEmpty());
     }
@@ -48,7 +53,7 @@ public class RoundRobinAssignorTest {
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, Arrays.asList(topic)));
+                Collections.singletonMap(consumerId, new Subscription(topics(topic))));
 
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(assignment.get(consumerId).isEmpty());
@@ -63,11 +68,8 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic, 3);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, Arrays.asList(topic)));
-        assertEquals(Arrays.asList(
-                new TopicPartition(topic, 0),
-                new TopicPartition(topic, 1),
-                new TopicPartition(topic, 2)), assignment.get(consumerId));
+                Collections.singletonMap(consumerId, new Subscription(topics(topic))));
+        assertEquals(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumerId));
     }
 
     @Test
@@ -81,11 +83,8 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(otherTopic, 3);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, Arrays.asList(topic)));
-        assertEquals(Arrays.asList(
-                new TopicPartition(topic, 0),
-                new TopicPartition(topic, 1),
-                new TopicPartition(topic, 2)), assignment.get(consumerId));
+                Collections.singletonMap(consumerId, new Subscription(topics(topic))));
+        assertEquals(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumerId));
     }
 
     @Test
@@ -99,11 +98,8 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic2, 2);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, Arrays.asList(topic1, topic2)));
-        assertEquals(Arrays.asList(
-                new TopicPartition(topic1, 0),
-                new TopicPartition(topic2, 0),
-                new TopicPartition(topic2, 1)), assignment.get(consumerId));
+                Collections.singletonMap(consumerId, new Subscription(topics(topic1, topic2))));
+        assertEquals(partitions(tp(topic1, 0), tp(topic2, 0), tp(topic2, 1)), assignment.get(consumerId));
     }
 
     @Test
@@ -115,12 +111,12 @@ public class RoundRobinAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 1);
 
-        Map<String, List<String>> consumers = new HashMap<>();
-        consumers.put(consumer1, Arrays.asList(topic));
-        consumers.put(consumer2, Arrays.asList(topic));
+        Map<String, Subscription> consumers = new HashMap<>();
+        consumers.put(consumer1, new Subscription(topics(topic)));
+        consumers.put(consumer2, new Subscription(topics(topic)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
-        assertEquals(Arrays.asList(new TopicPartition(topic, 0)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic, 0)), assignment.get(consumer1));
         assertEquals(Collections.<TopicPartition>emptyList(), assignment.get(consumer2));
     }
 
@@ -133,13 +129,13 @@ public class RoundRobinAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 2);
 
-        Map<String, List<String>> consumers = new HashMap<>();
-        consumers.put(consumer1, Arrays.asList(topic));
-        consumers.put(consumer2, Arrays.asList(topic));
+        Map<String, Subscription> consumers = new HashMap<>();
+        consumers.put(consumer1, new Subscription(topics(topic)));
+        consumers.put(consumer2, new Subscription(topics(topic)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
-        assertEquals(Arrays.asList(new TopicPartition(topic, 0)), assignment.get(consumer1));
-        assertEquals(Arrays.asList(new TopicPartition(topic, 1)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic, 0)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic, 1)), assignment.get(consumer2));
     }
 
     @Test
@@ -154,20 +150,15 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic1, 3);
         partitionsPerTopic.put(topic2, 2);
 
-        Map<String, List<String>> consumers = new HashMap<>();
-        consumers.put(consumer1, Arrays.asList(topic1));
-        consumers.put(consumer2, Arrays.asList(topic1, topic2));
-        consumers.put(consumer3, Arrays.asList(topic1));
+        Map<String, Subscription> consumers = new HashMap<>();
+        consumers.put(consumer1, new Subscription(topics(topic1)));
+        consumers.put(consumer2, new Subscription(topics(topic1, topic2)));
+        consumers.put(consumer3, new Subscription(topics(topic1)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
-        assertEquals(Arrays.asList(
-                new TopicPartition(topic1, 0)), assignment.get(consumer1));
-        assertEquals(Arrays.asList(
-                new TopicPartition(topic1, 1),
-                new TopicPartition(topic2, 0),
-                new TopicPartition(topic2, 1)), assignment.get(consumer2));
-        assertEquals(Arrays.asList(
-                new TopicPartition(topic1, 2)), assignment.get(consumer3));
+        assertEquals(partitions(tp(topic1, 0)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic1, 1), tp(topic2, 0), tp(topic2, 1)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic1, 2)), assignment.get(consumer3));
     }
 
     @Test
@@ -181,27 +172,24 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic1, 3);
         partitionsPerTopic.put(topic2, 3);
 
-        Map<String, List<String>> consumers = new HashMap<>();
-        consumers.put(consumer1, Arrays.asList(topic1, topic2));
-        consumers.put(consumer2, Arrays.asList(topic1, topic2));
+        Map<String, Subscription> consumers = new HashMap<>();
+        consumers.put(consumer1, new Subscription(topics(topic1, topic2)));
+        consumers.put(consumer2, new Subscription(topics(topic1, topic2)));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
-        assertEquals(Arrays.asList(
-                new TopicPartition(topic1, 0),
-                new TopicPartition(topic1, 2),
-                new TopicPartition(topic2, 1)), assignment.get(consumer1));
-        assertEquals(Arrays.asList(
-                new TopicPartition(topic1, 1),
-                new TopicPartition(topic2, 0),
-                new TopicPartition(topic2, 2)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic1, 0), tp(topic1, 2), tp(topic2, 1)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic1, 1), tp(topic2, 0), tp(topic2, 2)), assignment.get(consumer2));
     }
 
-    public static List<String> topics(String... topics) {
+    private static List<String> topics(String... topics) {
         return Arrays.asList(topics);
     }
 
-    public static TopicPartition tp(String topic, int partition) {
-        return new TopicPartition(topic, partition);
+    private static List<TopicPartition> partitions(TopicPartition... partitions) {
+        return Arrays.asList(partitions);
     }
 
+    private static TopicPartition tp(String topic, int partition) {
+        return new TopicPartition(topic, partition);
+    }
 }

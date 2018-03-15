@@ -19,6 +19,8 @@ package kafka.utils
 import scala.collection.mutable.PriorityQueue
 import java.util.concurrent.TimeUnit
 
+import org.apache.kafka.common.utils.Time
+
 /**
  * A mock scheduler that executes tasks synchronously using a mock time instance. Tasks are executed synchronously when
  * the time is advanced. This class is meant to be used in conjunction with MockTime.
@@ -35,7 +37,7 @@ import java.util.concurrent.TimeUnit
 class MockScheduler(val time: Time) extends Scheduler {
   
   /* a priority queue of tasks ordered by next execution time */
-  var tasks = new PriorityQueue[MockTask]()
+  private val tasks = new PriorityQueue[MockTask]()
   
   def isStarted = true
 
@@ -69,10 +71,16 @@ class MockScheduler(val time: Time) extends Scheduler {
     }
   }
   
-  def schedule(name: String, fun: ()=>Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) {
+  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) {
     this synchronized {
       tasks += MockTask(name, fun, time.milliseconds + delay, period = period)
       tick()
+    }
+  }
+
+  def clear(): Unit = {
+    this synchronized {
+      tasks.clear()
     }
   }
   

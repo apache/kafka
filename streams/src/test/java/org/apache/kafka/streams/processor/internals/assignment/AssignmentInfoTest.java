@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.common.TopicPartition;
@@ -34,6 +33,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class AssignmentInfoTest {
 
@@ -53,7 +53,7 @@ public class AssignmentInfoTest {
     }
 
     @Test
-    public void shouldDecodePreviousVersion() throws Exception {
+    public void shouldDecodePreviousVersion() throws IOException {
         List<TaskId> activeTasks =
                 Arrays.asList(new TaskId(0, 0), new TaskId(0, 0), new TaskId(0, 1), new TaskId(1, 0));
         Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
@@ -62,10 +62,10 @@ public class AssignmentInfoTest {
         standbyTasks.put(new TaskId(2, 0), Utils.mkSet(new TopicPartition("t3", 0), new TopicPartition("t3", 0)));
         final AssignmentInfo oldVersion = new AssignmentInfo(1, activeTasks, standbyTasks, null);
         final AssignmentInfo decoded = AssignmentInfo.decode(encodeV1(oldVersion));
-        assertEquals(oldVersion.activeTasks, decoded.activeTasks);
-        assertEquals(oldVersion.standbyTasks, decoded.standbyTasks);
-        assertEquals(0, decoded.partitionsByHostState.size()); // should be empty as wasn't in V1
-        assertEquals(2, decoded.version); // automatically upgraded to v2 on decode;
+        assertEquals(oldVersion.activeTasks(), decoded.activeTasks());
+        assertEquals(oldVersion.standbyTasks(), decoded.standbyTasks());
+        assertNull(decoded.partitionsByHost()); // should be null as wasn't in V1
+        assertEquals(1, decoded.version());
     }
 
 
@@ -77,15 +77,15 @@ public class AssignmentInfoTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(baos);
         // Encode version
-        out.writeInt(oldVersion.version);
+        out.writeInt(oldVersion.version());
         // Encode active tasks
-        out.writeInt(oldVersion.activeTasks.size());
-        for (TaskId id : oldVersion.activeTasks) {
+        out.writeInt(oldVersion.activeTasks().size());
+        for (TaskId id : oldVersion.activeTasks()) {
             id.writeTo(out);
         }
         // Encode standby tasks
-        out.writeInt(oldVersion.standbyTasks.size());
-        for (Map.Entry<TaskId, Set<TopicPartition>> entry : oldVersion.standbyTasks.entrySet()) {
+        out.writeInt(oldVersion.standbyTasks().size());
+        for (Map.Entry<TaskId, Set<TopicPartition>> entry : oldVersion.standbyTasks().entrySet()) {
             TaskId id = entry.getKey();
             id.writeTo(out);
 

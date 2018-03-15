@@ -17,13 +17,31 @@
 
 package kafka.utils
 
+import kafka.api.LeaderAndIsr
+import kafka.common.TopicAndPartition
+import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.security.JaasUtils
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{After, Before, Test}
 
 class ZkUtilsTest extends ZooKeeperTestHarness {
 
   val path = "/path"
+  var zkUtils: ZkUtils = _
+
+  @Before
+  override def setUp() {
+    super.setUp
+    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled))
+  }
+
+  @After
+  override def tearDown() {
+    if (zkUtils != null)
+     CoreUtils.swallow(zkUtils.close(), this)
+    super.tearDown
+  }
 
   @Test
   def testSuccessfulConditionalDeletePath() {
@@ -38,6 +56,21 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
 
     // Deletion is successful when the node does not exist too
     assertTrue("Deletion should be successful", zkUtils.conditionalDeletePath(path, 0))
+  }
+
+  // Verify behaviour of ZkUtils.createSequentialPersistentPath since PIDManager relies on it
+  @Test
+  def testPersistentSequentialPath() {
+    // Given an existing path
+    zkUtils.createPersistentPath(path)
+
+    var result = zkUtils.createSequentialPersistentPath(path + "/sequence_")
+
+    assertEquals("/path/sequence_0000000000", result)
+
+    result = zkUtils.createSequentialPersistentPath(path + "/sequence_")
+
+    assertEquals("/path/sequence_0000000001", result)
   }
 
   @Test
@@ -57,5 +90,43 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
   def testClusterIdentifierJsonParsing() {
     val clusterId = "test"
     assertEquals(zkUtils.ClusterId.fromJson(zkUtils.ClusterId.toJson(clusterId)), clusterId)
+  }
+
+  @Test
+  def testGetAllPartitionsTopicWithoutPartitions() {
+    val topic = "testtopic"
+    // Create a regular topic and a topic without any partitions
+    zkUtils.createPersistentPath(ZkUtils.getTopicPartitionPath(topic, 0))
+    zkUtils.createPersistentPath(ZkUtils.getTopicPath("nopartitions"))
+
+    assertEquals(Set(TopicAndPartition(topic, 0)), zkUtils.getAllPartitions())
+  }
+
+  @Test
+  def testGetLeaderIsrAndEpochForPartition() {
+    val topic = "my-topic-test"
+    val partition = 0
+    val leader = 1
+    val leaderEpoch = 1
+    val controllerEpoch = 1
+    val isr = List(1, 2)
+    val topicPath = s"/brokers/topics/$topic/partitions/$partition/state"
+    val topicData = Json.legacyEncodeAsString(Map("controller_epoch" -> controllerEpoch, "leader" -> leader,
+      "versions" -> 1, "leader_epoch" -> leaderEpoch, "isr" -> isr))
+    zkUtils.createPersistentPath(topicPath, topicData)
+
+    val leaderIsrAndControllerEpoch = zkUtils.getLeaderIsrAndEpochForPartition(topic, partition)
+    val topicDataLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, leaderEpoch, isr, 0),
+      controllerEpoch)
+    assertEquals(topicDataLeaderIsrAndControllerEpoch, leaderIsrAndControllerEpoch.get)
+    assertEquals(None, zkUtils.getLeaderIsrAndEpochForPartition(topic, partition + 1))
+  }
+
+  @Test
+  def testGetSequenceIdMethod() {
+    val path = "/test/seqid"
+    (1 to 10).foreach { seqid =>
+      assertEquals(seqid, zkUtils.getSequenceId(path))
+    }
   }
 }

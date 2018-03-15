@@ -1,13 +1,12 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,13 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 package org.apache.kafka.common.utils;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -90,13 +88,15 @@ abstract public class Shell {
             //One time scheduling.
             timeoutTimer.schedule(new ShellTimeoutTimerTask(this), timeout);
         }
-        final BufferedReader errReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-        BufferedReader inReader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+        final BufferedReader errReader = new BufferedReader(
+            new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8));
+        BufferedReader inReader = new BufferedReader(
+            new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
         final StringBuffer errMsg = new StringBuffer();
 
         // read error and input streams as this would free up the buffers
         // free the error stream buffer
-        Thread errThread = Utils.newThread("kafka-shell-thread", new Runnable() {
+        Thread errThread = KafkaThread.nonDaemon("kafka-shell-thread", new Runnable() {
             @Override
             public void run() {
                 try {
@@ -110,16 +110,11 @@ abstract public class Shell {
                     LOG.warn("Error reading the error stream", ioe);
                 }
             }
-        }, false);
+        });
         errThread.start();
 
         try {
             parseExecResult(inReader); // parse the output
-            // clear the input stream buffer
-            String line = null;
-            while (line != null) {
-                line = inReader.readLine();
-            }
             // wait for the process to finish and check the exit code
             exitCode = process.waitFor();
             try {

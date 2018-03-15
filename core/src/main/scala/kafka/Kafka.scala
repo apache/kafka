@@ -18,18 +18,21 @@
 package kafka
 
 import java.util.Properties
+import java.util.concurrent.ConcurrentHashMap
 
+import sun.misc.{Signal, SignalHandler}
 import joptsimple.OptionParser
+import kafka.utils.Implicits._
 import kafka.server.{KafkaServer, KafkaServerStartable}
-import kafka.utils.{CommandLineUtils, Logging}
-import org.apache.kafka.common.utils.Utils
+import kafka.utils.{CommandLineUtils, Exit, Logging}
+import org.apache.kafka.common.utils.{OperatingSystem, Utils}
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 object Kafka extends Logging {
 
   def getPropsFromArgs(args: Array[String]): Properties = {
-    val optionParser = new OptionParser
+    val optionParser = new OptionParser(false)
     val overrideOpt = optionParser.accepts("override", "Optional property that should override values set in server.properties file")
       .withRequiredArg()
       .ofType(classOf[String])
@@ -40,16 +43,37 @@ object Kafka extends Logging {
 
     val props = Utils.loadProps(args(0))
 
-    if(args.length > 1) {
+    if (args.length > 1) {
       val options = optionParser.parse(args.slice(1, args.length): _*)
 
-      if(options.nonOptionArguments().size() > 0) {
+      if (options.nonOptionArguments().size() > 0) {
         CommandLineUtils.printUsageAndDie(optionParser, "Found non argument parameters: " + options.nonOptionArguments().toArray.mkString(","))
       }
 
-      props.putAll(CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt)))
+      props ++= CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt).asScala)
     }
     props
+  }
+
+  private def registerLoggingSignalHandler(): Unit = {
+    val jvmSignalHandlers = new ConcurrentHashMap[String, SignalHandler]().asScala
+    val handler = new SignalHandler() {
+      override def handle(signal: Signal) {
+        info(s"Terminating process due to signal $signal")
+        jvmSignalHandlers.get(signal.getName).foreach(_.handle(signal))
+      }
+    }
+    def registerHandler(signalName: String) {
+      val oldHandler = Signal.handle(new Signal(signalName), handler)
+      if (oldHandler != null)
+        jvmSignalHandlers.put(signalName, oldHandler)
+    }
+
+    if (!OperatingSystem.IS_WINDOWS) {
+      registerHandler("TERM")
+      registerHandler("INT")
+      registerHandler("HUP")
+    }
   }
 
   def main(args: Array[String]): Unit = {
@@ -57,21 +81,22 @@ object Kafka extends Logging {
       val serverProps = getPropsFromArgs(args)
       val kafkaServerStartable = KafkaServerStartable.fromProps(serverProps)
 
-      // attach shutdown handler to catch control-c
-      Runtime.getRuntime().addShutdownHook(new Thread() {
-        override def run() = {
-          kafkaServerStartable.shutdown
-        }
+      // register signal handler to log termination due to SIGTERM, SIGHUP and SIGINT (control-c)
+      registerLoggingSignalHandler()
+
+      // attach shutdown handler to catch terminating signals as well as normal termination
+      Runtime.getRuntime().addShutdownHook(new Thread("kafka-shutdown-hook") {
+        override def run(): Unit = kafkaServerStartable.shutdown()
       })
 
-      kafkaServerStartable.startup
-      kafkaServerStartable.awaitShutdown
+      kafkaServerStartable.startup()
+      kafkaServerStartable.awaitShutdown()
     }
     catch {
       case e: Throwable =>
-        fatal(e)
-        System.exit(1)
+        fatal("Exiting Kafka due to fatal exception", e)
+        Exit.exit(1)
     }
-    System.exit(0)
+    Exit.exit(0)
   }
 }

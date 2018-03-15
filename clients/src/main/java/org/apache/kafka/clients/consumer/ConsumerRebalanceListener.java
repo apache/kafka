@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients.consumer;
 
@@ -40,7 +44,7 @@ import org.apache.kafka.common.TopicPartition;
  * partition is reassigned it may want to automatically trigger a flush of this cache, before the new owner takes over
  * consumption.
  * <p>
- * This callback will execute in the user thread as part of the {@link Consumer#poll(long) poll(long)} call whenever partition assignment changes.
+ * This callback will only execute in the user thread as part of the {@link Consumer#poll(long) poll(long)} call whenever partition assignment changes.
  * <p>
  * It is guaranteed that all consumer processes will invoke {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} prior to
  * any process invoking {@link #onPartitionsAssigned(Collection) onPartitionsAssigned}. So if offsets or other state is saved in the
@@ -83,22 +87,38 @@ public interface ConsumerRebalanceListener {
      * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}
      * <p>
      * <b>NOTE:</b> This method is only called before rebalances. It is not called prior to {@link KafkaConsumer#close()}.
+     * <p>
+     * It is common for the revocation callback to use the consumer instance in order to commit offsets. It is possible
+     * for a {@link org.apache.kafka.common.errors.WakeupException} or {@link org.apache.kafka.common.errors.InterruptException}
+     * to be raised from one these nested invocations. In this case, the exception will be propagated to the current
+     * invocation of {@link KafkaConsumer#poll(long)} in which this callback is being executed. This means it is not
+     * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
      *
      * @param partitions The list of partitions that were assigned to the consumer on the last rebalance
+     * @throws org.apache.kafka.common.errors.WakeupException If raised from a nested call to {@link KafkaConsumer}
+     * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
      */
-    public void onPartitionsRevoked(Collection<TopicPartition> partitions);
+    void onPartitionsRevoked(Collection<TopicPartition> partitions);
 
     /**
      * A callback method the user can implement to provide handling of customized offsets on completion of a successful
      * partition re-assignment. This method will be called after an offset re-assignment completes and before the
-     * consumer starts fetching data.
+     * consumer starts fetching data, and only as the result of a {@link Consumer#poll(long) poll(long)} call.
      * <p>
      * It is guaranteed that all the processes in a consumer group will execute their
      * {@link #onPartitionsRevoked(Collection)} callback before any instance executes its
      * {@link #onPartitionsAssigned(Collection)} callback.
+     * <p>
+     * It is common for the assignment callback to use the consumer instance in order to query offsets. It is possible
+     * for a {@link org.apache.kafka.common.errors.WakeupException} or {@link org.apache.kafka.common.errors.InterruptException}
+     * to be raised from one these nested invocations. In this case, the exception will be propagated to the current
+     * invocation of {@link KafkaConsumer#poll(long)} in which this callback is being executed. This means it is not
+     * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
      *
      * @param partitions The list of partitions that are now assigned to the consumer (may include partitions previously
      *            assigned to the consumer)
+     * @throws org.apache.kafka.common.errors.WakeupException If raised from a nested call to {@link KafkaConsumer}
+     * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
      */
-    public void onPartitionsAssigned(Collection<TopicPartition> partitions);
+    void onPartitionsAssigned(Collection<TopicPartition> partitions);
 }

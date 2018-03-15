@@ -19,10 +19,12 @@ package kafka.server
 
 
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.Lock
 
 import com.yammer.metrics.core.Meter
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Pool
+
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -33,7 +35,7 @@ case class ProducePartitionStatus(requiredOffset: Long, responseStatus: Partitio
   @volatile var acksPending = false
 
   override def toString = "[acksPending: %b, error: %d, startOffset: %d, requiredOffset: %d]"
-    .format(acksPending, responseStatus.errorCode, responseStatus.baseOffset, requiredOffset)
+    .format(acksPending, responseStatus.error.code, responseStatus.baseOffset, requiredOffset)
 }
 
 /**
@@ -53,15 +55,16 @@ case class ProduceMetadata(produceRequiredAcks: Short,
 class DelayedProduce(delayMs: Long,
                      produceMetadata: ProduceMetadata,
                      replicaManager: ReplicaManager,
-                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit)
-  extends DelayedOperation(delayMs) {
+                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+                     lockOpt: Option[Lock] = None)
+  extends DelayedOperation(delayMs, lockOpt) {
 
   // first update the acks pending variable according to the error code
   produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
-    if (status.responseStatus.errorCode == Errors.NONE.code) {
+    if (status.responseStatus.error == Errors.NONE) {
       // Timeout error state will be cleared when required acks are received
       status.acksPending = true
-      status.responseStatus.errorCode = Errors.REQUEST_TIMED_OUT.code
+      status.responseStatus.error = Errors.REQUEST_TIMED_OUT
     } else {
       status.acksPending = false
     }
@@ -81,13 +84,16 @@ class DelayedProduce(delayMs: Long,
    */
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
-    produceMetadata.produceStatus.foreach { case (topicAndPartition, status) =>
-      trace(s"Checking produce satisfaction for ${topicAndPartition}, current status $status")
+    produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
+      trace(s"Checking produce satisfaction for $topicPartition, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
-        val (hasEnough, error) = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition) match {
+        val (hasEnough, error) = replicaManager.getPartition(topicPartition) match {
           case Some(partition) =>
-            partition.checkEnoughReplicasReachOffset(status.requiredOffset)
+            if (partition eq ReplicaManager.OfflinePartition)
+              (false, Errors.KAFKA_STORAGE_ERROR)
+            else
+              partition.checkEnoughReplicasReachOffset(status.requiredOffset)
           case None =>
             // Case A
             (false, Errors.UNKNOWN_TOPIC_OR_PARTITION)
@@ -95,7 +101,7 @@ class DelayedProduce(delayMs: Long,
         // Case B.1 || B.2
         if (error != Errors.NONE || hasEnough) {
           status.acksPending = false
-          status.responseStatus.errorCode = error.code
+          status.responseStatus.error = error
         }
       }
     }

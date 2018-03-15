@@ -20,8 +20,8 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.utils import is_int
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
-from ducktape.mark import parametrize
-from ducktape.mark import matrix
+from ducktape.mark import parametrize, matrix
+from ducktape.mark.resource import cluster
 from kafkatest.services.security.kafka_acls import ACLs
 import time
 
@@ -54,7 +54,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
         self.consumer = ConsoleConsumer(
             self.test_context, self.num_consumers, self.kafka, self.topic,
-            consumer_timeout_ms=60000, message_validator=is_int, new_consumer=True)
+            consumer_timeout_ms=60000, message_validator=is_int)
 
         self.consumer.group_id = "group"
 
@@ -69,8 +69,6 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
         # Roll cluster to include inter broker security protocol.
         self.kafka.interbroker_security_protocol = broker_protocol
-        self.kafka.open_port(client_protocol)
-        self.kafka.open_port(broker_protocol)
         self.bounce()
 
         # Roll cluster to disable PLAINTEXT port
@@ -79,8 +77,8 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
     def set_authorizer_and_bounce(self, client_protocol, broker_protocol):
         self.kafka.authorizer_class_name = KafkaService.SIMPLE_AUTHORIZER
-        self.acls.set_acls(client_protocol, self.kafka, self.zk, self.topic, self.group)
-        self.acls.set_acls(broker_protocol, self.kafka, self.zk, self.topic, self.group)
+        self.acls.set_acls(client_protocol, self.kafka, self.topic, self.group)
+        self.acls.set_acls(broker_protocol, self.kafka, self.topic, self.group)
         self.bounce()
 
     def open_secured_port(self, client_protocol):
@@ -102,7 +100,10 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         # Bounce again with ACLs for new mechanism
         self.set_authorizer_and_bounce(security_protocol, security_protocol)
 
-    @matrix(client_protocol=["SSL", "SASL_PLAINTEXT", "SASL_SSL"])
+    @cluster(num_nodes=8)
+    @matrix(client_protocol=["SSL"])
+    @cluster(num_nodes=9)
+    @matrix(client_protocol=["SASL_PLAINTEXT", "SASL_SSL"])
     def test_rolling_upgrade_phase_one(self, client_protocol):
         """
         Start with a PLAINTEXT cluster, open a SECURED port, via a rolling upgrade, ensuring we could produce
@@ -123,18 +124,21 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.create_producer_and_consumer()
         self.run_produce_consume_validate(lambda: time.sleep(1))
 
+    @cluster(num_nodes=8)
     @matrix(client_protocol=["SASL_SSL", "SSL", "SASL_PLAINTEXT"], broker_protocol=["SASL_SSL", "SSL", "SASL_PLAINTEXT"])
     def test_rolling_upgrade_phase_two(self, client_protocol, broker_protocol):
         """
         Start with a PLAINTEXT cluster with a second Secured port open (i.e. result of phase one).
-        Start an Producer and Consumer via the SECURED port
-        Incrementally upgrade to add inter-broker be the secure protocol
+        A third secure port is also open if inter-broker and client protocols are different.
+        Start a Producer and Consumer via the SECURED client port
+        Incrementally upgrade to add inter-broker be the secure broker protocol
         Incrementally upgrade again to add ACLs as well as disabling the PLAINTEXT port
         Ensure the producer and consumer ran throughout
         """
         #Given we have a broker that has both secure and PLAINTEXT ports open
         self.kafka.security_protocol = client_protocol
         self.kafka.interbroker_security_protocol = "PLAINTEXT"
+        self.kafka.open_port(broker_protocol)
         self.kafka.start()
 
         #Create Secured Producer and Consumer
@@ -143,6 +147,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         #Roll in the security protocol. Disable Plaintext. Ensure we can produce and Consume throughout
         self.run_produce_consume_validate(self.roll_in_secured_settings, client_protocol, broker_protocol)
 
+    @cluster(num_nodes=9)
     @parametrize(new_client_sasl_mechanism='PLAIN')
     def test_rolling_upgrade_sasl_mechanism_phase_one(self, new_client_sasl_mechanism):
         """
@@ -166,6 +171,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.create_producer_and_consumer()
         self.run_produce_consume_validate(lambda: time.sleep(1))
 
+    @cluster(num_nodes=8)
     @parametrize(new_sasl_mechanism='PLAIN')
     def test_rolling_upgrade_sasl_mechanism_phase_two(self, new_sasl_mechanism):
         """

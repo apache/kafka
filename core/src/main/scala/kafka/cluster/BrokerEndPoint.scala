@@ -32,7 +32,7 @@ object BrokerEndPoint {
    */
   def parseHostPort(connectionString: String): Option[(String, Int)] = {
     connectionString match {
-      case uriParseExp(host, port) => try Some(host, port.toInt) catch { case e: NumberFormatException => None }
+      case uriParseExp(host, port) => try Some(host, port.toInt) catch { case _: NumberFormatException => None }
       case _ => None
     }
   }

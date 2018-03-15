@@ -26,6 +26,7 @@ readonly ARGS="$@"
 AWS=false
 PARALLEL=true
 MAX_PARALLEL=5
+DEBUG=false
 
 readonly USAGE="Usage: $PROG_NAME [-h | --help] [--aws [--no-parallel] [--max-parallel MAX]]"
 readonly HELP="$(cat <<EOF
@@ -35,7 +36,7 @@ Tool to bring up a vagrant cluster on local machine or aws.
     --aws                   Use if you are running in aws
     --no-parallel           Bring up machines not in parallel. Only applicable on aws
     --max-parallel  MAX     Maximum number of machines to bring up in parallel. Note: only applicable on test worker machines on aws. default: $MAX_PARALLEL
-
+    --debug                 Enable debug information for vagrant
 Approximately speaking, this wrapper script essentially wraps 2 commands:
     vagrant up
     vagrant hostmanager
@@ -70,6 +71,9 @@ while [[ $# > 0 ]]; do
         --max-parallel)
             MAX_PARALLEL="$2"
             shift
+            ;;
+        --debug)
+            DEBUG=true
             ;;
         *)
             # unknown option
@@ -200,7 +204,14 @@ function bring_up_aws {
     local parallel="$1"
     local max_parallel="$2"
     local machines="$(read_vagrant_machines)"
-
+    case "$3" in
+          true)
+            local debug="--debug"
+            ;;
+          false)
+            local debug=""
+            ;;
+    esac
     zk_broker_machines=$(zk_broker "$machines")
     worker_machines=$(worker "$machines")
 
@@ -208,26 +219,45 @@ function bring_up_aws {
         if [[ ! -z "$zk_broker_machines" ]]; then
             # We still have to bring up zookeeper/broker nodes serially
             echo "Bringing up zookeeper/broker machines serially"
-            vagrant up --provider=aws --no-parallel --no-provision $zk_broker_machines
+            vagrant up --provider=aws --no-parallel --no-provision $zk_broker_machines $debug
             vagrant hostmanager
             vagrant provision
         fi
 
         if [[ ! -z "$worker_machines" ]]; then
             echo "Bringing up test worker machines in parallel"
-            vagrant_batch_command "vagrant up --provider=aws" "$worker_machines" "$max_parallel"
+	    # Try to isolate this job in its own /tmp space. See note
+	    # below about vagrant issue
+            local vagrant_rsync_temp_dir=$(mktemp -d);
+            TMPDIR=$vagrant_rsync_temp_dir vagrant_batch_command "vagrant up $debug --provider=aws" "$worker_machines" "$max_parallel"
+            rm -rf $vagrant_rsync_temp_dir
             vagrant hostmanager
         fi
     else
-        vagrant up --provider=aws --no-parallel --no-provision
+        vagrant up --provider=aws --no-parallel --no-provision $debug
         vagrant hostmanager
         vagrant provision
     fi
+
+    # Currently it seems that the AWS provider will always run rsync
+    # as part of vagrant up. However,
+    # https://github.com/mitchellh/vagrant/issues/7531 means it is not
+    # safe to do so. Since the bug doesn't seem to cause any direct
+    # errors, just missing data on some nodes, follow up with serial
+    # rsyncing to ensure we're in a clean state. Use custom TMPDIR
+    # values to ensure we're isolated from any other instances of this
+    # script that are running/ran recently and may cause different
+    # instances to sync to the wrong nodes
+    for worker in $worker_machines; do
+        local vagrant_rsync_temp_dir=$(mktemp -d);
+        TMPDIR=$vagrant_rsync_temp_dir vagrant rsync $worker;
+        rm -rf $vagrant_rsync_temp_dir
+    done
 }
 
 function main {
     if [[ "$AWS" == "true" ]]; then
-        bring_up_aws "$PARALLEL" "$MAX_PARALLEL"
+        bring_up_aws "$PARALLEL" "$MAX_PARALLEL" "$DEBUG"
     else
         bring_up_local
     fi

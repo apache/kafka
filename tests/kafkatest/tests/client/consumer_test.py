@@ -15,11 +15,13 @@
 
 from ducktape.mark import matrix
 from ducktape.utils.util import wait_until
+from ducktape.mark.resource import cluster
 
 from kafkatest.tests.verifiable_consumer_test import VerifiableConsumerTest
 from kafkatest.services.kafka import TopicPartition
 
 import signal
+
 
 class OffsetValidationTest(VerifiableConsumerTest):
     TOPIC = "test_topic"
@@ -72,6 +74,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.mark_for_collect(consumer, 'verifiable_consumer_stdout')
         return consumer
 
+    @cluster(num_nodes=7)
     def test_broker_rolling_bounce(self):
         """
         Verify correct consumer behavior when the brokers are consecutively restarted.
@@ -110,9 +113,11 @@ class OffsetValidationTest(VerifiableConsumerTest):
         consumer.stop_all()
 
         assert consumer.current_position(partition) == consumer.total_consumed(), \
-            "Total consumed records did not match consumed position"
+            "Total consumed records %d did not match consumed position %d" % \
+            (consumer.total_consumed(), consumer.current_position(partition))
 
-    @matrix(clean_shutdown=[True, False], bounce_mode=["all", "rolling"])
+    @cluster(num_nodes=7)
+    @matrix(clean_shutdown=[True], bounce_mode=["all", "rolling"])
     def test_consumer_bounce(self, clean_shutdown, bounce_mode):
         """
         Verify correct consumer behavior when the consumers in the group are consecutively restarted.
@@ -146,13 +151,16 @@ class OffsetValidationTest(VerifiableConsumerTest):
             # if the total records consumed matches the current position, we haven't seen any duplicates
             # this can only be guaranteed with a clean shutdown
             assert consumer.current_position(partition) == consumer.total_consumed(), \
-                "Total consumed records did not match consumed position"
+                "Total consumed records %d did not match consumed position %d" % \
+                (consumer.total_consumed(), consumer.current_position(partition))
         else:
             # we may have duplicates in a hard failure
             assert consumer.current_position(partition) <= consumer.total_consumed(), \
-                "Current position greater than the total number of consumed records"
+                "Current position %d greater than the total number of consumed records %d" % \
+                (consumer.current_position(partition), consumer.total_consumed())
 
-    @matrix(clean_shutdown=[True, False], enable_autocommit=[True, False])
+    @cluster(num_nodes=7)
+    @matrix(clean_shutdown=[True], enable_autocommit=[True, False])
     def test_consumer_failure(self, clean_shutdown, enable_autocommit):
         partition = TopicPartition(self.TOPIC, 0)
         
@@ -172,7 +180,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
         # stop the partition owner and await its shutdown
         consumer.kill_node(partition_owner, clean_shutdown=clean_shutdown)
         wait_until(lambda: len(consumer.joined_nodes()) == (self.num_consumers - 1) and consumer.owner(partition) != None,
-                   timeout_sec=self.session_timeout_sec+5, err_msg="Timed out waiting for consumer to close")
+                   timeout_sec=self.session_timeout_sec*2+5,
+                   err_msg="Timed out waiting for consumer to close")
 
         # ensure that the remaining consumer does some work after rebalancing
         self.await_consumed_messages(consumer, min_messages=1000)
@@ -183,18 +192,21 @@ class OffsetValidationTest(VerifiableConsumerTest):
             # if the total records consumed matches the current position, we haven't seen any duplicates
             # this can only be guaranteed with a clean shutdown
             assert consumer.current_position(partition) == consumer.total_consumed(), \
-                "Total consumed records did not match consumed position"
+                "Total consumed records %d did not match consumed position %d" % \
+                (consumer.total_consumed(), consumer.current_position(partition))
         else:
             # we may have duplicates in a hard failure
             assert consumer.current_position(partition) <= consumer.total_consumed(), \
-                "Current position greater than the total number of consumed records"
+                "Current position %d greater than the total number of consumed records %d" % \
+                (consumer.current_position(partition), consumer.total_consumed())
 
         # if autocommit is not turned on, we can also verify the last committed offset
         if not enable_autocommit:
             assert consumer.last_commit(partition) == consumer.current_position(partition), \
-                "Last committed offset did not match last consumed position"
+                "Last committed offset %d did not match last consumed position %d" % \
+                (consumer.last_commit(partition), consumer.current_position(partition))
 
-
+    @cluster(num_nodes=7)
     @matrix(clean_shutdown=[True, False], enable_autocommit=[True, False])
     def test_broker_failure(self, clean_shutdown, enable_autocommit):
         partition = TopicPartition(self.TOPIC, 0)
@@ -222,13 +234,16 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         # if the total records consumed matches the current position, we haven't seen any duplicates
         assert consumer.current_position(partition) == consumer.total_consumed(), \
-            "Total consumed records did not match consumed position"
+            "Total consumed records %d did not match consumed position %d" % \
+            (consumer.total_consumed(), consumer.current_position(partition))
 
         # if autocommit is not turned on, we can also verify the last committed offset
         if not enable_autocommit:
             assert consumer.last_commit(partition) == consumer.current_position(partition), \
-                "Last committed offset did not match last consumed position"
+                "Last committed offset %d did not match last consumed position %d" % \
+                (consumer.last_commit(partition), consumer.current_position(partition))
 
+    @cluster(num_nodes=7)
     def test_group_consumption(self):
         """
         Verifies correct group rebalance behavior as consumers are started and stopped. 
@@ -261,11 +276,12 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 self.await_consumed_messages(consumer)
 
         assert consumer.current_position(partition) == consumer.total_consumed(), \
-            "Total consumed records did not match consumed position"
+            "Total consumed records %d did not match consumed position %d" % \
+            (consumer.total_consumed(), consumer.current_position(partition))
 
         assert consumer.last_commit(partition) == consumer.current_position(partition), \
-            "Last committed offset did not match last consumed position"
-
+            "Last committed offset %d did not match last consumed position %d" % \
+            (consumer.last_commit(partition), consumer.current_position(partition))
 
 class AssignmentValidationTest(VerifiableConsumerTest):
     TOPIC = "test_topic"
@@ -277,6 +293,7 @@ class AssignmentValidationTest(VerifiableConsumerTest):
             self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 1 },
         })
 
+    @cluster(num_nodes=6)
     @matrix(assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
                                  "org.apache.kafka.clients.consumer.RoundRobinAssignor"])
     def test_valid_assignment(self, assignment_strategy):
@@ -293,5 +310,7 @@ class AssignmentValidationTest(VerifiableConsumerTest):
         for num_started, node in enumerate(consumer.nodes, 1):
             consumer.start_node(node)
             self.await_members(consumer, num_started)
-            assert self.valid_assignment(self.TOPIC, self.NUM_PARTITIONS, consumer.current_assignment())
-            
+            assert self.valid_assignment(self.TOPIC, self.NUM_PARTITIONS, consumer.current_assignment()), \
+                "expected valid assignments of %d partitions when num_started %d: %s" % \
+                (self.NUM_PARTITIONS, num_started, \
+                 [(str(node.account), a) for node, a in consumer.current_assignment().items()])

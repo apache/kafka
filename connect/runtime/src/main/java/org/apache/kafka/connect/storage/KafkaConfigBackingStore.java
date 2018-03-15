@@ -1,22 +1,22 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -25,7 +25,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -40,6 +40,7 @@ import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
+import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -192,23 +193,25 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     private static final long READ_TO_END_TIMEOUT_MS = 30000;
 
     private final Object lock;
-    private boolean starting;
     private final Converter converter;
+    private volatile boolean started;
+    // Although updateListener is not final, it's guaranteed to be visible to any thread after its
+    // initialization as long as we always read the volatile variable "started" before we access the listener.
     private UpdateListener updateListener;
 
-    private String topic;
+    private final String topic;
     // Data is passed to the log already serialized. We use a converter to handle translating to/from generic Connect
     // format to serialized form
-    private KafkaBasedLog<String, byte[]> configLog;
+    private final KafkaBasedLog<String, byte[]> configLog;
     // Connector -> # of tasks
-    private Map<String, Integer> connectorTaskCounts = new HashMap<>();
+    private final Map<String, Integer> connectorTaskCounts = new HashMap<>();
     // Connector and task configs: name or id -> config map
-    private Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
-    private Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
+    private final Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
+    private final Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
 
     // Set of connectors where we saw a task commit with an incomplete set of task config updates, indicating the data
     // is in an inconsistent state and we cannot safely use them until they have been refreshed.
-    private Set<String> inconsistent = new HashSet<>();
+    private final Set<String> inconsistent = new HashSet<>();
     // The most recently read offset. This does not take into account deferred task updates/commits, so we may have
     // outstanding data to be applied.
     private volatile long offset;
@@ -218,11 +221,17 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     private final Map<String, TargetState> connectorTargetStates = new HashMap<>();
 
-    public KafkaConfigBackingStore(Converter converter) {
+    public KafkaConfigBackingStore(Converter converter, WorkerConfig config) {
         this.lock = new Object();
-        this.starting = false;
+        this.started = false;
         this.converter = converter;
         this.offset = -1;
+
+        this.topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
+        if (this.topic == null || this.topic.trim().length() == 0)
+            throw new ConfigException("Must specify topic for connector configuration.");
+
+        configLog = setupAndCreateKafkaBasedLog(this.topic, config);
     }
 
     @Override
@@ -231,33 +240,12 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     }
 
     @Override
-    public void configure(WorkerConfig config) {
-        topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
-        if (topic.equals(""))
-            throw new ConfigException("Must specify topic for connector configuration.");
-
-        Map<String, Object> producerProps = new HashMap<>();
-        producerProps.putAll(config.originals());
-        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
-
-        Map<String, Object> consumerProps = new HashMap<>();
-        consumerProps.putAll(config.originals());
-        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-
-        configLog = createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback());
-    }
-
-    @Override
     public void start() {
         log.info("Starting KafkaConfigBackingStore");
-        // During startup, callbacks are *not* invoked. You can grab a snapshot after starting -- just take care that
+        // Before startup, callbacks are *not* invoked. You can grab a snapshot after starting -- just take care that
         // updates can continue to occur in the background
-        starting = true;
         configLog.start();
-        starting = false;
+        started = true;
         log.info("Started KafkaConfigBackingStore");
     }
 
@@ -295,7 +283,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     }
 
     /**
-     * Write this connector configuration to persistent storage and wait until it has been acknowledge and read back by
+     * Write this connector configuration to persistent storage and wait until it has been acknowledged and read back by
      * tailing the Kafka log with a consumer.
      *
      * @param connector  name of the connector to write data for
@@ -416,9 +404,41 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         configLog.send(TARGET_STATE_KEY(connector), serializedTargetState);
     }
 
+    // package private for testing
+    KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, final WorkerConfig config) {
+        Map<String, Object> originals = config.originals();
+        Map<String, Object> producerProps = new HashMap<>(originals);
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
+        Map<String, Object> consumerProps = new HashMap<>(originals);
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+
+        Map<String, Object> adminProps = new HashMap<>(originals);
+        NewTopic topicDescription = TopicAdmin.defineTopic(topic).
+                compacted().
+                partitions(1).
+                replicationFactor(config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG)).
+                build();
+
+        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminProps);
+    }
+
     private KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
-                                                              Map<String, Object> consumerProps, Callback<ConsumerRecord<String, byte[]>> consumedCallback) {
-        return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, new SystemTime());
+                                                              Map<String, Object> consumerProps,
+                                                              Callback<ConsumerRecord<String, byte[]>> consumedCallback,
+                                                              final NewTopic topicDescription, final Map<String, Object> adminProps) {
+        Runnable createTopics = new Runnable() {
+            @Override
+            public void run() {
+                log.debug("Creating admin client to manage Connect internal config topic");
+                try (TopicAdmin admin = new TopicAdmin(adminProps)) {
+                    admin.createTopics(topicDescription);
+                }
+            }
+        };
+        return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, Time.SYSTEM, createTopics);
     }
 
     @SuppressWarnings("unchecked")
@@ -480,7 +500,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
                 // Note that we do not notify the update listener if the target state has been removed.
                 // Instead we depend on the removal callback of the connector config itself to notify the worker.
-                if (!starting && !removed)
+                if (started && !removed)
                     updateListener.onConnectorTargetStateChange(connectorName);
 
             } else if (record.key().startsWith(CONNECTOR_PREFIX)) {
@@ -513,7 +533,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                             connectorTargetStates.put(connectorName, TargetState.STARTED);
                     }
                 }
-                if (!starting) {
+                if (started) {
                     if (removed)
                         updateListener.onConnectorConfigRemove(connectorName);
                     else
@@ -604,7 +624,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                     connectorTaskCounts.put(connectorName, newTaskCount);
                 }
 
-                if (!starting)
+                if (started)
                     updateListener.onTaskConfigUpdate(updatedTasks);
             } else {
                 log.error("Discarding config update record with invalid key: " + record.key());

@@ -1,22 +1,22 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -82,7 +82,7 @@ public interface Herder {
     void connectorConfig(String connName, Callback<Map<String, String>> callback);
 
     /**
-     * Set the configuration for a connector. This supports creation, update, and deletion.
+     * Set the configuration for a connector. This supports creation and updating.
      * @param connName name of the connector
      * @param config the connectors configuration, or null if deleting the connector
      * @param allowReplace if true, allow overwriting previous configs; if false, throw AlreadyExistsException if a connector
@@ -90,6 +90,13 @@ public interface Herder {
      * @param callback callback to invoke when the configuration has been written
      */
     void putConnectorConfig(String connName, Map<String, String> config, boolean allowReplace, Callback<Created<ConnectorInfo>> callback);
+
+    /**
+     * Delete a connector and its configuration.
+     * @param connName name of the connector
+     * @param callback callback to invoke when the configuration has been written
+     */
+    void deleteConnectorConfig(String connName, Callback<Created<ConnectorInfo>> callback);
 
     /**
      * Requests reconfiguration of the task. This should only be triggered by
@@ -130,10 +137,9 @@ public interface Herder {
 
     /**
      * Validate the provided connector config values against the configuration definition.
-     * @param connType the connector class
      * @param connectorConfig the provided connector config values
      */
-    ConfigInfos validateConfigs(String connType, Map<String, String> connectorConfig);
+    ConfigInfos validateConnectorConfig(Map<String, String> connectorConfig);
 
     /**
      * Restart the task with the given id.
@@ -163,6 +169,19 @@ public interface Herder {
      */
     void resumeConnector(String connector);
 
+    /**
+     * Returns a handle to the plugin factory used by this herder and its worker.
+     *
+     * @return a reference to the plugin factory.
+     */
+    Plugins plugins();
+
+
+    /**
+     * Get the cluster ID of the Kafka cluster backing this Connect cluster.
+     * @return the cluster ID of the Kafka cluster backing this connect cluster
+     */
+    String kafkaClusterId();
 
     class Created<T> {
         private final boolean created;

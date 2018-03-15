@@ -20,14 +20,18 @@ package kafka.tools
 import kafka.common._
 import kafka.message._
 import kafka.serializer._
-import kafka.utils.{CommandLineUtils, ToolsUtils}
+import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
+import kafka.utils.Implicits._
 import kafka.producer.{NewShinyProducer, OldProducer}
 import java.util.Properties
 import java.io._
+import java.nio.charset.StandardCharsets
 
 import joptsimple._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.utils.Utils
+
+import scala.collection.JavaConverters._
 
 object ConsoleProducer {
 
@@ -60,18 +64,18 @@ object ConsoleProducer {
     } catch {
       case e: joptsimple.OptionException =>
         System.err.println(e.getMessage)
-        System.exit(1)
+        Exit.exit(1)
       case e: Exception =>
         e.printStackTrace
-        System.exit(1)
+        Exit.exit(1)
     }
-    System.exit(0)
+    Exit.exit(0)
   }
 
   def getReaderProps(config: ProducerConfig): Properties = {
     val props = new Properties
     props.put("topic",config.topic)
-    props.putAll(config.cmdLineProps)
+    props ++= config.cmdLineProps
     props
   }
 
@@ -103,7 +107,7 @@ object ConsoleProducer {
       if (config.options.has(config.producerConfigOpt))
         Utils.loadProps(config.options.valueOf(config.producerConfigOpt))
       else new Properties
-    props.putAll(config.extraProducerProps)
+    props ++= config.extraProducerProps
     props
   }
 
@@ -130,7 +134,7 @@ object ConsoleProducer {
   }
 
   class ProducerConfig(args: Array[String]) {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val topicOpt = parser.accepts("topic", "REQUIRED: The topic id to produce messages to.")
       .withRequiredArg
       .describedAs("topic")
@@ -251,7 +255,6 @@ object ConsoleProducer {
       CommandLineUtils.printUsageAndDie(parser, "Read data from standard input and publish it to Kafka.")
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
 
-    import scala.collection.JavaConversions._
     val useOldProducer = options.has(useOldProducerOpt)
     val topic = options.valueOf(topicOpt)
     val brokerList = options.valueOf(brokerListOpt)
@@ -275,8 +278,8 @@ object ConsoleProducer {
     val valueEncoderClass = options.valueOf(valueEncoderOpt)
     val readerClass = options.valueOf(messageReaderOpt)
     val socketBuffer = options.valueOf(socketBufferSizeOpt)
-    val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt))
-    val extraProducerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(producerPropertyOpt))
+    val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
+    val extraProducerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(producerPropertyOpt).asScala)
     /* new producer related configs */
     val maxMemoryBytes = options.valueOf(maxMemoryBytesOpt)
     val maxPartitionMemoryBytes = options.valueOf(maxPartitionMemoryBytesOpt)
@@ -300,24 +303,25 @@ object ConsoleProducer {
         keySeparator = props.getProperty("key.separator")
       if (props.containsKey("ignore.error"))
         ignoreError = props.getProperty("ignore.error").trim.equalsIgnoreCase("true")
-      reader = new BufferedReader(new InputStreamReader(inputStream))
+      reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
     }
 
     override def readMessage() = {
       lineNumber += 1
+      print(">")
       (reader.readLine(), parseKey) match {
         case (null, _) => null
         case (line, true) =>
           line.indexOf(keySeparator) match {
             case -1 =>
-              if (ignoreError) new ProducerRecord(topic, line.getBytes)
+              if (ignoreError) new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
               else throw new KafkaException(s"No key found on line $lineNumber: $line")
             case n =>
-              val value = (if (n + keySeparator.size > line.size) "" else line.substring(n + keySeparator.size)).getBytes
-              new ProducerRecord(topic, line.substring(0, n).getBytes, value)
+              val value = (if (n + keySeparator.size > line.size) "" else line.substring(n + keySeparator.size)).getBytes(StandardCharsets.UTF_8)
+              new ProducerRecord(topic, line.substring(0, n).getBytes(StandardCharsets.UTF_8), value)
           }
         case (line, false) =>
-          new ProducerRecord(topic, line.getBytes)
+          new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
       }
     }
   }

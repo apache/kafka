@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,41 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.network;
+
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Map;
-import java.security.Principal;
-
-import org.apache.kafka.common.security.auth.PrincipalBuilder;
-import org.apache.kafka.common.KafkaException;
 
 /**
  * Authentication for Channel
  */
 public interface Authenticator extends Closeable {
-
-    /**
-     * Configures Authenticator using the provided parameters.
-     *
-     * @param transportLayer The transport layer used to read or write tokens
-     * @param principalBuilder The builder used to construct `Principal`
-     * @param configs Additional configuration parameters as key/value pairs
-     */
-    void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs);
-
     /**
      * Implements any authentication mechanism. Use transportLayer to read or write tokens.
-     * If no further authentication needs to be done returns.
+     * For security protocols PLAINTEXT and SSL, this is a no-op since no further authentication
+     * needs to be done. For SASL_PLAINTEXT and SASL_SSL, this performs the SASL authentication.
+     *
+     * @throws AuthenticationException if authentication fails due to invalid credentials or
+     *      other security configuration errors
+     * @throws IOException if read/write fails due to an I/O error
      */
-    void authenticate() throws IOException;
+    void authenticate() throws AuthenticationException, IOException;
 
     /**
      * Returns Principal using PrincipalBuilder
      */
-    Principal principal() throws KafkaException;
+    KafkaPrincipal principal();
 
     /**
      * returns true if authentication is complete otherwise returns false;

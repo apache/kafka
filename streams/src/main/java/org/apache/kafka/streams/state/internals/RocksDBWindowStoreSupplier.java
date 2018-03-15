@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,14 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.Map;
 
@@ -33,43 +30,46 @@ import java.util.Map;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-
-public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V> {
-
+@Deprecated
+public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, WindowStore> implements WindowStoreSupplier<WindowStore> {
+    public static final int MIN_SEGMENTS = 2;
     private final long retentionPeriod;
-    private final boolean retainDuplicates;
-    private final int numSegments;
-    private final long windowSize;
-    private final boolean enableCaching;
+    private WindowStoreBuilder<K, V> builder;
 
     public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, long windowSize, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
-        this(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, null, windowSize, logged, logConfig, enableCaching);
+        this(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, Time.SYSTEM, windowSize, logged, logConfig, enableCaching);
     }
 
     public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, Time time, long windowSize, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
         super(name, keySerde, valueSerde, time, logged, logConfig);
-        this.retentionPeriod = retentionPeriod;
-        this.retainDuplicates = retainDuplicates;
-        this.numSegments = numSegments;
-        this.windowSize = windowSize;
-        this.enableCaching = enableCaching;
-    }
-
-    public String name() {
-        return name;
-    }
-
-    public StateStore get() {
-        if (!enableCaching) {
-            final RocksDBWindowStore<K, V> rocksDbStore = new RocksDBWindowStore<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde);
-            return new MeteredWindowStore<>(logged ? rocksDbStore.enableLogging() : rocksDbStore, "rocksdb-window", time);
+        if (numSegments < MIN_SEGMENTS) {
+            throw new IllegalArgumentException("numSegments must be >= " + MIN_SEGMENTS);
         }
-
-        final RocksDBWindowStore<Bytes, byte[]> store = new RocksDBWindowStore<>(name, retentionPeriod, numSegments, false, Serdes.Bytes(), Serdes.ByteArray());
-        return new CachingWindowStore<>(new MeteredWindowStore<>(logged ? store.enableLogging() : store, "rocksdb-window", time), keySerde, valueSerde, windowSize);
+        this.retentionPeriod = retentionPeriod;
+        builder = new WindowStoreBuilder<>(new RocksDbWindowBytesStoreSupplier(name,
+                                                                               retentionPeriod,
+                                                                               numSegments,
+                                                                               windowSize,
+                                                                               retainDuplicates),
+                                           keySerde,
+                                           valueSerde,
+                                           time);
+        if (enableCaching) {
+            builder.withCachingEnabled();
+        }
+        // logged by default so we only need to worry about when it is disabled.
+        if (!logged) {
+            builder.withLoggingDisabled();
+        }
     }
 
+    public WindowStore<K, V> get() {
+        return builder.build();
+    }
+
+    @Override
     public long retentionPeriod() {
         return retentionPeriod;
     }
+
 }

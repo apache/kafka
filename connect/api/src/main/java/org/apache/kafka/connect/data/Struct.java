@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,8 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.data;
 
 import org.apache.kafka.connect.errors.DataException;
@@ -212,7 +211,9 @@ public class Struct {
      * @return the Struct, to allow chaining of {@link #put(String, Object)} calls
      */
     public Struct put(Field field, Object value) {
-        ConnectSchema.validateValue(field.schema(), value);
+        if (null == field)
+            throw new DataException("field cannot be null.");
+        ConnectSchema.validateValue(field.name(), field.schema(), value);
         values[field.index()] = value;
         return this;
     }
@@ -229,7 +230,7 @@ public class Struct {
             Object value = values[field.index()];
             if (value == null && (fieldSchema.isOptional() || fieldSchema.defaultValue() != null))
                 continue;
-            ConnectSchema.validateValue(fieldSchema, value);
+            ConnectSchema.validateValue(field.name(), fieldSchema, value);
         }
     }
 
@@ -239,12 +240,12 @@ public class Struct {
         if (o == null || getClass() != o.getClass()) return false;
         Struct struct = (Struct) o;
         return Objects.equals(schema, struct.schema) &&
-                Arrays.equals(values, struct.values);
+                Arrays.deepEquals(values, struct.values);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(schema, Arrays.hashCode(values));
+        return Objects.hash(schema, Arrays.deepHashCode(values));
     }
 
     private Field lookupField(String fieldName) {

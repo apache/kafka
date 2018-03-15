@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,11 +21,11 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.Base64;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -34,6 +34,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -42,8 +45,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import javax.xml.bind.DatatypeConverter;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
@@ -55,6 +56,7 @@ import static org.junit.Assert.fail;
  * Helper functions for writing unit tests
  */
 public class TestUtils {
+    private static final Logger log = LoggerFactory.getLogger(TestUtils.class);
 
     public static final File IO_TMP_DIR = new File(System.getProperty("java.io.tmpdir"));
 
@@ -70,12 +72,20 @@ public class TestUtils {
     public static final Random RANDOM = new Random();
     public static final long DEFAULT_MAX_WAIT_MS = 15000;
 
+    public static Cluster singletonCluster() {
+        return clusterWith(1);
+    }
+
     public static Cluster singletonCluster(final Map<String, Integer> topicPartitionCounts) {
         return clusterWith(1, topicPartitionCounts);
     }
 
     public static Cluster singletonCluster(final String topic, final int partitions) {
         return clusterWith(1, topic, partitions);
+    }
+
+    public static Cluster clusterWith(int nodes) {
+        return clusterWith(nodes, new HashMap<String, Integer>());
     }
 
     public static Cluster clusterWith(final int nodes, final Map<String, Integer> topicPartitionCounts) {
@@ -170,29 +180,15 @@ public class TestUtils {
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
-                Utils.delete(file);
+                try {
+                    Utils.delete(file);
+                } catch (IOException e) {
+                    log.error("Error deleting {}", file.getAbsolutePath(), e);
+                }
             }
         });
 
         return file;
-    }
-
-    /**
-     * Create a records buffer including the offset and message size at the start, which is required if the buffer is to
-     * be sent as part of `ProduceRequest`. This is the reason why we can't use
-     * `Record(long timestamp, byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize)` as this
-     * constructor does not include either of these fields.
-     */
-    public static ByteBuffer partitionRecordsBuffer(final long offset, final CompressionType compressionType, final Record... records) {
-        int bufferSize = 0;
-        for (final Record record : records)
-            bufferSize += Records.LOG_OVERHEAD + record.size();
-        final ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
-        final MemoryRecords memoryRecords = MemoryRecords.emptyRecords(buffer, compressionType);
-        for (final Record record : records)
-            memoryRecords.append(offset, record);
-        memoryRecords.close();
-        return memoryRecords.buffer();
     }
 
     public static Properties producerConfig(final String bootstrapServers,
@@ -267,11 +263,15 @@ public class TestUtils {
     public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, String conditionDetails) throws InterruptedException {
         final long startTime = System.currentTimeMillis();
 
-        while (!testCondition.conditionMet() && ((System.currentTimeMillis() - startTime) < maxWaitMs)) {
+        boolean testConditionMet;
+        while (!(testConditionMet = testCondition.conditionMet()) && ((System.currentTimeMillis() - startTime) < maxWaitMs)) {
             Thread.sleep(Math.min(maxWaitMs, 100L));
         }
 
-        if (!testCondition.conditionMet()) {
+        // don't re-evaluate testCondition.conditionMet() because this might slow down some tests significantly (this
+        // could be avoided by making the implementations more robust, but we have a large number of such implementations
+        // and it's easier to simply avoid the issue altogether)
+        if (!testConditionMet) {
             conditionDetails = conditionDetails != null ? conditionDetails : "";
             throw new AssertionError("Condition not met within timeout " + maxWaitMs + ". " + conditionDetails);
         }
@@ -293,7 +293,7 @@ public class TestUtils {
 
         // Convert into normal variant and add padding at the end.
         String originalClusterId = String.format("%s==", clusterId.replace("_", "/").replace("-", "+"));
-        byte[] decodedUuid = DatatypeConverter.parseBase64Binary(originalClusterId);
+        byte[] decodedUuid = Base64.decoder().decode(originalClusterId);
 
         // We expect 16 bytes, same as the input UUID.
         assertEquals(decodedUuid.length, 16);
@@ -305,5 +305,40 @@ public class TestUtils {
         } catch (Exception e) {
             fail(clusterId + " cannot be converted back to UUID.");
         }
+    }
+
+    /**
+     * Checks the two iterables for equality by first converting both to a list.
+     */
+    public static <T> void checkEquals(Iterable<T> it1, Iterable<T> it2) {
+        assertEquals(toList(it1), toList(it2));
+    }
+
+    public static <T> void checkEquals(Iterator<T> it1, Iterator<T> it2) {
+        assertEquals(Utils.toList(it1), Utils.toList(it2));
+    }
+
+    public static <T> void checkEquals(Set<T> c1, Set<T> c2, String firstDesc, String secondDesc) {
+        if (!c1.equals(c2)) {
+            Set<T> missing1 = new HashSet<>(c2);
+            missing1.removeAll(c1);
+            Set<T> missing2 = new HashSet<>(c1);
+            missing2.removeAll(c2);
+            fail(String.format("Sets not equal, missing %s=%s, missing %s=%s", firstDesc, missing1, secondDesc, missing2));
+        }
+    }
+
+    public static <T> List<T> toList(Iterable<? extends T> iterable) {
+        List<T> list = new ArrayList<>();
+        for (T item : iterable)
+            list.add(item);
+        return list;
+    }
+
+    public static ByteBuffer toBuffer(Struct struct) {
+        ByteBuffer buffer = ByteBuffer.allocate(struct.sizeOf());
+        struct.writeTo(buffer);
+        buffer.rewind();
+        return buffer;
     }
 }

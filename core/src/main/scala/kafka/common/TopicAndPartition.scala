@@ -1,7 +1,6 @@
 package kafka.common
 
-import kafka.cluster.{Replica, Partition}
-import kafka.utils.Json
+import org.apache.kafka.common.TopicPartition
 
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -25,13 +24,7 @@ import kafka.utils.Json
  */
 case class TopicAndPartition(topic: String, partition: Int) {
 
-  def this(tuple: (String, Int)) = this(tuple._1, tuple._2)
+  def this(topicPartition: TopicPartition) = this(topicPartition.topic, topicPartition.partition)
 
-  def this(partition: Partition) = this(partition.topic, partition.partitionId)
-
-  def this(replica: Replica) = this(replica.topic, replica.partitionId)
-
-  def asTuple = (topic, partition)
-
-  override def toString = "[%s,%d]".format(topic, partition)
+  override def toString: String = s"$topic-$partition"
 }

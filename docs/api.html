@@ -14,176 +14,100 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 -->
+<script id="api-template" type="text/x-handlebars-template">
+	Kafka includes five core apis:
+	<ol>
+	<li>The <a href="#producerapi">Producer</a> API allows applications to send streams of data to topics in the Kafka cluster.
+	<li>The <a href="#consumerapi">Consumer</a> API allows applications to read streams of data from topics in the Kafka cluster.
+	<li>The <a href="#streamsapi">Streams</a> API allows transforming streams of data from input topics to output topics.
+	<li>The <a href="#connectapi">Connect</a> API allows implementing connectors that continually pull from some source system or application into Kafka or push from Kafka into some sink system or application.
+	<li>The <a href="#adminapi">AdminClient</a> API allows managing and inspecting topics, brokers, and other Kafka objects.
+	</ol>
 
-Apache Kafka includes new java clients (in the org.apache.kafka.clients package). These are meant to supplant the older Scala clients, but for compatibility they will co-exist for some time. These clients are available in a separate jar with minimal dependencies, while the old Scala clients remain packaged with the server.
+	Kafka exposes all its functionality over a language independent protocol which has clients available in many programming languages. However only the Java clients are maintained as part of the main Kafka project, the others are available as independent open source projects. A list of non-Java clients is available <a href="https://cwiki.apache.org/confluence/display/KAFKA/Clients">here</a>.
 
-<h3><a id="producerapi" href="#producerapi">2.1 Producer API</a></h3>
+	<h3><a id="producerapi" href="#producerapi">2.1 Producer API</a></h3>
 
-We recommend the new Java producer for all new development. The old Scala producers have been deprecated and will be removed in a future major release.
-The new Java producer is production tested and generally faster and more fully featured than the previous Scala clients. You can use this client by adding a dependency on
-the client jar using the following example maven co-ordinates (you can change the version numbers with new releases):
-<pre>
-	&lt;dependency&gt;
-	    &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
-	    &lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
-	    &lt;version&gt;0.10.0.0&lt;/version&gt;
-	&lt;/dependency&gt;
-</pre>
+	The Producer API allows applications to send streams of data to topics in the Kafka cluster.
+	<p>
+	Examples showing how to use the producer are given in the
+	<a href="/{{version}}/javadoc/index.html?org/apache/kafka/clients/producer/KafkaProducer.html" title="Kafka {{dotVersion}} Javadoc">javadocs</a>.
+	<p>
+	To use the producer, you can use the following maven dependency:
 
-Examples showing how to use the producer are given in the
-<a href="http://kafka.apache.org/0100/javadoc/index.html?org/apache/kafka/clients/producer/KafkaProducer.html" title="Kafka 0.10.0 Javadoc">javadocs</a>.
+	<pre class="brush: xml;">
+		&lt;dependency&gt;
+			&lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+			&lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
+			&lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
+		&lt;/dependency&gt;
+	</pre>
 
-<p>
-For those interested in the legacy Scala producer api, information can be found <a href="http://kafka.apache.org/081/documentation.html#producerapi">
-here</a>.
-</p>
+	<h3><a id="consumerapi" href="#consumerapi">2.2 Consumer API</a></h3>
 
-<h3><a id="consumerapi" href="#consumerapi">2.2 Consumer API</a></h3>
+	The Consumer API allows applications to read streams of data from topics in the Kafka cluster.
+	<p>
+	Examples showing how to use the consumer are given in the
+	<a href="/{{version}}/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaConsumer.html" title="Kafka {{dotVersion}} Javadoc">javadocs</a>.
+	<p>
+	To use the consumer, you can use the following maven dependency:
+	<pre class="brush: xml;">
+		&lt;dependency&gt;
+			&lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+			&lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
+			&lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
+		&lt;/dependency&gt;
+	</pre>
 
-We recommend the new Java consumer for all new development. The new Java consumer replaces the high-level ZooKeeper-based consumer and
-low-level consumer APIs (also known as old Scala consumers).
+	<h3><a id="streamsapi" href="#streamsapi">2.3 Streams API</a></h3>
 
-To ensure a smooth upgrade path, the old Scala consumers are still maintained (although lacking features like security) and continue to work
-with the current Kafka clusters. The current plan is to deprecate them in the release after 0.10.1.0 and to remove them in a future major release.
+	The <a href="#streamsapi">Streams</a> API allows transforming streams of data from input topics to output topics.
+	<p>
+	Examples showing how to use this library are given in the
+	<a href="/{{version}}/javadoc/index.html?org/apache/kafka/streams/KafkaStreams.html" title="Kafka {{dotVersion}} Javadoc">javadocs</a>
+	<p>
+	Additional documentation on using the Streams API is available <a href="/{{version}}/documentation/streams">here</a>.
+	<p>
+	To use Kafka Streams you can use the following maven dependency:
 
-In the following sections we introduce new Java consumer API and the old Scala consumer APIs (both high-level ConsumerConnector and low-level SimpleConsumer).
+	<pre class="brush: xml;">
+		&lt;dependency&gt;
+			&lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+			&lt;artifactId&gt;kafka-streams&lt;/artifactId&gt;
+			&lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
+		&lt;/dependency&gt;
+	</pre>
 
-<h4><a id="newconsumerapi" href="#newconsumerapi">2.2.1 New Consumer API</a></h4>
-This new unified consumer API removes the distinction between the 0.8 high-level and low-level consumer APIs. You can use this client by adding a dependency on the client jar using the following example maven co-ordinates (you can change the version numbers with new releases):
-<pre>
-	&lt;dependency&gt;
-	    &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
-	    &lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
-	    &lt;version&gt;0.10.0.0&lt;/version&gt;
-	&lt;/dependency&gt;
-</pre>
+	<h3><a id="connectapi" href="#connectapi">2.4 Connect API</a></h3>
 
-Examples showing how to use the consumer are given in the
-<a href="http://kafka.apache.org/0100/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaConsumer.html" title="Kafka 0.10.0 Javadoc">javadocs</a>.
+	The Connect API allows implementing connectors that continually pull from some source data system into Kafka or push from Kafka into some sink data system.
+	<p>
+	Many users of Connect won't need to use this API directly, though, they can use pre-built connectors without needing to write any code. Additional information on using Connect is available <a href="/documentation.html#connect">here</a>.
+	<p>
+	Those who want to implement custom connectors can see the <a href="/{{version}}/javadoc/index.html?org/apache/kafka/connect" title="Kafka {{dotVersion}} Javadoc">javadoc</a>.
+	<p>
 
-<h4><a id="highlevelconsumerapi" href="#highlevelconsumerapi">2.2.2 Old High Level Consumer API</a></h4>
-<pre>
-class Consumer {
-  /**
-   *  Create a ConsumerConnector
-   *
-   *  @param config  at the minimum, need to specify the groupid of the consumer and the zookeeper
-   *                 connection string zookeeper.connect.
-   */
-  public static kafka.javaapi.consumer.ConsumerConnector createJavaConsumerConnector(ConsumerConfig config);
-}
+	<h3><a id="adminapi" href="#adminapi">2.5 AdminClient API</a></h3>
 
-/**
- *  V: type of the message
- *  K: type of the optional key associated with the message
- */
-public interface kafka.javaapi.consumer.ConsumerConnector {
-  /**
-   *  Create a list of message streams of type T for each topic.
-   *
-   *  @param topicCountMap  a map of (topic, #streams) pair
-   *  @param decoder a decoder that converts from Message to T
-   *  @return a map of (topic, list of  KafkaStream) pairs.
-   *          The number of items in the list is #streams. Each stream supports
-   *          an iterator over message/metadata pairs.
-   */
-  public &lt;K,V&gt; Map&lt;String, List&lt;KafkaStream&lt;K,V&gt;&gt;&gt;
-    createMessageStreams(Map&lt;String, Integer&gt; topicCountMap, Decoder&lt;K&gt; keyDecoder, Decoder&lt;V&gt; valueDecoder);
+	The AdminClient API supports managing and inspecting topics, brokers, acls, and other Kafka objects.
+	<p>
+	To use the AdminClient API, add the following Maven dependency:
+	<pre class="brush: xml;">
+		&lt;dependency&gt;
+			&lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+			&lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
+			&lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
+		&lt;/dependency&gt;
+	</pre>
+	For more information about the AdminClient APIs, see the <a href="/{{version}}/javadoc/index.html?org/apache/kafka/clients/admin/AdminClient.html" title="Kafka {{dotVersion}} Javadoc">javadoc</a>.
+	<p>
 
-  /**
-   *  Create a list of message streams of type T for each topic, using the default decoder.
-   */
-  public Map&lt;String, List&lt;KafkaStream&lt;byte[], byte[]&gt;&gt;&gt; createMessageStreams(Map&lt;String, Integer&gt; topicCountMap);
+	<h3><a id="legacyapis" href="#legacyapis">2.6 Legacy APIs</a></h3>
 
-  /**
-   *  Create a list of message streams for topics matching a wildcard.
-   *
-   *  @param topicFilter a TopicFilter that specifies which topics to
-   *                    subscribe to (encapsulates a whitelist or a blacklist).
-   *  @param numStreams the number of message streams to return.
-   *  @param keyDecoder a decoder that decodes the message key
-   *  @param valueDecoder a decoder that decodes the message itself
-   *  @return a list of KafkaStream. Each stream supports an
-   *          iterator over its MessageAndMetadata elements.
-   */
-  public &lt;K,V&gt; List&lt;KafkaStream&lt;K,V&gt;&gt;
-    createMessageStreamsByFilter(TopicFilter topicFilter, int numStreams, Decoder&lt;K&gt; keyDecoder, Decoder&lt;V&gt; valueDecoder);
+	<p>
+	A more limited legacy producer and consumer api is also included in Kafka. These old Scala APIs are deprecated and only still available for compatibility purposes. Information on them can be found here <a href="/081/documentation.html#producerapi"  title="Kafka 0.8.1 Docs">
+	here</a>.
+	</p>
+</script>
 
-  /**
-   *  Create a list of message streams for topics matching a wildcard, using the default decoder.
-   */
-  public List&lt;KafkaStream&lt;byte[], byte[]&gt;&gt; createMessageStreamsByFilter(TopicFilter topicFilter, int numStreams);
-
-  /**
-   *  Create a list of message streams for topics matching a wildcard, using the default decoder, with one stream.
-   */
-  public List&lt;KafkaStream&lt;byte[], byte[]&gt;&gt; createMessageStreamsByFilter(TopicFilter topicFilter);
-
-  /**
-   *  Commit the offsets of all topic/partitions connected by this connector.
-   */
-  public void commitOffsets();
-
-  /**
-   *  Shut down the connector
-   */
-  public void shutdown();
-}
-
-</pre>
-You can follow
-<a href="https://cwiki.apache.org/confluence/display/KAFKA/Consumer+Group+Example" title="Kafka 0.8 consumer example">this example</a> to learn how to use the high level consumer api.
-<h4><a id="simpleconsumerapi" href="#simpleconsumerapi">2.2.3 Old Simple Consumer API</a></h4>
-<pre>
-class kafka.javaapi.consumer.SimpleConsumer {
-  /**
-   *  Fetch a set of messages from a topic.
-   *
-   *  @param request specifies the topic name, topic partition, starting byte offset, maximum bytes to be fetched.
-   *  @return a set of fetched messages
-   */
-  public FetchResponse fetch(kafka.javaapi.FetchRequest request);
-
-  /**
-   *  Fetch metadata for a sequence of topics.
-   *
-   *  @param request specifies the versionId, clientId, sequence of topics.
-   *  @return metadata for each topic in the request.
-   */
-  public kafka.javaapi.TopicMetadataResponse send(kafka.javaapi.TopicMetadataRequest request);
-
-  /**
-   *  Get a list of valid offsets (up to maxSize) before the given time.
-   *
-   *  @param request a [[kafka.javaapi.OffsetRequest]] object.
-   *  @return a [[kafka.javaapi.OffsetResponse]] object.
-   */
-  public kafka.javaapi.OffsetResponse getOffsetsBefore(OffsetRequest request);
-
-  /**
-   * Close the SimpleConsumer.
-   */
-  public void close();
-}
-</pre>
-For most applications, the new Java Consumer API is the best option and it's the API we intend to support going forward. However, if you need to use the SimpleConsumer API, the logic will be a bit more complicated and you can follow the example <a href="https://cwiki.apache.org/confluence/display/KAFKA/0.8.0+SimpleConsumer+Example" title="Kafka 0.8 SimpleConsumer example">here</a>.
-
-<h3><a id="streamsapi" href="#streamsapi">2.3 Streams API</a></h3>
-
-As of the 0.10.0 release we have added a stream processing engine to Apache Kafka called Kafka Streams, which is a client library that lets users implement their own stream processing applications for data stored in Kafka topics.
-You can use Kafka Streams from within your Java applications by adding a dependency on the kafka-streams jar using the following maven co-ordinates:
-
-<pre>
-	&lt;dependency&gt;
-	    &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
-	    &lt;artifactId&gt;kafka-streams&lt;/artifactId&gt;
-	    &lt;version&gt;0.10.0.1&lt;/version&gt;
-	&lt;/dependency&gt;
-</pre>
-
-Examples showing how to use this library are given in the
-<a href="http://kafka.apache.org/0100/javadoc/index.html?org/apache/kafka/streams/KafkaStreams.html" title="Kafka 0.10.0 Javadoc">javadocs</a> and <a href="streams.html" title="Kafka Streams Overview">kafka streams overview</a>.
-<p>
-    Please note that Kafka Streams is a new component of Kafka, and its public APIs may change in future releases.
-    We use the <b>@InterfaceStability.Unstable</b> annotation to denote classes whose APIs may change without backward-compatibility in future releases.
-</p>
+<div class="p-api"></div>

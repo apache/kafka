@@ -7,7 +7,7 @@ package kafka.api
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -24,6 +24,7 @@ import kafka.utils.Logging
 object Request {
   val OrdinaryConsumerId: Int = -1
   val DebuggingConsumerId: Int = -2
+  val FutureLocalReplicaId: Int = -3
 
   // Broker ids are non-negative int.
   def isValidBrokerId(brokerId: Int): Boolean = brokerId >= 0
@@ -33,7 +34,7 @@ object Request {
 abstract class RequestOrResponse(val requestId: Option[Short] = None) extends Logging {
 
   def sizeInBytes: Int
-  
+
   def writeTo(buffer: ByteBuffer): Unit
 
   def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {}
@@ -42,6 +43,6 @@ abstract class RequestOrResponse(val requestId: Option[Short] = None) extends Lo
   *  This API has no meaning for a Response object.
    * @param details If this is false, omit the parts of the request description that are proportional to the number of
    *                topics or partitions. This is mainly to control the amount of request logging. */
-  def describe(details: Boolean):String
+  def describe(details: Boolean): String
 }
 

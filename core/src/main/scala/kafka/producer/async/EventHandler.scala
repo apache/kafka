@@ -33,5 +33,5 @@ trait EventHandler[K,V] {
   /**
    * Cleans up and shuts down the event handler
   */
-  def close
+  def close(): Unit
 }

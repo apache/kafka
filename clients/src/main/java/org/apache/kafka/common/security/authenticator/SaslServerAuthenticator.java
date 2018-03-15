@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,29 +14,50 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.authenticator;
 
-import java.io.IOException;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.security.Principal;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
-
-import javax.security.auth.login.Configuration;
-import javax.security.auth.Subject;
-import javax.security.sasl.Sasl;
-import javax.security.sasl.SaslServer;
-import javax.security.sasl.SaslException;
-
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.IllegalSaslStateException;
+import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.network.Authenticator;
+import org.apache.kafka.common.network.ChannelBuilders;
+import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.network.NetworkReceive;
+import org.apache.kafka.common.network.NetworkSend;
+import org.apache.kafka.common.network.Send;
+import org.apache.kafka.common.network.TransportLayer;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.requests.RequestAndSize;
+import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.SaslAuthenticateRequest;
+import org.apache.kafka.common.requests.SaslAuthenticateResponse;
+import org.apache.kafka.common.requests.SaslHandshakeRequest;
+import org.apache.kafka.common.requests.SaslHandshakeResponse;
+import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
+import org.apache.kafka.common.security.auth.SaslAuthenticationContext;
 import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
+import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.ScramLoginModule;
+import org.apache.kafka.common.security.scram.ScramMechanism;
+import org.apache.kafka.common.security.scram.ScramServerCallbackHandler;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
 import org.ietf.jgss.GSSContext;
 import org.ietf.jgss.GSSCredential;
 import org.ietf.jgss.GSSException;
@@ -45,96 +66,121 @@ import org.ietf.jgss.GSSName;
 import org.ietf.jgss.Oid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.kafka.common.security.auth.AuthCallbackHandler;
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.IllegalSaslStateException;
-import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.network.Authenticator;
-import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.common.network.NetworkSend;
-import org.apache.kafka.common.network.NetworkReceive;
-import org.apache.kafka.common.network.TransportLayer;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.Protocol;
-import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.requests.AbstractRequest;
-import org.apache.kafka.common.requests.AbstractRequestResponse;
-import org.apache.kafka.common.requests.ApiVersionsRequest;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
-import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.requests.ResponseHeader;
-import org.apache.kafka.common.requests.ResponseSend;
-import org.apache.kafka.common.requests.SaslHandshakeRequest;
-import org.apache.kafka.common.requests.SaslHandshakeResponse;
-import org.apache.kafka.common.security.auth.PrincipalBuilder;
+
+import javax.security.auth.Subject;
+import javax.security.sasl.Sasl;
+import javax.security.sasl.SaslException;
+import javax.security.sasl.SaslServer;
+import java.io.Closeable;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class SaslServerAuthenticator implements Authenticator {
 
+    // GSSAPI limits requests to 64K, but we allow a bit extra for custom SASL mechanisms
+    static final int MAX_RECEIVE_SIZE = 524288;
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerAuthenticator.class);
+    private static final ByteBuffer EMPTY_BUFFER = ByteBuffer.allocate(0);
 
-    public enum SaslState {
-        GSSAPI_OR_HANDSHAKE_REQUEST, HANDSHAKE_REQUEST, AUTHENTICATE, COMPLETE, FAILED
+    private enum SaslState {
+        INITIAL_REQUEST,               // May be GSSAPI token, SaslHandshake or ApiVersions
+        HANDSHAKE_OR_VERSIONS_REQUEST, // May be SaslHandshake or ApiVersions
+        HANDSHAKE_REQUEST,             // After an ApiVersions request, next request must be SaslHandshake
+        AUTHENTICATE,                  // Authentication tokens (SaslHandshake v1 and above indicate SaslAuthenticate headers)
+        COMPLETE,                      // Authentication completed successfully
+        FAILED                         // Authentication failed
     }
 
-    private final String node;
-    private final Subject subject;
-    private final KerberosShortNamer kerberosNamer;
-    private final int maxReceiveSize;
-    private final String host;
+    private final SecurityProtocol securityProtocol;
+    private final ListenerName listenerName;
+    private final String connectionId;
+    private final Map<String, JaasContext> jaasContexts;
+    private final Map<String, Subject> subjects;
+    private final CredentialCache credentialCache;
+    private final TransportLayer transportLayer;
+    private final Set<String> enabledMechanisms;
+    private final Map<String, ?> configs;
+    private final KafkaPrincipalBuilder principalBuilder;
+    private final DelegationTokenCache tokenCache;
 
     // Current SASL state
-    private SaslState saslState = SaslState.GSSAPI_OR_HANDSHAKE_REQUEST;
+    private SaslState saslState = SaslState.INITIAL_REQUEST;
     // Next SASL state to be set when outgoing writes associated with the current SASL state complete
     private SaslState pendingSaslState = null;
+    // Exception that will be thrown by `authenticate()` when SaslState is set to FAILED after outbound writes complete
+    private AuthenticationException pendingException = null;
     private SaslServer saslServer;
     private String saslMechanism;
     private AuthCallbackHandler callbackHandler;
 
-    // assigned in `configure`
-    private TransportLayer transportLayer;
-    private Set<String> enabledMechanisms;
-    private Map<String, ?> configs;
-
     // buffers used in `authenticate`
     private NetworkReceive netInBuffer;
-    private NetworkSend netOutBuffer;
+    private Send netOutBuffer;
+    // flag indicating if sasl tokens are sent as Kafka SaslAuthenticate request/responses
+    private boolean enableKafkaSaslAuthenticateHeaders;
 
-    public SaslServerAuthenticator(String node, final Subject subject, KerberosShortNamer kerberosNameParser, String host, int maxReceiveSize) throws IOException {
-        if (subject == null)
-            throw new IllegalArgumentException("subject cannot be null");
-        this.node = node;
-        this.subject = subject;
-        this.kerberosNamer = kerberosNameParser;
-        this.maxReceiveSize = maxReceiveSize;
-        this.host = host;
-    }
-
-    public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) {
+    public SaslServerAuthenticator(Map<String, ?> configs,
+                                   String connectionId,
+                                   Map<String, JaasContext> jaasContexts,
+                                   Map<String, Subject> subjects,
+                                   KerberosShortNamer kerberosNameParser,
+                                   CredentialCache credentialCache,
+                                   ListenerName listenerName,
+                                   SecurityProtocol securityProtocol,
+                                   TransportLayer transportLayer,
+                                   DelegationTokenCache tokenCache) throws IOException {
+        this.connectionId = connectionId;
+        this.jaasContexts = jaasContexts;
+        this.subjects = subjects;
+        this.credentialCache = credentialCache;
+        this.listenerName = listenerName;
+        this.securityProtocol = securityProtocol;
+        this.enableKafkaSaslAuthenticateHeaders = false;
+        this.tokenCache = tokenCache;
         this.transportLayer = transportLayer;
+
         this.configs = configs;
-        List<String> enabledMechanisms = (List<String>) this.configs.get(SaslConfigs.SASL_ENABLED_MECHANISMS);
+        @SuppressWarnings("unchecked")
+        List<String> enabledMechanisms = (List<String>) this.configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
         if (enabledMechanisms == null || enabledMechanisms.isEmpty())
             throw new IllegalArgumentException("No SASL mechanisms are enabled");
         this.enabledMechanisms = new HashSet<>(enabledMechanisms);
+        for (String mechanism : enabledMechanisms) {
+            if (!jaasContexts.containsKey(mechanism))
+                throw new IllegalArgumentException("Jaas context not specified for SASL mechanism " + mechanism);
+            if (!subjects.containsKey(mechanism))
+                throw new IllegalArgumentException("Subject cannot be null for SASL mechanism " + mechanism);
+        }
+
+        // Note that the old principal builder does not support SASL, so we do not need to pass the
+        // authenticator or the transport layer
+        this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, null, null, kerberosNameParser);
     }
 
     private void createSaslServer(String mechanism) throws IOException {
         this.saslMechanism = mechanism;
-        callbackHandler = new SaslServerCallbackHandler(Configuration.getConfiguration(), kerberosNamer);
+        Subject subject = subjects.get(mechanism);
+        if (!ScramMechanism.isScram(mechanism))
+            callbackHandler = new SaslServerCallbackHandler(jaasContexts.get(mechanism));
+        else
+            callbackHandler = new ScramServerCallbackHandler(credentialCache.cache(mechanism, ScramCredential.class), tokenCache);
         callbackHandler.configure(configs, Mode.SERVER, subject, saslMechanism);
         if (mechanism.equals(SaslConfigs.GSSAPI_MECHANISM)) {
-            if (subject.getPrincipals().isEmpty())
-                throw new IllegalArgumentException("subject must have at least one principal");
-            saslServer = createSaslKerberosServer(callbackHandler, configs);
+            saslServer = createSaslKerberosServer(callbackHandler, configs, subject);
         } else {
             try {
                 saslServer = Subject.doAs(subject, new PrivilegedExceptionAction<SaslServer>() {
                     public SaslServer run() throws SaslException {
-                        return Sasl.createSaslServer(saslMechanism, "kafka", host, configs, callbackHandler);
+                        return Sasl.createSaslServer(saslMechanism, "kafka", serverAddress().getHostName(),
+                                configs, callbackHandler);
                     }
                 });
             } catch (PrivilegedActionException e) {
@@ -143,12 +189,12 @@ public class SaslServerAuthenticator implements Authenticator {
         }
     }
 
-    private SaslServer createSaslKerberosServer(final AuthCallbackHandler saslServerCallbackHandler, final Map<String, ?> configs) throws IOException {
+    private SaslServer createSaslKerberosServer(final AuthCallbackHandler saslServerCallbackHandler, final Map<String, ?> configs, Subject subject) throws IOException {
         // server is using a JAAS-authenticated subject: determine service principal name and hostname from kafka server's subject.
-        final Principal servicePrincipal = subject.getPrincipals().iterator().next();
+        final String servicePrincipal = SaslClientAuthenticator.firstPrincipal(subject);
         KerberosName kerberosName;
         try {
-            kerberosName = KerberosName.parse(servicePrincipal.getName());
+            kerberosName = KerberosName.parse(servicePrincipal);
         } catch (IllegalArgumentException e) {
             throw new KafkaException("Principal has name with unexpected format " + servicePrincipal);
         }
@@ -196,6 +242,7 @@ public class SaslServerAuthenticator implements Authenticator {
      * The messages are sent and received as size delimited bytes that consists of a 4 byte network-ordered size N
      * followed by N bytes representing the opaque payload.
      */
+    @Override
     public void authenticate() throws IOException {
         if (netOutBuffer != null && !flushNetOutBufferAndUpdateInterestOps())
             return;
@@ -205,7 +252,7 @@ public class SaslServerAuthenticator implements Authenticator {
             return;
         }
 
-        if (netInBuffer == null) netInBuffer = new NetworkReceive(maxReceiveSize, node);
+        if (netInBuffer == null) netInBuffer = new NetworkReceive(MAX_RECEIVE_SIZE, connectionId);
 
         netInBuffer.readFrom(transportLayer);
 
@@ -216,20 +263,17 @@ public class SaslServerAuthenticator implements Authenticator {
             netInBuffer = null; // reset the networkReceive as we read all the data.
             try {
                 switch (saslState) {
+                    case HANDSHAKE_OR_VERSIONS_REQUEST:
                     case HANDSHAKE_REQUEST:
                         handleKafkaRequest(clientToken);
                         break;
-                    case GSSAPI_OR_HANDSHAKE_REQUEST:
+                    case INITIAL_REQUEST:
                         if (handleKafkaRequest(clientToken))
                             break;
                         // For default GSSAPI, fall through to authenticate using the client token as the first GSSAPI packet.
                         // This is required for interoperability with 0.9.0.x clients which do not send handshake request
                     case AUTHENTICATE:
-                        byte[] response = saslServer.evaluateResponse(clientToken);
-                        if (response != null) {
-                            netOutBuffer = new NetworkSend(node, ByteBuffer.wrap(response));
-                            flushNetOutBufferAndUpdateInterestOps();
-                        }
+                        handleSaslToken(clientToken);
                         // When the authentication exchange is complete and no more tokens are expected from the client,
                         // update SASL state. Current SASL state will be updated when outgoing writes to the client complete.
                         if (saslServer.isComplete())
@@ -238,35 +282,59 @@ public class SaslServerAuthenticator implements Authenticator {
                     default:
                         break;
                 }
+            } catch (SaslException | AuthenticationException e) {
+                // Exception will be propagated after response is sent to client
+                AuthenticationException authException = (e instanceof AuthenticationException) ?
+                        (AuthenticationException) e : new AuthenticationException("SASL authentication failed", e);
+                setSaslState(SaslState.FAILED, authException);
             } catch (Exception e) {
-                setSaslState(SaslState.FAILED);
-                throw new IOException(e);
+                // In the case of IOExceptions and other unexpected exceptions, fail immediately
+                saslState = SaslState.FAILED;
+                throw e;
             }
         }
     }
 
-    public Principal principal() {
-        return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, saslServer.getAuthorizationID());
+    @Override
+    public KafkaPrincipal principal() {
+        SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer, securityProtocol, clientAddress());
+        KafkaPrincipal principal = principalBuilder.build(context);
+        if (ScramMechanism.isScram(saslMechanism) && Boolean.parseBoolean((String) saslServer.getNegotiatedProperty(ScramLoginModule.TOKEN_AUTH_CONFIG))) {
+            principal.tokenAuthenticated(true);
+        }
+        return principal;
     }
 
+    @Override
     public boolean complete() {
         return saslState == SaslState.COMPLETE;
     }
 
+    @Override
     public void close() throws IOException {
+        if (principalBuilder instanceof Closeable)
+            Utils.closeQuietly((Closeable) principalBuilder, "principal builder");
         if (saslServer != null)
             saslServer.dispose();
         if (callbackHandler != null)
             callbackHandler.close();
     }
 
-    private void setSaslState(SaslState saslState) {
-        if (netOutBuffer != null && !netOutBuffer.completed())
+    private void setSaslState(SaslState saslState) throws IOException {
+        setSaslState(saslState, null);
+    }
+
+    private void setSaslState(SaslState saslState, AuthenticationException exception) throws IOException {
+        if (netOutBuffer != null && !netOutBuffer.completed()) {
             pendingSaslState = saslState;
-        else {
-            this.pendingSaslState = null;
+            pendingException = exception;
+        } else {
             this.saslState = saslState;
             LOG.debug("Set SASL server state to {}", saslState);
+            this.pendingSaslState = null;
+            this.pendingException = null;
+            if (exception != null)
+                throw exception;
         }
     }
 
@@ -275,7 +343,7 @@ public class SaslServerAuthenticator implements Authenticator {
         if (flushedCompletely) {
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
             if (pendingSaslState != null)
-                setSaslState(pendingSaslState);
+                setSaslState(pendingSaslState, pendingException);
         } else
             transportLayer.addInterestOps(SelectionKey.OP_WRITE);
         return flushedCompletely;
@@ -287,42 +355,89 @@ public class SaslServerAuthenticator implements Authenticator {
         return netOutBuffer.completed();
     }
 
+    private InetAddress serverAddress() {
+        return transportLayer.socketChannel().socket().getLocalAddress();
+    }
+
+    private InetAddress clientAddress() {
+        return transportLayer.socketChannel().socket().getInetAddress();
+    }
+
+    private void handleSaslToken(byte[] clientToken) throws IOException {
+        if (!enableKafkaSaslAuthenticateHeaders) {
+            byte[] response = saslServer.evaluateResponse(clientToken);
+            if (response != null) {
+                netOutBuffer = new NetworkSend(connectionId, ByteBuffer.wrap(response));
+                flushNetOutBufferAndUpdateInterestOps();
+            }
+        } else {
+            ByteBuffer requestBuffer = ByteBuffer.wrap(clientToken);
+            RequestHeader header = RequestHeader.parse(requestBuffer);
+            ApiKeys apiKey = header.apiKey();
+            short version = header.apiVersion();
+            RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(),
+                    KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol);
+            RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
+            if (apiKey != ApiKeys.SASL_AUTHENTICATE) {
+                IllegalSaslStateException e = new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL authentication.");
+                sendKafkaResponse(requestContext, requestAndSize.request.getErrorResponse(e));
+                throw e;
+            }
+            if (!apiKey.isVersionSupported(version)) {
+                // We cannot create an error response if the request version of SaslAuthenticate is not supported
+                // This should not normally occur since clients typically check supported versions using ApiVersionsRequest
+                throw new UnsupportedVersionException("Version " + version + " is not supported for apiKey " + apiKey);
+            }
+            SaslAuthenticateRequest saslAuthenticateRequest = (SaslAuthenticateRequest) requestAndSize.request;
+
+            try {
+                byte[] responseToken = saslServer.evaluateResponse(Utils.readBytes(saslAuthenticateRequest.saslAuthBytes()));
+                // For versions with SASL_AUTHENTICATE header, send a response to SASL_AUTHENTICATE request even if token is empty.
+                ByteBuffer responseBuf = responseToken == null ? EMPTY_BUFFER : ByteBuffer.wrap(responseToken);
+                sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.NONE, null, responseBuf));
+            } catch (SaslAuthenticationException | SaslException e) {
+                String errorMessage = e instanceof SaslAuthenticationException ? e.getMessage() :
+                    "Authentication failed due to invalid credentials with SASL mechanism " + saslMechanism;
+                sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.SASL_AUTHENTICATION_FAILED,
+                        errorMessage));
+                throw e;
+            }
+        }
+    }
+
     private boolean handleKafkaRequest(byte[] requestBytes) throws IOException, AuthenticationException {
         boolean isKafkaRequest = false;
         String clientMechanism = null;
         try {
             ByteBuffer requestBuffer = ByteBuffer.wrap(requestBytes);
-            RequestHeader requestHeader = RequestHeader.parse(requestBuffer);
-            ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
+            RequestHeader header = RequestHeader.parse(requestBuffer);
+            ApiKeys apiKey = header.apiKey();
+
             // A valid Kafka request header was received. SASL authentication tokens are now expected only
             // following a SaslHandshakeRequest since this is not a GSSAPI client token from a Kafka 0.9.0.x client.
-            setSaslState(SaslState.HANDSHAKE_REQUEST);
+            if (saslState == SaslState.INITIAL_REQUEST)
+                setSaslState(SaslState.HANDSHAKE_OR_VERSIONS_REQUEST);
             isKafkaRequest = true;
 
-            if (!Protocol.apiVersionSupported(requestHeader.apiKey(), requestHeader.apiVersion())) {
-                if (apiKey == ApiKeys.API_VERSIONS)
-                    sendKafkaResponse(requestHeader, ApiVersionsResponse.fromError(Errors.UNSUPPORTED_VERSION));
-                else
-                    throw new UnsupportedVersionException("Version " + requestHeader.apiVersion() + " is not supported for apiKey " + apiKey);
-            } else {
-                AbstractRequest request = AbstractRequest.getRequest(requestHeader.apiKey(), requestHeader.apiVersion(), requestBuffer);
+            // Raise an error prior to parsing if the api cannot be handled at this layer. This avoids
+            // unnecessary exposure to some of the more complex schema types.
+            if (apiKey != ApiKeys.API_VERSIONS && apiKey != ApiKeys.SASL_HANDSHAKE)
+                throw new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL handshake.");
 
-                LOG.debug("Handle Kafka request {}", apiKey);
-                switch (apiKey) {
-                    case API_VERSIONS:
-                        handleApiVersionsRequest(requestHeader, (ApiVersionsRequest) request);
-                        break;
-                    case SASL_HANDSHAKE:
-                        clientMechanism = handleHandshakeRequest(requestHeader, (SaslHandshakeRequest) request);
-                        break;
-                    default:
-                        throw new IllegalSaslStateException("Unexpected Kafka request of type " + apiKey + " during SASL handshake.");
-                }
-            }
-        } catch (SchemaException | IllegalArgumentException e) {
-            if (saslState == SaslState.GSSAPI_OR_HANDSHAKE_REQUEST) {
-                // SchemaException is thrown if the request is not in Kafka format. IIlegalArgumentException is thrown
-                // if the API key is invalid. For compatibility with 0.9.0.x where the first packet is a GSSAPI token
+            LOG.debug("Handling Kafka request {}", apiKey);
+
+
+            RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(),
+                    KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol);
+            RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
+            if (apiKey == ApiKeys.API_VERSIONS)
+                handleApiVersionsRequest(requestContext, (ApiVersionsRequest) requestAndSize.request);
+            else
+                clientMechanism = handleHandshakeRequest(requestContext, (SaslHandshakeRequest) requestAndSize.request);
+        } catch (InvalidRequestException e) {
+            if (saslState == SaslState.INITIAL_REQUEST) {
+                // InvalidRequestException is thrown if the request is not in Kafka format or if the API key
+                // is invalid. For compatibility with 0.9.0.x where the first packet is a GSSAPI token
                 // starting with 0x60, revert to GSSAPI for both these exceptions.
                 if (LOG.isDebugEnabled()) {
                     StringBuilder tokenBuilder = new StringBuilder();
@@ -348,26 +463,50 @@ public class SaslServerAuthenticator implements Authenticator {
         return isKafkaRequest;
     }
 
-    private String handleHandshakeRequest(RequestHeader requestHeader, SaslHandshakeRequest handshakeRequest) throws IOException, UnsupportedSaslMechanismException {
+    private String handleHandshakeRequest(RequestContext context, SaslHandshakeRequest handshakeRequest) throws IOException, UnsupportedSaslMechanismException {
         String clientMechanism = handshakeRequest.mechanism();
+        short version = context.header.apiVersion();
+        if (version >= 1)
+            this.enableKafkaSaslAuthenticateHeaders(true);
         if (enabledMechanisms.contains(clientMechanism)) {
             LOG.debug("Using SASL mechanism '{}' provided by client", clientMechanism);
-            sendKafkaResponse(requestHeader, new SaslHandshakeResponse((short) 0, enabledMechanisms));
+            sendKafkaResponse(context, new SaslHandshakeResponse(Errors.NONE, enabledMechanisms));
             return clientMechanism;
         } else {
             LOG.debug("SASL mechanism '{}' requested by client is not supported", clientMechanism);
-            sendKafkaResponse(requestHeader, new SaslHandshakeResponse(Errors.UNSUPPORTED_SASL_MECHANISM.code(), enabledMechanisms));
+            sendKafkaResponse(context, new SaslHandshakeResponse(Errors.UNSUPPORTED_SASL_MECHANISM, enabledMechanisms));
             throw new UnsupportedSaslMechanismException("Unsupported SASL mechanism " + clientMechanism);
         }
     }
 
-    private void handleApiVersionsRequest(RequestHeader requestHeader, ApiVersionsRequest versionRequest) throws IOException, UnsupportedSaslMechanismException {
-        sendKafkaResponse(requestHeader, ApiVersionsResponse.apiVersionsResponse());
+    // Visible to override for testing
+    protected ApiVersionsResponse apiVersionsResponse() {
+        return ApiVersionsResponse.defaultApiVersionsResponse();
     }
 
-    private void sendKafkaResponse(RequestHeader requestHeader, AbstractRequestResponse response) throws IOException {
-        ResponseHeader responseHeader = new ResponseHeader(requestHeader.correlationId());
-        netOutBuffer = new NetworkSend(node, ResponseSend.serialize(responseHeader, response.toStruct()));
+    // Visible to override for testing
+    protected void enableKafkaSaslAuthenticateHeaders(boolean flag) {
+        this.enableKafkaSaslAuthenticateHeaders = flag;
+    }
+
+    private void handleApiVersionsRequest(RequestContext context, ApiVersionsRequest apiVersionsRequest) throws IOException {
+        if (saslState != SaslState.HANDSHAKE_OR_VERSIONS_REQUEST)
+            throw new IllegalStateException("Unexpected ApiVersions request received during SASL authentication state " + saslState);
+
+        if (apiVersionsRequest.hasUnsupportedRequestVersion())
+            sendKafkaResponse(context, apiVersionsRequest.getErrorResponse(0, Errors.UNSUPPORTED_VERSION.exception()));
+        else {
+            sendKafkaResponse(context, apiVersionsResponse());
+            setSaslState(SaslState.HANDSHAKE_REQUEST);
+        }
+    }
+
+    private void sendKafkaResponse(RequestContext context, AbstractResponse response) throws IOException {
+        sendKafkaResponse(context.buildResponse(response));
+    }
+
+    private void sendKafkaResponse(Send send) throws IOException {
+        netOutBuffer = send;
         flushNetOutBufferAndUpdateInterestOps();
     }
 }

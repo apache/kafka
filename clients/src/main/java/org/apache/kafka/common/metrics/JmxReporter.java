@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.metrics;
 
@@ -33,6 +37,7 @@ import javax.management.ReflectionException;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.utils.Sanitizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,6 +75,9 @@ public class JmxReporter implements MetricsReporter {
         }
     }
 
+    boolean containsMbean(String mbeanName) {
+        return mbeans.containsKey(mbeanName);
+    }
     @Override
     public void metricChange(KafkaMetric metric) {
         synchronized (LOCK) {
@@ -81,19 +89,21 @@ public class JmxReporter implements MetricsReporter {
     @Override
     public void metricRemoval(KafkaMetric metric) {
         synchronized (LOCK) {
-            KafkaMbean mbean = removeAttribute(metric);
+            MetricName metricName = metric.metricName();
+            String mBeanName = getMBeanName(prefix, metricName);
+            KafkaMbean mbean = removeAttribute(metric, mBeanName);
             if (mbean != null) {
-                if (mbean.metrics.isEmpty())
+                if (mbean.metrics.isEmpty()) {
                     unregister(mbean);
-                else
+                    mbeans.remove(mBeanName);
+                } else
                     reregister(mbean);
             }
         }
     }
 
-    private KafkaMbean removeAttribute(KafkaMetric metric) {
+    private KafkaMbean removeAttribute(KafkaMetric metric, String mBeanName) {
         MetricName metricName = metric.metricName();
-        String mBeanName = getMBeanName(metricName);
         KafkaMbean mbean = this.mbeans.get(mBeanName);
         if (mbean != null)
             mbean.removeAttribute(metricName.name());
@@ -103,7 +113,7 @@ public class JmxReporter implements MetricsReporter {
     private KafkaMbean addAttribute(KafkaMetric metric) {
         try {
             MetricName metricName = metric.metricName();
-            String mBeanName = getMBeanName(metricName);
+            String mBeanName = getMBeanName(prefix, metricName);
             if (!this.mbeans.containsKey(mBeanName))
                 mbeans.put(mBeanName, new KafkaMbean(mBeanName));
             KafkaMbean mbean = this.mbeans.get(mBeanName);
@@ -118,7 +128,7 @@ public class JmxReporter implements MetricsReporter {
      * @param metricName
      * @return standard JMX MBean name in the following format domainName:type=metricType,key1=val1,key2=val2
      */
-    private String getMBeanName(MetricName metricName) {
+    static String getMBeanName(String prefix, MetricName metricName) {
         StringBuilder mBeanName = new StringBuilder();
         mBeanName.append(prefix);
         mBeanName.append(":type=");
@@ -129,7 +139,7 @@ public class JmxReporter implements MetricsReporter {
             mBeanName.append(",");
             mBeanName.append(entry.getKey());
             mBeanName.append("=");
-            mBeanName.append(entry.getValue());
+            mBeanName.append(Sanitizer.jmxSanitize(entry.getValue()));
         }
         return mBeanName.toString();
     }
@@ -165,7 +175,7 @@ public class JmxReporter implements MetricsReporter {
         private final Map<String, KafkaMetric> metrics;
 
         public KafkaMbean(String mbeanName) throws MalformedObjectNameException {
-            this.metrics = new HashMap<String, KafkaMetric>();
+            this.metrics = new HashMap<>();
             this.objectName = new ObjectName(mbeanName);
         }
 
@@ -180,22 +190,22 @@ public class JmxReporter implements MetricsReporter {
         @Override
         public Object getAttribute(String name) throws AttributeNotFoundException, MBeanException, ReflectionException {
             if (this.metrics.containsKey(name))
-                return this.metrics.get(name).value();
+                return this.metrics.get(name).metricValue();
             else
                 throw new AttributeNotFoundException("Could not find attribute " + name);
         }
 
         @Override
         public AttributeList getAttributes(String[] names) {
-            try {
-                AttributeList list = new AttributeList();
-                for (String name : names)
+            AttributeList list = new AttributeList();
+            for (String name : names) {
+                try {
                     list.add(new Attribute(name, getAttribute(name)));
-                return list;
-            } catch (Exception e) {
-                log.error("Error getting JMX attribute: ", e);
-                return new AttributeList();
+                } catch (Exception e) {
+                    log.warn("Error getting JMX attribute '{}'", name, e);
+                }
             }
+            return list;
         }
 
         public KafkaMetric removeAttribute(String name) {

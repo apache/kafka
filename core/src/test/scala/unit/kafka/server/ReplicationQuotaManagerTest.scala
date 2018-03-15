@@ -18,12 +18,13 @@ package kafka.server
 
 import java.util.Collections
 
-import kafka.common.TopicAndPartition
 import kafka.server.QuotaType._
-import org.apache.kafka.common.metrics.{Quota, MetricConfig, Metrics}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.metrics.{MetricConfig, Metrics, Quota}
 import org.apache.kafka.common.utils.MockTime
-import org.junit.Assert.{assertFalse, assertTrue, assertEquals}
+import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.Test
+
 import scala.collection.JavaConverters._
 
 class ReplicationQuotaManagerTest {
@@ -110,11 +111,11 @@ class ReplicationQuotaManagerTest {
     quota.markThrottled("MyTopic")
 
     //Then
-    assertTrue(quota.isThrottled(TopicAndPartition("MyTopic", 0)))
-    assertFalse(quota.isThrottled(TopicAndPartition("MyOtherTopic", 0)))
+    assertTrue(quota.isThrottled(new TopicPartition("MyTopic", 0)))
+    assertFalse(quota.isThrottled(new TopicPartition("MyOtherTopic", 0)))
   }
 
-  private def tp1(id: Int): TopicAndPartition = new TopicAndPartition("topic1", id)
+  private def tp1(id: Int): TopicPartition = new TopicPartition("topic1", id)
 
   private def newMetrics(): Metrics = {
     new Metrics(new MetricConfig(), Collections.emptyList(), time)

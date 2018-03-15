@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Reducer;
@@ -22,7 +21,6 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.CachedStateStore;
 
 public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V, V> {
 
@@ -49,6 +47,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
     private class KStreamReduceProcessor extends AbstractProcessor<K, V> {
 
         private KeyValueStore<K, V> store;
+        private TupleForwarder<K, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -56,31 +55,30 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
             super.init(context);
 
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-            ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
         }
 
 
         @Override
         public void process(K key, V value) {
-            // If the key is null we don't need to proceed
-            if (key == null)
+            // If the key or value is null we don't need to proceed
+            if (key == null || value == null) {
                 return;
+            }
 
             V oldAgg = store.get(key);
             V newAgg = oldAgg;
 
-            // try to add the new new value
-            if (value != null) {
-                if (newAgg == null) {
-                    newAgg = value;
-                } else {
-                    newAgg = reducer.apply(newAgg, value);
-                }
+            // try to add the new value
+            if (newAgg == null) {
+                newAgg = value;
+            } else {
+                newAgg = reducer.apply(newAgg, value);
             }
-
+            
             // update the store with the new value
             store.put(key, newAgg);
-
+            tupleForwarder.maybeForward(key, newAgg, oldAgg);
         }
     }
 
@@ -93,6 +91,10 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
                 return new KStreamReduceValueGetter();
             }
 
+            @Override
+            public String[] storeNames() {
+                return new String[]{storeName};
+            }
         };
     }
 

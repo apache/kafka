@@ -19,7 +19,7 @@ package kafka.log
 
 import java.util.Properties
 
-import kafka.server.{ThrottledReplicaValidator, KafkaConfig, KafkaServer}
+import kafka.server.{ThrottledReplicaListValidator, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
 import org.junit.{Assert, Test}
@@ -27,6 +27,23 @@ import org.junit.Assert._
 import org.scalatest.Assertions._
 
 class LogConfigTest {
+
+  /** 
+   * This test verifies that KafkaConfig object initialization does not depend on 
+   * LogConfig initialization. Bad things happen due to static initialization 
+   * order dependencies. For example, LogConfig.configDef ends up adding null 
+   * values in serverDefaultConfigNames. This test ensures that the mapping of 
+   * keys from LogConfig to KafkaConfig are not missing values.
+   */
+  @Test
+  def ensureNoStaticInitializationOrderDependency() {
+    // Access any KafkaConfig val to load KafkaConfig object before LogConfig.
+    assertTrue(KafkaConfig.LogRetentionTimeMillisProp != null)
+    assertTrue(LogConfig.configNames.forall { config =>
+      val serverConfigOpt = LogConfig.serverConfigName(config)
+      serverConfigOpt.isDefined && (serverConfigOpt.get != null)
+    })
+  }
 
   @Test
   def testKafkaConfigToProps() {
@@ -56,11 +73,11 @@ class LogConfigTest {
       case LogConfig.UncleanLeaderElectionEnableProp => assertPropertyInvalid(name, "not a boolean")
       case LogConfig.RetentionBytesProp => assertPropertyInvalid(name, "not_a_number")
       case LogConfig.RetentionMsProp => assertPropertyInvalid(name, "not_a_number" )
-      case LogConfig.CleanupPolicyProp => assertPropertyInvalid(name, "true", "foobar");
+      case LogConfig.CleanupPolicyProp => assertPropertyInvalid(name, "true", "foobar")
       case LogConfig.MinCleanableDirtyRatioProp => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
       case LogConfig.MinInSyncReplicasProp => assertPropertyInvalid(name, "not_a_number", "0", "-1")
       case LogConfig.MessageFormatVersionProp => assertPropertyInvalid(name, "")
-      case positiveIntProperty => assertPropertyInvalid(name, "not_a_number", "-1")
+      case _ => assertPropertyInvalid(name, "not_a_number", "-1")
     })
   }
 
@@ -74,22 +91,25 @@ class LogConfigTest {
     assertTrue(isValid("100:10,12:10"))
     assertTrue(isValid("100:10,12:10,15:1"))
     assertTrue(isValid("100:10,12:10,15:1  "))
+    assertTrue(isValid("100:0,"))
 
     assertFalse(isValid("100"))
     assertFalse(isValid("100:"))
-    assertFalse(isValid("100:0,"))
     assertFalse(isValid("100:0,10"))
     assertFalse(isValid("100:0,10:"))
     assertFalse(isValid("100:0,10:   "))
+    assertFalse(isValid("100 :0,10:   "))
+    assertFalse(isValid("100: 0,10:   "))
+    assertFalse(isValid("100:0,10 :   "))
   }
 
   private def isValid(configValue: String): Boolean = {
     try {
-      ThrottledReplicaValidator.ensureValid("", configValue)
+      ThrottledReplicaListValidator.ensureValidString("", configValue)
+      true
     } catch {
-      case e: ConfigException => return false
+      case _: ConfigException => false
     }
-    true
   }
 
   private def assertPropertyInvalid(name: String, values: AnyRef*) {
@@ -102,8 +122,4 @@ class LogConfigTest {
     })
   }
 
-  private def randFrom[T](choices: T*): T = {
-    import scala.util.Random
-    choices(Random.nextInt(choices.size))
-  }
 }
