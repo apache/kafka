@@ -154,7 +154,7 @@
                         interpreted as a changelog stream, where records with the same key are interpreted as UPSERT aka INSERT/UPDATE
                         (when the record value is not <code class="docutils literal"><span class="pre">null</span></code>) or as DELETE (when the value is <code class="docutils literal"><span class="pre">null</span></code>) for that key.
                         <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/StreamsBuilder.html#table-java.lang.String(java.lang.String)">(details)</a></p>
-                        <p>In the case of a KStream, the local KStream instance of every application instance will
+                        <p>In the case of a KTable, the local KTable instance of every application instance will
                             be populated with data from only <strong>a subset</strong> of the partitions of the input topic.  Collectively, across
                             all application instances, all input topic partitions are read and processed.</p>
                         <p>You must provide a name for the table (more precisely, for the internal
