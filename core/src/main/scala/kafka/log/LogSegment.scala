@@ -479,12 +479,12 @@ class LogSegment private[log] (val log: FileRecords,
     val position = offsetIndex.lookup(math.max(timestampOffset.offset, startingOffset)).position
 
     // Search the timestamp
-    if (position > 0){
+    if (position == 0 && timestampOffset.timestamp == -1){
+      Option(timestampOffset)
+    } else {
       Option(log.searchForTimestamp(timestamp, position, startingOffset)).map { timestampAndOffset =>
         TimestampOffset(timestampAndOffset.timestamp, timestampAndOffset.offset)
       }
-    } else {
-      Option(timestampOffset)
     }
   }
 

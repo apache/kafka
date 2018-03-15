@@ -263,7 +263,7 @@ class LogSegmentTest {
     assertEquals(43, seg.findOffsetByTimestamp(430).get.offset)
     assertEquals(44, seg.findOffsetByTimestamp(431).get.offset)
     // Search beyond the last timestamp
-    assertEquals(None, seg.findOffsetByTimestamp(491))
+    assertEquals(49, seg.findOffsetByTimestamp(491).get.offset)
     // Search before the first indexed timestamp
     assertEquals(41, seg.findOffsetByTimestamp(401).get.offset)
     // Search before the first timestamp
