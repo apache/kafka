@@ -391,7 +391,7 @@ public class StreamThread extends Thread {
                   taskCreatedSensor,
                   storeChangelogReader,
                   time,
-                    log);
+                  log);
             this.cache = cache;
             this.clientSupplier = clientSupplier;
             this.threadProducer = threadProducer;
@@ -457,7 +457,7 @@ public class StreamThread extends Thread {
                   taskCreatedSensor,
                   storeChangelogReader,
                   time,
-                    log);
+                  log);
         }
 
         @Override
