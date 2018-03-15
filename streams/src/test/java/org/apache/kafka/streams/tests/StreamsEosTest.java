@@ -18,7 +18,6 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.common.utils.Utils;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Properties;
 

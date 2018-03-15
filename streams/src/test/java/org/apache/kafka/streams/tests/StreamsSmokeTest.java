@@ -18,7 +18,6 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.common.utils.Utils;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
@@ -27,7 +26,7 @@ import java.util.Set;
 public class StreamsSmokeTest {
 
     /**
-     *  args ::= command kafka zookeeper stateDir
+     *  args ::= kafka propFileName command
      *  command := "run" | "process"
      *
      * @param args
