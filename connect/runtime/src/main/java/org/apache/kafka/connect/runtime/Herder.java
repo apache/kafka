@@ -183,6 +183,13 @@ public interface Herder {
      */
     Plugins plugins();
 
+
+    /**
+     * Get the cluster ID of the Kafka cluster backing this Connect cluster.
+     * @return the cluster ID of the Kafka cluster backing this connect cluster
+     */
+    String kafkaClusterId();
+
     class Created<T> {
         private final boolean created;
         private final T result;

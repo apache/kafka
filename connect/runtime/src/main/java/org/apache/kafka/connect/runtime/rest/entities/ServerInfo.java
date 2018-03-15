@@ -20,12 +20,14 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.common.utils.AppInfoParser;
 
 public class ServerInfo {
-    private String version;
-    private String commit;
+    private final String version;
+    private final String commit;
+    private final String kafkaClusterId;
 
-    public ServerInfo() {
-        version = AppInfoParser.getVersion();
-        commit = AppInfoParser.getCommitId();
+    public ServerInfo(String kafkaClusterId) {
+        this.version = AppInfoParser.getVersion();
+        this.commit = AppInfoParser.getCommitId();
+        this.kafkaClusterId = kafkaClusterId;
     }
 
     @JsonProperty
@@ -36,5 +38,10 @@ public class ServerInfo {
     @JsonProperty
     public String commit() {
         return commit;
+    }
+
+    @JsonProperty("kafka_cluster_id")
+    public String clusterId() {
+        return kafkaClusterId;
     }
 }

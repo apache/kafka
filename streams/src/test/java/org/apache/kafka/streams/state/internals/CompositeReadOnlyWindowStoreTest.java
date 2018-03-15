@@ -169,12 +169,50 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void shouldFetchKeyRangeAcrossStores() {
+        final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stubProviderTwo.addStore(storeName, secondUnderlying);
+        underlyingWindowStore.put("a", "a", 0L);
+        secondUnderlying.put("b", "b", 10L);
+        List<KeyValue<Windowed<String>, String>> results = StreamsTestUtils.toList(windowStore.fetch("a", "b", 0, 10));
+        assertThat(results, equalTo(Arrays.asList(
+                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+    }
+
+    @Test
+    public void shouldFetchKeyValueAcrossStores() {
+        final ReadOnlyWindowStoreStub<String, String> secondUnderlyingWindowStore = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stubProviderTwo.addStore(storeName, secondUnderlyingWindowStore);
+        underlyingWindowStore.put("a", "a", 0L);
+        secondUnderlyingWindowStore.put("b", "b", 10L);
+        assertThat(windowStore.fetch("a", 0L), equalTo("a"));
+        assertThat(windowStore.fetch("b", 10L), equalTo("b"));
+        assertThat(windowStore.fetch("c", 10L), equalTo(null));
+        assertThat(windowStore.fetch("a", 10L), equalTo(null));
+    }
+
+
+    @Test
+    public void shouldGetAllAcrossStores() {
         final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new
                 ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
         stubProviderTwo.addStore(storeName, secondUnderlying);
         underlyingWindowStore.put("a", "a", 0L);
         secondUnderlying.put("b", "b", 10L);
-        List<KeyValue<Windowed<String>, String>> results = StreamsTestUtils.toList(windowStore.fetch("a", "b", 0, 10));
+        List<KeyValue<Windowed<String>, String>> results = StreamsTestUtils.toList(windowStore.all());
+        assertThat(results, equalTo(Arrays.asList(
+                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+    }
+    
+    @Test
+    public void shouldFetchAllAcrossStores() {
+        final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new
+                ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stubProviderTwo.addStore(storeName, secondUnderlying);
+        underlyingWindowStore.put("a", "a", 0L);
+        secondUnderlying.put("b", "b", 10L);
+        List<KeyValue<Windowed<String>, String>> results = StreamsTestUtils.toList(windowStore.fetchAll(0, 10));
         assertThat(results, equalTo(Arrays.asList(
                 KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
                 KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));

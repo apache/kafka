@@ -21,12 +21,14 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 
 import javax.security.sasl.SaslException;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import org.apache.kafka.common.security.scram.ScramMessages.AbstractScramMessage;
@@ -70,7 +72,7 @@ public class ScramMessagesTest {
     @Test
     public void validClientFirstMessage() throws SaslException {
         String nonce = formatter.secureRandomString();
-        ClientFirstMessage m = new ClientFirstMessage("someuser", nonce);
+        ClientFirstMessage m = new ClientFirstMessage("someuser", nonce, Collections.<String, String>emptyMap());
         checkClientFirstMessage(m, "someuser", nonce, "");
 
         // Default format used by Kafka client: only user and nonce are specified
@@ -107,6 +109,11 @@ public class ScramMessagesTest {
             str = String.format("n,,n=testuser,r=%s,%s", nonce, extension);
             checkClientFirstMessage(createScramMessage(ClientFirstMessage.class, str), "testuser", nonce, "");
         }
+
+        //optional tokenauth specified as extensions
+        str = String.format("n,,n=testuser,r=%s,%s", nonce, "tokenauth=true");
+        m = createScramMessage(ClientFirstMessage.class, str);
+        assertTrue("Token authentication not set from extensions", m.extensions().tokenAuthenticated());
     }
 
     @Test

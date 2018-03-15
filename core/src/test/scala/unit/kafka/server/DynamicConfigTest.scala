@@ -26,11 +26,6 @@ class DynamicConfigTest  extends ZooKeeperTestHarness {
   private final val someValue: String = "some interesting value"
 
   @Test(expected = classOf[IllegalArgumentException])
-  def shouldFailWhenChangingBrokerUnknownConfig() {
-    adminZkClient.changeBrokerConfig(Seq(0), propsWith(nonExistentConfig, someValue))
-  }
-
-  @Test(expected = classOf[IllegalArgumentException])
   def shouldFailWhenChangingClientIdUnknownConfig() {
     adminZkClient.changeClientIdConfig("ClientId", propsWith(nonExistentConfig, someValue))
   }

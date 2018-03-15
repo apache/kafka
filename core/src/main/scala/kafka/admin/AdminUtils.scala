@@ -25,7 +25,7 @@ import java.util.Random
 import java.util.Properties
 
 import kafka.common.TopicAlreadyMarkedForDeletionException
-import org.apache.kafka.common.errors.{BrokerNotAvailableException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, TopicExistsException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors._
 
 import collection.{Map, Set, mutable, _}
 import scala.collection.JavaConverters._
@@ -268,7 +268,7 @@ object AdminUtils extends Logging with AdminUtilities {
   * @param validateOnly If true, validate the parameters without actually adding the partitions
   * @return the updated replica assignment
   */
- @deprecated("This method is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
+  @deprecated("This method is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
   def addPartitions(zkUtils: ZkUtils,
                     topic: String,
                     existingAssignment: Map[Int, Seq[Int]],
@@ -429,9 +429,10 @@ object AdminUtils extends Logging with AdminUtilities {
    * @param topic Topic of the consumer group information we wish to delete
    */
   @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def deleteAllConsumerGroupInfoForTopicInZK(zkUtils: ZkUtils, topic: String) {
+  def deleteAllConsumerGroupInfoForTopicInZK(zkUtils: ZkUtils, topic: String): Set[String] = {
     val groups = zkUtils.getAllConsumerGroupsForTopic(topic)
     groups.foreach(group => deleteConsumerGroupInfoForTopicInZK(zkUtils, group, topic))
+    groups
   }
 
   def topicExists(zkUtils: ZkUtils, topic: String): Boolean =
@@ -628,7 +629,7 @@ object AdminUtils extends Logging with AdminUtilities {
 
     // create the change notification
     val seqNode = ZkUtils.ConfigChangesPath + "/" + EntityConfigChangeZnodePrefix
-    val content = Json.encode(getConfigChangeZnodeData(sanitizedEntityPath))
+    val content = Json.legacyEncodeAsString(getConfigChangeZnodeData(sanitizedEntityPath))
     zkUtils.createSequentialPersistentPath(seqNode, content)
   }
 
@@ -641,7 +642,7 @@ object AdminUtils extends Logging with AdminUtilities {
    */
   private def writeEntityConfig(zkUtils: ZkUtils, entityPath: String, config: Properties) {
     val map = Map("version" -> 1, "config" -> config.asScala)
-    zkUtils.updatePersistentPath(entityPath, Json.encode(map))
+    zkUtils.updatePersistentPath(entityPath, Json.legacyEncodeAsString(map))
   }
 
   /**

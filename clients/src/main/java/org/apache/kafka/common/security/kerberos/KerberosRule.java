@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.kerberos;
 
 import java.io.IOException;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -44,6 +45,7 @@ class KerberosRule {
     private final Pattern fromPattern;
     private final String toPattern;
     private final boolean repeat;
+    private final boolean toLowerCase;
 
     KerberosRule(String defaultRealm) {
         this.defaultRealm = defaultRealm;
@@ -54,10 +56,11 @@ class KerberosRule {
         fromPattern = null;
         toPattern = null;
         repeat = false;
+        toLowerCase = false;
     }
 
     KerberosRule(String defaultRealm, int numOfComponents, String format, String match, String fromPattern,
-                 String toPattern, boolean repeat) {
+                 String toPattern, boolean repeat, boolean toLowerCase) {
         this.defaultRealm = defaultRealm;
         isDefault = false;
         this.numOfComponents = numOfComponents;
@@ -67,6 +70,7 @@ class KerberosRule {
                 fromPattern == null ? null : Pattern.compile(fromPattern);
         this.toPattern = toPattern;
         this.repeat = repeat;
+        this.toLowerCase = toLowerCase;
     }
 
     @Override
@@ -95,13 +99,16 @@ class KerberosRule {
                     buf.append('g');
                 }
             }
+            if (toLowerCase) {
+                buf.append("/L");
+            }
         }
         return buf.toString();
     }
 
     /**
-     * Replace the numbered parameters of the form $n where n is from 1 to
-     * the length of params. Normal text is copied directly and $n is replaced
+     * Replace the numbered parameters of the form $n where n is from 0 to
+     * the length of params - 1. Normal text is copied directly and $n is replaced
      * by the corresponding parameter.
      * @param format the string to replace parameters again
      * @param params the list of parameters
@@ -119,7 +126,7 @@ class KerberosRule {
             if (paramNum != null) {
                 try {
                     int num = Integer.parseInt(paramNum);
-                    if (num < 0 || num > params.length) {
+                    if (num < 0 || num >= params.length) {
                         throw new BadFormatString("index " + num + " from " + format +
                                 " is outside of the valid range 0 to " +
                                 (params.length - 1));
@@ -181,6 +188,9 @@ class KerberosRule {
         }
         if (result != null && NON_SIMPLE_PATTERN.matcher(result).find()) {
             throw new NoMatchingRule("Non-simple name " + result + " after auth_to_local rule " + this);
+        }
+        if (toLowerCase && result != null) {
+            result = result.toLowerCase(Locale.ENGLISH);
         }
         return result;
     }

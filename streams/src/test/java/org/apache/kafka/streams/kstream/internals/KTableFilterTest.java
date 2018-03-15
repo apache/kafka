@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
-import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Rule;
@@ -53,8 +53,10 @@ public class KTableFilterTest {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
-    private void doTestKTable(final StreamsBuilder builder, final KTable<String, Integer> table2,
-                              final KTable<String, Integer> table3, final String topic1) {
+    private void doTestKTable(final StreamsBuilder builder,
+                              final KTable<String, Integer> table2,
+                              final KTable<String, Integer> table3,
+                              final String topic) {
         MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
         MockProcessorSupplier<String, Integer> proc3 = new MockProcessorSupplier<>();
         table2.toStream().process(proc2);
@@ -62,13 +64,13 @@ public class KTableFilterTest {
 
         driver.setUp(builder, stateDir, Serdes.String(), Serdes.Integer());
 
-        driver.process(topic1, "A", 1);
-        driver.process(topic1, "B", 2);
-        driver.process(topic1, "C", 3);
-        driver.process(topic1, "D", 4);
+        driver.process(topic, "A", 1);
+        driver.process(topic, "B", 2);
+        driver.process(topic, "C", 3);
+        driver.process(topic, "D", 4);
         driver.flushState();
-        driver.process(topic1, "A", null);
-        driver.process(topic1, "B", null);
+        driver.process(topic, "A", null);
+        driver.process(topic, "B", null);
         driver.flushState();
 
         proc2.checkAndClearProcessResult("A:null", "B:2", "C:null", "D:4", "A:null", "B:null");
@@ -177,6 +179,7 @@ public class KTableFilterTest {
 
         driver.process(topic1, "A", 2);
         driver.process(topic1, "B", 2);
+        driver.flushState();
 
         assertEquals(2, (int) getter2.get("A"));
         assertEquals(2, (int) getter2.get("B"));
@@ -187,6 +190,7 @@ public class KTableFilterTest {
         assertEquals(1, (int) getter3.get("C"));
 
         driver.process(topic1, "A", 3);
+        driver.flushState();
 
         assertNull(getter2.get("A"));
         assertEquals(2, (int) getter2.get("B"));
@@ -198,6 +202,7 @@ public class KTableFilterTest {
 
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
+        driver.flushState();
 
         assertNull(getter2.get("A"));
         assertNull(getter2.get("B"));
@@ -451,7 +456,7 @@ public class KTableFilterTest {
                 public boolean test(String key, String value) {
                     return value.equalsIgnoreCase("accept");
                 }
-            }).groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
+            }).groupBy(MockMapper.<String, String>noOpKeyValueMapper())
             .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result");
 
         doTestSkipNullOnMaterialization(builder, table1, table2, topic1);
@@ -473,7 +478,7 @@ public class KTableFilterTest {
                 public boolean test(String key, String value) {
                     return value.equalsIgnoreCase("accept");
                 }
-            }, "anyStoreNameFilter").groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
+            }, "anyStoreNameFilter").groupBy(MockMapper.<String, String>noOpKeyValueMapper())
             .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result");
 
         doTestSkipNullOnMaterialization(builder, table1, table2, topic1);

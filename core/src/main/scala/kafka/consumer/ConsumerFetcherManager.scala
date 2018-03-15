@@ -83,7 +83,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
         }
       } catch {
         case t: Throwable => {
-            if (!isRunning.get())
+            if (!isRunning)
               throw t /* If this thread is stopped, propagate this exception to kill the thread. */
             else
               warn("Failed to find leader for %s".format(noLeaderPartitionSet), t)
@@ -98,7 +98,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
         )
       } catch {
         case t: Throwable =>
-          if (!isRunning.get())
+          if (!isRunning)
             throw t /* If this thread is stopped, propagate this exception to kill the thread. */
           else {
             warn("Failed to add leader for partitions %s; will retry".format(leaderForPartitionsMap.keySet.mkString(",")), t)
@@ -114,9 +114,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
   }
 
   override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
-    new ConsumerFetcherThread(
-      "ConsumerFetcherThread-%s-%d-%d".format(consumerIdString, fetcherId, sourceBroker.id),
-      config, sourceBroker, partitionMap, this)
+    new ConsumerFetcherThread(consumerIdString, fetcherId, config, sourceBroker, partitionMap, this)
   }
 
   def startConnections(topicInfos: Iterable[PartitionTopicInfo], cluster: Cluster) {

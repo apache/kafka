@@ -23,6 +23,7 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -69,6 +70,19 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     }
 
     /**
+     * Returns a map of offsets up to which the records can be deleted; this function should only be called
+     * after the commit call to make sure all consumed offsets are actually committed as well
+     */
+    Map<TopicPartition, Long> recordsToDelete() {
+        final Map<TopicPartition, Long> recordsToDelete = new HashMap<>();
+        for (final StreamTask task : running.values()) {
+            recordsToDelete.putAll(task.purgableOffsets());
+        }
+
+        return recordsToDelete;
+    }
+
+    /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     int process() {
@@ -81,6 +95,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                     processed++;
                 }
             } catch (final TaskMigratedException e) {
+                log.info("Failed to process stream task {} since it got migrated to another thread already. " +
+                        "Closing it as zombie before triggering a new rebalance.", task.id());
                 final RuntimeException fatalException = closeZombieTask(task);
                 if (fatalException != null) {
                     throw fatalException;
@@ -111,6 +127,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                     punctuated++;
                 }
             } catch (final TaskMigratedException e) {
+                log.info("Failed to punctuate stream task {} since it got migrated to another thread already. " +
+                        "Closing it as zombie before triggering a new rebalance.", task.id());
                 final RuntimeException fatalException = closeZombieTask(task);
                 if (fatalException != null) {
                     throw fatalException;

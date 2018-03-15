@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.connect.file;
 
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.ConnectorContext;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
 import org.junit.Before;
@@ -49,6 +50,16 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
         sourceProperties = new HashMap<>();
         sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, SINGLE_TOPIC);
         sourceProperties.put(FileStreamSourceConnector.FILE_CONFIG, FILENAME);
+    }
+
+    @Test
+    public void testConnectorConfigValidation() {
+        replayAll();
+        List<ConfigValue> configValues = connector.config().validate(sourceProperties);
+        for (ConfigValue val : configValues) {
+            assertEquals("Config property errors: " + val.errorMessages(), 0, val.errorMessages().size());
+        }
+        verifyAll();
     }
 
     @Test
@@ -87,7 +98,7 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
         EasyMock.verify(ctx);
     }
 
-    @Test(expected = ConnectException.class)
+    @Test(expected = ConfigException.class)
     public void testMultipleSourcesInvalid() {
         sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, MULTIPLE_TOPICS);
         connector.start(sourceProperties);
@@ -101,5 +112,24 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
         assertEquals(FileStreamSourceTask.class, connector.taskClass());
 
         EasyMock.verify(ctx);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testMissingTopic() {
+        sourceProperties.remove(FileStreamSourceConnector.TOPIC_CONFIG);
+        connector.start(sourceProperties);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testBlankTopic() {
+        // Because of trimming this tests is same as testing for empty string.
+        sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, "     ");
+        connector.start(sourceProperties);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testInvalidBatchSize() {
+        sourceProperties.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "abcd");
+        connector.start(sourceProperties);
     }
 }

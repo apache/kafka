@@ -53,9 +53,11 @@ import org.apache.kafka.common.security.auth.SaslAuthenticationContext;
 import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.security.scram.ScramMechanism;
 import org.apache.kafka.common.security.scram.ScramServerCallbackHandler;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
 import org.ietf.jgss.GSSContext;
 import org.ietf.jgss.GSSCredential;
 import org.ietf.jgss.GSSException;
@@ -100,13 +102,14 @@ public class SaslServerAuthenticator implements Authenticator {
     private final SecurityProtocol securityProtocol;
     private final ListenerName listenerName;
     private final String connectionId;
-    private final JaasContext jaasContext;
-    private final Subject subject;
+    private final Map<String, JaasContext> jaasContexts;
+    private final Map<String, Subject> subjects;
     private final CredentialCache credentialCache;
     private final TransportLayer transportLayer;
     private final Set<String> enabledMechanisms;
     private final Map<String, ?> configs;
     private final KafkaPrincipalBuilder principalBuilder;
+    private final DelegationTokenCache tokenCache;
 
     // Current SASL state
     private SaslState saslState = SaslState.INITIAL_REQUEST;
@@ -126,23 +129,22 @@ public class SaslServerAuthenticator implements Authenticator {
 
     public SaslServerAuthenticator(Map<String, ?> configs,
                                    String connectionId,
-                                   JaasContext jaasContext,
-                                   Subject subject,
+                                   Map<String, JaasContext> jaasContexts,
+                                   Map<String, Subject> subjects,
                                    KerberosShortNamer kerberosNameParser,
                                    CredentialCache credentialCache,
                                    ListenerName listenerName,
                                    SecurityProtocol securityProtocol,
-                                   TransportLayer transportLayer) throws IOException {
-        if (subject == null)
-            throw new IllegalArgumentException("subject cannot be null");
+                                   TransportLayer transportLayer,
+                                   DelegationTokenCache tokenCache) throws IOException {
         this.connectionId = connectionId;
-        this.jaasContext = jaasContext;
-        this.subject = subject;
+        this.jaasContexts = jaasContexts;
+        this.subjects = subjects;
         this.credentialCache = credentialCache;
         this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;
         this.enableKafkaSaslAuthenticateHeaders = false;
-
+        this.tokenCache = tokenCache;
         this.transportLayer = transportLayer;
 
         this.configs = configs;
@@ -151,6 +153,12 @@ public class SaslServerAuthenticator implements Authenticator {
         if (enabledMechanisms == null || enabledMechanisms.isEmpty())
             throw new IllegalArgumentException("No SASL mechanisms are enabled");
         this.enabledMechanisms = new HashSet<>(enabledMechanisms);
+        for (String mechanism : enabledMechanisms) {
+            if (!jaasContexts.containsKey(mechanism))
+                throw new IllegalArgumentException("Jaas context not specified for SASL mechanism " + mechanism);
+            if (!subjects.containsKey(mechanism))
+                throw new IllegalArgumentException("Subject cannot be null for SASL mechanism " + mechanism);
+        }
 
         // Note that the old principal builder does not support SASL, so we do not need to pass the
         // authenticator or the transport layer
@@ -159,10 +167,11 @@ public class SaslServerAuthenticator implements Authenticator {
 
     private void createSaslServer(String mechanism) throws IOException {
         this.saslMechanism = mechanism;
+        Subject subject = subjects.get(mechanism);
         if (!ScramMechanism.isScram(mechanism))
-            callbackHandler = new SaslServerCallbackHandler(jaasContext);
+            callbackHandler = new SaslServerCallbackHandler(jaasContexts.get(mechanism));
         else
-            callbackHandler = new ScramServerCallbackHandler(credentialCache.cache(mechanism, ScramCredential.class));
+            callbackHandler = new ScramServerCallbackHandler(credentialCache.cache(mechanism, ScramCredential.class), tokenCache);
         callbackHandler.configure(configs, Mode.SERVER, subject, saslMechanism);
         if (mechanism.equals(SaslConfigs.GSSAPI_MECHANISM)) {
             saslServer = createSaslKerberosServer(callbackHandler, configs, subject);
@@ -289,7 +298,11 @@ public class SaslServerAuthenticator implements Authenticator {
     @Override
     public KafkaPrincipal principal() {
         SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer, securityProtocol, clientAddress());
-        return principalBuilder.build(context);
+        KafkaPrincipal principal = principalBuilder.build(context);
+        if (ScramMechanism.isScram(saslMechanism) && Boolean.parseBoolean((String) saslServer.getNegotiatedProperty(ScramLoginModule.TOKEN_AUTH_CONFIG))) {
+            principal.tokenAuthenticated(true);
+        }
+        return principal;
     }
 
     @Override

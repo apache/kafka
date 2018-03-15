@@ -46,11 +46,11 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         }
     }
 
-    private static class Applicant<A, B> extends BiConsumer<A, Throwable> {
-        private final Function<A, B> function;
+    private static class Applicant<A, B> implements BiConsumer<A, Throwable> {
+        private final BaseFunction<A, B> function;
         private final KafkaFutureImpl<B> future;
 
-        Applicant(Function<A, B> function, KafkaFutureImpl<B> future) {
+        Applicant(BaseFunction<A, B> function, KafkaFutureImpl<B> future) {
             this.function = function;
             this.future = future;
         }
@@ -70,7 +70,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         }
     }
 
-    private static class SingleWaiter<R> extends BiConsumer<R, Throwable> {
+    private static class SingleWaiter<R> implements BiConsumer<R, Throwable> {
         private R value = null;
         private Throwable exception = null;
         private boolean done = false;
@@ -140,14 +140,59 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      * futures's result as the argument to the supplied function.
      */
     @Override
-    public <R> KafkaFuture<R> thenApply(Function<T, R> function) {
+    public <R> KafkaFuture<R> thenApply(BaseFunction<T, R> function) {
         KafkaFutureImpl<R> future = new KafkaFutureImpl<R>();
         addWaiter(new Applicant<>(function, future));
         return future;
     }
 
+
+    /**
+     * @See KafkaFutureImpl#thenApply(BaseFunction)
+     */
     @Override
-    protected synchronized void addWaiter(BiConsumer<? super T, ? super Throwable> action) {
+    public <R> KafkaFuture<R> thenApply(Function<T, R> function) {
+        return thenApply((BaseFunction<T, R>) function);
+    }
+
+    private static class WhenCompleteBiConsumer<T> implements BiConsumer<T, Throwable> {
+        private final KafkaFutureImpl<T> future;
+        private final BiConsumer<? super T, ? super Throwable> biConsumer;
+
+        WhenCompleteBiConsumer(KafkaFutureImpl<T> future, BiConsumer<? super T, ? super Throwable> biConsumer) {
+            this.future = future;
+            this.biConsumer = biConsumer;
+        }
+
+        @Override
+        public void accept(T val, Throwable exception) {
+            try {
+                if (exception != null) {
+                    biConsumer.accept(null, exception);
+                } else {
+                    biConsumer.accept(val, null);
+                }
+            } catch (Throwable e) {
+                if (exception == null) {
+                    exception = e;
+                }
+            }
+            if (exception != null) {
+                future.completeExceptionally(exception);
+            } else {
+                future.complete(val);
+            }
+        }
+    }
+
+    @Override
+    public KafkaFuture<T> whenComplete(final BiConsumer<? super T, ? super Throwable> biConsumer) {
+        final KafkaFutureImpl<T> future = new KafkaFutureImpl<>();
+        addWaiter(new WhenCompleteBiConsumer<>(future, biConsumer));
+        return future;
+    }
+
+    public synchronized void addWaiter(BiConsumer<? super T, ? super Throwable> action) {
         if (exception != null) {
             action.accept(null, exception);
         } else if (done) {
@@ -260,5 +305,10 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     @Override
     public synchronized boolean isDone() {
         return done;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("KafkaFuture{value=%s,exception=%s,done=%b}", value, exception, done);
     }
 }

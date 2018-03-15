@@ -20,7 +20,6 @@ from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.streams import StreamsEosTestDriverService, StreamsEosTestJobRunnerService, \
     StreamsComplexEosTestJobRunnerService, StreamsEosTestVerifyRunnerService, StreamsComplexEosTestVerifyRunnerService
 
-
 class StreamsEosTest(KafkaTest):
     """
     Test of Kafka Streams exactly-once semantics
@@ -61,6 +60,8 @@ class StreamsEosTest(KafkaTest):
 
         self.driver.start()
 
+        processor1.clean_node_enabled = False
+
         self.add_streams(processor1)
         self.add_streams2(processor1, processor2)
         self.add_streams3(processor1, processor2, processor3)
@@ -99,6 +100,8 @@ class StreamsEosTest(KafkaTest):
 
         self.driver.start()
 
+        processor1.clean_node_enabled = False
+
         self.add_streams(processor1)
         self.add_streams2(processor1, processor2)
         self.add_streams3(processor1, processor2, processor3)
@@ -118,8 +121,8 @@ class StreamsEosTest(KafkaTest):
         verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % verifier.STDOUT_FILE, allow_fail=False)
 
     def add_streams(self, processor):
-        processor.start()
         with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
+            processor.start()
             self.wait_for_startup(monitor, processor)
 
     def add_streams2(self, running_processor, processor_to_be_started):
@@ -155,7 +158,6 @@ class StreamsEosTest(KafkaTest):
         self.wait_for_startup(monitor1, keep_alive_processor1)
 
     def wait_for_startup(self, monitor, processor):
-        self.wait_for(monitor, processor, "StateChange: RUNNING -> REBALANCING")
         self.wait_for(monitor, processor, "StateChange: REBALANCING -> RUNNING")
         self.wait_for(monitor, processor, "processed 500 records from topic=data")
 

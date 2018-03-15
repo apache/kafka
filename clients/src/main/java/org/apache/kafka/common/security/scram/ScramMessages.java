@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.scram;
 import org.apache.kafka.common.utils.Base64;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -64,16 +65,18 @@ public class ScramMessages {
      */
     public static class ClientFirstMessage extends AbstractScramMessage {
         private static final Pattern PATTERN = Pattern.compile(String.format(
-                "n,(a=(?<authzid>%s))?,%sn=(?<saslname>%s),r=(?<nonce>%s)%s",
+                "n,(a=(?<authzid>%s))?,%sn=(?<saslname>%s),r=(?<nonce>%s)(?<extensions>%s)",
                 SASLNAME,
                 RESERVED,
                 SASLNAME,
                 PRINTABLE,
                 EXTENSIONS));
 
+
         private final String saslName;
         private final String nonce;
         private final String authorizationId;
+        private final ScramExtensions extensions;
         public ClientFirstMessage(byte[] messageBytes) throws SaslException {
             String message = toMessage(messageBytes);
             Matcher matcher = PATTERN.matcher(message);
@@ -83,10 +86,14 @@ public class ScramMessages {
             this.authorizationId = authzid != null ? authzid : "";
             this.saslName = matcher.group("saslname");
             this.nonce = matcher.group("nonce");
+            String extString = matcher.group("extensions");
+
+            this.extensions = extString.startsWith(",") ? new ScramExtensions(extString.substring(1)) : new ScramExtensions();
         }
-        public ClientFirstMessage(String saslName, String nonce) {
+        public ClientFirstMessage(String saslName, String nonce, Map<String, String> extensions) {
             this.saslName = saslName;
             this.nonce = nonce;
+            this.extensions = new ScramExtensions(extensions);
             this.authorizationId = ""; // Optional authzid not specified in gs2-header
         }
         public String saslName() {
@@ -101,8 +108,16 @@ public class ScramMessages {
         public String gs2Header() {
             return "n," + authorizationId + ",";
         }
+        public ScramExtensions extensions() {
+            return extensions;
+        }
+
         public String clientFirstMessageBare() {
-            return String.format("n=%s,r=%s", saslName, nonce);
+            String extensionStr = extensions.toString();
+            if (extensionStr.isEmpty())
+                return String.format("n=%s,r=%s", saslName, nonce);
+            else
+                return String.format("n=%s,r=%s,%s", saslName, nonce, extensionStr);
         }
         String toMessage() {
             return gs2Header() + clientFirstMessageBare();

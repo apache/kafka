@@ -20,12 +20,17 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerTask.TaskMetricsGroup;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.MockTime;
+import org.apache.kafka.common.utils.MockTime;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
+import org.easymock.Mock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -37,6 +42,9 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
 
+@RunWith(PowerMockRunner.class)
+@PrepareForTest({WorkerTask.class})
+@PowerMockIgnore("javax.management.*")
 public class WorkerTaskTest {
 
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
@@ -46,6 +54,8 @@ public class WorkerTaskTest {
     private static final TaskConfig TASK_CONFIG = new TaskConfig(TASK_PROPS);
 
     private ConnectMetrics metrics;
+    @Mock private TaskStatus.Listener statusListener;
+    @Mock private ClassLoader loader;
 
     @Before
     public void setup() {
@@ -60,9 +70,6 @@ public class WorkerTaskTest {
     @Test
     public void standardStartup() {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
-
-        TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
-        ClassLoader loader = EasyMock.createMock(ClassLoader.class);
 
         WorkerTask workerTask = partialMockBuilder(WorkerTask.class)
                 .withConstructor(
@@ -110,9 +117,6 @@ public class WorkerTaskTest {
     public void stopBeforeStarting() {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
-        TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
-        ClassLoader loader = EasyMock.createMock(ClassLoader.class);
-
         WorkerTask workerTask = partialMockBuilder(WorkerTask.class)
                 .withConstructor(
                         ConnectorTaskId.class,
@@ -151,9 +155,6 @@ public class WorkerTaskTest {
     @Test
     public void cancelBeforeStopping() throws Exception {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
-
-        TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
-        ClassLoader loader = EasyMock.createMock(ClassLoader.class);
 
         WorkerTask workerTask = partialMockBuilder(WorkerTask.class)
                 .withConstructor(
@@ -220,7 +221,6 @@ public class WorkerTaskTest {
     public void updateMetricsOnListenerEventsForStartupPauseResumeAndShutdown() {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
         ConnectMetrics metrics = new MockConnectMetrics();
-        TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
         TaskMetricsGroup group = new TaskMetricsGroup(taskId, metrics, statusListener);
 
         statusListener.onStartup(taskId);
@@ -255,7 +255,6 @@ public class WorkerTaskTest {
         MockConnectMetrics metrics = new MockConnectMetrics();
         MockTime time = metrics.time();
         ConnectException error = new ConnectException("error");
-        TaskStatus.Listener statusListener = EasyMock.createMock(TaskStatus.Listener.class);
         TaskMetricsGroup group = new TaskMetricsGroup(taskId, metrics, statusListener);
 
         statusListener.onStartup(taskId);

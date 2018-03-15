@@ -30,6 +30,7 @@ import org.apache.kafka.streams.KafkaClientSupplier;
 public class DefaultKafkaClientSupplier implements KafkaClientSupplier {
     @Override
     public AdminClient getAdminClient(final Map<String, Object> config) {
+        // create a new client upon each call; but expect this call to be only triggered once so this should be fine
         return AdminClient.create(config);
     }
 

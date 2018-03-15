@@ -17,7 +17,6 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -26,7 +25,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.MockStateStoreSupplier;
+import org.apache.kafka.test.MockStateStore;
 import org.apache.kafka.test.ProcessorTopologyTestDriver;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
@@ -157,7 +156,7 @@ public class TopologyTest {
     }
 
     @Test
-    public void shoudNotAllowToAddProcessorWithSameName() {
+    public void shouldNotAllowToAddProcessorWithSameName() {
         topology.addSource("source", "topic-1");
         topology.addProcessor("processor", new MockProcessorSupplier(), "source");
         try {
@@ -252,7 +251,7 @@ public class TopologyTest {
         } catch (final TopologyException expected) { }
     }
 
-    @Test(expected = TopologyBuilderException.class)
+    @Test
     public void shouldThrowOnUnassignedStateStoreAccess() throws Exception {
         final String sourceNodeName = "source";
         final String goodNodeName = "goodGuy";
@@ -264,7 +263,7 @@ public class TopologyTest {
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         final StreamsConfig streamsConfig = new StreamsConfig(config);
         mockStoreBuilder();
-        EasyMock.expect(storeBuilder.build()).andReturn(new MockStateStoreSupplier.MockStateStore("store", false));
+        EasyMock.expect(storeBuilder.build()).andReturn(new MockStateStore("store", false));
         EasyMock.replay(storeBuilder);
         topology
             .addSource(sourceNodeName, "topic")
@@ -276,15 +275,12 @@ public class TopologyTest {
 
         try {
             new ProcessorTopologyTestDriver(streamsConfig, topology.internalTopologyBuilder);
+            fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
-            final Throwable cause = e.getCause();
-            if (cause != null
-                && cause instanceof TopologyBuilderException
-                && cause.getMessage().equals("Invalid topology building: Processor " + badNodeName + " has no access to StateStore " + LocalMockProcessorSupplier.STORE_NAME)) {
-                throw (TopologyBuilderException) cause;
-            } else {
-                throw new RuntimeException("Did expect different exception. Did catch:", e);
-            }
+            final String error = e.toString();
+            final String expectedMessage = "org.apache.kafka.streams.errors.StreamsException: failed to initialize processor " + badNodeName;
+            
+            assertThat(error, equalTo(expectedMessage));
         }
     }
 
@@ -579,14 +575,14 @@ public class TopologyTest {
 
     @Test
     public void shouldDescribeGlobalStoreTopology() {
-        addGlobalStoreToTopologyAndExpectedDescription("globalStore", "source", "globalTopic", "processor");
+        addGlobalStoreToTopologyAndExpectedDescription("globalStore", "source", "globalTopic", "processor", 0);
         assertThat(topology.describe(), equalTo((TopologyDescription) expectedDescription));
     }
 
     @Test
     public void shouldDescribeMultipleGlobalStoreTopology() {
-        addGlobalStoreToTopologyAndExpectedDescription("globalStore1", "source1", "globalTopic1", "processor1");
-        addGlobalStoreToTopologyAndExpectedDescription("globalStore2", "source2", "globalTopic2", "processor2");
+        addGlobalStoreToTopologyAndExpectedDescription("globalStore1", "source1", "globalTopic1", "processor1", 0);
+        addGlobalStoreToTopologyAndExpectedDescription("globalStore2", "source2", "globalTopic2", "processor2", 1);
         assertThat(topology.describe(), equalTo((TopologyDescription) expectedDescription));
     }
 
@@ -677,7 +673,8 @@ public class TopologyTest {
     private void addGlobalStoreToTopologyAndExpectedDescription(final String globalStoreName,
                                                                 final String sourceName,
                                                                 final String globalTopicName,
-                                                                final String processorName) {
+                                                                final String processorName,
+                                                                final int id) {
         final KeyValueStoreBuilder globalStoreBuilder = EasyMock.createNiceMock(KeyValueStoreBuilder.class);
         EasyMock.expect(globalStoreBuilder.name()).andReturn(globalStoreName).anyTimes();
         EasyMock.replay(globalStoreBuilder);
@@ -695,7 +692,8 @@ public class TopologyTest {
             sourceName,
             processorName,
             globalStoreName,
-            globalTopicName);
+            globalTopicName,
+            id);
 
         expectedDescription.addGlobalStore(expectedGlobalStore);
     }

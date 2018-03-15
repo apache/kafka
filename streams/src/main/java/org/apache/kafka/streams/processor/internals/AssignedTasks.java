@@ -73,37 +73,23 @@ abstract class AssignedTasks<T extends Task> {
         created.put(task.id(), task);
     }
 
-    Set<TopicPartition> uninitializedPartitions() {
-        if (created.isEmpty()) {
-            return Collections.emptySet();
-        }
-        final Set<TopicPartition> partitions = new HashSet<>();
-        for (final Map.Entry<TaskId, T> entry : created.entrySet()) {
-            if (entry.getValue().hasStateStores()) {
-                partitions.addAll(entry.getValue().partitions());
-            }
-        }
-        return partitions;
-    }
-
     /**
-     * @return partitions that are ready to be resumed
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    Set<TopicPartition> initializeNewTasks() {
-        final Set<TopicPartition> readyPartitions = new HashSet<>();
+    void initializeNewTasks() {
         if (!created.isEmpty()) {
             log.debug("Initializing {}s {}", taskTypeName, created.keySet());
         }
         for (final Iterator<Map.Entry<TaskId, T>> it = created.entrySet().iterator(); it.hasNext(); ) {
             final Map.Entry<TaskId, T> entry = it.next();
             try {
-                if (!entry.getValue().initialize()) {
+                if (!entry.getValue().initializeStateStores()) {
                     log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
                     addToRestoring(entry.getValue());
                 } else {
-                    transitionToRunning(entry.getValue(), readyPartitions);
+                    transitionToRunning(entry.getValue());
                 }
                 it.remove();
             } catch (final LockException e) {
@@ -111,21 +97,19 @@ abstract class AssignedTasks<T extends Task> {
                 log.trace("Could not create {} {} due to {}; will retry", taskTypeName, entry.getKey(), e.getMessage());
             }
         }
-        return readyPartitions;
     }
 
-    Set<TopicPartition> updateRestored(final Collection<TopicPartition> restored) {
+    void updateRestored(final Collection<TopicPartition> restored) {
         if (restored.isEmpty()) {
-            return Collections.emptySet();
+            return;
         }
         log.trace("{} changelog partitions that have completed restoring so far: {}", taskTypeName, restored);
-        final Set<TopicPartition> resume = new HashSet<>();
         restoredPartitions.addAll(restored);
         for (final Iterator<Map.Entry<TaskId, T>> it = restoring.entrySet().iterator(); it.hasNext(); ) {
             final Map.Entry<TaskId, T> entry = it.next();
             final T task = entry.getValue();
             if (restoredPartitions.containsAll(task.changelogPartitions())) {
-                transitionToRunning(task, resume);
+                transitionToRunning(task);
                 it.remove();
                 log.trace("{} {} completed restoration as all its changelog partitions {} have been applied to restore state",
                         taskTypeName,
@@ -145,7 +129,6 @@ abstract class AssignedTasks<T extends Task> {
         if (allTasksRunning()) {
             restoredPartitions.clear();
         }
-        return resume;
     }
 
     boolean allTasksRunning() {
@@ -200,6 +183,8 @@ abstract class AssignedTasks<T extends Task> {
                 suspended.put(task.id(), task);
             } catch (final TaskMigratedException closeAsZombieAndSwallow) {
                 // as we suspend a task, we are either shutting down or rebalancing, thus, we swallow and move on
+                log.info("Failed to suspend {} {} since it got migrated to another thread already. " +
+                        "Closing it as zombie and move on.", taskTypeName, task.id());
                 firstException.compareAndSet(null, closeZombieTask(task));
                 it.remove();
             } catch (final RuntimeException e) {
@@ -216,7 +201,6 @@ abstract class AssignedTasks<T extends Task> {
     }
 
     RuntimeException closeZombieTask(final T task) {
-        log.warn("{} {} got migrated to another thread already. Closing it as zombie.", taskTypeName, task.id());
         try {
             task.close(false, true);
         } catch (final RuntimeException e) {
@@ -239,17 +223,21 @@ abstract class AssignedTasks<T extends Task> {
             log.trace("found suspended {} {}", taskTypeName, taskId);
             if (task.partitions().equals(partitions)) {
                 suspended.remove(taskId);
+                task.resume();
                 try {
-                    task.resume();
+                    transitionToRunning(task);
                 } catch (final TaskMigratedException e) {
+                    // we need to catch migration exception internally since this function
+                    // is triggered in the rebalance callback
+                    log.info("Failed to resume {} {} since it got migrated to another thread already. " +
+                            "Closing it as zombie before triggering a new rebalance.", taskTypeName, task.id());
                     final RuntimeException fatalException = closeZombieTask(task);
+                    running.remove(task.id());
                     if (fatalException != null) {
                         throw fatalException;
                     }
-                    suspended.remove(taskId);
                     throw e;
                 }
-                transitionToRunning(task, new HashSet<TopicPartition>());
                 log.trace("resuming suspended {} {}", taskTypeName, task.id());
                 return true;
             } else {
@@ -269,14 +257,15 @@ abstract class AssignedTasks<T extends Task> {
         }
     }
 
-    private void transitionToRunning(final T task, final Set<TopicPartition> readyPartitions) {
+    /**
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     */
+    private void transitionToRunning(final T task) {
         log.debug("transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);
+        task.initializeTopology();
         for (TopicPartition topicPartition : task.partitions()) {
             runningByPartition.put(topicPartition, task);
-            if (task.hasStateStores()) {
-                readyPartitions.add(topicPartition);
-            }
         }
         for (TopicPartition topicPartition : task.changelogPartitions()) {
             runningByPartition.put(topicPartition, task);
@@ -367,14 +356,14 @@ abstract class AssignedTasks<T extends Task> {
             try {
                 action.apply(task);
             } catch (final TaskMigratedException e) {
+                log.info("Failed to commit {} {} since it got migrated to another thread already. " +
+                        "Closing it as zombie before triggering a new rebalance.", taskTypeName, task.id());
                 final RuntimeException fatalException = closeZombieTask(task);
                 if (fatalException != null) {
                     throw fatalException;
                 }
                 it.remove();
-                if (firstException == null) {
-                    firstException = e;
-                }
+                throw e;
             } catch (final RuntimeException t) {
                 log.error("Failed to {} {} {} due to the following error:",
                           action.name(),
@@ -415,6 +404,8 @@ abstract class AssignedTasks<T extends Task> {
             try {
                 task.close(clean, false);
             } catch (final TaskMigratedException e) {
+                log.info("Failed to close {} {} since it got migrated to another thread already. " +
+                        "Closing it as zombie and move on.", taskTypeName, task.id());
                 firstException.compareAndSet(null, closeZombieTask(task));
             } catch (final RuntimeException t) {
                 log.error("Failed while closing {} {} due to the following error:",

@@ -19,9 +19,10 @@ package org.apache.kafka.connect.runtime.rest.resources;
 import com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.distributed.RequestTargetException;
-import org.apache.kafka.connect.runtime.rest.RestServer;
+import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
@@ -68,11 +69,13 @@ public class ConnectorsResource {
     private static final long REQUEST_TIMEOUT_MS = 90 * 1000;
 
     private final Herder herder;
+    private final WorkerConfig config;
     @javax.ws.rs.core.Context
     private ServletContext context;
 
-    public ConnectorsResource(Herder herder) {
+    public ConnectorsResource(Herder herder, WorkerConfig config) {
         this.herder = herder;
+        this.config = config;
     }
 
     @GET
@@ -88,10 +91,11 @@ public class ConnectorsResource {
     @Path("/")
     public Response createConnector(final @QueryParam("forward") Boolean forward,
                                     final CreateConnectorRequest createRequest) throws Throwable {
-        String name = createRequest.name();
-        if (name.contains("/")) {
-            throw new BadRequestException("connector name should not contain '/'");
-        }
+        // Trim leading and trailing whitespaces from the connector name, replace null with empty string
+        // if no name element present to keep validation within validator (NonEmptyStringWithoutControlChars
+        // allows null values)
+        String name = createRequest.name() == null ? "" : createRequest.name().trim();
+
         Map<String, String> configs = createRequest.config();
         checkAndPutConnectorConfigName(name, configs);
 
@@ -272,7 +276,7 @@ public class ConnectorsResource {
                             .build()
                             .toString();
                     log.debug("Forwarding request {} {} {}", forwardUrl, method, body);
-                    return translator.translate(RestServer.httpRequest(forwardUrl, method, body, resultType));
+                    return translator.translate(RestClient.httpRequest(forwardUrl, method, body, resultType, config));
                 } else {
                     // we should find the right target for the query within two hops, so if
                     // we don't, it probably means that a rebalance has taken place.
@@ -305,19 +309,19 @@ public class ConnectorsResource {
     }
 
     private interface Translator<T, U> {
-        T translate(RestServer.HttpResponse<U> response);
+        T translate(RestClient.HttpResponse<U> response);
     }
 
     private static class IdentityTranslator<T> implements Translator<T, T> {
         @Override
-        public T translate(RestServer.HttpResponse<T> response) {
+        public T translate(RestClient.HttpResponse<T> response) {
             return response.body();
         }
     }
 
     private static class CreatedConnectorInfoTranslator implements Translator<Herder.Created<ConnectorInfo>, ConnectorInfo> {
         @Override
-        public Herder.Created<ConnectorInfo> translate(RestServer.HttpResponse<ConnectorInfo> response) {
+        public Herder.Created<ConnectorInfo> translate(RestClient.HttpResponse<ConnectorInfo> response) {
             boolean created = response.status() == 201;
             return new Herder.Created<>(created, response.body());
         }

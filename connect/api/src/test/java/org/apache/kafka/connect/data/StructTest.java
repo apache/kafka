@@ -31,6 +31,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 
+
 public class StructTest {
 
     private static final Schema FLAT_STRUCT_SCHEMA = SchemaBuilder.struct()
@@ -236,6 +237,54 @@ public class StructTest {
         assertNotEquals(struct1, struct3);
     }
 
+    @Test
+    public void testEqualsAndHashCodeWithByteArrayValue() {
+        Struct struct1 = new Struct(FLAT_STRUCT_SCHEMA)
+                .put("int8", (byte) 12)
+                .put("int16", (short) 12)
+                .put("int32", 12)
+                .put("int64", (long) 12)
+                .put("float32", 12.f)
+                .put("float64", 12.)
+                .put("boolean", true)
+                .put("string", "foobar")
+                .put("bytes", "foobar".getBytes());
+
+        Struct struct2 = new Struct(FLAT_STRUCT_SCHEMA)
+                .put("int8", (byte) 12)
+                .put("int16", (short) 12)
+                .put("int32", 12)
+                .put("int64", (long) 12)
+                .put("float32", 12.f)
+                .put("float64", 12.)
+                .put("boolean", true)
+                .put("string", "foobar")
+                .put("bytes", "foobar".getBytes());
+
+        Struct struct3 = new Struct(FLAT_STRUCT_SCHEMA)
+                .put("int8", (byte) 12)
+                .put("int16", (short) 12)
+                .put("int32", 12)
+                .put("int64", (long) 12)
+                .put("float32", 12.f)
+                .put("float64", 12.)
+                .put("boolean", true)
+                .put("string", "foobar")
+                .put("bytes", "mismatching_string".getBytes());
+
+        // Verify contract for equals: method must be reflexive and transitive
+        assertEquals(struct1, struct2);
+        assertEquals(struct2, struct1);
+        assertNotEquals(struct1, struct3);
+        assertNotEquals(struct2, struct3);
+        // Testing hashCode against a hardcoded value here would be incorrect: hashCode values need not be equal for any
+        // two distinct executions. However, based on the general contract for hashCode, if two objects are equal, their
+        // hashCodes must be equal. If they are not equal, their hashCodes should not be equal for performance reasons.
+        assertEquals(struct1.hashCode(), struct2.hashCode());
+        assertNotEquals(struct1.hashCode(), struct3.hashCode());
+        assertNotEquals(struct2.hashCode(), struct3.hashCode());
+    }
+
     @Rule
     public ExpectedException thrown = ExpectedException.none();
 
@@ -265,5 +314,29 @@ public class StructTest {
         thrown.expect(DataException.class);
         thrown.expectMessage("Invalid Java object for schema type INT8: class java.lang.Object for field: \"field\"");
         ConnectSchema.validateValue(fieldName, Schema.INT8_SCHEMA, new Object());
+    }
+
+    @Test
+    public void testPutNullField() {
+        final String fieldName = "fieldName";
+        Schema testSchema = SchemaBuilder.struct()
+            .field(fieldName, Schema.STRING_SCHEMA);
+        Struct struct = new Struct(testSchema);
+
+        thrown.expect(DataException.class);
+        Field field = null;
+        struct.put(field, "valid");
+    }
+
+    @Test
+    public void testInvalidPutIncludesFieldName() {
+        final String fieldName = "fieldName";
+        Schema testSchema = SchemaBuilder.struct()
+            .field(fieldName, Schema.STRING_SCHEMA);
+        Struct struct = new Struct(testSchema);
+
+        thrown.expect(DataException.class);
+        thrown.expectMessage("Invalid value: null used for required field: \"fieldName\", schema type: STRING");
+        struct.put(fieldName, null);
     }
 }

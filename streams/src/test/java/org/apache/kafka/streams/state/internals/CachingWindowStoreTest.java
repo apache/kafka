@@ -96,6 +96,11 @@ public class CachingWindowStoreTest {
         cachingStore.put(bytesKey("a"), bytesValue("a"));
         cachingStore.put(bytesKey("b"), bytesValue("b"));
 
+        assertThat(cachingStore.fetch(bytesKey("a"), 10), equalTo(bytesValue("a")));
+        assertThat(cachingStore.fetch(bytesKey("b"), 10), equalTo(bytesValue("b")));
+        assertThat(cachingStore.fetch(bytesKey("c"), 10), equalTo(null));
+        assertThat(cachingStore.fetch(bytesKey("a"), 0), equalTo(null));
+
         final WindowStoreIterator<byte[]> a = cachingStore.fetch(bytesKey("a"), 10, 10);
         final WindowStoreIterator<byte[]> b = cachingStore.fetch(bytesKey("b"), 10, 10);
         verifyKeyValue(a.next(), DEFAULT_TIMESTAMP, "a");
@@ -129,7 +134,55 @@ public class CachingWindowStoreTest {
         assertFalse(iterator.hasNext());
         assertEquals(2, cache.size());
     }
+    
+    @Test
+    public void shouldGetAllFromCache() {
+        cachingStore.put(bytesKey("a"), bytesValue("a"));
+        cachingStore.put(bytesKey("b"), bytesValue("b"));
+        cachingStore.put(bytesKey("c"), bytesValue("c"));
+        cachingStore.put(bytesKey("d"), bytesValue("d"));
+        cachingStore.put(bytesKey("e"), bytesValue("e"));
+        cachingStore.put(bytesKey("f"), bytesValue("f"));
+        cachingStore.put(bytesKey("g"), bytesValue("g"));
+        cachingStore.put(bytesKey("h"), bytesValue("h"));
 
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.all();
+        String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
+        for (String s : array) {
+            verifyWindowedKeyValue(iterator.next(), new Windowed<>(bytesKey(s), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), s);
+        }
+        assertFalse(iterator.hasNext());
+    }
+    
+    @Test
+    public void shouldFetchAllWithinTimestampRange() {
+        String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
+        for (int i = 0; i < array.length; i++) {
+            context.setTime(i);
+            cachingStore.put(bytesKey(array[i]), bytesValue(array[i]));
+        }
+        
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.fetchAll(0, 7);
+        for (int i = 0; i < array.length; i++) {
+            String str = array[i];
+            verifyWindowedKeyValue(iterator.next(), new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)), str);
+        }
+        assertFalse(iterator.hasNext());
+        
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator1 = cachingStore.fetchAll(2, 4);
+        for (int i = 2; i <= 4; i++) {
+            String str = array[i];
+            verifyWindowedKeyValue(iterator1.next(), new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)), str);
+        }
+        assertFalse(iterator1.hasNext());
+        
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator2 = cachingStore.fetchAll(5, 7);
+        for (int i = 5; i <= 7; i++) {
+            String str = array[i];
+            verifyWindowedKeyValue(iterator2.next(), new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)), str);
+        }
+        assertFalse(iterator2.hasNext());
+    }
 
     @Test
     public void shouldFlushEvictedItemsIntoUnderlyingStore() throws IOException {
@@ -206,7 +259,7 @@ public class CachingWindowStoreTest {
     @Test
     public void shouldIterateCacheAndStore() {
         final Bytes key = Bytes.wrap("1" .getBytes());
-        underlying.put(WindowStoreUtils.toBinaryKey(key, DEFAULT_TIMESTAMP, 0, WindowStoreUtils.getInnerStateSerde("app-id")), "a".getBytes());
+        underlying.put(WindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
         cachingStore.put(key, bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
         final WindowStoreIterator<byte[]> fetch = cachingStore.fetch(bytesKey("1"), DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE);
         verifyKeyValue(fetch.next(), DEFAULT_TIMESTAMP, "a");
@@ -217,7 +270,7 @@ public class CachingWindowStoreTest {
     @Test
     public void shouldIterateCacheAndStoreKeyRange() {
         final Bytes key = Bytes.wrap("1" .getBytes());
-        underlying.put(WindowStoreUtils.toBinaryKey(key, DEFAULT_TIMESTAMP, 0, WindowStoreUtils.getInnerStateSerde("app-id")), "a".getBytes());
+        underlying.put(WindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
         cachingStore.put(key, bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> fetchRange =
@@ -313,7 +366,7 @@ public class CachingWindowStoreTest {
         return KeyValue.pair(new Windowed<>(bytesKey(key), new TimeWindow(timestamp, timestamp + WINDOW_SIZE)), bytesValue(value));
     }
 
-    private int addItemsToCache() throws IOException {
+    private int addItemsToCache() {
         int cachedSize = 0;
         int i = 0;
         while (cachedSize < MAX_CACHE_SIZE_BYTES) {

@@ -97,14 +97,18 @@ public class ScramSaslClient implements SaslClient {
                         throw new SaslException("Expected empty challenge");
                     clientNonce = formatter.secureRandomString();
                     NameCallback nameCallback = new NameCallback("Name:");
+                    ScramExtensionsCallback extensionsCallback = new ScramExtensionsCallback();
+
                     try {
-                        callbackHandler.handle(new Callback[]{nameCallback});
+                        callbackHandler.handle(new Callback[]{nameCallback, extensionsCallback});
                     } catch (IOException | UnsupportedCallbackException e) {
                         throw new SaslException("User name could not be obtained", e);
                     }
+
                     String username = nameCallback.getName();
                     String saslName = formatter.saslName(username);
-                    this.clientFirstMessage = new ScramMessages.ClientFirstMessage(saslName, clientNonce);
+                    Map<String, String> extensions = extensionsCallback.extensions();
+                    this.clientFirstMessage = new ScramMessages.ClientFirstMessage(saslName, clientNonce, extensions);
                     setState(State.RECEIVE_SERVER_FIRST_MESSAGE);
                     return clientFirstMessage.toBytes();
 

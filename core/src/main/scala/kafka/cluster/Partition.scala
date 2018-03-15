@@ -172,9 +172,8 @@ class Partition(val topic: String,
     allReplicasMap.getAndMaybePut(replicaId, {
       if (isReplicaLocal(replicaId)) {
         val adminZkClient = new AdminZkClient(zkClient)
-        val prop = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
-        val config = LogConfig.fromProps(logManager.defaultConfig.originals,
-                                         prop)
+        val props = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
+        val config = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
         val log = logManager.getOrCreateLog(topicPartition, config, isNew, replicaId == Request.FutureLocalReplicaId)
         val checkpoint = replicaManager.highWatermarkCheckpoints(log.dir.getParent)
         val offsetMap = checkpoint.read()
@@ -461,7 +460,11 @@ class Partition(val topic: String,
     }.map(_.logEndOffset)
     val newHighWatermark = allLogEndOffsets.min(new LogOffsetMetadata.OffsetOrdering)
     val oldHighWatermark = leaderReplica.highWatermark
-    if (oldHighWatermark.messageOffset < newHighWatermark.messageOffset || oldHighWatermark.onOlderSegment(newHighWatermark)) {
+
+    // Ensure that the high watermark increases monotonically. We also update the high watermark when the new
+    // offset metadata is on a newer segment, which occurs whenever the log is rolled to a new segment.
+    if (oldHighWatermark.messageOffset < newHighWatermark.messageOffset ||
+      (oldHighWatermark.messageOffset == newHighWatermark.messageOffset && oldHighWatermark.onOlderSegment(newHighWatermark))) {
       leaderReplica.highWatermark = newHighWatermark
       debug(s"High watermark updated to $newHighWatermark")
       true
@@ -663,10 +666,10 @@ class Partition(val topic: String,
 
   private def updateIsr(newIsr: Set[Replica]) {
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.map(_.brokerId).toList, zkVersion)
-    val (updateSucceeded,newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, topic, partitionId,
-      newLeaderAndIsr, controllerEpoch, zkVersion)
+    val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkClient, topicPartition, newLeaderAndIsr,
+      controllerEpoch)
 
-    if(updateSucceeded) {
+    if (updateSucceeded) {
       replicaManager.recordIsrChange(topicPartition)
       inSyncReplicas = newIsr
       zkVersion = newVersion

@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
@@ -54,13 +55,12 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     /**
-     * @throws org.apache.kafka.streams.errors.TopologyBuilderException if an attempt is made to access this state store from an unknown node
+     * @throws StreamsException if an attempt is made to access this state store from an unknown node
      */
-    @SuppressWarnings("deprecation")
     @Override
     public StateStore getStateStore(final String name) {
         if (currentNode() == null) {
-            throw new org.apache.kafka.streams.errors.TopologyBuilderException("Accessing from an unknown node");
+            throw new StreamsException("Accessing from an unknown node");
         }
 
         final StateStore global = stateManager.getGlobalStore(name);
@@ -69,24 +69,10 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         if (!currentNode().stateStores.contains(name)) {
-            throw new org.apache.kafka.streams.errors.TopologyBuilderException("Processor " + currentNode().name() + " has no access to StateStore " + name);
+            throw new StreamsException("Processor " + currentNode().name() + " has no access to StateStore " + name);
         }
 
         return stateManager.getStore(name);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public <K, V> void forward(final K key, final V value) {
-        final ProcessorNode previousNode = currentNode();
-        try {
-            for (ProcessorNode child : (List<ProcessorNode>) currentNode().children()) {
-                setCurrentNode(child);
-                child.process(key, value);
-            }
-        } finally {
-            setCurrentNode(previousNode);
-        }
     }
 
     @SuppressWarnings("unchecked")

@@ -28,7 +28,7 @@ import org.apache.kafka.common.utils.Time
  * Handle the notificationMessage.
  */
 trait NotificationHandler {
-  def processNotification(notificationMessage: String)
+  def processNotification(notificationMessage: Array[Byte])
 }
 
 /**
@@ -143,7 +143,6 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
   object ZkStateChangeHandler extends  StateChangeHandler {
     override val name: String = StateChangeHandlers.zkNodeChangeListenerHandler(seqNodeRoot)
     override def afterInitializingSession(): Unit = addChangeNotification
-    override def onReconnectionTimeout(): Unit = error("Reconnection timeout.")
   }
 }
 

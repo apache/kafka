@@ -51,12 +51,15 @@ import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.TestSecurityConfig;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.ScramCredentialUtils;
 import org.apache.kafka.common.security.scram.ScramFormatter;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.security.scram.ScramMechanism;
+import org.apache.kafka.common.security.token.delegation.TokenInformation;
+import org.apache.kafka.common.utils.SecurityUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -101,6 +104,7 @@ public class SaslAuthenticatorTest {
 
     @Before
     public void setup() throws Exception {
+        LoginManager.closeAll();
         serverCertStores = new CertStores(true, "localhost");
         clientCertStores = new CertStores(false, "localhost");
         saslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
@@ -372,6 +376,39 @@ public class SaslAuthenticatorTest {
 
         server = createEchoServer(securityProtocol);
         updateScramCredentialCache(username, password);
+        createAndCheckClientConnection(securityProtocol, "0");
+    }
+
+
+    @Test
+    public void testTokenAuthenticationOverSaslScram() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        TestJaasConfig jaasConfig = configureMechanisms("SCRAM-SHA-256", Arrays.asList("SCRAM-SHA-256"));
+
+        //create jaas config for token auth
+        Map<String, Object> options = new HashMap<>();
+        String tokenId = "token1";
+        String tokenHmac = "abcdefghijkl";
+        options.put("username", tokenId); //tokenId
+        options.put("password", tokenHmac); //token hmac
+        options.put(ScramLoginModule.TOKEN_AUTH_CONFIG, "true"); //enable token authentication
+        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_CLIENT, ScramLoginModule.class.getName(), options);
+
+        server = createEchoServer(securityProtocol);
+
+        //Check invalid tokenId/tokenInfo in tokenCache
+        createAndCheckClientConnectionFailure(securityProtocol, "0");
+
+        //Check valid token Info and invalid credentials
+        KafkaPrincipal owner = SecurityUtils.parseKafkaPrincipal("User:Owner");
+        KafkaPrincipal renewer = SecurityUtils.parseKafkaPrincipal("User:Renewer1");
+        TokenInformation tokenInfo = new TokenInformation(tokenId, owner, Collections.singleton(renewer),
+            System.currentTimeMillis(), System.currentTimeMillis(), System.currentTimeMillis());
+        server.tokenCache().addToken(tokenId, tokenInfo);
+        createAndCheckClientConnectionFailure(securityProtocol, "0");
+
+        //Check with valid token Info and credentials
+        updateTokenCredentialCache(tokenId, tokenHmac);
         createAndCheckClientConnection(securityProtocol, "0");
     }
 
@@ -679,7 +716,7 @@ public class SaslAuthenticatorTest {
      * property override is used during authentication.
      */
     @Test
-    public void testDynamicJaasConfiguration() throws Exception {
+    public void testClientDynamicJaasConfiguration() throws Exception {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
         saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, Arrays.asList("PLAIN"));
@@ -718,6 +755,37 @@ public class SaslAuthenticatorTest {
         } catch (IllegalArgumentException e) {
             // Expected
         }
+    }
+
+    /**
+     * Tests dynamic JAAS configuration property for SASL server. Invalid server credentials
+     * are set in the static JVM-wide configuration instance to ensure that the dynamic
+     * property override is used during authentication.
+     */
+    @Test
+    public void testServerDynamicJaasConfiguration() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
+        saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, Arrays.asList("PLAIN"));
+        Map<String, Object> serverOptions = new HashMap<>();
+        serverOptions.put("user_user1", "user1-secret");
+        serverOptions.put("user_user2", "user2-secret");
+        saslServerConfigs.put("listener.name.sasl_ssl.plain." + SaslConfigs.SASL_JAAS_CONFIG,
+                TestJaasConfig.jaasConfigProperty("PLAIN", serverOptions));
+        TestJaasConfig staticJaasConfig = new TestJaasConfig();
+        staticJaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(),
+                Collections.<String, Object>emptyMap());
+        staticJaasConfig.setClientOptions("PLAIN", "user1", "user1-secret");
+        Configuration.setConfiguration(staticJaasConfig);
+        server = createEchoServer(securityProtocol);
+
+        // Check that 'user1' can connect with static Jaas config
+        createAndCheckClientConnection(securityProtocol, "1");
+
+        // Check that user 'user2' can also connect with a Jaas config override
+        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG,
+                TestJaasConfig.jaasConfigProperty("PLAIN", "user2", "user2-secret"));
+        createAndCheckClientConnection(securityProtocol, "2");
     }
 
     @Test
@@ -950,19 +1018,20 @@ public class SaslAuthenticatorTest {
             throws Exception {
         final ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         final Map<String, ?> configs = Collections.emptyMap();
-        final JaasContext jaasContext = JaasContext.load(JaasContext.Type.SERVER, listenerName, configs);
+        final JaasContext jaasContext = JaasContext.loadServerContext(listenerName, saslMechanism, configs);
+        final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
 
         boolean isScram = ScramMechanism.isScram(saslMechanism);
         if (isScram)
             ScramCredentialUtils.createCache(credentialCache, Arrays.asList(saslMechanism));
-        SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContext,
-                securityProtocol, listenerName, saslMechanism, true, credentialCache) {
+        SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContexts,
+                securityProtocol, listenerName, false, saslMechanism, true, credentialCache, null) {
 
             @Override
             protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs, String id,
-                            TransportLayer transportLayer, Subject subject) throws IOException {
-                return new SaslServerAuthenticator(configs, id, jaasContext, subject, null,
-                                credentialCache, listenerName, securityProtocol, transportLayer) {
+                            TransportLayer transportLayer, Map<String, Subject> subjects) throws IOException {
+                return new SaslServerAuthenticator(configs, id, jaasContexts, subjects, null,
+                                credentialCache, listenerName, securityProtocol, transportLayer, null) {
 
                     @Override
                     protected ApiVersionsResponse apiVersionsResponse() {
@@ -996,9 +1065,11 @@ public class SaslAuthenticatorTest {
 
         final ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         final Map<String, ?> configs = Collections.emptyMap();
-        final JaasContext jaasContext = JaasContext.load(JaasContext.Type.CLIENT, null, configs);
-        SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContext,
-                securityProtocol, listenerName, saslMechanism, true, null) {
+        final JaasContext jaasContext = JaasContext.loadClientContext(configs);
+        final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
+
+        SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContexts,
+                securityProtocol, listenerName, false, saslMechanism, true, null, null) {
 
             @Override
             protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs, String id,
@@ -1206,5 +1277,16 @@ public class SaslAuthenticatorTest {
     // SaslClientAuthenticator always uses version 0
     private ApiVersionsRequest createApiVersionsRequestV0() {
         return new ApiVersionsRequest.Builder((short) 0).build();
+    }
+
+    private void updateTokenCredentialCache(String username, String password) throws NoSuchAlgorithmException {
+        for (String mechanism : (List<String>) saslServerConfigs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG)) {
+            ScramMechanism scramMechanism = ScramMechanism.forMechanismName(mechanism);
+            if (scramMechanism != null) {
+                ScramFormatter formatter = new ScramFormatter(scramMechanism);
+                ScramCredential credential = formatter.generateCredential(password, 4096);
+                server.tokenCache().credentialCache(scramMechanism.mechanismName()).put(username, credential);
+            }
+        }
     }
 }

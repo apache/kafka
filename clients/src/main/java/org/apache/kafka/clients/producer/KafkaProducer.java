@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -261,11 +262,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * are documented <a href="http://kafka.apache.org/documentation.html#producerconfigs">here</a>. Values can be
      * either strings or Objects of the appropriate type (for example a numeric configuration would accept either the
      * string "42" or the integer 42).
+     * <p>
+     * Note: after creating a {@code KafkaProducer} you must always {@link #close()} it to avoid resource leaks.
      * @param configs   The producer configs
      *
      */
-    public KafkaProducer(Map<String, Object> configs) {
-        this(new ProducerConfig(configs), null, null);
+    public KafkaProducer(final Map<String, Object> configs) {
+        this(new ProducerConfig(configs), null, null, null, null);
     }
 
     /**
@@ -273,6 +276,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Valid configuration strings are documented <a href="http://kafka.apache.org/documentation.html#producerconfigs">here</a>.
      * Values can be either strings or Objects of the appropriate type (for example a numeric configuration would accept
      * either the string "42" or the integer 42).
+     * <p>
+     * Note: after creating a {@code KafkaProducer} you must always {@link #close()} it to avoid resource leaks.
      * @param configs   The producer configs
      * @param keySerializer  The serializer for key that implements {@link Serializer}. The configure() method won't be
      *                       called in the producer when the serializer is passed in directly.
@@ -281,21 +286,28 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public KafkaProducer(Map<String, Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         this(new ProducerConfig(ProducerConfig.addSerializerToConfig(configs, keySerializer, valueSerializer)),
-                keySerializer, valueSerializer);
+            keySerializer,
+            valueSerializer,
+            null,
+            null);
     }
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
      * are documented <a href="http://kafka.apache.org/documentation.html#producerconfigs">here</a>.
+     * <p>
+     * Note: after creating a {@code KafkaProducer} you must always {@link #close()} it to avoid resource leaks.
      * @param properties   The producer configs
      */
     public KafkaProducer(Properties properties) {
-        this(new ProducerConfig(properties), null, null);
+        this(new ProducerConfig(properties), null, null, null, null);
     }
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration, a key and a value {@link Serializer}.
      * Valid configuration strings are documented <a href="http://kafka.apache.org/documentation.html#producerconfigs">here</a>.
+     * <p>
+     * Note: after creating a {@code KafkaProducer} you must always {@link #close()} it to avoid resource leaks.
      * @param properties   The producer configs
      * @param keySerializer  The serializer for key that implements {@link Serializer}. The configure() method won't be
      *                       called in the producer when the serializer is passed in directly.
@@ -304,11 +316,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public KafkaProducer(Properties properties, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         this(new ProducerConfig(ProducerConfig.addSerializerToConfig(properties, keySerializer, valueSerializer)),
-                keySerializer, valueSerializer);
+                keySerializer, valueSerializer, null, null);
     }
 
     @SuppressWarnings("unchecked")
-    private KafkaProducer(ProducerConfig config, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+    // visible for testing
+    KafkaProducer(ProducerConfig config,
+                  Serializer<K> keySerializer,
+                  Serializer<V> valueSerializer,
+                  Metadata metadata,
+                  KafkaClient kafkaClient) {
         try {
             Map<String, Object> userProvidedConfigs = config.originals();
             this.producerConfig = config;
@@ -361,10 +378,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             userProvidedConfigs.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
             List<ProducerInterceptor<K, V>> interceptorList = (List) (new ProducerConfig(userProvidedConfigs, false)).getConfiguredInstances(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ProducerInterceptor.class);
-            this.interceptors = interceptorList.isEmpty() ? null : new ProducerInterceptors<>(interceptorList);
+            this.interceptors = new ProducerInterceptors<>(interceptorList);
             ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keySerializer, valueSerializer, interceptorList, reporters);
-            this.metadata = new Metadata(retryBackoffMs, config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
-                    true, true, clusterResourceListeners);
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
@@ -388,10 +403,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     apiVersions,
                     transactionManager);
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
-            this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), time.milliseconds());
+            if (metadata != null) {
+                this.metadata = metadata;
+            } else {
+                this.metadata = new Metadata(retryBackoffMs, config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
+                    true, true, clusterResourceListeners);
+                this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), time.milliseconds());
+            }
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config);
             Sensor throttleTimeSensor = Sender.throttleTimeSensor(metricsRegistry.senderMetrics);
-            NetworkClient client = new NetworkClient(
+            KafkaClient client = kafkaClient != null ? kafkaClient : new NetworkClient(
                     new Selector(config.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
                             this.metrics, time, "producer", channelBuilder, logContext),
                     this.metadata,
@@ -759,7 +780,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
         // intercept the record, which can be potentially modified; this method does not throw exceptions
-        ProducerRecord<K, V> interceptedRecord = this.interceptors == null ? record : this.interceptors.onSend(record);
+        ProducerRecord<K, V> interceptedRecord = this.interceptors.onSend(record);
         return doSend(interceptedRecord, callback);
     }
 
@@ -801,7 +822,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             // producer callback will make sure to call both 'callback' and interceptor callback
-            Callback interceptCallback = this.interceptors == null ? callback : new InterceptorCallback<>(callback, this.interceptors, tp);
+            Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
 
             if (transactionManager != null && transactionManager.isTransactional())
                 transactionManager.maybeAddPartitionToTransaction(tp);
@@ -821,29 +842,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (callback != null)
                 callback.onCompletion(null, e);
             this.errors.record();
-            if (this.interceptors != null)
-                this.interceptors.onSendError(record, tp, e);
+            this.interceptors.onSendError(record, tp, e);
             return new FutureFailure(e);
         } catch (InterruptedException e) {
             this.errors.record();
-            if (this.interceptors != null)
-                this.interceptors.onSendError(record, tp, e);
+            this.interceptors.onSendError(record, tp, e);
             throw new InterruptException(e);
         } catch (BufferExhaustedException e) {
             this.errors.record();
             this.metrics.sensor("buffer-exhausted-records").record();
-            if (this.interceptors != null)
-                this.interceptors.onSendError(record, tp, e);
+            this.interceptors.onSendError(record, tp, e);
             throw e;
         } catch (KafkaException e) {
             this.errors.record();
-            if (this.interceptors != null)
-                this.interceptors.onSendError(record, tp, e);
+            this.interceptors.onSendError(record, tp, e);
             throw e;
         } catch (Exception e) {
             // we notify interceptor about all exceptions, since onSend is called before anything else in this method
-            if (this.interceptors != null)
-                this.interceptors.onSendError(record, tp, e);
+            this.interceptors.onSendError(record, tp, e);
             throw e;
         }
     }
@@ -1051,7 +1067,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     try {
                         this.ioThread.join(timeUnit.toMillis(timeout));
                     } catch (InterruptedException t) {
-                        firstException.compareAndSet(null, t);
+                        firstException.compareAndSet(null, new InterruptException(t));
                         log.error("Interrupted while joining ioThread", t);
                     }
                 }
@@ -1067,7 +1083,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 try {
                     this.ioThread.join();
                 } catch (InterruptedException e) {
-                    firstException.compareAndSet(null, e);
+                    firstException.compareAndSet(null, new InterruptException(e));
                 }
             }
         }
@@ -1079,8 +1095,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         ClientUtils.closeQuietly(partitioner, "producer partitioner", firstException);
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
         log.debug("Kafka producer has been closed");
-        if (firstException.get() != null && !swallowException)
-            throw new KafkaException("Failed to close kafka producer", firstException.get());
+        Throwable exception = firstException.get();
+        if (exception != null && !swallowException) {
+            if (exception instanceof InterruptException) {
+                throw (InterruptException) exception;
+            }
+            throw new KafkaException("Failed to close kafka producer", exception);
+        }
     }
 
     private ClusterResourceListeners configureClusterResourceListeners(Serializer<K> keySerializer, Serializer<V> valueSerializer, List<?>... candidateLists) {
@@ -1172,14 +1193,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         public void onCompletion(RecordMetadata metadata, Exception exception) {
-            if (this.interceptors != null) {
-                if (metadata == null) {
-                    this.interceptors.onAcknowledgement(new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP,
-                                    Long.valueOf(-1L), -1, -1), exception);
-                } else {
-                    this.interceptors.onAcknowledgement(metadata, exception);
-                }
-            }
+            metadata = metadata != null ? metadata : new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, Long.valueOf(-1L), -1, -1);
+            this.interceptors.onAcknowledgement(metadata, exception);
             if (this.userCallback != null)
                 this.userCallback.onCompletion(metadata, exception);
         }

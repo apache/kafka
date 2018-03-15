@@ -35,7 +35,9 @@ import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -176,6 +178,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public <V1> KStream<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper) {
+        return mapValues(withKey(mapper));
+    }
+
+    @Override
+    public <VR> KStream<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         String name = builder.newProcessorName(MAPVALUES_NAME);
 
@@ -329,6 +336,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public <V1> KStream<K, V1> flatMapValues(final ValueMapper<? super V, ? extends Iterable<? extends V1>> mapper) {
+        return flatMapValues(withKey(mapper));
+    }
+
+    @Override
+    public <VR> KStream<K, VR> flatMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends VR>> mapper) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         String name = builder.newProcessorName(FLATMAPVALUES_NAME);
 
@@ -488,8 +500,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final StreamPartitioner<? super K, ? super V> partitioner = produced.streamPartitioner();
 
         if (partitioner == null && keySerializer != null && keySerializer instanceof WindowedSerializer) {
-            final WindowedSerializer<Object> windowedSerializer = (WindowedSerializer<Object>) keySerializer;
-            final StreamPartitioner<K, V> windowedPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>(topic, windowedSerializer);
+            final StreamPartitioner<K, V> windowedPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>(topic, (WindowedSerializer) keySerializer);
             builder.internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, windowedPartitioner, this.name);
         } else {
             builder.internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, partitioner, this.name);
@@ -514,9 +525,22 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public <V1> KStream<K, V1> transformValues(final ValueTransformerSupplier<? super V, ? extends V1> valueTransformerSupplier,
                                                final String... stateStoreNames) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformSupplier can't be null");
-        String name = builder.newProcessorName(TRANSFORMVALUES_NAME);
 
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamTransformValues<>(valueTransformerSupplier), this.name);
+        return transformValues(toInternalValueTransformerSupplier(valueTransformerSupplier), stateStoreNames);
+    }
+
+    @Override
+    public <VR> KStream<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
+                                               final String... stateStoreNames) {
+        Objects.requireNonNull(valueTransformerSupplier, "valueTransformSupplier can't be null");
+
+        return transformValues(toInternalValueTransformerSupplier(valueTransformerSupplier), stateStoreNames);
+    }
+
+    private <VR> KStream<K, VR> transformValues(final InternalValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> internalValueTransformerWithKeySupplier,
+                                                final String... stateStoreNames) {
+        final String name = builder.newProcessorName(TRANSFORMVALUES_NAME);
+        builder.internalTopologyBuilder.addProcessor(name, new KStreamTransformValues<>(internalValueTransformerWithKeySupplier), this.name);
         if (stateStoreNames != null && stateStoreNames.length > 0) {
             builder.internalTopologyBuilder.connectProcessorAndStateStores(name, stateStoreNames);
         }
@@ -628,16 +652,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
      */
     private KStreamImpl<K, V> repartitionForJoin(final Serde<K> keySerde,
                                                  final Serde<V> valSerde) {
-        String repartitionedSourceName = createReparitionedSource(builder, keySerde, valSerde, null, name);
+        String repartitionedSourceName = createRepartitionedSource(builder, keySerde, valSerde, null, name);
         return new KStreamImpl<>(builder, repartitionedSourceName, Collections
             .singleton(repartitionedSourceName), false);
     }
 
-    static <K1, V1> String createReparitionedSource(final InternalStreamsBuilder builder,
-                                                    final Serde<K1> keySerde,
-                                                    final Serde<V1> valSerde,
-                                                    final String topicNamePrefix,
-                                                    final String name) {
+    static <K1, V1> String createRepartitionedSource(final InternalStreamsBuilder builder,
+                                                     final Serde<K1> keySerde,
+                                                     final Serde<V1> valSerde,
+                                                     final String topicNamePrefix,
+                                                     final String name) {
         Serializer<K1> keySerializer = keySerde != null ? keySerde.serializer() : null;
         Serializer<V1> valSerializer = valSerde != null ? valSerde.serializer() : null;
         Deserializer<K1> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
@@ -769,7 +793,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final String name = builder.newProcessorName(leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
         builder.internalTopologyBuilder.addProcessor(name, new KStreamKTableJoin<>(((KTableImpl<K, ?, V1>) other).valueGetterSupplier(), joiner, leftJoin), this.name);
-        builder.internalTopologyBuilder.connectProcessorAndStateStores(name, ((KTableImpl<K, ?, V1>) other).internalStoreName());
+        builder.internalTopologyBuilder.connectProcessorAndStateStores(name, ((KTableImpl) other).valueGetterSupplier().storeNames());
         builder.internalTopologyBuilder.connectProcessors(this.name, ((KTableImpl<K, ?, V1>) other).name);
 
         return new KStreamImpl<>(builder, name, allSourceNodes, false);

@@ -91,7 +91,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
 
     @Override
     public void put(final K key, final V value, final long timestamp) {
-        long startNs = time.nanoseconds();
+        final long startNs = time.nanoseconds();
         try {
             inner.put(keyBytes(key), serdes.rawValue(value), timestamp);
         } finally {
@@ -104,6 +104,20 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     }
 
     @Override
+    public V fetch(final K key, final long timestamp) {
+        final long startNs = time.nanoseconds();
+        try {
+            final byte[] result = inner.fetch(keyBytes(key), timestamp);
+            if (result == null) {
+                return null;
+            }
+            return serdes.valueFrom(result);
+        } finally {
+            metrics.recordLatency(this.fetchTime, startNs, time.nanoseconds());
+        }
+    }
+
+    @Override
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
         return new MeteredWindowStoreIterator<>(inner.fetch(keyBytes(key), timeFrom, timeTo),
                                                 fetchTime,
@@ -112,6 +126,20 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
                                                 time);
     }
 
+    @Override
+    public KeyValueIterator<Windowed<K>, V> all() {
+        return new MeteredWindowedKeyValueIterator<>(inner.all(), fetchTime, metrics, serdes, time);
+    }
+    
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
+        return new MeteredWindowedKeyValueIterator<>(inner.fetchAll(timeFrom, timeTo), 
+                                                     fetchTime, 
+                                                     metrics, 
+                                                     serdes, 
+                                                     time);
+    }
+    
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
         return new MeteredWindowedKeyValueIterator<>(inner.fetch(keyBytes(from), keyBytes(to), timeFrom, timeTo),

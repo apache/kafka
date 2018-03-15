@@ -290,7 +290,7 @@ public final class WorkerManager {
                 return;
             }
             KafkaFutureImpl<String> haltFuture = new KafkaFutureImpl<>();
-            haltFuture.thenApply(new KafkaFuture.Function<String, Void>() {
+            haltFuture.thenApply(new KafkaFuture.BaseFunction<String, Void>() {
                 @Override
                 public Void apply(String errorString) {
                     if (errorString.isEmpty()) {

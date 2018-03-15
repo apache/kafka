@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -26,18 +30,23 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
 public abstract class AbstractKeyValueStoreTest {
 
-
-    protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(ProcessorContext context,
-                                                                      Class<K> keyClass, Class<V> valueClass,
-                                                                      boolean useContextSerdes);
+    protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context);
 
     protected MockProcessorContext context;
     protected KeyValueStore<Integer, String> store;
@@ -48,7 +57,7 @@ public abstract class AbstractKeyValueStoreTest {
         driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
         context = (MockProcessorContext) driver.context();
         context.setTime(10);
-        store = createKeyValueStore(context, Integer.class, String.class, false);
+        store = createKeyValueStore(context);
     }
 
     @After
@@ -56,6 +65,75 @@ public abstract class AbstractKeyValueStoreTest {
         store.close();
         context.close();
         driver.clear();
+    }
+
+    private static Map<Integer, String> getContents(final KeyValueIterator<Integer, String> iter) {
+        final HashMap<Integer, String> result = new HashMap<>();
+        while (iter.hasNext()) {
+            KeyValue<Integer, String> entry = iter.next();
+            result.put(entry.key, entry.value);
+        }
+        return result;
+    }
+
+    @Test
+    public void shouldNotIncludeDeletedFromRangeResult() {
+        store.close();
+
+        final Serializer<String> serializer = new StringSerializer() {
+            private int numCalls = 0;
+
+            @Override
+            public byte[] serialize(final String topic, final String data) {
+                if (++numCalls > 3) {
+                    fail("Value serializer is called; it should never happen");
+                }
+
+                return super.serialize(topic, data);
+            }
+        };
+
+        context.setValueSerde(Serdes.serdeFrom(serializer, new StringDeserializer()));
+        store = createKeyValueStore(driver.context());
+
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(2, "two");
+        store.delete(0);
+        store.delete(1);
+
+        // should not include deleted records in iterator
+        final Map<Integer, String> expectedContents = Collections.singletonMap(2, "two");
+        assertEquals(expectedContents, getContents(store.all()));
+    }
+
+    @Test
+    public void shouldDeleteIfSerializedValueIsNull() {
+        store.close();
+
+        final Serializer<String> serializer = new StringSerializer() {
+            @Override
+            public byte[] serialize(final String topic, final String data) {
+                if (data.equals("null")) {
+                    // will be serialized to null bytes, indicating deletes
+                    return null;
+                }
+                return super.serialize(topic, data);
+            }
+        };
+
+        context.setValueSerde(Serdes.serdeFrom(serializer, new StringDeserializer()));
+        store = createKeyValueStore(driver.context());
+
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(2, "two");
+        store.put(0, "null");
+        store.put(1, "null");
+
+        // should not include deleted records in iterator
+        final Map<Integer, String> expectedContents = Collections.singletonMap(2, "two");
+        assertEquals(expectedContents, getContents(store.all()));
     }
 
     @Test
@@ -74,6 +152,7 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals("four", store.get(4));
         assertEquals("five", store.get(5));
         store.delete(5);
+        assertEquals(4, driver.sizeOf(store));
 
         // Flush the store and verify all current entries were properly flushed ...
         store.flush();
@@ -89,31 +168,18 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals(false, driver.flushedEntryRemoved(4));
         assertEquals(true, driver.flushedEntryRemoved(5));
 
-        // Check range iteration ...
-        try (KeyValueIterator<Integer, String> iter = store.range(2, 4)) {
-            while (iter.hasNext()) {
-                KeyValue<Integer, String> entry = iter.next();
-                if (entry.key.equals(2))
-                    assertEquals("two", entry.value);
-                else if (entry.key.equals(4))
-                    assertEquals("four", entry.value);
-                else
-                    fail("Unexpected entry: " + entry);
-            }
-        }
+        final HashMap<Integer, String> expectedContents = new HashMap<>();
+        expectedContents.put(2, "two");
+        expectedContents.put(4, "four");
 
         // Check range iteration ...
-        try (KeyValueIterator<Integer, String> iter = store.range(2, 6)) {
-            while (iter.hasNext()) {
-                KeyValue<Integer, String> entry = iter.next();
-                if (entry.key.equals(2))
-                    assertEquals("two", entry.value);
-                else if (entry.key.equals(4))
-                    assertEquals("four", entry.value);
-                else
-                    fail("Unexpected entry: " + entry);
-            }
-        }
+        assertEquals(expectedContents, getContents(store.range(2, 4)));
+        assertEquals(expectedContents, getContents(store.range(2, 6)));
+
+        // Check all iteration ...
+        expectedContents.put(0, "zero");
+        expectedContents.put(1, "one");
+        assertEquals(expectedContents, getContents(store.all()));
     }
 
     @Test
@@ -160,7 +226,7 @@ public abstract class AbstractKeyValueStoreTest {
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
-        store = createKeyValueStore(driver.context(), Integer.class, String.class, false);
+        store = createKeyValueStore(driver.context());
         context.restore(store.name(), driver.restoredEntries());
 
         // Verify that the store's contents were properly restored ...
@@ -182,7 +248,7 @@ public abstract class AbstractKeyValueStoreTest {
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
-        store = createKeyValueStore(driver.context(), Integer.class, String.class, true);
+        store = createKeyValueStore(driver.context());
         context.restore(store.name(), driver.restoredEntries());
         // Verify that the store's contents were properly restored ...
         assertEquals(0, driver.checkForRestoredEntries(store));
@@ -280,5 +346,32 @@ public abstract class AbstractKeyValueStoreTest {
         store.put(5, "five");
         store.flush();
         assertEquals(5, store.approximateNumEntries());
+    }
+
+    @Test
+    public void shouldPutAll() {
+        List<KeyValue<Integer, String>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(1, "one"));
+        entries.add(new KeyValue<>(2, "two"));
+
+        store.putAll(entries);
+
+        final List<KeyValue<Integer, String>> allReturned = new ArrayList<>();
+        final List<KeyValue<Integer, String>> expectedReturned = Arrays.asList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two"));
+        final Iterator<KeyValue<Integer, String>> iterator = store.all();
+
+        while (iterator.hasNext()) {
+            allReturned.add(iterator.next());
+        }
+        assertThat(allReturned, equalTo(expectedReturned));
+
+    }
+
+    @Test
+    public void shouldDeleteFromStore() {
+        store.put(1, "one");
+        store.put(2, "two");
+        store.delete(2);
+        assertNull(store.get(2));
     }
 }

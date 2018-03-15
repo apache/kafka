@@ -42,9 +42,7 @@ import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
@@ -52,7 +50,6 @@ import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -67,9 +64,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.singleton;
 
-public class StreamThread extends Thread implements ThreadDataProvider {
+public class StreamThread extends Thread {
 
-    private final Logger log;
+    private final static int UNLIMITED_RECORDS = -1;
     private static final AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
     /**
@@ -176,23 +173,26 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     /**
      * Sets the state
      * @param newState New state
+     * @return The state prior to the call to setState, or null if the transition is invalid
      */
-    boolean setState(final State newState) {
-        final State oldState = state;
+    State setState(final State newState) {
+        final State oldState;
 
         synchronized (stateLock) {
+            oldState = state;
+
             if (state == State.PENDING_SHUTDOWN && newState != State.DEAD) {
                 // when the state is already in PENDING_SHUTDOWN, all other transitions will be
                 // refused but we do not throw exception here
-                return false;
+                return null;
             } else if (state == State.DEAD) {
                 // when the state is already in NOT_RUNNING, all its transitions
                 // will be refused but we do not throw exception here
-                return false;
+                return null;
             } else if (state == State.PARTITIONS_REVOKED && newState == State.PARTITIONS_REVOKED) {
                 // when the state is already in PARTITIONS_REVOKED, its transition to itself will be
                 // refused but we do not throw exception here
-                return false;
+                return null;
             } else if (!state.isValidTransition(newState)) {
                 log.error("Unexpected state transition from {} to {}", oldState, newState);
                 throw new StreamsException(logPrefix + "Unexpected state transition from " + oldState + " to " + newState);
@@ -204,7 +204,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             if (newState == State.RUNNING) {
                 updateThreadMetadata(taskManager.activeTasks(), taskManager.standbyTasks());
             } else {
-                updateThreadMetadata(null, null);
+                updateThreadMetadata(Collections.<TaskId, StreamTask>emptyMap(), Collections.<TaskId, StandbyTask>emptyMap());
             }
         }
 
@@ -212,7 +212,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             stateListener.onChange(this, state, oldState);
         }
 
-        return true;
+        return oldState;
     }
 
     public boolean isRunningAndNotRebalancing() {
@@ -222,7 +222,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
     public boolean isRunning() {
         synchronized (stateLock) {
-            return state == State.RUNNING || state == State.PARTITIONS_REVOKED || state == State.PARTITIONS_ASSIGNED;
+            return state.isRunning();
         }
     }
 
@@ -254,11 +254,10 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
             final long start = time.milliseconds();
             try {
-                if (!streamThread.setState(State.PARTITIONS_ASSIGNED)) {
+                if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
                     return;
                 }
                 taskManager.createTasks(assignment);
-                streamThread.refreshMetadataState();
             } catch (final Throwable t) {
                 log.error("Error caught during partition assignment, " +
                         "will abort the current process and re-throw at the end of rebalance: {}", t.getMessage());
@@ -285,7 +284,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                 taskManager.activeTaskIds(),
                 taskManager.standbyTaskIds());
 
-            if (streamThread.setState(State.PARTITIONS_REVOKED)) {
+            if (streamThread.setState(State.PARTITIONS_REVOKED) != null) {
                 final long start = time.milliseconds();
                 try {
                     // suspend active tasks
@@ -295,7 +294,6 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                               "will abort the current process and re-throw at the end of rebalance: {}", t.getMessage());
                     streamThread.setRebalanceException(t);
                 } finally {
-                    streamThread.refreshMetadataState();
                     streamThread.clearStandbyRecords();
 
                     log.info("partition revocation took {} ms.\n" +
@@ -340,9 +338,14 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             this.log = log;
         }
 
-        /**
-         * @throws TaskMigratedException if the task producer got fenced (EOS only)
-         */
+        public InternalTopologyBuilder builder() {
+            return builder;
+        }
+
+        public StateDirectory stateDirectory() {
+            return stateDirectory;
+        }
+
         Collection<T> createTasks(final Consumer<byte[], byte[]> consumer, final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
             final List<T> createdTasks = new ArrayList<>();
             for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
@@ -388,16 +391,13 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                   taskCreatedSensor,
                   storeChangelogReader,
                   time,
-                    log);
+                  log);
             this.cache = cache;
             this.clientSupplier = clientSupplier;
             this.threadProducer = threadProducer;
             this.threadClientId = threadClientId;
         }
 
-        /**
-         * @throws TaskMigratedException if the task producer got fenced (EOS only)
-         */
         @Override
         StreamTask createTask(final Consumer<byte[], byte[]> consumer, final TaskId taskId, final Set<TopicPartition> partitions) {
             taskCreatedSensor.record();
@@ -457,7 +457,7 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                   taskCreatedSensor,
                   storeChangelogReader,
                   time,
-                    log);
+                  log);
         }
 
         @Override
@@ -555,15 +555,10 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     private final long pollTimeMs;
     private final long commitTimeMs;
     private final Object stateLock;
-    private final UUID processId;
-    private final String clientId;
+    private final Logger log;
     private final String logPrefix;
-    private final StreamsConfig config;
     private final TaskManager taskManager;
-    private final StateDirectory stateDirectory;
-    private final PartitionGrouper partitionGrouper;
     private final StreamsMetricsThreadImpl streamsMetrics;
-    private final StreamsMetadataState streamsMetadataState;
 
     private long lastCommitMs;
     private long timerStartedMs;
@@ -571,75 +566,16 @@ public class StreamThread extends Thread implements ThreadDataProvider {
     private Throwable rebalanceException = null;
     private boolean processStandbyRecords = false;
     private volatile State state = State.CREATED;
+    private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
-    private ThreadMetadataProvider metadataProvider;
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
-
-    private final AdminClient adminClient;
 
     // package-private for testing
     final ConsumerRebalanceListener rebalanceListener;
     final Consumer<byte[], byte[]> restoreConsumer;
+    final Consumer<byte[], byte[]> consumer;
+    final InternalTopologyBuilder builder;
 
-    protected final Consumer<byte[], byte[]> consumer;
-    protected final InternalTopologyBuilder builder;
-
-    public final String applicationId;
-
-    private volatile ThreadMetadata threadMetadata;
-
-    private final static int UNLIMITED_RECORDS = -1;
-
-    public StreamThread(final InternalTopologyBuilder builder,
-                        final String clientId,
-                        final String threadClientId,
-                        final StreamsConfig config,
-                        final UUID processId,
-                        final Time time,
-                        final StreamsMetadataState streamsMetadataState,
-                        final TaskManager taskManager,
-                        final StreamsMetricsThreadImpl streamsMetrics,
-                        final KafkaClientSupplier clientSupplier,
-                        final Consumer<byte[], byte[]> restoreConsumer,
-                        final AdminClient adminClient,
-                        final StateDirectory stateDirectory) {
-        super(threadClientId);
-        this.builder = builder;
-        this.clientId = clientId;
-        this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-        this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
-        this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
-        this.processId = processId;
-        this.time = time;
-        this.streamsMetadataState = streamsMetadataState;
-        this.taskManager = taskManager;
-        this.logPrefix = String.format("stream-thread [%s] ", threadClientId);
-        this.streamsMetrics = streamsMetrics;
-        this.restoreConsumer = restoreConsumer;
-        this.adminClient = adminClient;
-        this.stateDirectory = stateDirectory;
-        this.config = config;
-        this.stateLock = new Object();
-        this.standbyRecords = new HashMap<>();
-        this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
-        final LogContext logContext = new LogContext(this.logPrefix);
-        this.log = logContext.logger(StreamThread.class);
-        this.rebalanceListener = new RebalanceListener(time, taskManager, this, this.log);
-
-        log.info("Creating consumer client");
-        final Map<String, Object> consumerConfigs = config.getConsumerConfigs(this, applicationId, threadClientId);
-
-        if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
-            originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
-            log.info("Custom offset resets specified updating configs original auto offset reset {}", originalReset);
-            consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
-        }
-        this.consumer = clientSupplier.getConsumer(consumerConfigs);
-        taskManager.setConsumer(consumer);
-        updateThreadMetadata(null, null);
-    }
-
-    @SuppressWarnings("ConstantConditions")
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
@@ -652,94 +588,133 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                                       final long cacheSizeBytes,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener) {
-
         final String threadClientId = clientId + "-StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement();
-        final StreamsMetricsThreadImpl streamsMetrics = new StreamsMetricsThreadImpl(metrics,
-                                                                                     "stream-metrics",
-                                                                                     "thread." + threadClientId,
-                                                                                     Collections.singletonMap("client-id",
-                                                                                                              threadClientId));
 
         final String logPrefix = String.format("stream-thread [%s] ", threadClientId);
         final LogContext logContext = new LogContext(logPrefix);
         final Logger log = logContext.logger(StreamThread.class);
 
-        if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
-            log.warn("Negative cache size passed in thread. Reverting to cache size of 0 bytes");
-        }
-        final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
-
-        final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
-
         log.info("Creating restore consumer client");
-        final Map<String, Object> consumerConfigs = config.getRestoreConsumerConfigs(threadClientId);
-        final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(consumerConfigs);
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreConsumer,
-                                                                              userStateRestoreListener,
-                                                                              logContext);
+        final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(threadClientId);
+        final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreConsumer, userStateRestoreListener, logContext);
 
         Producer<byte[], byte[]> threadProducer = null;
+        final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         if (!eosEnabled) {
             final Map<String, Object> producerConfigs = config.getProducerConfigs(threadClientId);
             log.info("Creating shared producer client");
             threadProducer = clientSupplier.getProducer(producerConfigs);
         }
 
-        final AbstractTaskCreator activeTaskCreator = new TaskCreator(builder,
-                                                                      config,
-                                                                      streamsMetrics,
-                                                                      stateDirectory,
-                                                                      streamsMetrics.taskCreatedSensor,
-                                                                      changelogReader,
-                                                                      cache,
-                                                                      time,
-                                                                      clientSupplier,
-                                                                      threadProducer,
-                                                                      threadClientId,
-                                                                      log);
-        final AbstractTaskCreator standbyTaskCreator = new StandbyTaskCreator(builder,
-                                                                              config,
-                                                                              streamsMetrics,
-                                                                              stateDirectory,
-                                                                              streamsMetrics.taskCreatedSensor,
-                                                                              changelogReader,
-                                                                              time,
-                                                                              log);
-        final TaskManager taskManager = new TaskManager(changelogReader,
-                                                        logPrefix,
-                                                        restoreConsumer,
-                                                        activeTaskCreator,
-                                                        standbyTaskCreator,
-                                                        new AssignedStreamsTasks(logContext),
-                                                        new AssignedStandbyTasks(logContext));
+        StreamsMetricsThreadImpl streamsMetrics = new StreamsMetricsThreadImpl(
+                metrics,
+                "stream-metrics",
+                "thread." + threadClientId,
+                Collections.singletonMap("client-id", threadClientId));
 
-        return new StreamThread(builder,
-                                clientId,
-                                threadClientId,
-                                config,
-                                processId,
-                                time,
-                                streamsMetadataState,
-                                taskManager,
-                                streamsMetrics,
-                                clientSupplier,
-                                restoreConsumer,
-                                adminClient,
-                                stateDirectory);
+        final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
+        final AbstractTaskCreator<StreamTask> activeTaskCreator = new TaskCreator(builder,
+                                                                                  config,
+                                                                                  streamsMetrics,
+                                                                                  stateDirectory,
+                                                                                  streamsMetrics.taskCreatedSensor,
+                                                                                  changelogReader,
+                                                                                  cache,
+                                                                                  time,
+                                                                                  clientSupplier,
+                                                                                  threadProducer,
+                                                                                  threadClientId,
+                                                                                  log);
+        final AbstractTaskCreator<StandbyTask> standbyTaskCreator = new StandbyTaskCreator(builder,
+                                                                                           config,
+                                                                                           streamsMetrics,
+                                                                                           stateDirectory,
+                                                                                           streamsMetrics.taskCreatedSensor,
+                                                                                           changelogReader,
+                                                                                           time,
+                                                                                           log);
+        TaskManager taskManager = new TaskManager(changelogReader,
+                                                  processId,
+                                                  logPrefix,
+                                                  restoreConsumer,
+                                                  streamsMetadataState,
+                                                  activeTaskCreator,
+                                                  standbyTaskCreator,
+                                                  adminClient,
+                                                  new AssignedStreamsTasks(logContext),
+                                                  new AssignedStandbyTasks(logContext));
 
+        log.info("Creating consumer client");
+        final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+        final Map<String, Object> consumerConfigs = config.getConsumerConfigs(applicationId, threadClientId);
+        consumerConfigs.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
+        String originalReset = null;
+        if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
+            originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
+            consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
+        }
+        final Consumer<byte[], byte[]> consumer = clientSupplier.getConsumer(consumerConfigs);
+        taskManager.setConsumer(consumer);
+
+        return new StreamThread(time,
+                config,
+                restoreConsumer,
+                consumer,
+                originalReset,
+                taskManager,
+                streamsMetrics,
+                builder,
+                threadClientId,
+                logContext);
+    }
+
+    public StreamThread(final Time time,
+                        final StreamsConfig config,
+                        final Consumer<byte[], byte[]> restoreConsumer,
+                        final Consumer<byte[], byte[]> consumer,
+                        final String originalReset,
+                        final TaskManager taskManager,
+                        final StreamsMetricsThreadImpl streamsMetrics,
+                        final InternalTopologyBuilder builder,
+                        final String threadClientId,
+                        final LogContext logContext) {
+        super(threadClientId);
+
+        this.stateLock = new Object();
+        this.standbyRecords = new HashMap<>();
+
+        this.time = time;
+        this.builder = builder;
+        this.streamsMetrics = streamsMetrics;
+        this.logPrefix = logContext.logPrefix();
+        this.log = logContext.logger(StreamThread.class);
+        this.rebalanceListener = new RebalanceListener(time, taskManager, this, this.log);
+        this.taskManager = taskManager;
+        this.restoreConsumer = restoreConsumer;
+        this.consumer = consumer;
+        this.originalReset = originalReset;
+
+        this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
+        this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
+
+        updateThreadMetadata(Collections.<TaskId, StreamTask>emptyMap(), Collections.<TaskId, StandbyTask>emptyMap());
     }
 
     /**
      * Execute the stream processors
      *
-     * @throws KafkaException for any Kafka-related exceptions
-     * @throws Exception      for any other non-Kafka exceptions
+     * @throws KafkaException    for any Kafka-related exceptions
+     * @throws RuntimeException  for any other non-Kafka exceptions
      */
     @Override
     public void run() {
         log.info("Starting");
-        setState(State.RUNNING);
+        if (setState(State.RUNNING) == null) {
+            log.info("StreamThread already shutdown. Not running");
+            return;
+        }
         boolean cleanRun = false;
         try {
             runLoop();
@@ -774,9 +749,14 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             try {
                 recordsProcessedBeforeCommit = runOnce(recordsProcessedBeforeCommit);
             } catch (final TaskMigratedException ignoreAndRejoinGroup) {
-                log.warn("Detected a task that got migrated to another thread. " +
+                log.warn("Detected task {} that got migrated to another thread. " +
                     "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
-                    "Trying to rejoin the consumer group now.", ignoreAndRejoinGroup);
+                    "Will try to rejoin the consumer group. Below is the detailed description of the task:\n{}",
+                        ignoreAndRejoinGroup.migratedTask().id(), ignoreAndRejoinGroup.migratedTask().toString(">"));
+
+                // re-subscribe to enforce a rebalance in the next poll call
+                consumer.unsubscribe();
+                consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
             }
         }
     }
@@ -913,15 +893,20 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      * @param records Records, can be null
      */
     private void addRecordsToTasks(final ConsumerRecords<byte[], byte[]> records) {
-        if (records != null && !records.isEmpty()) {
-            int numAddedRecords = 0;
+        int numAddedRecords = 0;
 
-            for (final TopicPartition partition : records.partitions()) {
-                final StreamTask task = taskManager.activeTask(partition);
-                numAddedRecords += task.addRecords(partition, records.records(partition));
+        for (final TopicPartition partition : records.partitions()) {
+            final StreamTask task = taskManager.activeTask(partition);
+
+            if (task.isClosed()) {
+                log.warn("Stream task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
+                        "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                throw new TaskMigratedException(task);
             }
-            streamsMetrics.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);
+
+            numAddedRecords += task.addRecords(partition, records.records(partition));
         }
+        streamsMetrics.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);
     }
 
     /**
@@ -1019,6 +1004,9 @@ public class StreamThread extends Thread implements ThreadDataProvider {
             int committed = taskManager.commitAll();
             if (committed > 0) {
                 streamsMetrics.commitTimeSensor.record(computeLatency() / (double) committed, timerStartedMs);
+
+                // try to purge the committed records for repartition topics if possible
+                taskManager.maybePurgeCommitedRecords();
             }
             if (log.isDebugEnabled()) {
                 log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
@@ -1042,6 +1030,13 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                         List<ConsumerRecord<byte[], byte[]>> remaining = entry.getValue();
                         if (remaining != null) {
                             final StandbyTask task = taskManager.standbyTask(partition);
+
+                            if (task.isClosed()) {
+                                log.warn("Standby task {} is already closed, probably because it got unexpectly migrated to another thread already. " +
+                                        "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                                throw new TaskMigratedException(task);
+                            }
+
                             remaining = task.update(partition, remaining);
                             if (remaining != null) {
                                 remainingStandbyRecords.put(partition, remaining);
@@ -1058,22 +1053,46 @@ public class StreamThread extends Thread implements ThreadDataProvider {
                 processStandbyRecords = false;
             }
 
-            final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(0);
+            try {
+                final ConsumerRecords<byte[], byte[]> records = restoreConsumer.poll(0);
 
-            if (!records.isEmpty()) {
-                for (final TopicPartition partition : records.partitions()) {
-                    final StandbyTask task = taskManager.standbyTask(partition);
+                if (!records.isEmpty()) {
+                    for (final TopicPartition partition : records.partitions()) {
+                        final StandbyTask task = taskManager.standbyTask(partition);
 
-                    if (task == null) {
-                        throw new StreamsException(logPrefix + "Missing standby task for partition " + partition);
-                    }
+                        if (task == null) {
+                            throw new StreamsException(logPrefix + "Missing standby task for partition " + partition);
+                        }
 
-                    final List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
-                    if (remaining != null) {
-                        restoreConsumer.pause(singleton(partition));
-                        standbyRecords.put(partition, remaining);
+                        if (task.isClosed()) {
+                            log.warn("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
+                                    "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                            throw new TaskMigratedException(task);
+                        }
+
+                        final List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
+                        if (remaining != null) {
+                            restoreConsumer.pause(singleton(partition));
+                            standbyRecords.put(partition, remaining);
+                        }
                     }
                 }
+            } catch (final InvalidOffsetException recoverableException) {
+                log.warn("Updating StandbyTasks failed. Deleting StandbyTasks stores to recreate from scratch.", recoverableException);
+                final Set<TopicPartition> partitions = recoverableException.partitions();
+                for (final TopicPartition partition : partitions) {
+                    final StandbyTask task = taskManager.standbyTask(partition);
+
+                    if (task.isClosed()) {
+                        log.warn("Standby task {} is already closed, probably because it got unexpectly migrated to another thread already. " +
+                                "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                        throw new TaskMigratedException(task);
+                    }
+
+                    log.info("Reinitializing StandbyTask {}", task);
+                    task.reinitializeStateStoresForPartitions(recoverableException.partitions());
+                }
+                restoreConsumer.seekToBeginning(partitions);
             }
         }
     }
@@ -1099,108 +1118,11 @@ public class StreamThread extends Thread implements ThreadDataProvider {
      */
     public void shutdown() {
         log.info("Informed to shut down");
-        setState(State.PENDING_SHUTDOWN);
-    }
-
-    public Map<TaskId, StreamTask> tasks() {
-        return taskManager.activeTasks();
-    }
-
-    /**
-     * Returns ids of tasks that were being executed before the rebalance.
-     */
-    public Set<TaskId> prevActiveTasks() {
-        return taskManager.prevActiveTaskIds();
-    }
-
-    @Override
-    public InternalTopologyBuilder builder() {
-        return builder;
-    }
-
-    @Override
-    public String name() {
-        return getName();
-    }
-
-    /**
-     * Returns ids of tasks whose states are kept on the local storage.
-     */
-    public Set<TaskId> cachedTasks() {
-        // A client could contain some inactive tasks whose states are still kept on the local storage in the following scenarios:
-        // 1) the client is actively maintaining standby tasks by maintaining their states from the change log.
-        // 2) the client has just got some tasks migrated out of itself to other clients while these task states
-        //    have not been cleaned up yet (this can happen in a rolling bounce upgrade, for example).
-
-        final HashSet<TaskId> tasks = new HashSet<>();
-
-        final File[] stateDirs = stateDirectory.listTaskDirectories();
-        if (stateDirs != null) {
-            for (final File dir : stateDirs) {
-                try {
-                    final TaskId id = TaskId.parse(dir.getName());
-                    // if the checkpoint file exists, the state is valid.
-                    if (new File(dir, ProcessorStateManager.CHECKPOINT_FILE_NAME).exists()) {
-                        tasks.add(id);
-                    }
-                } catch (final TaskIdFormatException e) {
-                    // there may be some unknown files that sits in the same directory,
-                    // we should ignore these files instead trying to delete them as well
-                }
-            }
+        State oldState = setState(State.PENDING_SHUTDOWN);
+        if (oldState == State.CREATED) {
+            // The thread may not have been started. Take responsibility for shutting down
+            completeShutdown(true);
         }
-
-        return tasks;
-    }
-
-    @Override
-    public UUID processId() {
-        return processId;
-    }
-
-    @Override
-    public StreamsConfig config() {
-        return config;
-    }
-
-    @Override
-    public PartitionGrouper partitionGrouper() {
-        return partitionGrouper;
-    }
-
-    /**
-     * Produces a string representation containing useful information about a StreamThread.
-     * This is useful in debugging scenarios.
-     * @return A string representation of the StreamThread instance.
-     */
-    @Override
-    public String toString() {
-        return toString("");
-    }
-
-    /**
-     * Produces a string representation containing useful information about a StreamThread, starting with the given indent.
-     * This is useful in debugging scenarios.
-     * @return A string representation of the StreamThread instance.
-     */
-    @SuppressWarnings("ThrowableNotThrown")
-    public String toString(final String indent) {
-        final StringBuilder sb = new StringBuilder()
-            .append(indent).append("StreamsThread appId: ").append(applicationId).append("\n")
-            .append(indent).append("\tStreamsThread clientId: ").append(clientId).append("\n")
-            .append(indent).append("\tStreamsThread threadId: ").append(getName()).append("\n");
-
-        sb.append(taskManager.toString(indent));
-        return sb.toString();
-    }
-
-    String threadClientId() {
-        return getName();
-    }
-
-    public void setThreadMetadataProvider(final ThreadMetadataProvider metadataProvider) {
-        this.metadataProvider = metadataProvider;
-        taskManager.setThreadMetadataProvider(metadataProvider);
     }
 
     private void completeShutdown(final boolean cleanRun) {
@@ -1236,10 +1158,6 @@ public class StreamThread extends Thread implements ThreadDataProvider {
         standbyRecords.clear();
     }
 
-    private void refreshMetadataState() {
-        streamsMetadataState.onChange(metadataProvider.getPartitionsByHostState(), metadataProvider.clusterMetadata());
-    }
-
     /**
      * Return information about the current {@link StreamThread}.
      *
@@ -1251,17 +1169,50 @@ public class StreamThread extends Thread implements ThreadDataProvider {
 
     private void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks, final Map<TaskId, StandbyTask> standbyTasks) {
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
-        if (activeTasks != null) {
-            for (Map.Entry<TaskId, StreamTask> task : activeTasks.entrySet()) {
-                activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
-            }
+        for (Map.Entry<TaskId, StreamTask> task : activeTasks.entrySet()) {
+            activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
-        if (standbyTasks != null) {
-            for (Map.Entry<TaskId, StandbyTask> task : standbyTasks.entrySet()) {
-                standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
-            }
+        for (Map.Entry<TaskId, StandbyTask> task : standbyTasks.entrySet()) {
+            standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
         }
+
         threadMetadata = new ThreadMetadata(this.getName(), this.state().name(), activeTasksMetadata, standbyTasksMetadata);
+    }
+
+    public Map<TaskId, StreamTask> tasks() {
+        return taskManager.activeTasks();
+    }
+
+    /**
+     * Produces a string representation containing useful information about a StreamThread.
+     * This is useful in debugging scenarios.
+     * @return A string representation of the StreamThread instance.
+     */
+    @Override
+    public String toString() {
+        return toString("");
+    }
+
+    /**
+     * Produces a string representation containing useful information about a StreamThread, starting with the given indent.
+     * This is useful in debugging scenarios.
+     * @return A string representation of the StreamThread instance.
+     */
+    public String toString(final String indent) {
+        final StringBuilder sb = new StringBuilder()
+                .append(indent).append("\tStreamsThread threadId: ").append(getName()).append("\n");
+
+        sb.append(taskManager.toString(indent));
+        return sb.toString();
+    }
+
+    // the following are for testing only
+    TaskManager taskManager() {
+        return taskManager;
+    }
+
+    Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords() {
+        return standbyRecords;
     }
 }

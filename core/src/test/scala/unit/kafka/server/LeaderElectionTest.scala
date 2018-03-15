@@ -72,9 +72,9 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val partitionId = 0
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    val leader1 = createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(0, 1)), servers = servers)(0)
+    val leader1 = createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(0, 1)), servers = servers)(0)
 
-    val leaderEpoch1 = zkUtils.getEpochForPartition(topic, partitionId)
+    val leaderEpoch1 = zkClient.getEpochForPartition(new TopicPartition(topic, partitionId)).get
     debug("leader Epoch: " + leaderEpoch1)
     debug("Leader is elected to be: %s".format(leader1))
     // NOTE: this is to avoid transient test failures
@@ -84,9 +84,9 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     // kill the server hosting the preferred replica
     servers.last.shutdown()
     // check if leader moves to the other server
-    val leader2 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId,
+    val leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId,
                                                     oldLeaderOpt = if (leader1 == 0) None else Some(leader1))
-    val leaderEpoch2 = zkUtils.getEpochForPartition(topic, partitionId)
+    val leaderEpoch2 = zkClient.getEpochForPartition(new TopicPartition(topic, partitionId)).get
     debug("Leader is elected to be: %s".format(leader1))
     debug("leader Epoch: " + leaderEpoch2)
     assertEquals("Leader must move to broker 0", 0, leader2)
@@ -98,9 +98,9 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     servers.last.startup()
     servers.head.shutdown()
     Thread.sleep(zookeeper.tickTime)
-    val leader3 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId,
+    val leader3 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId,
                                                     oldLeaderOpt = if (leader2 == 1) None else Some(leader2))
-    val leaderEpoch3 = zkUtils.getEpochForPartition(topic, partitionId)
+    val leaderEpoch3 = zkClient.getEpochForPartition(new TopicPartition(topic, partitionId)).get
     debug("leader Epoch: " + leaderEpoch3)
     debug("Leader is elected to be: %s".format(leader3))
     assertEquals("Leader must return to 1", 1, leader3)
@@ -117,9 +117,9 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val partitionId = 0
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    val leader1 = createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(0, 1)), servers = servers)(0)
+    val leader1 = createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(0, 1)), servers = servers)(0)
 
-    val leaderEpoch1 = zkUtils.getEpochForPartition(topic, partitionId)
+    val leaderEpoch1 = zkClient.getEpochForPartition(new TopicPartition(topic, partitionId)).get
     debug("leader Epoch: " + leaderEpoch1)
     debug("Leader is elected to be: %s".format(leader1))
     // NOTE: this is to avoid transient test failures
@@ -134,7 +134,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
     val brokers = servers.map(s => new Broker(s.config.brokerId, "localhost", TestUtils.boundPort(s), listenerName,
       securityProtocol))
-    val nodes = brokers.map(_.getNode(listenerName))
+    val nodes = brokers.map(_.node(listenerName))
 
     val controllerContext = new ControllerContext
     controllerContext.liveBrokers = brokers.toSet

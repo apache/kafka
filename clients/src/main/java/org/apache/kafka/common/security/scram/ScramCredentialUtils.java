@@ -31,11 +31,13 @@ import org.apache.kafka.common.utils.Base64;
  * </pre>
  *
  */
-public class ScramCredentialUtils {
+public final class ScramCredentialUtils {
     private static final String SALT = "salt";
     private static final String STORED_KEY = "stored_key";
     private static final String SERVER_KEY = "server_key";
     private static final String ITERATIONS = "iterations";
+
+    private ScramCredentialUtils() {}
 
     public static String credentialToString(ScramCredential credential) {
         return String.format("%s=%s,%s=%s,%s=%s,%s=%d",
@@ -74,9 +76,9 @@ public class ScramCredentialUtils {
         return props;
     }
 
-    public static void createCache(CredentialCache cache, Collection<String> enabledMechanisms) {
+    public static void createCache(CredentialCache cache, Collection<String> mechanisms) {
         for (String mechanism : ScramMechanism.mechanismNames()) {
-            if (enabledMechanisms.contains(mechanism))
+            if (mechanisms.contains(mechanism))
                 cache.createCache(mechanism, ScramCredential.class);
         }
     }

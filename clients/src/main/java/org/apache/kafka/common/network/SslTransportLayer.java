@@ -36,16 +36,14 @@ import javax.net.ssl.SSLPeerUnverifiedException;
 
 import org.apache.kafka.common.errors.SslAuthenticationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /*
  * Transport layer for SSL communication
  */
 public class SslTransportLayer implements TransportLayer {
-    private static final Logger log = LoggerFactory.getLogger(SslTransportLayer.class);
-
     private enum State {
         HANDSHAKE,
         HANDSHAKE_FAILED,
@@ -57,6 +55,7 @@ public class SslTransportLayer implements TransportLayer {
     private final SSLEngine sslEngine;
     private final SelectionKey key;
     private final SocketChannel socketChannel;
+    private final Logger log;
 
     private HandshakeStatus handshakeStatus;
     private SSLEngineResult handshakeResult;
@@ -79,6 +78,9 @@ public class SslTransportLayer implements TransportLayer {
         this.key = key;
         this.socketChannel = (SocketChannel) key.channel();
         this.sslEngine = sslEngine;
+
+        final LogContext logContext = new LogContext(String.format("[SslTransportLayer channelId=%s key=%s] ", channelId, key));
+        this.log = logContext.logger(getClass());
     }
 
     // Visible for testing
@@ -89,7 +91,7 @@ public class SslTransportLayer implements TransportLayer {
         this.netReadBuffer = ByteBuffer.allocate(netReadBufferSize());
         this.netWriteBuffer = ByteBuffer.allocate(netWriteBufferSize());
         this.appReadBuffer = ByteBuffer.allocate(applicationBufferSize());
-        
+
         //clear & set netRead & netWrite buffers
         netWriteBuffer.position(0);
         netWriteBuffer.limit(0);
@@ -131,6 +133,11 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     @Override
+    public SelectionKey selectionKey() {
+        return key;
+    }
+
+    @Override
     public boolean isOpen() {
         return socketChannel.isOpen();
     }
@@ -167,15 +174,10 @@ public class SslTransportLayer implements TransportLayer {
                 flush(netWriteBuffer);
             }
         } catch (IOException ie) {
-            log.warn("Failed to send SSL Close message ", ie);
+            log.warn("Failed to send SSL Close message", ie);
         } finally {
-            try {
-                socketChannel.socket().close();
-                socketChannel.close();
-            } finally {
-                key.attach(null);
-                key.cancel();
-            }
+            socketChannel.socket().close();
+            socketChannel.close();
         }
     }
 
@@ -482,7 +484,8 @@ public class SslTransportLayer implements TransportLayer {
 
 
     /**
-    * Reads a sequence of bytes from this channel into the given buffer.
+    * Reads a sequence of bytes from this channel into the given buffer. Reads as much as possible
+    * until either the dst buffer is full or there is no more data in the socket.
     *
     * @param dst The buffer into which bytes are to be transferred
     * @return The number of bytes read, possible zero or -1 if the channel has reached end-of-stream
@@ -500,8 +503,10 @@ public class SslTransportLayer implements TransportLayer {
             read = readFromAppBuffer(dst);
         }
 
-        int netread = 0;
-        if (dst.remaining() > 0) {
+        boolean isClosed = false;
+        // Each loop reads at most once from the socket.
+        while (dst.remaining() > 0) {
+            int netread = 0;
             netReadBuffer = Utils.ensureCapacity(netReadBuffer, netReadBufferSize());
             if (netReadBuffer.remaining() > 0)
                 netread = readFromSocketChannel();
@@ -547,15 +552,19 @@ public class SslTransportLayer implements TransportLayer {
                     // If data has been read and unwrapped, return the data. Close will be handled on the next poll.
                     if (appReadBuffer.position() == 0 && read == 0)
                         throw new EOFException();
-                    else
+                    else {
+                        isClosed = true;
                         break;
+                    }
                 }
             }
+            if (read == 0 && netread < 0)
+                throw new EOFException("EOF during read");
+            if (netread <= 0 || isClosed)
+                break;
         }
         // If data has been read and unwrapped, return the data even if end-of-stream, channel will be closed
         // on a subsequent poll.
-        if (read == 0 && netread < 0)
-            throw new EOFException("EOF during read");
         return read;
     }
 
@@ -771,7 +780,7 @@ public class SslTransportLayer implements TransportLayer {
     protected int netReadBufferSize() {
         return sslEngine.getSession().getPacketBufferSize();
     }
-    
+
     protected int netWriteBufferSize() {
         return sslEngine.getSession().getPacketBufferSize();
     }
@@ -779,7 +788,7 @@ public class SslTransportLayer implements TransportLayer {
     protected int applicationBufferSize() {
         return sslEngine.getSession().getApplicationBufferSize();
     }
-    
+
     protected ByteBuffer netReadBuffer() {
         return netReadBuffer;
     }

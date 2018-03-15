@@ -36,6 +36,7 @@ import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.common.utils.SecurityUtils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -74,7 +75,7 @@ class RequestQuotaTest extends BaseRequestTest {
     RequestQuotaTest.principal = KafkaPrincipal.ANONYMOUS
     super.setUp()
 
-    TestUtils.createTopic(zkUtils, topic, numPartitions, 1, servers)
+    createTopic(topic, numPartitions, 1)
     leaderNode = servers.head
 
     // Change default client-id request quota to a small value and a single unthrottledClient with a large quota
@@ -305,6 +306,21 @@ class RequestQuotaTest extends BaseRequestTest {
             Collections.singletonMap("topic-2", NewPartitions.increaseTo(1)), 0, false
           )
 
+        case ApiKeys.CREATE_DELEGATION_TOKEN =>
+          new CreateDelegationTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")), 1000)
+
+        case ApiKeys.EXPIRE_DELEGATION_TOKEN =>
+          new ExpireDelegationTokenRequest.Builder(ByteBuffer.allocate(10), 1000)
+
+        case ApiKeys.DESCRIBE_DELEGATION_TOKEN =>
+          new DescribeDelegationTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")))
+
+        case ApiKeys.RENEW_DELEGATION_TOKEN =>
+          new RenewDelegationTokenRequest.Builder(ByteBuffer.allocate(10), 1000)
+
+        case ApiKeys.DELETE_GROUPS =>
+          new DeleteGroupsRequest.Builder(Collections.singleton("test-group"))
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
@@ -399,6 +415,11 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.ALTER_REPLICA_LOG_DIRS => new AlterReplicaLogDirsResponse(response).throttleTimeMs
       case ApiKeys.DESCRIBE_LOG_DIRS => new DescribeLogDirsResponse(response).throttleTimeMs
       case ApiKeys.CREATE_PARTITIONS => new CreatePartitionsResponse(response).throttleTimeMs
+      case ApiKeys.CREATE_DELEGATION_TOKEN => new CreateDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.DESCRIBE_DELEGATION_TOKEN=> new DescribeDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.EXPIRE_DELEGATION_TOKEN => new ExpireDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.RENEW_DELEGATION_TOKEN => new RenewDelegationTokenResponse(response).throttleTimeMs
+      case ApiKeys.DELETE_GROUPS => new DeleteGroupsResponse(response).throttleTimeMs
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
     }
   }

@@ -45,6 +45,8 @@ import static net.sourceforge.argparse4j.impl.Arguments.store;
 public final class Coordinator {
     private static final Logger log = LoggerFactory.getLogger(Coordinator.class);
 
+    public static final int DEFAULT_PORT = 8889;
+
     /**
      * The start time of the Coordinator in milliseconds.
      */
@@ -64,7 +66,7 @@ public final class Coordinator {
      * Create a new Coordinator.
      *
      * @param platform      The platform object to use.
-     * @param time          The timekeeper to use for this Coordinator.
+     * @param scheduler     The scheduler to use for this Coordinator.
      * @param restServer    The REST server to use.
      * @param resource      The AgentRestResoure to use.
      */

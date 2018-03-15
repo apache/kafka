@@ -40,13 +40,14 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class MeteredWindowStoreTest {
     private MockProcessorContext context;
     @SuppressWarnings("unchecked")
     private final WindowStore<Bytes, byte[]> innerStoreMock = EasyMock.createNiceMock(WindowStore.class);
-    private final MeteredWindowStore<String, String> store = new MeteredWindowStore<>(innerStoreMock, "scope", new MockTime(), Serdes.String(), Serdes.String());
+    private final MeteredWindowStore<String, String> store = new MeteredWindowStore<>(innerStoreMock, "scope", new MockTime(), Serdes.String(), new SerdeThatDoesntHandleNull());
     private final Set<String> latencyRecorded = new HashSet<>();
     private final Set<String> throughputRecorded = new HashSet<>();
 
@@ -118,7 +119,7 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
-    public void shouldRecordRestoreLatencyOnInit() throws Exception {
+    public void shouldRecordRestoreLatencyOnInit() {
         innerStoreMock.init(context, store);
         EasyMock.expectLastCall();
         EasyMock.replay(innerStoreMock);
@@ -127,7 +128,7 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
-    public void shouldRecordPutLatency() throws Exception {
+    public void shouldRecordPutLatency() {
         final byte[] bytes = "a".getBytes();
         innerStoreMock.put(EasyMock.eq(Bytes.wrap(bytes)), EasyMock.<byte[]>anyObject(), EasyMock.eq(context.timestamp()));
         EasyMock.expectLastCall();
@@ -140,7 +141,7 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
-    public void shouldRecordFetchLatency() throws Exception {
+    public void shouldRecordFetchLatency() {
         EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
         EasyMock.replay(innerStoreMock);
 
@@ -151,7 +152,7 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
-    public void shouldRecordFetchRangeLatency() throws Exception {
+    public void shouldRecordFetchRangeLatency() {
         EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
         EasyMock.replay(innerStoreMock);
 
@@ -163,7 +164,7 @@ public class MeteredWindowStoreTest {
 
 
     @Test
-    public void shouldRecordFlushLatency() throws Exception {
+    public void shouldRecordFlushLatency() {
         innerStoreMock.flush();
         EasyMock.expectLastCall();
         EasyMock.replay(innerStoreMock);
@@ -176,7 +177,7 @@ public class MeteredWindowStoreTest {
 
 
     @Test
-    public void shouldCloseUnderlyingStore() throws Exception {
+    public void shouldCloseUnderlyingStore() {
         innerStoreMock.close();
         EasyMock.expectLastCall();
         EasyMock.replay(innerStoreMock);
@@ -186,5 +187,14 @@ public class MeteredWindowStoreTest {
         EasyMock.verify(innerStoreMock);
     }
 
+
+    @Test
+    public void shouldNotExceptionIfFetchReturnsNull() {
+        EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 0)).andReturn(null);
+        EasyMock.replay(innerStoreMock);
+
+        store.init(context, store);
+        assertNull(store.fetch("a", 0));
+    }
 
 }

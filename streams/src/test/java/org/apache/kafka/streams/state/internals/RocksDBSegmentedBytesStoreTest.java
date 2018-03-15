@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -52,6 +51,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+// TODO: this test does not cover time window serdes
 public class RocksDBSegmentedBytesStoreTest {
 
     private final long retention = 60000L;
@@ -156,6 +156,55 @@ public class RocksDBSegmentedBytesStoreTest {
     }
 
     @Test
+    public void shouldGetAllSegments() {
+        // just to validate directories
+        final Segments segments = new Segments(storeName, retention, numSegments);
+        final String key = "a";
+        bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(0L, 0L))), serializeValue(50L));
+        assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
+
+        bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(30000L, 60000L))), serializeValue(100L));
+        assertEquals(Utils.mkSet(segments.segmentName(0),
+                                 segments.segmentName(1)), segmentDirs());
+
+        bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(61000L, 120000L))), serializeValue(200L));
+        assertEquals(Utils.mkSet(segments.segmentName(0),
+                                 segments.segmentName(1),
+                                 segments.segmentName(2)), segmentDirs());
+
+        final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.all());
+        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>(key, new SessionWindow(0L, 0L)), 50L),
+                                   KeyValue.pair(new Windowed<>(key, new SessionWindow(30000L, 60000L)), 100L),
+                                   KeyValue.pair(new Windowed<>(key, new SessionWindow(61000L, 120000L)), 200L)
+                                                 ), results);
+
+    }
+
+    @Test
+    public void shouldFetchAllSegments() {
+        // just to validate directories
+        final Segments segments = new Segments(storeName, retention, numSegments);
+        final String key = "a";
+        bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(0L, 0L))), serializeValue(50L));
+        assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
+
+        bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(30000L, 60000L))), serializeValue(100L));
+        assertEquals(Utils.mkSet(segments.segmentName(0),
+                                 segments.segmentName(1)), segmentDirs());
+
+        bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(61000L, 120000L))), serializeValue(200L));
+        assertEquals(Utils.mkSet(segments.segmentName(0),
+                                 segments.segmentName(1),
+                                 segments.segmentName(2)), segmentDirs());
+
+        final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetchAll(0L, 60000L));
+        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>(key, new SessionWindow(0L, 0L)), 50L),
+                                   KeyValue.pair(new Windowed<>(key, new SessionWindow(30000L, 60000L)), 100L)
+                                                 ), results);
+
+    }
+
+    @Test
     public void shouldLoadSegementsWithOldStyleDateFormattedName() {
         final Segments segments = new Segments(storeName, retention, numSegments);
         final String key = "a";
@@ -209,6 +258,16 @@ public class RocksDBSegmentedBytesStoreTest {
             KeyValue.pair(new Windowed<>(key, new SessionWindow(30000L, 60000L)), 100L))));
     }
 
+    @Test
+    public void shouldBeAbleToWriteToReInitializedStore() {
+        final String key = "a";
+        // need to create a segment so we can attempt to write to it again.
+        bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(0L, 0L))), serializeValue(50L));
+        bytesStore.close();
+        bytesStore.init(context, bytesStore);
+        bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(0L, 0L))), serializeValue(50L));
+    }
+
     private Set<String> segmentDirs() {
         File windowDir = new File(stateDir, storeName);
 
@@ -220,15 +279,17 @@ public class RocksDBSegmentedBytesStoreTest {
     }
 
     private Bytes serializeKey(final Windowed<String> key) {
-        return SessionKeySerde.toBinary(key, Serdes.String().serializer(), "dummy");
+        return Bytes.wrap(SessionKeySchema.toBinary(key, Serdes.String().serializer(), "dummy"));
     }
 
     private List<KeyValue<Windowed<String>, Long>> toList(final KeyValueIterator<Bytes, byte[]> iterator) {
         final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
         while (iterator.hasNext()) {
             final KeyValue<Bytes, byte[]> next = iterator.next();
-            final KeyValue<Windowed<String>, Long> deserialized
-                    = KeyValue.pair(SessionKeySerde.from(next.key.get(), Serdes.String().deserializer(), "dummy"), Serdes.Long().deserializer().deserialize("", next.value));
+            final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
+                    SessionKeySchema.from(next.key.get(), Serdes.String().deserializer(), "dummy"),
+                    Serdes.Long().deserializer().deserialize("dummy", next.value)
+            );
             results.add(deserialized);
         }
         return results;
