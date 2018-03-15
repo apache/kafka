@@ -47,11 +47,11 @@ import java.lang.{Long => JLong}
 import java.util.regex.Pattern
 
 object LogAppendInfo {
-  val UnknownLogAppendInfo = LogAppendInfo(Some(-1L), -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
+  val UnknownLogAppendInfo = LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
     RecordsProcessingStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
 
   def unknownLogAppendInfoWithLogStartOffset(logStartOffset: Long): LogAppendInfo =
-    LogAppendInfo(Some(-1L), -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
+    LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
       RecordsProcessingStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
 }
 
@@ -84,13 +84,6 @@ case class LogAppendInfo(var firstOffset: Option[Long],
                          shallowCount: Int,
                          validBytes: Int,
                          offsetsMonotonic: Boolean) {
-  /**
-    * Check if we know the offset of first message. First offset may not exist when the message format is less than V2
-    * and we are appending to the follower.
-    * @return true if we know the offset of first message; false otherwise
-    */
-  def hasFirstOffset: Boolean = firstOffset.isDefined
-
   /**
     * Get the first offset if it exists, else get the last offset.
     * @return The offset of first message if it exists; else offset of the last message.
@@ -784,8 +777,7 @@ class Log(@volatile var dir: File,
         updateFirstUnstableOffset()
 
         trace(s"Appended message set to log ${this.name} with last offset: ${appendInfo.lastOffset}, " +
-              s"first offset: ${if (appendInfo.hasFirstOffset) Some(appendInfo.firstOffset) else None}, " +
-              s"next offset: ${nextOffsetMetadata.messageOffset}, and messages: $validRecords")
+              s"first offset: ${appendInfo.firstOffset}, next offset: ${nextOffsetMetadata.messageOffset}, and messages: $validRecords")
 
         if (unflushedMessages >= config.flushInterval)
           flush()
