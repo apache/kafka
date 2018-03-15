@@ -65,12 +65,12 @@ object ConfigCommand extends Config {
     DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp)
 
   def main(args: Array[String]): Unit = {
-    val opts = new ConfigCommandOptions(args)
-
-    if (args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity config for a topic, client, user or broker")
-
     try {
+      val opts = new ConfigCommandOptions(args)
+
+      if (args.length == 0)
+        CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity config for a topic, client, user or broker")
+
       opts.checkArgs()
 
       if (opts.options.has(opts.zkConnectOpt)) {
@@ -79,7 +79,7 @@ object ConfigCommand extends Config {
         processBrokerConfig(opts)
       }
     } catch {
-      case e @ (_: IllegalArgumentException | _: InvalidConfigException) =>
+      case e @ (_: IllegalArgumentException | _: InvalidConfigException | _: OptionException) =>
         logger.debug(s"Failed config command with args $args", e)
         System.err.println(e.getMessage)
         Exit.exit(1)
