@@ -283,6 +283,12 @@ class ReplicaManager(val config: KafkaConfig,
 
   def getLog(topicPartition: TopicPartition): Option[Log] = logManager.getLog(topicPartition)
 
+  def forceCompleteDelayedProduce(key: DelayedOperationKey) {
+    //TODO: transfer another error code to onComplete function, for also return request.timeout errorcode
+    val completed = delayedProducePurgatory.checkAndForceComplete(key)
+    debug("Request key %s unblocked %d fetch requests.".format(key.keyLabel, completed))
+  }
+
   /**
    * Try to complete some delayed produce requests with the request key;
    * this can be triggered when:
@@ -293,6 +299,11 @@ class ReplicaManager(val config: KafkaConfig,
   def tryCompleteDelayedProduce(key: DelayedOperationKey) {
     val completed = delayedProducePurgatory.checkAndComplete(key)
     debug("Request key %s unblocked %d producer requests.".format(key.keyLabel, completed))
+  }
+
+  def forceCompleteDelayedFetch(key: DelayedOperationKey) {
+    val completed = delayedFetchPurgatory.checkAndForceComplete(key)
+    debug("Request key %s unblocked %d fetch requests.".format(key.keyLabel, completed))
   }
 
   /**

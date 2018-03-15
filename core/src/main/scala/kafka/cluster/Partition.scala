@@ -319,6 +319,11 @@ class Partition(val topic: String,
         false
       }
       else {
+        // avoid client to wait until timeout, leader has become follower, but only behave when shuttingdown
+        if (replicaManager.isShuttingDown.get()) {
+          forceCompleteDelayedRequests()
+        }
+
         leaderReplicaIdOpt = Some(newLeaderBrokerId)
         true
       }
@@ -487,6 +492,12 @@ class Partition(val topic: String,
       case replica if replicaManager.metadataCache.isBrokerAlive(replica.brokerId) || replica.brokerId == Request.FutureLocalReplicaId => replica.logStartOffset
     }
     CoreUtils.min(logStartOffsets, 0L)
+  }
+
+  def forceCompleteDelayedRequests() {
+    val requestKey = new TopicPartitionOperationKey(this.topic, this.partitionId)
+    replicaManager.forceCompleteDelayedFetch(requestKey)
+    replicaManager.forceCompleteDelayedProduce(requestKey)
   }
 
   /**

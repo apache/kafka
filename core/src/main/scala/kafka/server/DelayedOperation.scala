@@ -74,6 +74,12 @@ abstract class DelayedOperation(override val delayMs: Long,
     }
   }
 
+  def safeForceComplete(): Boolean = {
+    synchronized {
+      forceComplete()
+    }
+  }
+
   /**
    * Check if the delayed operation is already completed
    */
@@ -264,6 +270,20 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
   }
 
   /**
+   * Check if some some delayed operations can be completed with the given watch key,
+   * and if yes complete them.（force）
+   *
+   * @return the number of completed operations during this process
+   */
+  def checkAndForceComplete(key: Any): Int = {
+    val watchers = inReadLock(removeWatchersLock) { watchersForKey.get(key) }
+    if(watchers == null)
+      0
+    else
+      watchers.forceCompleteWatched()
+  }
+
+  /**
    * Check if some delayed operations can be completed with the given watch key,
    * and if yes complete them.
    *
@@ -356,6 +376,28 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     // add the element to watch
     def watch(t: T) {
       operations.add(t)
+    }
+
+    // traverse the list and force complete some watched elements
+    def forceCompleteWatched(): Int = {
+      var completed = 0
+
+      val iter = operations.iterator()
+      while (iter.hasNext) {
+        val curr = iter.next()
+        if (curr.isCompleted) {
+          // another thread has completed this operation, just remove it
+          iter.remove()
+        } else if (curr.safeForceComplete()) {
+          iter.remove()
+          completed += 1
+        }
+      }
+
+      if (operations.isEmpty)
+        removeKeyIfEmpty(key, this)
+
+      completed
     }
 
     // traverse the list and try to complete some watched elements

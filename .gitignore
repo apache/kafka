@@ -47,3 +47,4 @@ tests/venv
 docs/generated/
 
 .release-settings.json
+gradle/wrapper/
