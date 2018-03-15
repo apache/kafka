@@ -129,12 +129,12 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("stderr=" + args['stderr'])
         self.logger.info("pidfile=" + args['pidfile'])
         self.logger.info("kafka_run_class=" + args['kafka_run_class'])
-        self.logger.info("user_test_args=" + args['user_test_args'])
-        self.logger.info("user_test_args1=" + args['user_test_args1'])
-        self.logger.info("user_test_args2=" + args['user_test_args2'])
-        self.logger.info("user_test_args3=" + args['user_test_args3'])
+        self.logger.info("user_test_args=" + `args['user_test_args']`)
+        self.logger.info("user_test_args1=" + `args['user_test_args1']`)
+        self.logger.info("user_test_args2=" + `args['user_test_args2']`)
+        self.logger.info("user_test_args3=" + `args['user_test_args3']`)
 
-        self.logger.info("args=" + args)
+        self.logger.info("args=" + `args`)
 
 
         cmd = "( export JMX_PORT=%(jmx_port); export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
