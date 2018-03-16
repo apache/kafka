@@ -1274,7 +1274,7 @@ class GroupCoordinatorTest extends JUnitSuite {
   @Test
   def testDeleteNonEmptyGroup() {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
-    val joinGroupResult = joinGroup(groupId, memberId, protocolType, protocols)
+    joinGroup(groupId, memberId, protocolType, protocols)
 
     val result = groupCoordinator.handleDeleteGroups(Set(groupId).toSet)
     assert(result.size == 1 && result.contains(groupId) && result.get(groupId).contains(Errors.NON_EMPTY_GROUP))

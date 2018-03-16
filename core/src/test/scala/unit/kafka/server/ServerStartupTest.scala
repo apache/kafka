@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.common.KafkaException
-import kafka.utils.{TestUtils, ZkUtils}
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.zookeeper.KeeperException.NodeExistsException
 import org.easymock.EasyMock

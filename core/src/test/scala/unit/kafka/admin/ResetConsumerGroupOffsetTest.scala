@@ -365,7 +365,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
   private def resetAndAssertOffsetsCommitted(consumerGroupService: ConsumerGroupService,
                                              expectedOffsets: Map[TopicPartition, Long],
-                                             topic: String = topic): Unit = {
+                                             topic: String): Unit = {
     val allResetOffsets = resetOffsets(consumerGroupService)
     allResetOffsets.foreach { case (tp, offset) =>
       assertEquals(offset, expectedOffsets(tp))

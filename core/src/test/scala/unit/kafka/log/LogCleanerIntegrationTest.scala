@@ -238,7 +238,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
       cleanerIoBufferSize = Some(1))
     val log = cleaner.logs.get(topicPartitions(0))
 
-    val appends = writeDups(numKeys = 100, numDups = 3, log = log, codec = codec)
+    writeDups(numKeys = 100, numDups = 3, log = log, codec = codec)
     val startSize = log.size
     cleaner.startup()
     assertEquals(1, cleaner.cleanerCount)
