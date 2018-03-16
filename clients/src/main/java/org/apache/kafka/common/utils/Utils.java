@@ -506,9 +506,13 @@ public final class Utils {
      */
     public static Properties loadProps(String filename) throws IOException {
         Properties props = new Properties();
-        try (InputStream propStream = new FileInputStream(filename)) {
-            props.load(propStream);
+
+        if (filename != null) {
+            try (InputStream propStream = new FileInputStream(filename)) {
+                props.load(propStream);
+            }
         }
+
         return props;
     }
 
