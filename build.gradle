@@ -41,7 +41,9 @@ allprojects {
   }
   
   apply plugin: 'idea'
-  apply plugin: "jacoco"
+  // jacoco is not compatible with Java 10 or 11 at the moment, see https://github.com/jacoco/jacoco/issues/629
+  if (!JavaVersion.current().isJava10Compatible())
+    apply plugin: "jacoco"
   apply plugin: 'org.owasp.dependencycheck'
   apply plugin: 'com.github.ben-manes.versions'
 
@@ -385,26 +387,28 @@ subprojects {
   // Ignore core since its a scala project
   if (it.path != ':core') {
 
-    jacoco {
-      toolVersion = "0.8.0"
-    }
+    if (!JavaVersion.current().isJava10Compatible()) {
+      jacoco {
+        toolVersion = "0.8.0"
+      }
 
-    // NOTE: Jacoco Gradle plugin does not support "offline instrumentation" this means that classes mocked by PowerMock
-    // may report 0 coverage, since the source was modified after initial instrumentation.
-    // See https://github.com/jacoco/jacoco/issues/51
-    jacocoTestReport {
-      dependsOn tasks.test
-      sourceSets sourceSets.main
-      reports {
-        html.enabled = true
-        xml.enabled = true
-        csv.enabled = false
+      // NOTE: Jacoco Gradle plugin does not support "offline instrumentation" this means that classes mocked by PowerMock
+      // may report 0 coverage, since the source was modified after initial instrumentation.
+      // See https://github.com/jacoco/jacoco/issues/51
+      jacocoTestReport {
+        dependsOn tasks.test
+        sourceSets sourceSets.main
+        reports {
+          html.enabled = true
+          xml.enabled = true
+          csv.enabled = false
+        }
       }
     }
-  }
 
-  def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
-  task reportCoverage(dependsOn: [coverageGen])
+    def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
+    task reportCoverage(dependsOn: [coverageGen])
+  }
 
 }
 
@@ -445,31 +449,34 @@ def fineTuneEclipseClasspathFile(eclipse, project) {
   }
 }
 
-// Aggregates all jacoco results into the root project directory
-task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
-  def javaProjects = subprojects.findAll { it.path != ':core' }
 
-  description = 'Generates an aggregate report from all subprojects'
-  dependsOn(javaProjects.test)
+if (!JavaVersion.current().isJava10Compatible()) {
+  // Aggregates all jacoco results into the root project directory
+  task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
+    def javaProjects = subprojects.findAll { it.path != ':core' }
 
-  additionalSourceDirs = files(javaProjects.sourceSets.main.allSource.srcDirs)
-  sourceDirectories = files(javaProjects.sourceSets.main.allSource.srcDirs)
-  classDirectories =  files(javaProjects.sourceSets.main.output)
-  executionData = files(javaProjects.jacocoTestReport.executionData)
+    description = 'Generates an aggregate report from all subprojects'
+    dependsOn(javaProjects.test)
 
-  reports {
-    html.enabled = true
-    xml.enabled = true
+    additionalSourceDirs = files(javaProjects.sourceSets.main.allSource.srcDirs)
+    sourceDirectories = files(javaProjects.sourceSets.main.allSource.srcDirs)
+    classDirectories = files(javaProjects.sourceSets.main.output)
+    executionData = files(javaProjects.jacocoTestReport.executionData)
+
+    reports {
+      html.enabled = true
+      xml.enabled = true
+    }
+
+    // workaround to ignore projects that don't have any tests at all
+    onlyIf = { true }
+    doFirst {
+      executionData = files(executionData.findAll { it.exists() })
+    }
   }
 
-  // workaround to ignore projects that don't have any tests at all
-  onlyIf = { true }
-  doFirst {
-    executionData = files(executionData.findAll { it.exists() })
-  }
+  task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportCoverage'])
 }
-
-task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportCoverage'])
 
 for ( sv in availableScalaVersions ) {
   String taskSuffix = sv.replaceAll("\\.", "_")
@@ -592,7 +599,9 @@ project(':core') {
     scoverage libs.scoverageRuntime
   }
 
-  jacocoTestReport.enabled = false
+  if (!JavaVersion.current().isJava10Compatible())
+    jacocoTestReport.enabled = false
+
   scoverage {
     reportDir = file("${rootProject.buildDir}/scoverage")
     highlighting = false
