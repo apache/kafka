@@ -16,49 +16,26 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-public class RecordContextStub implements RecordContext {
+import org.apache.kafka.streams.processor.To;
 
-    private final long offset;
-    private long timestamp;
-    private final int partition;
-    private final String topic;
-
-    public RecordContextStub() {
-        this(-1, -1, -1, "");
+public class ToInternal extends To {
+    public ToInternal() {
+        super(To.all());
     }
 
-    public RecordContextStub(final long offset,
-                             final long timestamp,
-                             final int partition,
-                             final String topic) {
-        this.offset = offset;
-        this.timestamp = timestamp;
-        this.partition = partition;
-        this.topic = topic;
+    public void update(final To to) {
+        super.update(to);
     }
 
-    @Override
-    public long offset() {
-        return offset;
+    public boolean hasTimestamp() {
+        return timestamp != -1;
     }
 
-    @Override
     public long timestamp() {
         return timestamp;
     }
 
-    @Override
-    public void setTimestamp(final long timestamp) {
-        this.timestamp = timestamp;
-    }
-
-    @Override
-    public String topic() {
-        return topic;
-    }
-
-    @Override
-    public int partition() {
-        return partition;
+    public String child() {
+        return childName;
     }
 }
