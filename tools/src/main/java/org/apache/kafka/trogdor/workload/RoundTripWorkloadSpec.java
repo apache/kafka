@@ -39,6 +39,7 @@ public class RoundTripWorkloadSpec extends TaskSpec {
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
     private final NavigableMap<Integer, List<Integer>> partitionAssignments;
+    private final PayloadGenerator valueGenerator;
     private final int maxMessages;
 
     @JsonCreator
@@ -48,6 +49,7 @@ public class RoundTripWorkloadSpec extends TaskSpec {
              @JsonProperty("bootstrapServers") String bootstrapServers,
              @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
              @JsonProperty("partitionAssignments") NavigableMap<Integer, List<Integer>> partitionAssignments,
+             @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
              @JsonProperty("maxMessages") int maxMessages) {
         super(startMs, durationMs);
         this.clientNode = clientNode == null ? "" : clientNode;
@@ -55,6 +57,8 @@ public class RoundTripWorkloadSpec extends TaskSpec {
         this.targetMessagesPerSec = targetMessagesPerSec;
         this.partitionAssignments = partitionAssignments == null ?
             new TreeMap<Integer, List<Integer>>() : partitionAssignments;
+        this.valueGenerator = valueGenerator == null ?
+            new UniformRandomPayloadGenerator(32, 123, 10) : valueGenerator;
         this.maxMessages = maxMessages;
     }
 
@@ -76,6 +80,11 @@ public class RoundTripWorkloadSpec extends TaskSpec {
     @JsonProperty
     public NavigableMap<Integer, List<Integer>> partitionAssignments() {
         return partitionAssignments;
+    }
+
+    @JsonProperty
+    public PayloadGenerator valueGenerator() {
+        return valueGenerator;
     }
 
     @JsonProperty
