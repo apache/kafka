@@ -535,11 +535,25 @@ class TransactionsTest extends KafkaServerTestHarness {
   @Test(expected = classOf[TimeoutException])
   def testInitTransactionFailWithBadBrokers() {
     val producer = createTransactionalProducerToConnectNonExistentBrokers()
+
     try {
       producer.initTransactions()
-      fail("should have raised a TimeoutException since initializing the transaction expired")
+      producer.beginTransaction()
     } finally {
-      producer.close() // should successfully close the producer
+      producer.close()
+    }
+  }
+
+  @Test(expected = classOf[KafkaException])
+  def testConsecutivelyRunInitTransactions(): Unit = {
+    val producer = createTransactionalProducer(transactionalId = "normalProducer")
+
+    try {
+      producer.initTransactions()
+      producer.initTransactions()
+      fail("Should have raised a KafkaException")
+    } finally {
+      producer.close()
     }
   }
 

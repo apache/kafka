@@ -112,8 +112,6 @@ public class TransactionManager {
     private int inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     private Node transactionCoordinator;
     private Node consumerGroupCoordinator;
-    // only visible for testing
-    TransactionalRequestResult transactionalRequestResult;
 
     private volatile State currentState = State.UNINITIALIZED;
     private volatile RuntimeException lastError = null;
@@ -203,16 +201,13 @@ public class TransactionManager {
 
     public synchronized TransactionalRequestResult initializeTransactions() {
         ensureTransactional();
-        if (transactionalRequestResult == null || transactionalRequestResult.isCompleted()) {
-            transitionTo(State.INITIALIZING);
-            setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
-            this.nextSequence.clear();
-            InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(transactionalId, transactionTimeoutMs);
-            InitProducerIdHandler handler = new InitProducerIdHandler(builder);
-            enqueueRequest(handler);
-            transactionalRequestResult = handler.result;
-        }
-        return transactionalRequestResult;
+        transitionTo(State.INITIALIZING);
+        setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
+        this.nextSequence.clear();
+        InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(transactionalId, transactionTimeoutMs);
+        InitProducerIdHandler handler = new InitProducerIdHandler(builder);
+        enqueueRequest(handler);
+        return handler.result;
     }
 
     public synchronized void beginTransaction() {

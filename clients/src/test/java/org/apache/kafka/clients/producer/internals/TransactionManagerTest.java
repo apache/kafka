@@ -2240,16 +2240,6 @@ public class TransactionManagerTest {
         assertTrue(manager.shouldResetProducerStateAfterResolvingSequences());
     }
 
-    @Test
-    public void verifyInitializeTransactionsCacheRequestResult() {
-        assertNull(transactionManager.transactionalRequestResult);
-        transactionManager.initializeTransactions();
-        assertNotNull(transactionManager.transactionalRequestResult);
-        assertFalse(transactionManager.transactionalRequestResult.isCompleted());
-        TransactionalRequestResult result = transactionManager.initializeTransactions(); // should cache the incomplete result
-        assertEquals(result, transactionManager.transactionalRequestResult);
-    }
-
     private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {
         final long pid = 1L;
         final short epoch = 1;

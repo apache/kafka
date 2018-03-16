@@ -256,6 +256,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
+    private TransactionalRequestResult transactionalRequestResult;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -566,12 +567,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void initTransactions() {
         throwIfNoTransactionManager();
-        TransactionalRequestResult result = transactionManager.initializeTransactions();
-        sender.wakeup();
+        if (transactionalRequestResult == null) {
+            transactionalRequestResult = transactionManager.initializeTransactions();
+            sender.wakeup();
+        }
+
         try {
-            if (!result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS)) {
-                throw new TimeoutException("Timeout expired while initializing transactional state in " +
-                        maxBlockTimeMs + "ms.");
+            if (transactionalRequestResult.await(maxBlockTimeMs, TimeUnit.MILLISECONDS)) {
+                transactionalRequestResult = null;
+            } else {
+                throw new TimeoutException("Timeout expired while initializing transactional state in " + maxBlockTimeMs + "ms.");
             }
         } catch (InterruptedException e) {
             throw new InterruptException("Initialize transactions interrupted.", e);
