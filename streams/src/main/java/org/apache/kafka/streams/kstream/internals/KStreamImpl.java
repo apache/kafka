@@ -53,7 +53,10 @@ import java.util.Set;
 
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.JOIN;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.PROCESSING;
+import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.REPARTITION;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.SINK;
+import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.STREAM_GLOBAL_TABLE_JOIN;
+import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.STREAM_KTABLE_JOIN;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.TRANSFORM;
 import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.TRANSFORM_VALUES;
 @SuppressWarnings("unchecked")
@@ -784,18 +787,24 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         String filterName = builder.newProcessorName(FILTER_NAME);
         String sourceName = builder.newProcessorName(SOURCE_NAME);
 
-        builder.internalTopologyBuilder.addInternalTopic(repartitionTopic);
-        builder.internalTopologyBuilder.addProcessor(filterName, new KStreamFilter<>(new Predicate<K1, V1>() {
-            @Override
-            public boolean test(final K1 key, final V1 value) {
-                return key != null;
-            }
-        }, false), name);
+        RepartitionGraphNode.Builder repartitionNodeBuilder = RepartitionGraphNode.Builder.builder();
+        repartitionNodeBuilder.withFilterName(filterName)
+            .withKeySerde(keySerde)
+            .withValueSerde(valSerde)
+            .withSinkName(sinkName)
+            .withFilterName(filterName)
+            .withSourceName(sourceName)
+            .withRepartitionTopic(repartitionTopic)
+            .withTopologyNodeType(REPARTITION)
+            .withProcessorSupplier(new KStreamFilter<>(new Predicate<K1, V1>() {
+                @Override
+                public boolean test(final K1 key,  final V1 value) {
+                    return key != null;
+                }
+            }, false))
+            .withName(name);
 
-        builder.internalTopologyBuilder.addSink(sinkName, repartitionTopic, keySerializer, valSerializer,
-            null, filterName);
-        builder.internalTopologyBuilder.addSource(null, sourceName, new FailOnInvalidTimestamp(),
-            keyDeserializer, valDeserializer, repartitionTopic);
+        builder.internalTopologyBuilder.getStreamsTopologyGraph().addNode(repartitionNodeBuilder.build());
 
         return sourceName;
     }
@@ -889,7 +898,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final KTableValueGetterSupplier<K1, V1> valueGetterSupplier = ((GlobalKTableImpl<K1, V1>) globalTable).valueGetterSupplier();
         final String name = builder.newProcessorName(LEFTJOIN_NAME);
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamGlobalKTableJoin<>(valueGetterSupplier, joiner, keyMapper, leftJoin), this.name);
+
+        ProcessDetails.Builder processDetailsBuilder = ProcessDetails.builder();
+        processDetailsBuilder.withProcessorSupplier(new KStreamGlobalKTableJoin<>(valueGetterSupplier, joiner, keyMapper, leftJoin));
+
+        StreamsGraphNode graphNode = new StreamsGraphNode(name,
+                                                          STREAM_GLOBAL_TABLE_JOIN,
+                                                          false,
+                                                          processDetailsBuilder.build(),
+                                                          this.name);
+        builder.internalTopologyBuilder.getStreamsTopologyGraph().addNode(graphNode);
+
         return new KStreamImpl<>(builder, name, sourceNodes, false);
     }
 
@@ -903,9 +922,19 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
         final String name = builder.newProcessorName(leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamKTableJoin<>(((KTableImpl<K, ?, V1>) other).valueGetterSupplier(), joiner, leftJoin), this.name);
-        builder.internalTopologyBuilder.connectProcessorAndStateStores(name, ((KTableImpl) other).valueGetterSupplier().storeNames());
-        builder.internalTopologyBuilder.connectProcessors(this.name, ((KTableImpl<K, ?, V1>) other).name);
+        ProcessDetails.Builder processDetailsBuilder = ProcessDetails.builder();
+        processDetailsBuilder.withProcessorSupplier(new KStreamKTableJoin<>(((KTableImpl<K, ?, V1>) other).valueGetterSupplier(), joiner, leftJoin))
+            .withStoreNames(((KTableImpl) other).valueGetterSupplier().storeNames())
+            .withConnectProcessorName(((KTableImpl<K, ?, V1>) other).name);
+
+        StreamsGraphNode streamsGraphNode = new StreamsGraphNode(name,
+                                                                 STREAM_KTABLE_JOIN,
+                                                                 false,
+                                                                 processDetailsBuilder.build(),
+                                                                 this.name);
+
+
+        builder.internalTopologyBuilder.getStreamsTopologyGraph().addNode(streamsGraphNode);
 
         return new KStreamImpl<>(builder, name, allSourceNodes, false);
     }
@@ -1070,7 +1099,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                 .withJoinOtherName(joinOtherName)
                 .withJoinMergeName(joinMergeName)
                 .withThisWindowBuilder(thisWindow)
-                .withOtherWindowBuilder(otherWindow);
+                .withOtherWindowBuilder(otherWindow)
+                .withName(((AbstractStream) lhs).name + ((AbstractStream) other).name);
 
 
             builder.internalTopologyBuilder.getStreamsTopologyGraph().addNode(joinGraphBuilder.build());

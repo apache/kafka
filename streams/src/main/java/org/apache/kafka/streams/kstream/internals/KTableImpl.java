@@ -407,7 +407,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                 action.apply(key, value.newValue);
             }
         }, false);
-        builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
+        ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(processorSupplier).build();
+        StreamsGraphNode graphNode = new StreamsGraphNode(name,
+                                                          StreamsGraphNode.TopologyNodeType.PROCESSING,
+                                                          false,
+                                                          processDetails,
+                                                          this.name);
+        builder.internalTopologyBuilder.getStreamsTopologyGraph().addNode(graphNode);
     }
 
     @SuppressWarnings("deprecation")
@@ -555,12 +561,20 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public KStream<K, V> toStream() {
         String name = builder.newProcessorName(TOSTREAM_NAME);
 
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamMapValues<>(new ValueMapperWithKey<K, Change<V>, V>() {
+        ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(new KStreamMapValues<>(new ValueMapperWithKey<K, Change<V>, V>() {
             @Override
             public V apply(final K key, final Change<V> change) {
                 return change.newValue;
             }
-        }), this.name);
+        })).build();
+
+        StreamsGraphNode graphNode = new StreamsGraphNode(name,
+                                                          StreamsGraphNode.TopologyNodeType.PROCESSING,
+                                                          false,
+                                                          processDetails,
+                                                          this.name);
+
+        builder.internalTopologyBuilder.getStreamsTopologyGraph().addNode(graphNode);
 
         return new KStreamImpl<>(builder, name, sourceNodes, false);
     }

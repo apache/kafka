@@ -90,6 +90,7 @@ public class JoinGraphNode extends StreamsGraphNode {
         private ProcessorSupplier joinMergeProcessor;
         private StoreBuilder thisWindowBuilder;
         private StoreBuilder otherWindowBuilder;
+        private String name;
 
         private Builder() {
         }
@@ -173,11 +174,19 @@ public class JoinGraphNode extends StreamsGraphNode {
             return this;
         }
 
+        public Builder withName(String name) {
+            this.name = name;
+            return this;
+        }
+
         public JoinGraphNode build() {
-            return new JoinGraphNode(topologyNodeType, thisWindowStreamName, otherWindowStreamName, leftHandSideCallingStream, otherStreamName, joinThisName,
+            JoinGraphNode joinGraphNode = new  JoinGraphNode(topologyNodeType, thisWindowStreamName, otherWindowStreamName, leftHandSideCallingStream, otherStreamName, joinThisName,
                                      joinOtherName,
                                      joinMergeName, joinThisProcessor, joinOtherProcessor, thisWindowedStream, otherWindowedStream, joinMergeProcessor,
                                      thisWindowBuilder, otherWindowBuilder);
+
+            joinGraphNode.setName(name);
+            return joinGraphNode;
         }
     }
 

@@ -18,8 +18,10 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.slf4j.Logger;
@@ -50,13 +52,21 @@ public class InternalTopologyBuilderOptimizerImpl implements TopologyOptimizer {
 
         graphNodeStack.push(topologyGraph.root);
 
+        System.out.println("Root node " + topologyGraph.root + " descendants " + topologyGraph.root.descendants);
+
         while (!graphNodeStack.isEmpty()) {
             final StreamsGraphNode streamGraphNode = graphNodeStack.pop();
 
             buildAndMaybeOptimize(internalTopologyBuilder, streamGraphNode);
 
             for (StreamsGraphNode descendant : streamGraphNode.getDescendants()) {
-                graphNodeStack.push(descendant);
+                if (streamGraphNode.descendants.size() > 1) {
+                    System.out.println("Adding to bottom of stack " + descendant + "descendants " + descendant.descendants);
+                    graphNodeStack.addLast(descendant);
+                } else {
+                    System.out.println("Adding to top of stack " + descendant + "descendants " + descendant.descendants);
+                    graphNodeStack.push(descendant);
+                }
             }
         }
     }
@@ -66,6 +76,10 @@ public class InternalTopologyBuilderOptimizerImpl implements TopologyOptimizer {
 
         final StreamsGraphNode.TopologyNodeType nodeType = descendant.getType();
         final ProcessDetails processDetails = descendant.getProcessed();
+        Deserializer keyDeserializer;
+        Deserializer valDeserializer;
+        Serializer keySerializer;
+        Serializer valSerializer;
         String topic;
 
         switch (nodeType) {
@@ -75,8 +89,8 @@ public class InternalTopologyBuilderOptimizerImpl implements TopologyOptimizer {
                 break;
 
             case SOURCE:
-                final Deserializer keyDeserializer = processDetails.consumedKeySerde() == null ? null : processDetails.consumedKeySerde().deserializer();
-                final Deserializer valDeserializer = processDetails.consumedValueSerde() == null ? null : processDetails.consumedValueSerde().deserializer();
+                keyDeserializer = getDeserializer(processDetails.consumedKeySerde());
+                valDeserializer = getDeserializer(processDetails.consumedValueSerde());
 
                 if (processDetails.getSourcePattern() != null) {
                     internalTopologyBuilder.addSource(processDetails.getConsumedResetPolicy(),
@@ -97,8 +111,8 @@ public class InternalTopologyBuilderOptimizerImpl implements TopologyOptimizer {
                 break;
 
             case SINK:
-                final Serializer keySerializer = processDetails.producedKeySerde() == null ? null : processDetails.producedKeySerde().serializer();
-                final Serializer valSerializer = processDetails.producedValueSerde() == null ? null : processDetails.producedValueSerde().serializer();
+                keySerializer = getSerializer(processDetails.producedKeySerde());
+                valSerializer = getSerializer(processDetails.producedValueSerde());
                 final StreamPartitioner partitioner = processDetails.streamPartitioner();
                 topic = processDetails.getSinkTopic();
 
@@ -112,12 +126,14 @@ public class InternalTopologyBuilderOptimizerImpl implements TopologyOptimizer {
 
             case KTABLE:
                 topic = processDetails.getSourceTopicArray()[0];
+                keyDeserializer = getDeserializer(processDetails.consumedKeySerde());
+                valDeserializer = getDeserializer(processDetails.consumedValueSerde());
 
                 internalTopologyBuilder.addSource(processDetails.getConsumedResetPolicy(),
-                                                  descendant.name,
+                                                  descendant.predecessorName,
                                                   processDetails.getConsumedTimestampExtractor(),
-                                                  processDetails.consumedKeySerde().deserializer(),
-                                                  processDetails.consumedValueSerde().deserializer(),
+                                                  keyDeserializer,
+                                                  valDeserializer,
                                                   topic);
 
                 internalTopologyBuilder.addProcessor(descendant.name(),
@@ -156,6 +172,7 @@ public class InternalTopologyBuilderOptimizerImpl implements TopologyOptimizer {
                     internalTopologyBuilder.connectProcessorAndStateStores(descendant.name(), processDetails.getStoreNames());
                 }
                 break;
+
             case JOIN:
                 JoinGraphNode jgn = (JoinGraphNode) descendant;
 
@@ -168,12 +185,75 @@ public class InternalTopologyBuilderOptimizerImpl implements TopologyOptimizer {
                 internalTopologyBuilder.addStateStore(jgn.otherWindowBuilder, jgn.otherWindowStreamName, jgn.joinThisName);
 
                 break;
-            case GROUP_BY:
-                //TODO Need to figure out how to handle this case
+
+            case REPARTITION:
+                RepartitionGraphNode rgn = (RepartitionGraphNode) descendant;
+
+                keySerializer = rgn.keySerde != null ? rgn.keySerde.serializer() : null;
+                valSerializer = rgn.valueSerde != null ? rgn.valueSerde.serializer() : null;
+                keyDeserializer = rgn.keySerde != null ? rgn.keySerde.deserializer() : null;
+                valDeserializer = rgn.valueSerde != null ? rgn.valueSerde.deserializer() : null;
+
+                internalTopologyBuilder.addInternalTopic(rgn.repartitionTopic);
+                internalTopologyBuilder.addProcessor(rgn.filterName, rgn.processorSupplier, rgn.name());
+
+                internalTopologyBuilder.addSink(rgn.sinkName, rgn.repartitionTopic, keySerializer, valSerializer,
+                                                null, rgn.filterName);
+                internalTopologyBuilder.addSource(null, rgn.sourceName, new FailOnInvalidTimestamp(),
+                                                  keyDeserializer, valDeserializer, rgn.repartitionTopic);
+                break;
+
+            case STREAM_KTABLE_JOIN:
+
+                internalTopologyBuilder.addProcessor(descendant.name(), processDetails.getProcessorSupplier(), descendant.getPredecessorName());
+                internalTopologyBuilder.connectProcessorAndStateStores(descendant.name(), processDetails.getStoreNames());
+                internalTopologyBuilder.connectProcessors(descendant.name(), processDetails.getConnectProcessorName());
+
+                break;
+
+            case STREAM_GLOBAL_TABLE_JOIN:
+                internalTopologyBuilder.addProcessor(descendant.name(), processDetails.getProcessorSupplier(), descendant.getPredecessorName());
+
+                break;
+
+            case GLOBAL_KTABLE:
+                topic = processDetails.getSourceTopicArray()[0];
+                keyDeserializer = getDeserializer(processDetails.consumedKeySerde());
+                valDeserializer = getDeserializer(processDetails.consumedValueSerde());
+
+                internalTopologyBuilder.addGlobalStore(processDetails.getStoreBuilder(),
+                                               descendant.name,
+                                               processDetails.getConsumedTimestampExtractor(),
+                                               keyDeserializer,
+                                               valDeserializer,
+                                               topic,
+                                               descendant.getPredecessorName(),
+                                               processDetails.getkTableSource());
+
+                break;
+
+            case AGGREGATE:
+
+                internalTopologyBuilder.addProcessor(descendant.name(), processDetails.getProcessorSupplier(), processDetails.getConnectProcessorName());
+                if (processDetails.getStoreBuilder() != null) {
+                    internalTopologyBuilder.addStateStore(processDetails.getStoreBuilder(), descendant.name());
+                } else if (processDetails.getStoreSupplier() != null) {
+                    internalTopologyBuilder.addStateStore(processDetails.getStoreSupplier(), descendant.name());
+                }
                 break;
             default:
                 throw new TopologyException("Unrecognized TopologyNodeType " + nodeType);
 
         }
     }
+
+
+    private Serializer getSerializer(Serde serde) {
+        return serde == null ? null : serde.serializer();
+    }
+
+    private Deserializer getDeserializer(Serde serde) {
+        return serde == null ? null : serde.deserializer();
+    }
+
 }

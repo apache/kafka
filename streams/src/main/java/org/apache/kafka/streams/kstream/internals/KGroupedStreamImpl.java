@@ -499,8 +499,17 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
 
         final String sourceName = repartitionIfRequired(storeSupplier.name());
 
-        builder.internalTopologyBuilder.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
-        builder.internalTopologyBuilder.addStateStore(storeSupplier, aggFunctionName);
+        ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(aggregateSupplier)
+            .withStoreSupplier(storeSupplier)
+            .withConnectProcessorName(sourceName).build();
+        StreamsGraphNode streamsGraphNode = new StreamsGraphNode(aggFunctionName,
+                                                                 StreamsGraphNode.TopologyNodeType.AGGREGATE,
+                                                                 false,
+                                                                 processDetails,
+                                                                 null);
+
+        builder.internalTopologyBuilder.getStreamsTopologyGraph().addNode(streamsGraphNode);
+
 
         return new KTableImpl<>(
             builder,

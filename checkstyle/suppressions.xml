@@ -77,7 +77,7 @@
               files="DistributedHerder(|Test).java"/>
 
     <suppress checks="MethodLength"
-              files="(KafkaConfigBackingStore|RequestResponseTest|WorkerSinkTaskTest).java"/>
+              files="(KafkaConfigBackingStore|RequestResponseTest|WorkerSinkTaskTest|InternalTopologyBuilderOptimizerImpl).java"/>
 
     <suppress checks="ParameterNumber"
               files="WorkerSourceTask.java"/>

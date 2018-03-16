@@ -42,6 +42,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 /**
@@ -56,6 +57,8 @@ public class StreamsBuilder {
 
     /** The actual topology that is constructed by this StreamsBuilder. */
     private final Topology topology = new Topology();
+
+    private final AtomicInteger nodeCounter = new AtomicInteger(0);
 
     /** The topology's internal builder. */
     final InternalTopologyBuilder internalTopologyBuilder = topology.internalTopologyBuilder;

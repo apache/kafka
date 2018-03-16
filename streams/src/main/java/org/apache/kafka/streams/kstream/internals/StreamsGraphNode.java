@@ -58,7 +58,11 @@ public class StreamsGraphNode {
         AGGREGATE_TYPE,
         GLOBAL_KTABLE,
         SELECT_KEY,
-        MAP_VALUES
+        MAP_VALUES,
+        REPARTITION,
+        STREAM_KTABLE_JOIN,
+        STREAM_GLOBAL_TABLE_JOIN,
+        AGGREGATE
     }
 
 
@@ -144,7 +148,6 @@ public class StreamsGraphNode {
         this.name = name;
     }
 
-
     public String getPredecessorName() {
         return predecessorName;
     }
@@ -179,5 +182,15 @@ public class StreamsGraphNode {
     public int hashCode() {
 
         return Objects.hash(topologyNodeType, name);
+    }
+
+    @Override
+    public String toString() {
+        return "StreamsGraphNode{" +
+               "topologyNodeType=" + topologyNodeType +
+               ", predecessor=" + predecessor +
+               ", name='" + name + '\'' +
+               ", predecessorName='" + predecessorName + '\'' +
+               '}';
     }
 }

@@ -59,6 +59,7 @@ public class ProcessDetails<K, V, S extends StateStore> {
     private final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
     private final KTableSource<K, V> kTableSource;
     private final String[] storeNames;
+    private final String connectProcessorName;
 
 
     private ProcessDetails(final Collection<String> sourceTopics,
@@ -71,7 +72,8 @@ public class ProcessDetails<K, V, S extends StateStore> {
                            final StateStoreSupplier<KeyValueStore<K, V>> storeSupplier,
                            final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
                            final KTableSource<K, V> kTableSource,
-                           final String[] storeNames) {
+                           final String[] storeNames,
+                           final String connectProcessorName) {
         this.sourceTopics = sourceTopics;
         this.sinkTopic = sinkTopic;
         this.sourcePattern = sourcePattern;
@@ -83,6 +85,7 @@ public class ProcessDetails<K, V, S extends StateStore> {
         this.storeBuilder = storeBuilder;
         this.kTableSource = kTableSource;
         this.storeNames = storeNames;
+        this.connectProcessorName = connectProcessorName;
         if (this.materialized != null) {
             this.materializedInternal = new MaterializedInternal(materialized);
         }
@@ -190,6 +193,10 @@ public class ProcessDetails<K, V, S extends StateStore> {
         return storeNames;
     }
 
+    public String getConnectProcessorName() {
+        return connectProcessorName;
+    }
+
     public static Builder builder() {
         return new Builder<>();
     }
@@ -207,6 +214,7 @@ public class ProcessDetails<K, V, S extends StateStore> {
         private StoreBuilder<KeyValueStore<K, V>> storeBuilder;
         private KTableSource<K, V> kTableSource;
         private String[] storeNames;
+        private String connectProcessorName;
 
         private Builder() {
         }
@@ -267,6 +275,11 @@ public class ProcessDetails<K, V, S extends StateStore> {
             return this;
         }
 
+        public Builder withConnectProcessorName(String name) {
+            this.connectProcessorName = name;
+            return this;
+        }
+
         public ProcessDetails<K, V, S> build() {
             return new ProcessDetails<>(sourceTopics,
                                         sinkTopic,
@@ -278,7 +291,8 @@ public class ProcessDetails<K, V, S extends StateStore> {
                                         storeSupplier,
                                         storeBuilder,
                                         kTableSource,
-                                        storeNames);
+                                        storeNames,
+                                        connectProcessorName);
         }
     }
 }

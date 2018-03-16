@@ -17,11 +17,15 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.errors.TopologyException;
+//import org.apache.kafka.streams.errors.TopologyException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 
 public class StreamsTopologyGraphImpl extends StreamsTopologyGraph {
+
+    private static final Logger LOG = LoggerFactory.getLogger(StreamsTopologyGraphImpl.class);
 
     @Override
     public void addNode(final StreamsGraphNode node) {
@@ -29,7 +33,8 @@ public class StreamsTopologyGraphImpl extends StreamsTopologyGraph {
         final StreamsGraphNode predecessorNode = node.getPredecessorName() != null ? nameToGraphNode.get(node.getPredecessorName()) : null;
 
         if (predecessorNode == null && !node.isSourceNode()) {
-            throw new TopologyException("Only SOURCE nodes can have a null predecessor.  Type" + node.getType() + " predecessor name" + node.getPredecessorName());
+            LOG.warn("Only SOURCE nodes should have a null predecessor.  Type " + node.getType() + " predecessor name " + node.getPredecessorName());
+            //throw new TopologyException("Only SOURCE nodes can have a null predecessor.  Type " + node.getType() + " predecessor name " + node.getPredecessorName());
         }
 
         if (predecessorNode == null) {
