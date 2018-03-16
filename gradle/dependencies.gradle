@@ -47,6 +47,7 @@ if (hasProperty('scalaVersion')) {
 versions["baseScala"] = versions.scala.substring(0, versions.scala.lastIndexOf("."))
 
 versions += [
+  activation: "1.1.1",
   apacheda: "1.0.0",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
@@ -58,6 +59,7 @@ versions += [
   jmh: "1.20",
   log4j: "1.2.17",
   scalaLogging: "3.8.0",
+  jaxb: "2.3.0",
   jopt: "5.0.4",
   junit: "4.12",
   lz4: "1.4.1",
@@ -77,6 +79,7 @@ versions += [
 ]
 
 libs += [
+  activation: "javax.activation:activation:$versions.activation",
   argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
   apacheda: "org.apache.directory.api:api-all:$versions.apacheda",
   apachedsCoreApi: "org.apache.directory.server:apacheds-core-api:$versions.apacheds",
@@ -91,6 +94,7 @@ libs += [
   easymock: "org.easymock:easymock:$versions.easymock",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
   jacksonJaxrsJsonProvider: "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:$versions.jackson",
+  jaxbApi: "javax.xml.bind:jaxb-api:$versions.jaxb",
   jettyServer: "org.eclipse.jetty:jetty-server:$versions.jetty",
   jettyClient: "org.eclipse.jetty:jetty-client:$versions.jetty",
   jettyServlet: "org.eclipse.jetty:jetty-servlet:$versions.jetty",
