@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Serde;
@@ -31,7 +32,6 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.CogroupedKStream;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
@@ -45,6 +45,7 @@ import org.apache.kafka.streams.state.WindowStore;
 
 class CogroupedKStreamImpl<K, V> implements CogroupedKStream<K, V> {
 
+    private final AtomicInteger index = new AtomicInteger(0);
     private static final String COGROUP_AGGREGATE_NAME = "KSTREAM-COGROUP-AGGREGATE-";
     private static final String COGROUP_NAME = "KSTREAM-COGROUP-";
     private static enum AggregateType {
@@ -53,12 +54,12 @@ class CogroupedKStreamImpl<K, V> implements CogroupedKStream<K, V> {
         WINDOW_AGGREGATE
     }
 
-    private final KStreamBuilder topology;
+    private final InternalStreamsBuilder topology;
     private final Serde<K> keySerde;
     private final Map<KGroupedStream, Aggregator> pairs = new HashMap<>();
     private final Map<KGroupedStreamImpl, String> repartitionNames = new HashMap<>();
 
-    <T> CogroupedKStreamImpl(final KStreamBuilder topology,
+    <T> CogroupedKStreamImpl(final InternalStreamsBuilder topology,
                          final KGroupedStream<K, T> groupedStream,
                          final Serde<K> keySerde,
                          final Aggregator<? super K, ? super T, V> aggregator) {
@@ -170,23 +171,17 @@ class CogroupedKStreamImpl<K, V> implements CogroupedKStream<K, V> {
             }
             processors.add(processor);
             
-            final String processorName = topology.newName(COGROUP_AGGREGATE_NAME);
-            processorNames.add(processorName);
-            final String[] sourceNameNodes = new String[groupedStream.sourceNodes.size()];
-            int index = 0;
-            for (Object node : groupedStream.sourceNodes) {
-                sourceNameNodes[index++] = (String) node;
-            }
-            topology.addSource(sourceName, sourceNameNodes);
-            topology.addProcessor(processorName, processor, sourceName);
+            final String processorName = newName(COGROUP_AGGREGATE_NAME);
+            final String[] sourceNames = {sourceName};
+            topology.addProcessor(processorName, processor, sourceNames);
         }
-        final String name = topology.newName(COGROUP_NAME);
+        final String name = newName(COGROUP_NAME);
         final KStreamCogroup cogroup = new KStreamCogroup(processors);
         final String[] processorNamesArray = processorNames.toArray(new String[processorNames.size()]);
-        topology.internalTopologyBuilder.addProcessor(name, cogroup, processorNamesArray);
-        topology.internalTopologyBuilder.addStateStore(storeSupplier, processorNamesArray);
+        topology.addProcessor(name, cogroup, processorNamesArray);
+        topology.addStateStore(storeSupplier, processorNamesArray);
         topology.copartitionSources(sourceNodes);
-        return new KTableImpl<K, String, V>(topology.internalStreamsBuilder(), name, cogroup, sourceNodes, storeSupplier.name(), true);
+        return new KTableImpl<K, String, V>(topology, name, cogroup, sourceNodes, storeSupplier.name(), true);
     }
 
     @SuppressWarnings("rawtypes")
@@ -197,5 +192,9 @@ class CogroupedKStreamImpl<K, V> implements CogroupedKStream<K, V> {
         final String sourceName = groupedStream.repartitionIfRequired(null);
         repartitionNames.put(groupedStream, sourceName);
         return sourceName;
+    }
+    
+    private String newName(String prefix) {
+        return prefix + String.format("%010d", index.getAndIncrement());
     }
 }

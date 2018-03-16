@@ -21,6 +21,7 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -167,8 +168,21 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return prefix + String.format(KTableImpl.STATE_STORE_NAME + "%010d", index.getAndIncrement());
     }
 
+    public synchronized void copartitionSources(final Collection<String> sourceNodes) {
+        internalTopologyBuilder.copartitionSources(sourceNodes);
+    }
+
     public synchronized void addStateStore(final StoreBuilder builder) {
         internalTopologyBuilder.addStateStore(builder);
+    }
+
+    public synchronized void addProcessor(final String name, 
+                                          final ProcessorSupplier cogroup, 
+                                          final String ... processorNames) {
+        internalTopologyBuilder.addProcessor(name, cogroup, processorNames);
+    }
+    public synchronized void addStateStore(final StateStoreSupplier supplier, final String ... processorNames) {
+        internalTopologyBuilder.addStateStore(supplier, processorNames);
     }
 
     public synchronized void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,
