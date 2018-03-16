@@ -57,7 +57,8 @@ public class RoundTripWorkloadSpec extends TaskSpec {
         this.targetMessagesPerSec = targetMessagesPerSec;
         this.partitionAssignments = partitionAssignments == null ?
             new TreeMap<Integer, List<Integer>>() : partitionAssignments;
-        this.valueGenerator = valueGenerator;
+        this.valueGenerator = valueGenerator == null ?
+            new UniformRandomPayloadGenerator(32, 123, 10) : valueGenerator;
         this.maxMessages = maxMessages;
     }
 

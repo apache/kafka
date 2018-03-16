@@ -84,11 +84,11 @@ public class PayloadGeneratorTest {
 
     @Test
     public void testUniformRandomPayloadGenerator() {
-        PayloadGeneratorManager manager = new PayloadGeneratorManager(
+        PayloadIterator iter = new PayloadIterator(
             new UniformRandomPayloadGenerator(1234, 456, 0));
-        byte[] prev = manager.next();
+        byte[] prev = iter.next();
         for (int uniques = 0; uniques < 1000; ) {
-            byte[] cur = manager.next();
+            byte[] cur = iter.next();
             assertEquals(prev.length, cur.length);
             if (!Arrays.equals(prev, cur)) {
                 uniques++;
@@ -122,5 +122,21 @@ public class PayloadGeneratorTest {
         System.arraycopy(val3, 900, val3End, 0, 100);
         assertArrayEquals(val1End, val2End);
         assertArrayEquals(val1End, val3End);
+    }
+
+    @Test
+    public void testPayloadIterator() {
+        final int expectedSize = 50;
+        PayloadIterator iter = new PayloadIterator(
+            new ConstantPayloadGenerator(expectedSize, new byte[0]));
+        final byte[] expected = new byte[expectedSize];
+        assertEquals(0, iter.position());
+        assertArrayEquals(expected, iter.next());
+        assertEquals(1, iter.position());
+        assertArrayEquals(expected, iter.next());
+        assertArrayEquals(expected, iter.next());
+        assertEquals(3, iter.position());
+        iter.setPosition(0);
+        assertEquals(0, iter.position());
     }
 }
