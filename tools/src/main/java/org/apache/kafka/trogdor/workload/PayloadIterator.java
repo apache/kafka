@@ -45,7 +45,7 @@ public final class PayloadIterator implements Iterator<byte[]> {
         throw new UnsupportedOperationException();
     }
 
-    public synchronized void setPosition(long position) {
+    public synchronized void seek(long position) {
         this.position = position;
     }
 

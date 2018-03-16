@@ -136,7 +136,7 @@ public class PayloadGeneratorTest {
         assertArrayEquals(expected, iter.next());
         assertArrayEquals(expected, iter.next());
         assertEquals(3, iter.position());
-        iter.setPosition(0);
+        iter.seek(0);
         assertEquals(0, iter.position());
     }
 }
