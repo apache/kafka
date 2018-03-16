@@ -17,10 +17,8 @@
 package kafka.common
 
 import java.util
-import java.util.Collections
-import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue}
+import java.util.{ArrayList, Collection, Collections, HashMap, Iterator, LinkedList}
 
-import kafka.admin.AdminClient
 import kafka.utils.ShutdownableThread
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
@@ -28,8 +26,7 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.JavaConversions._
-
+import scala.collection.JavaConverters._
 
 /**
  *  Class for inter-broker send thread that utilize a non-blocking network client.
@@ -41,8 +38,8 @@ abstract class InterBrokerSendThread(name: String,
   extends ShutdownableThread(name, isInterruptible) {
 
   def generateRequests(): Iterable[RequestAndCompletionHandler]
+  def unsentExpiryMs: Int
   var unsentRequests = new UnsentRequests
-  val unsentExpiryMs = AdminClient.DefaultRequestTimeoutMs
 
   override def shutdown(): Unit = {
     initiateShutdown()
@@ -58,12 +55,12 @@ abstract class InterBrokerSendThread(name: String,
     generateRequests().foreach { request =>
       val completionHandler = request.handler
       unsentRequests.put(request.destination,
-        networkClient.newClientRequest(request.destination.idString(), request.request, now, true, completionHandler))
+        networkClient.newClientRequest(request.destination.idString, request.request, now, true, completionHandler))
     }
 
     try {
       if (unsentRequests.hasRequests) {
-        for (node <- unsentRequests.nodes) {
+        for (node <- unsentRequests.nodes.asScala) {
           val requestIterator = unsentRequests.requestIterator(node)
           while (requestIterator.hasNext) {
             val request = requestIterator.next
@@ -96,19 +93,20 @@ abstract class InterBrokerSendThread(name: String,
     // by NetworkClient, so we just need to check whether connections for any of the unsent
     // requests have been disconnected; if they have, then we complete the corresponding future
     // and set the disconnect flag in the ClientResponse
-    for (node <- unsentRequests.nodes) {
+    for (node <- unsentRequests.nodes.asScala) {
       if (networkClient.connectionFailed(node)) {
         // Remove entry before invoking request callback to avoid callbacks handling
         // coordinator failures traversing the unsent list again.
         val requests = unsentRequests.remove(node)
-        for (request: ClientRequest <- requests) {
+        for (request <- requests.asScala) {
           val handler = request.callback
           val authenticationException = networkClient.authenticationException(node)
           if (authenticationException == null) {
             handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
               handler, request.destination, now /* createdTimeMs */ , now /* receivedTimeMs */ , true /* disconnected */ ,
               null /* versionMismatch */ , null /* responseBody */))
-          }
+          } else
+            debug(s"Failed to send the following request due to authentication error: ${request.toString}")
         }
       }
     }
@@ -117,8 +115,8 @@ abstract class InterBrokerSendThread(name: String,
   private def failExpiredRequests(now: Long): Unit = {
     // clear all expired unsent requests
     val expiredRequests = unsentRequests.removeExpiredRequests(now, unsentExpiryMs)
-    for (request: ClientRequest <- expiredRequests)
-      info(s"Failed to send the following request after $unsentExpiryMs ms: ${request.toString}")
+    for (request <- expiredRequests.asScala)
+      debug(s"Failed to send the following request after $unsentExpiryMs ms: ${request.toString}")
   }
 
   def wakeup(): Unit = networkClient.wakeup()
@@ -128,29 +126,26 @@ case class RequestAndCompletionHandler(destination: Node, request: AbstractReque
                                        handler: RequestCompletionHandler)
 
 class UnsentRequests {
-  private var unsent = new ConcurrentHashMap[Node, ConcurrentLinkedQueue[ClientRequest]]
+  private var unsent = new HashMap[Node, LinkedList[ClientRequest]]
 
   def put(node: Node, request: ClientRequest): Unit = {
-    // the lock protects the put from a concurrent removal of the queue for the node
-    this.synchronized {
-      var requests = unsent.get(node)
-      if (requests == null) {
-        requests = new ConcurrentLinkedQueue[ClientRequest]
-        unsent.putIfAbsent(node, requests)
-      }
-      requests.add(request)
+    var requests = unsent.get(node)
+    if (requests == null) {
+      requests = new LinkedList[ClientRequest]
+      unsent.putIfAbsent(node, requests)
     }
+    requests.add(request)
   }
 
   def hasRequests: Boolean = {
-    for (requests <- unsent.values)
+    for (requests <- unsent.values.asScala)
       if (!requests.isEmpty) return true
     false
   }
 
   def removeExpiredRequests(now: Long, unsentExpiryMs: Long): util.Collection[ClientRequest] = {
-    val expiredRequests = new util.ArrayList[ClientRequest]
-    for (requests: ConcurrentLinkedQueue[ClientRequest] <- unsent.values) {
+    val expiredRequests = new ArrayList[ClientRequest]
+    for (requests <- unsent.values.asScala) {
       val requestIterator = requests.iterator
       var foundExpiredRequest = false
       while (requestIterator.hasNext && !foundExpiredRequest) {
@@ -166,31 +161,23 @@ class UnsentRequests {
   }
 
   def clean(): Unit = {
-    // the lock protects removal from a concurrent put which could otherwise mutate the
-    // queue after it has been removed from the map
-    this.synchronized {
-      val iterator = unsent.values.iterator
-      while (iterator.hasNext) {
-        val requests = iterator.next
-        if (requests.isEmpty)
-          iterator.remove()
-      }
+    val iterator = unsent.values.iterator
+    while (iterator.hasNext) {
+      val requests = iterator.next
+      if (requests.isEmpty)
+        iterator.remove()
     }
   }
 
-  def remove(node: Node): util.Collection[ClientRequest] = {
-    // the lock protects removal from a concurrent put which could otherwise mutate the
-    // queue after it has been removed from the map
-    this.synchronized {
-      val requests = unsent.remove(node)
-      if (requests == null)
-        new ConcurrentLinkedQueue[ClientRequest]()
-      else
-        requests
-    }
+  def remove(node: Node): Collection[ClientRequest] = {
+    val requests = unsent.remove(node)
+    if (requests == null)
+      new LinkedList[ClientRequest]()
+    else
+      requests
   }
 
-  def requestIterator(node: Node): util.Iterator[ClientRequest] = {
+  def requestIterator(node: Node): Iterator[ClientRequest] = {
     val requests = unsent.get(node)
     if (requests == null)
       Collections.emptyIterator[ClientRequest]
