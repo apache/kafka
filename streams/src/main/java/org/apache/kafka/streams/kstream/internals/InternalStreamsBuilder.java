@@ -176,6 +176,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         internalTopologyBuilder.addStateStore(builder);
     }
 
+    public synchronized void addStateStore(final StoreBuilder builder, final String aggFunctionName) {
+        internalTopologyBuilder.addStateStore(builder, aggFunctionName);
+    }
     public synchronized void addProcessor(final String name, 
                                           final ProcessorSupplier cogroup, 
                                           final String ... processorNames) {
