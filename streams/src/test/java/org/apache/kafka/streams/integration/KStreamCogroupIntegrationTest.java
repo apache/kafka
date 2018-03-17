@@ -36,13 +36,13 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Merger;
@@ -163,7 +163,7 @@ public class KStreamCogroupIntegrationTest {
         CLUSTER.createTopic(INPUT_TOPIC_3 + testNumber, 2, 1);
         CLUSTER.createTopic(OUTPUT_TOPIC + testNumber, 2, 1);
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         KGroupedStream<Long, String> stream1 = builder.<Long, String>stream(INPUT_TOPIC_1 + testNumber).groupByKey();
         KGroupedStream<Long, String> stream2 = builder.<Long, String>stream(INPUT_TOPIC_2 + testNumber).groupByKey();
         KGroupedStream<Long, String> stream3 = builder.<Long, String>stream(INPUT_TOPIC_3 + testNumber).groupByKey();
@@ -173,7 +173,7 @@ public class KStreamCogroupIntegrationTest {
                 .aggregate(INITIALIZER, null, COGROUP_STORE_NAME)
                 .to(OUTPUT_TOPIC + testNumber);
 
-        final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
+        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfig(APP_ID + testNumber));
         
         final List<KeyValue<Long, String>> expecteds = Arrays.asList(
                 KeyValue.pair(1L, "1a"),
@@ -220,7 +220,7 @@ public class KStreamCogroupIntegrationTest {
         CLUSTER.createTopic(INPUT_TOPIC_3 + testNumber, 2, 1);
         CLUSTER.createTopic(OUTPUT_TOPIC + testNumber, 2, 1);
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         KGroupedStream<Long, String> stream1 = builder.<Long, String>stream(INPUT_TOPIC_1 + testNumber).groupBy(GROUP_BY);
         KGroupedStream<Long, String> stream2 = builder.<Long, String>stream(INPUT_TOPIC_2 + testNumber).groupBy(GROUP_BY);
         KGroupedStream<Long, String> stream3 = builder.<Long, String>stream(INPUT_TOPIC_3 + testNumber).groupBy(GROUP_BY);
@@ -230,7 +230,7 @@ public class KStreamCogroupIntegrationTest {
                 .aggregate(INITIALIZER, null, COGROUP_STORE_NAME)
                 .to(OUTPUT_TOPIC + testNumber);
 
-        final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
+        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfig(APP_ID + testNumber));
 
         final List<KeyValue<Long, String>> expecteds = Arrays.asList(
                 KeyValue.pair(2L, "1a"), // Key 1
@@ -277,17 +277,17 @@ public class KStreamCogroupIntegrationTest {
         CLUSTER.createTopic(INPUT_TOPIC_3 + testNumber, 2, 1);
         CLUSTER.createTopic(OUTPUT_TOPIC + testNumber, 2, 1);
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         KGroupedStream<Long, String> stream1 = builder.<Long, String>stream(INPUT_TOPIC_1 + testNumber).groupByKey();
         KGroupedStream<Long, String> stream2 = builder.<Long, String>stream(INPUT_TOPIC_2 + testNumber).groupByKey();
-        KTable<Long, String> table = builder.table(INPUT_TOPIC_3 + testNumber, TABLE_STORE_NAME);
+        KTable<Long, String> table = builder.table(INPUT_TOPIC_3 + testNumber);
         stream1.cogroup(AGGREGATOR_1)
                 .cogroup(stream2, AGGREGATOR_2)
                 .aggregate(INITIALIZER, null, COGROUP_STORE_NAME)
                 .outerJoin(table, JOINER)
                 .to(OUTPUT_TOPIC + testNumber);
 
-        final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
+        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfig(APP_ID + testNumber));
 
         final List<KeyValue<Long, String>> expecteds = Arrays.asList(
                 KeyValue.pair(1L, "1a+null"),
