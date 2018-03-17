@@ -19,9 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.junit.Test;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -130,8 +128,8 @@ public class TimeWindowTest {
         Map<Long, TimeWindow> matched = windows.windowsFor(21L);
 
         Long[] expected = matched.keySet().toArray(new Long[matched.size()]);
-        assertEquals(expected[0].longValue(),10L);
-        assertEquals(expected[1].longValue(),15L);
-        assertEquals(expected[2].longValue(),20L);
+        assertEquals(expected[0].longValue(), 10L);
+        assertEquals(expected[1].longValue(), 15L);
+        assertEquals(expected[2].longValue(), 20L);
     }
 }
