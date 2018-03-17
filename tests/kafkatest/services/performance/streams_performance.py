@@ -31,19 +31,23 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
                                                             test_name,
                                                             num_threads)
 
-        JmxMixin.__init__(self, num_nodes=1,
-                          jmx_object_names=['kafka.streams:type=stream-metrics,client-id=simple-benchmark-StreamThread-%d' %i for i in range(num_threads)],
-                          jmx_attributes=['process-latency-avg',
-                                          'process-rate',
-                                          'commit-latency-avg',
-                                          'commit-rate',
-                                          'poll-latency-avg',
-                                          'poll-rate'],
-                          root=StreamsTestBaseService.PERSISTENT_ROOT,
-                          report_interval=5000)
+        self.load_phase = load_phase
+
+        if self.load_phase == "false":
+            JmxMixin.__init__(self, num_nodes=1,
+                              jmx_object_names=['kafka.streams:type=stream-metrics,client-id=simple-benchmark-StreamThread-%d' %i for i in range(num_threads)],
+                              jmx_attributes=['process-latency-avg',
+                                              'process-rate',
+                                              'commit-latency-avg',
+                                              'commit-rate',
+                                              'poll-latency-avg',
+                                              'poll-rate'],
+                              root=StreamsTestBaseService.PERSISTENT_ROOT,
+                              report_interval=5000)
 
     def clean_node(self, node):
-        JmxMixin.clean_node(self, node)
+        if self.load_phase == "false":
+            JmxMixin.clean_node(self, node)
         super(StreamsSimpleBenchmarkService, self).clean_node(node)
 
     def collect_data(self, node, tag = None):
