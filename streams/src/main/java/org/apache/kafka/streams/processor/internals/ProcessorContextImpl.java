@@ -18,12 +18,13 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.List;
@@ -32,6 +33,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     private final StreamTask task;
     private final RecordCollector collector;
+    private final ToInternal toInternal = new ToInternal();
+    private final static To SEND_TO_ALL = To.all();
 
     ProcessorContextImpl(final TaskId id,
                          final StreamTask task,
@@ -77,32 +80,60 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     @SuppressWarnings("unchecked")
     @Override
+    public <K, V> void forward(final K key, final V value) {
+        forward(key, value, SEND_TO_ALL);
+    }
+
+    @SuppressWarnings({"unchecked", "deprecation"})
+    @Override
     public <K, V> void forward(final K key, final V value, final int childIndex) {
+        forward(key, value, To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
+    }
+
+    @SuppressWarnings({"unchecked", "deprecation"})
+    @Override
+    public <K, V> void forward(final K key, final V value, final String childName) {
+        forward(key, value, To.child(childName));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <K, V> void forward(final K key, final V value, final To to) {
+        toInternal.update(to);
+        if (toInternal.hasTimestamp()) {
+            recordContext.setTimestamp(toInternal.timestamp());
+        }
         final ProcessorNode previousNode = currentNode();
-        final ProcessorNode child = (ProcessorNode<K, V>) currentNode().children().get(childIndex);
-        setCurrentNode(child);
         try {
-            child.process(key, value);
+            final List<ProcessorNode<K, V>> children = (List<ProcessorNode<K, V>>) currentNode().children();
+            final String sendTo = toInternal.child();
+            if (sendTo != null) {
+                final ProcessorNode child = currentNode().getChild(sendTo);
+                if (child == null) {
+                    throw new StreamsException("Unknown processor name: " + sendTo);
+                }
+                forward(child, key, value);
+            } else {
+                if (children.size() == 1) {
+                    final ProcessorNode child = children.get(0);
+                    forward(child, key, value);
+                } else {
+                    for (final ProcessorNode child : children) {
+                        forward(child, key, value);
+                    }
+                }
+            }
         } finally {
             setCurrentNode(previousNode);
         }
     }
 
     @SuppressWarnings("unchecked")
-    @Override
-    public <K, V> void forward(final K key, final V value, final String childName) {
-        for (ProcessorNode child : (List<ProcessorNode<K, V>>) currentNode().children()) {
-            if (child.name().equals(childName)) {
-                ProcessorNode previousNode = currentNode();
-                setCurrentNode(child);
-                try {
-                    child.process(key, value);
-                    return;
-                } finally {
-                    setCurrentNode(previousNode);
-                }
-            }
-        }
+    private <K, V> void forward(final ProcessorNode child,
+                                final K key,
+                                final V value) {
+        setCurrentNode(child);
+        child.process(key, value);
     }
 
     @Override
