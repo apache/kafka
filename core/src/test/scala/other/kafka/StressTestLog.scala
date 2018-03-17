@@ -79,18 +79,15 @@ object StressTestLog {
     val threadInfo = "Thread: " + Thread.currentThread.getName + " Class: " + getClass.getName
 
     override def run() {
-      println("Entering " + threadInfo)
       try {
         while(running.get)
           work()
       } catch {
-        case e => {
-          println("Caught " + e + " in " + threadInfo)
+        case e: Exception => {
           e.printStackTrace()
         }
       } finally {
         running.set(false)
-        println("Exiting " + threadInfo)
       }
     }
 
