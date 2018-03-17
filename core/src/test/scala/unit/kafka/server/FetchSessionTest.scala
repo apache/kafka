@@ -201,7 +201,7 @@ class FetchSessionTest {
       context6.updateAndGenerateResponseData(respData2).error())
 
     // Close the incremental fetch session.
-    var prevSessionId = resp5.sessionId() //FIXME what should happen here?
+    val prevSessionId = resp5.sessionId
     var nextSessionId = prevSessionId
     do {
       val reqData7 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
