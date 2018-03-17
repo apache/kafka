@@ -562,16 +562,19 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testCreateConfigChangeNotification(): Unit = {
-    intercept[NoNodeException] {
-      zkClient.createConfigChangeNotification(ConfigEntityZNode.path(ConfigType.Topic, topic1))
-    }
+    assertFalse(zkClient.pathExists(ConfigEntityChangeNotificationZNode.path))
 
-    zkClient.createTopLevelPaths()
+    // The parent path is created if needed
     zkClient.createConfigChangeNotification(ConfigEntityZNode.path(ConfigType.Topic, topic1))
-
     assertPathExistenceAndData(
       "/config/changes/config_change_0000000000",
       """{"version":2,"entity_path":"/config/topics/topic1"}""")
+
+    // Creation does not fail if the parent path exists
+    zkClient.createConfigChangeNotification(ConfigEntityZNode.path(ConfigType.Topic, topic2))
+    assertPathExistenceAndData(
+      "/config/changes/config_change_0000000001",
+      """{"version":2,"entity_path":"/config/topics/topic2"}""")
   }
 
   private def createLogProps(bytesProp: Int): Properties = {
