@@ -286,10 +286,11 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @throws KeeperException if there is an error while setting or creating the znode
    */
   def createConfigChangeNotification(sanitizedEntityPath: String): Unit = {
+    makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     val path = ConfigEntityChangeNotificationSequenceZNode.createPath
     val createRequest = CreateRequest(path, ConfigEntityChangeNotificationSequenceZNode.encode(sanitizedEntityPath), acls(path), CreateMode.PERSISTENT_SEQUENTIAL)
     val createResponse = retryRequestUntilConnected(createRequest)
-    createResponse.maybeThrow
+    createResponse.maybeThrow()
   }
 
   /**
