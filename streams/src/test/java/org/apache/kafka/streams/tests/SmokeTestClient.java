@@ -46,7 +46,7 @@ public class SmokeTestClient extends SmokeTestUtil {
     private Thread thread;
     private boolean uncaughtException = false;
 
-    public SmokeTestClient(Properties streamsProperties, String kafka) {
+    public SmokeTestClient(final Properties streamsProperties, final String kafka) {
         super();
         this.kafka = kafka;
         this.streamsProperties = streamsProperties;
@@ -93,7 +93,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         }
     }
 
-    private static KafkaStreams createKafkaStreams(Properties props, String kafka) {
+    private static KafkaStreams createKafkaStreams(final Properties props, final String kafka) {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);

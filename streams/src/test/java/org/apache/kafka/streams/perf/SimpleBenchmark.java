@@ -205,7 +205,7 @@ public class SimpleBenchmark {
 
         final Properties props = Utils.loadProps(propFileName);
 
-        String stateDirStr;
+        final String stateDirStr;
         if (props.containsKey(StreamsConfig.STATE_DIR_CONFIG)) {
             stateDirStr = props.get(StreamsConfig.STATE_DIR_CONFIG).toString();
         } else {
@@ -229,7 +229,7 @@ public class SimpleBenchmark {
         benchmark.run();
     }
 
-    public Properties setStreamProperties(final String applicationId) {
+    public void setStreamProperties(final String applicationId) {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
@@ -244,7 +244,6 @@ public class SimpleBenchmark {
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
         //TODO remove this config or set to smaller value when KIP-91 is merged
         props.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 60000);
-        return props;
     }
 
     private Properties setProduceConsumeProperties(final String clientId) {
@@ -323,7 +322,7 @@ public class SimpleBenchmark {
         }
 
         CountDownLatch latch = new CountDownLatch(1);
-        Properties props = setStreamProperties("simple-benchmark-count");
+        setStreamProperties("simple-benchmark-count");
         final KafkaStreams streams = createCountStreams(props, countTopic, latch);
         runGenericBenchmark(streams, "Streams Count Performance [records/latency/rec-sec/MB-sec counted]: ", latch);
     }
@@ -341,7 +340,7 @@ public class SimpleBenchmark {
         CountDownLatch latch = new CountDownLatch(1);
 
         // setup join
-        Properties props = setStreamProperties("simple-benchmark-kstream-ktable-join");
+        setStreamProperties("simple-benchmark-kstream-ktable-join");
         final KafkaStreams streams = createKafkaStreamsKStreamKTableJoin(props, kStreamTopic, kTableTopic, latch);
 
         // run benchmark
@@ -361,7 +360,7 @@ public class SimpleBenchmark {
         CountDownLatch latch = new CountDownLatch(1);
 
         // setup join
-        Properties props = setStreamProperties("simple-benchmark-kstream-kstream-join");
+        setStreamProperties("simple-benchmark-kstream-kstream-join");
         final KafkaStreams streams = createKafkaStreamsKStreamKStreamJoin(props, kStreamTopic1, kStreamTopic2, latch);
 
         // run benchmark
@@ -380,7 +379,7 @@ public class SimpleBenchmark {
         CountDownLatch latch = new CountDownLatch(1);
 
         // setup join
-        Properties props = setStreamProperties("simple-benchmark-ktable-ktable-join");
+        setStreamProperties("simple-benchmark-ktable-ktable-join");
         final KafkaStreams streams = createKafkaStreamsKTableKTableJoin(props, kTableTopic1, kTableTopic2, latch);
 
         // run benchmark
@@ -596,7 +595,7 @@ public class SimpleBenchmark {
     }
 
     private KafkaStreams createKafkaStreams(String topic, final CountDownLatch latch) {
-        Properties props = setStreamProperties("simple-benchmark-streams");
+        setStreamProperties("simple-benchmark-streams");
 
         StreamsBuilder builder = new StreamsBuilder();
 
@@ -635,7 +634,7 @@ public class SimpleBenchmark {
     }
 
     private KafkaStreams createKafkaStreamsWithSink(String topic, final CountDownLatch latch) {
-        final Properties props = setStreamProperties("simple-benchmark-streams-with-sink");
+        setStreamProperties("simple-benchmark-streams-with-sink");
 
         StreamsBuilder builder = new StreamsBuilder();
 
@@ -734,7 +733,7 @@ public class SimpleBenchmark {
     private KafkaStreams createKafkaStreamsWithStateStore(String topic,
                                                           final CountDownLatch latch,
                                                           boolean enableCaching) {
-        Properties props = setStreamProperties("simple-benchmark-streams-with-store" + enableCaching);
+        setStreamProperties("simple-benchmark-streams-with-store" + enableCaching);
 
         StreamsBuilder builder = new StreamsBuilder();
 

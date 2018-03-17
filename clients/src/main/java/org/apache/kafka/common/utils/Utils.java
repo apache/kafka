@@ -511,6 +511,8 @@ public final class Utils {
             try (InputStream propStream = new FileInputStream(filename)) {
                 props.load(propStream);
             }
+        } else {
+            System.out.println("Did not load any properties since the property file is not specified");
         }
 
         return props;

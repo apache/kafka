@@ -31,7 +31,7 @@ public class StreamsSmokeTest {
      *
      * @param args
      */
-    public static void main(String[] args) throws InterruptedException, IOException {
+    public static void main(final String[] args) throws InterruptedException, IOException {
         final String kafka = args[0];
         final String propFileName = args.length > 1 ? args[1] : null;
         final String command = args.length > 2 ? args[2] : null;

@@ -42,7 +42,7 @@ import java.util.concurrent.TimeUnit;
 
 public class StreamsStandByReplicaTest {
 
-    public static void main(String[] args) throws IOException {
+    public static void main(final String[] args) throws IOException {
 
         System.out.println("StreamsTest instance started");
 
