@@ -91,6 +91,12 @@ public interface Consumer<K, V> extends Closeable {
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets);
 
     /**
+     * @see KafkaConsumer#commitSync(Map, long, TimeUnit)
+     */
+    public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, 
+                           final long timeout, 
+                           final TimeUnit timeunit);
+    /**
      * @see KafkaConsumer#commitAsync()
      */
     public void commitAsync();
@@ -134,6 +140,11 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#committed(TopicPartition)
      */
     public OffsetAndMetadata committed(TopicPartition partition);
+
+    /**
+     * @see KafkaConsumer#committed(TopicPartition, long, TimeUnit)
+     */
+    public OffsetAndMetadata committed(TopicPartition partition, final long timeout, final TimeUnit timeunit);
 
     /**
      * @see KafkaConsumer#metrics()

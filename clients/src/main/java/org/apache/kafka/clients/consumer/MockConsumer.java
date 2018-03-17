@@ -245,6 +245,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, long timeout, TimeUnit timeunit) {
+        commitSync(offsets);
+    }
+
+    @Override
     public synchronized void seek(TopicPartition partition, long offset) {
         ensureNotClosed();
         subscriptions.seek(partition, offset);
@@ -257,6 +262,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             return committed.get(partition);
         }
         return new OffsetAndMetadata(0);
+    }
+
+    @Override
+    public OffsetAndMetadata committed(TopicPartition partition, long timeout, TimeUnit timeunit) {
+        return committed(partition);
     }
 
     @Override
