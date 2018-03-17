@@ -24,7 +24,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.nio.ByteBuffer;
 import java.util.List;
 
-class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
+public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
     private static final int SUFFIX_SIZE = WindowStoreUtils.TIMESTAMP_SIZE + WindowStoreUtils.SEQNUM_SIZE;
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
