@@ -125,7 +125,7 @@ public class TimeWindowTest {
     }
 
     @Test
-    public void shouldComputeWindowsForLinkedHashMap() {
+    public void shouldReturnMatchedWindowsOrderedByTimestamp() {
         TimeWindows windows = TimeWindows.of(12L).advanceBy(5L);
         Map<Long, TimeWindow> matched = windows.windowsFor(21L);
 
