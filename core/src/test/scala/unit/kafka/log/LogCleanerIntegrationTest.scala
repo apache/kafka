@@ -69,7 +69,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
     checkLogAfterAppendingDups(log, startSize, appends)
 
     val appendInfo = log.appendAsLeader(largeMessageSet, leaderEpoch = 0)
-    val largeMessageOffset = appendInfo.firstOffset
+    val largeMessageOffset = appendInfo.firstOffset.get
 
     val dups = writeDups(startKey = largeMessageKey + 1, numKeys = 100, numDups = 3, log = log, codec = codec)
     val appends2 = appends ++ Seq((largeMessageKey, largeMessageValue, largeMessageOffset)) ++ dups
@@ -176,7 +176,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
     val appends2: Seq[(Int, String, Long)] = {
       val dupsV0 = writeDups(numKeys = 40, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
       val appendInfo = log.appendAsLeader(largeMessageSet, leaderEpoch = 0)
-      val largeMessageOffset = appendInfo.firstOffset
+      val largeMessageOffset = appendInfo.firstOffset.get
 
       // also add some messages with version 1 and version 2 to check that we handle mixed format versions correctly
       props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_11_0_IV0.version)
@@ -314,7 +314,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
       val appendInfo = log.appendAsLeader(TestUtils.singletonRecords(value = value.toString.getBytes, codec = codec,
               key = key.toString.getBytes, magicValue = magicValue), leaderEpoch = 0)
       counter += 1
-      (key, value, appendInfo.firstOffset)
+      (key, value, appendInfo.firstOffset.get)
     }
   }
 
@@ -331,7 +331,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
     }
 
     val appendInfo = log.appendAsLeader(MemoryRecords.withRecords(magicValue, codec, records: _*), leaderEpoch = 0)
-    val offsets = appendInfo.firstOffset to appendInfo.lastOffset
+    val offsets = appendInfo.firstOffset.get to appendInfo.lastOffset
 
     kvs.zip(offsets).map { case (kv, offset) => (kv._1, kv._2, offset) }
   }
