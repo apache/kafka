@@ -28,7 +28,7 @@ import kafka.utils.{CommandLineUtils, Exit, ZkUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram._
-import org.apache.kafka.common.utils.{Sanitizer, Utils}
+import org.apache.kafka.common.utils.Sanitizer
 
 import scala.collection._
 import scala.collection.JavaConverters._
@@ -76,12 +76,12 @@ object ConfigCommand extends Config {
       }
     } catch {
       case e @ (_: IllegalArgumentException | _: InvalidConfigException | _: OptionException) =>
-        logger.debug(s"Failed config command with args $args", e)
+        logger.debug(s"Failed config command with args '${args.mkString(" ")}'", e)
         System.err.println(e.getMessage)
         Exit.exit(1)
 
       case t: Throwable =>
-        System.err.println(s"Error while executing config command with args $args")
+        System.err.println(s"Error while executing config command with args '${args.mkString(" ")}'")
         t.printStackTrace(System.err)
         Exit.exit(1)
     }

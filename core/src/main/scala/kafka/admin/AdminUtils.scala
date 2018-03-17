@@ -610,6 +610,8 @@ object AdminUtils extends Logging with AdminUtilities {
   }
 
   private def changeEntityConfig(zkUtils: ZkUtils, rootEntityType: String, fullSanitizedEntityName: String, configs: Properties) {
+    zkUtils.makeSurePersistentPathExists(ZkUtils.ConfigChangesPath)
+
     val sanitizedEntityPath = rootEntityType + '/' + fullSanitizedEntityName
     val entityConfigPath = getEntityConfigPath(rootEntityType, fullSanitizedEntityName)
     // write the new config--may not exist if there were previously no overrides
