@@ -14,37 +14,42 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.processor.Processor;
+package org.apache.kafka.trogdor.workload;
+
+import java.util.Iterator;
 
 /**
- * The context associated with the current record being processed by
- * an {@link Processor}
+ * An iterator which wraps a PayloadGenerator.
  */
-public interface RecordContext {
-    /**
-     * @return The offset of the original record received from Kafka
-     */
-    long offset();
+public final class PayloadIterator implements Iterator<byte[]> {
+    private final PayloadGenerator generator;
+    private long position = 0;
 
-    /**
-     * @return The timestamp extracted from the record received from Kafka
-     */
-    long timestamp();
+    public PayloadIterator(PayloadGenerator generator) {
+        this.generator = generator;
+    }
 
-    /**
-     * Sets a new timestamp for the output record.
-     */
-    void setTimestamp(final long timestamp);
+    @Override
+    public boolean hasNext() {
+        return true;
+    }
 
-    /**
-     * @return The topic the record was received on
-     */
-    String topic();
+    @Override
+    public synchronized byte[] next() {
+        return generator.generate(position++);
+    }
 
-    /**
-     * @return The partition the record was received on
-     */
-    int partition();
+    @Override
+    public void remove() {
+        throw new UnsupportedOperationException();
+    }
+
+    public synchronized void seek(long position) {
+        this.position = position;
+    }
+
+    public synchronized long position() {
+        return this.position;
+    }
 }

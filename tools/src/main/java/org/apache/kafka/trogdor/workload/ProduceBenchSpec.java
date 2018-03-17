@@ -37,7 +37,8 @@ public class ProduceBenchSpec extends TaskSpec {
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
     private final int maxMessages;
-    private final int messageSize;
+    private final PayloadGenerator keyGenerator;
+    private final PayloadGenerator valueGenerator;
     private final Map<String, String> producerConf;
     private final int totalTopics;
     private final int activeTopics;
@@ -49,7 +50,8 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("bootstrapServers") String bootstrapServers,
                          @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
                          @JsonProperty("maxMessages") int maxMessages,
-                         @JsonProperty("messageSize") int messageSize,
+                         @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
+                         @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
                          @JsonProperty("producerConf") Map<String, String> producerConf,
                          @JsonProperty("totalTopics") int totalTopics,
                          @JsonProperty("activeTopics") int activeTopics) {
@@ -58,7 +60,10 @@ public class ProduceBenchSpec extends TaskSpec {
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
         this.targetMessagesPerSec = targetMessagesPerSec;
         this.maxMessages = maxMessages;
-        this.messageSize = (messageSize == 0) ? PayloadGenerator.DEFAULT_MESSAGE_SIZE : messageSize;
+        this.keyGenerator = keyGenerator == null ?
+            new SequentialPayloadGenerator(4, 0) : keyGenerator;
+        this.valueGenerator = valueGenerator == null ?
+            new ConstantPayloadGenerator(512, new byte[0]) : valueGenerator;
         this.producerConf = (producerConf == null) ? new TreeMap<String, String>() : producerConf;
         this.totalTopics = totalTopics;
         this.activeTopics = activeTopics;
@@ -85,8 +90,13 @@ public class ProduceBenchSpec extends TaskSpec {
     }
 
     @JsonProperty
-    public int messageSize() {
-        return messageSize;
+    public PayloadGenerator keyGenerator() {
+        return keyGenerator;
+    }
+
+    @JsonProperty
+    public PayloadGenerator valueGenerator() {
+        return valueGenerator;
     }
 
     @JsonProperty

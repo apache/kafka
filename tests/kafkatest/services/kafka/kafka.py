@@ -312,6 +312,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 'replication-factor': topic_cfg.get('replication-factor', 1)
             }
 
+        if topic_cfg.get('if-not-exists', False):
+            cmd += ' --if-not-exists'
+
         if "configs" in topic_cfg.keys() and topic_cfg["configs"] is not None:
             for config_name, config_value in topic_cfg["configs"].items():
                 cmd += " --config %s=%s" % (config_name, str(config_value))
