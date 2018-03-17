@@ -168,26 +168,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return prefix + String.format(KTableImpl.STATE_STORE_NAME + "%010d", index.getAndIncrement());
     }
 
-    public synchronized void copartitionSources(final Collection<String> sourceNodes) {
-        internalTopologyBuilder.copartitionSources(sourceNodes);
-    }
-
-    public synchronized void addStateStore(final StoreBuilder builder) {
-        internalTopologyBuilder.addStateStore(builder);
-    }
-
-    public synchronized void addStateStore(final StoreBuilder builder, final String aggFunctionName) {
-        internalTopologyBuilder.addStateStore(builder, aggFunctionName);
-    }
-    public synchronized void addProcessor(final String name, 
-                                          final ProcessorSupplier cogroup, 
-                                          final String ... processorNames) {
-        internalTopologyBuilder.addProcessor(name, cogroup, processorNames);
-    }
-    public synchronized void addStateStore(final StateStoreSupplier supplier, final String ... processorNames) {
-        internalTopologyBuilder.addStateStore(supplier, processorNames);
-    }
-
     public synchronized void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,
                                             final String sourceName,
                                             final String topic,
@@ -220,5 +200,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                        consumed,
                        processorName,
                        stateUpdateSupplier);
+    }
+    
+    public synchronized void addStateStore(StoreBuilder storeBuilder) {
+        internalTopologyBuilder.addStateStore(storeBuilder);
     }
 }

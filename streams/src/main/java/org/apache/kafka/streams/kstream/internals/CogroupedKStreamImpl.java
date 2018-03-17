@@ -54,16 +54,16 @@ class CogroupedKStreamImpl<K, V> implements CogroupedKStream<K, V> {
         WINDOW_AGGREGATE
     }
 
-    private final InternalStreamsBuilder topology;
+    private final InternalStreamsBuilder builder;
     private final Serde<K> keySerde;
     private final Map<KGroupedStream, Aggregator> pairs = new HashMap<>();
     private final Map<KGroupedStreamImpl, String> repartitionNames = new HashMap<>();
 
-    <T> CogroupedKStreamImpl(final InternalStreamsBuilder topology,
+    <T> CogroupedKStreamImpl(final InternalStreamsBuilder builder,
                          final KGroupedStream<K, T> groupedStream,
                          final Serde<K> keySerde,
                          final Aggregator<? super K, ? super T, V> aggregator) {
-        this.topology = topology;
+        this.builder = builder;
         this.keySerde = keySerde;
         cogroup(groupedStream, aggregator);
     }
@@ -173,15 +173,15 @@ class CogroupedKStreamImpl<K, V> implements CogroupedKStream<K, V> {
             
             final String processorName = newName(COGROUP_AGGREGATE_NAME);
             final String[] sourceNames = {sourceName};
-            topology.addProcessor(processorName, processor, sourceNames);
+            builder.internalTopologyBuilder.addProcessor(processorName, processor, sourceNames);
         }
         final String name = newName(COGROUP_NAME);
         final KStreamCogroup cogroup = new KStreamCogroup(processors);
         final String[] processorNamesArray = processorNames.toArray(new String[processorNames.size()]);
-        topology.addProcessor(name, cogroup, processorNamesArray);
-        topology.addStateStore(storeSupplier, processorNamesArray);
-        topology.copartitionSources(sourceNodes);
-        return new KTableImpl<K, String, V>(topology, name, cogroup, sourceNodes, storeSupplier.name(), true);
+        builder.internalTopologyBuilder.addProcessor(name, cogroup, processorNamesArray);
+        builder.internalTopologyBuilder.addStateStore(storeSupplier, processorNamesArray);
+        builder.internalTopologyBuilder.copartitionSources(sourceNodes);
+        return new KTableImpl<K, String, V>(builder, name, cogroup, sourceNodes, storeSupplier.name(), true);
     }
 
     @SuppressWarnings("rawtypes")
