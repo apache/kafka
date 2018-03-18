@@ -589,6 +589,69 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
+    public void shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersions() throws Exception {
+        final Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
+        final Set<TaskId> emptyTasks = Collections.emptySet();
+        subscriptions.put(
+            "consumer1",
+            new PartitionAssignor.Subscription(
+                Collections.singletonList("topic1"),
+                new SubscriptionInfo(1, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
+            )
+        );
+        subscriptions.put(
+            "consumer2",
+            new PartitionAssignor.Subscription(
+                Collections.singletonList("topic1"),
+                new SubscriptionInfo(2, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
+            )
+        );
+
+        final StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
+        StreamsConfig config = new StreamsConfig(configProps());
+
+        final TopologyBuilder builder = new TopologyBuilder();
+        final StreamThread streamThread = new StreamThread(
+            builder,
+            config,
+            new MockClientSupplier(),
+            "applicationId",
+            "clientId",
+            UUID.randomUUID(),
+            new Metrics(),
+            new SystemTime(),
+            new StreamsMetadataState(builder));
+
+        partitionAssignor.configure(config.getConsumerConfigs(streamThread, "test", "clientId"));
+        final Map<String, PartitionAssignor.Assignment> assignment = partitionAssignor.assign(metadata, subscriptions);
+
+        assertEquals(2, assignment.size());
+        assertEquals(1, AssignmentInfo.decode(assignment.get("consumer1").userData()).version);
+        assertEquals(1, AssignmentInfo.decode(assignment.get("consumer2").userData()).version);
+    }
+
+    @Test
+    public void shouldDownGradeSubscription() {
+        final Properties properties = configProps();
+        properties.put(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_0100);
+        StreamsConfig config = new StreamsConfig(properties);
+
+        TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource("source1", "topic1");
+
+        String clientId = "client-id";
+        StreamThread thread = new StreamThread(builder, config, new MockClientSupplier(), "test", clientId,
+            UUID.randomUUID(), new Metrics(), new SystemTime(), new StreamsMetadataState(builder));
+
+        StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
+        partitionAssignor.configure(config.getConsumerConfigs(thread, "test", clientId));
+
+        PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("topic1"));
+
+        assertEquals(SubscriptionInfo.decode(subscription.userData()).version, 1);
+    }
+
+    @Test
     public void shouldMapUserEndPointToTopicPartitions() throws Exception {
         final Properties properties = configProps();
         final String myEndPoint = "localhost:8080";

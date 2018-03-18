@@ -360,7 +360,7 @@ for ( sv in ['2_10', '2_11', '2_12'] ) {
 }
 
 def connectPkgs = ['connect:api', 'connect:runtime', 'connect:json', 'connect:file']
-def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams', 'streams:examples'] + connectPkgs
+def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams', 'streams:examples', 'streams:upgrade-system-tests-0100'] + connectPkgs
 
 tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
 tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10', 'jar_core_2_11'] + pkgs.collect { it + ":jar" }) { }
@@ -538,6 +538,8 @@ project(':core') {
     from(project(':streams').configurations.runtime) { into("libs/") }
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtime) { into("libs/") }
+    from(project(':streams:upgrade-system-tests-0100').jar) { into("libs/") }
+    from(project(':streams:upgrade-system-tests-0100').configurations.runtime) { into("libs/") }
     duplicatesStrategy 'exclude'
   }
 
@@ -775,6 +777,19 @@ project(':streams:examples') {
     dependsOn 'copyDependantLibs'
   }
 }
+
+project(':streams:upgrade-system-tests-0100') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-0100"
+
+  dependencies {
+    testCompile libs.kafkaStreams0100
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 
 project(':log4j-appender') {
   archivesBaseName = "kafka-log4j-appender"

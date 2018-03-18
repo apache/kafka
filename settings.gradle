@@ -13,5 +13,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-include 'core', 'examples', 'clients', 'tools', 'streams', 'streams:examples', 'log4j-appender',
-        'connect:api', 'connect:runtime', 'connect:json', 'connect:file'
+include 'core', 'examples', 'clients', 'tools', 'streams', 'streams:examples', 'streams:upgrade-system-tests-0100',
+        'log4j-appender', 'connect:api', 'connect:runtime', 'connect:json', 'connect:file'

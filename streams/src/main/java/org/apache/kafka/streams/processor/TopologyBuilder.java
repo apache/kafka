@@ -676,7 +676,7 @@ public class TopologyBuilder {
         }
     }
 
-    private Set<String> findSourceTopicsForProcessorParents(String [] parents) {
+    private Set<String> findSourceTopicsForProcessorParents(String[] parents) {
         final Set<String> sourceTopics = new HashSet<>();
         for (String parent : parents) {
             NodeFactory nodeFactory = nodeFactories.get(parent);

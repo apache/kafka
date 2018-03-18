@@ -124,7 +124,27 @@ public class SmokeTestDriver extends SmokeTestUtil {
         System.out.println("shutdown");
     }
 
+    private static volatile boolean running = true;
+
     public static Map<String, Set<Integer>> generate(String kafka, final int numKeys, final int maxRecordsPerKey) throws Exception {
+        return generate(kafka, numKeys, maxRecordsPerKey, true);
+    }
+
+    public static Map<String, Set<Integer>> generate(final String kafka,
+                                                     final int numKeys,
+                                                     final int maxRecordsPerKey,
+                                                     final boolean autoTerminate) throws Exception {
+        if (autoTerminate) {
+            running = false;
+        } else {
+            Runtime.getRuntime().addShutdownHook(new Thread() {
+                @Override
+                public void run() {
+                    running = false;
+                }
+            });
+        }
+
         Properties props = new Properties();
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "SmokeTest");
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
@@ -143,14 +163,22 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
         Random rand = new Random();
 
-        int remaining = data.length;
+        int remaining = 0;
+        if (autoTerminate) {
+            remaining = data.length;
+        }
 
-        while (remaining > 0) {
-            int index = rand.nextInt(remaining);
+        while (running || remaining > 0) {
+            int index;
+            if (autoTerminate) {
+                index = rand.nextInt(remaining);
+            } else {
+                index = rand.nextInt(numKeys);
+            }
             String key = data[index].key;
             int value = data[index].next();
 
-            if (value < 0) {
+            if (autoTerminate && value < 0) {
                 remaining--;
                 data[index] = data[remaining];
                 value = END;
@@ -165,8 +193,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 numRecordsProduced++;
                 allData.get(key).add(value);
 
-                if (numRecordsProduced % 100 == 0)
+                if (numRecordsProduced % 100 == 0) {
                     System.out.println(numRecordsProduced + " records produced");
+                }
 
                 Thread.sleep(10);
             }
