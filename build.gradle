@@ -770,6 +770,19 @@ project(':streams:examples') {
   }
 }
 
+project(':streams:upgrade-system-tests-0100') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-0100"
+
+  dependencies {
+    testCompile libs.kafkaStreams0100
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+
 project(':log4j-appender') {
   archivesBaseName = "kafka-log4j-appender"
 

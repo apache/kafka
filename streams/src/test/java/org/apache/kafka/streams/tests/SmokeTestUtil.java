@@ -33,8 +33,6 @@ import java.io.File;
 
 public class SmokeTestUtil {
 
-    public final static int WINDOW_SIZE = 100;
-    public final static long START_TIME = 60000L * 60 * 24 * 365 * 30;
     public final static int END = Integer.MAX_VALUE;
 
     public static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic) {
@@ -46,18 +44,15 @@ public class SmokeTestUtil {
             public Processor<Object, Object> get() {
                 return new AbstractProcessor<Object, Object>() {
                     private int numRecordsProcessed = 0;
-                    private ProcessorContext context;
 
                     @Override
                     public void init(ProcessorContext context) {
                         System.out.println("initializing processor: topic=" + topic + " taskId=" + context.taskId());
                         numRecordsProcessed = 0;
-                        this.context = context;
                     }
 
                     @Override
                     public void process(Object key, Object value) {
-                        if (printOffset) System.out.println(">>> " + context.offset());
                         numRecordsProcessed++;
                         if (numRecordsProcessed % 100 == 0) {
                             System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
@@ -65,12 +60,10 @@ public class SmokeTestUtil {
                     }
 
                     @Override
-                    public void punctuate(long timestamp) {
-                    }
+                    public void punctuate(long timestamp) {}
 
                     @Override
-                    public void close() {
-                    }
+                    public void close() {}
                 };
             }
         };

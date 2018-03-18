@@ -807,21 +807,40 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
         See <a href="#streams_api_changes_0102">below</a> a complete list of 0.10.2 API and semantical changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
         </p>
 
+        <p> Upgrading from 0.10.0.x to 0.10.2.2 requires two rolling bounces with config <code>upgrade.from="0.10.0"</code> set for first upgrade phase
+            (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>).
+        </p>
+        <ul>
+            <li> note: rolling bounce upgrade requires to upgrade to 0.10.2.2 (rolling bounce upgrade is not supported for upgrading from 0.10.0.x to 0.10.2.0 or 0.10.2.1) </li>
+            <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from="0.10.0"</code> is set for new version 0.10.2.2 </li>
+            <li> bounce each instance of your application once </li>
+            <li> prepare your newly deployed 0.10.2.2 application instances for a second round of rolling bounces; make sure to remove config <code>upgrade.mode</code> </li>
+            <li> bounce each instance of your application once more to complete the upgrade </li>
+        </ul>
+
         <p>
         If you want to upgrade from 0.10.0.x to 0.10.1, see the <a href="/{{version}}/documentation/#upgrade_1010_streams">Upgrade Section for 0.10.1</a>.
         It highlights incompatible changes you need to consider to upgrade your code and application.
         See <a href="#streams_api_changes_0101">below</a> a complete list of 0.10.1 API changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
         </p>
 
-         <h3><a id="streams_api_changes_01021" href="#streams_api_changes_0102">Notable changes in 0.10.2.1</a></h3>
-         <p>
+        <h3><a id="streams_api_changes_01022" href="#streams_api_changes_0102">Notable changes in 0.10.2.2</a></h3>
+        <p>
             Parameter updates in <code>StreamsConfig</code>:
         </p>
-          <ul>
-            <li> of particular importance to improve the resiliency of a Kafka Streams application are two changes to default parameters of producer <code>retries</code> and consumer <code>max.poll.interval.ms</code> </li>
-          </ul>
-        <h3><a id="streams_api_changes_0102" href="#streams_api_changes_0102">Streams API changes in 0.10.2.0</a></h3>
+        <ul>
+            <li> New configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from version 0.10.0.x </li>
+        </ul>
 
+        <h3><a id="streams_api_changes_01021" href="#streams_api_changes_0102">Notable changes in 0.10.2.1</a></h3>
+        <p>
+            Parameter updates in <code>StreamsConfig</code>:
+        </p>
+        <ul>
+            <li> of particular importance to improve the resiliency of a Kafka Streams application are two changes to default parameters of producer <code>retries</code> and consumer <code>max.poll.interval.ms</code> </li>
+        </ul>
+
+        <h3><a id="streams_api_changes_0102" href="#streams_api_changes_0102">Streams API changes in 0.10.2.0</a></h3>
         <p>
             New methods in <code>KafkaStreams</code>:
         </p>
