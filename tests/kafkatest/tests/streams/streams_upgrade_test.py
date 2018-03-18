@@ -23,8 +23,16 @@ from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATES
 import random
 import time
 
+# broker 0.10.0 is not compatible with newer Kafka Streams versions
 broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), str(DEV_BRANCH)]
-simple_upgrade_versions_metadata_version_2 = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(DEV_VERSION)]
+
+metadata_1_versions = [str(LATEST_0_10_0)]
+metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
+# we can add the following versions to `backward_compatible_metadata_2_versions` after the corresponding
+# bug-fix release 0.10.1.2, 0.10.2.2, 0.11.0.3, 1.0.2, and 1.1.1 are available:
+# str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)
+backward_compatible_metadata_2_versions = []
+metadata_3_versions = [str(DEV_VERSION)]
 
 class StreamsUpgradeTest(Test):
     """
@@ -39,6 +47,7 @@ class StreamsUpgradeTest(Test):
             'echo' : { 'partitions': 5 },
             'data' : { 'partitions': 5 },
         }
+        self.leader = None
 
     def perform_broker_upgrade(self, to_version):
         self.logger.info("First pass bounce - rolling broker upgrade")
@@ -114,7 +123,7 @@ class StreamsUpgradeTest(Test):
         node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.driver.STDOUT_FILE, allow_fail=False)
         self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
 
-    @matrix(from_version=simple_upgrade_versions_metadata_version_2, to_version=simple_upgrade_versions_metadata_version_2)
+    @matrix(from_version=metadata_2_versions, to_version=metadata_2_versions)
     def test_simple_upgrade_downgrade(self, from_version, to_version):
         """
         Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
@@ -165,15 +174,12 @@ class StreamsUpgradeTest(Test):
 
         self.driver.stop()
 
-    #@parametrize(new_version=str(LATEST_0_10_1)) we cannot run this test until Kafka 0.10.1.2 is released
-    #@parametrize(new_version=str(LATEST_0_10_2)) we cannot run this test until Kafka 0.10.2.2 is released
-    #@parametrize(new_version=str(LATEST_0_11_0)) we cannot run this test until Kafka 0.11.0.3 is released
-    #@parametrize(new_version=str(LATEST_1_0)) we cannot run this test until Kafka 1.0.2 is released
-    #@parametrize(new_version=str(LATEST_1_1)) we cannot run this test until Kafka 1.1.1 is released
-    @parametrize(new_version=str(DEV_VERSION))
-    def test_metadata_upgrade(self, new_version):
+    @matrix(from_version=metadata_1_versions, to_version=backward_compatible_metadata_2_versions)
+    @matrix(from_version=metadata_1_versions, to_version=metadata_3_versions)
+    @matrix(from_version=metadata_2_versions, to_version=metadata_3_versions)
+    def test_metadata_upgrade(self, from_version, to_version):
         """
-        Starts 3 KafkaStreams instances with version 0.10.0, and upgrades one-by-one to <new_version>
+        Starts 3 KafkaStreams instances with version <from_version> and upgrades one-by-one to <to_version>
         """
 
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
@@ -189,7 +195,7 @@ class StreamsUpgradeTest(Test):
         self.processor3 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
 
         self.driver.start()
-        self.start_all_nodes_with(str(LATEST_0_10_0))
+        self.start_all_nodes_with(from_version)
 
         self.processors = [self.processor1, self.processor2, self.processor3]
 
@@ -200,14 +206,100 @@ class StreamsUpgradeTest(Test):
         random.shuffle(self.processors)
         for p in self.processors:
             p.CLEAN_NODE_ENABLED = False
-            self.do_rolling_bounce(p, "0.10.0", new_version, counter)
+            self.do_rolling_bounce(p, from_version[:-2], to_version, counter)
             counter = counter + 1
 
         # second rolling bounce
         random.shuffle(self.processors)
         for p in self.processors:
-            self.do_rolling_bounce(p, None, new_version, counter)
+            self.do_rolling_bounce(p, None, to_version, counter)
             counter = counter + 1
+
+        # shutdown
+        self.driver.stop()
+        self.driver.wait()
+
+        random.shuffle(self.processors)
+        for p in self.processors:
+            node = p.node
+            with node.account.monitor_log(p.STDOUT_FILE) as monitor:
+                p.stop()
+                monitor.wait_until("UPGRADE-TEST-CLIENT-CLOSED",
+                                   timeout_sec=60,
+                                   err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
+
+        self.driver.stop()
+
+    def test_version_probing_upgrade(self):
+        """
+        Starts 3 KafkaStreams instances, and upgrades one-by-one to "future version"
+        """
+
+        self.zk = ZookeeperService(self.test_context, num_nodes=1)
+        self.zk.start()
+
+        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, topics=self.topics)
+        self.kafka.start()
+
+        self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
+        self.driver.disable_auto_terminate()
+        self.processor1 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
+        self.processor2 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
+        self.processor3 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
+
+        self.driver.start()
+        self.start_all_nodes_with("") # run with TRUNK
+
+        self.processors = [self.processor1, self.processor2, self.processor3]
+
+        for p in self.processors:
+            p.CLEAN_NODE_ENABLED = False
+            it = p.node.account.ssh_capture("grep \"Finished assignment for group\" %s" % p.LOG_FILE, allow_fail=True)
+            if it.has_next():
+                if self.leader is not None:
+                    raise Exception("Could not uniquely identify leader")
+                self.leader = p
+
+        if self.leader is None:
+            raise Exception("Could not identify leader")
+
+        counter = 1
+        random.seed()
+
+        # rolling bounces
+        random.shuffle(self.processors)
+        first_bounced_processor = None
+        expected_new_leader_processor = None
+        with self.leader.node.account.monitor_log(self.leader.LOG_FILE) as leader_monitor:
+            for p in self.processors:
+                if p == self.leader:
+                    continue
+
+                self.do_rolling_bounce(p, None, "future_version", counter)
+                leader_monitor.wait_until("Received a future (version probing) subscription (version: 4). Sending empty assignment back (with supported version 3).",
+                                          timeout_sec=60,
+                                          err_msg="Could not detect 'version probing' attempt at leader " + str(self.leader.node.account))
+                p.node.account.ssh_capture("grep \"partition.assignment.strategy = [org.apache.kafka.streams.tests.StreamsUpgradeTest$FutureStreamsPartitionAssignor]\" %s" % p.LOG_FILE, allow_fail=False)
+                p.node.account.ssh_capture("grep \"Sent a version 4 subscription and got version 3 assignment back (successful version probing). Downgrading subscription metadata to received version and trigger new rebalance\" %s" % p.LOG_FILE, allow_fail=False)
+
+                if first_bounced_processor is None:
+                    first_bounced_processor = p
+                else:
+                    expected_new_leader_processor = p
+
+                counter = counter + 1
+
+        it = expected_new_leader_processor.node.account.ssh_capture("grep \"Received a future (version probing) subscription (version: 4). Sending empty assignment back (with supported version 3).\" %s" % expected_new_leader_processor.LOG_FILE, allow_fail=True)
+        if it.has_next():
+            print it.next()
+            raise Exception("Future new leader should receive version probing only after current/old leader is bounced.")
+
+        self.do_rolling_bounce(self.leader, None, "future_version", counter)
+        prevLeader = self.leader
+
+        expected_new_leader_processor.node.account.ssh_capture("grep \"Received a future (version probing) subscription (version: 4). Sending empty assignment back (with supported version 3).\" %s" % expected_new_leader_processor.LOG_FILE, allow_fail=False)
+        prevLeader.node.account.ssh_capture("grep \"partition.assignment.strategy = [org.apache.kafka.streams.tests.StreamsUpgradeTest$FutureStreamsPartitionAssignor]\" %s" % prevLeader.LOG_FILE, allow_fail=False)
+        prevLeader.node.account.ssh_capture("grep \"Sent a version 4 subscription and got version 3 assignment back (successful version probing). Downgrading subscription metadata to received version and trigger new rebalance\" %s" % prevLeader.LOG_FILE, allow_fail=False)
 
         # shutdown
         self.driver.stop()
@@ -321,8 +413,12 @@ class StreamsUpgradeTest(Test):
 
         if new_version == str(DEV_VERSION):
             processor.set_version("")  # set to TRUNK
+        elif new_version == "future_version":
+            processor.set_upgrade_to("future_version")
+            new_version = str(DEV_VERSION)
         else:
             processor.set_version(new_version)
+
         processor.set_upgrade_from(upgrade_from)
 
         grep_metadata_error = "grep \"org.apache.kafka.streams.errors.TaskAssignmentException: unable to decode subscription data: version=2\" "

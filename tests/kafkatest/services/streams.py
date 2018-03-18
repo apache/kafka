@@ -413,6 +413,7 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
                                                                  "org.apache.kafka.streams.tests.StreamsUpgradeTest",
                                                                  "")
         self.UPGRADE_FROM = None
+        self.UPGRADE_TO = None
 
     def set_version(self, kafka_streams_version):
         self.KAFKA_STREAMS_VERSION = kafka_streams_version
@@ -420,10 +421,15 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
     def set_upgrade_from(self, upgrade_from):
         self.UPGRADE_FROM = upgrade_from
 
+    def set_upgrade_to(self, upgrade_to):
+        self.UPGRADE_TO = upgrade_to
+
     def prop_file(self):
         properties = {STATE_DIR: self.PERSISTENT_ROOT}
         if self.UPGRADE_FROM is not None:
             properties['upgrade.from'] = self.UPGRADE_FROM
+        if self.UPGRADE_TO == "future_version":
+            properties['test.future.metadata'] = "any_value"
 
         cfg = KafkaConfig(**properties)
         return cfg.render()

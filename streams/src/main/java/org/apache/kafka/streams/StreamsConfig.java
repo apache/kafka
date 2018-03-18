@@ -173,6 +173,31 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_0100 = "0.10.0";
 
     /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.1.x}.
+     */
+    public static final String UPGRADE_FROM_0101 = "0.10.1";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.2.x}.
+     */
+    public static final String UPGRADE_FROM_0102 = "0.10.2";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.11.0.x}.
+     */
+    public static final String UPGRADE_FROM_0110 = "0.11.0";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 1.0.x}.
+     */
+    public static final String UPGRADE_FROM_10 = "1.0";
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 1.1.x}.
+     */
+    public static final String UPGRADE_FROM_11 = "1.1";
+
+    /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
      */
     public static final String AT_LEAST_ONCE = "at_least_once";
@@ -347,8 +372,9 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code upgrade.from} */
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
-    public static final String UPGRADE_FROM_DOC = "Allows upgrading from version 0.10.0 to version 0.10.1 (or newer) in a backward compatible way. " +
-        "Default is null. Accepted values are \"" + UPGRADE_FROM_0100 + "\" (for upgrading from 0.10.0.x).";
+    public static final String UPGRADE_FROM_DOC = "Allows upgrading from versions 0.10.0/0.10.1/0.10.2/0.11.0/1.0/1.1 to version 1.2 (or newer) in a backward compatible way. " +
+        "When upgrading from 1.2 to a newer version it is not required to specify this config." +
+        "Default is null. Accepted values are \"" + UPGRADE_FROM_0100 + "\", \"" + UPGRADE_FROM_0101 + "\", \"" + UPGRADE_FROM_0102 + "\", \"" + UPGRADE_FROM_0110 + "\", \"" + UPGRADE_FROM_10 + "\", \"" + UPGRADE_FROM_11 + "\" (for upgrading from the corresponding old version).";
 
     /**
      * {@code value.serde}
@@ -364,7 +390,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /**
      * {@code zookeeper.connect}
-     * @deprecated Kakfa Streams does not use Zookeeper anymore and this parameter will be ignored.
+     * @deprecated Kafka Streams does not use Zookeeper anymore and this parameter will be ignored.
      */
     @Deprecated
     public static final String ZOOKEEPER_CONNECT_CONFIG = "zookeeper.connect";
@@ -575,7 +601,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(UPGRADE_FROM_CONFIG,
                     ConfigDef.Type.STRING,
                     null,
-                    in(null, UPGRADE_FROM_0100),
+                    in(null, UPGRADE_FROM_0100, UPGRADE_FROM_0101, UPGRADE_FROM_0102, UPGRADE_FROM_0110, UPGRADE_FROM_10, UPGRADE_FROM_11),
                     Importance.LOW,
                     UPGRADE_FROM_DOC)
             .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,

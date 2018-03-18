@@ -46,9 +46,9 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
-import org.junit.Assert;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -64,6 +64,7 @@ import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 public class StreamsPartitionAssignorTest {
 
@@ -867,9 +868,12 @@ public class StreamsPartitionAssignorTest {
         final PartitionAssignor.Assignment consumerAssignment = assignments.get("consumer1");
         final AssignmentInfo assignmentInfo = AssignmentInfo.decode(consumerAssignment.userData());
         final Set<TopicPartition> topicPartitions = assignmentInfo.partitionsByHost().get(new HostInfo("localhost", 8080));
-        assertEquals(Utils.mkSet(new TopicPartition("topic1", 0),
+        assertEquals(
+            Utils.mkSet(
+                new TopicPartition("topic1", 0),
                 new TopicPartition("topic1", 1),
-                new TopicPartition("topic1", 2)), topicPartitions);
+                new TopicPartition("topic1", 2)),
+            topicPartitions);
     }
 
     @Test
@@ -881,7 +885,7 @@ public class StreamsPartitionAssignorTest {
 
         try {
             configurePartitionAssignor(Collections.singletonMap(StreamsConfig.APPLICATION_SERVER_CONFIG, (Object) "localhost"));
-            Assert.fail("expected to an exception due to invalid config");
+            fail("expected to an exception due to invalid config");
         } catch (ConfigException e) {
             // pass
         }
@@ -893,7 +897,7 @@ public class StreamsPartitionAssignorTest {
 
         try {
             configurePartitionAssignor(Collections.singletonMap(StreamsConfig.APPLICATION_SERVER_CONFIG, (Object) "localhost:j87yhk"));
-            Assert.fail("expected to an exception due to invalid config");
+            fail("expected to an exception due to invalid config");
         } catch (ConfigException e) {
             // pass
         }
@@ -1088,21 +1092,36 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
-    public void shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersions() {
+    public void shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersionsV1V2() {
+        shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersions(1, 2);
+    }
+
+    @Test
+    public void shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersionsV1V3() {
+        shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersions(1, 3);
+    }
+
+    @Test
+    public void shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersionsV2V3() {
+        shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersions(2, 3);
+    }
+
+    private void shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersions(final int smallestVersion,
+                                                                                     final int otherVersion) {
         final Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
         final Set<TaskId> emptyTasks = Collections.emptySet();
         subscriptions.put(
             "consumer1",
             new PartitionAssignor.Subscription(
                 Collections.singletonList("topic1"),
-                new SubscriptionInfo(1, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
+                new SubscriptionInfo(smallestVersion, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
             )
         );
         subscriptions.put(
             "consumer2",
             new PartitionAssignor.Subscription(
                 Collections.singletonList("topic1"),
-                new SubscriptionInfo(2, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
+                new SubscriptionInfo(otherVersion, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
             )
         );
 
@@ -1115,12 +1134,12 @@ public class StreamsPartitionAssignorTest {
         final Map<String, PartitionAssignor.Assignment> assignment = partitionAssignor.assign(metadata, subscriptions);
 
         assertThat(assignment.size(), equalTo(2));
-        assertThat(AssignmentInfo.decode(assignment.get("consumer1").userData()).version(), equalTo(1));
-        assertThat(AssignmentInfo.decode(assignment.get("consumer2").userData()).version(), equalTo(1));
+        assertThat(AssignmentInfo.decode(assignment.get("consumer1").userData()).version(), equalTo(smallestVersion));
+        assertThat(AssignmentInfo.decode(assignment.get("consumer2").userData()).version(), equalTo(smallestVersion));
     }
 
     @Test
-    public void shouldDownGradeSubscription() {
+    public void shouldDownGradeSubscriptionToVersion1() {
         final Set<TaskId> emptyTasks = Collections.emptySet();
 
         mockTaskManager(
@@ -1135,6 +1154,126 @@ public class StreamsPartitionAssignorTest {
         assertThat(SubscriptionInfo.decode(subscription.userData()).version(), equalTo(1));
     }
 
+    @Test
+    public void shouldDownGradeSubscriptionToVersion2For0101() {
+        shouldDownGradeSubscriptionToVersion2(StreamsConfig.UPGRADE_FROM_0101);
+    }
+
+    @Test
+    public void shouldDownGradeSubscriptionToVersion2For0102() {
+        shouldDownGradeSubscriptionToVersion2(StreamsConfig.UPGRADE_FROM_0102);
+    }
+
+    @Test
+    public void shouldDownGradeSubscriptionToVersion2For0110() {
+        shouldDownGradeSubscriptionToVersion2(StreamsConfig.UPGRADE_FROM_0110);
+    }
+
+    @Test
+    public void shouldDownGradeSubscriptionToVersion2For10() {
+        shouldDownGradeSubscriptionToVersion2(StreamsConfig.UPGRADE_FROM_10);
+    }
+
+    @Test
+    public void shouldDownGradeSubscriptionToVersion2For11() {
+        shouldDownGradeSubscriptionToVersion2(StreamsConfig.UPGRADE_FROM_11);
+    }
+
+    private void shouldDownGradeSubscriptionToVersion2(final Object upgradeFromValue) {
+        final Set<TaskId> emptyTasks = Collections.emptySet();
+
+        mockTaskManager(
+            emptyTasks,
+            emptyTasks,
+            UUID.randomUUID(),
+            builder);
+        configurePartitionAssignor(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFromValue));
+
+        PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("topic1"));
+
+        assertThat(SubscriptionInfo.decode(subscription.userData()).version(), equalTo(2));
+    }
+
+    @Test
+    public void shouldReturnEmptyAssignmentForAllInstancesIfReceivedSingleFutureVersionSubscription() {
+        final Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
+        final Set<TaskId> emptyTasks = Collections.emptySet();
+        subscriptions.put(
+            "consumer1",
+            new PartitionAssignor.Subscription(
+                Collections.singletonList("topic1"),
+                new SubscriptionInfo(UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
+            )
+        );
+        subscriptions.put(
+            "future-consumer",
+            new PartitionAssignor.Subscription(
+                Collections.singletonList("topic1"),
+                encodeFutureSubscription()
+            )
+        );
+
+        mockTaskManager(
+            emptyTasks,
+            emptyTasks,
+            UUID.randomUUID(),
+            builder);
+        partitionAssignor.configure(configProps());
+        final Map<String, PartitionAssignor.Assignment> assignment = partitionAssignor.assign(metadata, subscriptions);
+
+        assertThat(assignment.size(), equalTo(2));
+        assertThat(AssignmentInfo.decode(assignment.get("consumer1").userData()),  equalTo(new AssignmentInfo()));
+        assertThat(AssignmentInfo.decode(assignment.get("future-consumer").userData()), equalTo(new AssignmentInfo()));
+    }
+
+    @Test
+    public void shouldThrowIfV1SubscriptionAndFutureSubscriptionIsMixed() {
+        shouldThrowIfPreVersionProbingSubscriptionAndFutureSubscriptionIsMixed(1);
+    }
+
+    @Test
+    public void shouldThrowIfV2SubscriptionAndFutureSubscriptionIsMixed() {
+        shouldThrowIfPreVersionProbingSubscriptionAndFutureSubscriptionIsMixed(2);
+    }
+
+    private ByteBuffer encodeFutureSubscription() {
+        final ByteBuffer buf = ByteBuffer.allocate(4 /* version */);
+        buf.putInt(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1);
+        return buf;
+    }
+
+    private void shouldThrowIfPreVersionProbingSubscriptionAndFutureSubscriptionIsMixed(final int oldVersion) {
+        final Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
+        final Set<TaskId> emptyTasks = Collections.emptySet();
+        subscriptions.put(
+            "consumer1",
+            new PartitionAssignor.Subscription(
+                Collections.singletonList("topic1"),
+                new SubscriptionInfo(oldVersion, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
+            )
+        );
+        subscriptions.put(
+            "future-consumer",
+            new PartitionAssignor.Subscription(
+                Collections.singletonList("topic1"),
+                encodeFutureSubscription()
+            )
+        );
+
+        mockTaskManager(
+            emptyTasks,
+            emptyTasks,
+            UUID.randomUUID(),
+            builder);
+        partitionAssignor.configure(configProps());
+
+        try {
+            partitionAssignor.assign(metadata, subscriptions);
+            fail("Should have thrown IllegalStateException");
+        } catch (final IllegalStateException expected) {
+            // pass
+        }
+    }
     private PartitionAssignor.Assignment createAssignment(final Map<HostInfo, Set<TopicPartition>> firstHostState) {
         final AssignmentInfo info = new AssignmentInfo(Collections.<TaskId>emptyList(),
                                                        Collections.<TaskId, Set<TopicPartition>>emptyMap(),
