@@ -124,10 +124,10 @@ public class TimeWindowTest {
 
     @Test
     public void shouldReturnMatchedWindowsOrderedByTimestamp() {
-        TimeWindows windows = TimeWindows.of(12L).advanceBy(5L);
-        Map<Long, TimeWindow> matched = windows.windowsFor(21L);
+        final TimeWindows windows = TimeWindows.of(12L).advanceBy(5L);
+        final Map<Long, TimeWindow> matched = windows.windowsFor(21L);
 
-        Long[] expected = matched.keySet().toArray(new Long[matched.size()]);
+        final Long[] expected = matched.keySet().toArray(new Long[matched.size()]);
         assertEquals(expected[0].longValue(), 10L);
         assertEquals(expected[1].longValue(), 15L);
         assertEquals(expected[2].longValue(), 20L);
