@@ -14,6 +14,7 @@ package kafka.api
 
 import java.nio.ByteBuffer
 import java.util
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
 import java.util.{ArrayList, Collections, Properties}
@@ -919,12 +920,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     this.consumers.head.position(tp)
   }
 
-  @Test
+  @Test(expected = classOf[org.apache.kafka.common.errors.TimeoutException])
   def testOffsetFetchWithTopicAndGroupRead() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
     this.consumers.head.assign(List(tp).asJava)
-    this.consumers.head.position(tp)
+    this.consumers.head.position(tp, 2000L, TimeUnit.MILLISECONDS)
   }
 
   @Test(expected = classOf[TopicAuthorizationException])

@@ -464,6 +464,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         Set<TopicPartition> missingFetchPositions = subscriptions.missingFetchPositions();
         try {
             Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(missingFetchPositions, startMs, timeout, time);
+            if (offsets == null) {
+                throw new TimeoutException("Offsets cannot be retrieved within set duration");
+            }
             for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
                 TopicPartition tp = entry.getKey();
                 long offset = entry.getValue().offset();

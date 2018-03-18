@@ -1,4 +1,5 @@
 /**
+
   * Licensed to the Apache Software Foundation (ASF) under one or more
   * contributor license agreements.  See the NOTICE file distributed with
   * this work for additional information regarding copyright ownership.
@@ -168,7 +169,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     assertEquals(2, readCommittedConsumer.assignment.size)
     readCommittedConsumer.seekToEnd(readCommittedConsumer.assignment)
     readCommittedConsumer.assignment.asScala.foreach { tp =>
-      assertEquals(1L, readCommittedConsumer.position(tp))
+      assertEquals(1L, readCommittedConsumer.position(tp, 2, TimeUnit.SECONDS))
     }
 
     // undecided timestamps should not be searchable either

@@ -584,7 +584,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.assign(List(tp).asJava)
 
     consumer.seekToEnd(List(tp).asJava)
-    assertEquals(totalRecords, consumer.position(tp))
+    assertEquals(totalRecords, consumer.position(tp, 2000L, TimeUnit.MILLISECONDS))
     assertFalse(consumer.poll(totalRecords).iterator().hasNext)
 
     consumer.seekToBeginning(List(tp).asJava)
@@ -602,15 +602,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.assign(List(tp2).asJava)
 
     consumer.seekToEnd(List(tp2).asJava)
-    assertEquals(totalRecords, consumer.position(tp2))
+    assertEquals(totalRecords, consumer.position(tp2, 2000L, TimeUnit.MILLISECONDS))
     assertFalse(consumer.poll(totalRecords).iterator().hasNext)
 
     consumer.seekToBeginning(List(tp2).asJava)
-    assertEquals(0, consumer.position(tp2), 0)
+    assertEquals(0, consumer.position(tp2, 2000L, TimeUnit.MILLISECONDS), 0)
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0, tp = tp2)
 
     consumer.seek(tp2, mid)
-    assertEquals(mid, consumer.position(tp2))
+    assertEquals(mid, consumer.position(tp2, 2000L, TimeUnit.MILLISECONDS))
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt,
       startingTimestamp = mid.toLong, tp = tp2)
   }
