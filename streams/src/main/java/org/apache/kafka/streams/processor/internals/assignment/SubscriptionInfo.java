@@ -35,12 +35,12 @@ public class SubscriptionInfo {
     public static final int LATEST_SUPPORTED_VERSION = 3;
     public static final int UNKNOWN = -1;
 
-    private final int usedVersion;
-    private final int latestSupportedVersion;
-    private UUID processId;
-    private Set<TaskId> prevTasks;
-    private Set<TaskId> standbyTasks;
-    private String userEndPoint;
+    protected final int usedVersion;
+    protected final int latestSupportedVersion;
+    protected UUID processId;
+    protected Set<TaskId> prevTasks;
+    protected Set<TaskId> standbyTasks;
+    protected String userEndPoint;
 
     // used for decoding; don't apply version checks
     private SubscriptionInfo(final int version,
@@ -226,6 +226,22 @@ public class SubscriptionInfo {
                4 + endPointBytes.length; // length + userEndPoint
     }
 
+    // for testing
+    protected ByteBuffer encodeFutureVersion() {
+        final byte[] endPointBytes = prepareUserEndPoint();
+
+        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeByteLength(endPointBytes));
+
+        buf.putInt(LATEST_SUPPORTED_VERSION + 1); // used version
+        buf.putInt(LATEST_SUPPORTED_VERSION + 1); // supported version
+        encodeClientUUID(buf);
+        encodeTasks(buf, prevTasks);
+        encodeTasks(buf, standbyTasks);
+        encodeUserEndPoint(buf, endPointBytes);
+
+        return buf;
+    }
+
     /**
      * @throws TaskAssignmentException if method fails to decode the data
      */
@@ -261,12 +277,7 @@ public class SubscriptionInfo {
     private static void decodeVersionOneData(final SubscriptionInfo subscriptionInfo,
                                              final ByteBuffer data) {
         decodeClientUUID(subscriptionInfo, data);
-
-        subscriptionInfo.prevTasks = new HashSet<>();
-        decodeTasks(subscriptionInfo.prevTasks, data);
-
-        subscriptionInfo.standbyTasks = new HashSet<>();
-        decodeTasks(subscriptionInfo.standbyTasks, data);
+        decodeTasks(subscriptionInfo, data);
     }
 
     private static void decodeClientUUID(final SubscriptionInfo subscriptionInfo,
@@ -274,24 +285,25 @@ public class SubscriptionInfo {
         subscriptionInfo.processId = new UUID(data.getLong(), data.getLong());
     }
 
-    private static void decodeTasks(final Collection<TaskId> taskIds,
+    private static void decodeTasks(final SubscriptionInfo subscriptionInfo,
                                     final ByteBuffer data) {
-        final int numPrevs = data.getInt();
-        for (int i = 0; i < numPrevs; i++) {
-            taskIds.add(TaskId.readFrom(data));
+        subscriptionInfo.prevTasks = new HashSet<>();
+        final int numPrevTasks = data.getInt();
+        for (int i = 0; i < numPrevTasks; i++) {
+            subscriptionInfo.prevTasks.add(TaskId.readFrom(data));
+        }
+
+        subscriptionInfo.standbyTasks = new HashSet<>();
+        final int numStandbyTasks = data.getInt();
+        for (int i = 0; i < numStandbyTasks; i++) {
+            subscriptionInfo.standbyTasks.add(TaskId.readFrom(data));
         }
     }
 
     private static void decodeVersionTwoData(final SubscriptionInfo subscriptionInfo,
                                              final ByteBuffer data) {
         decodeClientUUID(subscriptionInfo, data);
-
-        subscriptionInfo.prevTasks = new HashSet<>();
-        decodeTasks(subscriptionInfo.prevTasks, data);
-
-        subscriptionInfo.standbyTasks = new HashSet<>();
-        decodeTasks(subscriptionInfo.standbyTasks, data);
-
+        decodeTasks(subscriptionInfo, data);
         decodeUserEndPoint(subscriptionInfo, data);
     }
 
@@ -308,16 +320,11 @@ public class SubscriptionInfo {
     private static void decodeVersionThreeData(final SubscriptionInfo subscriptionInfo,
                                                final ByteBuffer data) {
         decodeClientUUID(subscriptionInfo, data);
-
-        subscriptionInfo.prevTasks = new HashSet<>();
-        decodeTasks(subscriptionInfo.prevTasks, data);
-
-        subscriptionInfo.standbyTasks = new HashSet<>();
-        decodeTasks(subscriptionInfo.standbyTasks, data);
-
+        decodeTasks(subscriptionInfo, data);
         decodeUserEndPoint(subscriptionInfo, data);
     }
 
+    @Override
     public int hashCode() {
         final int hashCode = usedVersion ^ latestSupportedVersion ^ processId.hashCode() ^ prevTasks.hashCode() ^ standbyTasks.hashCode();
         if (userEndPoint == null) {

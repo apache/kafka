@@ -176,8 +176,7 @@ class StreamsUpgradeTest(Test):
 
         self.driver.stop()
 
-    #@matrix(from_version=metadata_1_versions, to_version=backward_compatible_metadata_2_versions)
-    @ignore
+    @matrix(from_version=metadata_1_versions, to_version=backward_compatible_metadata_2_versions)
     @matrix(from_version=metadata_1_versions, to_version=metadata_3_versions)
     @matrix(from_version=metadata_2_versions, to_version=metadata_3_versions)
     def test_metadata_upgrade(self, from_version, to_version):
@@ -217,6 +216,92 @@ class StreamsUpgradeTest(Test):
         for p in self.processors:
             self.do_rolling_bounce(p, None, to_version, counter)
             counter = counter + 1
+
+        # shutdown
+        self.driver.stop()
+        self.driver.wait()
+
+        random.shuffle(self.processors)
+        for p in self.processors:
+            node = p.node
+            with node.account.monitor_log(p.STDOUT_FILE) as monitor:
+                p.stop()
+                monitor.wait_until("UPGRADE-TEST-CLIENT-CLOSED",
+                                   timeout_sec=60,
+                                   err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
+
+        self.driver.stop()
+
+    def test_version_probing_upgrade(self):
+        """
+        Starts 3 KafkaStreams instances, and upgrades one-by-one to "future version"
+        """
+
+        self.zk = ZookeeperService(self.test_context, num_nodes=1)
+        self.zk.start()
+
+        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, topics=self.topics)
+        self.kafka.start()
+
+        self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
+        self.driver.disable_auto_terminate()
+        self.processor1 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
+        self.processor2 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
+        self.processor3 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
+
+        self.driver.start()
+        self.start_all_nodes_with("") # run with TRUNK
+
+        self.processors = [self.processor1, self.processor2, self.processor3]
+
+        for p in self.processors:
+            p.CLEAN_NODE_ENABLED = False
+            it = p.node.account.ssh_capture("grep \"Finished assignment for group\" %s" % p.LOG_FILE, allow_fail=True)
+            if it.has_next():
+                if self.leader is not None:
+                    raise Exception("Could not uniquely identify leader")
+                self.leader = p
+
+        if self.leader is None:
+            raise Exception("Could not identify leader")
+
+        counter = 1
+        random.seed()
+
+        # rolling bounces
+        random.shuffle(self.processors)
+        first_bounced_processor = None
+        expected_new_leader_processor = None
+        with self.leader.node.account.monitor_log(self.leader.LOG_FILE) as leader_monitor:
+            for p in self.processors:
+                if p == self.leader:
+                    continue
+
+                self.do_rolling_bounce(p, None, "future_version", counter)
+                leader_monitor.wait_until("Received a future (version probing) subscription (version: 4). Sending empty assignment back (with supported version 3).",
+                                          timeout_sec=60,
+                                          err_msg="Could not detect 'version probing' attempt at leader " + str(self.leader.node.account))
+                p.node.account.ssh_capture("grep \"partition.assignment.strategy = [org.apache.kafka.streams.tests.StreamsUpgradeTest$FutureStreamsPartitionAssignor]\" %s" % p.LOG_FILE, allow_fail=False)
+                p.node.account.ssh_capture("grep \"Sent a version 4 subscription and got version 3 assignment back (successful version probing). Downgrading subscription metadata to received version and trigger new rebalance\" %s" % p.LOG_FILE, allow_fail=False)
+
+                if first_bounced_processor is None:
+                    first_bounced_processor = p
+                else:
+                    expected_new_leader_processor = p
+
+                counter = counter + 1
+
+        it = expected_new_leader_processor.node.account.ssh_capture("grep \"Received a future (version probing) subscription (version: 4). Sending empty assignment back (with supported version 3).\" %s" % expected_new_leader_processor.LOG_FILE, allow_fail=True)
+        if it.has_next():
+            print it.next()
+            raise Exception("Future new leader should receive version probing only after current/old leader is bounced.")
+
+        self.do_rolling_bounce(self.leader, None, "future_version", counter)
+        prevLeader = self.leader
+
+        expected_new_leader_processor.node.account.ssh_capture("grep \"Received a future (version probing) subscription (version: 4). Sending empty assignment back (with supported version 3).\" %s" % expected_new_leader_processor.LOG_FILE, allow_fail=False)
+        prevLeader.node.account.ssh_capture("grep \"partition.assignment.strategy = [org.apache.kafka.streams.tests.StreamsUpgradeTest$FutureStreamsPartitionAssignor]\" %s" % prevLeader.LOG_FILE, allow_fail=False)
+        prevLeader.node.account.ssh_capture("grep \"Sent a version 4 subscription and got version 3 assignment back (successful version probing). Downgrading subscription metadata to received version and trigger new rebalance\" %s" % prevLeader.LOG_FILE, allow_fail=False)
 
         # shutdown
         self.driver.stop()
@@ -330,8 +415,12 @@ class StreamsUpgradeTest(Test):
 
         if new_version == str(DEV_VERSION):
             processor.set_version("")  # set to TRUNK
+        elif new_version == "future_version":
+            processor.set_upgrade_to("future_version")
+            new_version = str(DEV_VERSION)
         else:
             processor.set_version(new_version)
+
         processor.set_upgrade_from(upgrade_from)
 
         grep_metadata_error = "grep \"org.apache.kafka.streams.errors.TaskAssignmentException: unable to decode subscription data: version=2\" "

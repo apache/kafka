@@ -48,6 +48,7 @@ import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -1190,6 +1191,87 @@ public class StreamsPartitionAssignorTest {
         PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("topic1"));
 
         assertThat(SubscriptionInfo.decode(subscription.userData()).version(), equalTo(2));
+    }
+
+    @Test
+    public void shouldReturnEmptyAssignmentForAllInstancesIfReceivedSingleFutureVersionSubscription() {
+        final Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
+        final Set<TaskId> emptyTasks = Collections.emptySet();
+        subscriptions.put(
+            "consumer1",
+            new PartitionAssignor.Subscription(
+                Collections.singletonList("topic1"),
+                new SubscriptionInfo(UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
+            )
+        );
+        subscriptions.put(
+            "future-consumer",
+            new PartitionAssignor.Subscription(
+                Collections.singletonList("topic1"),
+                encodeFutureSubscription()
+            )
+        );
+
+        mockTaskManager(
+            emptyTasks,
+            emptyTasks,
+            UUID.randomUUID(),
+            builder);
+        partitionAssignor.configure(configProps());
+        final Map<String, PartitionAssignor.Assignment> assignment = partitionAssignor.assign(metadata, subscriptions);
+
+        assertThat(assignment.size(), equalTo(2));
+        assertThat(AssignmentInfo.decode(assignment.get("consumer1").userData()),  equalTo(new AssignmentInfo()));
+        assertThat(AssignmentInfo.decode(assignment.get("future-consumer").userData()), equalTo(new AssignmentInfo()));
+    }
+
+    @Test
+    public void shouldThrowIfV1SubscriptionAndFutureSubscriptionIsMixed() {
+        shouldThrowIfPreVersionProbingSubscriptionAndFutureSubscriptionIsMixed(1);
+    }
+
+    @Test
+    public void shouldThrowIfV2SubscriptionAndFutureSubscriptionIsMixed() {
+        shouldThrowIfPreVersionProbingSubscriptionAndFutureSubscriptionIsMixed(2);
+    }
+
+    private ByteBuffer encodeFutureSubscription() {
+        final ByteBuffer buf = ByteBuffer.allocate(4 /* version */);
+        buf.putInt(SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1);
+        return buf;
+    }
+
+    private void shouldThrowIfPreVersionProbingSubscriptionAndFutureSubscriptionIsMixed(final int oldVersion) {
+        final Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
+        final Set<TaskId> emptyTasks = Collections.emptySet();
+        subscriptions.put(
+            "consumer1",
+            new PartitionAssignor.Subscription(
+                Collections.singletonList("topic1"),
+                new SubscriptionInfo(oldVersion, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
+            )
+        );
+        subscriptions.put(
+            "future-consumer",
+            new PartitionAssignor.Subscription(
+                Collections.singletonList("topic1"),
+                encodeFutureSubscription()
+            )
+        );
+
+        mockTaskManager(
+            emptyTasks,
+            emptyTasks,
+            UUID.randomUUID(),
+            builder);
+        partitionAssignor.configure(configProps());
+
+        try {
+            partitionAssignor.assign(metadata, subscriptions);
+            fail("Should have thrown IllegalStateException");
+        } catch (final IllegalStateException expected) {
+            // pass
+        }
     }
 
     private PartitionAssignor.Assignment createAssignment(final Map<HostInfo, Set<TopicPartition>> firstHostState) {
