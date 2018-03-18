@@ -114,7 +114,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             }
         });
 
-        data.process(SmokeTestUtil.printProcessorSupplier("data"));
+        data.process(SmokeTestUtil.<String, Integer>printProcessorSupplier("data"));
 
         // min
         KGroupedStream<String, Integer>
@@ -140,7 +140,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         ).to(stringSerde, intSerde, "min");
 
         KTable<String, Integer> minTable = builder.table(stringSerde, intSerde, "min", "minStoreName");
-        minTable.toStream().process(SmokeTestUtil.printProcessorSupplier("min"));
+        minTable.toStream().process(SmokeTestUtil.<String, Integer>printProcessorSupplier("min"));
 
         // max
         groupedData.aggregate(
@@ -162,7 +162,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         ).to(stringSerde, intSerde, "max");
 
         KTable<String, Integer> maxTable = builder.table(stringSerde, intSerde, "max", "maxStoreName");
-        maxTable.toStream().process(SmokeTestUtil.printProcessorSupplier("max"));
+        maxTable.toStream().process(SmokeTestUtil.<String, Integer>printProcessorSupplier("max"));
 
         // sum
         groupedData.aggregate(
@@ -185,7 +185,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
 
         KTable<String, Long> sumTable = builder.table(stringSerde, longSerde, "sum", "sumStoreName");
-        sumTable.toStream().process(SmokeTestUtil.printProcessorSupplier("sum"));
+        sumTable.toStream().process(SmokeTestUtil.<String, Long>printProcessorSupplier("sum"));
 
         // cnt
         groupedData.count(TimeWindows.of(TimeUnit.DAYS.toMillis(2)), "uwin-cnt")
@@ -194,7 +194,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         ).to(stringSerde, longSerde, "cnt");
 
         KTable<String, Long> cntTable = builder.table(stringSerde, longSerde, "cnt", "cntStoreName");
-        cntTable.toStream().process(SmokeTestUtil.printProcessorSupplier("cnt"));
+        cntTable.toStream().process(SmokeTestUtil.<String, Long>printProcessorSupplier("cnt"));
 
         // dif
         maxTable.join(minTable,
