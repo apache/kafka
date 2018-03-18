@@ -175,8 +175,10 @@ class Replica(val brokerId: Int,
   def convertHWToLocalOffsetMetadata() {
     if (isLocal) {
       highWatermarkMetadata = log.get.convertToOffsetMetadata(highWatermarkMetadata.messageOffset).getOrElse {
-        val firstOffset = log.get.logSegments.head.baseOffset
-        new LogOffsetMetadata(firstOffset, firstOffset, 0)
+        log.get.convertToOffsetMetadata(logStartOffset).getOrElse {
+          val firstSegmentOffset = log.get.logSegments.head.baseOffset
+          new LogOffsetMetadata(firstSegmentOffset, firstSegmentOffset, 0)
+        }
       }
     } else {
       throw new KafkaException(s"Should not construct complete high watermark on partition $topicPartition's non-local replica $brokerId")
