@@ -130,7 +130,27 @@ public class SmokeTestDriver extends SmokeTestUtil {
         System.out.println("shutdown");
     }
 
-    public static Map<String, Set<Integer>> generate(String kafka, final int numKeys, final int maxRecordsPerKey) {
+    private static volatile boolean running = true;
+
+    public static Map<String, Set<Integer>> generate(final String kafka,
+                                                     final int numKeys,
+                                                     final int maxRecordsPerKey) {
+        return generate(kafka, numKeys, maxRecordsPerKey, true);
+    }
+
+    public static Map<String, Set<Integer>> generate(final String kafka,
+                                                     final int numKeys,
+                                                     final int maxRecordsPerKey,
+                                                     final boolean autoTerminate) {
+        if (!autoTerminate) {
+            Runtime.getRuntime().addShutdownHook(new Thread() {
+                @Override
+                public void run() {
+                    running = false;
+                }
+            });
+        }
+
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "SmokeTest");
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
@@ -154,16 +174,28 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
         Random rand = new Random();
 
-        int remaining = data.length;
+        int remaining = -1;
+        if (autoTerminate) {
+            remaining = data.length;
+        }
 
         List<ProducerRecord<byte[], byte[]>> needRetry = new ArrayList<>();
 
-        while (remaining > 0) {
-            int index = rand.nextInt(remaining);
+        while (running) {
+            if (remaining == 0) {
+                break;
+            }
+
+            int index;
+            if (autoTerminate) {
+                index = rand.nextInt(remaining);
+            } else {
+                index = rand.nextInt(numKeys);
+            }
             String key = data[index].key;
             int value = data[index].next();
 
-            if (value < 0) {
+            if (autoTerminate && value < 0) {
                 remaining--;
                 data[index] = data[remaining];
             } else {
@@ -175,8 +207,10 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
                 numRecordsProduced++;
                 allData.get(key).add(value);
-                if (numRecordsProduced % 100 == 0)
+
+                if (numRecordsProduced % 100 == 0) {
                     System.out.println(numRecordsProduced + " records produced");
+                }
                 Utils.sleep(2);
             }
         }

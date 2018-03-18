@@ -175,6 +175,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
     private String userEndPoint;
     private int numStandbyReplicas;
 
+    private int userMetadataVersion = SubscriptionInfo.CURRENT_VERSION;
+
     private Cluster metadataWithInternalTopics;
     private Map<HostInfo, Set<TopicPartition>> partitionsByHostState;
 
@@ -205,7 +207,13 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
         // Setting the logger with the passed in client thread name
         logPrefix = String.format("stream-thread [%s] ", configs.get(CommonClientConfigs.CLIENT_ID_CONFIG));
         final LogContext logContext = new LogContext(logPrefix);
-        this.log = logContext.logger(getClass());
+        log = logContext.logger(getClass());
+
+        final String upgradeMode = (String) configs.get(StreamsConfig.UPGRADE_FROM_CONFIG);
+        if (StreamsConfig.UPGRADE_FROM_0100.equals(upgradeMode)) {
+            log.info("Downgrading metadata version from 2 to 1 for upgrade from 0.10.0.x.");
+            userMetadataVersion = 1;
+        }
 
         Object o = configs.get(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE);
         if (o == null) {
@@ -266,7 +274,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
         final Set<TaskId> previousActiveTasks = threadDataProvider.prevActiveTasks();
         Set<TaskId> standbyTasks = threadDataProvider.cachedTasks();
         standbyTasks.removeAll(previousActiveTasks);
-        SubscriptionInfo data = new SubscriptionInfo(threadDataProvider.processId(), previousActiveTasks, standbyTasks, this.userEndPoint);
+        SubscriptionInfo data = new SubscriptionInfo(userMetadataVersion, threadDataProvider.processId(), previousActiveTasks, standbyTasks, this.userEndPoint);
 
         if (threadDataProvider.builder().sourceTopicPattern() != null &&
             !threadDataProvider.builder().subscriptionUpdates().getUpdates().equals(topics)) {
@@ -309,11 +317,16 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
         // construct the client metadata from the decoded subscription info
         Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
 
+        int minUserMetadataVersion = SubscriptionInfo.CURRENT_VERSION;
         for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             String consumerId = entry.getKey();
             Subscription subscription = entry.getValue();
 
             SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
+            final int usedVersion = info.version;
+            if (usedVersion < minUserMetadataVersion) {
+                minUserMetadataVersion = usedVersion;
+            }
 
             // create the new client metadata if necessary
             ClientMetadata clientMetadata = clientsMetadata.get(info.processId);
@@ -572,7 +585,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable,
                 }
 
                 // finally, encode the assignment before sending back to coordinator
-                assignment.put(consumer, new Assignment(activePartitions, new AssignmentInfo(active, standby, partitionsByHostState).encode()));
+                assignment.put(consumer, new Assignment(activePartitions, new AssignmentInfo(minUserMetadataVersion, active, standby, partitionsByHostState).encode()));
             }
         }
 

@@ -140,7 +140,7 @@ public class StreamPartitionAssignorTest {
                                         final Set<TaskId> cachedTasks,
                                         final UUID processId,
                                         final PartitionGrouper partitionGrouper,
-                                        final InternalTopologyBuilder builder) throws NoSuchFieldException, IllegalAccessException {
+                                        final InternalTopologyBuilder builder) {
         EasyMock.expect(threadDataProvider.name()).andReturn("name").anyTimes();
         EasyMock.expect(threadDataProvider.prevActiveTasks()).andReturn(prevTasks).anyTimes();
         EasyMock.expect(threadDataProvider.cachedTasks()).andReturn(cachedTasks).anyTimes();
@@ -179,7 +179,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void testSubscription() throws Exception {
+    public void testSubscription() {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2");
@@ -208,7 +208,7 @@ public class StreamPartitionAssignorTest {
 
 
     @Test
-    public void testAssignBasic() throws Exception {
+    public void testAssignBasic() {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2");
@@ -248,11 +248,9 @@ public class StreamPartitionAssignorTest {
 
         // check assignment info
 
-        Set<TaskId> allActiveTasks = new HashSet<>();
-
         // the first consumer
         AssignmentInfo info10 = checkAssignment(allTopics, assignments.get("consumer10"));
-        allActiveTasks.addAll(info10.activeTasks);
+        Set<TaskId> allActiveTasks = new HashSet<>(info10.activeTasks);
 
         // the second consumer
         AssignmentInfo info11 = checkAssignment(allTopics, assignments.get("consumer11"));
@@ -272,7 +270,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldAssignEvenlyAcrossConsumersOneClientMultipleThreads() throws Exception {
+    public void shouldAssignEvenlyAcrossConsumersOneClientMultipleThreads() {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source1");
@@ -340,7 +338,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void testAssignWithPartialTopology() throws Exception {
+    public void testAssignWithPartialTopology() {
         Properties props = configProps();
         props.put(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, SingleGroupPartitionGrouperStub.class);
         StreamsConfig config = new StreamsConfig(props);
@@ -369,9 +367,8 @@ public class StreamPartitionAssignorTest {
         Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(metadata, subscriptions);
 
         // check assignment info
-        Set<TaskId> allActiveTasks = new HashSet<>();
         AssignmentInfo info10 = checkAssignment(Utils.mkSet("topic1"), assignments.get("consumer10"));
-        allActiveTasks.addAll(info10.activeTasks);
+        Set<TaskId> allActiveTasks = new HashSet<>(info10.activeTasks);
 
         assertEquals(3, allActiveTasks.size());
         assertEquals(allTasks, new HashSet<>(allActiveTasks));
@@ -379,7 +376,7 @@ public class StreamPartitionAssignorTest {
 
 
     @Test
-    public void testAssignEmptyMetadata() throws Exception {
+    public void testAssignEmptyMetadata() {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2");
@@ -409,9 +406,8 @@ public class StreamPartitionAssignorTest {
             new HashSet<>(assignments.get("consumer10").partitions()));
 
         // check assignment info
-        Set<TaskId> allActiveTasks = new HashSet<>();
         AssignmentInfo info10 = checkAssignment(Collections.<String>emptySet(), assignments.get("consumer10"));
-        allActiveTasks.addAll(info10.activeTasks);
+        Set<TaskId> allActiveTasks = new HashSet<>(info10.activeTasks);
 
         assertEquals(0, allActiveTasks.size());
         assertEquals(Collections.<TaskId>emptySet(), new HashSet<>(allActiveTasks));
@@ -434,7 +430,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void testAssignWithNewTasks() throws Exception {
+    public void testAssignWithNewTasks() {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
         builder.addSource(null, "source3", null, null, null, "topic3");
@@ -466,13 +462,9 @@ public class StreamPartitionAssignorTest {
         // check assigned partitions: since there is no previous task for topic 3 it will be assigned randomly so we cannot check exact match
         // also note that previously assigned partitions / tasks may not stay on the previous host since we may assign the new task first and
         // then later ones will be re-assigned to other hosts due to load balancing
-        Set<TaskId> allActiveTasks = new HashSet<>();
-        Set<TopicPartition> allPartitions = new HashSet<>();
-        AssignmentInfo info;
-
-        info = AssignmentInfo.decode(assignments.get("consumer10").userData());
-        allActiveTasks.addAll(info.activeTasks);
-        allPartitions.addAll(assignments.get("consumer10").partitions());
+        AssignmentInfo info = AssignmentInfo.decode(assignments.get("consumer10").userData());
+        Set<TaskId> allActiveTasks = new HashSet<>(info.activeTasks);
+        Set<TopicPartition> allPartitions = new HashSet<>(assignments.get("consumer10").partitions());
 
         info = AssignmentInfo.decode(assignments.get("consumer11").userData());
         allActiveTasks.addAll(info.activeTasks);
@@ -487,7 +479,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void testAssignWithStates() throws Exception {
+    public void testAssignWithStates() {
         String applicationId = "test";
         builder.setApplicationId(applicationId);
         builder.addSource(null, "source1", null, null, null, "topic1");
@@ -576,7 +568,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void testAssignWithStandbyReplicas() throws Exception {
+    public void testAssignWithStandbyReplicas() {
         Properties props = configProps();
         props.setProperty(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "1");
         StreamsConfig config = new StreamsConfig(props);
@@ -613,13 +605,10 @@ public class StreamPartitionAssignorTest {
 
         Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(metadata, subscriptions);
 
-        Set<TaskId> allActiveTasks = new HashSet<>();
-        Set<TaskId> allStandbyTasks = new HashSet<>();
-
         // the first consumer
         AssignmentInfo info10 = checkAssignment(allTopics, assignments.get("consumer10"));
-        allActiveTasks.addAll(info10.activeTasks);
-        allStandbyTasks.addAll(info10.standbyTasks.keySet());
+        Set<TaskId> allActiveTasks = new HashSet<>(info10.activeTasks);
+        Set<TaskId> allStandbyTasks = new HashSet<>(info10.standbyTasks.keySet());
 
         // the second consumer
         AssignmentInfo info11 = checkAssignment(allTopics, assignments.get("consumer11"));
@@ -647,7 +636,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void testOnAssignment() throws Exception {
+    public void testOnAssignment() {
         TopicPartition t2p3 = new TopicPartition("topic2", 3);
 
         builder.addSource(null, "source1", null, null, null, "topic1");
@@ -675,7 +664,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void testAssignWithInternalTopics() throws Exception {
+    public void testAssignWithInternalTopics() {
         String applicationId = "test";
         builder.setApplicationId(applicationId);
         builder.addInternalTopic("topicX");
@@ -706,7 +695,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void testAssignWithInternalTopicThatsSourceIsAnotherInternalTopic() throws Exception {
+    public void testAssignWithInternalTopicThatsSourceIsAnotherInternalTopic() {
         String applicationId = "test";
         builder.setApplicationId(applicationId);
         builder.addInternalTopic("topicX");
@@ -741,9 +730,8 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldAddUserDefinedEndPointToSubscription() throws Exception {
-        final String applicationId = "application-id";
-        builder.setApplicationId(applicationId);
+    public void shouldAddUserDefinedEndPointToSubscription() {
+        builder.setApplicationId("application-id");
         builder.addSource(null, "source", null, null, null, "input");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
         builder.addSink("sink", "output", null, null, null, "processor");
@@ -752,7 +740,8 @@ public class StreamPartitionAssignorTest {
         mockThreadDataProvider(Collections.<TaskId>emptySet(),
                                Collections.<TaskId>emptySet(),
                                uuid1,
-                               defaultPartitionGrouper, builder);
+                               defaultPartitionGrouper,
+                               builder);
         configurePartitionAssignor(0, userEndPoint);
         final PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("input"));
         final SubscriptionInfo subscriptionInfo = SubscriptionInfo.decode(subscription.userData());
@@ -760,7 +749,59 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldMapUserEndPointToTopicPartitions() throws Exception {
+    public void shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersions() {
+        final Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
+        final Set<TaskId> emptyTasks = Collections.emptySet();
+        subscriptions.put(
+            "consumer1",
+            new PartitionAssignor.Subscription(
+                Collections.singletonList("topic1"),
+                new SubscriptionInfo(1, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
+            )
+        );
+        subscriptions.put(
+            "consumer2",
+            new PartitionAssignor.Subscription(
+                Collections.singletonList("topic1"),
+                new SubscriptionInfo(2, UUID.randomUUID(), emptyTasks, emptyTasks, null).encode()
+            )
+        );
+
+        mockThreadDataProvider(
+            emptyTasks,
+            emptyTasks,
+            UUID.randomUUID(),
+            defaultPartitionGrouper,
+            builder);
+        configurePartitionAssignor(0, null);
+        final Map<String, PartitionAssignor.Assignment> assignment = partitionAssignor.assign(metadata, subscriptions);
+
+        assertEquals(2, assignment.size());
+        assertEquals(1, AssignmentInfo.decode(assignment.get("consumer1").userData()).version);
+        assertEquals(1, AssignmentInfo.decode(assignment.get("consumer2").userData()).version);
+    }
+
+    @Test
+    public void shouldDownGradeSubscription() {
+        final Set<TaskId> emptyTasks = Collections.emptySet();
+
+        mockThreadDataProvider(
+            emptyTasks,
+            emptyTasks,
+            UUID.randomUUID(),
+            defaultPartitionGrouper,
+            builder);
+
+        configurationMap.put(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_0100);
+        configurePartitionAssignor(0, null);
+
+        PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("topic1"));
+
+        assertEquals(1, SubscriptionInfo.decode(subscription.userData()).version);
+    }
+
+    @Test
+    public void shouldMapUserEndPointToTopicPartitions() {
         final String applicationId = "application-id";
         builder.setApplicationId(applicationId);
         builder.addSource(null, "source", null, null, null, "topic1");
@@ -790,7 +831,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldThrowExceptionIfApplicationServerConfigIsNotHostPortPair() throws Exception {
+    public void shouldThrowExceptionIfApplicationServerConfigIsNotHostPortPair() {
         final String myEndPoint = "localhost";
         final String applicationId = "application-id";
         builder.setApplicationId(applicationId);
@@ -821,7 +862,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldExposeHostStateToTopicPartitionsOnAssignment() throws Exception {
+    public void shouldExposeHostStateToTopicPartitionsOnAssignment() {
         List<TopicPartition> topic = Collections.singletonList(new TopicPartition("topic", 0));
         final Map<HostInfo, Set<TopicPartition>> hostState =
                 Collections.singletonMap(new HostInfo("localhost", 80),
@@ -837,7 +878,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldSetClusterMetadataOnAssignment() throws Exception {
+    public void shouldSetClusterMetadataOnAssignment() {
         final List<TopicPartition> topic = Collections.singletonList(new TopicPartition("topic", 0));
         final Map<HostInfo, Set<TopicPartition>> hostState =
                 Collections.singletonMap(new HostInfo("localhost", 80),
@@ -865,7 +906,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldNotLoopInfinitelyOnMissingMetadataAndShouldNotCreateRelatedTasks() throws Exception {
+    public void shouldNotLoopInfinitelyOnMissingMetadataAndShouldNotCreateRelatedTasks() {
         final String applicationId = "application-id";
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -970,7 +1011,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldUpdatePartitionHostInfoMapOnAssignment() throws Exception {
+    public void shouldUpdatePartitionHostInfoMapOnAssignment() {
         final TopicPartition partitionOne = new TopicPartition("topic", 1);
         final TopicPartition partitionTwo = new TopicPartition("topic", 2);
         final Map<HostInfo, Set<TopicPartition>> firstHostState = Collections.singletonMap(
@@ -993,7 +1034,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldUpdateClusterMetadataOnAssignment() throws Exception {
+    public void shouldUpdateClusterMetadataOnAssignment() {
         final TopicPartition topicOne = new TopicPartition("topic", 1);
         final TopicPartition topicTwo = new TopicPartition("topic2", 2);
         final Map<HostInfo, Set<TopicPartition>> firstHostState = Collections.singletonMap(
@@ -1015,7 +1056,7 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldNotAddStandbyTaskPartitionsToPartitionsForHost() throws Exception {
+    public void shouldNotAddStandbyTaskPartitionsToPartitionsForHost() {
         final String applicationId = "appId";
         final StreamsBuilder builder = new StreamsBuilder();
 

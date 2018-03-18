@@ -423,6 +423,7 @@ public class StreamsConfigTest {
         assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(commitIntervalMs));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldBeBackwardsCompatibleWithDeprecatedConfigs() {
         final Properties props = minimalStreamsConfig();
@@ -457,6 +458,7 @@ public class StreamsConfigTest {
         assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldSpecifyCorrectKeySerdeClassOnErrorUsingDeprecatedConfigs() {
         final Properties props = minimalStreamsConfig();
@@ -470,6 +472,7 @@ public class StreamsConfigTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldSpecifyCorrectKeySerdeClassOnError() {
         final Properties props = minimalStreamsConfig();
@@ -483,6 +486,7 @@ public class StreamsConfigTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldSpecifyCorrectValueSerdeClassOnErrorUsingDeprecatedConfigs() {
         final Properties props = minimalStreamsConfig();
@@ -496,6 +500,7 @@ public class StreamsConfigTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldSpecifyCorrectValueSerdeClassOnError() {
         final Properties props = minimalStreamsConfig();
@@ -518,9 +523,7 @@ public class StreamsConfigTest {
         }
 
         @Override
-        public void close() {
-
-        }
+        public void close() {}
 
         @Override
         public Serializer serializer() {
