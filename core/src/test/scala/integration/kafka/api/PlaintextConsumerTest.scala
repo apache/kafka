@@ -15,6 +15,7 @@ package kafka.api
 import java.util
 import java.util.regex.Pattern
 import java.util.{Collections, Locale, Properties}
+import java.util.concurrent.TimeUnit
 
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
@@ -587,11 +588,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertFalse(consumer.poll(totalRecords).iterator().hasNext)
 
     consumer.seekToBeginning(List(tp).asJava)
-    assertEquals(0, consumer.position(tp), 0)
+    assertEquals(0, consumer.position(tp, 2000L, TimeUnit.MILLISECONDS), 0)
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0)
 
     consumer.seek(tp, mid)
-    assertEquals(mid, consumer.position(tp))
+    assertEquals(mid, consumer.position(tp, 2000L, TimeUnit.MILLISECONDS))
 
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = mid.toInt, startingKeyAndValueIndex = mid.toInt,
       startingTimestamp = mid.toLong)

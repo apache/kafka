@@ -1495,7 +1495,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * within a given amount of time, the process will be terminated.
      *
      * @param partition The partition to get the position for
-     * @param timeout   The maximum duration in which the method can block
+     * @param duration  The maximum duration in which the method can block
+     * @param timeunit  The unit of time which duration refers to
      * @return The current position of the consumer (that is, the offset of the next record to be fetched)
      * @throws IllegalArgumentException if the provided TopicPartition is not assigned to this consumer
      * @throws org.apache.kafka.clients.consumer.InvalidOffsetException if no offset is currently defined for
@@ -1510,7 +1511,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             configured groupId. See the exception for more details
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
      */
-    public long position(TopicPartition partition, final long timeout) {
+    public long position(TopicPartition partition, final long duration, final TimeUnit timeunit) {
+        final long timeout = timeunit.toMillis(duration);
         acquireAndEnsureOpen();
         try {
             if (!this.subscriptions.isAssigned(partition))

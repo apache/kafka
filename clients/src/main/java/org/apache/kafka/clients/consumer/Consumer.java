@@ -132,9 +132,9 @@ public interface Consumer<K, V> extends Closeable {
     public long position(TopicPartition partition);
     
     /**
-     * @see KafkaConsumer#position(TopicPartition, Long)
+     * @see KafkaConsumer#position(TopicPartition, Long, TimeUnit)
      */
-    public long position(TopicPartition partition, long timeout);
+    public long position(TopicPartition partition, long timeout, final TimeUnit timeunit);
 
     /**
      * @see KafkaConsumer#committed(TopicPartition)

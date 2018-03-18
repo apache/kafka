@@ -283,7 +283,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public synchronized long position(TopicPartition partition, long timeout) {
+    public synchronized long position(TopicPartition partition, long timeout, TimeUnit timeunit) {
         return position(partition);
     }
 
