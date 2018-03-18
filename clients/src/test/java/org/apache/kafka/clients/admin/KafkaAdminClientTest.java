@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
@@ -49,6 +50,7 @@ import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.requests.DeleteRecordsResponse;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceFilter;
@@ -81,6 +83,7 @@ import static org.apache.kafka.common.requests.ResourceType.TOPIC;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
 
@@ -562,6 +565,27 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Test
+    public void testListConsumerGroups() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+
+            env.kafkaClient().prepareResponse(
+                    new ListGroupsResponse(
+                            Errors.NONE,
+                            Arrays.asList(
+                                    new ListGroupsResponse.Group("group-0", ConsumerProtocol.PROTOCOL_TYPE),
+                                    new ListGroupsResponse.Group("group-1", "connector"))));
+
+            final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups();
+            final Set<String> consumerGroups = result.names().get();
+            assertTrue(consumerGroups.contains("group-0"));
+            assertFalse(consumerGroups.contains("group-1"));
+        }
+    }
+
     private static <T> void assertCollectionIs(Collection<T> collection, T... elements) {
         for (T element : elements) {
             assertTrue("Did not find " + element, collection.contains(element));
@@ -579,7 +603,7 @@ public class KafkaAdminClientTest {
         private int numTries = 0;
 
         private int failuresInjected = 0;
-        
+
         @Override
         public KafkaAdminClient.TimeoutProcessor create(long now) {
             return new FailureInjectingTimeoutProcessor(now);
