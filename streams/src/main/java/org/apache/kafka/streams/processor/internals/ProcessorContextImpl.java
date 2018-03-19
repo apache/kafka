@@ -73,7 +73,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         if (!currentNode().stateStores.contains(name)) {
             throw new StreamsException("Processor " + currentNode().name() + " has no access to StateStore " + name
-                    + " as the store is not connected to the processor. Please check you connected the store to the processor.");
+                    + " as the store is not connected to the processor. " +
+                    "Please check you have connected the store to the processor.");
         }
 
         return stateManager.getStore(name);
