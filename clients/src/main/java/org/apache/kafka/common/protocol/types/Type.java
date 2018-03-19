@@ -64,6 +64,12 @@ public abstract class Type {
     }
 
     /**
+     * Documentation of the Type.
+     * @return details about valid values, representation
+     */
+    public abstract String documentation();
+
+    /**
      * The Boolean type represents a boolean value in a byte by using
      * the value of 0 to represent false, and 1 to represent true.
      *
@@ -102,6 +108,13 @@ public abstract class Type {
             else
                 throw new SchemaException(item + " is not a Boolean.");
         }
+
+        @Override
+        public String documentation() {
+            return "Represents a boolean value in a byte. " +
+                    "Values 0 and 1 is used to represent false and true respectively. " +
+                    "When reading a Boolean value, any non-zero value is considered true.";
+        }
     };
 
     public static final Type INT8 = new Type() {
@@ -131,6 +144,11 @@ public abstract class Type {
                 return (Byte) item;
             else
                 throw new SchemaException(item + " is not a Byte.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents an integer between -2<sup>7</sup> and 2<sup>7</sup>-1 inclusive.";
         }
     };
 
@@ -162,6 +180,12 @@ public abstract class Type {
             else
                 throw new SchemaException(item + " is not a Short.");
         }
+
+        @Override
+        public String documentation() {
+            return "Represents an integer between -2<sup>15</sup> and 2<sup>15</sup>-1 inclusive. " +
+                    "The values are encoded on two bytes using network byte order (big endian).";
+        }
     };
 
     public static final Type INT32 = new Type() {
@@ -191,6 +215,12 @@ public abstract class Type {
                 return (Integer) item;
             else
                 throw new SchemaException(item + " is not an Integer.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents an integer between -2<sup>31</sup> and 2<sup>31</sup>-1 inclusive. " +
+                    "The values are encoded on four bytes using network byte order (big endian).";
         }
     };
 
@@ -222,6 +252,12 @@ public abstract class Type {
             else
                 throw new SchemaException(item + " is not a Long.");
         }
+
+        @Override
+        public String documentation() {
+            return "Represents an integer between 0 and 2<sup>32</sup>-1 inclusive. " +
+                    "The values are encoded on four bytes using network byte order (big endian).";
+        }
     };
 
     public static final Type INT64 = new Type() {
@@ -251,6 +287,12 @@ public abstract class Type {
                 return (Long) item;
             else
                 throw new SchemaException(item + " is not a Long.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents an integer between -2<sup>63</sup> and 2<sup>63</sup>-1 inclusive. " +
+                    "The values are encoded on eight bytes using network byte order (big endian).";
         }
     };
 
@@ -292,6 +334,13 @@ public abstract class Type {
                 return (String) item;
             else
                 throw new SchemaException(item + " is not a String.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of characters. First the length N is given as an " + INT16 +
+                    ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
+                    "Length must not be negative.";
         }
     };
 
@@ -350,6 +399,13 @@ public abstract class Type {
             else
                 throw new SchemaException(item + " is not a String.");
         }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of characters or null. For non-null strings, first the length N is given as an " + INT16 +
+                    ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
+                    "Null value is encoded with length of -1 and there are no following bytes.";
+        }
     };
 
     public static final Type BYTES = new Type() {
@@ -393,6 +449,12 @@ public abstract class Type {
                 return (ByteBuffer) item;
             else
                 throw new SchemaException(item + " is not a java.nio.ByteBuffer.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a raw sequence of bytes. First the length N is given as an " + INT32 +
+                    ". Then N bytes follow.";
         }
     };
 
@@ -454,6 +516,12 @@ public abstract class Type {
 
             throw new SchemaException(item + " is not a java.nio.ByteBuffer.");
         }
+
+        @Override
+        public String documentation() {
+            return "Represents a raw sequence of bytes or null. For non-null values, first the length N is given as an " + INT32 +
+                    ". Then N bytes follow. Null value is encoded with length of -1 and there are no following bytes.";
+        }
     };
 
     public static final Type RECORDS = new Type() {
@@ -500,6 +568,13 @@ public abstract class Type {
 
             throw new SchemaException(item + " is not an instance of " + Records.class.getName());
         }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of Kafka records as " + NULLABLE_BYTES + ". " +
+                    "For a detailed description of records see " +
+                    "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+        }
     };
 
     public static final Type VARINT = new Type() {
@@ -527,6 +602,13 @@ public abstract class Type {
         @Override
         public int sizeOf(Object o) {
             return ByteUtils.sizeOfVarint((Integer) o);
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents an integer between -2<sup>31</sup> and 2<sup>31</sup>-1 inclusive. " +
+                    "Encoding follows the variable-length zig-zag encoding from " +
+                    " <a href=\"http://code.google.com/apis/protocolbuffers/docs/encoding.html\"> Google Protocol Buffers</a>.";
         }
     };
 
@@ -556,6 +638,73 @@ public abstract class Type {
         public int sizeOf(Object o) {
             return ByteUtils.sizeOfVarlong((Long) o);
         }
+
+        @Override
+        public String documentation() {
+            return "Represents an integer between -2<sup>63</sup> and 2<sup>63</sup>-1 inclusive. " +
+                    "Encoding follows the variable-length zig-zag encoding from " +
+                    " <a href=\"http://code.google.com/apis/protocolbuffers/docs/encoding.html\"> Google Protocol Buffers</a>.";
+        }
     };
 
+    private static String toHtml() {
+        final StringBuilder b = new StringBuilder();
+        b.append("<table class=\"data-table\"><tbody>\n");
+        b.append("<tr>");
+        b.append("<th>Type</th>\n");
+        b.append("<th>Description</th>\n");
+        b.append("</tr>\n");
+        Type[] types = {
+                BOOLEAN, INT8, INT16, INT32, INT64,
+                UNSIGNED_INT32, VARINT, VARLONG,
+                STRING, NULLABLE_STRING, BYTES, NULLABLE_BYTES,
+                RECORDS, new ArrayOf(new Type(){
+
+            @Override
+            public void write(ByteBuffer buffer, Object o) {
+
+            }
+
+            @Override
+            public Object read(ByteBuffer buffer) {
+                return null;
+            }
+
+            @Override
+            public Object validate(Object o) {
+                return null;
+            }
+
+            @Override
+            public int sizeOf(Object o) {
+                return 0;
+            }
+
+            @Override
+            public String documentation() {
+                return null;
+            }
+
+            @Override
+            public String toString() {
+                return "T";
+            }
+        })};
+        for (Type type : types) {
+            b.append("<tr>");
+            b.append("<td>");
+            b.append(type.toString());
+            b.append("</td>");
+            b.append("<td>");
+            b.append(type.documentation());
+            b.append("</td>");
+            b.append("</tr>\n");
+        }
+        b.append("</table>\n");
+        return b.toString();
+    }
+
+    public static void main(String[] args) {
+        System.out.println(toHtml());
+    }
 }
