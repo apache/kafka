@@ -79,13 +79,16 @@ class StreamsMultipleRollingUpgradeTest(BaseStreamsTest):
             self.logger.info("Updating node %s to version %s" % (processor.node.account, to_version))
             node = processor.node
             if self.started:
-                processor.stop()
-                self.wait_for_verification(processor, "SMOKE-TEST-CLIENT-CLOSED", processor.STDOUT_FILE)
+                self.stop(processor)
             node.version = KafkaVersion(to_version)
             processor.start()
             self.wait_for_verification(processor, "initializing processor: topic", processor.STDOUT_FILE)
 
         self.started = True
+
+    def stop(self, processor):
+        processor.stop()
+        self.wait_for_verification(processor, "SMOKE-TEST-CLIENT-CLOSED", processor.STDOUT_FILE)
 
     def update_processors_and_verify(self, versions):
         for version in versions:
@@ -108,3 +111,6 @@ class StreamsMultipleRollingUpgradeTest(BaseStreamsTest):
 
         # with order reversed now we test downgrading, verification run after each downgrade
         self.update_processors_and_verify(self.streams_downgrade_versions)
+
+        for processor in self.processors:
+            self.stop(processor)
