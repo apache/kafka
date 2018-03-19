@@ -627,7 +627,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     producer.close()
   }
 
-  @Test
+  @Test(expected = classOf[org.apache.kafka.common.errors.TimeoutException])
   def testPositionAndCommit() {
     sendRecords(5)
 
@@ -640,12 +640,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     this.consumers.head.assign(List(tp).asJava)
 
-    assertEquals("position() on a partition that we are subscribed to should reset the offset", 0L, this.consumers.head.position(tp))
+    assertEquals("position() on a partition that we are subscribed to should reset the offset", 0L, this.consumers.head.position(tp, 2000L, TimeUnit.MILLISECONDS))
     this.consumers.head.commitSync()
     assertEquals(0L, this.consumers.head.committed(tp).offset)
 
     consumeAndVerifyRecords(consumer = this.consumers.head, numRecords = 5, startingOffset = 0)
-    assertEquals("After consuming 5 records, position should be 5", 5L, this.consumers.head.position(tp))
+    assertEquals("After consuming 5 records, position should be 5", 5L, this.consumers.head.position(tp, 2000L, TimeUnit.MILLISECONDS))
     this.consumers.head.commitSync()
     assertEquals("Committed offset should be returned", 5L, this.consumers.head.committed(tp).offset)
 

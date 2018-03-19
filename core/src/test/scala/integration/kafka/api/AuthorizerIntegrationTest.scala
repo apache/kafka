@@ -912,12 +912,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(offset, offsetFetchResponse.responseData.get(tp).offset)
   }
 
-  @Test
+  @Test(expected = classOf[org.apache.kafka.common.errors.TimeoutException])
   def testOffsetFetchTopicDescribe() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), groupResource)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), topicResource)
     this.consumers.head.assign(List(tp).asJava)
-    this.consumers.head.position(tp)
+    this.consumers.head.position(tp, 2000L, TimeUnit.MILLISECONDS)
   }
 
   @Test(expected = classOf[org.apache.kafka.common.errors.TimeoutException])
