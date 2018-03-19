@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -74,7 +75,7 @@ public final class WorkerUtils {
     }
 
     private static final int CREATE_TOPICS_REQUEST_TIMEOUT = 25000;
-    private static final int CREATE_TOPICS_CALL_TIMEOUT = 90000;
+    private static final int CREATE_TOPICS_CALL_TIMEOUT = 180000;
     private static final int MAX_CREATE_TOPICS_BATCH_SIZE = 10;
 
             //Map<String, Map<Integer, List<Integer>>> topics) throws Throwable {
@@ -168,8 +169,9 @@ public final class WorkerUtils {
                     future.get();
                     log.debug("Successfully created {}.", topicName);
                 } catch (Exception e) {
-                    if (e.getCause() instanceof TimeoutException) {
-                        log.warn("Timed out attempting to create {}: {}", topicName,
+                    if ((e.getCause() instanceof TimeoutException)
+                        || (e.getCause() instanceof NotEnoughReplicasException)) {
+                        log.warn("Attempt to create topic `{}` failed: {}", topicName,
                                  e.getCause().getMessage());
                         topicsToCreate.add(topicName);
                     } else if (e.getCause() instanceof TopicExistsException) {
