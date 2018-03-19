@@ -39,6 +39,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 public class StoreChangelogReader implements ChangelogReader {
 
@@ -184,7 +185,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         for (final StateRestorer restorer : needsPositionUpdate) {
-            final long position = restoreConsumer.position(restorer.partition());
+            final long position = restoreConsumer.position(restorer.partition(), 2000L, TimeUnit.MILLISECONDS);
             logRestoreOffsets(restorer.partition(),
                               position,
                               endOffsets.get(restorer.partition()));
