@@ -20,7 +20,6 @@ package kafka.server
 import java.lang.{Long => JLong}
 import java.net.InetAddress
 import java.util
-
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0}
 import kafka.cluster.Replica
 import kafka.controller.KafkaController
@@ -37,6 +36,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -47,9 +47,9 @@ import org.apache.kafka.common.utils.Utils
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Test}
-
 import scala.collection.JavaConverters._
 import scala.collection.Map
+import scala.collection.Set
 
 class KafkaApisTest {
 
@@ -80,7 +80,7 @@ class KafkaApisTest {
     metrics.close()
   }
 
-  def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion): KafkaApis = {
+  def createKafkaApis(interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion, cache:MetadataCache = metadataCache): KafkaApis = {
     val properties = TestUtils.createBrokerConfig(brokerId, "zk")
     properties.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
     properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
@@ -93,7 +93,7 @@ class KafkaApisTest {
       zkClient,
       brokerId,
       new KafkaConfig(properties),
-      metadataCache,
+      cache,
       metrics,
       authorizer,
       quotas,
@@ -388,6 +388,45 @@ class KafkaApisTest {
     assertEquals(Set(0), response.brokers.asScala.map(_.id).toSet)
   }
 
+  @Test
+  def testCreateResponseForFindCoordinatorRequest(): Unit = {
+    val expectedError = Errors.NOT_COORDINATOR
+    val topicMetadata = EasyMock.createNiceMock(classOf[MetadataResponse.TopicMetadata])
+    // other methods won't be used if there is a error in topicMetadata
+    EasyMock.expect(topicMetadata.error())
+      .andReturn(expectedError)
+    val cache = EasyMock.createNiceMock(classOf[MetadataCache])
+    EasyMock.expect(cache.getTopicMetadata(
+      EasyMock.anyObject[Set[String]],
+      EasyMock.anyObject[ListenerName],
+      EasyMock.anyObject[Boolean]
+    )).andReturn(Seq(topicMetadata))
+
+    // capturing the function which is used to send response help us to generate the
+    // response later.
+    val capturedSendCallback = EasyMock.newCapture[Int => Unit]
+    EasyMock.expect(clientRequestQuotaManager.maybeRecordAndThrottle(
+      EasyMock.anyObject[RequestChannel.Request],
+      EasyMock.capture(capturedSendCallback))).andAnswer(new IAnswer[Unit] {
+      override def answer(): Unit = {
+        // do nothing
+      }
+    })
+    EasyMock.replay(topicMetadata, cache, clientRequestQuotaManager)
+
+    var response: Option[FindCoordinatorResponse] = None
+    def captureBuildResponse(r: AbstractResponse): Unit = r match {
+      case fcr: FindCoordinatorResponse => response = Some(fcr)
+      case _ => response = None
+    }
+    val request = buildRequest(new FindCoordinatorRequest.Builder(
+      FindCoordinatorRequest.CoordinatorType.GROUP, "coordinatorKey"),
+      responseCallback = Some(captureBuildResponse))._2
+    createKafkaApis(cache = cache).handleFindCoordinatorRequest(request)
+    capturedSendCallback.getValue.apply(0)
+    assertEquals(expectedError, response.get.error())
+  }
+
   /**
    * Return pair of listener names in the metadataCache: PLAINTEXT and LISTENER2 respectively.
    */
@@ -459,7 +498,8 @@ class KafkaApisTest {
   }
 
   private def buildRequest[T <: AbstractRequest](builder: AbstractRequest.Builder[T],
-      listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, RequestChannel.Request) = {
+      listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+      responseCallback: Option[AbstractResponse => Unit] = None): (T, RequestChannel.Request) = {
 
     val request = builder.build()
     val buffer = request.serialize(new RequestHeader(builder.apiKey, request.version, "", 0))
@@ -467,7 +507,12 @@ class KafkaApisTest {
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
-      listenerName, SecurityProtocol.PLAINTEXT)
+      listenerName, SecurityProtocol.PLAINTEXT) {
+      override def buildResponse(body: AbstractResponse) = {
+        responseCallback.foreach(_(body))
+        super.buildResponse(body)
+      }
+    }
     (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos =  0,
       MemoryPool.NONE, buffer, requestChannelMetrics))
   }
