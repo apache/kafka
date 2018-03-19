@@ -107,9 +107,6 @@ class InterBrokerSendThreadTest {
     EasyMock.expect(networkClient.ready(node, time.milliseconds()))
       .andReturn(false)
 
-    EasyMock.expect(networkClient.connectionDelay(EasyMock.anyObject(), EasyMock.anyLong()))
-    .andReturn(0)
-
     EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
       .andReturn(Utils.mkList())
 
@@ -149,9 +146,6 @@ class InterBrokerSendThreadTest {
     // make the node unready so the request is not cleared
     EasyMock.expect(networkClient.ready(node, time.milliseconds()))
       .andReturn(false)
-
-    EasyMock.expect(networkClient.connectionDelay(node, time.milliseconds()))
-      .andReturn(500)
 
     EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
       .andReturn(Utils.mkList())

@@ -16,9 +16,9 @@
  */
 package kafka.common
 
-import java.util
-import java.util.{ArrayList, Collection, Collections, HashMap, Iterator, LinkedList}
+import java.util.{ArrayDeque, ArrayList, Collection, Collections, HashMap, Iterator}
 
+import kafka.admin.AdminClient
 import kafka.utils.ShutdownableThread
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
@@ -50,7 +50,6 @@ abstract class InterBrokerSendThread(name: String,
 
   override def doWork() {
     val now = time.milliseconds()
-    var pollTimeout = Long.MaxValue
 
     generateRequests().foreach { request =>
       val completionHandler = request.handler
@@ -59,21 +58,8 @@ abstract class InterBrokerSendThread(name: String,
     }
 
     try {
-      if (unsentRequests.hasRequests) {
-        for (node <- unsentRequests.nodes.asScala) {
-          val requestIterator = unsentRequests.requestIterator(node)
-          while (requestIterator.hasNext) {
-            val request = requestIterator.next
-            if (networkClient.ready(node, now)) {
-              networkClient.send(request, now)
-              requestIterator.remove()
-              unsentRequests.clean()
-            } else
-              pollTimeout = Math.min(pollTimeout, networkClient.connectionDelay(node, now))
-          }
-        }
-      }
-      networkClient.poll(pollTimeout, now)
+      sendRequests(now)
+      unsentRequests.clean()
       checkDisconnects(now)
       failExpiredRequests(now)
     } catch {
@@ -88,25 +74,44 @@ abstract class InterBrokerSendThread(name: String,
     }
   }
 
+  private def sendRequests(now: Long): Unit = {
+    var pollTimeout = Long.MaxValue
+    if (unsentRequests.hasRequests) {
+      for (node <- unsentRequests.nodes.asScala) {
+        val requestIterator = unsentRequests.requestIterator(node)
+        while (requestIterator.hasNext) {
+          val request = requestIterator.next
+          if (networkClient.ready(node, now)) {
+            networkClient.send(request, now)
+            requestIterator.remove()
+          } else
+            pollTimeout = if (unsentRequests.hasRequests) AdminClient.DefaultReconnectBackoffMs else Long.MaxValue
+        }
+      }
+    }
+    networkClient.poll(pollTimeout, now)
+  }
+
   private def checkDisconnects(now: Long): Unit = {
     // any disconnects affecting requests that have already been transmitted will be handled
     // by NetworkClient, so we just need to check whether connections for any of the unsent
     // requests have been disconnected; if they have, then we complete the corresponding future
     // and set the disconnect flag in the ClientResponse
-    for (node <- unsentRequests.nodes.asScala) {
+    val nodeIterator = unsentRequests.nodeIterator()
+    while (nodeIterator.hasNext) {
+      val node = nodeIterator.next
       if (networkClient.connectionFailed(node)) {
         // Remove entry before invoking request callback to avoid callbacks handling
         // coordinator failures traversing the unsent list again.
-        val requests = unsentRequests.remove(node)
+        val requests = unsentRequests.getRequests(node)
+        nodeIterator.remove()
         for (request <- requests.asScala) {
           val handler = request.callback
-          val authenticationException = networkClient.authenticationException(node)
-          if (authenticationException == null) {
-            handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
-              handler, request.destination, now /* createdTimeMs */ , now /* receivedTimeMs */ , true /* disconnected */ ,
-              null /* versionMismatch */ , null /* responseBody */))
-          } else
-            debug(s"Failed to send the following request due to authentication error: ${request.toString}")
+          if (networkClient.authenticationException(node) == null)
+            error(s"Failed to send the following request due to authentication error: ${request.toString}")
+          handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
+            handler, request.destination, now /* createdTimeMs */ , now /* receivedTimeMs */ , true /* disconnected */ ,
+            null /* versionMismatch */ , null /* responseBody */))
         }
       }
     }
@@ -115,8 +120,13 @@ abstract class InterBrokerSendThread(name: String,
   private def failExpiredRequests(now: Long): Unit = {
     // clear all expired unsent requests
     val expiredRequests = unsentRequests.removeExpiredRequests(now, unsentExpiryMs)
-    for (request <- expiredRequests.asScala)
+    for (request <- expiredRequests.asScala) {
       debug(s"Failed to send the following request after $unsentExpiryMs ms: ${request.toString}")
+      val handler = request.callback
+      handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
+        handler, request.destination, now /* createdTimeMs */ , now /* receivedTimeMs */ , true /* disconnected */ ,
+        null /* versionMismatch */ , null /* responseBody */))
+    }
   }
 
   def wakeup(): Unit = networkClient.wakeup()
@@ -126,12 +136,12 @@ case class RequestAndCompletionHandler(destination: Node, request: AbstractReque
                                        handler: RequestCompletionHandler)
 
 class UnsentRequests {
-  private var unsent = new HashMap[Node, LinkedList[ClientRequest]]
+  private var unsent = new HashMap[Node, ArrayDeque[ClientRequest]]
 
   def put(node: Node, request: ClientRequest): Unit = {
     var requests = unsent.get(node)
     if (requests == null) {
-      requests = new LinkedList[ClientRequest]
+      requests = new ArrayDeque[ClientRequest]
       unsent.putIfAbsent(node, requests)
     }
     requests.add(request)
@@ -143,7 +153,7 @@ class UnsentRequests {
     false
   }
 
-  def removeExpiredRequests(now: Long, unsentExpiryMs: Long): util.Collection[ClientRequest] = {
+  def removeExpiredRequests(now: Long, unsentExpiryMs: Long): Collection[ClientRequest] = {
     val expiredRequests = new ArrayList[ClientRequest]
     for (requests <- unsent.values.asScala) {
       val requestIterator = requests.iterator
@@ -169,12 +179,16 @@ class UnsentRequests {
     }
   }
 
-  def remove(node: Node): Collection[ClientRequest] = {
-    val requests = unsent.remove(node)
+  def getRequests(node: Node): Collection[ClientRequest] = {
+    val requests = unsent.get(node)
     if (requests == null)
-      new LinkedList[ClientRequest]()
+      new ArrayDeque[ClientRequest]()
     else
       requests
+  }
+
+  def nodeIterator(): Iterator[Node] = {
+    unsent.keySet().iterator()
   }
 
   def requestIterator(node: Node): Iterator[ClientRequest] = {
