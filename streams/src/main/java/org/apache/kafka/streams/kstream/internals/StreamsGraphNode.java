@@ -21,49 +21,23 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 
-import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.FLATMAP;
-import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.GLOBAL_KTABLE;
-import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.GROUP_BY;
-import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.JOIN;
-import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.MAP;
-import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.SELECT_KEY;
-import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.SOURCE;
-import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.TABLE;
-import static org.apache.kafka.streams.kstream.internals.StreamsGraphNode.TopologyNodeType.TRANSFORM;
-
+import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.FLATMAP;
+import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.GLOBAL_KTABLE;
+import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.GROUP_BY;
+import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.MAP;
+import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.SELECT_KEY;
+import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.SOURCE;
+import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.STREAM_STREAM_JOIN;
+import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.TABLE;
+import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.TRANSFORM;
 
 /**
  * A Node in the Streams DAG used to contain all information needed to construct this
  * portion of the Topology.  The class holds information until the InternalTopologyBuilder builds
- * the actual topology.
+ * the actual topology.  This is the base case class and other more specific cases required
+ * more detailed information will extend this class
  */
 public class StreamsGraphNode {
-
-    public enum TopologyNodeType {
-        MAP,
-        GROUP_BY,
-        SOURCE,
-        TABLE,
-        SINK,
-        JOIN,
-        FLATMAP,
-        PROCESSING,
-        FILTER,
-        TRANSFORM,
-        TRANSFORM_VALUES,
-        PROCESSOR,
-        KTABLE,
-        TOPOLOGY_PARENT,
-        TO_STREAM,
-        AGGREGATE_TYPE,
-        GLOBAL_KTABLE,
-        SELECT_KEY,
-        MAP_VALUES,
-        REPARTITION,
-        STREAM_KTABLE_JOIN,
-        STREAM_GLOBAL_TABLE_JOIN,
-        AGGREGATE
-    }
 
 
     protected final TopologyNodeType topologyNodeType;
@@ -74,8 +48,8 @@ public class StreamsGraphNode {
     protected String name;
     protected String predecessorName;
 
-    public StreamsGraphNode(TopologyNodeType nodeType) {
-        this.topologyNodeType = nodeType;
+    public StreamsGraphNode(final TopologyNodeType topologyNodeType) {
+        this.topologyNodeType = topologyNodeType;
     }
 
     public StreamsGraphNode(final String name, final TopologyNodeType topologyNodeType) {
@@ -120,7 +94,8 @@ public class StreamsGraphNode {
     }
 
     public boolean isSourceNode() {
-        return topologyNodeType == SOURCE || topologyNodeType == TABLE || topologyNodeType == GLOBAL_KTABLE || topologyNodeType == JOIN;
+        return topologyNodeType == SOURCE || topologyNodeType == TABLE || topologyNodeType == GLOBAL_KTABLE || topologyNodeType
+                                                                                                               == STREAM_STREAM_JOIN;
     }
 
 

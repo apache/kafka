@@ -28,7 +28,7 @@ import java.util.Set;
  */
 public abstract class StreamsTopologyGraph {
 
-    protected final StreamsGraphNode root = new StreamsGraphNode("TOPOLOGY_ROOT", StreamsGraphNode.TopologyNodeType.TOPOLOGY_PARENT);
+    protected final StreamsGraphNode root = new StreamsGraphNode("TOPOLOGY_ROOT", TopologyNodeType.TOPOLOGY_PARENT);
 
     protected final Map<StreamsGraphNode, Set<StreamsGraphNode>> repartitioningNodeToRepartitioned = new HashMap<>();
     protected final Map<StreamsGraphNode, StreamsGraphNode> stateStoreNodeToSinkNodes = new HashMap<>();

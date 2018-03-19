@@ -95,7 +95,7 @@
               files="JsonConverter.java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="ConnectRecord.java"/>
+              files="ConnectRecord.java|TopologyOptimizerImpl.java"/>
     <suppress checks="CyclomaticComplexity"
               files="JsonConverter.java"/>
     <suppress checks="CyclomaticComplexity"
@@ -108,7 +108,7 @@
               files="(Values|ConnectHeader|ConnectHeaders).java"/>
 
     <suppress checks="JavaNCSS"
-              files="KafkaConfigBackingStore.java"/>
+              files="KafkaConfigBackingStore.java|InternalTopologyBuilderOptimizerImpl"/>
     <suppress checks="JavaNCSS"
               files="Values.java"/>
 

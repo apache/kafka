@@ -63,6 +63,7 @@ public class KGroupedTableImplTest {
     public void before() {
         groupedTable = builder.table("blah", Consumed.with(Serdes.String(), Serdes.String()))
                 .groupBy(MockMapper.<String, String>selectValueKeyValueMapper());
+        builder.build();
     }
 
     @Test

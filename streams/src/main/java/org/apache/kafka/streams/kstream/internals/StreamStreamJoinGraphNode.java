@@ -22,7 +22,11 @@ import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Objects;
 
-public class JoinGraphNode extends StreamsGraphNode {
+/**
+ * This class is needed to encode all the information
+ * required for building a StreamsStreams Join
+ */
+class StreamStreamJoinGraphNode extends StreamsGraphNode {
 
     final String thisWindowStreamName;
     final String otherWindowStreamName;
@@ -40,21 +44,21 @@ public class JoinGraphNode extends StreamsGraphNode {
     final StoreBuilder otherWindowBuilder;
 
 
-    public JoinGraphNode(final TopologyNodeType nodeType,
-                         final String thisWindowStreamName,
-                         final String otherWindowStreamName,
-                         final String leftHandSideCallingStream,
-                         final String otherStreamName,
-                         final String joinThisName,
-                         final String joinOtherName,
-                         final String joinMergeName,
-                         final ProcessorSupplier joinThisProcessor,
-                         final ProcessorSupplier joinOtherProcessor,
-                         final ProcessorSupplier thisWindowedStreamProcessor,
-                         final ProcessorSupplier otherWindowedStreamProcessor,
-                         final ProcessorSupplier joinMergeProcessor,
-                         final StoreBuilder thisWindowBuilder,
-                         final StoreBuilder otherWindowBuilder) {
+    private StreamStreamJoinGraphNode(final TopologyNodeType nodeType,
+                                      final String thisWindowStreamName,
+                                      final String otherWindowStreamName,
+                                      final String leftHandSideCallingStream,
+                                      final String otherStreamName,
+                                      final String joinThisName,
+                                      final String joinOtherName,
+                                      final String joinMergeName,
+                                      final ProcessorSupplier joinThisProcessor,
+                                      final ProcessorSupplier joinOtherProcessor,
+                                      final ProcessorSupplier thisWindowedStreamProcessor,
+                                      final ProcessorSupplier otherWindowedStreamProcessor,
+                                      final ProcessorSupplier joinMergeProcessor,
+                                      final StoreBuilder thisWindowBuilder,
+                                      final StoreBuilder otherWindowBuilder) {
         super(nodeType);
         this.thisWindowStreamName = thisWindowStreamName;
         this.otherWindowStreamName = otherWindowStreamName;
@@ -179,14 +183,15 @@ public class JoinGraphNode extends StreamsGraphNode {
             return this;
         }
 
-        public JoinGraphNode build() {
-            JoinGraphNode joinGraphNode = new  JoinGraphNode(topologyNodeType, thisWindowStreamName, otherWindowStreamName, leftHandSideCallingStream, otherStreamName, joinThisName,
-                                     joinOtherName,
-                                     joinMergeName, joinThisProcessor, joinOtherProcessor, thisWindowedStream, otherWindowedStream, joinMergeProcessor,
-                                     thisWindowBuilder, otherWindowBuilder);
+        public StreamStreamJoinGraphNode build() {
+            StreamStreamJoinGraphNode
+                streamStreamJoinGraphNode = new StreamStreamJoinGraphNode(topologyNodeType, thisWindowStreamName, otherWindowStreamName, leftHandSideCallingStream, otherStreamName, joinThisName,
+                                                                          joinOtherName,
+                                                                          joinMergeName, joinThisProcessor, joinOtherProcessor, thisWindowedStream, otherWindowedStream, joinMergeProcessor,
+                                                                          thisWindowBuilder, otherWindowBuilder);
 
-            joinGraphNode.setName(name);
-            return joinGraphNode;
+            streamStreamJoinGraphNode.setName(name);
+            return streamStreamJoinGraphNode;
         }
     }
 
@@ -201,7 +206,7 @@ public class JoinGraphNode extends StreamsGraphNode {
         if (!super.equals(o)) {
             return false;
         }
-        JoinGraphNode that = (JoinGraphNode) o;
+        StreamStreamJoinGraphNode that = (StreamStreamJoinGraphNode) o;
         return Objects.equals(thisWindowStreamName, that.thisWindowStreamName) &&
                Objects.equals(otherWindowStreamName, that.otherWindowStreamName) &&
                Objects.equals(leftHandSideCallingStream, that.leftHandSideCallingStream) &&

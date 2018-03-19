@@ -71,11 +71,11 @@ class GroupedStreamAggregateBuilder<K, V> {
         ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(aggregateSupplier)
             .withStoreBuilder(storeBuilder).withConnectProcessorName(sourceName).build();
         StreamsGraphNode graphNode = new StreamsGraphNode(aggFunctionName,
-                                                          StreamsGraphNode.TopologyNodeType.AGGREGATE,
+                                                          TopologyNodeType.AGGREGATE,
                                                           false,
                                                           processDetails,
                                                           null);
-        builder.internalTopologyBuilder.getStreamsTopologyGraph().addNode(graphNode);
+        builder.addNode(graphNode);
 //        builder.internalTopologyBuilder.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
 //        builder.internalTopologyBuilder.addStateStore(storeBuilder, aggFunctionName);
 

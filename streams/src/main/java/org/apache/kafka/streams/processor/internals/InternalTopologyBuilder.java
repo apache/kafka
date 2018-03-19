@@ -21,8 +21,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.kstream.internals.StreamsTopologyGraph;
-import org.apache.kafka.streams.kstream.internals.StreamsTopologyGraphImpl;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -123,8 +121,6 @@ public class InternalTopologyBuilder {
     private Pattern topicPattern = null;
 
     private Map<Integer, Set<String>> nodeGroups = null;
-
-    StreamsTopologyGraph streamsTopologyGraph = new StreamsTopologyGraphImpl();
 
     interface StateStoreFactory {
         Set<String> users();
@@ -1885,7 +1881,4 @@ public class InternalTopologyBuilder {
         updateSubscriptions(subscriptionUpdates, logPrefix);
     }
 
-    public StreamsTopologyGraph getStreamsTopologyGraph() {
-        return this.streamsTopologyGraph;
-    }
 }

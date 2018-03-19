@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-//import org.apache.kafka.streams.errors.TopologyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +33,6 @@ public class StreamsTopologyGraphImpl extends StreamsTopologyGraph {
 
         if (predecessorNode == null && !node.isSourceNode()) {
             LOG.warn("Only SOURCE nodes should have a null predecessor.  Type " + node.getType() + " predecessor name " + node.getPredecessorName());
-            //throw new TopologyException("Only SOURCE nodes can have a null predecessor.  Type " + node.getType() + " predecessor name " + node.getPredecessorName());
         }
 
         if (predecessorNode == null) {
@@ -56,12 +54,12 @@ public class StreamsTopologyGraphImpl extends StreamsTopologyGraph {
                 }
                 currentNode = predecessor.getPredecessor();
             }
-        } else if (node.getType() == StreamsGraphNode.TopologyNodeType.SINK) {
+        } else if (node.getType() == TopologyNodeType.SINK) {
             final StreamsGraphNode sinkParent = node.getPredecessor();
             if (sinkParent != null) {
                 final StreamsGraphNode sinkGrandparent = sinkParent.getPredecessor();
-                if (sinkParent.getType() == StreamsGraphNode.TopologyNodeType.TO_STREAM
-                    && sinkGrandparent.getType() == StreamsGraphNode.TopologyNodeType.AGGREGATE_TYPE) {
+                if (sinkParent.getType() == TopologyNodeType.TO_STREAM
+                    && sinkGrandparent.getType() == TopologyNodeType.AGGREGATE_TYPE) {
                     stateStoreNodeToSinkNodes.put(sinkGrandparent, node);
                 }
             }

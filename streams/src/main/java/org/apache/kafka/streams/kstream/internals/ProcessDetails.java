@@ -43,7 +43,7 @@ import java.util.regex.Pattern;
  * {@link AbstractStream} when building a topology
  */
 @SuppressWarnings({"deprecation", "unchecked"})
-public class ProcessDetails<K, V, S extends StateStore> {
+class ProcessDetails<K, V, S extends StateStore> {
 
     private final Collection<String> sourceTopics;
     private final String sinkTopic;

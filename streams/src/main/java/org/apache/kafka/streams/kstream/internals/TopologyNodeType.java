@@ -17,21 +17,30 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+public enum TopologyNodeType {
 
-/**
- * Used to Build a Topology and apply optimization rules as the graph of the topology
- * is traversed.
- */
-public interface TopologyOptimizer {
-
-
-    /**
-     * Called to build and optimize the topology. During this process results stored in the graph
-     * are applied to the topology.
-     *
-     * @param streamsTopologyGraph
-     */
-    void optimize(StreamsTopologyGraph streamsTopologyGraph, InternalTopologyBuilder internalTopologyBuilder);
-
+    MAP,
+    GROUP_BY,
+    SOURCE,
+    TABLE,
+    SINK,
+    STREAM_STREAM_JOIN,
+    FLATMAP,
+    PROCESSING,
+    FILTER,
+    TRANSFORM,
+    TRANSFORM_VALUES,
+    PROCESSOR,
+    KTABLE,
+    TOPOLOGY_PARENT,
+    TO_STREAM,
+    AGGREGATE_TYPE,
+    GLOBAL_KTABLE,
+    SELECT_KEY,
+    MAP_VALUES,
+    SOURCE_SINK,
+    STREAM_KTABLE_JOIN,
+    KTABLE_KTABLE_JOIN,
+    STREAM_GLOBAL_TABLE_JOIN,
+    AGGREGATE
 }

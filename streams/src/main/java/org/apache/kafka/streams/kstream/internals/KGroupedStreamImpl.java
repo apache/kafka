@@ -503,12 +503,12 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
             .withStoreSupplier(storeSupplier)
             .withConnectProcessorName(sourceName).build();
         StreamsGraphNode streamsGraphNode = new StreamsGraphNode(aggFunctionName,
-                                                                 StreamsGraphNode.TopologyNodeType.AGGREGATE,
+                                                                 TopologyNodeType.AGGREGATE,
                                                                  false,
                                                                  processDetails,
                                                                  null);
 
-        builder.internalTopologyBuilder.getStreamsTopologyGraph().addNode(streamsGraphNode);
+        builder.addNode(streamsGraphNode);
 
 
         return new KTableImpl<>(

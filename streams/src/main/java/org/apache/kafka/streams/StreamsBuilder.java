@@ -26,9 +26,9 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
-import org.apache.kafka.streams.kstream.internals.InternalTopologyBuilderOptimizerImpl;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.kstream.internals.TopologyOptimizer;
+import org.apache.kafka.streams.kstream.internals.TopologyOptimizerImpl;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -42,7 +42,6 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 /**
@@ -58,12 +57,11 @@ public class StreamsBuilder {
     /** The actual topology that is constructed by this StreamsBuilder. */
     private final Topology topology = new Topology();
 
-    private final AtomicInteger nodeCounter = new AtomicInteger(0);
-
     /** The topology's internal builder. */
     final InternalTopologyBuilder internalTopologyBuilder = topology.internalTopologyBuilder;
 
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
+    private boolean topologyBuilt = false;
 
     /**
      * Create a {@link KStream} from the specified topics.
@@ -520,8 +518,11 @@ public class StreamsBuilder {
      * @return the {@link Topology} that represents the specified processing logic
      */
     public synchronized Topology build() {
-        final TopologyOptimizer topologyOptimizer = new InternalTopologyBuilderOptimizerImpl(internalTopologyBuilder);
-        topologyOptimizer.optimize(internalTopologyBuilder.getStreamsTopologyGraph());
+        if (!topologyBuilt) {
+            final TopologyOptimizer topologyOptimizer = new TopologyOptimizerImpl();
+            topologyOptimizer.optimize(internalStreamsBuilder.getTopologyGraph(), internalTopologyBuilder);
+            topologyBuilt = true;
+        }
         return topology;
     }
 }

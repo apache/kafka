@@ -22,33 +22,47 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.util.Objects;
 
-public class RepartitionGraphNode extends StreamsGraphNode {
+/**
+ * Used for through nodes and other cases where you need
+ * a source node immediately followed by a sink node
+ */
+class SourceSinkNode extends StreamsGraphNode {
 
     final Serde keySerde;
     final Serde valueSerde;
-    final String repartitionTopic;
+    final ChangedDeserializer changedDeserializer;
+    final ChangedSerializer changedSerializer;
+    final String sinkTopic;
     final String sinkName;
-    final String filterName;
+    final String funcOrFilterName;
     final String sourceName;
     final ProcessorSupplier processorSupplier;
 
 
-    public RepartitionGraphNode(final TopologyNodeType nodeType,
-                                final Serde keySerde,
-                                final Serde valueSerde,
-                                final String repartitionTopic,
-                                final String sinkName,
-                                final String filterName,
-                                final String sourceName,
-                                final ProcessorSupplier processorSupplier) {
-        super(nodeType);
+    public SourceSinkNode(final TopologyNodeType topologyNodeType,
+                          final Serde keySerde,
+                          final Serde valueSerde,
+                          final String sinkTopic,
+                          final String sinkName,
+                          final String funcOrFilterName,
+                          final String sourceName,
+                          final ProcessorSupplier processorSupplier,
+                          final ChangedDeserializer changedDeserializer,
+                          final ChangedSerializer changedSerializer) {
+        super(topologyNodeType);
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
-        this.repartitionTopic = repartitionTopic;
+        this.sinkTopic = sinkTopic;
         this.sinkName = sinkName;
-        this.filterName = filterName;
+        this.funcOrFilterName = funcOrFilterName;
         this.sourceName = sourceName;
         this.processorSupplier = processorSupplier;
+        this.changedDeserializer = changedDeserializer;
+        this.changedSerializer = changedSerializer;
+    }
+
+    public static Builder builder() {
+        return new Builder();
     }
 
 
@@ -57,12 +71,15 @@ public class RepartitionGraphNode extends StreamsGraphNode {
         String name;
         Serde keySerde;
         Serde valueSerde;
-        String repartitionTopic;
+        String sinkTopic;
         String sinkName;
         String filterName;
         String sourceName;
-        TopologyNodeType nodeType;
+        TopologyNodeType topologyNodeType;
         ProcessorSupplier processorSupplier;
+        ProcessDetails processDetails;
+        ChangedSerializer changedSerializer;
+        ChangedDeserializer changedDeserializer;
 
         private Builder() {
         }
@@ -81,8 +98,8 @@ public class RepartitionGraphNode extends StreamsGraphNode {
             return this;
         }
 
-        public Builder withRepartitionTopic(String repartitionTopic) {
-            this.repartitionTopic = repartitionTopic;
+        public Builder withSinkTopic(String repartitionTopic) {
+            this.sinkTopic = repartitionTopic;
             return this;
         }
 
@@ -106,8 +123,8 @@ public class RepartitionGraphNode extends StreamsGraphNode {
             return this;
         }
 
-        public Builder withTopologyNodeType(TopologyNodeType nodeType) {
-            this.nodeType = nodeType;
+        public Builder withTopologyNodeType(TopologyNodeType topologyNodeType) {
+            this.topologyNodeType = topologyNodeType;
             return this;
         }
 
@@ -116,12 +133,28 @@ public class RepartitionGraphNode extends StreamsGraphNode {
             return this;
         }
 
-        public RepartitionGraphNode build() {
-            RepartitionGraphNode
-                repartitionGraphNode =
-                new RepartitionGraphNode(nodeType, keySerde, valueSerde, repartitionTopic, sinkName, filterName, sourceName, processorSupplier);
-            repartitionGraphNode.setName(name);
-            return repartitionGraphNode;
+        public Builder withProcessorDetails(ProcessDetails processorDetails) {
+            this.processDetails = processorDetails;
+            return this;
+        }
+
+        public Builder withChangedSerialiazer(ChangedSerializer changedSerialiazer) {
+            this.changedSerializer = changedSerialiazer;
+            return this;
+        }
+
+        public Builder withChangedDeserializer(ChangedDeserializer changedDeserializer) {
+            this.changedDeserializer = changedDeserializer;
+            return this;
+        }
+
+        public SourceSinkNode build() {
+            SourceSinkNode
+                sourceSinkNode =
+                new SourceSinkNode(topologyNodeType, keySerde, valueSerde, sinkTopic, sinkName, filterName, sourceName, processorSupplier, changedDeserializer, changedSerializer);
+            sourceSinkNode.setName(name);
+            sourceSinkNode.setProcessed(processDetails);
+            return sourceSinkNode;
         }
     }
 
@@ -136,12 +169,12 @@ public class RepartitionGraphNode extends StreamsGraphNode {
         if (!super.equals(o)) {
             return false;
         }
-        RepartitionGraphNode that = (RepartitionGraphNode) o;
+        SourceSinkNode that = (SourceSinkNode) o;
         return Objects.equals(keySerde, that.keySerde) &&
                Objects.equals(valueSerde, that.valueSerde) &&
-               Objects.equals(repartitionTopic, that.repartitionTopic) &&
+               Objects.equals(sinkTopic, that.sinkTopic) &&
                Objects.equals(sinkName, that.sinkName) &&
-               Objects.equals(filterName, that.filterName) &&
+               Objects.equals(funcOrFilterName, that.funcOrFilterName) &&
                Objects.equals(sourceName, that.sourceName) &&
                Objects.equals(processorSupplier, that.processorSupplier);
     }
@@ -149,6 +182,6 @@ public class RepartitionGraphNode extends StreamsGraphNode {
     @Override
     public int hashCode() {
 
-        return Objects.hash(super.hashCode(), keySerde, valueSerde, repartitionTopic, sinkName, filterName, sourceName, processorSupplier);
+        return Objects.hash(super.hashCode(), keySerde, valueSerde, sinkTopic, sinkName, funcOrFilterName, sourceName, processorSupplier);
     }
 }
