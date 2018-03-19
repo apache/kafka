@@ -137,6 +137,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private val dynamicConfigPasswordEncoder = maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderSecret)
 
   private[server] def initialize(zkClient: KafkaZkClient): Unit = {
+    currentConfig = new KafkaConfig(kafkaConfig.props, false, None)
     val adminZkClient = new AdminZkClient(zkClient)
     updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default))
     val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, kafkaConfig.brokerId.toString)
@@ -719,8 +720,8 @@ class DynamicListenerConfig(server: KafkaServer) extends BrokerReconfigurable wi
     val oldListeners = listenersToMap(oldConfig.listeners)
     if (!newAdvertisedListeners.keySet.subsetOf(newListeners.keySet))
       throw new ConfigException(s"Advertised listeners '$newAdvertisedListeners' must be a subset of listeners '$newListeners'")
-    if (newListeners.keySet != newConfig.listenerSecurityProtocolMap.keySet)
-      throw new ConfigException(s"Listeners '$newListeners' and listener map '${newConfig.listenerSecurityProtocolMap}' don't match")
+    if (!newListeners.keySet.subsetOf(newConfig.listenerSecurityProtocolMap.keySet))
+      throw new ConfigException(s"Listeners '$newListeners' must be subset of listener map '${newConfig.listenerSecurityProtocolMap}'")
     newListeners.keySet.intersect(oldListeners.keySet).foreach { listenerName =>
       val prefix = listenerName.configPrefix
       val newListenerProps = immutableListenerConfigs(newConfig, prefix)
