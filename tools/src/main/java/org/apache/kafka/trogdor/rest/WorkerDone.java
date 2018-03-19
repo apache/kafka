@@ -55,8 +55,8 @@ public class WorkerDone extends WorkerState {
         super(spec);
         this.startedMs = startedMs;
         this.doneMs = doneMs;
-        this.status = status;
-        this.error = error;
+        this.status = status == null ? "" : status;
+        this.error = error == null ? "" : error;
     }
 
     @JsonProperty

@@ -15,29 +15,41 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.trogdor.rest;
+package org.apache.kafka.trogdor.workload;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-
-import java.util.Collections;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.Iterator;
 
 /**
- * The response to /coordinator/tasks
+ * An iterator which wraps a PayloadGenerator.
  */
-public class TasksResponse extends Message {
-    private final Map<String, TaskState> tasks;
+public final class PayloadIterator implements Iterator<byte[]> {
+    private final PayloadGenerator generator;
+    private long position = 0;
 
-    @JsonCreator
-    public TasksResponse(@JsonProperty("tasks") TreeMap<String, TaskState> tasks) {
-        this.tasks = Collections.unmodifiableMap((tasks == null) ?
-            new TreeMap<String, TaskState>() : tasks);
+    public PayloadIterator(PayloadGenerator generator) {
+        this.generator = generator;
     }
 
-    @JsonProperty
-    public Map<String, TaskState> tasks() {
-        return tasks;
+    @Override
+    public boolean hasNext() {
+        return true;
+    }
+
+    @Override
+    public synchronized byte[] next() {
+        return generator.generate(position++);
+    }
+
+    @Override
+    public void remove() {
+        throw new UnsupportedOperationException();
+    }
+
+    public synchronized void seek(long position) {
+        this.position = position;
+    }
+
+    public synchronized long position() {
+        return this.position;
     }
 }

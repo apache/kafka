@@ -142,7 +142,7 @@ class LogManagerTest {
     for (_ <- 0 until numMessages) {
       val set = TestUtils.singletonRecords("test".getBytes())
       val info = log.appendAsLeader(set, leaderEpoch = 0)
-      offset = info.firstOffset
+      offset = info.firstOffset.get
     }
 
     log.onHighWatermarkIncremented(log.logEndOffset)

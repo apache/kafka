@@ -14,43 +14,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.kafka.trogdor.task;
+package org.apache.kafka.trogdor.workload;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-public class SampleTaskSpec extends TaskSpec {
-    private final long exitMs;
-    private final String error;
+/**
+ * A PayloadGenerator which always generates a constant payload.
+ */
+public class ConstantPayloadGenerator implements PayloadGenerator {
+    private final int size;
+    private final byte[] value;
 
     @JsonCreator
-    public SampleTaskSpec(@JsonProperty("startMs") long startMs,
-                        @JsonProperty("durationMs") long durationMs,
-                        @JsonProperty("exitMs") long exitMs,
-                        @JsonProperty("error") String error) {
-        super(startMs, durationMs);
-        this.exitMs = exitMs;
-        this.error = error == null ? "" : error;
+    public ConstantPayloadGenerator(@JsonProperty("size") int size,
+                                    @JsonProperty("value") byte[] value) {
+        this.size = size;
+        this.value = (value == null || value.length == 0) ? new byte[size] : value;
     }
 
     @JsonProperty
-    public long exitMs() {
-        return exitMs;
+    public int size() {
+        return size;
     }
 
     @JsonProperty
-    public String error() {
-        return error;
+    public byte[] value() {
+        return value;
     }
 
     @Override
-    public TaskController newController(String id) {
-        return new SampleTaskController();
+    public byte[] generate(long position) {
+        byte[] next = new byte[size];
+        for (int i = 0; i < next.length; i += value.length) {
+            System.arraycopy(value, 0, next, i, Math.min(next.length - i, value.length));
+        }
+        return next;
     }
-
-    @Override
-    public TaskWorker newTaskWorker(String id) {
-        return new SampleTaskWorker(this);
-    }
-};
+}

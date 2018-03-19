@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,10 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.processor.internals;
 
-package kafka.common
+import org.apache.kafka.streams.processor.To;
 
-class NotAssignedReplicaException(message: String, cause: Throwable) extends RuntimeException(message, cause) {
-  def this(message: String) = this(message, null)
-  def this() = this(null, null)
+public class ToInternal extends To {
+    public ToInternal() {
+        super(To.all());
+    }
+
+    public void update(final To to) {
+        super.update(to);
+    }
+
+    public boolean hasTimestamp() {
+        return timestamp != -1;
+    }
+
+    public long timestamp() {
+        return timestamp;
+    }
+
+    public String child() {
+        return childName;
+    }
 }

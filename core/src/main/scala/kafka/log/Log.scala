@@ -47,11 +47,11 @@ import java.lang.{Long => JLong}
 import java.util.regex.Pattern
 
 object LogAppendInfo {
-  val UnknownLogAppendInfo = LogAppendInfo(-1, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
+  val UnknownLogAppendInfo = LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, -1L,
     RecordsProcessingStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
 
   def unknownLogAppendInfoWithLogStartOffset(logStartOffset: Long): LogAppendInfo =
-    LogAppendInfo(-1, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
+    LogAppendInfo(None, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP, logStartOffset,
       RecordsProcessingStats.EMPTY, NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
 }
 
@@ -59,7 +59,7 @@ object LogAppendInfo {
  * Struct to hold various quantities we compute about each message set before appending to the log
  *
  * @param firstOffset The first offset in the message set unless the message format is less than V2 and we are appending
- *                    to the follower. In that case, this will be the last offset for performance reasons.
+ *                    to the follower.
  * @param lastOffset The last offset in the message set
  * @param maxTimestamp The maximum timestamp of the message set.
  * @param offsetOfMaxTimestamp The offset of the message with the maximum timestamp.
@@ -72,7 +72,7 @@ object LogAppendInfo {
  * @param validBytes The number of valid bytes
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
  */
-case class LogAppendInfo(var firstOffset: Long,
+case class LogAppendInfo(var firstOffset: Option[Long],
                          var lastOffset: Long,
                          var maxTimestamp: Long,
                          var offsetOfMaxTimestamp: Long,
@@ -83,7 +83,24 @@ case class LogAppendInfo(var firstOffset: Long,
                          targetCodec: CompressionCodec,
                          shallowCount: Int,
                          validBytes: Int,
-                         offsetsMonotonic: Boolean)
+                         offsetsMonotonic: Boolean) {
+  /**
+    * Get the first offset if it exists, else get the last offset.
+    * @return The offset of first message if it exists; else offset of the last message.
+    */
+  def firstOrLastOffset: Long = firstOffset.getOrElse(lastOffset)
+
+  /**
+    * Get the (maximum) number of messages described by LogAppendInfo
+    * @return Maximum possible number of messages described by LogAppendInfo
+    */
+  def numMessages: Long = {
+    firstOffset match {
+      case Some(firstOffsetVal) if (firstOffsetVal >= 0 && lastOffset >= 0) => (lastOffset - firstOffsetVal + 1)
+      case _ => 0
+    }
+  }
+}
 
 /**
  * A class used to hold useful metadata about a completed transaction. This is used to build
@@ -653,7 +670,7 @@ class Log(@volatile var dir: File,
         if (assignOffsets) {
           // assign offsets to the message set
           val offset = new LongRef(nextOffsetMetadata.messageOffset)
-          appendInfo.firstOffset = offset.value
+          appendInfo.firstOffset = Some(offset.value)
           val now = time.milliseconds
           val validateAndOffsetAssignResult = try {
             LogValidator.validateMessagesAndAssignOffsets(validRecords,
@@ -695,7 +712,7 @@ class Log(@volatile var dir: File,
           }
         } else {
           // we are taking the offsets we are given
-          if (!appendInfo.offsetsMonotonic || appendInfo.firstOffset < nextOffsetMetadata.messageOffset)
+          if (!appendInfo.offsetsMonotonic || appendInfo.firstOrLastOffset < nextOffsetMetadata.messageOffset)
             throw new IllegalArgumentException("Out of order offsets found in " + records.records.asScala.map(_.offset))
         }
 
@@ -715,7 +732,7 @@ class Log(@volatile var dir: File,
         // validate the idempotent/transactional state of the producers and collect some metadata
         val (updatedProducers, completedTxns, maybeDuplicate) = analyzeAndValidateProducerState(validRecords, isFromClient)
         maybeDuplicate.foreach { duplicate =>
-          appendInfo.firstOffset = duplicate.firstOffset
+          appendInfo.firstOffset = Some(duplicate.firstOffset)
           appendInfo.lastOffset = duplicate.lastOffset
           appendInfo.logAppendTime = duplicate.timestamp
           appendInfo.logStartOffset = logStartOffset
@@ -723,17 +740,14 @@ class Log(@volatile var dir: File,
         }
 
         // maybe roll the log if this segment is full
-        val segment = maybeRoll(messagesSize = validRecords.sizeInBytes,
-          maxTimestampInMessages = appendInfo.maxTimestamp,
-          maxOffsetInMessages = appendInfo.lastOffset)
+        val segment = maybeRoll(validRecords.sizeInBytes, appendInfo)
 
         val logOffsetMetadata = LogOffsetMetadata(
-          messageOffset = appendInfo.firstOffset,
+          messageOffset = appendInfo.firstOrLastOffset,
           segmentBaseOffset = segment.baseOffset,
           relativePositionInSegment = segment.size)
 
-        segment.append(firstOffset = appendInfo.firstOffset,
-          largestOffset = appendInfo.lastOffset,
+        segment.append(largestOffset = appendInfo.lastOffset,
           largestTimestamp = appendInfo.maxTimestamp,
           shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
           records = validRecords)
@@ -761,8 +775,8 @@ class Log(@volatile var dir: File,
         // update the first unstable offset (which is used to compute LSO)
         updateFirstUnstableOffset()
 
-        trace("Appended message set to log %s with first offset: %d, next offset: %d, and messages: %s"
-          .format(this.name, appendInfo.firstOffset, nextOffsetMetadata.messageOffset, validRecords))
+        trace(s"Appended message set to log ${this.name} with last offset: ${appendInfo.lastOffset}, " +
+              s"first offset: ${appendInfo.firstOffset}, next offset: ${nextOffsetMetadata.messageOffset}, and messages: $validRecords")
 
         if (unflushedMessages >= config.flushInterval)
           flush()
@@ -859,12 +873,13 @@ class Log(@volatile var dir: File,
   private def analyzeAndValidateRecords(records: MemoryRecords, isFromClient: Boolean): LogAppendInfo = {
     var shallowMessageCount = 0
     var validBytesCount = 0
-    var firstOffset = -1L
+    var firstOffset: Option[Long] = None
     var lastOffset = -1L
     var sourceCodec: CompressionCodec = NoCompressionCodec
     var monotonic = true
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
+    var readFirstMessage = false
 
     for (batch <- records.batches.asScala) {
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
@@ -876,8 +891,12 @@ class Log(@volatile var dir: File,
       // For magic version 2, we can get the first offset directly from the batch header.
       // When appending to the leader, we will update LogAppendInfo.baseOffset with the correct value. In the follower
       // case, validation will be more lenient.
-      if (firstOffset < 0)
-        firstOffset = if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) batch.baseOffset else batch.lastOffset
+      // Also indicate whether we have the accurate first offset or not
+      if (!readFirstMessage) {
+        if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
+          firstOffset = Some(batch.baseOffset)
+        readFirstMessage = true
+      }
 
       // check that offsets are monotonically increasing
       if (lastOffset >= batch.lastOffset)
@@ -1126,14 +1145,14 @@ class Log(@volatile var dir: File,
 
   /**
    * Given a message offset, find its corresponding offset metadata in the log.
-   * If the message offset is out of range, return unknown offset metadata
+   * If the message offset is out of range, return None to the caller.
    */
-  def convertToOffsetMetadata(offset: Long): LogOffsetMetadata = {
+  def convertToOffsetMetadata(offset: Long): Option[LogOffsetMetadata] = {
     try {
       val fetchDataInfo = readUncommitted(offset, 1)
-      fetchDataInfo.fetchOffsetMetadata
+      Some(fetchDataInfo.fetchOffsetMetadata)
     } catch {
-      case _: OffsetOutOfRangeException => LogOffsetMetadata.UnknownOffsetMetadata
+      case _: OffsetOutOfRangeException => None
     }
   }
 
@@ -1268,8 +1287,8 @@ class Log(@volatile var dir: File,
   /**
    * Roll the log over to a new empty log segment if necessary.
    *
-   * @param messagesSize The messages set size in bytes
-   * @param maxTimestampInMessages The maximum timestamp in the messages.
+   * @param messagesSize The messages set size in bytes.
+   * @param appendInfo log append information
    * logSegment will be rolled if one of the following conditions met
    * <ol>
    * <li> The logSegment is full
@@ -1279,14 +1298,19 @@ class Log(@volatile var dir: File,
    * </ol>
    * @return The currently active segment after (perhaps) rolling to a new segment
    */
-  private def maybeRoll(messagesSize: Int, maxTimestampInMessages: Long, maxOffsetInMessages: Long): LogSegment = {
+  private def maybeRoll(messagesSize: Int, appendInfo: LogAppendInfo): LogSegment = {
     val segment = activeSegment
     val now = time.milliseconds
+
+    val maxTimestampInMessages = appendInfo.maxTimestamp
+    val maxOffsetInMessages = appendInfo.lastOffset
+
     if (segment.shouldRoll(messagesSize, maxTimestampInMessages, maxOffsetInMessages, now)) {
       debug(s"Rolling new log segment in $name (log_size = ${segment.size}/${config.segmentSize}}, " +
           s"offset_index_size = ${segment.offsetIndex.entries}/${segment.offsetIndex.maxEntries}, " +
           s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
           s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
+
       /*
         maxOffsetInMessages - Integer.MAX_VALUE is a heuristic value for the first offset in the set of messages.
         Since the offset in messages will not differ by more than Integer.MAX_VALUE, this is guaranteed <= the real
@@ -1296,8 +1320,13 @@ class Log(@volatile var dir: File,
         Integer.MAX_VALUE.toLong + 2 or more.  In this case, the prior behavior would roll a new log segment whose
         base offset was too low to contain the next message.  This edge case is possible when a replica is recovering a
         highly compacted topic from scratch.
-       */
-      roll(maxOffsetInMessages - Integer.MAX_VALUE)
+        Note that this is only required for pre-V2 message formats because these do not store the first message offset
+        in the header.
+      */
+      appendInfo.firstOffset match {
+        case Some(firstOffset) => roll(firstOffset)
+        case None => roll(maxOffsetInMessages - Integer.MAX_VALUE)
+      }
     } else {
       segment
     }

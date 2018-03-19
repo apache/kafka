@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
 
 import java.io.File;
 import java.util.Map;
@@ -117,10 +118,17 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
                     }
 
                     @Override
+                    public <K, V> void forward(final K key, final V value, final To to) {
+                        throw new StreamsException("ProcessorContext#forward() must not be called within TransformValues.");
+                    }
+
+                    @SuppressWarnings("deprecation")
+                    @Override
                     public <K, V> void forward(final K key, final V value, final int childIndex) {
                         throw new StreamsException("ProcessorContext#forward() must not be called within TransformValues.");
                     }
 
+                    @SuppressWarnings("deprecation")
                     @Override
                     public <K, V> void forward(final K key, final V value, final String childName) {
                         throw new StreamsException("ProcessorContext#forward() must not be called within TransformValues.");
