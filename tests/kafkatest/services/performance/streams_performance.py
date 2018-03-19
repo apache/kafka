@@ -46,22 +46,25 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
                               report_interval=5000)
 
     def start_cmd(self, node):
-        args = self.args.copy()
-        args['jmx_port'] = self.jmx_port
-        args['kafka'] = self.kafka.bootstrap_servers()
-        args['config_file'] = self.CONFIG_FILE
-        args['stdout'] = self.STDOUT_FILE
-        args['stderr'] = self.STDERR_FILE
-        args['pidfile'] = self.PID_FILE
-        args['log4j'] = self.LOG4J_CONFIG_FILE
-        args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
+        cmd = super(StreamsSimpleBenchmarkService, self).start_cmd(node)
 
-        cmd = "( export JMX_PORT=%(jmx_port)s; export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
-              "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
-              " %(kafka)s %(config_file)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
-              " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+        if self.load_phase == "false":
+            args = self.args.copy()
+            args['jmx_port'] = self.jmx_port
+            args['kafka'] = self.kafka.bootstrap_servers()
+            args['config_file'] = self.CONFIG_FILE
+            args['stdout'] = self.STDOUT_FILE
+            args['stderr'] = self.STDERR_FILE
+            args['pidfile'] = self.PID_FILE
+            args['log4j'] = self.LOG4J_CONFIG_FILE
+            args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
 
-        self.logger.info("Executing streams cmd: " + cmd)
+            cmd = "( export JMX_PORT=%(jmx_port)s; export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
+                  "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
+                  " %(kafka)s %(config_file)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
+                  " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+
+        self.logger.info("Executing streams simple benchmark cmd: " + cmd)
 
         return cmd
 
