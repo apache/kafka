@@ -192,7 +192,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         return future;
     }
 
-    public synchronized void addWaiter(BiConsumer<? super T, ? super Throwable> action) {
+    protected synchronized void addWaiter(BiConsumer<? super T, ? super Throwable> action) {
         if (exception != null) {
             action.accept(null, exception);
         } else if (done) {

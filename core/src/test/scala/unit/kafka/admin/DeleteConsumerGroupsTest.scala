@@ -227,7 +227,7 @@ class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
   @Test
   def testDeleteCmdWithShortInitialization() {
     // run one consumer in the group
-    val executor = addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1)
     val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
@@ -239,7 +239,7 @@ class DeleteConsumerGroupTest extends ConsumerGroupCommandTest {
   @Test
   def testDeleteWithShortInitialization() {
     // run one consumer in the group
-    val executor = addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1)
     val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 

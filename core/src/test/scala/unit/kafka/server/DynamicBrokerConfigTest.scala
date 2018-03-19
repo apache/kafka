@@ -24,10 +24,12 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
+import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
 
 import scala.collection.JavaConverters._
+import scala.collection.Set
 
 class DynamicBrokerConfigTest {
 
@@ -247,5 +249,57 @@ class DynamicBrokerConfigTest {
     val newConfigWithNewSecret = KafkaConfig(props)
     newConfigWithNewSecret.dynamicConfig.updateBrokerConfig(0, persistedProps)
     assertEquals("staticLoginModule required;", newConfigWithNewSecret.values.get(KafkaConfig.SaslJaasConfigProp).asInstanceOf[Password].value)
+  }
+
+  @Test
+  def testDynamicListenerConfig(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092)
+    val oldConfig =  KafkaConfig.fromProps(props)
+    val kafkaServer = EasyMock.createMock(classOf[kafka.server.KafkaServer])
+    EasyMock.expect(kafkaServer.config).andReturn(oldConfig).anyTimes()
+    EasyMock.replay(kafkaServer)
+
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://hostname:9092,SASL_PLAINTEXT://hostname:9093")
+    val newConfig = KafkaConfig(props)
+
+    val dynamicListenerConfig = new DynamicListenerConfig(kafkaServer)
+    dynamicListenerConfig.validateReconfiguration(newConfig)
+  }
+
+  @Test
+  def testDynamicConfigInitializationWithoutConfigsInZK(): Unit = {
+    val zkClient = EasyMock.createMock(classOf[kafka.zk.KafkaZkClient])
+    EasyMock.expect(zkClient.getEntityConfigs(EasyMock.anyString(), EasyMock.anyString())).andReturn(new java.util.Properties()).anyTimes()
+    EasyMock.replay(zkClient)
+
+    val oldConfig =  KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092))
+    val dynamicBrokerConfig = new DynamicBrokerConfig(oldConfig)
+    dynamicBrokerConfig.initialize(zkClient)
+    dynamicBrokerConfig.addBrokerReconfigurable(new TestDynamicThreadPool)
+
+    val newprops = new Properties()
+    newprops.put(KafkaConfig.NumIoThreadsProp, "10")
+    newprops.put(KafkaConfig.BackgroundThreadsProp, "100")
+    dynamicBrokerConfig.updateBrokerConfig(0, newprops)
+  }
+}
+
+class TestDynamicThreadPool() extends BrokerReconfigurable {
+
+  override def reconfigurableConfigs: Set[String] = {
+    DynamicThreadPool.ReconfigurableConfigs
+  }
+
+  override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
+    assertEquals(Defaults.NumIoThreads, oldConfig.numIoThreads)
+    assertEquals(Defaults.BackgroundThreads, oldConfig.backgroundThreads)
+
+    assertEquals(10, newConfig.numIoThreads)
+    assertEquals(100, newConfig.backgroundThreads)
+  }
+
+  override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
+    assertEquals(10, newConfig.numIoThreads)
+    assertEquals(100, newConfig.backgroundThreads)
   }
 }

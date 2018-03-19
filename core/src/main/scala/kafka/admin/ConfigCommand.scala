@@ -80,12 +80,12 @@ object ConfigCommand extends Config {
       }
     } catch {
       case e @ (_: IllegalArgumentException | _: InvalidConfigException | _: OptionException) =>
-        logger.debug(s"Failed config command with args $args", e)
+        logger.debug(s"Failed config command with args '${args.mkString(" ")}'", e)
         System.err.println(e.getMessage)
         Exit.exit(1)
 
       case t: Throwable =>
-        System.err.println(s"Error while executing config command with args $args")
+        System.err.println(s"Error while executing config command with args '${args.mkString(" ")}'")
         t.printStackTrace(System.err)
         Exit.exit(1)
     }

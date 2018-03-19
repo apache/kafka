@@ -113,14 +113,14 @@ public final class Coordinator {
             .newArgumentParser("trogdor-coordinator")
             .defaultHelp(true)
             .description("The Trogdor fault injection coordinator");
-        parser.addArgument("--coordinator.config")
+        parser.addArgument("--coordinator.config", "-c")
             .action(store())
             .required(true)
             .type(String.class)
             .dest("config")
             .metavar("CONFIG")
             .help("The configuration file to use.");
-        parser.addArgument("--node-name")
+        parser.addArgument("--node-name", "-n")
             .action(store())
             .required(true)
             .type(String.class)
