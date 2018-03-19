@@ -757,15 +757,6 @@ class ZkUtils(val zkClient: ZkClient,
     ret
   }
 
-  def getPartitionAssignmentForPartitions(topics: Seq[String]): mutable.Map[Int, Seq[Int]] = {
-    val res:mutable.Map[Int, Seq[Int]] = new mutable.HashMap[Int, Seq[Int]]
-    getPartitionAssignmentForTopics(topics).map { topicAndPartitionMap =>
-      val partitionMap = topicAndPartitionMap._2
-      res ++= partitionMap
-    }
-    res
-  }
-
   def getPartitionsForTopics(topics: Seq[String]): mutable.Map[String, Seq[Int]] = {
     getPartitionAssignmentForTopics(topics).map { topicAndPartitionMap =>
       val topic = topicAndPartitionMap._1
