@@ -19,11 +19,12 @@ package org.apache.kafka.trogdor.common;
 
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -33,8 +34,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
+import java.util.TreeMap;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Utilities for Trogdor TaskWorkers.
@@ -70,71 +76,129 @@ public final class WorkerUtils {
         return (int) perPeriod;
     }
 
-    private static final int CREATE_TOPICS_REQUEST_TIMEOUT = 25000;
-    private static final int CREATE_TOPICS_CALL_TIMEOUT = 90000;
-    private static final int MAX_CREATE_TOPICS_BATCH_SIZE = 10;
+    private static final int CREATE_TOPICS_REQUEST_TIMEOUT_MS = 25000;
+    private static final int CREATE_TOPICS_CALL_TIMEOUT_MS = 360000;
+    private static final int MAX_CREATE_TOPICS_BATCH_SIZE = 500;
 
-            //Map<String, Map<Integer, List<Integer>>> topics) throws Throwable {
+    private static class NewTopicCreation {
+        final NewTopic newTopic;
+        final String errorMessage;
+
+        NewTopicCreation(NewTopic newTopic, String errorMessage) {
+            this.newTopic = newTopic;
+            this.errorMessage = errorMessage;
+        }
+    }
 
     /**
      * Create some Kafka topics.
      *
      * @param log               The logger to use.
      * @param bootstrapServers  The bootstrap server list.
-     * @param topics            Maps topic names to partition assignments.
+     * @param newTopics         The new topics to create.
      */
-    public static void createTopics(Logger log, String bootstrapServers,
-            Collection<NewTopic> topics) throws Throwable {
-        Properties props = new Properties();
+    public static void createTopics(final Logger log, String bootstrapServers,
+            final Collection<NewTopic> newTopics) throws Throwable {
+        final Properties props = new Properties();
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, CREATE_TOPICS_REQUEST_TIMEOUT);
+        props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, CREATE_TOPICS_REQUEST_TIMEOUT_MS);
+        final ConcurrentLinkedDeque<NewTopicCreation> pendingCreations = new ConcurrentLinkedDeque<>();
+        for (NewTopic newTopic : newTopics) {
+            pendingCreations.offer(new NewTopicCreation(newTopic, ""));
+        }
+        final AtomicInteger remainingCreations = new AtomicInteger(newTopics.size());
+        final AtomicInteger topicsCreated = new AtomicInteger(0);
+        final AtomicInteger topicsVerified = new AtomicInteger(0);
+        final KafkaFutureImpl<Void> doneFuture = new KafkaFutureImpl<>();
         try (AdminClient adminClient = AdminClient.create(props)) {
-            long startMs = Time.SYSTEM.milliseconds();
-            int tries = 0;
-
-            Map<String, NewTopic> newTopics = new HashMap<>();
-            for (NewTopic newTopic : topics) {
-                newTopics.put(newTopic.name(), newTopic);
-            }
-            List<String> topicsToCreate = new ArrayList<>(newTopics.keySet());
-            while (true) {
-                log.info("Attemping to create {} topics (try {})...", topicsToCreate.size(), ++tries);
-                Map<String, Future<Void>> creations = new HashMap<>();
-                while (!topicsToCreate.isEmpty()) {
-                    List<NewTopic> newTopicsBatch = new ArrayList<>();
-                    for (int i = 0; (i < MAX_CREATE_TOPICS_BATCH_SIZE) &&
-                            !topicsToCreate.isEmpty(); i++) {
-                        String topicName = topicsToCreate.remove(0);
-                        newTopicsBatch.add(newTopics.get(topicName));
-                    }
-                    creations.putAll(adminClient.createTopics(newTopicsBatch).values());
-                }
-                // We retry cases where the topic creation failed with a
-                // timeout.  This is a workaround for KAFKA-6368.
-                for (Map.Entry<String, Future<Void>> entry : creations.entrySet()) {
-                    String topicName = entry.getKey();
-                    Future<Void> future = entry.getValue();
-                    try {
-                        future.get();
-                        log.debug("Successfully created {}.", topicName);
-                    } catch (ExecutionException e) {
-                        if (e.getCause() instanceof TimeoutException) {
-                            log.warn("Timed out attempting to create {}: {}", topicName, e.getCause().getMessage());
-                            topicsToCreate.add(topicName);
-                        } else {
-                            log.warn("Failed to create {}", topicName, e.getCause());
-                            throw e.getCause();
+            final ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor(
+                ThreadUtils.createThreadFactory("createTopicsThread", false));
+            try {
+                executorService.submit(new Callable<Void>() {
+                    @Override
+                    public Void call() throws Exception {
+                        try {
+                            while (true) {
+                                final List<NewTopicCreation> batch = getBatch(MAX_CREATE_TOPICS_BATCH_SIZE);
+                                if (batch.isEmpty()) {
+                                    break;
+                                }
+                                TreeMap<String, List<String>> descriptions = new TreeMap<>();
+                                final HashMap<String, NewTopic> topics = new HashMap<>();
+                                for (NewTopicCreation newTopicCreation : batch) {
+                                    List<String> list = descriptions.get(newTopicCreation.errorMessage);
+                                    if (list == null) {
+                                        list = new ArrayList<>();
+                                        descriptions.put(newTopicCreation.errorMessage, list);
+                                    }
+                                    list.add(newTopicCreation.newTopic.name());
+                                    topics.put(newTopicCreation.newTopic.name(), newTopicCreation.newTopic);
+                                }
+                                for (Map.Entry<String, List<String>> entry : descriptions.entrySet()) {
+                                    if (!entry.getKey().isEmpty()) {
+                                        log.info("Got error {} when attempting to create topic(s): {}",
+                                            entry.getKey(), Utils.join(entry.getValue(), ", "));
+                                    }
+                                }
+                                log.info("Creating topic(s) {}", Utils.join(topics.values(), ", "));
+                                CreateTopicsResult result = adminClient.createTopics(topics.values());
+                                for (final Map.Entry<String, KafkaFuture<Void>> entry : result.values().entrySet()) {
+                                    final String topicName = entry.getKey();
+                                    final KafkaFuture<Void> future = entry.getValue();
+                                    future.whenComplete(new KafkaFuture.BiConsumer<Void, Throwable>() {
+                                        @Override
+                                        public void accept(Void v, Throwable e) {
+                                            if (e == null) {
+                                                log.trace("Successfully created topic {}", topicName);
+                                                topicsCreated.incrementAndGet();
+                                                if (remainingCreations.decrementAndGet() <= 0) {
+                                                    doneFuture.complete(null);
+                                                }
+                                            } else if (e instanceof TopicExistsException) {
+                                                log.trace("Topic {} already exists.", topicName);
+                                                topicsVerified.incrementAndGet();
+                                                if (remainingCreations.decrementAndGet() <= 0) {
+                                                    doneFuture.complete(null);
+                                                }
+                                            } else {
+                                                log.trace("Failed to create {}: {}", topicName, e.getMessage());
+                                                pendingCreations.add(new NewTopicCreation(topics.get(topicName),
+                                                    e.getClass().getSimpleName()));
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                            executorService.schedule(this,
+                                2 * CREATE_TOPICS_REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                        } catch (Throwable t) {
+                            log.error("Exception while preparing AdminClient operations", t);
+                            doneFuture.completeExceptionally(t);
                         }
+                        return null;
                     }
-                }
-                if (topicsToCreate.isEmpty()) {
-                    break;
-                }
-                if (Time.SYSTEM.milliseconds() > startMs + CREATE_TOPICS_CALL_TIMEOUT) {
-                    String str = "Unable to create topic(s): " +
-                            Utils.join(topicsToCreate, ", ") + "after " + tries + " attempt(s)";
-                    log.warn(str);
-                    throw new TimeoutException(str);
+
+                    private List<NewTopicCreation> getBatch(int maxSize) {
+                        List<NewTopicCreation> batch = new ArrayList<>();
+                        do {
+                            NewTopicCreation newTopicCreation = pendingCreations.poll();
+                            if (newTopicCreation == null) {
+                                break;
+                            }
+                            batch.add(newTopicCreation);
+                        } while (batch.size() < maxSize);
+                        return batch;
+                    }
+                });
+                doneFuture.get(CREATE_TOPICS_CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                log.info("CreateTopics completed.  topicsCreated = {}, topicsVerified = {}",
+                    topicsCreated.get(), topicsVerified.get());
+            } finally {
+                try {
+                    executorService.shutdownNow();
+                    executorService.awaitTermination(1, TimeUnit.DAYS);
+                } catch (Throwable e) {
+                    log.error("Error shutting down executorService", e);
                 }
             }
         }
