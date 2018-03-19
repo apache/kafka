@@ -1136,20 +1136,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val responseBody = if (topicMetadata.error != Errors.NONE) {
-          new FindCoordinatorResponse(requestThrottleMs, Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
-        } else {
-          val coordinatorEndpoint = topicMetadata.partitionMetadata.asScala
-            .find(_.partition == partition)
-            .map(_.leader)
-            .flatMap(p => Option(p))
-
-          coordinatorEndpoint match {
-            case Some(endpoint) if !endpoint.isEmpty =>
-              new FindCoordinatorResponse(requestThrottleMs, Errors.NONE, endpoint)
-            case _ =>
-              new FindCoordinatorResponse(requestThrottleMs, Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
-          }
+        val responseBody = topicMetadata.error match {
+          case Errors.NONE =>
+            topicMetadata.partitionMetadata.asScala
+              .find(_.partition == partition)
+              .map(_.leader)
+              .filter(!_.isEmpty)
+              .map(new FindCoordinatorResponse(requestThrottleMs, Errors.NONE, _))
+              .getOrElse(new FindCoordinatorResponse(requestThrottleMs, Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode))
+          case error:Errors => new FindCoordinatorResponse(requestThrottleMs, error, Node.noNode)
         }
         trace("Sending FindCoordinator response %s for correlation id %d to client %s."
           .format(responseBody, request.header.correlationId, request.header.clientId))
