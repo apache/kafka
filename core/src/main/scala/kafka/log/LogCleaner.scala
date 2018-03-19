@@ -596,7 +596,7 @@ private[log] class Cleaner(val id: Int,
     }
 
     var position = 0
-    var mayBeLegacySegment = false
+    var allowOversizeIndexOffset = false
     while (position < sourceRecords.sizeInBytes) {
       checkDone(topicPartition)
       // read a chunk of messages and copy any that are to be retained to the write buffer to be written out
@@ -623,10 +623,10 @@ private[log] class Cleaner(val id: Int,
 
         if ((largestOffsetToAppend - baseOffsetOfLog) > Integer.MAX_VALUE) {
           require(numSegmentsInGroup == 1, "Constructed segment group causes index offset overflow")
-          mayBeLegacySegment = true
+          allowOversizeIndexOffset = true
 
           debug("Offset overflow during log cleaning " +
-                s"topic: ${topicPartition.topic} largest: $largestOffsetToAppend " +
+                s"topic: $topicPartition largest: $largestOffsetToAppend " +
                 s"first: $firstOffsetToAppend base: $firstOffsetToAppend")
         }
 
@@ -636,7 +636,7 @@ private[log] class Cleaner(val id: Int,
           largestTimestamp = result.maxTimestamp,
           shallowOffsetOfMaxTimestamp = result.shallowOffsetOfMaxTimestamp,
           records = retained,
-          mayBeLegacySegment = mayBeLegacySegment)
+          allowOversizeIndexOffset = allowOversizeIndexOffset)
         throttler.maybeThrottle(outputBuffer.limit())
       }
 

@@ -107,8 +107,7 @@ class LogSegment private[log] (val log: FileRecords,
   }
 
   /**
-   * Append the given messages starting with the given offset. Add
-   * an entry to the index if needed.
+   * Append the given messages starting with the given offset. Add an entry to the index if needed.
    *
    * It is assumed this method is being called from within a lock.
    *
@@ -116,43 +115,37 @@ class LogSegment private[log] (val log: FileRecords,
    * @param largestTimestamp The largest timestamp in the message set.
    * @param shallowOffsetOfMaxTimestamp The offset of the message that has the largest timestamp in the messages to append.
    * @param records The log entries to append.
-   * @return the physical position in the file of the appended records
    */
   @nonthreadsafe
   def append(largestOffset: Long,
              largestTimestamp: Long,
              shallowOffsetOfMaxTimestamp: Long,
              records: MemoryRecords): Unit = {
-    append(firstOffset, largestOffset, largestTimestamp, shallowOffsetOfMaxTimestamp, records,
-           false)
+    append(largestOffset, largestTimestamp, shallowOffsetOfMaxTimestamp, records, false)
   }
 
   /**
-   * Append the given messages starting with the given offset. Add
-   * an entry to the index if needed.
+   * Append the given messages starting with the given offset. Add an entry to the index if needed. Most clients might
+   * want to invoke append(largestOffset, largestTimestamp, shallowOffsetOfMaxTimestamp, records) instead of
+   * calling this function directly.
    *
    * It is assumed this method is being called from within a lock.
    *
-   * @param firstOffset The first offset in the message set.
    * @param largestOffset The last offset in the message set
    * @param largestTimestamp The largest timestamp in the message set.
    * @param shallowOffsetOfMaxTimestamp The offset of the message that has the largest timestamp in the messages to append.
    * @param records The log entries to append.
-   * @param mayBeLegacySegment The segment might be a pre KAFKA-5413 "legacy" segment, which
-   *                           potentially contains messages that could overflow the index. Note
-   *                           that this only affects log segments that were created before
-   *                           the patch for KAFKA-5413. Typically, the compactor might encounter
-   *                           such log segments.
-   *
-   * @return the physical position in the file of the appended records
+   * @param allowOversizeIndexOffset Allow for the possibility that index offset might overflow. This might be the case
+   *                                 for a pre KAFKA-5413 segment, which could contains messages that could overflow the
+   *                                 index. Note that this only affects log segments that were created before the patch
+   *                                 for KAFKA-5413. Typically, the compactor might encounter such log segments.
    */
   @nonthreadsafe
-  private[log] def append(firstOffset: Long,
-                          largestOffset: Long,
+  private[log] def append(largestOffset: Long,
                           largestTimestamp: Long,
                           shallowOffsetOfMaxTimestamp: Long,
                           records: MemoryRecords,
-                          mayBeLegacySegment: Boolean): Unit = {
+                          allowOversizeIndexOffset: Boolean): Unit = {
     if (records.sizeInBytes > 0) {
       trace(s"Inserting ${records.sizeInBytes} bytes at end offset $largestOffset at position ${log.sizeInBytes} " +
             s"with largest timestamp $largestTimestamp at shallow offset $shallowOffsetOfMaxTimestamp")
@@ -163,12 +156,12 @@ class LogSegment private[log] (val log: FileRecords,
         rollingBasedTimestamp = Some(largestTimestamp)
 
       // Must be able to convert the largest offset to base-relative offset.
-      // Because of KAFKA-5413, a log segment could contain messages larger than firstOffset +
-      // Integer.MAX_VALUE. If that is the case, silently ignore the fact that we cannot convert
-      // all message offsets to the base-relative form. Also make sure we do not generate an index
-      // entry for such messages, so that there is no further issue downstream.
+      // Because of KAFKA-5413, a log segment could contain messages larger than firstOffset + Integer.MAX_VALUE. If
+      // that is the case, silently ignore the fact that we cannot convert all message offsets to the base-relative
+      // form. Also make sure we do not generate an index entry for such messages, so that there is no further issue
+      // downstream.
       if (!canConvertToRelativeOffset(largestOffset)) {
-        if (mayBeLegacySegment)
+        if (allowOversizeIndexOffset)
           canAppendToIndex = false
         else
           throw new IllegalArgumentException("requirement failed: " +

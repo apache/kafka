@@ -1237,10 +1237,12 @@ class LogCleanerTest extends JUnitSuite {
       if (i == 0)
         log.appendAsFollower(set)        // write the first record using log.append API
       else
-        log.activeSegment.log.append(set)  // write all records directly to the file
+        log.activeSegment.append(offsets.last, 0, offsets.last, set, true)   // write all other records directly to the segment
       i += 1
     }
 
+    // Since we wrote messages directly to the log segment, bypassing the log layer, the log now would be in an
+    // inconsistent state. Reload the log so that the state is recomputed and built up accurately.
     log.close
     log = reloadLog(log, config)
 
