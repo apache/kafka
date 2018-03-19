@@ -72,7 +72,7 @@ public class ProduceBenchWorker implements TaskWorker {
      * @return                  The topic name.
      */
     public String topicIndexToName(int topicIndex) {
-        return String.format("%s%05d", spec.topicsPrefix(), topicIndex);
+        return String.format("%s%05d", spec.topicPrefix(), topicIndex);
     }
 
     public ProduceBenchWorker(String id, ProduceBenchSpec spec) {

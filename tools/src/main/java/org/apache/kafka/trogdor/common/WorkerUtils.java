@@ -137,8 +137,8 @@ public final class WorkerUtils {
      * @return                Collection of topics names that already exist.
      * @throws Throwable if creation of one or more topics fails (except for topic exists case).
      */
-    static Collection<String> createTopics(Logger log, AdminClient adminClient,
-                             Collection<NewTopic> topics) throws Throwable {
+    private static Collection<String> createTopics(Logger log, AdminClient adminClient,
+                                                   Collection<NewTopic> topics) throws Throwable {
         long startMs = Time.SYSTEM.milliseconds();
         int tries = 0;
         List<String> existingTopics = new ArrayList<>();
@@ -207,7 +207,7 @@ public final class WorkerUtils {
      * @throws RuntimeException  If one or more topics have different number of partitions than
      * described in 'topicsInfo'
      */
-    static void verifyTopics(
+    private static void verifyTopics(
         Logger log, AdminClient adminClient,
         Collection<String> topicsToVerify, Map<String, NewTopic> topicsInfo) throws Throwable {
         DescribeTopicsResult topicsResult = adminClient.describeTopics(

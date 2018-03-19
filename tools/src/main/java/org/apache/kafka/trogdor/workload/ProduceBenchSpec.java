@@ -47,7 +47,7 @@ public class ProduceBenchSpec extends TaskSpec {
     private final Map<String, String> producerConf;
     private final int totalTopics;
     private final int activeTopics;
-    private final String topicsPrefix;
+    private final String topicPrefix;
     private final int numPartitions;
     private final short replicationFactor;
 
@@ -63,7 +63,7 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("producerConf") Map<String, String> producerConf,
                          @JsonProperty("totalTopics") int totalTopics,
                          @JsonProperty("activeTopics") int activeTopics,
-                         @JsonProperty("topicPrefix") String topicsPrefix,
+                         @JsonProperty("topicPrefix") String topicPrefix,
                          @JsonProperty("partitionsPerTopic") int partitionsPerTopic,
                          @JsonProperty("replicationFactor") short replicationFactor) {
         super(startMs, durationMs);
@@ -78,7 +78,7 @@ public class ProduceBenchSpec extends TaskSpec {
         this.producerConf = (producerConf == null) ? new TreeMap<String, String>() : producerConf;
         this.totalTopics = totalTopics;
         this.activeTopics = activeTopics;
-        this.topicsPrefix = (topicsPrefix == null) ? DEFAULT_TOPIC_PREFIX : topicsPrefix;
+        this.topicPrefix = (topicPrefix == null) ? DEFAULT_TOPIC_PREFIX : topicPrefix;
         this.numPartitions = (partitionsPerTopic == 0)
                              ? DEFAULT_NUM_PARTITIONS : partitionsPerTopic;
         this.replicationFactor = (replicationFactor == 0)
@@ -131,8 +131,8 @@ public class ProduceBenchSpec extends TaskSpec {
     }
 
     @JsonProperty
-    public String topicsPrefix() {
-        return topicsPrefix;
+    public String topicPrefix() {
+        return topicPrefix;
     }
 
     @JsonProperty

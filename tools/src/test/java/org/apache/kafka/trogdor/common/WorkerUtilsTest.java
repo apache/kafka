@@ -36,6 +36,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -49,13 +50,7 @@ public class WorkerUtilsTest {
     private final Node broker1 = new Node(0, "testHost-1", 1234);
     private final Node broker2 = new Node(1, "testHost-2", 1234);
     private final Node broker3 = new Node(1, "testHost-3", 1234);
-    private final List<Node> cluster = new ArrayList<Node>(2) {
-        {
-            add(broker1);
-            add(broker2);
-            add(broker3);
-        }
-    };
+    private final List<Node> cluster = Arrays.asList(broker1, broker2, broker3);
     private final List<Node> singleReplica = Collections.singletonList(broker1);
 
     private static final String TEST_TOPIC = "test-topic-1";
@@ -78,11 +73,14 @@ public class WorkerUtilsTest {
 
         WorkerUtils.createTopics(log, adminClient, newTopics, true);
         assertEquals(Collections.singleton(TEST_TOPIC), adminClient.listTopics().names().get());
-        assertEquals(new TopicDescription(TEST_TOPIC, false, new ArrayList<TopicPartitionInfo>() {
-            {
-                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()));
-            }
-        }), adminClient.describeTopics(Collections.singleton(TEST_TOPIC)).values().get(TEST_TOPIC).get());
+        assertEquals(
+            new TopicDescription(
+                TEST_TOPIC, false,
+                Collections.singletonList(
+                    new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()))),
+            adminClient.describeTopics(
+                Collections.singleton(TEST_TOPIC)).values().get(TEST_TOPIC).get()
+        );
     }
 
     @Test
@@ -92,11 +90,14 @@ public class WorkerUtilsTest {
         WorkerUtils.createTopics(
             log, adminClient, Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), true);
 
-        assertEquals(new TopicDescription(TEST_TOPIC, false, new ArrayList<TopicPartitionInfo>() {
-            {
-                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()));
-            }
-        }), adminClient.describeTopics(Collections.singleton(TEST_TOPIC)).values().get(TEST_TOPIC).get());
+        assertEquals(
+            new TopicDescription(
+                TEST_TOPIC, false,
+                Collections.singletonList(
+                    new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()))),
+            adminClient.describeTopics(
+                Collections.singleton(TEST_TOPIC)).values().get(TEST_TOPIC).get()
+        );
     }
 
     @Test
@@ -169,11 +170,13 @@ public class WorkerUtilsTest {
             log, adminClient, Collections.singletonMap(TEST_TOPIC, NEW_TEST_TOPIC), false);
 
         assertEquals(Collections.singleton(TEST_TOPIC), adminClient.listTopics().names().get());
-        assertEquals(new TopicDescription(TEST_TOPIC, false, new ArrayList<TopicPartitionInfo>() {
-            {
-                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()));
-            }
-        }), adminClient.describeTopics(Collections.singleton(TEST_TOPIC)).values().get(TEST_TOPIC).get());
+        assertEquals(
+            new TopicDescription(
+                TEST_TOPIC, false,
+                Collections.singletonList(
+                    new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()))),
+            adminClient.describeTopics(Collections.singleton(TEST_TOPIC)).values().get(TEST_TOPIC).get()
+        );
     }
 
     @Test
