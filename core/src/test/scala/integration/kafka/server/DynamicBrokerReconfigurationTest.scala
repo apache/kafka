@@ -444,6 +444,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
         Thread.sleep(100)
       }
       stopAndVerifyProduceConsume(producerThread, consumerThread, mayReceiveDuplicates)
+      // Verify that all threads are alive
+      maybeVerifyThreadPoolSize(propName, threadPoolSize, threadPrefix)
     }
 
     val config = servers.head.config
