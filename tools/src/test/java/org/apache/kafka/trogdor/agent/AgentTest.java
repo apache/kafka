@@ -17,6 +17,7 @@
 
 package org.apache.kafka.trogdor.agent;
 
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.common.utils.MockScheduler;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Scheduler;
@@ -122,7 +123,7 @@ public class AgentTest {
         CreateWorkerResponse response = client.createWorker(new CreateWorkerRequest("foo", fooSpec));
         assertEquals(fooSpec.toString(), response.spec().toString());
         new ExpectedTasks().addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerRunning(fooSpec, 0, "")).
+                workerState(new WorkerRunning(fooSpec, 0, new TextNode("active"))).
                 build()).
             waitFor(client);
 
@@ -131,10 +132,10 @@ public class AgentTest {
         client.createWorker(new CreateWorkerRequest("bar", barSpec));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerRunning(fooSpec, 0, "")).
+                workerState(new WorkerRunning(fooSpec, 0, new TextNode("active"))).
                 build()).
             addTask(new ExpectedTaskBuilder("bar").
-                workerState(new WorkerRunning(barSpec, 0, "")).
+                workerState(new WorkerRunning(barSpec, 0, new TextNode("active"))).
                 build()).
             waitFor(client);
 
@@ -142,13 +143,13 @@ public class AgentTest {
         client.createWorker(new CreateWorkerRequest("baz", bazSpec));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerRunning(fooSpec, 0, "")).
+                workerState(new WorkerRunning(fooSpec, 0, new TextNode("active"))).
                 build()).
             addTask(new ExpectedTaskBuilder("bar").
-                workerState(new WorkerRunning(barSpec, 0, "")).
+                workerState(new WorkerRunning(barSpec, 0, new TextNode("active"))).
                 build()).
             addTask(new ExpectedTaskBuilder("baz").
-                workerState(new WorkerRunning(bazSpec, 0, "")).
+                workerState(new WorkerRunning(bazSpec, 0, new TextNode("active"))).
                 build()).
             waitFor(client);
 
@@ -169,7 +170,7 @@ public class AgentTest {
         client.createWorker(new CreateWorkerRequest("foo", fooSpec));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerRunning(fooSpec, 0, "")).
+                workerState(new WorkerRunning(fooSpec, 0, new TextNode("active"))).
                 build()).
             waitFor(client);
 
@@ -179,10 +180,10 @@ public class AgentTest {
         client.createWorker(new CreateWorkerRequest("bar", barSpec));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerRunning(fooSpec, 0, "")).
+                workerState(new WorkerRunning(fooSpec, 0, new TextNode("active"))).
                 build()).
             addTask(new ExpectedTaskBuilder("bar").
-                workerState(new WorkerRunning(barSpec, 1, "")).
+                workerState(new WorkerRunning(barSpec, 1, new TextNode("active"))).
                 build()).
             waitFor(client);
 
@@ -190,10 +191,10 @@ public class AgentTest {
 
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerDone(fooSpec, 0, 2, "", "")).
+                workerState(new WorkerDone(fooSpec, 0, 2, new TextNode("done"), "")).
                 build()).
             addTask(new ExpectedTaskBuilder("bar").
-                workerState(new WorkerRunning(barSpec, 1, "")).
+                workerState(new WorkerRunning(barSpec, 1, new TextNode("active"))).
                 build()).
             waitFor(client);
 
@@ -201,10 +202,10 @@ public class AgentTest {
         client.stopWorker(new StopWorkerRequest("bar"));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerDone(fooSpec, 0, 2, "", "")).
+                workerState(new WorkerDone(fooSpec, 0, 2, new TextNode("done"), "")).
                 build()).
             addTask(new ExpectedTaskBuilder("bar").
-                workerState(new WorkerDone(barSpec, 1, 7, "", "")).
+                workerState(new WorkerDone(barSpec, 1, 7, new TextNode("done"), "")).
                 build()).
             waitFor(client);
 
@@ -221,34 +222,40 @@ public class AgentTest {
             maxTries(10).target("localhost", agent.port()).build();
         new ExpectedTasks().waitFor(client);
 
-        SampleTaskSpec fooSpec = new SampleTaskSpec(0, 900000, 1, "");
+        SampleTaskSpec fooSpec = new SampleTaskSpec(0, 900000,
+            Collections.singletonMap("node01", 1L), "");
         client.createWorker(new CreateWorkerRequest("foo", fooSpec));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerRunning(fooSpec, 0, "")).
+                workerState(new WorkerRunning(fooSpec, 0, new TextNode("active"))).
                 build()).
             waitFor(client);
 
-        SampleTaskSpec barSpec = new SampleTaskSpec(0, 900000, 2, "baz");
+        SampleTaskSpec barSpec = new SampleTaskSpec(0, 900000,
+            Collections.singletonMap("node01", 2L), "baz");
         client.createWorker(new CreateWorkerRequest("bar", barSpec));
 
         time.sleep(1);
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerDone(fooSpec, 0, 1, "", "")).
+                workerState(new WorkerDone(fooSpec, 0, 1,
+                    new TextNode("halted"), "")).
                 build()).
             addTask(new ExpectedTaskBuilder("bar").
-                workerState(new WorkerRunning(barSpec, 0, "")).
+                workerState(new WorkerRunning(barSpec, 0,
+                    new TextNode("active"))).
                 build()).
             waitFor(client);
 
         time.sleep(1);
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerDone(fooSpec, 0, 1, "", "")).
+                workerState(new WorkerDone(fooSpec, 0, 1,
+                    new TextNode("halted"), "")).
                 build()).
             addTask(new ExpectedTaskBuilder("bar").
-                workerState(new WorkerDone(barSpec, 0, 2, "", "baz")).
+                workerState(new WorkerDone(barSpec, 0, 2,
+                    new TextNode("halted"), "baz")).
                 build()).
             waitFor(client);
     }
@@ -289,7 +296,7 @@ public class AgentTest {
             client.createWorker(new CreateWorkerRequest("foo", fooSpec));
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
-                    workerState(new WorkerRunning(fooSpec, 0, "")).
+                    workerState(new WorkerRunning(fooSpec, 0, new TextNode("Added fault foo"))).
                     build()).
                 waitFor(client);
             Assert.assertEquals(new KiboshControlFile(Collections.<Kibosh.KiboshFaultSpec>singletonList(
@@ -299,9 +306,9 @@ public class AgentTest {
             client.createWorker(new CreateWorkerRequest("bar", barSpec));
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
-                    workerState(new WorkerRunning(fooSpec, 0, "")).build()).
+                    workerState(new WorkerRunning(fooSpec, 0, new TextNode("Added fault foo"))).build()).
                 addTask(new ExpectedTaskBuilder("bar").
-                    workerState(new WorkerRunning(barSpec, 0, "")).build()).
+                    workerState(new WorkerRunning(barSpec, 0, new TextNode("Added fault bar"))).build()).
                 waitFor(client);
             Assert.assertEquals(new KiboshControlFile(new ArrayList<Kibosh.KiboshFaultSpec>() {{
                     add(new KiboshFilesUnreadableFaultSpec("/foo", 123));
@@ -311,9 +318,9 @@ public class AgentTest {
             client.stopWorker(new StopWorkerRequest("foo"));
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
-                    workerState(new WorkerDone(fooSpec, 0, 1, "", "")).build()).
+                    workerState(new WorkerDone(fooSpec, 0, 1, new TextNode("Removed fault foo"), "")).build()).
                 addTask(new ExpectedTaskBuilder("bar").
-                    workerState(new WorkerRunning(barSpec, 0, "")).build()).
+                    workerState(new WorkerRunning(barSpec, 0, new TextNode("Added fault bar"))).build()).
                 waitFor(client);
             Assert.assertEquals(new KiboshControlFile(Collections.<Kibosh.KiboshFaultSpec>singletonList(
                 new KiboshFilesUnreadableFaultSpec("/bar", 456))), mockKibosh.read());
