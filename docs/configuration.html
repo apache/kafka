@@ -191,8 +191,9 @@
 
   <p><b>Note:</b> In Kafka version 1.1.0, thread config updates and listener updates are processed by a broker only if at least one other
   broker config was configured dynamically prior to this update. To workaround this issue, a dummy property may be dynamically configured
-  prior to an update of thread/listener configs or the update may be retried after reverting the change.
-  This issue will be fixed in the next release.
+  prior to an update of thread/listener configs or the update may be retried after reverting the change. Dynamic update of listeners in
+  1.1.0 requires <code>listener.security.protocol.map</code> to be updated to a map containing security protocols for all the listeners,
+  even if listener name is a security protocol. These issues will be fixed in the next release.
 
   <h3><a id="topicconfigs" href="#topicconfigs">3.2 Topic-Level Configs</a></h3>
 
