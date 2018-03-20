@@ -129,5 +129,4 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
       assertEquals(seqid, zkUtils.getSequenceId(path))
     }
   }
-
 }
