@@ -315,6 +315,7 @@ public class CastTest {
         recordValue.put("float64", -64.);
         recordValue.put("boolean", true);
         recordValue.put("string", "42");
+        recordValue.put("timestamp", new Date(0));
         // optional field intentionally omitted
 
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
@@ -331,6 +332,7 @@ public class CastTest {
         assertEquals(true, ((Struct) transformed.value()).schema().field("float64").schema().defaultValue());
         assertEquals((byte) 1, ((Struct) transformed.value()).get("boolean"));
         assertEquals(42, ((Struct) transformed.value()).get("string"));
+        assertEquals(new Date(0), ((Struct) transformed.value()).get("timestamp"));
         assertNull(((Struct) transformed.value()).get("optional"));
     }
 
