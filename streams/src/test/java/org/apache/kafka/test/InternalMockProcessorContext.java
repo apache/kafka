@@ -48,7 +48,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public class MockProcessorContext extends AbstractProcessorContext implements RecordCollector.Supplier {
+public class InternalMockProcessorContext extends AbstractProcessorContext implements RecordCollector.Supplier {
 
     private final File stateDir;
     private final Metrics metrics;
@@ -61,19 +61,19 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
     private Serde<?> valSerde;
     private long timestamp = -1L;
 
-    public MockProcessorContext(final File stateDir,
-                                final StreamsConfig config) {
+    public InternalMockProcessorContext(final File stateDir,
+                                        final StreamsConfig config) {
         this(stateDir, null, null, new Metrics(), config, null, null);
     }
 
-    public MockProcessorContext(final StateSerdes<?, ?> serdes,
-                                final RecordCollector collector) {
+    public InternalMockProcessorContext(final StateSerdes<?, ?> serdes,
+                                        final RecordCollector collector) {
         this(null, serdes.keySerde(), serdes.valueSerde(), collector, null);
     }
 
-    public MockProcessorContext(final StateSerdes<?, ?> serdes,
-                                final RecordCollector collector,
-                                final Metrics metrics) {
+    public InternalMockProcessorContext(final StateSerdes<?, ?> serdes,
+                                        final RecordCollector collector,
+                                        final Metrics metrics) {
         this(null, serdes.keySerde(), serdes.valueSerde(), metrics, new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()), new RecordCollector.Supplier() {
             @Override
             public RecordCollector recordCollector() {
@@ -82,11 +82,11 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
         }, null);
     }
 
-    public MockProcessorContext(final File stateDir,
-                                final Serde<?> keySerde,
-                                final Serde<?> valSerde,
-                                final RecordCollector collector,
-                                final ThreadCache cache) {
+    public InternalMockProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valSerde,
+                                        final RecordCollector collector,
+                                        final ThreadCache cache) {
         this(stateDir, keySerde, valSerde, new Metrics(), new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()), new RecordCollector.Supplier() {
             @Override
             public RecordCollector recordCollector() {
@@ -95,13 +95,13 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
         }, cache);
     }
 
-    private MockProcessorContext(final File stateDir,
-                                final Serde<?> keySerde,
-                                final Serde<?> valSerde,
-                                final Metrics metrics,
-                                final StreamsConfig config,
-                                final RecordCollector.Supplier collectorSupplier,
-                                final ThreadCache cache) {
+    private InternalMockProcessorContext(final File stateDir,
+                                         final Serde<?> keySerde,
+                                         final Serde<?> valSerde,
+                                         final Metrics metrics,
+                                         final StreamsConfig config,
+                                         final RecordCollector.Supplier collectorSupplier,
+                                         final ThreadCache cache) {
         super(new TaskId(0, 0),
               config,
               new MockStreamsMetrics(metrics),
