@@ -33,6 +33,7 @@ import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManagerFactory;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -219,7 +220,20 @@ public class SslFactory implements Reconfigurable {
     }
 
     public SSLEngine createSslEngine(String peerHost, int peerPort) {
+        maybeReloadTruststore();
         return createSslEngine(sslContext, peerHost, peerPort);
+    }
+
+    private void maybeReloadTruststore() {
+        if ((wantClientAuth || needClientAuth) && truststore != null && mode == Mode.SERVER) {
+            if (truststore.getLastModified() > truststore.getLastReloaded()) {
+                try {
+                    this.sslContext = createSSLContext(this.keystore);
+                } catch (Exception e) {
+                    throw new KafkaException("Reload of SSL truststore failed", e);
+                }
+            }
+        }
     }
 
     private SSLEngine createSslEngine(SSLContext sslContext, String peerHost, int peerPort) {
@@ -273,11 +287,18 @@ public class SslFactory implements Reconfigurable {
     }
 
     // package access for testing
+    SecurityStore getTruststore() {
+        return truststore;
+    }
+
+    // package access for testing
     static class SecurityStore {
         private final String type;
         private final String path;
         private final Password password;
         private final Password keyPassword;
+        private KeyStore ks;
+        private long lastReloaded;
 
         SecurityStore(String type, String path, Password password, Password keyPassword) {
             Objects.requireNonNull(type, "type must not be null");
@@ -287,17 +308,28 @@ public class SslFactory implements Reconfigurable {
             this.keyPassword = keyPassword;
         }
 
+        KeyStore getKeyStore() {
+            return ks;
+        }
+
+        long getLastReloaded() {
+            return lastReloaded;
+        }
+
+        long getLastModified() {
+            File storeFile = new File(path);
+            return storeFile.lastModified();
+        }
+
         KeyStore load() throws GeneralSecurityException, IOException {
-            FileInputStream in = null;
-            try {
-                KeyStore ks = KeyStore.getInstance(type);
-                in = new FileInputStream(path);
+            try (FileInputStream in = new FileInputStream(path)) {
+                ks = KeyStore.getInstance(type);
                 // If a password is not set access to the truststore is still available, but integrity checking is disabled.
                 char[] passwordChars = password != null ? password.value().toCharArray() : null;
+                long modifiedTime = getLastModified();
                 ks.load(in, passwordChars);
+                lastReloaded = modifiedTime;
                 return ks;
-            } finally {
-                if (in != null) in.close();
             }
         }
     }
