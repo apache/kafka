@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -19,7 +35,7 @@ import java.util.Properties;
  * This is a mock of {@link ProcessorContext} provided for authors of {@link Processor},
  * {@link org.apache.kafka.streams.kstream.Transformer}, and {@link org.apache.kafka.streams.kstream.ValueTransformer}.
  * <p>
- * The tests for this class ({@link org.apache.kafka.streams.MockProcessorContextTest}) include several behavioral
+ * The tests for this class (org.apache.kafka.streams.MockProcessorContextTest) include several behavioral
  * tests that serve as example usage.
  * <p>
  * Note that this class does not take any automated actions (such as firing scheduled punctuators).
@@ -28,7 +44,6 @@ import java.util.Properties;
  * {@link org.apache.kafka.streams.Topology} and using the {@link org.apache.kafka.streams.TopologyTestDriver}.
  * <p>
  */
-@SuppressWarnings("JavadocReference")
 @InterfaceStability.Evolving
 public class MockProcessorContext implements ProcessorContext {
     // Immutable fields ================================================
@@ -44,10 +59,10 @@ public class MockProcessorContext implements ProcessorContext {
      * {@link org.apache.kafka.streams.state.internals.InMemoryKeyValueStore}, so the stateDir won't matter.
      *
      * @param config a StreamsConfig Properties object.
-     *               {@link StreamsConfig.BOOTSTRAP_SERVERS_CONFIG} [required] is ignored.
-     *               {@link StreamsConfig.APPLICATION_ID_CONFIG} [required] will set the {@link ProcessorContext#applicationId()} value.
-     *               {@link StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG} will set the {@link ProcessorContext#keySerde()} value.
-     *               {@link StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG} will set the {@link ProcessorContext#valueSerde()} value.
+     *               StreamsConfig.BOOTSTRAP_SERVERS_CONFIG [required] is ignored.
+     *               StreamsConfig.APPLICATION_ID_CONFIG [required] will set the {@link ProcessorContext#applicationId()} value.
+     *               StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG will set the {@link ProcessorContext#keySerde()} value.
+     *               StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG will set the {@link ProcessorContext#valueSerde()} value.
      *               All properties will be available via {@link ProcessorContext#appConfigs()} and {@link ProcessorContext#appConfigsWithPrefix(String)}.
      */
     public MockProcessorContext(final Properties config) {
@@ -62,9 +77,13 @@ public class MockProcessorContext implements ProcessorContext {
         this.metrics = new StreamsMetricsImpl(new Metrics(), "mock-processor-context", new HashMap<String, String>());
     }
 
-    @Override public String applicationId() { return config.getString(StreamsConfig.APPLICATION_ID_CONFIG);}
+    @Override public String applicationId() {
+        return config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+    }
 
-    @Override public TaskId taskId() { return taskId;}
+    @Override public TaskId taskId() {
+        return taskId;
+    }
 
     @Override public Map<String, Object> appConfigs() {
         final Map<String, Object> combined = new HashMap<>();
@@ -77,13 +96,21 @@ public class MockProcessorContext implements ProcessorContext {
         return config.originalsWithPrefix(prefix);
     }
 
-    @Override public Serde<?> keySerde() { return config.defaultKeySerde();}
+    @Override public Serde<?> keySerde() {
+        return config.defaultKeySerde();
+    }
 
-    @Override public Serde<?> valueSerde() { return config.defaultValueSerde();}
+    @Override public Serde<?> valueSerde() {
+        return config.defaultValueSerde();
+    }
 
-    @Override public File stateDir() { return stateDir;}
+    @Override public File stateDir() {
+        return stateDir;
+    }
 
-    @Override public StreamsMetrics metrics() { return metrics;}
+    @Override public StreamsMetrics metrics() {
+        return metrics;
+    }
 
     // settable record metadata ================================================
 
@@ -98,26 +125,52 @@ public class MockProcessorContext implements ProcessorContext {
         this.offset = offset;
         this.timestamp = timestamp;
     }
-    public void setTopic(final String topic) { this.topic = topic;}
-    public void setPartition(final int partition) { this.partition = partition;}
-    public void setOffset(final long offset) { this.offset = offset;}
-    public void setTimestamp(final long timestamp) { this.timestamp = timestamp;}
 
-    @Override public String topic() { return topic;}
-    @Override public int partition() { return partition;}
-    @Override public long offset() { return offset;}
-    @Override public long timestamp() { return timestamp;}
+    public void setTopic(final String topic) {
+        this.topic = topic;
+    }
+
+    public void setPartition(final int partition) {
+        this.partition = partition;
+    }
+
+    public void setOffset(final long offset) {
+        this.offset = offset;
+    }
+
+    public void setTimestamp(final long timestamp) {
+        this.timestamp = timestamp;
+    }
+
+    @Override public String topic() {
+        return topic;
+    }
+
+    @Override public int partition() {
+        return partition;
+    }
+
+    @Override public long offset() {
+        return offset;
+    }
+
+    @Override public long timestamp() {
+        return timestamp;
+    }
 
     // mocks ================================================
 
     // state stores
     private final Map<String, StateStore> stateStores = new HashMap<>();
+
     @Override
     public void register(final StateStore store, final boolean loggingEnabledIsDeprecatedAndIgnored, final StateRestoreCallback stateRestoreCallbackIsIgnoredInMock) {
         stateStores.put(store.name(), store);
     }
 
-    @Override public StateStore getStateStore(final String name) { return stateStores.get(name);}
+    @Override public StateStore getStateStore(final String name) {
+        return stateStores.get(name);
+    }
 
     // punctuators
     public static class CapturedPunctuator {
@@ -131,9 +184,17 @@ public class MockProcessorContext implements ProcessorContext {
             this.punctuator = punctuator;
         }
 
-        public long getIntervalMs() { return intervalMs;}
-        public PunctuationType getType() { return type;}
-        public Punctuator getPunctuator() { return punctuator;}
+        public long getIntervalMs() {
+            return intervalMs;
+        }
+
+        public PunctuationType getType() {
+            return type;
+        }
+
+        public Punctuator getPunctuator() {
+            return punctuator;
+        }
     }
 
     private final List<CapturedPunctuator> punctuators = new LinkedList<>();
@@ -142,9 +203,11 @@ public class MockProcessorContext implements ProcessorContext {
     public Cancellable schedule(final long intervalMs, final PunctuationType type, final Punctuator callback) {
         punctuators.add(new CapturedPunctuator(intervalMs, type, callback));
         return new Cancellable() {
-            @Override public void cancel() {}
+            @Override public void cancel() {
+            }
         };
     }
+
     @Override
     public void schedule(final long interval) {
         throw new UnsupportedOperationException("schedule() is deprecated and not supported in Mock. Use schedule(final long intervalMs, final PunctuationType type, final Punctuator callback) instead.");
@@ -201,7 +264,9 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     @SuppressWarnings("unchecked")
-    private <FK, FV> KeyValue castKV(final FK key, final FV value) { return new KeyValue(key, value);}
+    private <FK, FV> KeyValue castKV(final FK key, final FV value) {
+        return new KeyValue(key, value);
+    }
 
     public List<KeyValue> forwarded() {
         final LinkedList<KeyValue> result = new LinkedList<>();
@@ -231,15 +296,23 @@ public class MockProcessorContext implements ProcessorContext {
         return result;
     }
 
-    public void resetForwards() { captured = new LinkedList<>();}
+    public void resetForwards() {
+        captured = new LinkedList<>();
+    }
 
     // commits
 
     private boolean committed = false;
 
-    @Override public void commit() { committed = true; }
+    @Override public void commit() {
+        committed = true;
+    }
 
-    public boolean committed() { return committed;}
+    public boolean committed() {
+        return committed;
+    }
 
-    public void resetCommit() {committed = false;}
+    public void resetCommit() {
+        committed = false;
+    }
 }

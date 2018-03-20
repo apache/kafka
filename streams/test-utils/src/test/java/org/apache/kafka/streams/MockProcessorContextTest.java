@@ -64,6 +64,7 @@ public class MockProcessorContextTest {
 
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
             private int count = 0;
+
             @Override public void process(final String key, final Long value) {
                 final To child = count % 2 == 0 ? To.child("george") : To.child("pete");
                 this.context().forward(key + value, key.length() + value, child);
@@ -117,6 +118,7 @@ public class MockProcessorContextTest {
 
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
             private int count = 0;
+
             @Override public void process(final String key, final Long value) {
                 this.context().forward(key + value, key.length() + value, count % 2);
                 count++;
@@ -169,6 +171,7 @@ public class MockProcessorContextTest {
 
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
             private int count = 0;
+
             @Override public void process(final String key, final Long value) {
                 if (++count > 2) context().commit();
             }
@@ -331,9 +334,15 @@ public class MockProcessorContextTest {
                     }
                 );
             }
-            @Override public void process(final String key, final Long value) {}
-            @Override public void punctuate(final long timestamp) {}
-            @Override public void close() {}
+
+            @Override public void process(final String key, final Long value) {
+            }
+
+            @Override public void punctuate(final long timestamp) {
+            }
+
+            @Override public void close() {
+            }
         };
 
         final MockProcessorContext context = new MockProcessorContext(config);
