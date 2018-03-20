@@ -64,9 +64,6 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
                   " %(kafka)s %(config_file)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
                   " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
-
-            self.start_jmx_tool(1, node)
-
         self.logger.info("Executing streams simple benchmark cmd: " + cmd)
 
         return cmd
