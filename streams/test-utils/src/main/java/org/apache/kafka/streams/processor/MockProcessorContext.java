@@ -109,7 +109,7 @@ public class MockProcessorContext implements ProcessorContext {
 
     private final List<CapturedPunctuator> punctuators = new LinkedList<>();
 
-    private class CapturedForward {
+    private static class CapturedForward {
         /*Nullable*/ private final Integer childIndex;
         /*Nullable*/ private final String childName;
         private final KeyValue kv;
