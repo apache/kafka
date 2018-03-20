@@ -159,8 +159,6 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
 
-        self.start_jmx_tool(1, node)
-
 
 class StreamsSmokeTestBaseService(StreamsTestBaseService):
     """Base class for Streams Smoke Test services providing some common settings and functionality"""

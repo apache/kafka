@@ -64,11 +64,21 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
                   " %(kafka)s %(config_file)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
                   " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
+
+            self.start_jmx_tool(1, node)
+
         self.logger.info("Executing streams simple benchmark cmd: " + cmd)
 
         return cmd
 
-    def clean_node(self, node):
+    def start_node(self, node):
+        super(StreamsSimpleBenchmarkService, self).start_node(node)
+
+        if self.load_phase == "false":
+            self.start_jmx_tool(1, node)
+
+
+def clean_node(self, node):
         if self.load_phase == "false":
             JmxMixin.clean_node(self, node)
         super(StreamsSimpleBenchmarkService, self).clean_node(node)
