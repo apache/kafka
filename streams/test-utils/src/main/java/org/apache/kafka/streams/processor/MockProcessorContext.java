@@ -37,8 +37,8 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * This is a mock of {@link ProcessorContext} provided for authors of {@link Processor},
- * {@link Transformer}, and {@link ValueTransformer}.
+ * This is a mock of {@link ProcessorContext} for users to test their {@link Processor},
+ * {@link Transformer}, and {@link ValueTransformer} implementations.
  * <p>
  * The tests for this class (org.apache.kafka.streams.MockProcessorContextTest) include several behavioral
  * tests that serve as example usage.
@@ -47,6 +47,9 @@ import java.util.Properties;
  * It simply captures any data it witnessess.
  * If you require more automated tests, we recommend wrapping your {@link Processor} in a minimal source-processor-sink
  * {@link Topology} and using the {@link TopologyTestDriver}.
+ * <p>
+ * See https://kafka.apache.org/11/documentation/streams/developer-guide/testing.html for more documentation on testing
+ * strategies.
  */
 @InterfaceStability.Evolving
 public class MockProcessorContext implements ProcessorContext {
