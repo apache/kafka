@@ -185,7 +185,7 @@ class LogSegment private[log] (val log: FileRecords,
           timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp)
           bytesSinceLastIndexEntry = 0
         } else {
-          debug("Skipping append to offset index to prevent offset overflow")
+          debug(s"Skipping append to offset index to prevent offset overflow (${log.file.getAbsolutePath})")
         }
       }
       bytesSinceLastIndexEntry += records.sizeInBytes

@@ -618,16 +618,13 @@ private[log] class Cleaner(val id: Int,
         outputBuffer.flip()
         val retained = MemoryRecords.readableRecords(outputBuffer)
         val baseOffsetOfLog = dest.baseOffset
-        val firstOffsetToAppend = retained.batches.iterator.next.baseOffset
         val largestOffsetToAppend = result.maxOffset
 
         if ((largestOffsetToAppend - baseOffsetOfLog) > Integer.MAX_VALUE) {
-          require(numSegmentsInGroup == 1, "Constructed segment group causes index offset overflow")
+          require(numSegmentsInGroup == 1, s"Constructed segment group causes index offset overflow for $topicPartition")
           allowOversizeIndexOffset = true
 
-          debug("Offset overflow during log cleaning " +
-                s"topic: $topicPartition largest: $largestOffsetToAppend " +
-                s"first: $firstOffsetToAppend base: $firstOffsetToAppend")
+          debug(s"Offset overflow during log cleaning topic-partition: $topicPartition largestOffset: $largestOffsetToAppend")
         }
 
         // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
