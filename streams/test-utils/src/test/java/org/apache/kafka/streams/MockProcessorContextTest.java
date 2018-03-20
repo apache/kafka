@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.streams;
 
 import org.apache.kafka.common.serialization.Serdes;
@@ -26,18 +42,16 @@ public class MockProcessorContextTest {
     /**
      * Behavioral test demonstrating the use of the context for capturing forwarded values
      */
-    @Test public void testForward() {
-        final Properties config = new Properties();
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "testForward");
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
-
+    @Test
+    public void shouldCaptureOutputRecords() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
-            @Override public void process(final String key, final Long value) {
+            @Override
+            public void process(final String key, final Long value) {
                 this.context().forward(key + value, key.length() + value);
             }
         };
 
-        final MockProcessorContext context = new MockProcessorContext(config);
+        final MockProcessorContext context = new MockProcessorContext();
 
         processor.init(context);
 
@@ -57,22 +71,20 @@ public class MockProcessorContextTest {
     /**
      * Behavioral test demonstrating the use of the context for capturing forwarded values to specific children
      */
-    @Test public void testForwardTo() {
-        final Properties config = new Properties();
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "testForwardTo");
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
-
+    @Test
+    public void shouldCaptureRecordsOutputToChildByName() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
             private int count = 0;
 
-            @Override public void process(final String key, final Long value) {
+            @Override
+            public void process(final String key, final Long value) {
                 final To child = count % 2 == 0 ? To.child("george") : To.child("pete");
                 this.context().forward(key + value, key.length() + value, child);
                 count++;
             }
         };
 
-        final MockProcessorContext context = new MockProcessorContext(config);
+        final MockProcessorContext context = new MockProcessorContext();
 
         processor.init(context);
 
@@ -111,21 +123,19 @@ public class MockProcessorContextTest {
     /**
      * Behavioral test demonstrating the use of the context for capturing forwarded values to children by index (deprecated usage)
      */
-    @Test public void testForwardToIndex() {
-        final Properties config = new Properties();
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "testForwardTo");
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
-
+    @Test
+    public void shouldCaptureRecordsOutputToChildByIndex() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
             private int count = 0;
 
-            @Override public void process(final String key, final Long value) {
+            @Override
+            public void process(final String key, final Long value) {
                 this.context().forward(key + value, key.length() + value, count % 2);
                 count++;
             }
         };
 
-        final MockProcessorContext context = new MockProcessorContext(config);
+        final MockProcessorContext context = new MockProcessorContext();
 
         processor.init(context);
 
@@ -164,20 +174,18 @@ public class MockProcessorContextTest {
     /**
      * Behavioral test demonstrating the use of the context for capturing commits
      */
-    @Test public void testCommit() {
-        final Properties config = new Properties();
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "testCommit");
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
-
+    @Test
+    public void shouldCaptureCommitsAndAllowReset() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
             private int count = 0;
 
-            @Override public void process(final String key, final Long value) {
+            @Override
+            public void process(final String key, final Long value) {
                 if (++count > 2) context().commit();
             }
         };
 
-        final MockProcessorContext context = new MockProcessorContext(config);
+        final MockProcessorContext context = new MockProcessorContext();
 
         processor.init(context);
 
@@ -198,13 +206,11 @@ public class MockProcessorContextTest {
     /**
      * Behavioral test demonstrating the use of state stores
      */
-    @Test public void testState() {
-        final Properties config = new Properties();
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "testForwardTo");
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
-
+    @Test
+    public void shouldStoreAndReturnStateStores() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
-            @Override public void process(final String key, final Long value) {
+            @Override
+            public void process(final String key, final Long value) {
                 //noinspection unchecked
                 final KeyValueStore<String, Long> stateStore = (KeyValueStore<String, Long>) context().getStateStore("my-state");
                 stateStore.put(key, (stateStore.get(key) == null ? 0 : stateStore.get(key)) + value);
@@ -212,7 +218,7 @@ public class MockProcessorContextTest {
             }
         };
 
-        final MockProcessorContext context = new MockProcessorContext(config);
+        final MockProcessorContext context = new MockProcessorContext();
         final KeyValueStore<String, Long> store = new InMemoryKeyValueStore<>("my-state", Serdes.String(), Serdes.Long());
         context.register(store, false, null);
 
@@ -229,13 +235,15 @@ public class MockProcessorContextTest {
     /**
      * Behavioral test demonstrating the use of the context with context-aware processors
      */
-    @Test public void testMetadata() {
+    @Test
+    public void shouldCaptureApplicationAndRecordMetadata() {
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "testMetadata");
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
 
         final AbstractProcessor<String, Object> processor = new AbstractProcessor<String, Object>() {
-            @Override public void process(final String key, final Object value) {
+            @Override
+            public void process(final String key, final Object value) {
                 context().forward("appId", context().applicationId());
                 context().forward("taskId", context().taskId());
 
@@ -316,36 +324,37 @@ public class MockProcessorContextTest {
     /**
      * Behavioral test demonstrating testing captured punctuator behavior
      */
-    @Test public void testPunctuatorCapture() {
-        final Properties config = new Properties();
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "testPunctuatorCapture");
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
-
-
+    @Test
+    public void shouldCapturePunctuator() {
         final Processor<String, Long> processor = new Processor<String, Long>() {
-            @Override public void init(final ProcessorContext context) {
+            @Override
+            public void init(final ProcessorContext context) {
                 context.schedule(
                     1000L,
                     PunctuationType.WALL_CLOCK_TIME,
                     new Punctuator() {
-                        @Override public void punctuate(final long timestamp) {
+                        @Override
+                        public void punctuate(final long timestamp) {
                             context.commit();
                         }
                     }
                 );
             }
 
-            @Override public void process(final String key, final Long value) {
+            @Override
+            public void process(final String key, final Long value) {
             }
 
-            @Override public void punctuate(final long timestamp) {
+            @Override
+            public void punctuate(final long timestamp) {
             }
 
-            @Override public void close() {
+            @Override
+            public void close() {
             }
         };
 
-        final MockProcessorContext context = new MockProcessorContext(config);
+        final MockProcessorContext context = new MockProcessorContext();
 
         processor.init(context);
 
@@ -360,7 +369,8 @@ public class MockProcessorContextTest {
     /**
      * Unit test verifying the full MockProcessorContext constructor
      */
-    @Test public void testFullConstructor() {
+    @Test
+    public void fullConstructorShouldSetAllExpectedAttributes() {
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "testFullConstructor");
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
