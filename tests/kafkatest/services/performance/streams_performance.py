@@ -78,7 +78,7 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
             self.start_jmx_tool(1, node)
 
 
-def clean_node(self, node):
+    def clean_node(self, node):
         if self.load_phase == "false":
             JmxMixin.clean_node(self, node)
         super(StreamsSimpleBenchmarkService, self).clean_node(node)
