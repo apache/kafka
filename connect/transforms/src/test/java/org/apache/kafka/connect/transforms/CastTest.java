@@ -304,6 +304,7 @@ public class CastTest {
         builder.field("boolean", Schema.BOOLEAN_SCHEMA);
         builder.field("string", Schema.STRING_SCHEMA);
         builder.field("optional", Schema.OPTIONAL_FLOAT32_SCHEMA);
+        builder.field("timestamp", Timestamp.SCHEMA);
         Schema supportedTypesSchema = builder.build();
 
         Struct recordValue = new Struct(supportedTypesSchema);
