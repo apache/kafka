@@ -144,10 +144,13 @@ public class MockProcessorContext implements ProcessorContext {
      */
     public MockProcessorContext() {
         //noinspection DoubleBraceInitialization
-        this(new Properties() {{
-                 put(StreamsConfig.APPLICATION_ID_CONFIG, "");
-                 put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
-             }},
+        this(
+            new Properties() {
+                {
+                    put(StreamsConfig.APPLICATION_ID_CONFIG, "");
+                    put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
+                }
+            },
             new TaskId(0, 0),
             null);
     }
