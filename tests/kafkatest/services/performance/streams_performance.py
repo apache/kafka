@@ -35,7 +35,7 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
 
         if self.load_phase == "false":
             JmxMixin.__init__(self, num_nodes=1,
-                              jmx_object_names=['kafka.streams:type=stream-metrics,client-id=simple-benchmark-StreamThread-%d' %i for i in range(num_threads)],
+                              jmx_object_names=['kafka.streams:type=stream-metrics,client-id=simple-benchmark-StreamThread-%d' %(i+1) for i in range(num_threads)],
                               jmx_attributes=['process-latency-avg',
                                               'process-rate',
                                               'commit-latency-avg',
