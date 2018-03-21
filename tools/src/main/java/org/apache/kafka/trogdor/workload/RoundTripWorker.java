@@ -123,8 +123,11 @@ public class RoundTripWorker implements TaskWorker {
                 if ((spec.partitionAssignments() == null) || spec.partitionAssignments().isEmpty()) {
                     throw new ConfigException("Invalid null or empty partitionAssignments.");
                 }
-                WorkerUtils.createTopics(log, spec.bootstrapServers(),
-                    Collections.singletonList(new NewTopic(TOPIC_NAME, spec.partitionAssignments())));
+                WorkerUtils.createTopics(
+                    log, spec.bootstrapServers(),
+                    Collections.singletonMap(TOPIC_NAME,
+                                             new NewTopic(TOPIC_NAME, spec.partitionAssignments())),
+                    true);
                 executor.submit(new ProducerRunnable());
                 executor.submit(new ConsumerRunnable());
             } catch (Throwable e) {

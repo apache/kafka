@@ -152,6 +152,7 @@ public class MockAdminClient extends AdminClient {
             if (allTopics.containsKey(topicName)) {
                 future.completeExceptionally(new TopicExistsException(String.format("Topic %s exists already.", topicName)));
                 createTopicResult.put(topicName, future);
+                continue;
             }
             int replicationFactor = newTopic.replicationFactor();
             List<Node> replicas = new ArrayList<>(replicationFactor);
