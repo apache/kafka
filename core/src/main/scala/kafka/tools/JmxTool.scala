@@ -55,11 +55,16 @@ object JmxTool extends Logging {
         .withRequiredArg
         .describedAs("name")
         .ofType(classOf[String])
-    val reportingIntervalOpt = parser.accepts("reporting-interval", "Interval in MS with which to poll jmx stats.")
+    val reportingIntervalOpt = parser.accepts("reporting-interval", "Interval in MS with which to poll jmx stats. Value of -1 equivalent to setting one-time to true")
       .withRequiredArg
       .describedAs("ms")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(2000)
+    val oneTimeOpt = parser.accepts("one-time", "Flag to indicate run once only.")
+      .withRequiredArg
+      .describedAs("one-time")
+      .ofType(classOf[java.lang.Boolean])
+      .defaultsTo(false)
     val helpOpt = parser.accepts("help", "Print usage information.")
     val dateFormatOpt = parser.accepts("date-format", "The date format to use for formatting the time field. " +
       "See java.text.SimpleDateFormat for options.")
@@ -72,6 +77,13 @@ object JmxTool extends Logging {
         .describedAs("service-url")
         .ofType(classOf[String])
         .defaultsTo("service:jmx:rmi:///jndi/rmi://:9999/jmxrmi")
+
+    val reportFormatOpt = parser.accepts("report-format", "output format name: either 'original', 'properties', 'csv', 'tsv' ")
+      .withRequiredArg
+      .describedAs("report-format")
+      .ofType(classOf[java.lang.String])
+      .defaultsTo("original")
+
     val waitOpt = parser.accepts("wait", "Wait for requested JMX objects to become available before starting output. " +
       "Only supported when the list of objects is non-empty and contains no object name patterns.")
 
@@ -87,11 +99,15 @@ object JmxTool extends Logging {
 
     val url = new JMXServiceURL(options.valueOf(jmxServiceUrlOpt))
     val interval = options.valueOf(reportingIntervalOpt).intValue
+    var oneTime = interval < 0 || options.valueOf(oneTimeOpt)
     val attributesWhitelistExists = options.has(attributesOpt)
     val attributesWhitelist = if(attributesWhitelistExists) Some(options.valueOf(attributesOpt).split(",")) else None
     val dateFormatExists = options.has(dateFormatOpt)
     val dateFormat = if(dateFormatExists) Some(new SimpleDateFormat(options.valueOf(dateFormatOpt))) else None
     val wait = options.has(waitOpt)
+
+    val reportFormat = parseFormat(options.valueOf(reportFormatOpt).toLowerCase)
+    val reportFormatOriginal = reportFormat.equals("original")
 
     var jmxc: JMXConnector = null
     var mbsc: MBeanServerConnection = null
@@ -159,20 +175,40 @@ object JmxTool extends Logging {
 
     // print csv header
     val keys = List("time") ++ queryAttributes(mbsc, names, attributesWhitelist).keys.toArray.sorted
-    if(keys.size == numExpectedAttributes.values.sum + 1)
+    if(reportFormatOriginal && keys.size == numExpectedAttributes.values.sum + 1) {
       println(keys.map("\"" + _ + "\"").mkString(","))
+    }
 
-    while(true) {
+    var keepGoing = true
+    while (keepGoing) {
       val start = System.currentTimeMillis
       val attributes = queryAttributes(mbsc, names, attributesWhitelist)
       attributes("time") = dateFormat match {
         case Some(dFormat) => dFormat.format(new Date)
         case None => System.currentTimeMillis().toString
       }
-      if(attributes.keySet.size == numExpectedAttributes.values.sum + 1)
-        println(keys.map(attributes(_)).mkString(","))
-      val sleep = max(0, interval - (System.currentTimeMillis - start))
-      Thread.sleep(sleep)
+      if(attributes.keySet.size == numExpectedAttributes.values.sum + 1) {
+        if(reportFormatOriginal) {
+          println(keys.map(attributes(_)).mkString(","))
+        }
+        else if(reportFormat.equals("properties")) {
+          keys.foreach( k => { println(k + "=" + attributes(k) ) } )
+        }
+        else if(reportFormat.equals("csv")) {
+          keys.foreach( k => { println(k + ",\"" + attributes(k) + "\"" ) } )
+        }
+        else { // tsv
+          keys.foreach( k => { println(k + "\t" + attributes(k) ) } )
+        }
+      }
+
+      if (oneTime) {
+        keepGoing = false
+      }
+      else {
+        val sleep = max(0, interval - (System.currentTimeMillis - start))
+        Thread.sleep(sleep)
+      }
     }
   }
 
@@ -193,4 +229,10 @@ object JmxTool extends Logging {
     attributes
   }
 
+  def parseFormat(reportFormatOpt : String) = reportFormatOpt match {
+    case "properties" => "properties"
+    case "csv" => "csv"
+    case "tsv" => "tsv"
+    case _ => "original"
+  }
 }
