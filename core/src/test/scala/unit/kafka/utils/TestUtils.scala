@@ -549,7 +549,7 @@ object TestUtils extends Logging {
                         bufferSize: Long = 1024L * 1024L,
                         retries: Int = 0,
                         lingerMs: Long = 0,
-                        requestTimeoutMs: Long = 10 * 1024L,
+                        requestTimeoutMs: Long = 30 * 1000L,
                         securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                         trustStoreFile: Option[File] = None,
                         saslProperties: Option[Properties] = None,
@@ -1092,20 +1092,22 @@ object TestUtils extends Logging {
     val producer = createNewProducer(
       TestUtils.getBrokerListStrFromServers(servers),
       retries = 5,
-      requestTimeoutMs = 2000,
       acks = acks
     )
+    val values = try {
+      val curValues = (0 until numMessages).map(x => valueBytes match {
+        case -1 => s"test-$x".getBytes
+        case _ => new Array[Byte](valueBytes)
+      })
 
-    val values = (0 until numMessages).map(x => valueBytes match {
-      case -1 => s"test-$x".getBytes
-      case _ => new Array[Byte](valueBytes)
-    })
-
-    val futures = values.map { value =>
-      producer.send(new ProducerRecord(topic, value))
+      val futures = curValues.map { value =>
+        producer.send(new ProducerRecord(topic, value))
+      }
+      futures.foreach(_.get)
+      curValues 
+    } finally {
+      producer.close()
     }
-    futures.foreach(_.get)
-    producer.close()
 
     debug(s"Sent ${values.size} messages for topic [$topic]")
 
@@ -1115,8 +1117,7 @@ object TestUtils extends Logging {
   def produceMessage(servers: Seq[KafkaServer], topic: String, partition: Integer, message: String) {
     val producer = createNewProducer(
       TestUtils.getBrokerListStrFromServers(servers),
-      retries = 5,
-      requestTimeoutMs = 2000
+      retries = 5
     )
     producer.send(new ProducerRecord(topic, partition, topic.getBytes, message.getBytes)).get
     producer.close()
