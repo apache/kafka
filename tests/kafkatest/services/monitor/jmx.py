@@ -27,7 +27,7 @@ class JmxMixin(object):
     - we assume the service using JmxMixin also uses KafkaPathResolverMixin
     - this uses the --wait option for JmxTool, so the list of object names must be explicit; no patterns are permitted
     """
-    def __init__(self, num_nodes, jmx_object_names=None, jmx_attributes=None, root="/mnt", report_interval=1000):
+    def __init__(self, num_nodes, jmx_object_names=None, jmx_attributes=None, root="/mnt"):
         self.jmx_object_names = jmx_object_names
         self.jmx_attributes = jmx_attributes or []
         self.jmx_port = 9192
@@ -36,7 +36,6 @@ class JmxMixin(object):
         self.jmx_stats = [{} for x in range(num_nodes)]
         self.maximum_jmx_value = {}  # map from object_attribute_name to maximum value observed over time
         self.average_jmx_value = {}  # map from object_attribute_name to average value observed over time
-        self.report_interval = report_interval
 
         self.jmx_tool_log = os.path.join(root, "jmx_tool.log")
         self.jmx_tool_err_log = os.path.join(root, "jmx_tool.err.log")
@@ -72,7 +71,7 @@ class JmxMixin(object):
         if use_jmxtool_version <= V_0_11_0_0:
             use_jmxtool_version = DEV_BRANCH
         cmd = "%s %s " % (self.path.script("kafka-run-class.sh", use_jmxtool_version), self.jmx_class_name())
-        cmd += "--reporting-interval %d --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % (self.report_interval, self.jmx_port)
+        cmd += "--reporting-interval 1000 --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % self.jmx_port
         cmd += " --wait"
         for jmx_object_name in self.jmx_object_names:
             cmd += " --object-name %s" % jmx_object_name

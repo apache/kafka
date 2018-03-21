@@ -42,8 +42,7 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
                                               'commit-rate',
                                               'poll-latency-avg',
                                               'poll-rate'],
-                              root=StreamsTestBaseService.PERSISTENT_ROOT,
-                              report_interval=5000)
+                              root=StreamsTestBaseService.PERSISTENT_ROOT)
 
     def start_cmd(self, node):
         cmd = super(StreamsSimpleBenchmarkService, self).start_cmd(node)
