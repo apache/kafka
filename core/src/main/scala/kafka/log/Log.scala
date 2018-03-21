@@ -1139,7 +1139,10 @@ class Log(@volatile var dir: File,
           None
       }
 
-      targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, logStartOffset))
+      targetSeg match {
+        case None => Some(TimestampOffset(RecordBatch.NO_TIMESTAMP, this.logEndOffset))
+        case _ => targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp))
+      }
     }
   }
 
