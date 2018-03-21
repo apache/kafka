@@ -420,7 +420,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }
 
     def increasePoolSize(propName: String, currentSize: => Int, threadPrefix: String): Int = {
-      val newSize = currentSize * 2 - 1
+      val newSize = if (currentSize == 1) currentSize * 2 else currentSize * 2 - 1
       resizeThreadPool(propName, newSize, threadPrefix)
       newSize
     }
@@ -444,6 +444,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
         Thread.sleep(100)
       }
       stopAndVerifyProduceConsume(producerThread, consumerThread, mayReceiveDuplicates)
+      // Verify that all threads are alive
+      maybeVerifyThreadPoolSize(propName, threadPoolSize, threadPrefix)
     }
 
     val config = servers.head.config
@@ -457,6 +459,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       "", mayReceiveDuplicates = false)
     verifyThreadPoolResize(KafkaConfig.NumNetworkThreadsProp, config.numNetworkThreads,
       networkThreadPrefix, mayReceiveDuplicates = true)
+    verifyThreads("kafka-socket-acceptor-", config.listeners.size)
 
     verifyProcessorMetrics()
     verifyMarkPartitionsForTruncation()
