@@ -109,27 +109,41 @@ public class MockProcessorContext implements ProcessorContext {
 
     private final List<CapturedPunctuator> punctuators = new LinkedList<>();
 
-    private static class CapturedForward {
-        /*Nullable*/ private final Integer childIndex;
+    public static class CapturedForward {
         /*Nullable*/ private final String childName;
+        private final long timestamp;
         private final KeyValue kv;
 
-        private CapturedForward(final KeyValue kv) {
-            this.childIndex = null;
-            this.childName = null;
+        private CapturedForward(final To to, final KeyValue kv) {
+            if (kv == null) throw new IllegalArgumentException();
+
+            this.childName = to.childName;
+            this.timestamp = to.timestamp;
             this.kv = kv;
         }
 
-        private CapturedForward(final Integer childIndex, final KeyValue kv) {
-            this.childIndex = childIndex;
-            this.childName = null;
-            this.kv = kv;
+        /**
+         * The child this data was forwarded to.
+         * @return The child name, or {@code null} if it was broadcasted.
+         */
+        public String childName() {
+            return childName;
         }
 
-        private CapturedForward(final String childName, final KeyValue kv) {
-            this.childIndex = null;
-            this.childName = childName;
-            this.kv = kv;
+        /**
+         * The timestamp attached to the forwarded record.
+         * @return A timestamp, or {@code -1} if none was forwarded.
+         */
+        public long timestamp() {
+            return timestamp;
+        }
+
+        /**
+         * The data forwarded.
+         * @return A key/value pair. Not null.
+         */
+        public KeyValue kv() {
+            return kv;
         }
     }
 
@@ -365,25 +379,27 @@ public class MockProcessorContext implements ProcessorContext {
     @Override
     public <FK, FV> void forward(final FK key, final FV value) {
         //noinspection unchecked
-        capturedForwards.add(new CapturedForward(new KeyValue(key, value)));
+        capturedForwards.add(new CapturedForward(To.all(), new KeyValue(key, value)));
     }
 
     @Override
     public <FK, FV> void forward(final FK key, final FV value, final To to) {
         //noinspection unchecked
-        capturedForwards.add(new CapturedForward(to.childName, new KeyValue(key, value)));
+        capturedForwards.add(new CapturedForward(to, new KeyValue(key, value)));
     }
 
     @Override
     public <FK, FV> void forward(final FK key, final FV value, final int childIndex) {
-        //noinspection unchecked
-        capturedForwards.add(new CapturedForward(childIndex, new KeyValue(key, value)));
+        throw new UnsupportedOperationException(
+            "Forwarding to a child by index is deprecated. " +
+                "Please transition processors to forward using a 'To' object instead."
+        );
     }
 
     @Override
     public <FK, FV> void forward(final FK key, final FV value, final String childName) {
         //noinspection unchecked
-        capturedForwards.add(new CapturedForward(childName, new KeyValue(key, value)));
+        capturedForwards.add(new CapturedForward(To.child(childName), new KeyValue(key, value)));
     }
 
     /**
@@ -393,31 +409,9 @@ public class MockProcessorContext implements ProcessorContext {
      *
      * @return A list of key/value pairs that were previously passed to the context.
      */
-    public List<KeyValue> forwarded() {
-        final LinkedList<KeyValue> result = new LinkedList<>();
-        for (final CapturedForward capturedForward : capturedForwards) {
-            result.add(capturedForward.kv);
-        }
-        return result;
-    }
-
-    /**
-     * A method for retrieving all the forwarded data this context has observed for a specific child by index.
-     * The returned list will not be affected by subsequent interactions with the context.
-     * The data in the list is in the same order as the calls to {@code forward(...)}.
-     *
-     * @param childIndex The child index to retrieve forwards for
-     * @return A list of key/value pairs that were previously passed to the context.
-     * @deprecated please re-write processors to use {@link #forward(Object, Object, To)} instead
-     */
-    @Deprecated
-    public List<KeyValue> forwarded(final int childIndex) {
-        final LinkedList<KeyValue> result = new LinkedList<>();
-        for (final CapturedForward capture : capturedForwards) {
-            if (capture.childIndex != null && capture.childIndex == childIndex) {
-                result.add(capture.kv);
-            }
-        }
+    public List<CapturedForward> forwarded() {
+        final LinkedList<CapturedForward> result = new LinkedList<>();
+        result.addAll(capturedForwards);
         return result;
     }
 
@@ -429,11 +423,11 @@ public class MockProcessorContext implements ProcessorContext {
      * @param childName The child name to retrieve forwards for
      * @return A list of key/value pairs that were previously passed to the context.
      */
-    public List<KeyValue> forwarded(final String childName) {
-        final LinkedList<KeyValue> result = new LinkedList<>();
+    public List<CapturedForward> forwarded(final String childName) {
+        final LinkedList<CapturedForward> result = new LinkedList<>();
         for (final CapturedForward capture : capturedForwards) {
-            if (capture.childName != null && capture.childName.equals(childName)) {
-                result.add(capture.kv);
+            if (capture.childName() == null || capture.childName().equals(childName)) {
+                result.add(capture);
             }
         }
         return result;
