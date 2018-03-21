@@ -105,6 +105,9 @@ object DynamicBrokerConfig {
       case KafkaConfig.LogRetentionTimeMillisProp | KafkaConfig.LogRetentionTimeMinutesProp | KafkaConfig.LogRetentionTimeHoursProp =>
         List(KafkaConfig.LogRetentionTimeMillisProp, KafkaConfig.LogRetentionTimeMinutesProp, KafkaConfig.LogRetentionTimeHoursProp)
       case ListenerConfigRegex(baseName) if matchListenerOverride =>
+        // `ListenerMechanismConfigs` are specified as listenerPrefix.mechanism.<configName>
+        // and other listener configs are specified as listenerPrefix.<configName>
+        // Add <configName> as a synonym in both cases.
         val mechanismConfig = ListenerMechanismConfigs.find(baseName.endsWith)
         List(name, mechanismConfig.getOrElse(baseName))
       case _ => List(name)

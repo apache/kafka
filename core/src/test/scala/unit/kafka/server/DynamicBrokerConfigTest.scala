@@ -267,6 +267,18 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
+  def testSynonyms(): Unit = {
+    assertEquals(List("listener.name.secure.ssl.keystore.type", "ssl.keystore.type"),
+      DynamicBrokerConfig.brokerConfigSynonyms("listener.name.secure.ssl.keystore.type", matchListenerOverride = true))
+    assertEquals(List("listener.name.sasl_ssl.plain.sasl.jaas.config", "sasl.jaas.config"),
+      DynamicBrokerConfig.brokerConfigSynonyms("listener.name.sasl_ssl.plain.sasl.jaas.config", matchListenerOverride = true))
+    assertEquals(List("some.config"),
+      DynamicBrokerConfig.brokerConfigSynonyms("some.config", matchListenerOverride = true))
+    assertEquals(List(KafkaConfig.LogRollTimeMillisProp, KafkaConfig.LogRollTimeHoursProp),
+      DynamicBrokerConfig.brokerConfigSynonyms(KafkaConfig.LogRollTimeMillisProp, matchListenerOverride = true))
+  }
+
+  @Test
   def testDynamicConfigInitializationWithoutConfigsInZK(): Unit = {
     val zkClient = EasyMock.createMock(classOf[kafka.zk.KafkaZkClient])
     EasyMock.expect(zkClient.getEntityConfigs(EasyMock.anyString(), EasyMock.anyString())).andReturn(new java.util.Properties()).anyTimes()

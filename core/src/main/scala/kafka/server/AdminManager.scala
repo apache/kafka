@@ -476,10 +476,10 @@ class AdminManager(val config: KafkaConfig,
     val isSensitive = configEntryType == ConfigDef.Type.PASSWORD || configEntryType == null
     val valueAsString = if (isSensitive)
       null
-    else if (value.isInstanceOf[String]) // listener prefixed configs are stored as strings
-      value.asInstanceOf[String]
-    else
-      ConfigDef.convertToString(value, configEntryType)
+    else value match {
+      case v: String => v
+      case _ => ConfigDef.convertToString(value, configEntryType)
+    }
     val allSynonyms = configSynonyms(name, allNames, isSensitive)
         .filter(perBrokerConfig || _.source == ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG)
     val synonyms = if (!includeSynonyms) List.empty else allSynonyms
