@@ -473,6 +473,7 @@ class AdminManager(val config: KafkaConfig,
                                      (name: String, value: Any): DescribeConfigsResponse.ConfigEntry = {
     val allNames = brokerSynonyms(name)
     val configEntryType = configType(name, allNames)
+    // If we can't determine the config entry type, treat it as a sensitive config to be safe
     val isSensitive = configEntryType == ConfigDef.Type.PASSWORD || configEntryType == null
     val valueAsString = if (isSensitive)
       null

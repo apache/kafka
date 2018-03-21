@@ -142,14 +142,16 @@ class DynamicBrokerConfigTest {
   }
 
   private def verifyConfigUpdate(name: String, value: Object, perBrokerConfig: Boolean, expectFailure: Boolean) {
-    val config = KafkaConfig(TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181))
+    val configProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    configProps.put(KafkaConfig.PasswordEncoderSecretProp, "broker.secret")
+    val config = KafkaConfig(configProps)
     val props = new Properties
     props.put(name, value)
     val oldValue = config.originals.get(name)
 
     def updateConfig() = {
       if (perBrokerConfig)
-        config.dynamicConfig.updateBrokerConfig(0, props)
+        config.dynamicConfig.updateBrokerConfig(0, config.dynamicConfig.toPersistentProps(props, perBrokerConfig))
       else
         config.dynamicConfig.updateDefaultConfig(props)
     }
