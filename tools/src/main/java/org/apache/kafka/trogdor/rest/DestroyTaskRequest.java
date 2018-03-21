@@ -19,21 +19,20 @@ package org.apache.kafka.trogdor.rest;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.trogdor.task.TaskSpec;
 
 /**
- * A response from the Trogdor agent about stopping a worker.
+ * A request to the Trogdor coordinator to delete all memory of a task.
  */
-public class StopWorkerResponse extends Message {
-    private final TaskSpec spec;
+public class DestroyTaskRequest extends Message {
+    private final String id;
 
     @JsonCreator
-    public StopWorkerResponse(@JsonProperty("spec") TaskSpec spec) {
-        this.spec = spec;
+    public DestroyTaskRequest(@JsonProperty("id") String id) {
+        this.id = id;
     }
 
     @JsonProperty
-    public TaskSpec spec() {
-        return spec;
+    public String id() {
+        return id;
     }
 }

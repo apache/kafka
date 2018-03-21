@@ -45,9 +45,9 @@ public class JsonSerializationTest {
         verify(new ProcessStopFaultSpec(0, 0, null, null));
         verify(new AgentStatusResponse(0, null));
         verify(new TasksResponse(null));
-        verify(new WorkerDone(null, 0, 0, null, null));
-        verify(new WorkerRunning(null, 0, null));
-        verify(new WorkerStopping(null, 0, null));
+        verify(new WorkerDone(null, null, 0, 0, null, null));
+        verify(new WorkerRunning(null, null, 0, null));
+        verify(new WorkerStopping(null, null, 0, null));
         verify(new ProduceBenchSpec(0, 0, null, null,
             0, 0, null, null, null, null, null, 0, 0, "test-topic", 1, (short) 3));
         verify(new RoundTripWorkloadSpec(0, 0, null, null, null, null, null, null,

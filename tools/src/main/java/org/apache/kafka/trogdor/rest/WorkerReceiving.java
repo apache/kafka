@@ -29,8 +29,9 @@ import org.apache.kafka.trogdor.task.TaskSpec;
  */
 public final class WorkerReceiving extends WorkerState {
     @JsonCreator
-    public WorkerReceiving(@JsonProperty("spec") TaskSpec spec) {
-        super(spec);
+    public WorkerReceiving(@JsonProperty("taskId") String taskId,
+            @JsonProperty("spec") TaskSpec spec) {
+        super(taskId, spec);
     }
 
     @Override
