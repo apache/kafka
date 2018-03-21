@@ -41,13 +41,16 @@
             <p class="topic-title first"><b>Table of Contents</b></p>
             <ul class="simple">
                 <li><a class="reference internal" href="#overview" id="id1">Overview</a></li>
-                <li><a class="reference internal" href="#defining-a-stream-processor" id="id2">Defining a Stream Processor</a></li>
-                <li><a class="reference internal" href="#state-stores" id="id3">State Stores</a><ul>
-                    <li><a class="reference internal" href="#defining-and-creating-a-state-store" id="id4">Defining and creating a State Store</a></li>
-                    <li><a class="reference internal" href="#fault-tolerant-state-stores" id="id5">Fault-tolerant State Stores</a></li>
-                    <li><a class="reference internal" href="#enable-or-disable-fault-tolerance-of-state-stores-store-changelogs" id="id6">Enable or Disable Fault Tolerance of State Stores (Store Changelogs)</a></li>
-                    <li><a class="reference internal" href="#implementing-custom-state-stores" id="id7">Implementing Custom State Stores</a></li>
-                </ul>
+                <li><a class="reference internal" href="#defining-a-stream-processor" id="id2">Defining a Stream
+                    Processor</a></li>
+                <li><a class="reference internal" href="#unit-testing-processors" id="id9">Unit Testing Processors</a></li>
+                <li><a class="reference internal" href="#state-stores" id="id3">State Stores</a>
+                    <ul>
+                        <li><a class="reference internal" href="#defining-and-creating-a-state-store" id="id4">Defining and creating a State Store</a></li>
+                        <li><a class="reference internal" href="#fault-tolerant-state-stores" id="id5">Fault-tolerant State Stores</a></li>
+                        <li><a class="reference internal" href="#enable-or-disable-fault-tolerance-of-state-stores-store-changelogs" id="id6">Enable or Disable Fault Tolerance of State Stores (Store Changelogs)</a></li>
+                        <li><a class="reference internal" href="#implementing-custom-state-stores" id="id7">Implementing Custom State Stores</a></li>
+                    </ul>
                 </li>
                 <li><a class="reference internal" href="#connecting-processors-and-state-stores" id="id8">Connecting Processors and State Stores</a></li>
             </ul>
@@ -98,11 +101,12 @@
                 callbacks with different <code class="docutils literal"><span class="pre">PunctuationType</span></code> types within the same processor by calling <code class="docutils literal"><span class="pre">ProcessorContext#schedule()</span></code> multiple
                 times inside <code class="docutils literal"><span class="pre">init()</span></code> method.</p>
             <div class="admonition attention">
-                <p class="first admonition-title">Attention</p>
+                <p class="first admonition-title"><b>Attention</b></p>
                 <p class="last">Stream-time is only advanced if all input partitions over all input topics have new data (with newer timestamps) available.
                     If at least one partition does not have any new data available, stream-time will not be advanced and thus <code class="docutils literal"><span class="pre">punctuate()</span></code> will not be triggered if <code class="docutils literal"><span class="pre">PunctuationType.STREAM_TIME</span></code> was specified.
                     This behavior is independent of the configured timestamp extractor, i.e., using <code class="docutils literal"><span class="pre">WallclockTimestampExtractor</span></code> does not enable wall-clock triggering of <code class="docutils literal"><span class="pre">punctuate()</span></code>.</p>
             </div>
+            <p><b>Example</b></p>
             <p>The following example <code class="docutils literal"><span class="pre">Processor</span></code> defines a simple word-count algorithm and the following actions are performed:</p>
             <ul class="simple">
                 <li>In the <code class="docutils literal"><span class="pre">init()</span></code> method, schedule the punctuation every 1000 time units (the time unit is normally milliseconds, which in this example would translate to punctuation every 1 second) and retrieve the local state store by its name &#8220;Counts&#8221;.</li>
@@ -158,6 +162,100 @@
                     leverage <a class="reference internal" href="#streams-developer-guide-state-store"><span class="std std-ref">state stores</span></a> to maintain processing states to, for example, remember recently
                     arrived records for stateful processing needs like aggregations and joins. For more information, see the <a class="reference internal" href="#streams-developer-guide-state-store"><span class="std std-ref">state stores</span></a> documentation.</p>
             </div>
+        </div>
+        <div class="section" id="unit-testing-processors">
+            <h2>
+                <a class="toc-backref" href="#id9">Unit Testing Processors</a>
+                <a class="headerlink" href="#connecting-processors-and-state-stores"
+                   title="Permalink to this headline"></a>
+            </h2>
+            <p>
+                Once you have a processor implementation, you will want to test it.
+                Because the <code>Processor</code> forwards its results to the context rather than returning them,
+                Unit testing requires a mocked context capable of capturing forwarded data for inspection.
+                For this reason, we provide a <code>MockProcessorContext</code> in our <code>test-utils</code>module.
+            </p>
+            <p>
+                Instructions on importing the <code>test-utils</code> module are <a href="testing.html">here</a>.
+            </p>
+            <b>Construction</b>
+            <p>
+            To begin with, instantiate your processor and initialize it with the mock context:
+            <pre>
+final Processor processorUnderTest = ...;
+final MockProcessorContext context = new MockProcessorContext();
+processorUnderTest.init(context);
+                </pre>
+            If you need to pass configuration to your processor or set the default serdes, you can create the mock with
+            config:
+            <pre>
+final Properties config = new Properties();
+config.put(StreamsConfig.APPLICATION_ID_CONFIG, "unit-test");
+config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
+config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+config.put("some.other.config", "some config value");
+final MockProcessorContext context = new MockProcessorContext(config);
+                </pre>
+            </p>
+            <b>Captured data</b>
+            <p>
+                The mock will capture any values that your processor forwards. You can make assertions on them:
+            <pre>
+processorUnderTest.process("key", "value");
+
+final Iterator&lt;CapturedForward&gt; forwarded = context.forwarded().iterator();
+assertEquals(forwarded.next().kv(), new KeyValue<>(..., ...));
+assertFalse(forwarded.hasNext());
+
+// you can reset forwards to clear the captured data. This may be helpful in constructing longer scenarios.
+context.resetForwards();
+
+assertEquals(context.forwarded().size(), 0);
+            </pre>
+            If your processor forwards to specific child processors, you can query the context for captured data by child name:
+            <pre>
+final List&lt;CapturedForward&gt; captures = context.forwarded("childProcessorName");
+            </pre>
+            The mock also captures whether your processor has called <code>commit()</code> on the context:
+            <pre>
+assertTrue(context.committed());
+
+// commit captures can also be reset.
+context.resetCommit();
+
+assertFalse(context.committed());
+            </pre>
+            </p>
+            <b>Setting record metadata</b>
+            <p>
+                In case your processor logic depends on the record metadata (topic, partition, offset, or timestamp),
+                you can set them on the context, either all together or individually:
+                <pre>
+context.setRecordMetadata("topicName", /*partition*/ 0, /*offset*/ 0L, /*timestamp*/ 0L);
+context.setTopic("topicName");
+context.setPartition(0);
+context.setOffset(0L);
+context.setTimestamp(0L);
+                </pre>
+                Once these are set, the context will continue returning the same values, until you set new ones.
+            </p>
+            <b>Verifying punctuators</b>
+            <p>
+                As discussed above, processors can schedule punctuators to handle periodic tasks.
+                The mock context does <i>not</i> automatically execute punctuators, but it does capture them to
+                allow you to unit test them as well:
+                <pre>
+final MockProcessorContext.CapturedPunctuator capturedPunctuator = context.scheduledPunctuators().get(0);
+final long interval = capturedPunctuator.getIntervalMs();
+final PunctuationType type = capturedPunctuator.getType();
+final boolean cancelled = capturedPunctuator.cancelled();
+final Punctuator punctuator = capturedPunctuator.getPunctuator();
+punctuator.punctuate(/*timestamp*/ 0L);
+                </pre>
+                If you need to write tests involving automatic firing of scheduled punctuators, we recommend creating a
+                simple topology with your processor and using the <a href="testing.html#testing-topologytestdriver"><code>TopologyTestDriver</code></a>.
+            </p>
         </div>
         <div class="section" id="state-stores">
             <span id="streams-developer-guide-state-store"></span><h2><a class="toc-backref" href="#id3">State Stores</a><a class="headerlink" href="#state-stores" title="Permalink to this headline"></a></h2>

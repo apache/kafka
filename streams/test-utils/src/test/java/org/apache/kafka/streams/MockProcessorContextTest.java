@@ -54,7 +54,6 @@ public class MockProcessorContextTest {
         };
 
         final MockProcessorContext context = new MockProcessorContext();
-
         processor.init(context);
 
         processor.process("foo", 5L);
@@ -63,7 +62,7 @@ public class MockProcessorContextTest {
         final Iterator<CapturedForward> forwarded = context.forwarded().iterator();
         assertEquals(forwarded.next().kv(), new KeyValue<>("foo5", 8L));
         assertEquals(forwarded.next().kv(), new KeyValue<>("barbaz50", 56L));
-        Assert.assertFalse(forwarded.hasNext());
+        assertFalse(forwarded.hasNext());
 
         context.resetForwards();
 
@@ -92,7 +91,7 @@ public class MockProcessorContextTest {
         final Iterator<CapturedForward> forwarded = context.forwarded().iterator();
         assertEquals(forwarded.next().kv(), new KeyValue<>("foo5", 8L));
         assertEquals(forwarded.next().kv(), new KeyValue<>("barbaz50", 56L));
-        Assert.assertFalse(forwarded.hasNext());
+        assertFalse(forwarded.hasNext());
 
         context.resetForwards();
 
@@ -130,27 +129,27 @@ public class MockProcessorContextTest {
             assertEquals(forwarded.next().kv(), new KeyValue<>("start", -1L));
             assertEquals(forwarded.next().kv(), new KeyValue<>("foo5", 8L));
             assertEquals(forwarded.next().kv(), new KeyValue<>("barbaz50", 56L));
-            Assert.assertFalse(forwarded.hasNext());
+            assertFalse(forwarded.hasNext());
         }
 
         {
             final Iterator<CapturedForward> forwarded = context.forwarded("george").iterator();
             assertEquals(forwarded.next().kv(), new KeyValue<>("start", -1L));
             assertEquals(forwarded.next().kv(), new KeyValue<>("foo5", 8L));
-            Assert.assertFalse(forwarded.hasNext());
+            assertFalse(forwarded.hasNext());
         }
 
         {
             final Iterator<CapturedForward> forwarded = context.forwarded("pete").iterator();
             assertEquals(forwarded.next().kv(), new KeyValue<>("start", -1L));
             assertEquals(forwarded.next().kv(), new KeyValue<>("barbaz50", 56L));
-            Assert.assertFalse(forwarded.hasNext());
+            assertFalse(forwarded.hasNext());
         }
 
         {
             final Iterator<CapturedForward> forwarded = context.forwarded("steve").iterator();
             assertEquals(forwarded.next().kv(), new KeyValue<>("start", -1L));
-            Assert.assertFalse(forwarded.hasNext());
+            assertFalse(forwarded.hasNext());
         }
 
         context.resetForwards();
@@ -159,18 +158,15 @@ public class MockProcessorContextTest {
     }
 
     /**
-     * Behavioral test demonstrating the use of the context for capturing forwarded values to children by index (deprecated usage)
+     * Unit test verifying that forwarding to child by index is not supported. This usage is deprecated.
      */
     @Test
-    public void shouldCaptureRecordsOutputToChildByIndex() {
+    public void shouldThrowInsteadOfCaptureRecordsOutputToChildByIndex() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
-            private int count = 0;
-
             @Override
             public void process(final String key, final Long value) {
                 //noinspection deprecation
-                this.context().forward(key + value, key.length() + value, count % 2);
-                count++;
+                this.context().forward(key, value, 0);
             }
         };
 
@@ -207,15 +203,15 @@ public class MockProcessorContextTest {
         processor.process("foo", 5L);
         processor.process("barbaz", 50L);
 
-        Assert.assertFalse(context.committed());
+        assertFalse(context.committed());
 
         processor.process("foobar", 500L);
 
-        Assert.assertTrue(context.committed());
+        assertTrue(context.committed());
 
         context.resetCommit();
 
-        Assert.assertFalse(context.committed());
+        assertFalse(context.committed());
     }
 
     /**
@@ -242,9 +238,9 @@ public class MockProcessorContextTest {
         processor.process("foo", 5L);
         processor.process("bar", 50L);
 
-        Assert.assertEquals(5L, (long) store.get("foo"));
-        Assert.assertEquals(50L, (long) store.get("bar"));
-        Assert.assertEquals(55L, (long) store.get("all"));
+        assertEquals(5L, (long) store.get("foo"));
+        assertEquals(50L, (long) store.get("bar"));
+        assertEquals(55L, (long) store.get("all"));
     }
 
     /**
