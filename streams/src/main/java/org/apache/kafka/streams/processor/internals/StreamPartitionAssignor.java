@@ -113,7 +113,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         final String upgradeMode = (String) configs.get(StreamsConfig.UPGRADE_FROM_CONFIG);
         if (StreamsConfig.UPGRADE_FROM_0100.equals(upgradeMode)) {
-            log.debug("Downgrading metadata version from 2 to 1 for upgrade from 0.10.0.x.");
+            log.info("Downgrading metadata version from 2 to 1 for upgrade from 0.10.0.x.");
             userMetadataVersion = 1;
         }
 

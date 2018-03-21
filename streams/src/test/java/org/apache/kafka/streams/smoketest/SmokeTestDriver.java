@@ -134,9 +134,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                                                      final int numKeys,
                                                      final int maxRecordsPerKey,
                                                      final boolean autoTerminate) throws Exception {
-        if (autoTerminate) {
-            running = false;
-        } else {
+        if (!autoTerminate) {
             Runtime.getRuntime().addShutdownHook(new Thread() {
                 @Override
                 public void run() {
@@ -163,12 +161,16 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
         Random rand = new Random();
 
-        int remaining = 0;
+        int remaining = -1;
         if (autoTerminate) {
             remaining = data.length;
         }
 
-        while (running || remaining > 0) {
+        while (running) {
+            if (remaining == 0) {
+                break;
+            }
+
             int index;
             if (autoTerminate) {
                 index = rand.nextInt(remaining);

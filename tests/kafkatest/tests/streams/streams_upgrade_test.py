@@ -107,7 +107,7 @@ class StreamsUpgradeTest(KafkaTest):
                                               timeout_sec=60,
                                               err_msg="Never saw output 'processed 100 records from topic' on" + str(node2.account))
 
-        # start second with 0.10.0
+        # start third with 0.10.0
         self.prepare_for_0100(self.processor3)
         node3 = self.processor3.node
         with node1.account.monitor_log(self.processor1.STDOUT_FILE) as first_monitor:

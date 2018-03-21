@@ -45,24 +45,6 @@ class StreamsSmokeTestBaseService(KafkaPathResolverMixin, Service):
         "streams_stderr": {
             "path": STDERR_FILE,
             "collect_default": True},
-        "streams_log.0": {
-            "path": LOG_FILE + ".0",
-            "collect_default": True},
-        "streams_stdout.0": {
-            "path": STDOUT_FILE + ".0",
-            "collect_default": True},
-        "streams_stderr.0": {
-            "path": STDERR_FILE + ".0",
-            "collect_default": True},
-        "streams_log.1": {
-            "path": LOG_FILE + ".1",
-            "collect_default": True},
-        "streams_stdout.1": {
-            "path": STDOUT_FILE + ".1",
-            "collect_default": True},
-        "streams_stderr.1": {
-            "path": STDERR_FILE + ".1",
-            "collect_default": True},
         "streams_log.0-1": {
             "path": LOG_FILE + ".0-1",
             "collect_default": True},

@@ -31,9 +31,14 @@ public class StreamsUpgradeTest {
 
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) {
-        String kafka = args.length > 0 ? args[0] : null;
-        String zookeeper = args.length > 1 ? args[1] : null;
-        String stateDir = args.length > 2 ? args[2] : null;
+        if (args.length < 3) {
+            System.err.println("StreamsUpgradeTest requires three argument (kafka-url, zookeeper-url, state-dir) but only " + args.length + " provided: "
+                + (args.length > 0 ? args[0] + " " : "")
+                + (args.length > 1 ? args[1] : ""));
+        }
+        String kafka = args[0];
+        String zookeeper = args[1];
+        String stateDir = args[2];
 
         System.out.println("StreamsUpgradeTest instance started 0.10.0");
         System.out.println("kafka=" + kafka);
