@@ -107,8 +107,8 @@ class StreamsSimpleBenchmarkTest(Test):
             final["jmx-avg" + str(num)] = self.driver[num].average_jmx_value
             final["jmx-max" + str(num)] = self.driver[num].maximum_jmx_value
 
-            for key in sorted(self.driver[num].jmx_stats):
-                self.logger.info("%s: %s" % (key, self.driver[num].jmx_stats[key]))
+            for key in sorted(self.driver[num].jmx_stats[0]):
+                self.logger.info("%s: %s" % (key, self.driver[num].jmx_stats[0][key]))
 
 
         
