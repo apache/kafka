@@ -755,6 +755,15 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       saslMechanisms.foreach(mechanism => verifyListener(securityProtocol, Some(mechanism)))
     else
       verifyListener(securityProtocol, None)
+
+    val brokerConfigs = describeConfig(adminClients.head).entries.asScala
+    props.asScala.foreach { case (name, value) =>
+      val entry = brokerConfigs.find(_.name == name).getOrElse(throw new IllegalArgumentException(s"Config not found $name"))
+      if (DynamicBrokerConfig.DynamicPasswordConfigs.exists(name.endsWith))
+        assertNull(s"Password config returned $entry", entry.value)
+      else
+        assertEquals(value, entry.value)
+    }
   }
 
   private def verifyRemoveListener(listenerName: String, securityProtocol: SecurityProtocol,

@@ -85,6 +85,7 @@ object DynamicBrokerConfig {
 
   private val PerBrokerConfigs = DynamicSecurityConfigs  ++
     DynamicListenerConfig.ReconfigurableConfigs
+  private val ListenerMechanismConfigs = Set(KafkaConfig.SaslJaasConfigProp)
 
   val ListenerConfigRegex = """listener\.name\.[^.]*\.(.*)""".r
 
@@ -103,7 +104,9 @@ object DynamicBrokerConfig {
         List(KafkaConfig.LogFlushIntervalMsProp, KafkaConfig.LogFlushSchedulerIntervalMsProp)
       case KafkaConfig.LogRetentionTimeMillisProp | KafkaConfig.LogRetentionTimeMinutesProp | KafkaConfig.LogRetentionTimeHoursProp =>
         List(KafkaConfig.LogRetentionTimeMillisProp, KafkaConfig.LogRetentionTimeMinutesProp, KafkaConfig.LogRetentionTimeHoursProp)
-      case ListenerConfigRegex(baseName) if matchListenerOverride => List(name, baseName)
+      case ListenerConfigRegex(baseName) if matchListenerOverride =>
+        val mechanismConfig = ListenerMechanismConfigs.find(baseName.endsWith)
+        List(name, mechanismConfig.getOrElse(baseName))
       case _ => List(name)
     }
   }
