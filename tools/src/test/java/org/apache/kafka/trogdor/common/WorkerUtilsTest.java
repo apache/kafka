@@ -18,9 +18,9 @@
 package org.apache.kafka.trogdor.common;
 
 
-
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 
 import org.apache.kafka.common.Node;
@@ -35,9 +35,11 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -261,5 +263,37 @@ public class WorkerUtilsTest {
             Collections.singletonMap(ProducerConfig.ACKS_CONFIG, "1"),
             Collections.singletonMap(ProducerConfig.ACKS_CONFIG, "0"));
         assertEquals(resultProps, props);
+    }
+
+    @Test
+    public void testGetMatchingTopicPartitionsCorrectlyMatchesTopics() throws Throwable {
+        final String topic1 = "existing-topic";
+        final String topic2 = "another-topic";
+        final String topic3 = "one-more-topic";
+        makeExistingTopicWithOneReplica(topic1, 10);
+        makeExistingTopicWithOneReplica(topic2, 20);
+        makeExistingTopicWithOneReplica(topic3, 30);
+
+        Collection<TopicPartition> topicPartitions =
+            WorkerUtils.getMatchingTopicPartitions(adminClient, topic3, 0, 2);
+        assertTrue(topicPartitions.containsAll(
+            Arrays.asList(new TopicPartition(topic3, 0), new TopicPartition(topic3, 1))
+        ));
+    }
+
+    private void makeExistingTopicWithOneReplica(String topicName, int numPartitions) {
+        List<TopicPartitionInfo> tpInfo = new ArrayList<>();
+        int brokerIndex = 0;
+        for (int i = 0; i < numPartitions; ++i) {
+            Node broker = cluster.get(brokerIndex);
+            tpInfo.add(new TopicPartitionInfo(
+                i, broker, singleReplica, Collections.<Node>emptyList()));
+            brokerIndex = (brokerIndex + 1) % cluster.size();
+        }
+        adminClient.addTopic(
+            false,
+            topicName,
+            tpInfo,
+            null);
     }
 }
