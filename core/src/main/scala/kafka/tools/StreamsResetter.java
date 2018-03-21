@@ -226,12 +226,6 @@ public class StreamsResetter {
             CommandLineUtils.printUsageAndDie(optionParser, "Only one of --dry-run and --execute can be specified");
         }
 
-        if (!options.has(executeOption) && !options.has(dryRunOption)) {
-            System.err.println("WARN: In a future major release, the default behavior of this command will be to " +
-                    "prompt the user before executing the reset. You should add the --execute option explicitly if " +
-                    "you are scripting this command and want to keep the current default behavior without prompting.");
-        }
-
         scala.collection.immutable.HashSet<OptionSpec<?>> allScenarioOptions = new scala.collection.immutable.HashSet<>();
         allScenarioOptions.$plus(toOffsetOption);
         allScenarioOptions.$plus(toDatetimeOption);
