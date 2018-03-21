@@ -48,4 +48,9 @@ class Segment extends RocksDBStore implements Comparable<Segment> {
     public String toString() {
         return "Segment(id=" + id + ", name=" + name() + ")";
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        return super.equals(obj);
+    }
 }
