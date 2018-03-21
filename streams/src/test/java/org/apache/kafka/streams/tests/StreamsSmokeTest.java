@@ -16,27 +16,32 @@
  */
 package org.apache.kafka.streams.tests;
 
-import java.io.File;
+import org.apache.kafka.common.utils.Utils;
+
+import java.io.IOException;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 
 public class StreamsSmokeTest {
 
     /**
-     *  args ::= command kafka zookeeper stateDir
+     *  args ::= kafka propFileName command
      *  command := "run" | "process"
      *
      * @param args
      */
-    public static void main(String[] args) throws InterruptedException {
-        String kafka = args[0];
-        String stateDir = args.length > 1 ? args[1] : null;
-        String command = args.length > 2 ? args[2] : null;
+    public static void main(final String[] args) throws InterruptedException, IOException {
+        final String kafka = args[0];
+        final String propFileName = args.length > 1 ? args[1] : null;
+        final String command = args.length > 2 ? args[2] : null;
+
+        final Properties streamsProperties = Utils.loadProps(propFileName);
 
         System.out.println("StreamsTest instance started");
         System.out.println("command=" + command);
         System.out.println("kafka=" + kafka);
-        System.out.println("stateDir=" + stateDir);
+        System.out.println("props=" + streamsProperties);
 
         switch (command) {
             case "standalone":
@@ -51,7 +56,7 @@ public class StreamsSmokeTest {
                 break;
             case "process":
                 // this starts a KafkaStreams client
-                final SmokeTestClient client = new SmokeTestClient(new File(stateDir), kafka);
+                final SmokeTestClient client = new SmokeTestClient(streamsProperties, kafka);
                 client.start();
                 break;
             case "close-deadlock-test":
