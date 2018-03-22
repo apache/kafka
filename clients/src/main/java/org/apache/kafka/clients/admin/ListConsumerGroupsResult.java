@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
@@ -31,40 +32,45 @@ import java.util.Set;
  */
 @InterfaceStability.Evolving
 public class ListConsumerGroupsResult {
-    final KafkaFuture<Map<String, ConsumerGroupListing>> future;
+    final KafkaFuture<Map<Node, KafkaFuture<Collection<ConsumerGroupListing>>>> futureMap;
 
-    ListConsumerGroupsResult(KafkaFuture<Map<String, ConsumerGroupListing>> future) {
-        this.future = future;
+    ListConsumerGroupsResult(KafkaFuture<Map<Node, KafkaFuture<Collection<ConsumerGroupListing>>>> futureMap) {
+        this.futureMap = futureMap;
     }
 
     /**
      * Return a future which yields a map of consumer groups to ConsumerGroupListing objects.
      */
-    public KafkaFuture<Map<String, ConsumerGroupListing>> namesToListings() {
-        return future;
+    public KafkaFuture<Map<Node, KafkaFuture<Collection<ConsumerGroupListing>>>> nodesToListings() {
+        return futureMap;
     }
 
     /**
      * Return a future which yields a collection of ConsumerGroupListing objects.
      */
-    public KafkaFuture<Collection<ConsumerGroupListing>> listings() {
-        return future.thenApply(new KafkaFuture.Function<Map<String, ConsumerGroupListing>, Collection<ConsumerGroupListing>>() {
-            @Override
-            public Collection<ConsumerGroupListing> apply(Map<String, ConsumerGroupListing> namesToDescriptions) {
-                return namesToDescriptions.values();
+    public KafkaFuture<Collection<KafkaFuture<Collection<ConsumerGroupListing>>>> listings() {
+        return futureMap.thenApply(
+            new KafkaFuture.Function<Map<Node, KafkaFuture<Collection<ConsumerGroupListing>>>, Collection<KafkaFuture<Collection<ConsumerGroupListing>>>>() {
+
+                @Override
+                public Collection<KafkaFuture<Collection<ConsumerGroupListing>>> apply(Map<Node, KafkaFuture<Collection<ConsumerGroupListing>>> futureMap) {
+                    return futureMap.values();
+                }
             }
-        });
+        );
     }
 
     /**
      * Return a future which yields a collection of consumer groups.
      */
-    public KafkaFuture<Set<String>> names() {
-        return future.thenApply(new KafkaFuture.Function<Map<String, ConsumerGroupListing>, Set<String>>() {
-            @Override
-            public Set<String> apply(Map<String, ConsumerGroupListing> namesToListings) {
-                return namesToListings.keySet();
+    public KafkaFuture<Set<Node>> nodes() {
+        return futureMap.thenApply(
+            new KafkaFuture.Function<Map<Node, KafkaFuture<Collection<ConsumerGroupListing>>>, Set<Node>>() {
+                @Override
+                public Set<Node> apply(Map<Node, KafkaFuture<Collection<ConsumerGroupListing>>> futureMap) {
+                    return futureMap.keySet();
+                }
             }
-        });
+        );
     }
 }

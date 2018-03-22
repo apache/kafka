@@ -21,15 +21,25 @@ package org.apache.kafka.clients.admin;
  * A listing of a consumer group in the cluster.
  */
 public class ConsumerGroupListing {
+    private final String groupId;
     private final boolean isSimpleConsumerGroup;
 
     /**
      * Create an instance with the specified parameters.
      *
+     * @param groupId Group Id
      * @param isSimpleConsumerGroup If consumer group is simple or not.
      */
-    public ConsumerGroupListing(boolean isSimpleConsumerGroup) {
+    public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup) {
+        this.groupId = groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
+    }
+
+    /**
+     * Consumer Group Id
+     */
+    public String groupId() {
+        return groupId;
     }
 
     /**
