@@ -35,7 +35,7 @@ class StreamsSimpleBenchmarkTest(Test):
         self.num_threads = 1
 
     @cluster(num_nodes=9)
-    @matrix(test=["produce", "consume", "count", "processstream", "processstreamwithsink", "processstreamwithstatestore", "processstreamwithcachedstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin", "yahoo"], scale=[1, 3])
+    @matrix(test=["count", "processstream", "processstreamwithsink", "processstreamwithstatestore", "processstreamwithcachedstatestore", "kstreamktablejoin", "kstreamkstreamjoin", "ktablektablejoin"], scale=[1, 3])
     def test_simple_benchmark(self, test, scale):
         """
         Run simple Kafka Streams benchmark
@@ -75,6 +75,8 @@ class StreamsSimpleBenchmarkTest(Test):
         self.load_driver.wait()
         self.load_driver.stop()
 
+
+
         ################
         # RUN PHASE
         ################
@@ -93,11 +95,18 @@ class StreamsSimpleBenchmarkTest(Test):
             node[num] = self.driver[num].node
             node[num].account.ssh("grep Performance %s" % self.driver[num].STDOUT_FILE, allow_fail=False)
             data[num] = self.driver[num].collect_data(node[num], "" )
-                
+            self.driver[num].read_jmx_output_all_nodes()
+
 
         final = {}
         for num in range(0, scale):
             for key in data[num]:
                 final[key + str(num)] = data[num][key]
-        
+
+            for key in sorted(self.driver[num].jmx_stats[0]):
+                self.logger.info("%s: %s" % (key, self.driver[num].jmx_stats[0][key]))
+
+            final["jmx-avg" + str(num)] = self.driver[num].average_jmx_value
+            final["jmx-max" + str(num)] = self.driver[num].maximum_jmx_value
+
         return final

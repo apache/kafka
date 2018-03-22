@@ -19,13 +19,12 @@ import signal
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.kafka import KafkaConfig
-
 
 STATE_DIR = "state.dir"
 
-class StreamsTestBaseService(KafkaPathResolverMixin, Service):
-
+class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
     """Base class for Streams Test services providing some common settings and functionality"""
 
     PERSISTENT_ROOT = "/mnt/streams"
@@ -35,6 +34,8 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
     LOG_FILE = os.path.join(PERSISTENT_ROOT, "streams.log")
     STDOUT_FILE = os.path.join(PERSISTENT_ROOT, "streams.stdout")
     STDERR_FILE = os.path.join(PERSISTENT_ROOT, "streams.stderr")
+    JMX_LOG_FILE = os.path.join(PERSISTENT_ROOT, "jmx_tool.log")
+    JMX_ERR_FILE = os.path.join(PERSISTENT_ROOT, "jmx_tool.err.log")
     LOG4J_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
     PID_FILE = os.path.join(PERSISTENT_ROOT, "streams.pid")
 
@@ -48,10 +49,16 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
         "streams_stderr": {
             "path": STDERR_FILE,
             "collect_default": True},
+        "jmx_log": {
+            "path": JMX_LOG_FILE,
+            "collect_default": True},
+        "jmx_err": {
+            "path": JMX_ERR_FILE,
+            "collect_default": True},
     }
 
     def __init__(self, test_context, kafka, streams_class_name, user_test_args, user_test_args1=None, user_test_args2=None, user_test_args3=None):
-        super(StreamsTestBaseService, self).__init__(test_context, 1)
+        Service.__init__(self, test_context, num_nodes=1)
         self.kafka = kafka
         self.args = {'streams_class_name': streams_class_name,
                      'user_test_args': user_test_args,
@@ -130,7 +137,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
               " %(kafka)s %(config_file)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
               " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
-        self.logger.info("Executing Streams cmd: " + cmd)
+        self.logger.info("Executing streams cmd: " + cmd)
 
         return cmd
 
