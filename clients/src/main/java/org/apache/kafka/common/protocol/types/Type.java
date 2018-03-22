@@ -681,10 +681,10 @@ public abstract class Type {
             }
         };
         Type[] types = {
-                BOOLEAN, INT8, INT16, INT32, INT64,
-                UNSIGNED_INT32, VARINT, VARLONG,
-                STRING, NULLABLE_STRING, BYTES, NULLABLE_BYTES,
-                RECORDS, new ArrayOf(dummyType)};
+            BOOLEAN, INT8, INT16, INT32, INT64,
+            UNSIGNED_INT32, VARINT, VARLONG,
+            STRING, NULLABLE_STRING, BYTES, NULLABLE_BYTES,
+            RECORDS, new ArrayOf(dummyType)};
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>");
