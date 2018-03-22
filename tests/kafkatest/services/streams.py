@@ -20,7 +20,7 @@ from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
-from kafkatest.version import LATEST_0_10_0
+from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1
 
 
 class StreamsTestBaseService(KafkaPathResolverMixin, Service):
@@ -322,7 +322,7 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
     def start_cmd(self, node):
         args = self.args.copy()
         args['kafka'] = self.kafka.bootstrap_servers()
-        if self.KAFKA_STREAMS_VERSION == str(LATEST_0_10_0):
+        if self.KAFKA_STREAMS_VERSION == str(LATEST_0_10_0) or self.KAFKA_STREAMS_VERSION == str(LATEST_0_10_1):
             args['zk'] = self.kafka.zk.connect_setting()
         else:
             args['zk'] = ""
