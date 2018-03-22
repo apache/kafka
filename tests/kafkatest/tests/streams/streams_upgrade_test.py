@@ -51,7 +51,7 @@ class StreamsUpgradeTest(KafkaTest):
         # first rolling bounce
         random.shuffle(self.processors)
         for p in self.processors:
-            p.clean_node_enabled = False
+            p.CLEAN_NODE_ENABLED = False
             self.do_rolling_bounce(p, "0.10.0", counter)
             counter = counter + 1
 
@@ -180,7 +180,7 @@ class StreamsUpgradeTest(KafkaTest):
 
                         log_monitor.wait_until("Kafka version : " + str(TRUNK_VERSION),
                                                timeout_sec=60,
-                                               err_msg="Could not detect Kafka Streams version " + str(TRUNK_VERSION) + " " + str(first_other_node.account))
+                                               err_msg="Could not detect Kafka Streams version " + str(TRUNK_VERSION) + " " + str(node.account))
                         first_other_monitor.wait_until("processed 100 records from topic",
                                                        timeout_sec=60,
                                                        err_msg="Never saw output 'processed 100 records from topic' on" + str(first_other_node.account))
