@@ -142,14 +142,16 @@ class DynamicBrokerConfigTest {
   }
 
   private def verifyConfigUpdate(name: String, value: Object, perBrokerConfig: Boolean, expectFailure: Boolean) {
-    val config = KafkaConfig(TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181))
+    val configProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    configProps.put(KafkaConfig.PasswordEncoderSecretProp, "broker.secret")
+    val config = KafkaConfig(configProps)
     val props = new Properties
     props.put(name, value)
     val oldValue = config.originals.get(name)
 
     def updateConfig() = {
       if (perBrokerConfig)
-        config.dynamicConfig.updateBrokerConfig(0, props)
+        config.dynamicConfig.updateBrokerConfig(0, config.dynamicConfig.toPersistentProps(props, perBrokerConfig))
       else
         config.dynamicConfig.updateDefaultConfig(props)
     }
@@ -264,6 +266,18 @@ class DynamicBrokerConfigTest {
 
     val dynamicListenerConfig = new DynamicListenerConfig(kafkaServer)
     dynamicListenerConfig.validateReconfiguration(newConfig)
+  }
+
+  @Test
+  def testSynonyms(): Unit = {
+    assertEquals(List("listener.name.secure.ssl.keystore.type", "ssl.keystore.type"),
+      DynamicBrokerConfig.brokerConfigSynonyms("listener.name.secure.ssl.keystore.type", matchListenerOverride = true))
+    assertEquals(List("listener.name.sasl_ssl.plain.sasl.jaas.config", "sasl.jaas.config"),
+      DynamicBrokerConfig.brokerConfigSynonyms("listener.name.sasl_ssl.plain.sasl.jaas.config", matchListenerOverride = true))
+    assertEquals(List("some.config"),
+      DynamicBrokerConfig.brokerConfigSynonyms("some.config", matchListenerOverride = true))
+    assertEquals(List(KafkaConfig.LogRollTimeMillisProp, KafkaConfig.LogRollTimeHoursProp),
+      DynamicBrokerConfig.brokerConfigSynonyms(KafkaConfig.LogRollTimeMillisProp, matchListenerOverride = true))
   }
 
   @Test
