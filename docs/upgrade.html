@@ -65,6 +65,14 @@ only support 0.10.1.x or later brokers while 0.10.1.x brokers also support older
             <li> bounce each instance of your application once more to complete the upgrade </li>
         </ul>
     </li>
+    <li> Upgrading from 0.10.0.x to 0.10.1.0 or 0.10.1.1 requires an offline upgrade (rolling bounce upgrade is not supported)
+        <ul>
+            <li> note: rolling bounce upgrade is supported for upgrading from 0.10.0.x to 0.10.1.2 </li>
+            <li> stop all old (0.10.0.x) application instances </li>
+            <li> update your code and swap old code and jar file with new code and new jar file </li>
+            <li> restart all new (0.10.1.0 or 0.10.1.1) application instances </li>
+        </ul>
+    </li>
     <li> Stream grouping and aggregation split into two methods:
         <ul>
             <li> old: KStream #aggregateByKey(), #reduceByKey(), and #countByKey() </li>
