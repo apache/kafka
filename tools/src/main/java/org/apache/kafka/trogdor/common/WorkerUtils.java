@@ -24,8 +24,8 @@ import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.ConfigDef;
+
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
@@ -35,12 +35,13 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.Future;
 
 /**
@@ -48,19 +49,8 @@ import java.util.concurrent.Future;
  */
 public final class WorkerUtils {
 
-    private static final List<String> CLIENT_SECURITY_KEYS = Arrays.asList(
-        AdminClientConfig.SECURITY_PROTOCOL_CONFIG,
-        SaslConfigs.SASL_MECHANISM,
-        SaslConfigs.SASL_JAAS_CONFIG,
-        SaslConfigs.SASL_KERBEROS_SERVICE_NAME,
-        SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
-        SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
-        SslConfigs.SSL_KEY_PASSWORD_CONFIG,
-        SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
-        SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
-        SslConfigs.SSL_PROTOCOL_CONFIG,
-        SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
-    );
+    private static final ConfigDef SASL_AND_SSL_CONFIG = new ConfigDef()
+        .withClientSaslSupport().withClientSslSupport();
 
     /**
      * Handle an exception in a TaskWorker.
@@ -252,8 +242,10 @@ public final class WorkerUtils {
         props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, CREATE_TOPICS_REQUEST_TIMEOUT);
 
         // copy security related props
+        Set<String> clientSecurityKeys = new HashSet<>(SASL_AND_SSL_CONFIG.configKeys().keySet());
+        clientSecurityKeys.add(AdminClientConfig.SECURITY_PROTOCOL_CONFIG);
         for (Map.Entry<String, String> clientPropsEntry: clientConf.entrySet()) {
-            if (CLIENT_SECURITY_KEYS.contains(clientPropsEntry.getKey())) {
+            if (clientSecurityKeys.contains(clientPropsEntry.getKey())) {
                 props.put(clientPropsEntry.getKey(), clientPropsEntry.getValue());
             }
         }
