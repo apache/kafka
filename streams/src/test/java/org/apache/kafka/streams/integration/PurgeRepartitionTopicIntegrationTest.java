@@ -66,7 +66,6 @@ public class PurgeRepartitionTopicIntegrationTest {
     private static KafkaStreams kafkaStreams;
     private static Integer purgeIntervalMs = 10;
     private static Integer purgeSegmentBytes = 2000;
-    private static Long purgeRetention = Long.MAX_VALUE;
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, new Properties() {
@@ -158,7 +157,6 @@ public class PurgeRepartitionTopicIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(APPLICATION_ID).getPath());
         streamsConfiguration.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_MS_CONFIG), purgeIntervalMs);
         streamsConfiguration.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), purgeSegmentBytes);
-        streamsConfiguration.put(StreamsConfig.topicPrefix(TopicConfig.RETENTION_MS_CONFIG), purgeRetention);
         streamsConfiguration.put(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), purgeSegmentBytes / 2);    // we cannot allow batch size larger than segment size
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, purgeIntervalMs);
 

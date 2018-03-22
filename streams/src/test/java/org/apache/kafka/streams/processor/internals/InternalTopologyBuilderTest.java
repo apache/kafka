@@ -554,6 +554,7 @@ public class InternalTopologyBuilderTest {
         final InternalTopicConfig topicConfig = topicsInfo.repartitionSourceTopics.get("appId-foo");
         final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
         assertEquals(5, properties.size());
+        assertEquals(properties.get(TopicConfig.RETENTION_MS_CONFIG), String.valueOf(Long.MAX_VALUE));
         assertEquals(TopicConfig.CLEANUP_POLICY_DELETE, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("appId-foo", topicConfig.name());
         assertTrue(topicConfig instanceof RepartitionTopicConfig);
