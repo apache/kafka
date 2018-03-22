@@ -672,6 +672,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       val secret = config.passwordEncoderSecret.getOrElse(throw new IllegalStateException("Password encoder secret not configured"))
       val oldSecret = config.passwordEncoderOldSecret.getOrElse(throw new IllegalStateException("Password encoder old secret not configured"))
       val passwordConfigs = props.asScala.filterKeys(DynamicBrokerConfig.isPasswordConfig)
+      assertTrue("Password configs not found", passwordConfigs.nonEmpty)
       val passwordDecoder = new PasswordEncoder(secret,
         config.passwordEncoderKeyFactoryAlgorithm,
         config.passwordEncoderCipherAlgorithm,
@@ -741,6 +742,10 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       case SecurityProtocol.PLAINTEXT => // no additional props
     }
 
+    // Add a config to verify that configs whose types are not known are not returned by describeConfigs()
+    val unknownConfig = "some.config"
+    props.put(unknownConfig, "some.config.value")
+
     alterConfigs(adminClients.head, props, perBrokerConfig = true).all.get
 
     TestUtils.waitUntilTrue(() => servers.forall(server => server.config.listeners.size == existingListenerCount + 1),
@@ -761,8 +766,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val brokerConfigs = describeConfig(adminClients.head).entries.asScala
     props.asScala.foreach { case (name, value) =>
       val entry = brokerConfigs.find(_.name == name).getOrElse(throw new IllegalArgumentException(s"Config not found $name"))
-      if (DynamicBrokerConfig.isPasswordConfig(name))
-        assertNull(s"Password config returned $entry", entry.value)
+      if (DynamicBrokerConfig.isPasswordConfig(name) || name == unknownConfig)
+        assertNull(s"Password or unknown config returned $entry", entry.value)
       else
         assertEquals(value, entry.value)
     }
