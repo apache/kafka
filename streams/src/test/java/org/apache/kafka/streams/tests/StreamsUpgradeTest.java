@@ -38,7 +38,7 @@ public class StreamsUpgradeTest {
         String stateDir = args[2];
         String upgradeFrom = args.length > 3 ? args[3] : null;
 
-        System.out.println("StreamsUpgradeTest instance started trunk");
+        System.out.println("StreamsTest instance started (StreamsUpgradeTest trunk)");
         System.out.println("kafka=" + kafka);
         System.out.println("zookeeper=" + zookeeper);
         System.out.println("stateDir=" + stateDir);

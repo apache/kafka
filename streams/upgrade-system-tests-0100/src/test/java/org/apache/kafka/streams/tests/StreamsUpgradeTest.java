@@ -40,7 +40,7 @@ public class StreamsUpgradeTest {
         String zookeeper = args[1];
         String stateDir = args[2];
 
-        System.out.println("StreamsUpgradeTest instance started 0.10.0");
+        System.out.println("StreamsTest instance started (StreamsUpgradeTest v0.10.0)");
         System.out.println("kafka=" + kafka);
         System.out.println("zookeeper=" + zookeeper);
         System.out.println("stateDir=" + stateDir);

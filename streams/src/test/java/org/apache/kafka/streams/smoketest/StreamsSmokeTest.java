@@ -36,7 +36,7 @@ public class StreamsSmokeTest {
         String stateDir = args.length > 3 ? args[3] : null;
         boolean disableAutoTerminate = args.length > 4;
 
-        System.out.println("StreamsSmokeTest instance started");
+        System.out.println("StreamsTest instance started (StreamsSmokeTest)");
         System.out.println("command=" + command);
         System.out.println("kafka=" + kafka);
         System.out.println("zookeeper=" + zookeeper);

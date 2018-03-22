@@ -231,10 +231,13 @@ class StreamsSmokeTestBaseService(KafkaPathResolverMixin, Service):
 
         node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('tools_log4j.properties', log_file=self.LOG_FILE))
 
-        self.logger.info("Starting StreamsSmokeTest process on " + str(node.account))
+        self.logger.info("Starting StreamsTest process on " + str(node.account))
         with node.account.monitor_log(self.STDOUT_FILE) as monitor:
             node.account.ssh(self.start_cmd(node))
-            monitor.wait_until('StreamsSmokeTest instance started', timeout_sec=15, err_msg="Never saw message indicating StreamsSmokeTest finished startup on " + str(node.account))
+            monitor.wait_until('StreamsTest instance started', timeout_sec=15, err_msg="Never saw message indicating StreamsTest finished startup on " + str(node.account))
+
+        if len(self.pids(node)) == 0:
+            raise RuntimeError("No process ids recorded")
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
@@ -302,16 +305,3 @@ class StreamsUpgradeTestJobRunnerService(StreamsSmokeTestBaseService):
               " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
         return cmd
-
-    def start_node(self, node):
-        node.account.ssh("mkdir -p %s" % self.PERSISTENT_ROOT, allow_fail=False)
-
-        node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('tools_log4j.properties', log_file=self.LOG_FILE))
-
-        self.logger.info("Starting StreamsUpgradeTest process on " + str(node.account))
-        with node.account.monitor_log(self.STDOUT_FILE) as monitor:
-            node.account.ssh(self.start_cmd(node))
-            monitor.wait_until('StreamsUpgradeTest instance started', timeout_sec=15, err_msg="Never saw message indicating StreamsUpgradeTest finished startup on " + str(node.account))
-
-        if len(self.pids(node)) == 0:
-            raise RuntimeError("No process ids recorded")
