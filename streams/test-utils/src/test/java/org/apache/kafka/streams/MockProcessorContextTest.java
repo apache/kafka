@@ -232,6 +232,7 @@ public class MockProcessorContextTest {
         final KeyValueStore<String, Long> store = new InMemoryKeyValueStore<>("my-state", Serdes.String(), Serdes.Long());
         context.register(store, false, null);
 
+        store.init(context, store);
         processor.init(context);
 
         processor.process("foo", 5L);

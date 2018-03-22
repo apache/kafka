@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -26,6 +28,7 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.ValueTransformer;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 
@@ -49,7 +52,7 @@ import java.util.Properties;
  * {@link Topology} and using the {@link TopologyTestDriver}.
  */
 @InterfaceStability.Evolving
-public class MockProcessorContext implements ProcessorContext {
+public class MockProcessorContext implements ProcessorContext, RecordCollector.Supplier {
     // Immutable fields ================================================
     private final StreamsMetricsImpl metrics;
     private final TaskId taskId;
@@ -300,25 +303,29 @@ public class MockProcessorContext implements ProcessorContext {
 
     @Override
     public String topic() {
-        if (topic == null) throw new IllegalStateException("Topic must be set before use via setRecordMetadata() or setTopic().");
+        if (topic == null)
+            throw new IllegalStateException("Topic must be set before use via setRecordMetadata() or setTopic().");
         return topic;
     }
 
     @Override
     public int partition() {
-        if (partition == null) throw new IllegalStateException("Partition must be set before use via setRecordMetadata() or setPartition().");
+        if (partition == null)
+            throw new IllegalStateException("Partition must be set before use via setRecordMetadata() or setPartition().");
         return partition;
     }
 
     @Override
     public long offset() {
-        if (offset == null) throw new IllegalStateException("Offset must be set before use via setRecordMetadata() or setOffset().");
+        if (offset == null)
+            throw new IllegalStateException("Offset must be set before use via setRecordMetadata() or setOffset().");
         return offset;
     }
 
     @Override
     public long timestamp() {
-        if (timestamp == null) throw new IllegalStateException("Timestamp must be set before use via setRecordMetadata() or setTimestamp().");
+        if (timestamp == null)
+            throw new IllegalStateException("Timestamp must be set before use via setRecordMetadata() or setTimestamp().");
         return timestamp;
     }
 
@@ -455,5 +462,50 @@ public class MockProcessorContext implements ProcessorContext {
      */
     public void resetCommit() {
         committed = false;
+    }
+
+    @Override
+    public RecordCollector recordCollector() {
+        // This interface is required for state stores that add change logging.
+        // Rather than risking a mysterious ClassCastException during unit tests, just supply a no-op collector.
+
+        return new RecordCollector() {
+            @Override
+            public <K, V> void send(final String topic,
+                                    final K key,
+                                    final V value,
+                                    final Integer partition,
+                                    final Long timestamp,
+                                    final Serializer<K> keySerializer,
+                                    final Serializer<V> valueSerializer) {
+
+            }
+
+            @Override
+            public <K, V> void send(final String topic,
+                                    final K key,
+                                    final V value,
+                                    final Long timestamp,
+                                    final Serializer<K> keySerializer,
+                                    final Serializer<V> valueSerializer,
+                                    final StreamPartitioner<? super K, ? super V> partitioner) {
+
+            }
+
+            @Override
+            public void flush() {
+
+            }
+
+            @Override
+            public void close() {
+
+            }
+
+            @Override
+            public Map<TopicPartition, Long> offsets() {
+                return null;
+            }
+        };
     }
 }
