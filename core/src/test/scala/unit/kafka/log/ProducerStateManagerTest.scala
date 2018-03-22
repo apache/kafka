@@ -62,8 +62,8 @@ class ProducerStateManagerTest extends JUnitSuite {
     // Second entry for id 0 added
     append(stateManager, producerId, epoch, 1, 0L, 1L)
 
-    // Duplicate sequence number (matches previous sequence number)
-    assertThrows[DuplicateSequenceException] {
+    // Duplicates are checked separately and should result in OutOfOrderSequence if appended
+    assertThrows[OutOfOrderSequenceException] {
       append(stateManager, producerId, epoch, 1, 0L, 1L)
     }
 
@@ -225,9 +225,9 @@ class ProducerStateManagerTest extends JUnitSuite {
     appendInfo.append(producerEpoch, 1, 5, time.milliseconds(), 20L, isTransactional = true)
     var lastEntry = appendInfo.toEntry
     assertEquals(producerEpoch, lastEntry.producerEpoch)
-    assertEquals(0, lastEntry.firstSeq)
+    assertEquals(1, lastEntry.firstSeq)
     assertEquals(5, lastEntry.lastSeq)
-    assertEquals(9L, lastEntry.firstOffset)
+    assertEquals(16L, lastEntry.firstOffset)
     assertEquals(20L, lastEntry.lastDataOffset)
     assertEquals(Some(16L), lastEntry.currentTxnFirstOffset)
     assertEquals(List(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions)
@@ -235,9 +235,9 @@ class ProducerStateManagerTest extends JUnitSuite {
     appendInfo.append(producerEpoch, 6, 10, time.milliseconds(), 30L, isTransactional = true)
     lastEntry = appendInfo.toEntry
     assertEquals(producerEpoch, lastEntry.producerEpoch)
-    assertEquals(0, lastEntry.firstSeq)
+    assertEquals(1, lastEntry.firstSeq)
     assertEquals(10, lastEntry.lastSeq)
-    assertEquals(9L, lastEntry.firstOffset)
+    assertEquals(16L, lastEntry.firstOffset)
     assertEquals(30L, lastEntry.lastDataOffset)
     assertEquals(Some(16L), lastEntry.currentTxnFirstOffset)
     assertEquals(List(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions)
@@ -252,26 +252,37 @@ class ProducerStateManagerTest extends JUnitSuite {
     lastEntry = appendInfo.toEntry
     assertEquals(producerEpoch, lastEntry.producerEpoch)
     // verify that appending the transaction marker doesn't affect the metadata of the cached record batches.
-    assertEquals(0, lastEntry.firstSeq)
+    assertEquals(1, lastEntry.firstSeq)
     assertEquals(10, lastEntry.lastSeq)
-    assertEquals(9L, lastEntry.firstOffset)
+    assertEquals(16L, lastEntry.firstOffset)
     assertEquals(30L, lastEntry.lastDataOffset)
     assertEquals(coordinatorEpoch, lastEntry.coordinatorEpoch)
     assertEquals(None, lastEntry.currentTxnFirstOffset)
     assertEquals(List(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions)
   }
 
-  @Test(expected = classOf[OutOfOrderSequenceException])
+  @Test
   def testOutOfSequenceAfterControlRecordEpochBump(): Unit = {
     val epoch = 0.toShort
-    append(stateManager, producerId, epoch, 0, 0L)
-    append(stateManager, producerId, epoch, 1, 1L)
+    append(stateManager, producerId, epoch, 0, 0L, isTransactional = true)
+    append(stateManager, producerId, epoch, 1, 1L, isTransactional = true)
 
     val bumpedEpoch = 1.toShort
     appendEndTxnMarker(stateManager, producerId, bumpedEpoch, ControlRecordType.ABORT, 1L)
 
     // next append is invalid since we expect the sequence to be reset
-    append(stateManager, producerId, bumpedEpoch, 2, 2L)
+    assertThrows[OutOfOrderSequenceException] {
+      append(stateManager, producerId, bumpedEpoch, 2, 2L, isTransactional = true)
+    }
+
+    assertThrows[OutOfOrderSequenceException] {
+      append(stateManager, producerId, (bumpedEpoch + 1).toShort, 2, 2L, isTransactional = true)
+    }
+
+    // Append with the bumped epoch should be fine if starting from sequence 0
+    append(stateManager, producerId, bumpedEpoch, 0, 0L, isTransactional = true)
+    assertEquals(bumpedEpoch, stateManager.lastEntry(producerId).get.producerEpoch)
+    assertEquals(0, stateManager.lastEntry(producerId).get.lastSeq)
   }
 
   @Test(expected = classOf[InvalidTxnStateException])
@@ -360,10 +371,10 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertFalse(recoveredMapping.activeProducers.contains(producerId))
     append(recoveredMapping, producerId, epoch, sequence, 2L, 70001, isFromClient = false)
     assertTrue(recoveredMapping.activeProducers.contains(producerId))
-    val producerIdEntry = recoveredMapping.activeProducers.get(producerId).head
-    assertEquals(epoch, producerIdEntry.producerEpoch)
-    assertEquals(sequence, producerIdEntry.firstSeq)
-    assertEquals(sequence, producerIdEntry.lastSeq)
+    val producerStateEntry = recoveredMapping.activeProducers.get(producerId).head
+    assertEquals(epoch, producerStateEntry.producerEpoch)
+    assertEquals(sequence, producerStateEntry.firstSeq)
+    assertEquals(sequence, producerStateEntry.lastSeq)
   }
 
   @Test
@@ -550,7 +561,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(stateManager, producerId, epoch, 2, 3L, 4L)
     stateManager.takeSnapshot()
 
-    intercept[UnknownProducerIdException] {
+    assertThrows[UnknownProducerIdException] {
       val recoveredMapping = new ProducerStateManager(partition, logDir, maxPidExpirationMs)
       recoveredMapping.truncateAndReload(0L, 1L, time.milliseconds)
       append(recoveredMapping, pid2, epoch, 1, 4L, 5L)

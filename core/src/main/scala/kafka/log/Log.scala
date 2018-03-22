@@ -844,7 +844,7 @@ class Log(@volatile var dir: File,
       // if this is a client produce request, there will be up to 5 batches which could have been duplicated.
       // If we find a duplicate, we return the metadata of the appended batch to the client.
       if (isFromClient) {
-        maybeLastEntry.flatMap(_.duplicateOf(batch)).foreach { duplicate =>
+        maybeLastEntry.flatMap(_.findDuplicateBatch(batch)).foreach { duplicate =>
           return (updatedProducers, completedTxns.toList, Some(duplicate))
         }
       }

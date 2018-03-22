@@ -90,7 +90,7 @@ private[log] case class BatchMetadata(lastSeq: Int, lastOffset: Long, offsetDelt
 }
 
 // the batchMetadata is ordered such that the batch with the lowest sequence is at the head of the queue while the
-// batch with the highest sequence is at the tail of the queue. We will retain at most ProducerIdEntry.NumBatchesToRetain
+// batch with the highest sequence is at the tail of the queue. We will retain at most ProducerStateEntry.NumBatchesToRetain
 // elements in the queue. When the queue is at capacity, we remove the first element to make space for the incoming batch.
 private[log] class ProducerStateEntry(val producerId: Long,
                                       val batchMetadata: mutable.Queue[BatchMetadata],
@@ -98,21 +98,21 @@ private[log] class ProducerStateEntry(val producerId: Long,
                                       var coordinatorEpoch: Int,
                                       var currentTxnFirstOffset: Option[Long]) {
 
-  def firstSeq: Int = if (batchMetadata.isEmpty) RecordBatch.NO_SEQUENCE else batchMetadata.front.firstSeq
+  def firstSeq: Int = if (isEmpty) RecordBatch.NO_SEQUENCE else batchMetadata.front.firstSeq
 
-  def firstOffset: Long = if (batchMetadata.isEmpty) -1L else batchMetadata.front.firstOffset
+  def firstOffset: Long = if (isEmpty) -1L else batchMetadata.front.firstOffset
 
-  def lastSeq: Int = if (batchMetadata.isEmpty) RecordBatch.NO_SEQUENCE else batchMetadata.last.lastSeq
+  def lastSeq: Int = if (isEmpty) RecordBatch.NO_SEQUENCE else batchMetadata.last.lastSeq
 
-  def lastDataOffset: Long = if (batchMetadata.isEmpty) -1L else batchMetadata.last.lastOffset
+  def lastDataOffset: Long = if (isEmpty) -1L else batchMetadata.last.lastOffset
 
-  def lastTimestamp = if (batchMetadata.isEmpty) RecordBatch.NO_TIMESTAMP else batchMetadata.last.timestamp
+  def lastTimestamp = if (isEmpty) RecordBatch.NO_TIMESTAMP else batchMetadata.last.timestamp
 
-  def lastOffsetDelta : Int = if (batchMetadata.isEmpty) 0 else batchMetadata.last.offsetDelta
+  def lastOffsetDelta : Int = if (isEmpty) 0 else batchMetadata.last.offsetDelta
 
   def isEmpty: Boolean = batchMetadata.isEmpty
 
-  def addBatchMetadata(producerEpoch: Short, lastSeq: Int, lastOffset: Long, offsetDelta: Int, timestamp: Long): Unit = {
+  def addBatch(producerEpoch: Short, lastSeq: Int, lastOffset: Long, offsetDelta: Int, timestamp: Long): Unit = {
     maybeUpdateEpoch(producerEpoch)
     addBatchMetadata(BatchMetadata(lastSeq, lastOffset, offsetDelta, timestamp))
   }
@@ -134,16 +134,16 @@ private[log] class ProducerStateEntry(val producerId: Long,
   }
 
   def update(nextEntry: ProducerStateEntry): Unit = {
+    maybeUpdateEpoch(nextEntry.producerEpoch)
     while (nextEntry.batchMetadata.nonEmpty)
       addBatchMetadata(nextEntry.batchMetadata.dequeue())
-    this.producerEpoch = nextEntry.producerEpoch
     this.coordinatorEpoch = nextEntry.coordinatorEpoch
     this.currentTxnFirstOffset = nextEntry.currentTxnFirstOffset
   }
 
-  def removeBatchesOlderThan(offset: Long) = batchMetadata.dropWhile(_.lastOffset < offset)
+  def removeBatchesOlderThan(offset: Long): Unit = batchMetadata.dropWhile(_.lastOffset < offset)
 
-  def duplicateOf(batch: RecordBatch): Option[BatchMetadata] = {
+  def findDuplicateBatch(batch: RecordBatch): Option[BatchMetadata] = {
     if (batch.producerEpoch != producerEpoch)
        None
     else
@@ -159,7 +159,7 @@ private[log] class ProducerStateEntry(val producerId: Long,
   }
 
   override def toString: String = {
-    "ProducerIdEntry(" +
+    "ProducerStateEntry(" +
       s"producerId=$producerId, " +
       s"producerEpoch=$producerEpoch, " +
       s"currentTxnFirstOffset=$currentTxnFirstOffset, " +
@@ -215,7 +215,6 @@ private[log] class ProducerAppendInfo(val producerId: Long,
   }
 
   private def checkSequence(producerEpoch: Short, appendFirstSeq: Int): Unit = {
-    val currentLastSeq = if (updatedEntry.isEmpty) currentEntry.lastSeq else updatedEntry.lastSeq
     if (producerEpoch != updatedEntry.producerEpoch) {
       if (appendFirstSeq != 0) {
         if (updatedEntry.producerEpoch != RecordBatch.NO_PRODUCER_EPOCH) {
@@ -226,13 +225,22 @@ private[log] class ProducerAppendInfo(val producerId: Long,
             s"that the last message with the producerId=$producerId has been removed due to hitting the retention limit.")
         }
       }
-    } else if (currentLastSeq == RecordBatch.NO_SEQUENCE && appendFirstSeq != 0) {
-      // the epoch was bumped by a control record, so we expect the sequence number to be reset
-      throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: found $appendFirstSeq " +
-        s"(incoming seq. number), but expected 0")
-    } else if (!inSequence(currentLastSeq, appendFirstSeq)) {
-      throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: $appendFirstSeq " +
-        s"(incoming seq. number), $currentLastSeq (current end sequence number)")
+    } else {
+      val currentLastSeq = if (!updatedEntry.isEmpty)
+        updatedEntry.lastSeq
+      else if (producerEpoch == currentEntry.producerEpoch)
+        currentEntry.lastSeq
+      else
+        RecordBatch.NO_SEQUENCE
+
+      if (currentLastSeq == RecordBatch.NO_SEQUENCE && appendFirstSeq != 0) {
+        // the epoch was bumped by a control record, so we expect the sequence number to be reset
+        throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: found $appendFirstSeq " +
+          s"(incoming seq. number), but expected 0")
+      } else if (!inSequence(currentLastSeq, appendFirstSeq)) {
+        throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: $appendFirstSeq " +
+          s"(incoming seq. number), $currentLastSeq (current end sequence number)")
+      }
     }
   }
 
@@ -260,7 +268,7 @@ private[log] class ProducerAppendInfo(val producerId: Long,
              lastOffset: Long,
              isTransactional: Boolean): Unit = {
     maybeValidateAppend(epoch, firstSeq)
-    updatedEntry.addBatchMetadata(epoch, lastSeq, lastOffset, lastSeq - firstSeq, lastTimestamp)
+    updatedEntry.addBatch(epoch, lastSeq, lastOffset, lastSeq - firstSeq, lastTimestamp)
 
     updatedEntry.currentTxnFirstOffset match {
       case Some(_) if !isTransactional =>
@@ -567,8 +575,8 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     }
   }
 
-  private def isProducerExpired(currentTimeMs: Long, producerIdEntry: ProducerStateEntry): Boolean =
-    producerIdEntry.currentTxnFirstOffset.isEmpty && currentTimeMs - producerIdEntry.lastTimestamp >= maxProducerIdExpirationMs
+  private def isProducerExpired(currentTimeMs: Long, producerState: ProducerStateEntry): Boolean =
+    producerState.currentTxnFirstOffset.isEmpty && currentTimeMs - producerState.lastTimestamp >= maxProducerIdExpirationMs
 
   /**
    * Expire any producer ids which have been idle longer than the configured maximum expiration timeout.
@@ -673,9 +681,9 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    */
   def oldestSnapshotOffset: Option[Long] = oldestSnapshotFile.map(file => offsetFromFile(file))
 
-  private def isProducerRetained(producerIdEntry: ProducerStateEntry, logStartOffset: Long): Boolean = {
-    producerIdEntry.removeBatchesOlderThan(logStartOffset)
-    producerIdEntry.lastDataOffset >= logStartOffset
+  private def isProducerRetained(producerStateEntry: ProducerStateEntry, logStartOffset: Long): Boolean = {
+    producerStateEntry.removeBatchesOlderThan(logStartOffset)
+    producerStateEntry.lastDataOffset >= logStartOffset
   }
 
   /**
@@ -688,8 +696,8 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    * the snapshot.
    */
   def truncateHead(logStartOffset: Long) {
-    val evictedProducerEntries = producers.filter { case (_, producerIdEntry) =>
-      !isProducerRetained(producerIdEntry, logStartOffset)
+    val evictedProducerEntries = producers.filter { case (_, producerState) =>
+      !isProducerRetained(producerState, logStartOffset)
     }
     val evictedProducerIds = evictedProducerEntries.keySet
 
