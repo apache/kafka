@@ -1003,6 +1003,7 @@ project(':streams:examples') {
     compile project(':connect:json')  // this dependency should be removed after we unify data API
     compile libs.slf4jlog4j
 
+    testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
     testCompile project(':streams:test-utils')
     testCompile libs.junit
   }
