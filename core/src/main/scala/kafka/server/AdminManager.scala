@@ -473,8 +473,14 @@ class AdminManager(val config: KafkaConfig,
                                      (name: String, value: Any): DescribeConfigsResponse.ConfigEntry = {
     val allNames = brokerSynonyms(name)
     val configEntryType = configType(name, allNames)
-    val isSensitive = configEntryType == ConfigDef.Type.PASSWORD
-    val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType)
+    // If we can't determine the config entry type, treat it as a sensitive config to be safe
+    val isSensitive = configEntryType == ConfigDef.Type.PASSWORD || configEntryType == null
+    val valueAsString = if (isSensitive)
+      null
+    else value match {
+      case v: String => v
+      case _ => ConfigDef.convertToString(value, configEntryType)
+    }
     val allSynonyms = configSynonyms(name, allNames, isSensitive)
         .filter(perBrokerConfig || _.source == ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG)
     val synonyms = if (!includeSynonyms) List.empty else allSynonyms
