@@ -29,7 +29,7 @@ public class StreamsUpgradeTest {
     public static void main(final String[] args) {
         if (args.length < 2) {
             System.err.println("StreamsUpgradeTest requires two argument (kafka-url, state-dir, [upgradeFrom: optional]) but only " + args.length + " provided: "
-                + (args.length > 0 ? args[0]: ""));
+                + (args.length > 0 ? args[0] : ""));
         }
         String kafka = args[0];
         String stateDir = args[1];
