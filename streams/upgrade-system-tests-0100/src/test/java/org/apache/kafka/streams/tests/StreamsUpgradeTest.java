@@ -36,9 +36,9 @@ public class StreamsUpgradeTest {
                 + (args.length > 0 ? args[0] + " " : "")
                 + (args.length > 1 ? args[1] : ""));
         }
-        String kafka = args[0];
-        String zookeeper = args[1];
-        String stateDir = args[2];
+        final String kafka = args[0];
+        final String zookeeper = args[1];
+        final String stateDir = args[2];
 
         System.out.println("StreamsTest instance started (StreamsUpgradeTest v0.10.0)");
         System.out.println("kafka=" + kafka);
@@ -46,7 +46,7 @@ public class StreamsUpgradeTest {
         System.out.println("stateDir=" + stateDir);
 
         final KStreamBuilder builder = new KStreamBuilder();
-        KStream dataStream = builder.stream("data");
+        final KStream dataStream = builder.stream("data");
         dataStream.process(printProcessorSupplier());
         dataStream.to("echo");
 

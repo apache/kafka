@@ -774,7 +774,7 @@ project(':streams:upgrade-system-tests-0100') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-0100"
 
   dependencies {
-    testCompile libs.kafkaStreams0100
+    testCompile libs.kafkaStreams_0100
   }
 
   systemTestLibs {
@@ -786,7 +786,7 @@ project(':streams:upgrade-system-tests-0101') {
   archivesBaseName = "kafka-streams-upgrade-system-tests-0101"
 
   dependencies {
-    testCompile libs.kafkaStreams0101
+    testCompile libs.kafkaStreams_0101
   }
 
   systemTestLibs {

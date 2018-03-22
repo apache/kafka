@@ -150,9 +150,9 @@ only support 0.10.1.x or later brokers while 0.10.1.x brokers also support older
 	 (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>).
         <ul>
             <li> note: rolling bounce upgrade requires to upgrade to 0.10.1.2 (rolling bounce upgrade is not supported for upgrading from 0.10.0.x to 0.10.1.0 or 0.10.1.1) </li>
-	    <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from="0.10.0"</code> is set for new version 0.10.1.2 </li>
+            <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from="0.10.0"</code> is set for new version 0.10.1.2 </li>
             <li> bounce each instance of your application once </li>
-	    <li> prepare your newly deployed 0.10.1.2 application instances for a second round of rolling bounces; make sure to remove config <code>upgrade.mode</code> </li>
+            <li> prepare your newly deployed 0.10.1.2 application instances for a second round of rolling bounces; make sure to remove config <code>upgrade.mode</code> </li>
             <li> bounce each instance of your application once more to complete the upgrade </li>
         </ul>
     </li>
