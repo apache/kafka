@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -100,6 +101,46 @@ public class SegmentIteratorTest {
         assertTrue(iterator.hasNext());
         assertEquals("d", new String(iterator.peekNextKey().get()));
         assertEquals(KeyValue.pair("d", "4"), toStringKeyValue(iterator.next()));
+
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void shouldNotThrowExceptionOnHasNextWhenStoreClosed() {
+        iterator = new SegmentIterator(Arrays.asList(segmentOne, segmentTwo).iterator(),
+                                       hasNextCondition,
+                                       Bytes.wrap("a".getBytes()),
+                                       Bytes.wrap("z".getBytes()));
+        segmentTwo.close();
+        segmentOne.close();
+
+        iterator.currentIterator = new KeyValueIterator<Bytes, byte[]>() {
+            @Override
+            public void close() {
+
+            }
+
+            @Override
+            public Bytes peekNextKey() {
+                return null;
+            }
+
+            @Override
+            public boolean hasNext() {
+                throw new InvalidStateStoreException("Store is closed");
+            }
+
+            @Override
+            public KeyValue<Bytes, byte[]> next() {
+                return null;
+            }
+
+            @Override
+            public void remove() {
+
+            }
+        };
+
 
         assertFalse(iterator.hasNext());
     }
