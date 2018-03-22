@@ -269,8 +269,8 @@ public class MockProcessorContextTest {
 
         try {
             processor.process("foo", 5L);
-            fail("Should have thrown an NPE.");
-        } catch (final NullPointerException expected) {
+            fail("Should have thrown an exception.");
+        } catch (final IllegalStateException expected) {
             // expected, since the record metadata isn't initialized
         }
 
