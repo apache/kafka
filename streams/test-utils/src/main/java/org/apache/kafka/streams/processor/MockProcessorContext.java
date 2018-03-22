@@ -37,7 +37,7 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * This is a mock of {@link ProcessorContext} for users to test their {@link Processor},
+ * {@link MockProcessorContext} is a mock of {@link ProcessorContext} for users to test their {@link Processor},
  * {@link Transformer}, and {@link ValueTransformer} implementations.
  * <p>
  * The tests for this class (org.apache.kafka.streams.MockProcessorContextTest) include several behavioral
@@ -47,9 +47,6 @@ import java.util.Properties;
  * It simply captures any data it witnessess.
  * If you require more automated tests, we recommend wrapping your {@link Processor} in a minimal source-processor-sink
  * {@link Topology} and using the {@link TopologyTestDriver}.
- * <p>
- * See https://kafka.apache.org/11/documentation/streams/developer-guide/testing.html for more documentation on testing
- * strategies.
  */
 @InterfaceStability.Evolving
 public class MockProcessorContext implements ProcessorContext {
@@ -57,7 +54,7 @@ public class MockProcessorContext implements ProcessorContext {
     private final StreamsMetricsImpl metrics;
     private final TaskId taskId;
     private final StreamsConfig config;
-    private final File stateDir; // default: null
+    private final File stateDir;
 
     // settable record metadata ================================================
     private String topic;
@@ -67,17 +64,17 @@ public class MockProcessorContext implements ProcessorContext {
 
     // mocks ================================================
     private final Map<String, StateStore> stateStores = new HashMap<>();
-
+    private final List<CapturedPunctuator> punctuators = new LinkedList<>();
+    private final List<CapturedForward> capturedForwards = new LinkedList<>();
+    private boolean committed = false;
 
     /**
-     * A simple class for holding captured punctuators, along with their scheduling information.
+     * {@link CapturedPunctuator} holds captured punctuators, along with their scheduling information.
      */
     public static class CapturedPunctuator {
         private final long intervalMs;
         private final PunctuationType type;
         private final Punctuator punctuator;
-
-        // mutable:
         private boolean cancelled = false;
 
         private CapturedPunctuator(final long intervalMs, final PunctuationType type, final Punctuator punctuator) {
@@ -107,23 +104,23 @@ public class MockProcessorContext implements ProcessorContext {
         }
     }
 
-    private final List<CapturedPunctuator> punctuators = new LinkedList<>();
 
     public static class CapturedForward {
-        /*Nullable*/ private final String childName;
+        private final String childName;
         private final long timestamp;
-        private final KeyValue kv;
+        private final KeyValue keyValue;
 
-        private CapturedForward(final To to, final KeyValue kv) {
-            if (kv == null) throw new IllegalArgumentException();
+        private CapturedForward(final To to, final KeyValue keyValue) {
+            if (keyValue == null) throw new IllegalArgumentException();
 
             this.childName = to.childName;
             this.timestamp = to.timestamp;
-            this.kv = kv;
+            this.keyValue = keyValue;
         }
 
         /**
          * The child this data was forwarded to.
+         *
          * @return The child name, or {@code null} if it was broadcasted.
          */
         public String childName() {
@@ -132,6 +129,7 @@ public class MockProcessorContext implements ProcessorContext {
 
         /**
          * The timestamp attached to the forwarded record.
+         *
          * @return A timestamp, or {@code -1} if none was forwarded.
          */
         public long timestamp() {
@@ -140,16 +138,13 @@ public class MockProcessorContext implements ProcessorContext {
 
         /**
          * The data forwarded.
+         *
          * @return A key/value pair. Not null.
          */
-        public KeyValue kv() {
-            return kv;
+        public KeyValue keyValue() {
+            return keyValue;
         }
     }
-
-    private List<CapturedForward> capturedForwards = new LinkedList<>();
-
-    private boolean committed = false;
 
     // contructors ================================================
 
@@ -325,7 +320,6 @@ public class MockProcessorContext implements ProcessorContext {
 
     // mocks ================================================
 
-    // state stores
 
     @Override
     public void register(final StateStore store,
@@ -338,8 +332,6 @@ public class MockProcessorContext implements ProcessorContext {
     public StateStore getStateStore(final String name) {
         return stateStores.get(name);
     }
-
-    // punctuators
 
     @Override
     public Cancellable schedule(final long intervalMs, final PunctuationType type, final Punctuator callback) {
@@ -364,7 +356,7 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     /**
-     * A method for getting the punctuators sheduled so far. The returned list is not affected by subsequent calls to {@code schedule(...)}.
+     * Get the punctuators scheduled so far. The returned list is not affected by subsequent calls to {@code schedule(...)}.
      *
      * @return A list of captured punctuators.
      */
@@ -374,22 +366,20 @@ public class MockProcessorContext implements ProcessorContext {
         return capturedPunctuators;
     }
 
-    // forwards
-
     @Override
-    public <FK, FV> void forward(final FK key, final FV value) {
+    public <K, V> void forward(final K key, final V value) {
         //noinspection unchecked
         capturedForwards.add(new CapturedForward(To.all(), new KeyValue(key, value)));
     }
 
     @Override
-    public <FK, FV> void forward(final FK key, final FV value, final To to) {
+    public <K, V> void forward(final K key, final V value, final To to) {
         //noinspection unchecked
         capturedForwards.add(new CapturedForward(to, new KeyValue(key, value)));
     }
 
     @Override
-    public <FK, FV> void forward(final FK key, final FV value, final int childIndex) {
+    public <K, V> void forward(final K key, final V value, final int childIndex) {
         throw new UnsupportedOperationException(
             "Forwarding to a child by index is deprecated. " +
                 "Please transition processors to forward using a 'To' object instead."
@@ -397,13 +387,15 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     @Override
-    public <FK, FV> void forward(final FK key, final FV value, final String childName) {
-        //noinspection unchecked
-        capturedForwards.add(new CapturedForward(To.child(childName), new KeyValue(key, value)));
+    public <K, V> void forward(final K key, final V value, final String childName) {
+        throw new UnsupportedOperationException(
+            "Forwarding to a child by name is deprecated. " +
+                "Please transition processors to forward using 'To.child(childName)' instead."
+        );
     }
 
     /**
-     * A method for retrieving all the forwarded data this context has observed. The returned list will not be
+     * Get all the forwarded data this context has observed. The returned list will not be
      * affected by subsequent interactions with the context. The data in the list is in the same order as the calls to
      * {@code forward(...)}.
      *
@@ -416,7 +408,7 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     /**
-     * A method for retrieving all the forwarded data this context has observed for a specific child by name.
+     * Get all the forwarded data this context has observed for a specific child by name.
      * The returned list will not be affected by subsequent interactions with the context.
      * The data in the list is in the same order as the calls to {@code forward(...)}.
      *
@@ -434,13 +426,11 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     /**
-     * Clears the captured forwarded data.
+     * Clear the captured forwarded data.
      */
     public void resetForwards() {
-        capturedForwards = new LinkedList<>();
+        capturedForwards.clear();
     }
-
-    // commits
 
     @Override
     public void commit() {
@@ -457,7 +447,7 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     /**
-     * Re-sets the commit capture to {@code false} (whether or not it was previously {@code true}).
+     * Reset the commit capture to {@code false} (whether or not it was previously {@code true}).
      */
     public void resetCommit() {
         committed = false;

@@ -28,7 +28,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
-import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.File;
@@ -49,7 +48,7 @@ public class MockProcessorContextTest {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
             @Override
             public void process(final String key, final Long value) {
-                this.context().forward(key + value, key.length() + value);
+                context().forward(key + value, key.length() + value);
             }
         };
 
@@ -60,8 +59,8 @@ public class MockProcessorContextTest {
         processor.process("barbaz", 50L);
 
         final Iterator<CapturedForward> forwarded = context.forwarded().iterator();
-        assertEquals(forwarded.next().kv(), new KeyValue<>("foo5", 8L));
-        assertEquals(forwarded.next().kv(), new KeyValue<>("barbaz50", 56L));
+        assertEquals(forwarded.next().keyValue(), new KeyValue<>("foo5", 8L));
+        assertEquals(forwarded.next().keyValue(), new KeyValue<>("barbaz50", 56L));
         assertFalse(forwarded.hasNext());
 
         context.resetForwards();
@@ -77,7 +76,7 @@ public class MockProcessorContextTest {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
             @Override
             public void process(final String key, final Long value) {
-                this.context().forward(key + value, key.length() + value, To.all());
+                context().forward(key + value, key.length() + value, To.all());
             }
         };
 
@@ -89,8 +88,8 @@ public class MockProcessorContextTest {
         processor.process("barbaz", 50L);
 
         final Iterator<CapturedForward> forwarded = context.forwarded().iterator();
-        assertEquals(forwarded.next().kv(), new KeyValue<>("foo5", 8L));
-        assertEquals(forwarded.next().kv(), new KeyValue<>("barbaz50", 56L));
+        assertEquals(forwarded.next().keyValue(), new KeyValue<>("foo5", 8L));
+        assertEquals(forwarded.next().keyValue(), new KeyValue<>("barbaz50", 56L));
         assertFalse(forwarded.hasNext());
 
         context.resetForwards();
@@ -109,10 +108,10 @@ public class MockProcessorContextTest {
             @Override
             public void process(final String key, final Long value) {
                 if (count == 0) {
-                    this.context().forward("start", -1L, To.all()); // broadcast
+                    context().forward("start", -1L, To.all()); // broadcast
                 }
-                final To child = count % 2 == 0 ? To.child("george") : To.child("pete");
-                this.context().forward(key + value, key.length() + value, child);
+                final To toChild = count % 2 == 0 ? To.child("george") : To.child("pete");
+                context().forward(key + value, key.length() + value, toChild);
                 count++;
             }
         };
@@ -126,47 +125,43 @@ public class MockProcessorContextTest {
 
         {
             final Iterator<CapturedForward> forwarded = context.forwarded().iterator();
-            assertEquals(forwarded.next().kv(), new KeyValue<>("start", -1L));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("foo5", 8L));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("barbaz50", 56L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("start", -1L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("foo5", 8L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("barbaz50", 56L));
             assertFalse(forwarded.hasNext());
         }
 
         {
             final Iterator<CapturedForward> forwarded = context.forwarded("george").iterator();
-            assertEquals(forwarded.next().kv(), new KeyValue<>("start", -1L));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("foo5", 8L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("start", -1L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("foo5", 8L));
             assertFalse(forwarded.hasNext());
         }
 
         {
             final Iterator<CapturedForward> forwarded = context.forwarded("pete").iterator();
-            assertEquals(forwarded.next().kv(), new KeyValue<>("start", -1L));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("barbaz50", 56L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("start", -1L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("barbaz50", 56L));
             assertFalse(forwarded.hasNext());
         }
 
         {
             final Iterator<CapturedForward> forwarded = context.forwarded("steve").iterator();
-            assertEquals(forwarded.next().kv(), new KeyValue<>("start", -1L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("start", -1L));
             assertFalse(forwarded.hasNext());
         }
-
-        context.resetForwards();
-
-        assertEquals(context.forwarded().size(), 0);
     }
 
     /**
      * Unit test verifying that forwarding to child by index is not supported. This usage is deprecated.
      */
     @Test
-    public void shouldThrowInsteadOfCaptureRecordsOutputToChildByIndex() {
+    public void shouldThrowIfForwardedWithDeprecatedChildIndex() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
             @Override
             public void process(final String key, final Long value) {
                 //noinspection deprecation
-                this.context().forward(key, value, 0);
+                context().forward(key, value, 0);
             }
         };
 
@@ -177,7 +172,32 @@ public class MockProcessorContextTest {
         try {
             processor.process("foo", 5L);
             fail("Should have thrown an UnsupportedOperationException.");
-        } catch (final UnsupportedOperationException uoe) {
+        } catch (final UnsupportedOperationException expected) {
+            // expected
+        }
+    }
+
+    /**
+     * Unit test verifying that forwarding to child by name is not supported. This usage is deprecated.
+     */
+    @Test
+    public void shouldThrowIfForwardedWithDeprecatedChildName() {
+        final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
+            @Override
+            public void process(final String key, final Long value) {
+                //noinspection deprecation
+                context().forward(key, value, "child1");
+            }
+        };
+
+        final MockProcessorContext context = new MockProcessorContext();
+
+        processor.init(context);
+
+        try {
+            processor.process("foo", 5L);
+            fail("Should have thrown an UnsupportedOperationException.");
+        } catch (final UnsupportedOperationException expected) {
             // expected
         }
     }
@@ -273,8 +293,8 @@ public class MockProcessorContextTest {
 
         try {
             processor.process("foo", 5L);
-            Assert.fail("Should have thrown an NPE.");
-        } catch (final NullPointerException npe) {
+            fail("Should have thrown an NPE.");
+        } catch (final NullPointerException expected) {
             // expected, since the record metadata isn't initialized
         }
 
@@ -284,14 +304,14 @@ public class MockProcessorContextTest {
         {
             processor.process("foo", 5L);
             final Iterator<CapturedForward> forwarded = context.forwarded().iterator();
-            assertEquals(forwarded.next().kv(), new KeyValue<>("appId", "testMetadata"));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("taskId", new TaskId(0, 0)));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("topic", "t1"));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("partition", 0));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("offset", 0L));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("timestamp", 0L));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("key", "foo"));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("value", 5L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("appId", "testMetadata"));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("taskId", new TaskId(0, 0)));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("topic", "t1"));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("partition", 0));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("offset", 0L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("timestamp", 0L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("key", "foo"));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("value", 5L));
         }
 
         context.resetForwards();
@@ -303,14 +323,14 @@ public class MockProcessorContextTest {
         {
             processor.process("bar", 50L);
             final Iterator<CapturedForward> forwarded = context.forwarded().iterator();
-            assertEquals(forwarded.next().kv(), new KeyValue<>("appId", "testMetadata"));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("taskId", new TaskId(0, 0)));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("topic", "t1"));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("partition", 0));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("offset", 1L));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("timestamp", 10L));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("key", "bar"));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("value", 50L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("appId", "testMetadata"));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("taskId", new TaskId(0, 0)));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("topic", "t1"));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("partition", 0));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("offset", 1L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("timestamp", 10L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("key", "bar"));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("value", 50L));
         }
 
         context.resetForwards();
@@ -321,14 +341,14 @@ public class MockProcessorContextTest {
         {
             processor.process("baz", 500L);
             final Iterator<CapturedForward> forwarded = context.forwarded().iterator();
-            assertEquals(forwarded.next().kv(), new KeyValue<>("appId", "testMetadata"));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("taskId", new TaskId(0, 0)));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("topic", "t2"));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("partition", 30));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("offset", 1L));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("timestamp", 10L));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("key", "baz"));
-            assertEquals(forwarded.next().kv(), new KeyValue<>("value", 500L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("appId", "testMetadata"));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("taskId", new TaskId(0, 0)));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("topic", "t2"));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("partition", 30));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("offset", 1L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("timestamp", 10L));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("key", "baz"));
+            assertEquals(forwarded.next().keyValue(), new KeyValue<>("value", 500L));
         }
     }
 
@@ -395,7 +415,6 @@ public class MockProcessorContextTest {
         final MockProcessorContext context = new MockProcessorContext(config, new TaskId(1, 1), dummyFile);
 
         assertEquals(context.applicationId(), "testFullConstructor");
-        assertEquals(context.taskId(), new TaskId(1, 1));
         assertEquals(context.taskId(), new TaskId(1, 1));
         assertEquals("testFullConstructor", context.appConfigs().get(StreamsConfig.APPLICATION_ID_CONFIG));
         assertEquals("testFullConstructor", context.appConfigsWithPrefix("application.").get("id"));

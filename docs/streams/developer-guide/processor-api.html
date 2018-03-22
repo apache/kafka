@@ -205,7 +205,7 @@ final MockProcessorContext context = new MockProcessorContext(config);
 processorUnderTest.process("key", "value");
 
 final Iterator&lt;CapturedForward&gt; forwarded = context.forwarded().iterator();
-assertEquals(forwarded.next().kv(), new KeyValue<>(..., ...));
+assertEquals(forwarded.next().keyValue(), new KeyValue<>(..., ...));
 assertFalse(forwarded.hasNext());
 
 // you can reset forwards to clear the captured data. This may be helpful in constructing longer scenarios.
