@@ -386,7 +386,7 @@ subprojects {
   if (it.path != ':core') {
 
     jacoco {
-      toolVersion = "0.8.0"
+      toolVersion = "0.8.1"
     }
 
     // NOTE: Jacoco Gradle plugin does not support "offline instrumentation" this means that classes mocked by PowerMock
