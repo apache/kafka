@@ -17,7 +17,6 @@
 
 package org.apache.kafka.trogdor.common;
 
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
@@ -50,7 +49,7 @@ import java.util.concurrent.Future;
 public final class WorkerUtils {
 
     private static final List<String> CLIENT_SECURITY_KEYS = Arrays.asList(
-        CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+        AdminClientConfig.SECURITY_PROTOCOL_CONFIG,
         SaslConfigs.SASL_MECHANISM,
         SaslConfigs.SASL_JAAS_CONFIG,
         SaslConfigs.SASL_KERBEROS_SERVICE_NAME,
