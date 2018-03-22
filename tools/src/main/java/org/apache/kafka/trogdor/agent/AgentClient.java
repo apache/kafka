@@ -33,6 +33,8 @@ import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.JsonRestServer.HttpResponse;
 import org.apache.kafka.trogdor.rest.StopWorkerRequest;
 import org.apache.kafka.trogdor.rest.StopWorkerResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
@@ -41,6 +43,8 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
  * A client for the Trogdor agent.
  */
 public class AgentClient {
+    private final Logger log;
+
     /**
      * The maximum number of tries to make.
      */
@@ -51,13 +55,46 @@ public class AgentClient {
      */
     private final String target;
 
-    public AgentClient(int maxTries, String host, int port) {
-        this(maxTries, String.format("%s:%d", host, port));
+    public static class Builder {
+        private Logger log = LoggerFactory.getLogger(AgentClient.class);
+        private int maxTries = 1;
+        private String target = null;
+
+        public Builder() {
+        }
+
+        public Builder log(Logger log) {
+            this.log = log;
+            return this;
+        }
+
+        public Builder maxTries(int maxTries) {
+            this.maxTries = maxTries;
+            return this;
+        }
+
+        public Builder target(String target) {
+            this.target = target;
+            return this;
+        }
+
+        public Builder target(String host, int port) {
+            this.target = String.format("%s:%d", host, port);
+            return this;
+        }
+
+        public AgentClient build() {
+            if (target == null) {
+                throw new RuntimeException("You must specify a target.");
+            }
+            return new AgentClient(log, maxTries, target);
+        }
     }
 
-    public AgentClient(int maxTries, String target) {
-        this.target = target;
+    private AgentClient(Logger log, int maxTries, String target) {
+        this.log = log;
         this.maxTries = maxTries;
+        this.target = target;
     }
 
     public String target() {
@@ -152,7 +189,10 @@ public class AgentClient {
             }
         }
         String target = res.getString("target");
-        AgentClient client = new AgentClient(3, target);
+        AgentClient client = new Builder().
+            maxTries(3).
+            target(target).
+            build();
         if (res.getBoolean("status")) {
             System.out.println("Got agent status: " +
                 JsonUtil.toPrettyJsonString(client.status()));

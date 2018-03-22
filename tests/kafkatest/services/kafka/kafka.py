@@ -163,6 +163,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.open_port(self.interbroker_security_protocol)
 
         self.start_minikdc(add_principals)
+        self._ensure_zk_chroot()
+
         Service.start(self)
 
         self.logger.info("Waiting for brokers to register at ZK")
@@ -182,6 +184,16 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
                 topic_cfg["topic"] = topic
                 self.create_topic(topic_cfg)
+
+    def _ensure_zk_chroot(self):
+        self.logger.info("Ensuring zk_chroot %s exists", self.zk_chroot)
+        if self.zk_chroot:
+            if not self.zk_chroot.startswith('/'):
+                raise Exception("Zookeeper chroot must start with '/' but found " + self.zk_chroot)
+
+            parts = self.zk_chroot.split('/')[1:]
+            for i in range(len(parts)):
+                self.zk.create('/' + '/'.join(parts[:i+1]))
 
     def set_protocol_and_port(self, node):
         listeners = []
@@ -310,6 +322,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 'partitions': topic_cfg.get('partitions', 1),
                 'replication-factor': topic_cfg.get('replication-factor', 1)
             }
+
+        if topic_cfg.get('if-not-exists', False):
+            cmd += ' --if-not-exists'
 
         if "configs" in topic_cfg.keys() and topic_cfg["configs"] is not None:
             for config_name, config_value in topic_cfg["configs"].items():

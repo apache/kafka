@@ -43,6 +43,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -68,6 +69,8 @@ public class RoundTripWorker implements TaskWorker {
     private static final String TOPIC_NAME = "round_trip_topic";
 
     private static final Logger log = LoggerFactory.getLogger(RoundTripWorker.class);
+
+    private static final PayloadGenerator KEY_GENERATOR = new SequentialPayloadGenerator(4, 0);
 
     private final ToReceiveTracker toReceiveTracker = new ToReceiveTracker();
 
@@ -120,8 +123,11 @@ public class RoundTripWorker implements TaskWorker {
                 if ((spec.partitionAssignments() == null) || spec.partitionAssignments().isEmpty()) {
                     throw new ConfigException("Invalid null or empty partitionAssignments.");
                 }
-                WorkerUtils.createTopics(log, spec.bootstrapServers(),
-                    Collections.singletonList(new NewTopic(TOPIC_NAME, spec.partitionAssignments())));
+                WorkerUtils.createTopics(
+                    log, spec.bootstrapServers(),
+                    Collections.singletonMap(TOPIC_NAME,
+                                             new NewTopic(TOPIC_NAME, spec.partitionAssignments())),
+                    true);
                 executor.submit(new ProducerRunnable());
                 executor.submit(new ConsumerRunnable());
             } catch (Throwable e) {
@@ -183,7 +189,6 @@ public class RoundTripWorker implements TaskWorker {
             int perPeriod = WorkerUtils.
                 perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.throttle = new Throttle(perPeriod, THROTTLE_PERIOD_MS);
-            payloadGenerator = new PayloadGenerator(MESSAGE_SIZE, PayloadKeyType.KEY_MESSAGE_INDEX);
         }
 
         @Override
@@ -206,7 +211,9 @@ public class RoundTripWorker implements TaskWorker {
                     }
                     messagesSent++;
                     // we explicitly specify generator position based on message index
-                    ProducerRecord<byte[], byte[]> record = payloadGenerator.nextRecord(TOPIC_NAME, messageIndex);
+                    ProducerRecord<byte[], byte[]> record = new ProducerRecord(TOPIC_NAME, 0,
+                        KEY_GENERATOR.generate(messageIndex),
+                        spec.valueGenerator().generate(messageIndex));
                     producer.send(record, new Callback() {
                         @Override
                         public void onCompletion(RecordMetadata metadata, Exception exception) {
@@ -286,7 +293,7 @@ public class RoundTripWorker implements TaskWorker {
                         pollInvoked++;
                         ConsumerRecords<byte[], byte[]> records = consumer.poll(50);
                         for (ConsumerRecord<byte[], byte[]> record : records.records(TOPIC_NAME)) {
-                            int messageIndex = ByteBuffer.wrap(record.key()).getInt();
+                            int messageIndex = ByteBuffer.wrap(record.key()).order(ByteOrder.LITTLE_ENDIAN).getInt();
                             messagesReceived++;
                             if (toReceiveTracker.removePending(messageIndex)) {
                                 uniqueMessagesReceived++;
