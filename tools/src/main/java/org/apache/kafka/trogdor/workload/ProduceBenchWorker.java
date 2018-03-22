@@ -111,7 +111,8 @@ public class ProduceBenchWorker implements TaskWorker {
                     String name = topicIndexToName(i);
                     newTopics.put(name, new NewTopic(name, spec.numPartitions(), spec.replicationFactor()));
                 }
-                WorkerUtils.createTopics(log, spec.bootstrapServers(), newTopics, false);
+                WorkerUtils.createTopics(log, spec.bootstrapServers(), spec.producerConf(),
+                                         newTopics, false);
 
                 executor.submit(new SendRecords());
             } catch (Throwable e) {

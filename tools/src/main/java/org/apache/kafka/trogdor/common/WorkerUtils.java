@@ -17,6 +17,7 @@
 
 package org.apache.kafka.trogdor.common;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
@@ -24,6 +25,8 @@ import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
@@ -33,6 +36,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -44,6 +48,21 @@ import java.util.concurrent.Future;
  * Utilities for Trogdor TaskWorkers.
  */
 public final class WorkerUtils {
+
+    private static final List<String> CLIENT_SECURITY_KEYS = Arrays.asList(
+        CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+        SaslConfigs.SASL_MECHANISM,
+        SaslConfigs.SASL_JAAS_CONFIG,
+        SaslConfigs.SASL_KERBEROS_SERVICE_NAME,
+        SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
+        SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
+        SslConfigs.SSL_KEY_PASSWORD_CONFIG,
+        SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
+        SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
+        SslConfigs.SSL_PROTOCOL_CONFIG,
+        SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
+    );
+
     /**
      * Handle an exception in a TaskWorker.
      *
@@ -93,12 +112,12 @@ public final class WorkerUtils {
      *                          number of partitions, the method throws RuntimeException.
      */
     public static void createTopics(
-        Logger log, String bootstrapServers,
+        Logger log, String bootstrapServers, Map<String, String> clientConf,
         Map<String, NewTopic> topics, boolean failOnExisting) throws Throwable {
         // this method wraps the call to createTopics() that takes admin client, so that we can
         // unit test the functionality with MockAdminClient. The exception is caught and
         // re-thrown so that admin client is closed when the method returns.
-        try (AdminClient adminClient = createAdminClient(bootstrapServers)) {
+        try (AdminClient adminClient = createAdminClient(bootstrapServers, clientConf)) {
             createTopics(log, adminClient, topics, failOnExisting);
         } catch (Exception e) {
             log.warn("Failed to create or verify topics {}", topics, e);
@@ -227,10 +246,18 @@ public final class WorkerUtils {
         }
     }
 
-    private static AdminClient createAdminClient(String bootstrapServers) {
+    private static AdminClient createAdminClient(
+        String bootstrapServers, Map<String, String> clientConf) {
         Properties props = new Properties();
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, CREATE_TOPICS_REQUEST_TIMEOUT);
+
+        // copy security related props
+        for (Map.Entry<String, String> clientPropsEntry: clientConf.entrySet()) {
+            if (CLIENT_SECURITY_KEYS.contains(clientPropsEntry.getKey())) {
+                props.put(clientPropsEntry.getKey(), clientPropsEntry.getValue());
+            }
+        }
         return AdminClient.create(props);
     }
 }
