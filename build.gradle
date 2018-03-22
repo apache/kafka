@@ -1205,6 +1205,8 @@ project(':connect:runtime') {
 
     compile libs.jacksonJaxrsJsonProvider
     compile libs.jerseyContainerServlet
+    compile libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
+    compile libs.activation // Jersey dependency that was available in the JDK before Java 9
     compile libs.jettyServer
     compile libs.jettyServlet
     compile libs.jettyServlets
