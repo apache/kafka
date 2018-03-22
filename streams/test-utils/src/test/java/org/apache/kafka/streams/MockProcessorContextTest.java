@@ -40,9 +40,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class MockProcessorContextTest {
-    /**
-     * Behavioral test demonstrating the use of the context for capturing forwarded values
-     */
     @Test
     public void shouldCaptureOutputRecords() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
@@ -68,9 +65,6 @@ public class MockProcessorContextTest {
         assertEquals(context.forwarded().size(), 0);
     }
 
-    /**
-     * Behavioral test demonstrating the use of the context for capturing forwarded values using the To API
-     */
     @Test
     public void shouldCaptureOutputRecordsUsingTo() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
@@ -97,9 +91,6 @@ public class MockProcessorContextTest {
         assertEquals(context.forwarded().size(), 0);
     }
 
-    /**
-     * Behavioral test demonstrating the use of the context for capturing forwarded values to specific children
-     */
     @Test
     public void shouldCaptureRecordsOutputToChildByName() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
@@ -152,9 +143,6 @@ public class MockProcessorContextTest {
         }
     }
 
-    /**
-     * Unit test verifying that forwarding to child by index is not supported. This usage is deprecated.
-     */
     @Test
     public void shouldThrowIfForwardedWithDeprecatedChildIndex() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
@@ -177,9 +165,6 @@ public class MockProcessorContextTest {
         }
     }
 
-    /**
-     * Unit test verifying that forwarding to child by name is not supported. This usage is deprecated.
-     */
     @Test
     public void shouldThrowIfForwardedWithDeprecatedChildName() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
@@ -202,9 +187,6 @@ public class MockProcessorContextTest {
         }
     }
 
-    /**
-     * Behavioral test demonstrating the use of the context for capturing commits
-     */
     @Test
     public void shouldCaptureCommitsAndAllowReset() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
@@ -234,9 +216,6 @@ public class MockProcessorContextTest {
         assertFalse(context.committed());
     }
 
-    /**
-     * Behavioral test demonstrating the use of state stores
-     */
     @Test
     public void shouldStoreAndReturnStateStores() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
@@ -263,9 +242,6 @@ public class MockProcessorContextTest {
         assertEquals(55L, (long) store.get("all"));
     }
 
-    /**
-     * Behavioral test demonstrating the use of the context with context-aware processors
-     */
     @Test
     public void shouldCaptureApplicationAndRecordMetadata() {
         final Properties config = new Properties();
@@ -352,9 +328,6 @@ public class MockProcessorContextTest {
         }
     }
 
-    /**
-     * Behavioral test demonstrating testing captured punctuator behavior
-     */
     @Test
     public void shouldCapturePunctuator() {
         final Processor<String, Long> processor = new Processor<String, Long>() {
@@ -400,9 +373,6 @@ public class MockProcessorContextTest {
         assertTrue(context.committed());
     }
 
-    /**
-     * Unit test verifying the full MockProcessorContext constructor
-     */
     @Test
     public void fullConstructorShouldSetAllExpectedAttributes() {
         final Properties config = new Properties();
