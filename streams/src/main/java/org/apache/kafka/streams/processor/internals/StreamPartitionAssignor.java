@@ -65,7 +65,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         public final TaskId taskId;
         public final TopicPartition partition;
 
-        AssignedPartition(TaskId taskId, TopicPartition partition) {
+        AssignedPartition(final TaskId taskId, final TopicPartition partition) {
             this.taskId = taskId;
             this.partition = partition;
         }
