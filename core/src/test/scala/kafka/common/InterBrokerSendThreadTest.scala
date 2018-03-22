@@ -107,6 +107,9 @@ class InterBrokerSendThreadTest {
     EasyMock.expect(networkClient.ready(node, time.milliseconds()))
       .andReturn(false)
 
+    EasyMock.expect(networkClient.connectionDelay(EasyMock.anyObject(), EasyMock.anyLong()))
+      .andReturn(0)
+
     EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
       .andReturn(Utils.mkList())
 
@@ -147,6 +150,9 @@ class InterBrokerSendThreadTest {
     EasyMock.expect(networkClient.ready(node, time.milliseconds()))
       .andReturn(false)
 
+    EasyMock.expect(networkClient.connectionDelay(EasyMock.anyObject(), EasyMock.anyLong()))
+      .andReturn(0)
+
     EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
       .andReturn(Utils.mkList())
 
@@ -159,7 +165,7 @@ class InterBrokerSendThreadTest {
     sendThread.doWork()
 
     EasyMock.verify(networkClient)
-    Assert.assertFalse(sendThread.unsentRequests.hasRequests)
+    Assert.assertFalse(sendThread.unsentRequests.iterator().hasNext)
   }
 
 

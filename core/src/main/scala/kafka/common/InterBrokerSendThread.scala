@@ -17,8 +17,8 @@
 package kafka.common
 
 import java.util.{ArrayDeque, ArrayList, Collection, Collections, HashMap, Iterator}
+import java.util.Map.Entry
 
-import kafka.admin.AdminClient
 import kafka.utils.ShutdownableThread
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
@@ -49,7 +49,7 @@ abstract class InterBrokerSendThread(name: String,
   }
 
   override def doWork() {
-    val now = time.milliseconds()
+    var now = time.milliseconds()
 
     generateRequests().foreach { request =>
       val completionHandler = request.handler
@@ -58,8 +58,10 @@ abstract class InterBrokerSendThread(name: String,
     }
 
     try {
-      sendRequests(now)
+      val timeout = sendRequests(now)
+      networkClient.poll(timeout, now)
       unsentRequests.clean()
+      now = time.milliseconds()
       checkDisconnects(now)
       failExpiredRequests(now)
     } catch {
@@ -74,22 +76,23 @@ abstract class InterBrokerSendThread(name: String,
     }
   }
 
-  private def sendRequests(now: Long): Unit = {
+  private def sendRequests(now: Long): Long = {
     var pollTimeout = Long.MaxValue
-    if (unsentRequests.hasRequests) {
-      for (node <- unsentRequests.nodes.asScala) {
-        val requestIterator = unsentRequests.requestIterator(node)
-        while (requestIterator.hasNext) {
-          val request = requestIterator.next
-          if (networkClient.ready(node, now)) {
-            networkClient.send(request, now)
-            requestIterator.remove()
-          } else
-            pollTimeout = if (unsentRequests.hasRequests) AdminClient.DefaultReconnectBackoffMs else Long.MaxValue
-        }
+    val iterator = unsentRequests.iterator()
+    while (iterator.hasNext) {
+      val entry = iterator.next
+      val node = entry.getKey
+      val requestIterator = entry.getValue.iterator()
+      while (requestIterator.hasNext) {
+        val request = requestIterator.next
+        if (networkClient.ready(node, now)) {
+          networkClient.send(request, now)
+          requestIterator.remove()
+        } else
+          pollTimeout = Math.min(pollTimeout, networkClient.connectionDelay(node, now))
       }
     }
-    networkClient.poll(pollTimeout, now)
+    pollTimeout
   }
 
   private def checkDisconnects(now: Long): Unit = {
@@ -97,21 +100,16 @@ abstract class InterBrokerSendThread(name: String,
     // by NetworkClient, so we just need to check whether connections for any of the unsent
     // requests have been disconnected; if they have, then we complete the corresponding future
     // and set the disconnect flag in the ClientResponse
-    val nodeIterator = unsentRequests.nodeIterator()
-    while (nodeIterator.hasNext) {
-      val node = nodeIterator.next
+    val iterator = unsentRequests.iterator()
+    while (iterator.hasNext) {
+      val entry = iterator.next
+      val (node, requests) = (entry.getKey, entry.getValue)
       if (networkClient.connectionFailed(node)) {
-        // Remove entry before invoking request callback to avoid callbacks handling
-        // coordinator failures traversing the unsent list again.
-        val requests = unsentRequests.getRequests(node)
-        nodeIterator.remove()
+        iterator.remove()
         for (request <- requests.asScala) {
-          val handler = request.callback
-          if (networkClient.authenticationException(node) == null)
-            error(s"Failed to send the following request due to authentication error: ${request.toString}")
-          handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
-            handler, request.destination, now /* createdTimeMs */ , now /* receivedTimeMs */ , true /* disconnected */ ,
-            null /* versionMismatch */ , null /* responseBody */))
+          if (networkClient.authenticationException(node) != null)
+            error(s"Failed to send the following request due to authentication error: $request")
+          onComplete(request, now)
         }
       }
     }
@@ -121,12 +119,16 @@ abstract class InterBrokerSendThread(name: String,
     // clear all expired unsent requests
     val expiredRequests = unsentRequests.removeExpiredRequests(now, unsentExpiryMs)
     for (request <- expiredRequests.asScala) {
-      debug(s"Failed to send the following request after $unsentExpiryMs ms: ${request.toString}")
-      val handler = request.callback
-      handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
-        handler, request.destination, now /* createdTimeMs */ , now /* receivedTimeMs */ , true /* disconnected */ ,
-        null /* versionMismatch */ , null /* responseBody */))
+      debug(s"Failed to send the following request after $unsentExpiryMs ms: $request")
+      onComplete(request, now)
     }
+  }
+
+  def onComplete(request: ClientRequest, now: Long): Unit = {
+    val handler = request.callback
+    handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
+      handler, request.destination, now /* createdTimeMs */ , now /* receivedTimeMs */ , true /* disconnected */ ,
+      null /* versionMismatch */ , null /* responseBody */))
   }
 
   def wakeup(): Unit = networkClient.wakeup()
@@ -142,15 +144,9 @@ class UnsentRequests {
     var requests = unsent.get(node)
     if (requests == null) {
       requests = new ArrayDeque[ClientRequest]
-      unsent.putIfAbsent(node, requests)
+      unsent.put(node, requests)
     }
     requests.add(request)
-  }
-
-  def hasRequests: Boolean = {
-    for (requests <- unsent.values.asScala)
-      if (!requests.isEmpty) return true
-    false
   }
 
   def removeExpiredRequests(now: Long, unsentExpiryMs: Long): Collection[ClientRequest] = {
@@ -167,6 +163,10 @@ class UnsentRequests {
         }
       }
     }
+
+    if (!expiredRequests.isEmpty)
+      clean()
+
     expiredRequests
   }
 
@@ -179,25 +179,8 @@ class UnsentRequests {
     }
   }
 
-  def getRequests(node: Node): Collection[ClientRequest] = {
-    val requests = unsent.get(node)
-    if (requests == null)
-      new ArrayDeque[ClientRequest]()
-    else
-      requests
+  def iterator(): Iterator[Entry[Node, ArrayDeque[ClientRequest]]] = {
+    unsent.entrySet().iterator()
   }
 
-  def nodeIterator(): Iterator[Node] = {
-    unsent.keySet().iterator()
-  }
-
-  def requestIterator(node: Node): Iterator[ClientRequest] = {
-    val requests = unsent.get(node)
-    if (requests == null)
-      Collections.emptyIterator[ClientRequest]
-    else
-      requests.iterator
-  }
-
-  def nodes = unsent.keySet
 }
