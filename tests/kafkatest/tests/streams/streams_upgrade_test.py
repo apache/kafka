@@ -54,7 +54,7 @@ class StreamsUpgradeTest(KafkaTest):
         random.shuffle(self.processors)
         for p in self.processors:
             p.CLEAN_NODE_ENABLED = False
-            self.do_rolling_bounce(p, "0.10.0", str(DEV_VERSION), counter)
+            self.do_rolling_bounce(p, "", str(DEV_VERSION), counter)
             counter = counter + 1
 
         # shutdown
@@ -72,7 +72,7 @@ class StreamsUpgradeTest(KafkaTest):
 
         self.driver.stop()
 
-    #@parametrize(broker_version=str(LATEST_0_10_1)) we cannot run this test until Kafka 0.10.1.2 is released
+    #@parametrize(new_version=str(LATEST_0_10_1)) we cannot run this test until Kafka 0.10.1.2 is released
     @parametrize(new_version=str(DEV_VERSION))
     def test_metadata_upgrade(self, new_version):
         """

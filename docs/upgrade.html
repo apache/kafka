@@ -147,18 +147,17 @@ only support 0.10.1.x or later brokers while 0.10.1.x brokers also support older
     <li> There are couple of API changes, that are not backward compatible (cf. <a href="/{{version}}/documentation/streams#streams_api_changes_0101">Streams API changes in 0.10.1</a> for more details).
          Thus, you need to update and recompile your code. Just swapping the Kafka Streams library jar file will not work and will break your application. </li>
     <li> Upgrading from 0.10.0.x to 0.10.1.2 requires two rolling bounces with config <code>upgrade.from="0.10.0"</code> set for first upgrade phase
-	 (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>).
+         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>).
+         As an alternative, and offline upgrade is also possible.
         <ul>
-            <li> note: rolling bounce upgrade requires to upgrade to 0.10.1.2 (rolling bounce upgrade is not supported for upgrading from 0.10.0.x to 0.10.1.0 or 0.10.1.1) </li>
-            <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from="0.10.0"</code> is set for new version 0.10.1.2 </li>
+            <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to <code>"0.10.0"</code> for new version 0.10.1.2 </li>
             <li> bounce each instance of your application once </li>
-            <li> prepare your newly deployed 0.10.1.2 application instances for a second round of rolling bounces; make sure to remove config <code>upgrade.mode</code> </li>
+            <li> prepare your newly deployed 0.10.1.2 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
             <li> bounce each instance of your application once more to complete the upgrade </li>
         </ul>
     </li>
     <li> Upgrading from 0.10.0.x to 0.10.1.0 or 0.10.1.1 requires an offline upgrade (rolling bounce upgrade is not supported)
         <ul>
-            <li> note: rolling bounce upgrade is supported for upgrading from 0.10.0.x to 0.10.1.2 </li>
             <li> stop all old (0.10.0.x) application instances </li>
             <li> update your code and swap old code and jar file with new code and new jar file </li>
             <li> restart all new (0.10.1.0 or 0.10.1.1) application instances </li>
