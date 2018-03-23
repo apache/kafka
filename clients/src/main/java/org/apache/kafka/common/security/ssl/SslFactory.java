@@ -287,7 +287,7 @@ public class SslFactory implements Reconfigurable {
             this.keyPassword = keyPassword;
         }
 
-        KeyStore load() throws GeneralSecurityException, IOException {
+        KeyStore load() throws IOException {
             FileInputStream in = null;
             try {
                 KeyStore ks = KeyStore.getInstance(type);
@@ -296,6 +296,8 @@ public class SslFactory implements Reconfigurable {
                 char[] passwordChars = password != null ? password.value().toCharArray() : null;
                 ks.load(in, passwordChars);
                 return ks;
+            } catch (GeneralSecurityException | IOException e) {
+                throw new KafkaException("Failed to load SSL keystore " + path + " of type " + type, e);
             } finally {
                 if (in != null) in.close();
             }
