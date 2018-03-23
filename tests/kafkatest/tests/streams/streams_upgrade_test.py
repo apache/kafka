@@ -169,11 +169,14 @@ class StreamsUpgradeTest(Test):
         self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
 
     @parametrize(old_version=str(LATEST_0_10_1), new_version=str(LATEST_0_10_2))
+    @parametrize(old_version=str(LATEST_0_10_1), new_version=str(LATEST_0_11_0))
     @parametrize(old_version=str(LATEST_0_10_1), new_version=str(DEV_VERSION))
+    @parametrize(old_version=str(LATEST_0_10_2), new_version=str(LATEST_0_11_0))
     @parametrize(old_version=str(LATEST_0_10_2), new_version=str(DEV_VERSION))
+    @parametrize(old_version=str(LATEST_0_11_0), new_version=str(DEV_VERSION))
     def test_simple_upgrade(self, old_version, new_version):
         """
-        Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_verion>
+        Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
         """
 
         self.topics = {
@@ -224,6 +227,7 @@ class StreamsUpgradeTest(Test):
 
     #@parametrize(new_version=str(LATEST_0_10_1)) we cannot run this test until Kafka 0.10.1.2 is released
     #@parametrize(new_version=str(LATEST_0_10_2)) we cannot run this test until Kafka 0.10.2.2 is released
+    #@parametrize(new_version=str(LATEST_0_11_0)) we cannot run this test until Kafka 0.11.0.3 is released
     @parametrize(new_version=str(DEV_VERSION))
     def test_metadata_upgrade(self, new_version):
         """

@@ -17,9 +17,9 @@
 package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 
 import java.util.Properties;
 
@@ -40,8 +40,7 @@ public class StreamsUpgradeTest {
         System.out.println("stateDir=" + stateDir);
         System.out.println("upgradeFrom=" + upgradeFrom);
 
-        final KStreamBuilder builder = new KStreamBuilder();
-
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream dataStream = builder.stream("data");
         dataStream.process(SmokeTestUtil.printProcessorSupplier("data"));
         dataStream.to("echo");
@@ -56,7 +55,7 @@ public class StreamsUpgradeTest {
         }
 
 
-        final KafkaStreams streams = new KafkaStreams(builder, config);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), config);
         streams.start();
 
         Runtime.getRuntime().addShutdownHook(new Thread() {

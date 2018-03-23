@@ -38,19 +38,23 @@
         However, some public APIs were deprecated and thus it is recommended to update your code eventually to allow for future upgrades.
         See below a complete list of <a href="#streams_api_changes_100">1.0</a> and <a href="#streams_api_changes_0110">0.11.0</a> API
         and semantic changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
+        Additionally, Streams API 1.0.x requires broker on-disk message format version 0.10 or higher; thus, you need to make sure that the message
+        format is configured correctly before you upgrade your Kafka Streams application.
     </p>
 
     <p>
         If you want to upgrade from 0.10.1.x to 1.0.x see the Upgrade Sections for <a href="/{{version}}/documentation/#upgrade_1020_streams"><b>0.10.2</b></a>,
         <a href="/{{version}}/documentation/#upgrade_1100_streams"><b>0.11.0</b></a>, and
         <a href="/{{version}}/documentation/#upgrade_100_streams"><b>1.0</b></a>.
+        Note, that a brokers on-disk message format must be on version 0.10 or higher to run a Kafka Streams application version 1.0 or higher.
         See below a complete list of <a href="#streams_api_changes_0102">0.10.2</a>, <a href="#streams_api_changes_0110">0.11.0</a>,
         and <a href="#streams_api_changes_100">1.0</a> API and semantical changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
     </p>
 
     <p>
         Upgrading from 0.10.0.x to 1.0.x directly is also possible.
-        Note, that a brokers must be on version 0.10.1 or higher to run a Kafka Streams application version 0.10.1 or higher.
+        Note, that a brokers must be on version 0.10.1 or higher and on-disk message format must be on version 0.10 or higher
+        to run a Kafka Streams application version 1.0 or higher.
         See <a href="#streams_api_changes_0101">Streams API changes in 0.10.1</a>, <a href="#streams_api_changes_0102">Streams API changes in 0.10.2</a>,
         <a href="#streams_api_changes_0110">Streams API changes in 0.11.0</a>, and <a href="#streams_api_changes_100">Streams API changes in 1.0</a>
         for a complete list of API changes.

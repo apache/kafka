@@ -997,6 +997,18 @@ project(':streams:upgrade-system-tests-0102') {
   }
 }
 
+project(':streams:upgrade-system-tests-0110') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-0110"
+
+  dependencies {
+    testCompile libs.kafkaStreams_0110
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'com.github.johnrengelman.shadow'
