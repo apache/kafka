@@ -30,7 +30,7 @@ import java.util.Properties;
 public class StreamsUpgradeTest {
 
     /**
-     * This test cannot be run executed, as long as Kafka 0.10.1.2 is not release
+     * This test cannot be run executed, as long as Kafka 0.10.1.2 is not released
      */
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) {
@@ -73,6 +73,8 @@ public class StreamsUpgradeTest {
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
+                System.out.println("closing Kafka Streams instance");
+                System.out.flush();
                 streams.close();
                 System.out.println("UPGRADE-TEST-CLIENT-CLOSED");
                 System.out.flush();

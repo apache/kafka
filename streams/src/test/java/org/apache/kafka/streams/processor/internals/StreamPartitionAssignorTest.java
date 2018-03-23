@@ -843,7 +843,7 @@ public class StreamPartitionAssignorTest {
 
         PartitionAssignor.Subscription subscription = partitionAssignor.subscription(Utils.mkSet("topic1"));
 
-        assertEquals(SubscriptionInfo.decode(subscription.userData()).version, 1);
+        assertEquals(1, SubscriptionInfo.decode(subscription.userData()).version);
     }
 
     @Test
