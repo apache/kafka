@@ -256,7 +256,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
-    private TransactionalRequestResult transactionalRequestResult;
+    private TransactionalRequestResult initTransactionsResult;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -547,6 +547,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     /**
      * Needs to be called before any other methods when the transactional.id is set in the configuration.
+     * This method could be retried if a {@link TimeoutException} or {@link InterruptException} is raised.
      *
      * This method does the following:
      *   1. Ensures any transactions initiated by previous instances of the producer with the same
@@ -567,14 +568,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void initTransactions() {
         throwIfNoTransactionManager();
-        if (transactionalRequestResult == null) {
-            transactionalRequestResult = transactionManager.initializeTransactions();
+        if (initTransactionsResult == null) {
+            initTransactionsResult = transactionManager.initializeTransactions();
             sender.wakeup();
         }
 
         try {
-            if (transactionalRequestResult.await(maxBlockTimeMs, TimeUnit.MILLISECONDS)) {
-                transactionalRequestResult = null;
+            if (initTransactionsResult.await(maxBlockTimeMs, TimeUnit.MILLISECONDS)) {
+                initTransactionsResult = null;
             } else {
                 throw new TimeoutException("Timeout expired while initializing transactional state in " + maxBlockTimeMs + "ms.");
             }

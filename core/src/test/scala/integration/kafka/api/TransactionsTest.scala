@@ -26,9 +26,9 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.errors.{ProducerFencedException, TimeoutException}
+import org.apache.kafka.common.errors.ProducerFencedException
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
@@ -532,18 +532,6 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
-  @Test(expected = classOf[TimeoutException])
-  def testInitTransactionFailWithBadBrokers() {
-    val producer = createTransactionalProducerToConnectNonExistentBrokers()
-
-    try {
-      producer.initTransactions()
-      producer.beginTransaction()
-    } finally {
-      producer.close()
-    }
-  }
-
   @Test(expected = classOf[KafkaException])
   def testConsecutivelyRunInitTransactions(): Unit = {
     val producer = createTransactionalProducer(transactionalId = "normalProducer")
@@ -555,30 +543,6 @@ class TransactionsTest extends KafkaServerTestHarness {
     } finally {
       producer.close()
     }
-  }
-
-  @Test(expected = classOf[KafkaException])
-  def testOnlyCanExecuteCloseAfterFailInitTransaction(): Unit = {
-    val producer = createTransactionalProducerToConnectNonExistentBrokers()
-    try {
-      producer.initTransactions()
-    } catch {
-      case _: TimeoutException => // expected
-    }
-    // other transactional operations should not be allowed even when we capture the error after initTransaction failed
-    try {
-      producer.beginTransaction()
-    } finally {
-      producer.close() // should successfully close the producer
-    }
-  }
-
-  private def createTransactionalProducerToConnectNonExistentBrokers(): KafkaProducer[Array[Byte], Array[Byte]] = {
-    val props = new Properties()
-    props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "test-transaction-id")
-    val producer = TestUtils.createNewProducer(brokerList = "192.168.1.1:9092", maxBlockMs = 1000,
-      retries = Integer.MAX_VALUE, props = Some(props))
-    producer
   }
 
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,

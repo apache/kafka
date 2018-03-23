@@ -548,4 +548,39 @@ public class KafkaProducerTest {
             // expected
         }
     }
+
+    @Test(expected = TimeoutException.class)
+    public void testInitTransactionTimeout() {
+        Properties props = new Properties();
+        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "bad-transaction");
+        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 1000);
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+
+        try (Producer<byte[], byte[]> producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer())) {
+            producer.initTransactions();
+            producer.beginTransaction();
+        }
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testOnlyCanExecuteCloseAfterFailInitTransaction() {
+        Properties props = new Properties();
+        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "bad-transaction");
+        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 1000);
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+
+        Producer<byte[], byte[]> producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
+
+        try {
+            producer.initTransactions();
+        } catch (TimeoutException e) {
+            // expected
+        }
+        // other transactional operations should not be allowed even when we capture the error after initTransaction failed
+        try {
+            producer.beginTransaction();
+        } finally {
+            producer.close();
+        }
+    }
 }
