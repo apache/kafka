@@ -129,7 +129,7 @@ public class QueryableStateIntegrationTest {
     }
 
     @Before
-    public void before() throws IOException, InterruptedException {
+    public void before() throws Exception {
         testNo++;
         createTopics();
         streamsConfiguration = new Properties();
@@ -609,15 +609,13 @@ public class QueryableStateIntegrationTest {
      * @param failIfKeyNotFound     if true, tests fails if an expected key is not found in store. If false,
      *                              the method merely inserts the new found key into the list of
      *                              expected keys.
-     * @throws InterruptedException
      */
     private void verifyGreaterOrEqual(final String[] keys,
                                       final Map<String, Long> expectedWindowedCount,
                                       final Map<String, Long> expectedCount,
                                       final ReadOnlyWindowStore<String, Long> windowStore,
                                       final ReadOnlyKeyValueStore<String, Long> keyValueStore,
-                                      final boolean failIfKeyNotFound)
-        throws InterruptedException {
+                                      final boolean failIfKeyNotFound) {
         final Map<String, Long> windowState = new HashMap<>();
         final Map<String, Long> countState = new HashMap<>();
 
@@ -743,6 +741,5 @@ public class QueryableStateIntegrationTest {
             }
         }
     }
-
 
 }
