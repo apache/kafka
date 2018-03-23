@@ -225,27 +225,34 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNode(env.cluster().controller());
 
             List<String> sillyTopicNames = Arrays.asList(new String[] {"", null});
+            int originRequestCount = env.kafkaClient().requestCount();
             Map<String, KafkaFuture<Void>> deleteFutures =
                 env.adminClient().deleteTopics(sillyTopicNames).values();
             for (String sillyTopicName : sillyTopicNames) {
                 assertFutureError(deleteFutures.get(sillyTopicName), InvalidTopicException.class);
             }
+            assertEquals(originRequestCount, env.kafkaClient().requestCount());
 
+            originRequestCount = env.kafkaClient().requestCount();
             Map<String, KafkaFuture<TopicDescription>> describeFutures =
                     env.adminClient().describeTopics(sillyTopicNames).values();
             for (String sillyTopicName : sillyTopicNames) {
                 assertFutureError(describeFutures.get(sillyTopicName), InvalidTopicException.class);
             }
+            assertEquals(originRequestCount, env.kafkaClient().requestCount());
 
             List<NewTopic> newTopics = new ArrayList<>();
             for (String sillyTopicName : sillyTopicNames) {
                 newTopics.add(new NewTopic(sillyTopicName, 1, (short) 1));
             }
+
+            originRequestCount = env.kafkaClient().requestCount();
             Map<String, KafkaFuture<Void>> createFutures =
                 env.adminClient().createTopics(newTopics).values();
             for (String sillyTopicName : sillyTopicNames) {
                 assertFutureError(createFutures .get(sillyTopicName), InvalidTopicException.class);
             }
+            assertEquals(originRequestCount, env.kafkaClient().requestCount());
         }
     }
 
