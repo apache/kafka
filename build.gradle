@@ -28,7 +28,7 @@ buildscript {
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.17.0'
     classpath 'org.scoverage:gradle-scoverage:2.1.0'
     classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.2'
-    classpath 'org.owasp:dependency-check-gradle:3.0.2'
+    classpath 'org.owasp:dependency-check-gradle:3.1.1'
   }
 }
 
@@ -79,7 +79,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "4.5.1"
+  gradleVersion = "4.6"
   buildVersionFileName = "kafka-version.properties"
 
   maxPermSizeArgs = []
@@ -386,7 +386,7 @@ subprojects {
   if (it.path != ':core') {
 
     jacoco {
-      toolVersion = "0.8.0"
+      toolVersion = "0.8.1"
     }
 
     // NOTE: Jacoco Gradle plugin does not support "offline instrumentation" this means that classes mocked by PowerMock
@@ -874,6 +874,8 @@ project(':tools') {
 
     compile libs.jacksonJaxrsJsonProvider
     compile libs.jerseyContainerServlet
+    compile libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
+    compile libs.activation // Jersey dependency that was available in the JDK before Java 9
     compile libs.jettyServer
     compile libs.jettyServlet
     compile libs.jettyServlets
@@ -1203,6 +1205,8 @@ project(':connect:runtime') {
 
     compile libs.jacksonJaxrsJsonProvider
     compile libs.jerseyContainerServlet
+    compile libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
+    compile libs.activation // Jersey dependency that was available in the JDK before Java 9
     compile libs.jettyServer
     compile libs.jettyServlet
     compile libs.jettyServlets
