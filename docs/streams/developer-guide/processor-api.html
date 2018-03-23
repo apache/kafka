@@ -166,95 +166,11 @@
         <div class="section" id="unit-testing-processors">
             <h2>
                 <a class="toc-backref" href="#id9">Unit Testing Processors</a>
-                <a class="headerlink" href="#connecting-processors-and-state-stores"
-                   title="Permalink to this headline"></a>
+                <a class="headerlink" href="#unit-testing-processors" title="Permalink to this headline"></a>
             </h2>
             <p>
-                Once you have a processor implementation, you will want to test it.
-                Because the <code>Processor</code> forwards its results to the context rather than returning them,
-                Unit testing requires a mocked context capable of capturing forwarded data for inspection.
-                For this reason, we provide a <code>MockProcessorContext</code> in our <code>test-utils</code>module.
-            </p>
-            <p>
-                Instructions on importing the <code>test-utils</code> module are <a href="testing.html">here</a>.
-            </p>
-            <b>Construction</b>
-            <p>
-            To begin with, instantiate your processor and initialize it with the mock context:
-            <pre>
-final Processor processorUnderTest = ...;
-final MockProcessorContext context = new MockProcessorContext();
-processorUnderTest.init(context);
-                </pre>
-            If you need to pass configuration to your processor or set the default serdes, you can create the mock with
-            config:
-            <pre>
-final Properties config = new Properties();
-config.put(StreamsConfig.APPLICATION_ID_CONFIG, "unit-test");
-config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
-config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
-config.put("some.other.config", "some config value");
-final MockProcessorContext context = new MockProcessorContext(config);
-                </pre>
-            </p>
-            <b>Captured data</b>
-            <p>
-                The mock will capture any values that your processor forwards. You can make assertions on them:
-            <pre>
-processorUnderTest.process("key", "value");
-
-final Iterator&lt;CapturedForward&gt; forwarded = context.forwarded().iterator();
-assertEquals(forwarded.next().keyValue(), new KeyValue&lt;&gt;(..., ...));
-assertFalse(forwarded.hasNext());
-
-// you can reset forwards to clear the captured data. This may be helpful in constructing longer scenarios.
-context.resetForwards();
-
-assertEquals(context.forwarded().size(), 0);
-            </pre>
-            If your processor forwards to specific child processors, you can query the context for captured data by child name:
-            <pre>
-final List&lt;CapturedForward&gt; captures = context.forwarded("childProcessorName");
-            </pre>
-            The mock also captures whether your processor has called <code>commit()</code> on the context:
-            <pre>
-assertTrue(context.committed());
-
-// commit captures can also be reset.
-context.resetCommit();
-
-assertFalse(context.committed());
-            </pre>
-            </p>
-            <b>Setting record metadata</b>
-            <p>
-                In case your processor logic depends on the record metadata (topic, partition, offset, or timestamp),
-                you can set them on the context, either all together or individually:
-                <pre>
-context.setRecordMetadata("topicName", /*partition*/ 0, /*offset*/ 0L, /*timestamp*/ 0L);
-context.setTopic("topicName");
-context.setPartition(0);
-context.setOffset(0L);
-context.setTimestamp(0L);
-                </pre>
-                Once these are set, the context will continue returning the same values, until you set new ones.
-            </p>
-            <b>Verifying punctuators</b>
-            <p>
-                As discussed above, processors can schedule punctuators to handle periodic tasks.
-                The mock context does <i>not</i> automatically execute punctuators, but it does capture them to
-                allow you to unit test them as well:
-                <pre>
-final MockProcessorContext.CapturedPunctuator capturedPunctuator = context.scheduledPunctuators().get(0);
-final long interval = capturedPunctuator.getIntervalMs();
-final PunctuationType type = capturedPunctuator.getType();
-final boolean cancelled = capturedPunctuator.cancelled();
-final Punctuator punctuator = capturedPunctuator.getPunctuator();
-punctuator.punctuate(/*timestamp*/ 0L);
-                </pre>
-                If you need to write tests involving automatic firing of scheduled punctuators, we recommend creating a
-                simple topology with your processor and using the <a href="testing.html#testing-topologytestdriver"><code>TopologyTestDriver</code></a>.
+                Kafka Streams comes with a <code>test-utils</code> module to help you write unit tests for your
+                processors <a href="testing.html#unit-testing-processors">here</a>.
             </p>
         </div>
         <div class="section" id="state-stores">
