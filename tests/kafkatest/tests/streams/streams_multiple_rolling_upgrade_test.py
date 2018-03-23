@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+from ducktape.mark import ignore
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
@@ -100,6 +100,7 @@ class StreamsMultipleRollingUpgradeTest(BaseStreamsTest):
         self.wait_for_verification(self.driver, "ALL-RECORDS-DELIVERED", self.driver.STDOUT_FILE)
         self.driver.stop()
 
+    @ignore
     @cluster(num_nodes=9)
     @matrix(broker_version=streams_upgrade_versions)
     def test_rolling_upgrade_downgrade_multiple_apps(self, broker_version):
