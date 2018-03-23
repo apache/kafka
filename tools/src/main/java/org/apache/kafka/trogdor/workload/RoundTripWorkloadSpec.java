@@ -26,6 +26,7 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
@@ -41,12 +42,14 @@ public class RoundTripWorkloadSpec extends TaskSpec {
     private final NavigableMap<Integer, List<Integer>> partitionAssignments;
     private final PayloadGenerator valueGenerator;
     private final int maxMessages;
+    private final Map<String, String> commonClientConf;
 
     @JsonCreator
     public RoundTripWorkloadSpec(@JsonProperty("startMs") long startMs,
              @JsonProperty("durationMs") long durationMs,
              @JsonProperty("clientNode") String clientNode,
              @JsonProperty("bootstrapServers") String bootstrapServers,
+             @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
              @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
              @JsonProperty("partitionAssignments") NavigableMap<Integer, List<Integer>> partitionAssignments,
              @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
@@ -60,6 +63,8 @@ public class RoundTripWorkloadSpec extends TaskSpec {
         this.valueGenerator = valueGenerator == null ?
             new UniformRandomPayloadGenerator(32, 123, 10) : valueGenerator;
         this.maxMessages = maxMessages;
+        this.commonClientConf = (commonClientConf == null)
+                                ? new TreeMap<String, String>() : commonClientConf;
     }
 
     @JsonProperty
@@ -90,6 +95,11 @@ public class RoundTripWorkloadSpec extends TaskSpec {
     @JsonProperty
     public int maxMessages() {
         return maxMessages;
+    }
+
+    @JsonProperty
+    public Map<String, String> commonClientConf() {
+        return commonClientConf;
     }
 
     @Override

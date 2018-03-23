@@ -45,6 +45,7 @@ public class ProduceBenchSpec extends TaskSpec {
     private final PayloadGenerator keyGenerator;
     private final PayloadGenerator valueGenerator;
     private final Map<String, String> producerConf;
+    private final Map<String, String> commonClientConf;
     private final int totalTopics;
     private final int activeTopics;
     private final String topicPrefix;
@@ -61,6 +62,7 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
                          @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
                          @JsonProperty("producerConf") Map<String, String> producerConf,
+                         @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                          @JsonProperty("totalTopics") int totalTopics,
                          @JsonProperty("activeTopics") int activeTopics,
                          @JsonProperty("topicPrefix") String topicPrefix,
@@ -75,7 +77,8 @@ public class ProduceBenchSpec extends TaskSpec {
             new SequentialPayloadGenerator(4, 0) : keyGenerator;
         this.valueGenerator = valueGenerator == null ?
             new ConstantPayloadGenerator(512, new byte[0]) : valueGenerator;
-        this.producerConf = (producerConf == null) ? new TreeMap<String, String>() : producerConf;
+        this.producerConf = configOrEmptyMap(producerConf);
+        this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.totalTopics = totalTopics;
         this.activeTopics = activeTopics;
         this.topicPrefix = (topicPrefix == null) ? DEFAULT_TOPIC_PREFIX : topicPrefix;
@@ -83,6 +86,10 @@ public class ProduceBenchSpec extends TaskSpec {
                              ? DEFAULT_NUM_PARTITIONS : partitionsPerTopic;
         this.replicationFactor = (replicationFactor == 0)
                                  ? DEFAULT_REPLICATION_FACTOR : replicationFactor;
+    }
+
+    private Map<String, String> configOrEmptyMap(Map<String, String> config) {
+        return (config == null) ? new TreeMap<String, String>() : config;
     }
 
     @JsonProperty
@@ -118,6 +125,11 @@ public class ProduceBenchSpec extends TaskSpec {
     @JsonProperty
     public Map<String, String> producerConf() {
         return producerConf;
+    }
+
+    @JsonProperty
+    public Map<String, String> commonClientConf() {
+        return commonClientConf;
     }
 
     @JsonProperty

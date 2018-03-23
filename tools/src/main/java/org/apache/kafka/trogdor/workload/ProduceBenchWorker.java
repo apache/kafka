@@ -109,9 +109,10 @@ public class ProduceBenchWorker implements TaskWorker {
                 Map<String, NewTopic> newTopics = new HashMap<>();
                 for (int i = 0; i < spec.totalTopics(); i++) {
                     String name = topicIndexToName(i);
-                    newTopics.put(name, new NewTopic(name, spec.numPartitions(), spec.replicationFactor()));
+                    newTopics.put(name, new NewTopic(name, spec.numPartitions(),
+                                                     spec.replicationFactor()));
                 }
-                WorkerUtils.createTopics(log, spec.bootstrapServers(), spec.producerConf(),
+                WorkerUtils.createTopics(log, spec.bootstrapServers(), spec.commonClientConf(),
                                          newTopics, false);
 
                 executor.submit(new SendRecords());
@@ -183,6 +184,9 @@ public class ProduceBenchWorker implements TaskWorker {
                 new StatusUpdater(histogram), 1, 1, TimeUnit.MINUTES);
             Properties props = new Properties();
             props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
+            for (Map.Entry<String, String> commonEntry : spec.commonClientConf().entrySet()) {
+                props.setProperty(commonEntry.getKey(), commonEntry.getValue());
+            }
             for (Map.Entry<String, String> entry : spec.producerConf().entrySet()) {
                 props.setProperty(entry.getKey(), entry.getValue());
             }
