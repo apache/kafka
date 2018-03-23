@@ -562,7 +562,7 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * List the consumer groups available in the cluster.
      *
-     * @param options           The options to use when listing the groups.
+     * @param options           The options to use when listing the consumer groups.
      * @return The ListGroupsResult.
      */
     public abstract ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options);
@@ -580,15 +580,15 @@ public abstract class AdminClient implements AutoCloseable {
     }
 
     /**
-     * List the group offsets available in the cluster.
+     * List the consumer group offsets available in the cluster.
      *
-     * @param options           The options to use when listing the group offsets.
+     * @param options           The options to use when listing the consumer group offsets.
      * @return The ListGroupOffsetsResult
      */
     public abstract ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options);
 
     /**
-     * List the group offsets available in the cluster with the default options.
+     * List the consumer group offsets available in the cluster with the default options.
      *
      * This is a convenience method for #{@link AdminClient#listConsumerGroupOffsets(String, ListConsumerGroupOffsetsOptions)} with default options.
      *
@@ -596,5 +596,22 @@ public abstract class AdminClient implements AutoCloseable {
      */
     public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId) {
         return listConsumerGroupOffsets(groupId, new ListConsumerGroupOffsetsOptions());
+    }
+
+    /**
+     * Delete consumer groups from the cluster.
+     *
+     * @param options           The options to use when deleting a consumer group.
+     * @return The DeletConsumerGroupResult.
+     */
+    public abstract DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options);
+
+    /**
+     * Delete consumer groups from the cluster with the default options.
+     *
+     * @return The DeleteConsumerGroupResult.
+     */
+    public DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds) {
+        return deleteConsumerGroups(groupIds, new DeleteConsumerGroupsOptions());
     }
 }
