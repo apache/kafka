@@ -111,7 +111,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       props.put(KafkaConfig.NumReplicaFetchersProp, "2") // greater than one to test reducing threads
       props.put(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, "10000000") // non-default value to trigger a new metric
       props.put(KafkaConfig.PasswordEncoderSecretProp, "dynamic-config-secret")
-      props.put(KafkaConfig.PasswordEncoderOldSecretProp, "old-dynamic-config-secret") // for testing secret rotation
 
       props ++= sslProperties1
       addKeystoreWithListenerPrefix(sslProperties1, props, SecureInternal)
@@ -670,7 +669,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       val propsEncodedWithOldSecret = props.clone().asInstanceOf[Properties]
       val config = server.config
       val secret = config.passwordEncoderSecret.getOrElse(throw new IllegalStateException("Password encoder secret not configured"))
-      val oldSecret = config.passwordEncoderOldSecret.getOrElse(throw new IllegalStateException("Password encoder old secret not configured"))
+      val oldSecret = "old-dynamic-config-secret"
+      config.dynamicConfig.staticBrokerConfigs.put(KafkaConfig.PasswordEncoderOldSecretProp, oldSecret)
       val passwordConfigs = props.asScala.filterKeys(DynamicBrokerConfig.isPasswordConfig)
       assertTrue("Password configs not found", passwordConfigs.nonEmpty)
       val passwordDecoder = new PasswordEncoder(secret,
@@ -678,7 +678,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
         config.passwordEncoderCipherAlgorithm,
         config.passwordEncoderKeyLength,
         config.passwordEncoderIterations)
-      val passwordEncoder = new PasswordEncoder(oldSecret,
+      val passwordEncoder = new PasswordEncoder(new Password(oldSecret),
         config.passwordEncoderKeyFactoryAlgorithm,
         config.passwordEncoderCipherAlgorithm,
         config.passwordEncoderKeyLength,
