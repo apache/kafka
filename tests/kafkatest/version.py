@@ -81,7 +81,6 @@ LATEST_0_10_0 = V_0_10_0_1
 # 0.10.1.x versions
 V_0_10_1_0 = KafkaVersion("0.10.1.0")
 V_0_10_1_1 = KafkaVersion("0.10.1.1")
-# Adding 0.10.0 as the next version will be 0.10.1.x
 LATEST_0_10_1 = V_0_10_1_1
 
 # 0.10.2.x versions

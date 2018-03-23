@@ -130,8 +130,6 @@ public class SmokeTestDriver extends SmokeTestUtil {
         System.out.println("shutdown");
     }
 
-    private static volatile boolean running = true;
-
     public static Map<String, Set<Integer>> generate(final String kafka,
                                                      final int numKeys,
                                                      final int maxRecordsPerKey) {
@@ -142,57 +140,38 @@ public class SmokeTestDriver extends SmokeTestUtil {
                                                      final int numKeys,
                                                      final int maxRecordsPerKey,
                                                      final boolean autoTerminate) {
-        if (!autoTerminate) {
-            Runtime.getRuntime().addShutdownHook(new Thread() {
-                @Override
-                public void run() {
-                    running = false;
-                }
-            });
-        }
-
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "SmokeTest");
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        // the next 4 config values make sure that all records are produced with no loss and
-        // no duplicates
+        // the next 2 config values make sure that all records are produced with no loss and no duplicates
         producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
         producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
         producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 45000);
 
-        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
+        final KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
         int numRecordsProduced = 0;
 
-        Map<String, Set<Integer>> allData = new HashMap<>();
-        ValueList[] data = new ValueList[numKeys];
+        final Map<String, Set<Integer>> allData = new HashMap<>();
+        final ValueList[] data = new ValueList[numKeys];
         for (int i = 0; i < numKeys; i++) {
             data[i] = new ValueList(i, i + maxRecordsPerKey - 1);
             allData.put(data[i].key, new HashSet<Integer>());
         }
-        Random rand = new Random();
+        final Random rand = new Random();
 
-        int remaining = -1;
+        int remaining = 1; // dummy value must be positive if <autoTerminate> is false
         if (autoTerminate) {
             remaining = data.length;
         }
 
         List<ProducerRecord<byte[], byte[]>> needRetry = new ArrayList<>();
 
-        while (running) {
-            if (remaining == 0) {
-                break;
-            }
-
-            int index;
-            if (autoTerminate) {
-                index = rand.nextInt(remaining);
-            } else {
-                index = rand.nextInt(numKeys);
-            }
-            String key = data[index].key;
+        while (remaining > 0) {
+            final int index = autoTerminate ? rand.nextInt(remaining) : rand.nextInt(numKeys);
+            final String key = data[index].key;
             int value = data[index].next();
 
             if (autoTerminate && value < 0) {
@@ -200,14 +179,13 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 data[index] = data[remaining];
             } else {
 
-                ProducerRecord<byte[], byte[]> record =
-                        new ProducerRecord<>("data", stringSerde.serializer().serialize("", key), intSerde.serializer().serialize("", value));
+                final ProducerRecord<byte[], byte[]> record =
+                    new ProducerRecord<>("data", stringSerde.serializer().serialize("", key), intSerde.serializer().serialize("", value));
 
                 producer.send(record, new TestCallback(record, needRetry));
 
                 numRecordsProduced++;
                 allData.get(key).add(value);
-
                 if (numRecordsProduced % 100 == 0) {
                     System.out.println(numRecordsProduced + " records produced");
                 }

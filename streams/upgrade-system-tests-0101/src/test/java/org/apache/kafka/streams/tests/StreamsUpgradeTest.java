@@ -73,6 +73,8 @@ public class StreamsUpgradeTest {
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
+                System.out.println("closing Kafka Streams instance");
+                System.out.flush();
                 streams.close();
                 System.out.println("UPGRADE-TEST-CLIENT-CLOSED");
                 System.out.flush();

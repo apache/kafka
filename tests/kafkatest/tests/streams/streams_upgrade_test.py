@@ -204,7 +204,7 @@ class StreamsUpgradeTest(Test):
         random.shuffle(self.processors)
         for p in self.processors:
             p.CLEAN_NODE_ENABLED = False
-            self.do_rolling_bounce(p, "0.10.0", new_version, counter)
+            self.do_rolling_bounce(p, "", new_version, counter)
             counter = counter + 1
 
         # shutdown
