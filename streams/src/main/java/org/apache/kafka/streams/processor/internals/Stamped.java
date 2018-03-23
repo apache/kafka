@@ -36,8 +36,13 @@ public class Stamped<V> implements Comparable {
     }
 
     @Override
-    public boolean equals(Object obj) {
-        return super.equals(obj);
+    public boolean equals(Object other) {
+
+        if(getClass() != other.getClass()){
+            return false;
+        }
+        long otherTimestamp = ((Stamped<?>)other).timestamp;
+        return (timestamp > otherTimestamp);
     }
 
     @Override
