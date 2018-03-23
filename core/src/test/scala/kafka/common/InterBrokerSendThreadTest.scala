@@ -165,7 +165,7 @@ class InterBrokerSendThreadTest {
     sendThread.doWork()
 
     EasyMock.verify(networkClient)
-    Assert.assertFalse(sendThread.unsentRequests.iterator().hasNext)
+    Assert.assertFalse(sendThread.hasUnsentRequests)
   }
 
 

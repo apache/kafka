@@ -39,7 +39,9 @@ abstract class InterBrokerSendThread(name: String,
 
   def generateRequests(): Iterable[RequestAndCompletionHandler]
   def unsentExpiryMs: Int
-  var unsentRequests = new UnsentRequests
+  private var unsentRequests = new UnsentRequests
+
+  def hasUnsentRequests = unsentRequests.iterator().hasNext
 
   override def shutdown(): Unit = {
     initiateShutdown()
@@ -60,10 +62,10 @@ abstract class InterBrokerSendThread(name: String,
     try {
       val timeout = sendRequests(now)
       networkClient.poll(timeout, now)
-      unsentRequests.clean()
       now = time.milliseconds()
       checkDisconnects(now)
       failExpiredRequests(now)
+      unsentRequests.clean()
     } catch {
       case e: FatalExitError => throw e
       case t: Throwable =>
@@ -78,11 +80,8 @@ abstract class InterBrokerSendThread(name: String,
 
   private def sendRequests(now: Long): Long = {
     var pollTimeout = Long.MaxValue
-    val iterator = unsentRequests.iterator()
-    while (iterator.hasNext) {
-      val entry = iterator.next
-      val node = entry.getKey
-      val requestIterator = entry.getValue.iterator()
+    for (node <- unsentRequests.nodes.asScala) {
+      val requestIterator = unsentRequests.requestIterator(node)
       while (requestIterator.hasNext) {
         val request = requestIterator.next
         if (networkClient.ready(node, now)) {
@@ -104,12 +103,12 @@ abstract class InterBrokerSendThread(name: String,
     while (iterator.hasNext) {
       val entry = iterator.next
       val (node, requests) = (entry.getKey, entry.getValue)
-      if (networkClient.connectionFailed(node)) {
+      if (!requests.isEmpty && networkClient.connectionFailed(node)) {
         iterator.remove()
         for (request <- requests.asScala) {
           if (networkClient.authenticationException(node) != null)
             error(s"Failed to send the following request due to authentication error: $request")
-          onComplete(request, now)
+          completeWithDisconnect(request, now)
         }
       }
     }
@@ -120,11 +119,11 @@ abstract class InterBrokerSendThread(name: String,
     val expiredRequests = unsentRequests.removeExpiredRequests(now, unsentExpiryMs)
     for (request <- expiredRequests.asScala) {
       debug(s"Failed to send the following request after $unsentExpiryMs ms: $request")
-      onComplete(request, now)
+      completeWithDisconnect(request, now)
     }
   }
 
-  def onComplete(request: ClientRequest, now: Long): Unit = {
+  def completeWithDisconnect(request: ClientRequest, now: Long): Unit = {
     val handler = request.callback
     handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
       handler, request.destination, now /* createdTimeMs */ , now /* receivedTimeMs */ , true /* disconnected */ ,
@@ -137,7 +136,7 @@ abstract class InterBrokerSendThread(name: String,
 case class RequestAndCompletionHandler(destination: Node, request: AbstractRequest.Builder[_ <: AbstractRequest],
                                        handler: RequestCompletionHandler)
 
-class UnsentRequests {
+private class UnsentRequests {
   private var unsent = new HashMap[Node, ArrayDeque[ClientRequest]]
 
   def put(node: Node, request: ClientRequest): Unit = {
@@ -163,10 +162,6 @@ class UnsentRequests {
         }
       }
     }
-
-    if (!expiredRequests.isEmpty)
-      clean()
-
     expiredRequests
   }
 
@@ -183,4 +178,13 @@ class UnsentRequests {
     unsent.entrySet().iterator()
   }
 
+  def requestIterator(node: Node): Iterator[ClientRequest] = {
+    val requests = unsent.get(node)
+    if (requests == null)
+      Collections.emptyIterator[ClientRequest]
+    else
+      requests.iterator
+  }
+
+  def nodes = unsent.keySet
 }
