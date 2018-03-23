@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
@@ -464,8 +465,24 @@ class WorkerSinkTask extends WorkerTask {
         for (ConsumerRecord<byte[], byte[]> msg : msgs) {
             log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
-            SchemaAndValue keyAndSchema = keyConverter.toConnectData(msg.topic(), msg.key());
-            SchemaAndValue valueAndSchema = valueConverter.toConnectData(msg.topic(), msg.value());
+            final SchemaAndValue keyAndSchema;
+            final SchemaAndValue valueAndSchema;
+            boolean exceptionCheckForKeyAndSchema = true;
+
+            try {
+                keyAndSchema = keyConverter.toConnectData(msg.topic(), msg.key());
+                exceptionCheckForKeyAndSchema = false;
+                valueAndSchema = valueConverter.toConnectData(msg.topic(), msg.value());
+            } catch (DataException e) {
+                if(exceptionCheckForKeyAndSchema) {
+                    log.error("Failed to convert message Key to Kafka Connect format", e);
+
+                }
+                else {
+                    log.error("Failed to convert message Value to Kafka Connect format", e);
+                }
+                throw new ConnectException("Exiting WorkerSinkTask due to unconverted message to Kafka Connect format exception", e);
+            }
             Headers headers = convertHeadersFor(msg);
             Long timestamp = ConnectUtils.checkAndConvertTimestamp(msg.timestamp());
             SinkRecord origRecord = new SinkRecord(msg.topic(), msg.partition(),
