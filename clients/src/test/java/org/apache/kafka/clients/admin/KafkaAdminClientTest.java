@@ -821,7 +821,7 @@ public class KafkaAdminClientTest {
 
             final DeleteConsumerGroupsResult result = env.adminClient().deleteConsumerGroups(groupIds);
 
-            final Map<String, KafkaFuture<Void>> results = result.future.get();
+            final Map<String, KafkaFuture<Void>> results = result.values().get();
             assertNull(results.get("group-0").get());
         }
     }
