@@ -31,11 +31,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Demonstrates the use of {@link MockProcessorContext} for testing the {@link Processor} in the {@link WordCountProcessorDemo}.
- * <p>
- * In this example, the input stream reads from a topic named "streams-plaintext-input", where the values of messages
- * represent lines of text; and the histogram output is written to topic "streams-wordcount-processor-output" where each record
- * is an updated count of a single word.
+ * Demonstrate the use of {@link MockProcessorContext} for testing the {@link Processor} in the {@link WordCountProcessorDemo}.
  */
 public class WordCountProcessorTest {
     @Test
@@ -43,11 +39,10 @@ public class WordCountProcessorTest {
         final MockProcessorContext context = new MockProcessorContext();
 
         // Create, initialize, and register the state store.
-        final KeyValueStore<String, Integer> store = Stores.keyValueStoreBuilder(
-            Stores.inMemoryKeyValueStore("Counts"),
-            Serdes.String(),
-            Serdes.Integer()
-        ).build();
+        final KeyValueStore<String, Integer> store =
+            Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("Counts"), Serdes.String(), Serdes.Integer())
+                .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
+                .build();
         store.init(context, store);
         context.register(store, false, null);
 
@@ -55,9 +50,6 @@ public class WordCountProcessorTest {
         final Processor<String, String> processor = new WordCountProcessorDemo.MyProcessorSupplier().get();
         processor.init(context);
 
-        // In this example, we have to set the record metadata, since the state store change-logger makes use of it.
-        // Alternatively, we could construct the state store '.withLoggingDisabled()'.
-        context.setRecordMetadata("input", 0, 0L, 0L);
         // send a record to the processor
         processor.process("key", "alpha beta gamma alpha");
 

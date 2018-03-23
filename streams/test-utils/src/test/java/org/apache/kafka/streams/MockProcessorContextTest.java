@@ -116,9 +116,19 @@ public class MockProcessorContextTest {
 
         {
             final Iterator<CapturedForward> forwarded = context.forwarded().iterator();
-            assertEquals(forwarded.next().keyValue(), new KeyValue<>("start", -1L));
-            assertEquals(forwarded.next().keyValue(), new KeyValue<>("foo5", 8L));
-            assertEquals(forwarded.next().keyValue(), new KeyValue<>("barbaz50", 56L));
+
+            final CapturedForward forward1 = forwarded.next();
+            assertEquals(forward1.keyValue(), new KeyValue<>("start", -1L));
+            assertEquals(forward1.childName(), null);
+
+            final CapturedForward forward2 = forwarded.next();
+            assertEquals(forward2.keyValue(), new KeyValue<>("foo5", 8L));
+            assertEquals(forward2.childName(), "george");
+
+            final CapturedForward forward3 = forwarded.next();
+            assertEquals(forward3.keyValue(), new KeyValue<>("barbaz50", 56L));
+            assertEquals(forward3.childName(), "pete");
+
             assertFalse(forwarded.hasNext());
         }
 

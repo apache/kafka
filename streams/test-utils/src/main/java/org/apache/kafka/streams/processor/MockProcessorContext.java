@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.streams.processor;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -466,46 +464,11 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public RecordCollector recordCollector() {
-        // This interface is required for state stores that add change logging.
-        // Rather than risking a mysterious ClassCastException during unit tests, just supply a no-op collector.
+        // This interface is assumed by state stores that add change-logging.
+        // Rather than risk a mysterious ClassCastException during unit tests, throw an explanatory exception.
 
-        return new RecordCollector() {
-            @Override
-            public <K, V> void send(final String topic,
-                                    final K key,
-                                    final V value,
-                                    final Integer partition,
-                                    final Long timestamp,
-                                    final Serializer<K> keySerializer,
-                                    final Serializer<V> valueSerializer) {
-
-            }
-
-            @Override
-            public <K, V> void send(final String topic,
-                                    final K key,
-                                    final V value,
-                                    final Long timestamp,
-                                    final Serializer<K> keySerializer,
-                                    final Serializer<V> valueSerializer,
-                                    final StreamPartitioner<? super K, ? super V> partitioner) {
-
-            }
-
-            @Override
-            public void flush() {
-
-            }
-
-            @Override
-            public void close() {
-
-            }
-
-            @Override
-            public Map<TopicPartition, Long> offsets() {
-                return null;
-            }
-        };
+        throw new UnsupportedOperationException("MockProcessorContext does not provide record collection. " +
+            "For processor unit tests, use an in-memory state store with change-logging disabled. " +
+            "Alternatively, use the TopologyTestDriver for testing processor/store/topology integration.");
     }
 }
