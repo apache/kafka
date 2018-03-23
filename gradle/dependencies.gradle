@@ -82,8 +82,6 @@ versions += [
   jfreechart: "1.0.0",
   mavenArtifact: "3.5.3",
   avro4sVersion: "1.8.3",
-  scalaLoggingVersion: "3.8.0",
-  logbackVersion: "1.2.3",
   scalatestEmbeddedKafkaVersion: "1.1.0"
 ]
 
@@ -140,8 +138,6 @@ libs += [
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   avro4s: "com.sksamuel.avro4s:avro4s-core_$versions.baseScala:$versions.avro4sVersion",
-  scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScala:$versions.scalaLoggingVersion",
-  logback: "ch.qos.logback:logback-classic:$versions.logbackVersion",
   scalatestEmbeddedKafka: "net.manub:scalatest-embedded-kafka_$versions.baseScala:$versions.scalatestEmbeddedKafkaVersion",
   scalatestEmbeddedKafkaStreams: "net.manub:scalatest-embedded-kafka-streams_$versions.baseScala:$versions.scalatestEmbeddedKafkaVersion"
 ]

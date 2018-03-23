@@ -987,7 +987,6 @@ project(':streams:streams-scala') {
     testCompile project(':core')
     testCompile libs.avro4s
     testCompile libs.scalaLogging
-    testCompile libs.logback
 
     testCompile libs.junit
     testCompile libs.scalatest
