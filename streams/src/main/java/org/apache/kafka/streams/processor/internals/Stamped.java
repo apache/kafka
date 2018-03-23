@@ -41,7 +41,7 @@ public class Stamped<V> implements Comparable {
         if (getClass() != other.getClass()) return false;
 
         long otherTimestamp = ((Stamped<?>) other).timestamp;
-        return (timestamp > otherTimestamp);
+        return timestamp > otherTimestamp;
     }
 
     @Override
