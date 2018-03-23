@@ -43,7 +43,7 @@ public final class ClientUtils {
     private ClientUtils() {
     }
 
-    public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls) {
+    public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, boolean reverseLookup, String securityProtocolConfig) {
         List<InetSocketAddress> addresses = new ArrayList<>();
         for (String url : urls) {
             if (url != null && !url.isEmpty()) {
@@ -53,17 +53,30 @@ public final class ClientUtils {
                     if (host == null || port == null)
                         throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
 
-                    InetAddress[] inetAddresses = InetAddress.getAllByName(host);
-
-                    for (InetAddress inetAddress : inetAddresses) {
-                        String resolvedCanonicalName = inetAddress.getCanonicalHostName();
-                        InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
+                    //Reverse lookup of bootstrap.servers is not allowed if SSL is used as it can break authentication when using wildcard certificates
+                    if(reverseLookup && SecurityProtocol.forName(securityProtocolConfig) != SecurityProtocol.SSL)
+                    {
+                        InetAddress[] inetAddresses = InetAddress.getAllByName(host);
+                        for (InetAddress inetAddress : inetAddresses) {
+                            String resolvedCanonicalName = inetAddress.getCanonicalHostName();
+                            InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
+                            if (address.isUnresolved()) {
+                                log.warn("Removing server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
+                            } else {
+                                addresses.add(address);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        InetSocketAddress address = new InetSocketAddress(host, port);
                         if (address.isUnresolved()) {
                             log.warn("Removing server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
                         } else {
                             addresses.add(address);
                         }
                     }
+
                 } catch (IllegalArgumentException e) {
                     throw new ConfigException("Invalid port in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
                 } catch (UnknownHostException e) {

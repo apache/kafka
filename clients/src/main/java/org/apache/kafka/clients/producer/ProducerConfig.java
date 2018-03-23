@@ -51,6 +51,9 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>bootstrap.servers</code> */
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 
+    /** <code>bootstrap.reverse.dns.lookup</code> */
+    public static final String BOOTSTRAP_REVERSE_DNS_LOOKUP = CommonClientConfigs.BOOTSTRAP_REVERSE_DNS_LOOKUP;
+
     /** <code>metadata.max.age.ms</code> */
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
     private static final String METADATA_MAX_AGE_DOC = CommonClientConfigs.METADATA_MAX_AGE_DOC;

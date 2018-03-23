@@ -41,6 +41,10 @@ public class CommonClientConfigs {
                                                        + "discover the full cluster membership (which may change dynamically), this list need not contain the full set of "
                                                        + "servers (you may want more than one, though, in case a server is down).";
 
+    public static final String BOOTSTRAP_REVERSE_DNS_LOOKUP = "bootstrap.reverse.dns.lookup";
+    public static final String BOOTSTRAP_REVERSE_DNS_LOOKUP_DOC = "Perform reverse DNS lookup on elements of bootstrap.servers."
+                                                                +"Ignored if SSL is enabled.";
+
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";
 

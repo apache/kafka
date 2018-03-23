@@ -89,6 +89,9 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 
+    /** <code>bootstrap.reverse.dns.lookup</code> */
+    public static final String BOOTSTRAP_REVERSE_DNS_LOOKUP = CommonClientConfigs.BOOTSTRAP_REVERSE_DNS_LOOKUP;
+
     /**
      * <code>enable.auto.commit</code>
      */
@@ -253,7 +256,7 @@ public class ConsumerConfig extends AbstractConfig {
             " return the LSO";
 
     public static final String DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT);
-    
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -261,6 +264,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         new ConfigDef.NonNullValidator(),
                                         Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+                                .define(BOOTSTRAP_REVERSE_DNS_LOOKUP, Type.BOOLEAN, false, Importance.MEDIUM, CommonClientConfigs.BOOTSTRAP_REVERSE_DNS_LOOKUP_DOC)
                                 .define(GROUP_ID_CONFIG, Type.STRING, "", Importance.HIGH, GROUP_ID_DOC)
                                 .define(SESSION_TIMEOUT_MS_CONFIG,
                                         Type.INT,
