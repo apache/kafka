@@ -468,12 +468,12 @@ public class StreamsConfig extends AbstractConfig {
                     COMMIT_INTERVAL_MS_DOC)
             .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
                     ConfigDef.Type.LONG,
-                    9 * 60 * 1000,
+                    9 * 60 * 1000L,
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
             .define(METADATA_MAX_AGE_CONFIG,
                     ConfigDef.Type.LONG,
-                    5 * 60 * 1000,
+                    5 * 60 * 1000L,
                     atLeast(0),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.METADATA_MAX_AGE_DOC)
@@ -496,7 +496,7 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
             .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
                     Type.LONG,
-                    30000,
+                    30000L,
                     atLeast(0),
                     Importance.LOW,
                     CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
@@ -507,7 +507,7 @@ public class StreamsConfig extends AbstractConfig {
                     PARTITION_GROUPER_CLASS_DOC)
             .define(POLL_MS_CONFIG,
                     Type.LONG,
-                    100,
+                    100L,
                     Importance.LOW,
                     POLL_MS_DOC)
             .define(RECEIVE_BUFFER_CONFIG,
@@ -559,12 +559,12 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.SEND_BUFFER_DOC)
             .define(STATE_CLEANUP_DELAY_MS_CONFIG,
                     Type.LONG,
-                    10 * 60 * 1000,
+                    10 * 60 * 1000L,
                     Importance.LOW,
                     STATE_CLEANUP_DELAY_MS_DOC)
             .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
                     Type.LONG,
-                    24 * 60 * 60 * 1000,
+                    24 * 60 * 60 * 1000L,
                     Importance.LOW,
                     WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC)
 
