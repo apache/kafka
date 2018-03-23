@@ -287,19 +287,21 @@ public class SslFactory implements Reconfigurable {
             this.keyPassword = keyPassword;
         }
 
-        KeyStore load() throws IOException {
-            FileInputStream in = null;
-            try {
+        /**
+         * Loads this keystore
+         * @return the keystore
+         * @throws KafkaException if the file could not be read or if the keystore could not be loaded
+         *   using the specified configs (e.g. if the password or keystore type is invalid)
+         */
+        KeyStore load() {
+            try (FileInputStream in = new FileInputStream(path)) {
                 KeyStore ks = KeyStore.getInstance(type);
-                in = new FileInputStream(path);
                 // If a password is not set access to the truststore is still available, but integrity checking is disabled.
                 char[] passwordChars = password != null ? password.value().toCharArray() : null;
                 ks.load(in, passwordChars);
                 return ks;
             } catch (GeneralSecurityException | IOException e) {
                 throw new KafkaException("Failed to load SSL keystore " + path + " of type " + type, e);
-            } finally {
-                if (in != null) in.close();
             }
         }
     }
