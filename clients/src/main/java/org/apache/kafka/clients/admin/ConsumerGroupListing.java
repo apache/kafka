@@ -51,6 +51,9 @@ public class ConsumerGroupListing {
 
     @Override
     public String toString() {
-        return "(isSimpleConsumerGroup=" + isSimpleConsumerGroup + ")";
+        return "(" +
+            "groupId='" + groupId + '\'' +
+            ", isSimpleConsumerGroup=" + isSimpleConsumerGroup +
+            ')';
     }
 }
