@@ -239,9 +239,6 @@ class StreamsSmokeTestBaseService(KafkaPathResolverMixin, Service):
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
 
-        if len(self.pids(node)) == 0:
-            raise RuntimeError("No process ids recorded")
-
 
 class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
     def __init__(self, context, kafka):
