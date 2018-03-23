@@ -474,11 +474,9 @@ class WorkerSinkTask extends WorkerTask {
                 exceptionCheckForKeyAndSchema = false;
                 valueAndSchema = valueConverter.toConnectData(msg.topic(), msg.value());
             } catch (DataException e) {
-                if(exceptionCheckForKeyAndSchema) {
+                if (exceptionCheckForKeyAndSchema) {
                     log.error("Failed to convert message Key to Kafka Connect format", e);
-
-                }
-                else {
+                } else {
                     log.error("Failed to convert message Value to Kafka Connect format", e);
                 }
                 throw new ConnectException("Exiting WorkerSinkTask due to unconverted message to Kafka Connect format exception", e);
