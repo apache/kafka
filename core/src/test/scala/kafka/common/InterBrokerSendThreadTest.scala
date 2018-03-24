@@ -16,7 +16,6 @@
  */
 package kafka.common
 
-import org.junit.{Assert, Test}
 import kafka.utils.MockTime
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
@@ -25,6 +24,7 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.utils.Utils
 import org.easymock.EasyMock
+import org.junit.{Assert, Test}
 
 import scala.collection.mutable
 
@@ -42,13 +42,14 @@ class InterBrokerSendThreadTest {
 
     // poll is always called but there should be no further invocations on NetworkClient
     EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
-    .andReturn(Utils.mkList())
+      .andReturn(Utils.mkList())
 
     EasyMock.replay(networkClient)
 
     sendThread.doWork()
 
     EasyMock.verify(networkClient)
+    Assert.assertFalse(completionHandler.executedWithDisconnectedResponse)
   }
 
   @Test
@@ -68,10 +69,10 @@ class InterBrokerSendThreadTest {
       EasyMock.anyLong(),
       EasyMock.eq(true),
       EasyMock.same(handler.handler)))
-    .andReturn(clientRequest)
+      .andReturn(clientRequest)
 
     EasyMock.expect(networkClient.ready(node, time.milliseconds()))
-    .andReturn(true)
+      .andReturn(true)
 
     EasyMock.expect(networkClient.send(clientRequest, time.milliseconds()))
 
@@ -83,6 +84,7 @@ class InterBrokerSendThreadTest {
     sendThread.doWork()
 
     EasyMock.verify(networkClient)
+    Assert.assertFalse(completionHandler.executedWithDisconnectedResponse)
   }
 
   @Test
@@ -124,6 +126,7 @@ class InterBrokerSendThreadTest {
     sendThread.doWork()
 
     EasyMock.verify(networkClient)
+    Assert.assertTrue(completionHandler.executedWithDisconnectedResponse)
   }
 
   @Test
@@ -166,6 +169,7 @@ class InterBrokerSendThreadTest {
 
     EasyMock.verify(networkClient)
     Assert.assertFalse(sendThread.hasUnsentRequests)
+    Assert.assertTrue(completionHandler.executedWithDisconnectedResponse)
   }
 
 
@@ -174,8 +178,10 @@ class InterBrokerSendThreadTest {
   }
 
   private class StubCompletionHandler extends RequestCompletionHandler {
+    var executedWithDisconnectedResponse = false
     var response: ClientResponse = _
     override def onComplete(response: ClientResponse): Unit = {
+      this.executedWithDisconnectedResponse = response.wasDisconnected()
       this.response = response
     }
   }
