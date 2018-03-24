@@ -202,6 +202,9 @@ class ReplicaStateMachine(config: KafkaConfig,
             deletePartition = false, (_, _) => ())
         }
         val replicasToRemoveFromIsr = validReplicas.filter(replica => controllerContext.partitionLeadershipInfo.contains(replica.topicPartition))
+        validReplicas.filterNot(replica => controllerContext.partitionLeadershipInfo.contains(replica.topicPartition)).foreach { replica =>
+          logFailedStateChange(replica, replicaState(replica), targetState, new IllegalStateException(s"No leadership info found for the replica $replica"))
+        }
         val updatedLeaderIsrAndControllerEpochs = removeReplicasFromIsr(replicaId, replicasToRemoveFromIsr.map(_.topicPartition))
         updatedLeaderIsrAndControllerEpochs.foreach { case (partition, leaderIsrAndControllerEpoch) =>
           if (!topicDeletionManager.isPartitionToBeDeleted(partition)) {
