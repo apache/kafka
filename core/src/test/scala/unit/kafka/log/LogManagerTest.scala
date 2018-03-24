@@ -335,7 +335,7 @@ class LogManagerTest {
 
     time.sleep(logManager.InitialTaskDelayMs)
     assertTrue("Logs deleted too early", logManager.hasLogsToBeDeleted)
-    time.sleep(logManager.currentDefaultConfig.fileDeleteDelayMs)
+    time.sleep(logManager.currentDefaultConfig.fileDeleteDelayMs - logManager.InitialTaskDelayMs)
     assertFalse("Logs not deleted", logManager.hasLogsToBeDeleted)
   }
 }
