@@ -39,7 +39,7 @@ abstract class InterBrokerSendThread(name: String,
 
   def generateRequests(): Iterable[RequestAndCompletionHandler]
   def unsentExpiryMs: Int
-  private var unsentRequests = new UnsentRequests
+  private val unsentRequests = new UnsentRequests
 
   def hasUnsentRequests = unsentRequests.iterator().hasNext
 
@@ -137,7 +137,7 @@ case class RequestAndCompletionHandler(destination: Node, request: AbstractReque
                                        handler: RequestCompletionHandler)
 
 private class UnsentRequests {
-  private var unsent = new HashMap[Node, ArrayDeque[ClientRequest]]
+  private val unsent = new HashMap[Node, ArrayDeque[ClientRequest]]
 
   def put(node: Node, request: ClientRequest): Unit = {
     var requests = unsent.get(node)
