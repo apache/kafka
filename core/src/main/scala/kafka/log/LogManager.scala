@@ -79,12 +79,14 @@ class LogManager(logDirs: Seq[File],
   private val logsToBeDeleted = new LinkedBlockingQueue[(Log, Long)]()
 
   private val _liveLogDirs: ConcurrentLinkedQueue[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
-  @volatile var currentDefaultConfig = initialDefaultConfig
+  @volatile private var _currentDefaultConfig = initialDefaultConfig
   @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
 
   def reconfigureDefaultLogConfig(logConfig: LogConfig): Unit = {
-    this.currentDefaultConfig = logConfig
+    this._currentDefaultConfig = logConfig
   }
+
+  def currentDefaultConfig: LogConfig = _currentDefaultConfig
 
   def liveLogDirs: Seq[File] = {
     if (_liveLogDirs.size == logDirs.size)
@@ -244,6 +246,9 @@ class LogManager(logDirs: Seq[File],
   private def addLogToBeDeleted(log: Log): Unit = {
     this.logsToBeDeleted.add((log, time.milliseconds()))
   }
+
+  // Only for testing
+  private[log] def hasLogsToBeDeleted: Boolean = !logsToBeDeleted.isEmpty
 
   private def loadLog(logDir: File, recoveryPoints: Map[TopicPartition, Long], logStartOffsets: Map[TopicPartition, Long]): Unit = {
     debug("Loading log '" + logDir.getName + "'")
@@ -708,13 +713,17 @@ class LogManager(logDirs: Seq[File],
    */
   private def deleteLogs(): Unit = {
     try {
-      while (!logsToBeDeleted.isEmpty) {
-        val (removedLog, scheduleTimeMs) = logsToBeDeleted.take()
+      def hasDeletableLog: Boolean = {
+        if (!logsToBeDeleted.isEmpty) {
+          val (_, scheduleTimeMs) = logsToBeDeleted.peek()
+          scheduleTimeMs + currentDefaultConfig.fileDeleteDelayMs - time.milliseconds() <= 0
+        } else
+          false
+      }
+      while (hasDeletableLog) {
+        val (removedLog, _) = logsToBeDeleted.take()
         if (removedLog != null) {
           try {
-            val waitingTimeMs = scheduleTimeMs + currentDefaultConfig.fileDeleteDelayMs - time.milliseconds()
-            if (waitingTimeMs > 0)
-              Thread.sleep(waitingTimeMs)
             removedLog.delete()
             info(s"Deleted log for partition ${removedLog.topicPartition} in ${removedLog.dir.getAbsolutePath}.")
           } catch {

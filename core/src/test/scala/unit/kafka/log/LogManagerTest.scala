@@ -332,5 +332,10 @@ class LogManagerTest {
       assertNotEquals("File reference was not updated in index", fileBeforeDelete.getAbsolutePath,
         fileInIndex.get.getAbsolutePath)
     }
+
+    time.sleep(logManager.InitialTaskDelayMs)
+    assertTrue("Logs deleted too early", logManager.hasLogsToBeDeleted)
+    time.sleep(logManager.currentDefaultConfig.fileDeleteDelayMs)
+    assertFalse("Logs not deleted", logManager.hasLogsToBeDeleted)
   }
 }
