@@ -32,7 +32,7 @@ class ControllerContext {
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion - 1
   var allTopics: Set[String] = Set.empty
   private var partitionReplicaAssignmentUnderlying: mutable.Map[String, mutable.Map[Int, Seq[Int]]] = mutable.Map.empty
-  var partitionLeadershipInfo: mutable.Map[TopicPartition, LeaderIsrAndControllerEpoch] = mutable.Map.empty
+  val partitionLeadershipInfo: mutable.Map[TopicPartition, LeaderIsrAndControllerEpoch] = mutable.Map.empty
   val partitionsBeingReassigned: mutable.Map[TopicPartition, ReassignedPartitionsContext] = mutable.Map.empty
   val replicasOnOfflineDirs: mutable.Map[Int, Set[TopicPartition]] = mutable.Map.empty
 
@@ -44,23 +44,23 @@ class ControllerContext {
       .getOrElse(topicPartition.partition, Seq.empty)
   }
 
-  def clearPartitionReplicaAssignment() = {
-    partitionReplicaAssignmentUnderlying = mutable.Map.empty
+  def clearTopicsState(): Unit = {
+    allTopics = Set.empty
+    partitionReplicaAssignmentUnderlying.clear()
+    partitionLeadershipInfo.clear()
+    partitionsBeingReassigned.clear()
+    replicasOnOfflineDirs.clear()
   }
 
-  def updatePartitionReplicaAssignment(topicPartition: TopicPartition, newReplicas : Seq[Int]) = {
+  def updatePartitionReplicaAssignment(topicPartition: TopicPartition, newReplicas: Seq[Int]) : Unit = {
     partitionReplicaAssignmentUnderlying.getOrElseUpdate(topicPartition.topic, mutable.Map.empty)
       .put(topicPartition.partition, newReplicas)
   }
 
-  def partitionReplicaAssignmentForTopic(topic : String) : mutable.Map[TopicPartition, Seq[Int]] = {
-    partitionReplicaAssignmentUnderlying.getOrElse(topic, mutable.Map.empty).map {
+  def partitionReplicaAssignmentForTopic(topic : String) : Map[TopicPartition, Seq[Int]] = {
+    partitionReplicaAssignmentUnderlying.getOrElse(topic, Map.empty).map {
       case (partition, replicas) => (new TopicPartition(topic, partition), replicas)
-    }
-  }
-
-  def removePartitionReplicaAssignmentForTopic(topic : String) = {
-    partitionReplicaAssignmentUnderlying.remove(topic)
+    }.toMap
   }
 
   def allPartitions : Set[TopicPartition] = {
@@ -138,10 +138,24 @@ class ControllerContext {
     }
   }
 
-  def removeTopic(topic: String) = {
-    partitionLeadershipInfo = partitionLeadershipInfo.filter { case (topicPartition, _) => topicPartition.topic != topic }
-    partitionReplicaAssignmentUnderlying.remove(topic)
-    allTopics -= topic
+  def resetContext() : Unit = {
+    if (controllerChannelManager != null) {
+      controllerChannelManager.shutdown()
+      controllerChannelManager = null
+    }
+    shuttingDownBrokerIds.clear()
+    epoch = 0
+    epochZkVersion = 0
+    clearTopicsState()
+    liveBrokers = Set.empty
   }
 
+  def removeTopic(topic: String) = {
+    allTopics -= topic
+    partitionReplicaAssignmentUnderlying.remove(topic)
+    partitionLeadershipInfo.foreach {
+      case (topicPartition, _) if topicPartition.topic == topic => partitionLeadershipInfo.remove(topicPartition)
+      case _ =>
+    }
+  }
 }
