@@ -36,7 +36,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
@@ -467,20 +466,9 @@ class WorkerSinkTask extends WorkerTask {
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
             final SchemaAndValue keyAndSchema;
             final SchemaAndValue valueAndSchema;
-            boolean exceptionCheckForKeyAndSchema = true;
 
-            try {
-                keyAndSchema = keyConverter.toConnectData(msg.topic(), msg.key());
-                exceptionCheckForKeyAndSchema = false;
-                valueAndSchema = valueConverter.toConnectData(msg.topic(), msg.value());
-            } catch (DataException e) {
-                if (exceptionCheckForKeyAndSchema) {
-                    log.error("Failed to convert message Key to Kafka Connect format", e);
-                } else {
-                    log.error("Failed to convert message Value to Kafka Connect format", e);
-                }
-                throw new ConnectException("Exiting WorkerSinkTask due to unconverted message to Kafka Connect format exception", e);
-            }
+            keyAndSchema = toConnectData(keyConverter, "key", msg, msg.key());
+            valueAndSchema = toConnectData(valueConverter, "value", msg, msg.value());
             Headers headers = convertHeadersFor(msg);
             Long timestamp = ConnectUtils.checkAndConvertTimestamp(msg.timestamp());
             SinkRecord origRecord = new SinkRecord(msg.topic(), msg.partition(),
@@ -505,6 +493,16 @@ class WorkerSinkTask extends WorkerTask {
             }
         }
         sinkTaskMetricsGroup.recordConsumedOffsets(origOffsets);
+    }
+
+    private SchemaAndValue toConnectData(Converter converter, String converterName, ConsumerRecord<byte[], byte[]> msg, byte[] data) {
+        try {
+            return converter.toConnectData(msg.topic(), data);
+        } catch (Throwable e) {
+            String str = String.format("Error converting message %s in topic '%s' partition %d at offset %d and timestamp %d",
+                    converterName, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
+            throw new ConnectException(str, e);
+        }
     }
 
     private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {
