@@ -14,7 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.scala.kstream
+package org.apache.kafka.streams.scala
+package kstream
 
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{KStream => KStreamJ, _}
@@ -92,7 +93,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
       new Transformer[K, V, KeyValue[K1, V1]] {
         override def transform(key: K, value: V): KeyValue[K1, V1] = {
           transformerS.transform(key, value) match {
-            case (k1,v1) => KeyValue.pair(k1, v1)
+            case (k1, v1) => KeyValue.pair(k1, v1)
             case _ => null
           }
         }

@@ -14,7 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.scala.kstream
+package org.apache.kafka.streams.scala
+package kstream
 
 import org.apache.kafka.streams.kstream.{TimeWindowedKStream => TimeWindowedKStreamJ, _}
 import org.apache.kafka.streams.state.WindowStore
@@ -46,12 +47,10 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
     c.mapValues[Long](Long2long(_))
   }
 
-  def count(store: String, keySerde: Option[Serde[K]] = None): KTable[Windowed[K], Long] = {
-    val materialized = {
-      val m = Materialized.as[K, java.lang.Long, WindowStore[Bytes, Array[Byte]]](store)
-      keySerde.foldLeft(m)((m,serde)=> m.withKeySerde(serde))
-    }
-    val c: KTable[Windowed[K], java.lang.Long] = inner.count(materialized)
+  def count(store: String,
+    materialized: Materialized[K, Long, WindowStore[Bytes, Array[Byte]]]): KTable[Windowed[K], Long] = {
+    val c: KTable[Windowed[K], java.lang.Long] = 
+      inner.count(materialized.asInstanceOf[Materialized[K, java.lang.Long, WindowStore[Bytes, Array[Byte]]]])
     c.mapValues[Long](Long2long(_))
   }
 

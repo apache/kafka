@@ -14,7 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.scala.kstream
+package org.apache.kafka.streams.scala
+package kstream
 
 import org.apache.kafka.streams.kstream.{SessionWindowedKStream => SessionWindowedKStreamJ, _}
 import org.apache.kafka.streams.state.SessionStore

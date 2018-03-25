@@ -14,11 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.scala.kstream
+package org.apache.kafka.streams.scala
+package kstream
 
 import org.apache.kafka.streams.kstream.{KGroupedTable => KGroupedTableJ, _}
-import org.apache.kafka.streams.state.KeyValueStore
-import org.apache.kafka.common.utils.Bytes
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.FunctionConversions._
 
@@ -26,8 +25,6 @@ import org.apache.kafka.streams.scala.FunctionConversions._
  * Wraps the Java class KGroupedTable and delegates method calls to the underlying Java object.
  */
 class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
-
-  type ByteArrayKVStore = KeyValueStore[Bytes, Array[Byte]]
 
   def count(): KTable[K, Long] = {
     val c: KTable[K, java.lang.Long] = inner.count()

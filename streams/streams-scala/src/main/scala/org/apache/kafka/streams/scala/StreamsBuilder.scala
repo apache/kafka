@@ -18,10 +18,9 @@ package org.apache.kafka.streams.scala
 
 import java.util.regex.Pattern
 
-import org.apache.kafka.common.utils.Bytes
 import org.apache.kafka.streams.kstream.{GlobalKTable, Materialized}
 import org.apache.kafka.streams.processor.{ProcessorSupplier, StateStore}
-import org.apache.kafka.streams.state.{KeyValueStore, StoreBuilder}
+import org.apache.kafka.streams.state.StoreBuilder
 import org.apache.kafka.streams.{Consumed, StreamsBuilder => StreamsBuilderJ, Topology}
 
 import org.apache.kafka.streams.scala.kstream._
@@ -45,14 +44,14 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
   def table[K, V](topic: String)(implicit consumed: Consumed[K, V]): KTable[K, V] =
     inner.table[K, V](topic, consumed)
 
-  def table[K, V](topic: String, materialized: Materialized[K, V, KeyValueStore[Bytes, Array[Byte]]])
+  def table[K, V](topic: String, materialized: Materialized[K, V, ByteArrayKVStore])
     (implicit consumed: Consumed[K, V]): KTable[K, V] =
     inner.table[K, V](topic, consumed, materialized)
 
   def globalTable[K, V](topic: String)(implicit consumed: Consumed[K, V]): GlobalKTable[K, V] =
     inner.globalTable(topic, consumed)
 
-  def globalTable[K, V](topic: String, materialized: Materialized[K, V, KeyValueStore[Bytes, Array[Byte]]])
+  def globalTable[K, V](topic: String, materialized: Materialized[K, V, ByteArrayKVStore])
     (implicit consumed: Consumed[K, V]): GlobalKTable[K, V] =
     inner.globalTable(topic, consumed, materialized)
 

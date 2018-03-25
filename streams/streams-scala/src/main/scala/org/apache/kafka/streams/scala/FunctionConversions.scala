@@ -47,7 +47,7 @@ object FunctionConversions {
     def asValueMapper: ValueMapper[V, VR] = v => f(v)
   }
 
-  implicit class ValueMapperFromFunctionX[V, VR](val f: V => Iterable[VR]) extends AnyVal {
+  implicit class FlatValueMapperFromFunction[V, VR](val f: V => Iterable[VR]) extends AnyVal {
     def asValueMapper: ValueMapper[V, java.lang.Iterable[VR]] = v => f(v).asJava
   }
 
@@ -55,7 +55,7 @@ object FunctionConversions {
     def asValueMapperWithKey: ValueMapperWithKey[K, V, VR] = (k, v) => f(k, v)
   }
 
-  implicit class ValueMapperWithKeyFromFunctionX[K, V, VR](val f: (K, V) => Iterable[VR]) extends AnyVal {
+  implicit class FlatValueMapperWithKeyFromFunction[K, V, VR](val f: (K, V) => Iterable[VR]) extends AnyVal {
     def asValueMapperWithKey: ValueMapperWithKey[K, V, java.lang.Iterable[VR]] = (k, v) => f(k, v).asJava
   }
 

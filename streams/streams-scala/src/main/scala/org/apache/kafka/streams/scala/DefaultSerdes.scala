@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.scala
 
+import java.nio.ByteBuffer
 import org.apache.kafka.common.serialization.{Serde, Serdes}
 
 
@@ -30,4 +31,6 @@ object DefaultSerdes {
   implicit val floatSerde: Serde[Float] = Serdes.Float().asInstanceOf[Serde[Float]]
   implicit val doubleSerde: Serde[Double] = Serdes.Double().asInstanceOf[Serde[Double]]
   implicit val integerSerde: Serde[Int] = Serdes.Integer().asInstanceOf[Serde[Int]]
+  implicit val shortSerde: Serde[Short] = Serdes.Short().asInstanceOf[Serde[Short]]
+  implicit val byteBufferSerde: Serde[ByteBuffer] = Serdes.ByteBuffer()
 }

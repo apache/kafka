@@ -14,11 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.scala.kstream
+package org.apache.kafka.streams.scala
+package kstream
 
 import org.apache.kafka.streams.kstream.{KTable => KTableJ, _}
-import org.apache.kafka.streams.state.KeyValueStore
-import org.apache.kafka.common.utils.Bytes
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.FunctionConversions._
 
@@ -32,7 +31,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
   }
 
   def filter(predicate: (K, V) => Boolean,
-    materialized: Materialized[K, V, KeyValueStore[Bytes, Array[Byte]]]): KTable[K, V] = {
+    materialized: Materialized[K, V, ByteArrayKVStore]): KTable[K, V] = {
     inner.filter(predicate.asPredicate, materialized)
   }
 
@@ -41,7 +40,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
   }
 
   def filterNot(predicate: (K, V) => Boolean,
-    materialized: Materialized[K, V, KeyValueStore[Bytes, Array[Byte]]]): KTable[K, V] = {
+    materialized: Materialized[K, V, ByteArrayKVStore]): KTable[K, V] = {
     inner.filterNot(predicate.asPredicate, materialized)
   }
 
@@ -50,7 +49,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
   }
 
   def mapValues[VR](mapper: V => VR,
-    materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]]): KTable[K, VR] = {
+    materialized: Materialized[K, VR, ByteArrayKVStore]): KTable[K, VR] = {
     inner.mapValues[VR](mapper.asValueMapper, materialized)
   }
 
@@ -72,7 +71,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
 
   def join[VO, VR](other: KTable[K, VO],
     joiner: (V, VO) => VR,
-    materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]]): KTable[K, VR] = {
+    materialized: Materialized[K, VR, ByteArrayKVStore]): KTable[K, VR] = {
 
     inner.join[VO, VR](other.inner, joiner.asValueJoiner, materialized)
   }
@@ -85,7 +84,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
 
   def leftJoin[VO, VR](other: KTable[K, VO],
     joiner: (V, VO) => VR,
-    materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]]): KTable[K, VR] = {
+    materialized: Materialized[K, VR, ByteArrayKVStore]): KTable[K, VR] = {
 
     inner.leftJoin[VO, VR](other.inner, joiner.asValueJoiner, materialized)
   }
@@ -98,7 +97,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
 
   def outerJoin[VO, VR](other: KTable[K, VO],
     joiner: (V, VO) => VR,
-    materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]]): KTable[K, VR] = {
+    materialized: Materialized[K, VR, ByteArrayKVStore]): KTable[K, VR] = {
 
     inner.outerJoin[VO, VR](other.inner, joiner.asValueJoiner, materialized)
   }
