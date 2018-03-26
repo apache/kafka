@@ -286,7 +286,7 @@ public final class WorkerUtils {
      * where partitions are in range [startPartition, endPartition]
      * @param adminClient     AdminClient
      * @param topicRegex      Topic regular expression to match
-     * @return list of topic names
+     * @return                List of topic names
      * @throws Throwable      If failed to get list of existing topics
      */
     static Collection<TopicPartition> getMatchingTopicPartitions(

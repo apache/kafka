@@ -35,13 +35,13 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -266,19 +266,42 @@ public class WorkerUtilsTest {
     }
 
     @Test
-    public void testGetMatchingTopicPartitionsCorrectlyMatchesTopics() throws Throwable {
+    public void testGetMatchingTopicPartitionsCorrectlyMatchesExactTopicName() throws Throwable {
         final String topic1 = "existing-topic";
         final String topic2 = "another-topic";
-        final String topic3 = "one-more-topic";
+        makeExistingTopicWithOneReplica(topic1, 10);
+        makeExistingTopicWithOneReplica(topic2, 20);
+
+        Collection<TopicPartition> topicPartitions =
+            WorkerUtils.getMatchingTopicPartitions(adminClient, topic2, 0, 2);
+        assertEquals(
+            new HashSet<>(Arrays.asList(
+                new TopicPartition(topic2, 0), new TopicPartition(topic2, 1),
+                new TopicPartition(topic2, 2)
+            )),
+            new HashSet<>(topicPartitions)
+        );
+    }
+
+    @Test
+    public void testGetMatchingTopicPartitionsCorrectlyMatchesTopics() throws Throwable {
+        final String topic1 = "test-topic";
+        final String topic2 = "another-test-topic";
+        final String topic3 = "one-more";
         makeExistingTopicWithOneReplica(topic1, 10);
         makeExistingTopicWithOneReplica(topic2, 20);
         makeExistingTopicWithOneReplica(topic3, 30);
 
         Collection<TopicPartition> topicPartitions =
-            WorkerUtils.getMatchingTopicPartitions(adminClient, topic3, 0, 2);
-        assertTrue(topicPartitions.containsAll(
-            Arrays.asList(new TopicPartition(topic3, 0), new TopicPartition(topic3, 1))
-        ));
+            WorkerUtils.getMatchingTopicPartitions(adminClient, ".*-topic$", 0, 1);
+
+        assertEquals(
+            new HashSet<>(Arrays.asList(
+                new TopicPartition(topic1, 0), new TopicPartition(topic1, 1),
+                new TopicPartition(topic2, 0), new TopicPartition(topic2, 1)
+            )),
+            new HashSet<>(topicPartitions)
+        );
     }
 
     private void makeExistingTopicWithOneReplica(String topicName, int numPartitions) {
