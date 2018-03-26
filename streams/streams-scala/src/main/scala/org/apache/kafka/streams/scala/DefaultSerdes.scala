@@ -18,6 +18,9 @@ package org.apache.kafka.streams.scala
 
 import java.nio.ByteBuffer
 import org.apache.kafka.common.serialization.{Serde, Serdes}
+import org.apache.kafka.streams.kstream.WindowedSerdes
+import org.apache.kafka.streams.kstream.WindowedSerdes.TimeWindowedSerde
+import org.apache.kafka.streams.kstream.WindowedSerdes.SessionWindowedSerde
 
 
 /**
@@ -33,4 +36,7 @@ object DefaultSerdes {
   implicit val integerSerde: Serde[Int] = Serdes.Integer().asInstanceOf[Serde[Int]]
   implicit val shortSerde: Serde[Short] = Serdes.Short().asInstanceOf[Serde[Short]]
   implicit val byteBufferSerde: Serde[ByteBuffer] = Serdes.ByteBuffer()
+
+  implicit def timeWindowedSerde[T]: WindowedSerdes.TimeWindowedSerde[T] = new WindowedSerdes.TimeWindowedSerde[T]()
+  implicit def sessionWindowedSerde[T]: WindowedSerdes.SessionWindowedSerde[T] = new WindowedSerdes.SessionWindowedSerde[T]()
 }
