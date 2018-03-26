@@ -2151,8 +2151,8 @@ public class KafkaAdminClient extends AdminClient {
 
                                         final MemberDescription memberDescription =
                                             new MemberDescription(
-                                                groupMember.clientId(),
                                                 groupMember.memberId(),
+                                                groupMember.clientId(),
                                                 groupMember.clientHost(),
                                                 new MemberAssignment(assignment.partitions()));
                                         consumers.add(memberDescription);

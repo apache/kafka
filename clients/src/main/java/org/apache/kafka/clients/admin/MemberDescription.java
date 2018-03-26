@@ -22,7 +22,7 @@ package org.apache.kafka.clients.admin;
  */
 public class MemberDescription {
 
-    private final String consumerId;
+    private final String memberId;
     private final String clientId;
     private final String host;
     private final MemberAssignment assignment;
@@ -30,13 +30,13 @@ public class MemberDescription {
     /**
      * Creates an instance with the specified parameters.
      *
-     * @param consumerId The consumer id
+     * @param memberId The consumer id
      * @param clientId   The client id
      * @param host       The host
      * @param assignment The assignment
      */
-    public MemberDescription(String consumerId, String clientId, String host, MemberAssignment assignment) {
-        this.consumerId = consumerId;
+    public MemberDescription(String memberId, String clientId, String host, MemberAssignment assignment) {
+        this.memberId = memberId;
         this.clientId = clientId;
         this.host = host;
         this.assignment = assignment;
@@ -49,14 +49,14 @@ public class MemberDescription {
 
         MemberDescription that = (MemberDescription) o;
 
-        if (consumerId != null ? !consumerId.equals(that.consumerId) : that.consumerId != null) return false;
+        if (memberId != null ? !memberId.equals(that.memberId) : that.memberId != null) return false;
         if (clientId != null ? !clientId.equals(that.clientId) : that.clientId != null) return false;
         return assignment != null ? assignment.equals(that.assignment) : that.assignment == null;
     }
 
     @Override
     public int hashCode() {
-        int result = consumerId != null ? consumerId.hashCode() : 0;
+        int result = memberId != null ? memberId.hashCode() : 0;
         result = 31 * result + (clientId != null ? clientId.hashCode() : 0);
         result = 31 * result + (assignment != null ? assignment.hashCode() : 0);
         return result;
@@ -66,7 +66,7 @@ public class MemberDescription {
      * The consumer id of the group member.
      */
     public String consumerId() {
-        return consumerId;
+        return memberId;
     }
 
     /**
@@ -92,7 +92,7 @@ public class MemberDescription {
 
     @Override
     public String toString() {
-        return "(consumerId=" + consumerId + ", clientId=" + clientId + ", host=" + host + ", assignment=" +
+        return "(memberId=" + memberId + ", clientId=" + clientId + ", host=" + host + ", assignment=" +
             assignment + ")";
     }
 }
