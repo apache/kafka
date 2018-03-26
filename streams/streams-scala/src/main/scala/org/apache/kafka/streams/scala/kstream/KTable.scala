@@ -31,7 +31,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
   }
 
   def filter(predicate: (K, V) => Boolean,
-    materialized: Materialized[K, V, ByteArrayKVStore]): KTable[K, V] = {
+    materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] = {
     inner.filter(predicate.asPredicate, materialized)
   }
 
@@ -40,7 +40,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
   }
 
   def filterNot(predicate: (K, V) => Boolean,
-    materialized: Materialized[K, V, ByteArrayKVStore]): KTable[K, V] = {
+    materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] = {
     inner.filterNot(predicate.asPredicate, materialized)
   }
 
@@ -49,7 +49,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
   }
 
   def mapValues[VR](mapper: V => VR,
-    materialized: Materialized[K, VR, ByteArrayKVStore]): KTable[K, VR] = {
+    materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] = {
     inner.mapValues[VR](mapper.asValueMapper, materialized)
   }
 
@@ -71,7 +71,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
 
   def join[VO, VR](other: KTable[K, VO],
     joiner: (V, VO) => VR,
-    materialized: Materialized[K, VR, ByteArrayKVStore]): KTable[K, VR] = {
+    materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] = {
 
     inner.join[VO, VR](other.inner, joiner.asValueJoiner, materialized)
   }
@@ -84,7 +84,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
 
   def leftJoin[VO, VR](other: KTable[K, VO],
     joiner: (V, VO) => VR,
-    materialized: Materialized[K, VR, ByteArrayKVStore]): KTable[K, VR] = {
+    materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] = {
 
     inner.leftJoin[VO, VR](other.inner, joiner.asValueJoiner, materialized)
   }
@@ -97,7 +97,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
 
   def outerJoin[VO, VR](other: KTable[K, VO],
     joiner: (V, VO) => VR,
-    materialized: Materialized[K, VR, ByteArrayKVStore]): KTable[K, VR] = {
+    materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] = {
 
     inner.outerJoin[VO, VR](other.inner, joiner.asValueJoiner, materialized)
   }

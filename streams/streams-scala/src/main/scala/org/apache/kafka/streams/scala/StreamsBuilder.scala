@@ -44,14 +44,14 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
   def table[K, V](topic: String)(implicit consumed: Consumed[K, V]): KTable[K, V] =
     inner.table[K, V](topic, consumed)
 
-  def table[K, V](topic: String, materialized: Materialized[K, V, ByteArrayKVStore])
+  def table[K, V](topic: String, materialized: Materialized[K, V, ByteArrayKeyValueStore])
     (implicit consumed: Consumed[K, V]): KTable[K, V] =
     inner.table[K, V](topic, consumed, materialized)
 
   def globalTable[K, V](topic: String)(implicit consumed: Consumed[K, V]): GlobalKTable[K, V] =
     inner.globalTable(topic, consumed)
 
-  def globalTable[K, V](topic: String, materialized: Materialized[K, V, ByteArrayKVStore])
+  def globalTable[K, V](topic: String, materialized: Materialized[K, V, ByteArrayKeyValueStore])
     (implicit consumed: Consumed[K, V]): GlobalKTable[K, V] =
     inner.globalTable(topic, consumed, materialized)
 
@@ -59,11 +59,9 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
 
   def addGlobalStore(storeBuilder: StoreBuilder[_ <: StateStore],
                      topic: String,
-                     sourceName: String,
                      consumed: Consumed[_, _],
-                     processorName: String,
                      stateUpdateSupplier: ProcessorSupplier[_, _]): StreamsBuilderJ =
-    inner.addGlobalStore(storeBuilder, topic, sourceName, consumed, processorName, stateUpdateSupplier)
+    inner.addGlobalStore(storeBuilder, topic, consumed, stateUpdateSupplier)
 
   def build(): Topology = inner.build()
 }

@@ -312,9 +312,12 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
         <Bug pattern="EQ_UNUSUAL"/>
     </Match>
 
-    <Match>
+-    <Match>
         <Package name="org.apache.kafka.streams.scala"/>
-        <Source name="ScalaSerde.scala"/>
+        <Or>
+            <Class name="org.apache.kafka.streams.scala.Serializer" />
+            <Class name="org.apache.kafka.streams.scala.Deserializer" />
+        </Or>
         <Bug pattern="NM_SAME_SIMPLE_NAME_AS_INTERFACE"/>
     </Match>
 </FindBugsFilter>

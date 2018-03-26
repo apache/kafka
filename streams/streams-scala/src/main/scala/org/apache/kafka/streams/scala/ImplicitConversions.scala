@@ -24,7 +24,7 @@ import org.apache.kafka.streams.kstream.{KStream => KStreamJ,
   KGroupedTable => KGroupedTableJ, _}
 
 import org.apache.kafka.streams.scala.kstream._
-import org.apache.kafka.streams.{ KeyValue, Consumed }
+import org.apache.kafka.streams.{KeyValue, Consumed}
 import org.apache.kafka.common.serialization.Serde
 
 import scala.language.implicitConversions
@@ -68,7 +68,7 @@ object ImplicitConversions {
   implicit def producedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Produced[K, V] =
     Produced.`with`(keySerde, valueSerde)
 
-  implicit def joinedFromKVOSerde[K, V, VO]
+  implicit def joinedFromKeyValueOtherSerde[K, V, VO]
     (implicit keySerde: Serde[K], valueSerde: Serde[V], otherValueSerde: Serde[VO]): Joined[K, V, VO] =
     Joined.`with`(keySerde, valueSerde, otherValueSerde)
 }

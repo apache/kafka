@@ -51,6 +51,7 @@ versions += [
   apacheda: "1.0.0",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
+  avro4sVersion: "1.8.3",
   bcpkix: "1.59",
   easymock: "3.6",
   jackson: "2.9.5",
@@ -68,12 +69,14 @@ versions += [
   kafka_0110: "0.11.0.2",
   kafka_10: "1.0.1",
   lz4: "1.4.1",
+  mavenArtifact: "3.5.2",
   metrics: "2.2.0",
   // PowerMock 1.x doesn't support Java 9, so use PowerMock 2.0.0 beta
   powermock: "2.0.0-beta.5",
   reflections: "0.9.11",
   rocksDB: "5.7.3",
   scalatest: "3.0.5",
+  scalatestEmbeddedKafkaVersion: "1.1.0",
   scoverage: "1.3.1",
   slf4j: "1.7.25",
   snappy: "1.1.7.1",
@@ -87,6 +90,11 @@ versions += [
 
 libs += [
   activation: "javax.activation:activation:$versions.activation",
+  jfreechart: "1.0.0"
+]
+
+libs += [
+  avro4s: "com.sksamuel.avro4s:avro4s-core_$versions.baseScala:$versions.avro4sVersion",
   argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
   apacheda: "org.apache.directory.api:api-all:$versions.apacheda",
   apachedsCoreApi: "org.apache.directory.server:apacheds-core-api:$versions.apacheds",
@@ -128,6 +136,8 @@ libs += [
   scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScala:$versions.scalaLogging",
   scalaReflect: "org.scala-lang:scala-reflect:$versions.scala",
   scalatest: "org.scalatest:scalatest_$versions.baseScala:$versions.scalatest",
+  scalatestEmbeddedKafka: "net.manub:scalatest-embedded-kafka_$versions.baseScala:$versions.scalatestEmbeddedKafkaVersion",
+  scalatestEmbeddedKafkaStreams: "net.manub:scalatest-embedded-kafka-streams_$versions.baseScala:$versions.scalatestEmbeddedKafkaVersion",
   scoveragePlugin: "org.scoverage:scalac-scoverage-plugin_$versions.baseScala:$versions.scoverage",
   scoverageRuntime: "org.scoverage:scalac-scoverage-runtime_$versions.baseScala:$versions.scoverage",
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
@@ -136,8 +146,5 @@ libs += [
   zkclient: "com.101tec:zkclient:$versions.zkclient",
   zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper",
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
-  mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
-  avro4s: "com.sksamuel.avro4s:avro4s-core_$versions.baseScala:$versions.avro4sVersion",
-  scalatestEmbeddedKafka: "net.manub:scalatest-embedded-kafka_$versions.baseScala:$versions.scalatestEmbeddedKafkaVersion",
-  scalatestEmbeddedKafkaStreams: "net.manub:scalatest-embedded-kafka-streams_$versions.baseScala:$versions.scalatestEmbeddedKafkaVersion"
+  mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact"
 ]
