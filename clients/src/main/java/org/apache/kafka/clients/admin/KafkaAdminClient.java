@@ -48,7 +48,6 @@ import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -2105,7 +2104,7 @@ public class KafkaAdminClient extends AdminClient {
             final long nowFindCoordinator = time.milliseconds();
             final long deadline = calcDeadlineMs(nowFindCoordinator, options.timeoutMs());
 
-            runnable.call(new Call("findCoordinator", deadline, new ControllerNodeProvider()) {
+            runnable.call(new Call("findCoordinator", deadline, new LeastLoadedNodeProvider()) {
                 @Override
                 AbstractRequest.Builder createRequest(int timeoutMs) {
                     return new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, groupId);
@@ -2177,11 +2176,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 @Override
                 void handleFailure(Throwable throwable) {
-                    if (throwable instanceof NotCoordinatorException) {
-                        fail(nowFindCoordinator, throwable);
-                    } else {
-                        resultFutures.completeExceptionally(throwable);
-                    }
+                    resultFutures.completeExceptionally(throwable);
                 }
             }, nowFindCoordinator);
         }
@@ -2268,7 +2263,7 @@ public class KafkaAdminClient extends AdminClient {
         final long nowFindCoordinator = time.milliseconds();
         final long deadline = calcDeadlineMs(nowFindCoordinator, options.timeoutMs());
 
-        runnable.call(new Call("findCoordinator", deadline, new ControllerNodeProvider()) {
+        runnable.call(new Call("findCoordinator", deadline, new LeastLoadedNodeProvider()) {
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
                 return new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, groupId);
@@ -2311,11 +2306,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             void handleFailure(Throwable throwable) {
-                if (throwable instanceof NotCoordinatorException) {
-                    fail(nowFindCoordinator, throwable);
-                } else {
-                    groupOffsetListingFuture.completeExceptionally(throwable);
-                }
+                groupOffsetListingFuture.completeExceptionally(throwable);
             }
         }, nowFindCoordinator);
 
@@ -2339,7 +2330,7 @@ public class KafkaAdminClient extends AdminClient {
             final long nowFindCoordinator = time.milliseconds();
             final long deadline = calcDeadlineMs(nowFindCoordinator, options.timeoutMs());
 
-            runnable.call(new Call("findCoordinator", deadline, new ControllerNodeProvider()) {
+            runnable.call(new Call("findCoordinator", deadline, new LeastLoadedNodeProvider()) {
                 @Override
                 AbstractRequest.Builder createRequest(int timeoutMs) {
                     return new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, groupId);
@@ -2388,11 +2379,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 @Override
                 void handleFailure(Throwable throwable) {
-                    if (throwable instanceof NotCoordinatorException) {
-                        fail(nowFindCoordinator, throwable);
-                    } else {
-                        deleteConsumerGroupsFuture.completeExceptionally(throwable);
-                    }
+                    deleteConsumerGroupsFuture.completeExceptionally(throwable);
                 }
             }, nowFindCoordinator);
         }
