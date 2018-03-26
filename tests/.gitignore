@@ -1,0 +1,12 @@
+Vagrantfile.local
+
+.idea/
+
+*.pyc
+*.ipynb
+
+.DS_Store
+
+.ducktape
+results/
+*.json
