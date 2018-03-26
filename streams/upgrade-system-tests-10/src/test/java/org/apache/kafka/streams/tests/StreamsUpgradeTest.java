@@ -17,9 +17,9 @@
 package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -30,7 +30,7 @@ import java.util.Properties;
 public class StreamsUpgradeTest {
 
     /**
-     * This test cannot be run executed, as long as Kafka 0.10.2.2 is not released
+     * This test cannot be run executed, as long as Kafka 1.0.2 is not released
      */
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) {
@@ -42,12 +42,12 @@ public class StreamsUpgradeTest {
         final String stateDir = args[1];
         final String upgradeFrom = args.length > 2 ? args[2] : null;
 
-        System.out.println("StreamsTest instance started (StreamsUpgradeTest v0.10.2)");
+        System.out.println("StreamsTest instance started (StreamsUpgradeTest v1.0)");
         System.out.println("kafka=" + kafka);
         System.out.println("stateDir=" + stateDir);
         System.out.println("upgradeFrom=" + upgradeFrom);
 
-        final KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream dataStream = builder.stream("data");
         dataStream.process(printProcessorSupplier());
         dataStream.to("echo");
@@ -58,12 +58,12 @@ public class StreamsUpgradeTest {
         config.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
         if (upgradeFrom != null) {
-            // TODO: because Kafka 0.10.2.2 is not released yet, thus `UPGRADE_FROM_CONFIG` is not available yet
+            // TODO: because Kafka 1.0.2 is not released yet, thus `UPGRADE_FROM_CONFIG` is not available yet
             //config.setProperty(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom);
             config.setProperty("upgrade.from", upgradeFrom);
         }
 
-        final KafkaStreams streams = new KafkaStreams(builder, config);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), config);
         streams.start();
 
         Runtime.getRuntime().addShutdownHook(new Thread() {

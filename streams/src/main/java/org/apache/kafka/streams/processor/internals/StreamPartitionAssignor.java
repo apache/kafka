@@ -176,7 +176,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     private int userMetadataVersion = SubscriptionInfo.CURRENT_VERSION;
 
-
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsValidator copartitionedTopicsValidator;
 
