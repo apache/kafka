@@ -301,29 +301,33 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public String topic() {
-        if (topic == null)
+        if (topic == null) {
             throw new IllegalStateException("Topic must be set before use via setRecordMetadata() or setTopic().");
+        }
         return topic;
     }
 
     @Override
     public int partition() {
-        if (partition == null)
+        if (partition == null) {
             throw new IllegalStateException("Partition must be set before use via setRecordMetadata() or setPartition().");
+        }
         return partition;
     }
 
     @Override
     public long offset() {
-        if (offset == null)
+        if (offset == null) {
             throw new IllegalStateException("Offset must be set before use via setRecordMetadata() or setOffset().");
+        }
         return offset;
     }
 
     @Override
     public long timestamp() {
-        if (timestamp == null)
+        if (timestamp == null) {
             throw new IllegalStateException("Timestamp must be set before use via setRecordMetadata() or setTimestamp().");
+        }
         return timestamp;
     }
 
