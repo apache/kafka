@@ -95,6 +95,16 @@ public class StreamsConfig extends AbstractConfig {
      */
     public static final String PRODUCER_PREFIX = "producer.";
 
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.0.x}.
+     */
+    public static final String UPGRADE_FROM_0100 = "0.10.0";
+
+    /** {@code upgrade.from} */
+    public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
+    public static final String UPGRADE_FROM_DOC = "Allows upgrading from version 0.10.0 to version 0.10.1 (or newer) in a backward compatible way. " +
+        "Default is null. Accepted values are \"" + UPGRADE_FROM_0100 + "\" (for upgrading from 0.10.0.x).";
+
     /** {@code state.dir} */
     public static final String STATE_DIR_CONFIG = "state.dir";
     private static final String STATE_DIR_DOC = "Directory location for state store.";
@@ -383,7 +393,13 @@ public class StreamsConfig extends AbstractConfig {
                     40 * 1000,
                     atLeast(0),
                     ConfigDef.Importance.MEDIUM,
-                    REQUEST_TIMEOUT_MS_DOC);
+                    REQUEST_TIMEOUT_MS_DOC)
+            .define(UPGRADE_FROM_CONFIG,
+                    ConfigDef.Type.STRING,
+                    null,
+                    in(null, UPGRADE_FROM_0100),
+                    ConfigDef.Importance.LOW,
+                    UPGRADE_FROM_DOC);
     }
 
     // this is the list of configs for underlying clients
@@ -501,6 +517,7 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
 
         // add configs required for stream partition assignor
+        consumerProps.put(UPGRADE_FROM_CONFIG, getString(UPGRADE_FROM_CONFIG));
         consumerProps.put(InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
         consumerProps.put(REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
         consumerProps.put(NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));

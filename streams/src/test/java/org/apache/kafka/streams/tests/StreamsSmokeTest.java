@@ -24,7 +24,7 @@ import java.util.Set;
 public class StreamsSmokeTest {
 
     /**
-     *  args ::= command kafka zookeeper stateDir
+     *  args ::= command kafka zookeeper stateDir disableAutoTerminate
      *  command := "run" | "process"
      *
      * @param args
@@ -33,11 +33,13 @@ public class StreamsSmokeTest {
         String kafka = args[0];
         String stateDir = args.length > 1 ? args[1] : null;
         String command = args.length > 2 ? args[2] : null;
+        boolean disableAutoTerminate = args.length > 3;
 
-        System.out.println("StreamsTest instance started");
+        System.out.println("StreamsTest instance started (StreamsSmokeTest)");
         System.out.println("command=" + command);
         System.out.println("kafka=" + kafka);
         System.out.println("stateDir=" + stateDir);
+        System.out.println("disableAutoTerminate=" + disableAutoTerminate);
 
         switch (command) {
             case "standalone":
@@ -47,8 +49,12 @@ public class StreamsSmokeTest {
                 // this starts the driver (data generation and result verification)
                 final int numKeys = 10;
                 final int maxRecordsPerKey = 500;
-                Map<String, Set<Integer>> allData = SmokeTestDriver.generate(kafka, numKeys, maxRecordsPerKey);
-                SmokeTestDriver.verify(kafka, allData, maxRecordsPerKey);
+                if (disableAutoTerminate) {
+                    SmokeTestDriver.generate(kafka, numKeys, maxRecordsPerKey, false);
+                } else {
+                    Map<String, Set<Integer>> allData = SmokeTestDriver.generate(kafka, numKeys, maxRecordsPerKey);
+                    SmokeTestDriver.verify(kafka, allData, maxRecordsPerKey);
+                }
                 break;
             case "process":
                 // this starts a KafkaStreams client
