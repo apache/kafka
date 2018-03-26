@@ -149,6 +149,7 @@ public class SimpleBenchmark {
         this.keySkew = keySkew;
         this.valueSize = valueSize;
         this.numRecords = numRecords;
+
     }
 
     private void run() {
@@ -260,6 +261,7 @@ public class SimpleBenchmark {
         System.out.println("valueSize=" + valueSize);
 
         SimpleBenchmark benchmark = new SimpleBenchmark(props, kafka, testName, numRecords, keySkew, valueSize);
+
         benchmark.run();
     }
 

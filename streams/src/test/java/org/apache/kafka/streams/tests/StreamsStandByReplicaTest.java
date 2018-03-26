@@ -62,6 +62,12 @@ public class StreamsStandByReplicaTest {
         streamsProperties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsProperties.put(StreamsConfig.producerPrefix(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG), true);
 
+        if (additionalConfigs == null) {
+            System.err.println("additional configs are not provided");
+            System.err.flush();
+            System.exit(1);
+        }
+
         final Map<String, String> updated = SystemTestUtil.parseConfigs(additionalConfigs);
         System.out.println("Updating configs with " + updated);
 

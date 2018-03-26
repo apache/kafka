@@ -37,7 +37,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class EosTestClient extends SmokeTestUtil {
 
     static final String APP_ID = "EosTest";
-
     private final Properties properties;
     private final boolean withRepartitioning;
     private final AtomicBoolean notRunningCallbackReceived = new AtomicBoolean(false);

@@ -44,8 +44,6 @@ public class StreamsBrokerDownResilienceTest {
 
     private static final String SINK_TOPIC = "streamsResilienceSink";
 
-
-
     public static void main(String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("StreamsBrokerDownResilienceTest are expecting two parameters: propFile, additionalConfigs; but only see " + args.length + " parameter");
@@ -88,8 +86,10 @@ public class StreamsBrokerDownResilienceTest {
 
             System.exit(1);
         }
+
         final StreamsBuilder builder = new StreamsBuilder();
         final Serde<String> stringSerde = Serdes.String();
+
         builder.stream(Collections.singletonList(SOURCE_TOPIC_1), Consumed.with(stringSerde, stringSerde))
             .peek(new ForeachAction<String, String>() {
                 int messagesProcessed = 0;
