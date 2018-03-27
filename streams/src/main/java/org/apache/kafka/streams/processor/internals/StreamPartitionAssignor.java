@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
@@ -66,7 +65,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         public final TaskId taskId;
         public final TopicPartition partition;
 
-        public AssignedPartition(TaskId taskId, TopicPartition partition) {
+        AssignedPartition(final TaskId taskId, final TopicPartition partition) {
             this.taskId = taskId;
             this.partition = partition;
         }
@@ -92,6 +91,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     private StreamThread streamThread;
 
+    private int userMetadataVersion = SubscriptionInfo.CURRENT_VERSION;
     private int numStandbyReplicas;
     private Map<Integer, TopologyBuilder.TopicsInfo> topicGroups;
     private Map<TopicPartition, Set<TaskId>> partitionToTaskIds;
@@ -111,6 +111,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     public void configure(Map<String, ?> configs) {
         numStandbyReplicas = (Integer) configs.get(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
 
+        final String upgradeMode = (String) configs.get(StreamsConfig.UPGRADE_FROM_CONFIG);
+        if (StreamsConfig.UPGRADE_FROM_0100.equals(upgradeMode)) {
+            log.info("Downgrading metadata version from 2 to 1 for upgrade from 0.10.0.x.");
+            userMetadataVersion = 1;
+        }
 
         Object o = configs.get(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE);
         if (o == null) {
@@ -174,7 +179,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         Set<TaskId> prevTasks = streamThread.prevTasks();
         Set<TaskId> standbyTasks = streamThread.cachedTasks();
         standbyTasks.removeAll(prevTasks);
-        SubscriptionInfo data = new SubscriptionInfo(streamThread.processId, prevTasks, standbyTasks, this.userEndPointConfig);
+        SubscriptionInfo data = new SubscriptionInfo(userMetadataVersion, streamThread.processId, prevTasks, standbyTasks, this.userEndPointConfig);
 
         if (streamThread.builder.sourceTopicPattern() != null) {
             SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
@@ -265,12 +270,16 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         Map<UUID, ClientState<TaskId>> states = new HashMap<>();
         Map<UUID, HostInfo> consumerEndPointMap = new HashMap<>();
         // decode subscription info
+        int minUserMetadataVersion = SubscriptionInfo.CURRENT_VERSION;
         for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             String consumerId = entry.getKey();
             Subscription subscription = entry.getValue();
 
-
             SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
+            final int usedVersion = info.version;
+            if (usedVersion < minUserMetadataVersion) {
+                minUserMetadataVersion = usedVersion;
+            }
             if (info.userEndPoint != null) {
                 final String[] hostPort = info.userEndPoint.split(":");
                 consumerEndPointMap.put(info.processId, new HostInfo(hostPort[0], Integer.valueOf(hostPort[1])));
@@ -460,6 +469,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
 
                 assignmentSuppliers.add(new AssignmentSupplier(consumer,
+                                                               minUserMetadataVersion,
                                                                active,
                                                                standby,
                                                                endPointMap,
@@ -483,17 +493,20 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     class AssignmentSupplier {
         private final String consumer;
+        private final int metadataVersion;
         private final List<TaskId> active;
         private final Map<TaskId, Set<TopicPartition>> standby;
         private final Map<HostInfo, Set<TopicPartition>> endPointMap;
         private final List<TopicPartition> activePartitions;
 
         AssignmentSupplier(final String consumer,
+                           final int metadataVersion,
                            final List<TaskId> active,
                            final Map<TaskId, Set<TopicPartition>> standby,
                            final Map<HostInfo, Set<TopicPartition>> endPointMap,
                            final List<TopicPartition> activePartitions) {
             this.consumer = consumer;
+            this.metadataVersion = metadataVersion;
             this.active = active;
             this.standby = standby;
             this.endPointMap = endPointMap;
@@ -501,7 +514,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         Assignment get() {
-            return new Assignment(activePartitions, new AssignmentInfo(active,
+            return new Assignment(activePartitions, new AssignmentInfo(metadataVersion,
+                                                                       active,
                                                                        standby,
                                                                        endPointMap).encode());
         }

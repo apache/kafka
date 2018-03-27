@@ -37,27 +37,20 @@ public class SmokeTestUtil {
     public final static long START_TIME = 60000L * 60 * 24 * 365 * 30;
     public final static int END = Integer.MAX_VALUE;
 
-    public static <T> ProcessorSupplier<String, T> printProcessorSupplier(final String topic) {
-        return printProcessorSupplier(topic, false);
-    }
-
-    public static <T> ProcessorSupplier<String, T> printProcessorSupplier(final String topic, final boolean printOffset) {
-        return new ProcessorSupplier<String, T>() {
-            public Processor<String, T> get() {
-                return new AbstractProcessor<String, T>() {
+    public static <K, V> ProcessorSupplier<K, V> printProcessorSupplier(final String topic) {
+        return new ProcessorSupplier<K, V>() {
+            public Processor<K, V> get() {
+                return new AbstractProcessor<K, V>() {
                     private int numRecordsProcessed = 0;
-                    private ProcessorContext context;
 
                     @Override
                     public void init(ProcessorContext context) {
                         System.out.println("initializing processor: topic=" + topic + " taskId=" + context.taskId());
                         numRecordsProcessed = 0;
-                        this.context = context;
                     }
 
                     @Override
-                    public void process(String key, T value) {
-                        if (printOffset) System.out.println(">>> " + context.offset());
+                    public void process(K key, V value) {
                         numRecordsProcessed++;
                         if (numRecordsProcessed % 100 == 0) {
                             System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
@@ -65,12 +58,10 @@ public class SmokeTestUtil {
                     }
 
                     @Override
-                    public void punctuate(long timestamp) {
-                    }
+                    public void punctuate(long timestamp) {}
 
                     @Override
-                    public void close() {
-                    }
+                    public void close() {}
                 };
             }
         };

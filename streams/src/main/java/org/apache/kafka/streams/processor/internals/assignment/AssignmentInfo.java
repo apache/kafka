@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.common.record.ByteBufferInputStream;
@@ -56,7 +55,7 @@ public class AssignmentInfo {
         this(CURRENT_VERSION, activeTasks, standbyTasks, hostState);
     }
 
-    protected AssignmentInfo(int version, List<TaskId> activeTasks, Map<TaskId, Set<TopicPartition>> standbyTasks,
+    public AssignmentInfo(int version, List<TaskId> activeTasks, Map<TaskId, Set<TopicPartition>> standbyTasks,
                              Map<HostInfo, Set<TopicPartition>> hostState) {
         this.version = version;
         this.activeTasks = activeTasks;
@@ -155,9 +154,7 @@ public class AssignmentInfo {
                 }
             }
 
-            return new AssignmentInfo(activeTasks, standbyTasks, hostStateToTopicPartitions);
-
-
+            return new AssignmentInfo(version, activeTasks, standbyTasks, hostStateToTopicPartitions);
         } catch (IOException ex) {
             throw new TaskAssignmentException("Failed to decode AssignmentInfo", ex);
         }
