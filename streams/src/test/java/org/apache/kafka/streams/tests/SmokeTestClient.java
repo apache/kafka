@@ -115,7 +115,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             }
         });
 
-        data.process(SmokeTestUtil.<String, Integer>printProcessorSupplier("data"));
+        data.process(SmokeTestUtil.printProcessorSupplier("data"));
 
         // min
         KGroupedStream<String, Integer>
