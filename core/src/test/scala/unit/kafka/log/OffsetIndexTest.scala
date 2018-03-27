@@ -35,10 +35,11 @@ class OffsetIndexTest extends JUnitSuite {
   
   var idx: OffsetIndex = null
   val maxEntries = 30
+  val baseOffset = 45L
   
   @Before
   def setup() {
-    this.idx = new OffsetIndex(nonExistentTempFile(), baseOffset = 45L, maxIndexSize = 30 * 8)
+    this.idx = new OffsetIndex(nonExistentTempFile(), baseOffset = baseOffset, maxIndexSize = 30 * 8)
   }
   
   @After
@@ -102,10 +103,10 @@ class OffsetIndexTest extends JUnitSuite {
 
   @Test
   def testFetchUpperBoundOffset() {
-    val first = OffsetPosition(0, 0)
-    val second = OffsetPosition(1, 10)
-    val third = OffsetPosition(2, 23)
-    val fourth = OffsetPosition(3, 37)
+    val first = OffsetPosition(baseOffset + 0, 0)
+    val second = OffsetPosition(baseOffset + 1, 10)
+    val third = OffsetPosition(baseOffset + 2, 23)
+    val fourth = OffsetPosition(baseOffset + 3, 37)
 
     assertEquals(None, idx.fetchUpperBoundOffset(first, 5))
 
@@ -176,6 +177,24 @@ class OffsetIndexTest extends JUnitSuite {
     idx.forceUnmap()
     // mmap should be null after unmap causing lookup to throw a NPE
     intercept[NullPointerException](idx.lookup(1))
+  }
+
+  @Test
+  def testIndexOffsetOverflow(): Unit = {
+    val first = OffsetPosition(baseOffset + 0, 0)
+    val second = OffsetPosition(baseOffset + 1, 10)
+    val third = OffsetPosition(baseOffset + 2, 23)
+    val fourth = OffsetPosition(baseOffset + 3, 37)
+    val fifth = OffsetPosition(baseOffset + Integer.MAX_VALUE, 40)
+    val sixth = OffsetPosition(baseOffset + Integer.MAX_VALUE + 1L, 41)
+
+    for (offsetPosition <- Seq(first, second, third, fourth, fifth))
+      idx.append(offsetPosition.offset, offsetPosition.position)
+    assert(5 == idx.entries)
+
+    // try to insert an index entry that would cause offset overflow
+    intercept[InvalidOffsetException] { idx.append(sixth.offset, sixth.position) }
+    assert(5 == idx.entries)
   }
   
   def assertWriteFails[T](message: String, idx: OffsetIndex, offset: Int, klass: Class[T]) {

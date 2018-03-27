@@ -133,16 +133,29 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
   }
 
   /**
+    * Convert given offset to base-relative form. This function throws InvalidOffsetException if the conversion results
+    * in overflow or underflow.
+    * @param offset Offset to convert
+    * @return Base-relative offset
+    * @throws InvalidOffsetException
+    */
+  def getRelativeOffset(offset: Long): Int = {
+    val relativeOffset = (offset - baseOffset)
+    if (relativeOffset > Integer.MAX_VALUE || relativeOffset < 0)
+      throw new InvalidOffsetException(s"Attempt to append offset $offset to offset index with base offset $baseOffset will cause offset overflow")
+    relativeOffset.toInt
+  }
+
+  /**
    * Append an entry for the given offset/location pair to the index. This entry must have a larger offset than all subsequent entries.
    */
   def append(offset: Long, position: Int) {
     inLock(lock) {
       require(!isFull, "Attempt to append to a full index (size = " + _entries + ").")
       if (_entries == 0 || offset > _lastOffset) {
-        val relativeOffset = offset - baseOffset
-        require(relativeOffset <= Integer.MAX_VALUE, "index offset overflow")
+        val relativeOffset = getRelativeOffset(offset)
         debug("Adding index entry %d => %d to %s.".format(offset, position, file.getName))
-        mmap.putInt(relativeOffset.toInt)
+        mmap.putInt(relativeOffset)
         mmap.putInt(position)
         _entries += 1
         _lastOffset = offset

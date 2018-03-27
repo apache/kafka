@@ -93,8 +93,29 @@ class LogSegment private[log] (val log: FileRecords,
   private var rollingBasedTimestamp: Option[Long] = None
 
   /* The maximum timestamp we see so far */
-  @volatile private var maxTimestampSoFar: Long = timeIndex.lastEntry.timestamp
-  @volatile private var offsetOfMaxTimestamp: Long = timeIndex.lastEntry.offset
+  @volatile private var maxTimestampSoFar: Long = _
+  @volatile private var offsetOfMaxTimestamp: Long = _
+
+
+  locally {
+    try {
+      /* For some cases (like KAFKA-6264), it might not be enough to lookup the last entry in time-index because we could
+       * have messages that were appended after time index was last updated. So lookup the last entry and scan messages
+       * that appear after that to make sure we have the correct maximum timestamp and its corresponding offset.
+       * Calling loadLargestTimestamp should not have a performance impact for the normal case where the last entry
+       * was appended successfully during shutdown.
+       */
+      loadLargestTimestamp()
+    } catch {
+      /* Log layer is responsible for initiating recovery of a segment, so ignore the exceptions here */
+      case _: CorruptRecordException |
+           _: CorruptIndexException |
+           _: NoSuchFileException => {
+        maxTimestampSoFar = timeIndex.lastEntry.timestamp
+        offsetOfMaxTimestamp = timeIndex.lastEntry.offset
+      }
+    }
+  }
 
   /* Return the size in bytes of this log segment */
   def size: Int = log.sizeInBytes()
@@ -125,6 +146,9 @@ class LogSegment private[log] (val log: FileRecords,
   }
 
   /**
+   * NOTE: Read the function description carefully. For most cases, you might want to call
+   * append(Long, Long, Long, MemoryRecords) instead of invoking this function directly.
+   *
    * Append the given messages ending at the given last offset and allow for the possibility that the offset might
    * overflow the index. If it does and overflow is allowed, append to the log, but skip the index append. Note that
    * this only affects log segments that were created before the patch for KAFKA-5413. For such a segment, all oversize
@@ -172,7 +196,7 @@ class LogSegment private[log] (val log: FileRecords,
       if (bytesSinceLastIndexEntry > indexIntervalBytes) {
         if (canAppendToIndex) {
           offsetIndex.append(largestOffset, physicalPosition)
-          timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp)
+          timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipIndexFullCheck = false)
           bytesSinceLastIndexEntry = 0
         } else {
           debug(s"Skipping append to offset index to prevent offset overflow (${log.file})")
@@ -316,10 +340,20 @@ class LogSegment private[log] (val log: FileRecords,
 
         // Build offset index
         if (validBytes - lastIndexEntry > indexIntervalBytes) {
-          val startOffset = batch.baseOffset
-          offsetIndex.append(startOffset, validBytes)
-          timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp)
-          lastIndexEntry = validBytes
+          val lastOffsetInBatch = batch.lastOffset
+
+          /* Could have index overflow for log segments created before the patch for KAFKA-5413. For such a segment,
+           * all oversize offsets will be at the end of the log segment, so it should be fine to skip the index entries.
+           * Only need to check if we are able to convert the largest offset in this batch.
+           */
+          if (canConvertToRelativeOffset(lastOffsetInBatch)) {
+            offsetIndex.append(lastOffsetInBatch, validBytes)
+            timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipIndexFullCheck = false)
+            lastIndexEntry = validBytes
+          } else {
+            debug(s"Ignored index offset overflow when recovering lastOffset: $lastOffsetInBatch baseOffset: $baseOffset " +
+                  s"(${log.file.getAbsolutePath})")
+          }
         }
         validBytes += batch.sizeInBytes()
 
@@ -338,12 +372,15 @@ class LogSegment private[log] (val log: FileRecords,
     }
     val truncated = log.sizeInBytes - validBytes
     if (truncated > 0)
-      debug(s"Truncated $truncated invalid bytes at the end of segment ${log.file.getAbsoluteFile} during recovery")
+      debug(s"Truncating $truncated invalid bytes at the end of segment ${log.file.getAbsoluteFile} during recovery")
 
     log.truncateTo(validBytes)
     offsetIndex.trimToValidSize()
-    // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well.
-    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true)
+    /* A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well. This
+     * segment, if created before the patch for KAFKA-5413, could have messages that overflow the index so skip the entry
+     * in such cases.
+     */
+    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipIndexFullCheck = true, mayHaveIndexOverflow = true)
     timeIndex.trimToValidSize()
     truncated
   }
@@ -456,7 +493,7 @@ class LogSegment private[log] (val log: FileRecords,
    * The time index entry appended will be used to decide when to delete the segment.
    */
   def onBecomeInactiveSegment() {
-    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true)
+    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipIndexFullCheck = true, mayHaveIndexOverflow = true)
     offsetIndex.trimToValidSize()
     timeIndex.trimToValidSize()
     log.trim()
@@ -520,7 +557,7 @@ class LogSegment private[log] (val log: FileRecords,
    * Close this log segment
    */
   def close() {
-    CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true), this)
+    CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipIndexFullCheck = true, mayHaveIndexOverflow = true), this)
     CoreUtils.swallow(offsetIndex.close(), this)
     CoreUtils.swallow(timeIndex.close(), this)
     CoreUtils.swallow(log.close(), this)

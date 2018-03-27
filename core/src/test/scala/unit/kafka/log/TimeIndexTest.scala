@@ -32,10 +32,16 @@ class TimeIndexTest extends JUnitSuite {
   var idx: TimeIndex = null
   val maxEntries = 30
   val baseOffset = 45L
+  val indexFile = nonExistantTempFile()
+  val maxIndexSize = maxEntries * 12
+
+  def openTimeIndex: TimeIndex = {
+    new TimeIndex(indexFile, baseOffset = baseOffset, maxIndexSize = maxIndexSize)
+  }
 
   @Before
   def setup() {
-    this.idx = new TimeIndex(nonExistantTempFile(), baseOffset = baseOffset, maxIndexSize = maxEntries * 12)
+    this.idx = openTimeIndex
   }
 
   @After
@@ -75,17 +81,17 @@ class TimeIndexTest extends JUnitSuite {
   def testAppend() {
     appendEntries(maxEntries - 1)
     intercept[IllegalArgumentException] {
-      idx.maybeAppend(10000L, 1000L)
+      idx.maybeAppend(10000L, 1000L, skipIndexFullCheck =  false)
     }
     intercept[InvalidOffsetException] {
-      idx.maybeAppend(10000L, (maxEntries - 2) * 10, true)
+      idx.maybeAppend(10000L, (maxEntries - 2) * 10, skipIndexFullCheck = true)
     }
-    idx.maybeAppend(10000L, 1000L, true)
+    idx.maybeAppend(10000L, 1000L, skipIndexFullCheck = true)
   }
 
   private def appendEntries(numEntries: Int) {
     for (i <- 1 to numEntries)
-      idx.maybeAppend(i * 10, i * 10 + baseOffset)
+      idx.maybeAppend(i * 10, i * 10 + baseOffset, skipIndexFullCheck = false)
   }
 
   def nonExistantTempFile(): File = {
@@ -134,5 +140,53 @@ class TimeIndexTest extends JUnitSuite {
     idx.close()
   }
 
+  @Test
+  def testOffsetOverflow(): Unit = {
+    val first = TimestampOffset(0, baseOffset + 0)
+    val second = TimestampOffset(10, baseOffset + 1)
+    val third = TimestampOffset(23, baseOffset + 2)
+    val fourth = TimestampOffset(37, baseOffset + 3)
+    val fifth = TimestampOffset(40, baseOffset + Integer.MAX_VALUE)
+    val sixth = TimestampOffset(41, baseOffset + Integer.MAX_VALUE + 1L)
+
+    for (offsetPosition <- Seq(first, second, third, fourth, fifth))
+      idx.maybeAppend(offsetPosition.timestamp, offsetPosition.offset, skipIndexFullCheck = false)
+    assert(5 == idx.entries)
+
+    // try to insert an index entry that would cause offset overflow
+    intercept[InvalidOffsetException] { idx.maybeAppend(sixth.timestamp, sixth.offset, skipIndexFullCheck = false) }
+    assert(5 == idx.entries)
+
+    // call the internal API for ignoring offset overflow which should silently ignore the overflow, and skip appending to index
+    idx.maybeAppend(sixth.timestamp, sixth.offset, skipIndexFullCheck = false, mayHaveIndexOverflow = true)
+    assert(5 == idx.entries)
+  }
+
+  @Test
+  def testOffsetOverflowCorruptionSanity(): Unit = {
+    val first = TimestampOffset(0, baseOffset + 0)
+    val second = TimestampOffset(10, baseOffset + 1)
+    val third = TimestampOffset(23, baseOffset + 2)
+    val fourth = TimestampOffset(37, baseOffset + 3)
+    val fifth = TimestampOffset(40, baseOffset + Integer.MAX_VALUE)
+    val sixth = TimestampOffset(41, baseOffset + Integer.MAX_VALUE + 1L)
+
+    for (offsetPosition <- Seq(first, second, third, fourth, fifth))
+      idx.maybeAppend(offsetPosition.timestamp, offsetPosition.offset, skipIndexFullCheck = false)
+    assert(5 == idx.entries)
+
+    // forcefully append an index overflow to simulate pre KAFKA-5413 state
+    idx.mmap.putLong(sixth.timestamp)
+    idx.mmap.putInt((sixth.offset - baseOffset).toInt)
+    idx._entries += 1
+
+    // close the index and reload so that state is setup correctly
+    idx.close()
+    idx = openTimeIndex
+    assert(6 == idx.entries)
+
+    // sanity check should now throw an exception because of the index overflow
+    intercept[CorruptIndexException] { idx.sanityCheck() }
+  }
 }
 

@@ -49,7 +49,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   protected val lock = new ReentrantLock
 
   @volatile
-  protected var mmap: MappedByteBuffer = {
+  protected[log] var mmap: MappedByteBuffer = {
     val newlyCreated = file.createNewFile()
     val raf = if (writable) new RandomAccessFile(file, "rw") else new RandomAccessFile(file, "r")
     try {
@@ -88,7 +88,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
 
   /** The number of entries in this index */
   @volatile
-  protected var _entries = mmap.position() / entrySize
+  protected[log] var _entries = mmap.position() / entrySize
 
   /**
    * True iff there are no more slots available in this index
