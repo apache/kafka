@@ -193,9 +193,4 @@ public class Schema extends Type {
         public void visit(ArrayOf array) {}
         public void visit(Type field) {}
     }
-
-    @Override
-    public String documentation() {
-        throw new UnsupportedOperationException("Schemas are documented separately, each in it's own section.");
-    }
 }

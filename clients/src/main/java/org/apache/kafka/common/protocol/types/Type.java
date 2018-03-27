@@ -64,11 +64,25 @@ public abstract class Type {
     }
 
     /**
-     * Documentation of the Type.
-     * @return details about valid values, representation
+     * A Type that can return its description for documentation purposes.
      */
-    public abstract String documentation();
+    public static abstract class DocumentedType extends Type {
 
+        /**
+         * Short name of the type to identify it in documentation;
+         * @return the name of the type
+         */
+        public String typeName() {
+            return toString();
+        }
+
+        /**
+         * Documentation of the Type.
+         *
+         * @return details about valid values, representation
+         */
+        public abstract String documentation();
+    }
     /**
      * The Boolean type represents a boolean value in a byte by using
      * the value of 0 to represent false, and 1 to represent true.
@@ -76,7 +90,7 @@ public abstract class Type {
      * If for some reason a value that is not 0 or 1 is read,
      * then any non-zero value will return true.
      */
-    public static final Type BOOLEAN = new Type() {
+    public static final DocumentedType BOOLEAN = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             if ((Boolean) o)
@@ -112,12 +126,12 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a boolean value in a byte. " +
-                    "Values 0 and 1 is used to represent false and true respectively. " +
-                    "When reading a Boolean value, any non-zero value is considered true.";
+                    "Values 0 and 1 are used to represent false and true respectively. " +
+                    "When reading a boolean value, any non-zero value is considered true.";
         }
     };
 
-    public static final Type INT8 = new Type() {
+    public static final DocumentedType INT8 = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             buffer.put((Byte) o);
@@ -152,7 +166,7 @@ public abstract class Type {
         }
     };
 
-    public static final Type INT16 = new Type() {
+    public static final DocumentedType INT16 = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             buffer.putShort((Short) o);
@@ -184,11 +198,11 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents an integer between -2<sup>15</sup> and 2<sup>15</sup>-1 inclusive. " +
-                    "The values are encoded on two bytes using network byte order (big-endian).";
+                    "The values are encoded using two bytes in network byte order (big-endian).";
         }
     };
 
-    public static final Type INT32 = new Type() {
+    public static final DocumentedType INT32 = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             buffer.putInt((Integer) o);
@@ -220,11 +234,11 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents an integer between -2<sup>31</sup> and 2<sup>31</sup>-1 inclusive. " +
-                    "The values are encoded on four bytes using network byte order (big-endian).";
+                    "The values are encoded using four bytes in network byte order (big-endian).";
         }
     };
 
-    public static final Type UNSIGNED_INT32 = new Type() {
+    public static final DocumentedType UNSIGNED_INT32 = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             ByteUtils.writeUnsignedInt(buffer, (long) o);
@@ -256,11 +270,11 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents an integer between 0 and 2<sup>32</sup>-1 inclusive. " +
-                    "The values are encoded on four bytes using network byte order (big-endian).";
+                    "The values are encoded using four bytes in network byte order (big-endian).";
         }
     };
 
-    public static final Type INT64 = new Type() {
+    public static final DocumentedType INT64 = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             buffer.putLong((Long) o);
@@ -292,11 +306,11 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents an integer between -2<sup>63</sup> and 2<sup>63</sup>-1 inclusive. " +
-                    "The values are encoded on eight bytes using network byte order (big-endian).";
+                    "The values are encoded using eight bytes in network byte order (big-endian).";
         }
     };
 
-    public static final Type STRING = new Type() {
+    public static final DocumentedType STRING = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             byte[] bytes = Utils.utf8((String) o);
@@ -344,7 +358,7 @@ public abstract class Type {
         }
     };
 
-    public static final Type NULLABLE_STRING = new Type() {
+    public static final DocumentedType NULLABLE_STRING = new DocumentedType() {
         @Override
         public boolean isNullable() {
             return true;
@@ -408,7 +422,7 @@ public abstract class Type {
         }
     };
 
-    public static final Type BYTES = new Type() {
+    public static final DocumentedType BYTES = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             ByteBuffer arg = (ByteBuffer) o;
@@ -458,7 +472,7 @@ public abstract class Type {
         }
     };
 
-    public static final Type NULLABLE_BYTES = new Type() {
+    public static final DocumentedType NULLABLE_BYTES = new DocumentedType() {
         @Override
         public boolean isNullable() {
             return true;
@@ -520,11 +534,11 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a raw sequence of bytes or null. For non-null values, first the length N is given as an " + INT32 +
-                    ". Then N bytes follow. Null value is encoded with length of -1 and there are no following bytes.";
+                    ". Then N bytes follow. A null value is encoded with length of -1 and there are no following bytes.";
         }
     };
 
-    public static final Type RECORDS = new Type() {
+    public static final DocumentedType RECORDS = new DocumentedType() {
         @Override
         public boolean isNullable() {
             return true;
@@ -577,7 +591,7 @@ public abstract class Type {
         }
     };
 
-    public static final Type VARINT = new Type() {
+    public static final DocumentedType VARINT = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             ByteUtils.writeVarint((Integer) o, buffer);
@@ -612,7 +626,7 @@ public abstract class Type {
         }
     };
 
-    public static final Type VARLONG = new Type() {
+    public static final DocumentedType VARLONG = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
             ByteUtils.writeVarlong((Long) o, buffer);
@@ -648,53 +662,22 @@ public abstract class Type {
     };
 
     private static String toHtml() {
-        Type dummyType = new Type() {
 
-            @Override
-            public void write(ByteBuffer buffer, Object o) {
-
-            }
-
-            @Override
-            public Object read(ByteBuffer buffer) {
-                return null;
-            }
-
-            @Override
-            public Object validate(Object o) {
-                return null;
-            }
-
-            @Override
-            public int sizeOf(Object o) {
-                return 0;
-            }
-
-            @Override
-            public String documentation() {
-                return null;
-            }
-
-            @Override
-            public String toString() {
-                return "T";
-            }
-        };
-        Type[] types = {
+        DocumentedType[] types = {
             BOOLEAN, INT8, INT16, INT32, INT64,
             UNSIGNED_INT32, VARINT, VARLONG,
             STRING, NULLABLE_STRING, BYTES, NULLABLE_BYTES,
-            RECORDS, new ArrayOf(dummyType)};
+            RECORDS, new ArrayOf(STRING)};
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>");
         b.append("<th>Type</th>\n");
         b.append("<th>Description</th>\n");
         b.append("</tr>\n");
-        for (Type type : types) {
+        for (DocumentedType type : types) {
             b.append("<tr>");
             b.append("<td>");
-            b.append(type.toString());
+            b.append(type.typeName());
             b.append("</td>");
             b.append("<td>");
             b.append(type.documentation());
