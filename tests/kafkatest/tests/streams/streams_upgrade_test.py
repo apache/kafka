@@ -15,13 +15,16 @@
 
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
-from ducktape.mark import parametrize
+from ducktape.mark import ignore, matrix, parametrize
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService, StreamsUpgradeTestJobRunnerService
 from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, DEV_BRANCH, DEV_VERSION, KafkaVersion
 import random
 import time
+
+broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(DEV_BRANCH)]
+simple_upgrade_versions_metadata_version_2 = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(DEV_VERSION)]
 
 class StreamsUpgradeTest(Test):
     """
@@ -32,6 +35,28 @@ class StreamsUpgradeTest(Test):
 
     def __init__(self, test_context):
         super(StreamsUpgradeTest, self).__init__(test_context)
+        self.topics = {
+            'echo' : { 'partitions': 5 },
+            'data' : { 'partitions': 5 },
+        }
+
+    def perform_broker_upgrade(self, to_version):
+        self.logger.info("First pass bounce - rolling broker upgrade")
+        for node in self.kafka.nodes:
+            self.kafka.stop_node(node)
+            node.version = KafkaVersion(to_version)
+            self.kafka.start_node(node)
+
+    @cluster(num_nodes=6)
+    @matrix(from_version=broker_upgrade_versions, to_version=broker_upgrade_versions)
+    def test_upgrade_downgrade_brokers(self, from_version, to_version):
+        """
+        Start a smoke test client then perform rolling upgrades on the broker. 
+        """
+
+        if from_version == to_version:
+            return
+
         self.replication = 3
         self.partitions = 1
         self.isr = 2
@@ -57,45 +82,7 @@ class StreamsUpgradeTest(Test):
             'tagg' : { 'partitions': self.partitions, 'replication-factor': self.replication,
                        'configs': {"min.insync.replicas": self.isr} }
         }
-        
 
-    def perform_streams_upgrade(self, to_version):
-        self.logger.info("First pass bounce - rolling streams upgrade")
-
-        # get the node running the streams app
-        node = self.processor1.node
-        self.processor1.stop()
-
-        # change it's version. This will automatically make it pick up a different
-        # JAR when it starts again
-        node.version = KafkaVersion(to_version)
-        self.processor1.start()
-
-    def perform_broker_upgrade(self, to_version):
-        self.logger.info("First pass bounce - rolling broker upgrade")
-        for node in self.kafka.nodes:
-            self.kafka.stop_node(node)
-            node.version = KafkaVersion(to_version)
-            self.kafka.start_node(node)
-
-
-    @cluster(num_nodes=6)
-    @parametrize(from_version=str(LATEST_0_10_1), to_version=str(DEV_BRANCH))
-    @parametrize(from_version=str(LATEST_0_10_2), to_version=str(DEV_BRANCH))
-    @parametrize(from_version=str(LATEST_0_10_1), to_version=str(LATEST_0_11_0))
-    @parametrize(from_version=str(LATEST_0_10_2), to_version=str(LATEST_0_11_0))
-    @parametrize(from_version=str(LATEST_0_11_0), to_version=str(LATEST_0_10_2))
-    @parametrize(from_version=str(DEV_BRANCH), to_version=str(LATEST_0_10_2))
-    def test_upgrade_downgrade_streams(self, from_version, to_version):
-        """
-        Start a smoke test client, then abort (kill -9) and restart it a few times.
-        Ensure that all records are delivered.
-
-        Note, that just like tests/core/upgrade_test.py, a prerequisite for this test to succeed
-        if the inclusion of all parametrized versions of kafka in kafka/vagrant/base.sh 
-        (search for get_kafka()). For streams in particular, that means that someone has manually
-        copies the kafka-stream-$version-test.jar in the right S3 bucket as shown in base.sh.
-        """
         # Setup phase
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
         self.zk.start()
@@ -110,47 +97,6 @@ class StreamsUpgradeTest(Test):
         
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
         self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
-
-        
-        self.driver.start()
-        self.processor1.start()
-        time.sleep(15)
-
-        self.perform_streams_upgrade(to_version)
-
-        time.sleep(15)
-        self.driver.wait()
-        self.driver.stop()
-
-        self.processor1.stop()
-
-        node = self.driver.node
-        node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.driver.STDOUT_FILE, allow_fail=False)
-        self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
-
-
-
-    @cluster(num_nodes=6)
-    @parametrize(from_version=str(LATEST_0_10_2), to_version=str(DEV_BRANCH))
-    def test_upgrade_brokers(self, from_version, to_version):
-        """
-        Start a smoke test client then perform rolling upgrades on the broker. 
-        """
-        # Setup phase
-        self.zk = ZookeeperService(self.test_context, num_nodes=1)
-        self.zk.start()
-
-        # number of nodes needs to be >= 3 for the smoke test
-        self.kafka = KafkaService(self.test_context, num_nodes=3,
-                                  zk=self.zk, version=KafkaVersion(from_version), topics=self.topics)
-        self.kafka.start()
-        
-        # allow some time for topics to be created
-        time.sleep(10)
-        
-        self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
-        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
-
         
         self.driver.start()
         self.processor1.start()
@@ -168,25 +114,14 @@ class StreamsUpgradeTest(Test):
         node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.driver.STDOUT_FILE, allow_fail=False)
         self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
 
-    @parametrize(old_version=str(LATEST_0_10_1), new_version=str(LATEST_0_10_2))
-    @parametrize(old_version=str(LATEST_0_10_1), new_version=str(LATEST_0_11_0))
-    @parametrize(old_version=str(LATEST_0_10_1), new_version=str(LATEST_1_0))
-    @parametrize(old_version=str(LATEST_0_10_1), new_version=str(DEV_VERSION))
-    @parametrize(old_version=str(LATEST_0_10_2), new_version=str(LATEST_0_11_0))
-    @parametrize(old_version=str(LATEST_0_10_2), new_version=str(LATEST_1_0))
-    @parametrize(old_version=str(LATEST_0_10_2), new_version=str(DEV_VERSION))
-    @parametrize(old_version=str(LATEST_0_11_0), new_version=str(LATEST_1_0))
-    @parametrize(old_version=str(LATEST_0_11_0), new_version=str(DEV_VERSION))
-    @parametrize(old_version=str(LATEST_1_0), new_version=str(DEV_VERSION))
-    def test_simple_upgrade(self, old_version, new_version):
+    @matrix(from_version=simple_upgrade_versions_metadata_version_2, to_version=simple_upgrade_versions_metadata_version_2)
+    def test_simple_upgrade_downgrade(self, from_version, to_version):
         """
         Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
         """
 
-        self.topics = {
-            'echo' : { 'partitions': 5 },
-            'data' : { 'partitions': 5 },
-        }
+        if from_version == to_version:
+            return
 
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
         self.zk.start()
@@ -201,17 +136,18 @@ class StreamsUpgradeTest(Test):
         self.processor3 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
 
         self.driver.start()
-        self.start_all_nodes_with(old_version)
+        self.start_all_nodes_with(from_version)
 
         self.processors = [self.processor1, self.processor2, self.processor3]
 
         counter = 1
         random.seed()
 
+        # upgrade one-by-one via rolling bounce
         random.shuffle(self.processors)
         for p in self.processors:
             p.CLEAN_NODE_ENABLED = False
-            self.do_rolling_bounce(p, "", new_version, counter)
+            self.do_rolling_bounce(p, "", to_version, counter)
             counter = counter + 1
 
         # shutdown
@@ -238,11 +174,6 @@ class StreamsUpgradeTest(Test):
         """
         Starts 3 KafkaStreams instances with version 0.10.0, and upgrades one-by-one to <new_version>
         """
-
-        self.topics = {
-            'echo' : { 'partitions': 5 },
-            'data' : { 'partitions': 5 },
-        }
 
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
         self.zk.start()
@@ -347,7 +278,10 @@ class StreamsUpgradeTest(Test):
     @staticmethod
     def prepare_for(processor, version):
         processor.node.account.ssh("rm -rf " + processor.PERSISTENT_ROOT, allow_fail=False)
-        processor.set_version(version)
+        if version == str(DEV_VERSION):
+            processor.set_version("")  # set to TRUNK
+        else:
+            processor.set_version(version)
 
     def do_rolling_bounce(self, processor, upgrade_from, new_version, counter):
         first_other_processor = None
