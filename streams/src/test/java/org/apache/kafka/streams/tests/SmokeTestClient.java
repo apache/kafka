@@ -127,7 +127,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                 return value == null || value != END;
             }
         });
-        data.process(SmokeTestUtil.<String, Integer>printProcessorSupplier("data"));
+        data.process(SmokeTestUtil.printProcessorSupplier("data"));
 
         // min
         final KGroupedStream<String, Integer> groupedData =
@@ -155,7 +155,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             "min",
             Consumed.with(stringSerde, intSerde),
             Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("minStoreName"));
-        minTable.toStream().process(SmokeTestUtil.<String, Integer>printProcessorSupplier("min"));
+        minTable.toStream().process(SmokeTestUtil.printProcessorSupplier("min"));
 
         // max
         groupedData
@@ -180,7 +180,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             "max",
             Consumed.with(stringSerde, intSerde),
             Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("maxStoreName"));
-        maxTable.toStream().process(SmokeTestUtil.<String, Integer>printProcessorSupplier("max"));
+        maxTable.toStream().process(SmokeTestUtil.printProcessorSupplier("max"));
 
         // sum
         groupedData
@@ -216,7 +216,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             "cnt",
             Consumed.with(stringSerde, longSerde),
             Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("cntStoreName"));
-        cntTable.toStream().process(SmokeTestUtil.<String, Long>printProcessorSupplier("cnt"));
+        cntTable.toStream().process(SmokeTestUtil.printProcessorSupplier("cnt"));
 
         // dif
         maxTable
