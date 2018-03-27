@@ -1327,9 +1327,10 @@ project(':connect:runtime') {
   archivesBaseName = "connect-runtime"
 
   dependencies {
+    compileOnly project(':connect:json')
+    compileOnly project(':connect:transforms')
+
     compile project(':connect:api')
-    compile project(':connect:json')
-    compile project(':connect:transforms')
     compile project(':clients')
     compile project(':tools')
     compile libs.slf4jApi
@@ -1351,7 +1352,8 @@ project(':connect:runtime') {
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
-    testCompile project(":connect:json")
+    testCompile project(':connect:json')
+    testCompile project(':connect:transforms')
     testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
