@@ -28,29 +28,34 @@ public class ClientState {
     private final Set<TaskId> prevActiveTasks;
     private final Set<TaskId> prevAssignedTasks;
 
+    private String rackId;
     private int capacity;
-
 
     public ClientState() {
         this(0);
     }
 
-    ClientState(final int capacity) {
-        this(new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), capacity);
+    public ClientState(int capacity) {
+        this(0, "");
     }
 
-    private ClientState(Set<TaskId> activeTasks, Set<TaskId> standbyTasks, Set<TaskId> assignedTasks, Set<TaskId> prevActiveTasks, Set<TaskId> prevAssignedTasks, int capacity) {
+    ClientState(final int capacity, final String rackId) {
+        this(new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), new HashSet<TaskId>(), capacity, rackId);
+    }
+
+    private ClientState(Set<TaskId> activeTasks, Set<TaskId> standbyTasks, Set<TaskId> assignedTasks, Set<TaskId> prevActiveTasks, Set<TaskId> prevAssignedTasks, int capacity, String rackId) {
         this.activeTasks = activeTasks;
         this.standbyTasks = standbyTasks;
         this.assignedTasks = assignedTasks;
         this.prevActiveTasks = prevActiveTasks;
         this.prevAssignedTasks = prevAssignedTasks;
         this.capacity = capacity;
+        this.rackId = rackId;
     }
 
     public ClientState copy() {
         return new ClientState(new HashSet<>(activeTasks), new HashSet<>(standbyTasks), new HashSet<>(assignedTasks),
-                new HashSet<>(prevActiveTasks), new HashSet<>(prevAssignedTasks), capacity);
+                new HashSet<>(prevActiveTasks), new HashSet<>(prevAssignedTasks), capacity, rackId);
     }
 
     public void assign(final TaskId taskId, final boolean active) {
@@ -79,6 +84,10 @@ public class ClientState {
         capacity++;
     }
 
+    public void updateRackId(final String rackId){
+        this.rackId = rackId;
+    }
+
     public int activeTaskCount() {
         return activeTasks.size();
     }
@@ -100,6 +109,7 @@ public class ClientState {
                 ") prevActiveTasks: (" + prevActiveTasks +
                 ") prevAssignedTasks: (" + prevAssignedTasks +
                 ") capacity: " + capacity +
+                " rackId: " + rackId +
                 "]";
     }
 
@@ -139,6 +149,10 @@ public class ClientState {
 
     boolean hasAssignedTask(final TaskId taskId) {
         return assignedTasks.contains(taskId);
+    }
+
+    String getRackId(){
+        return rackId;
     }
 
     // Visible for testing

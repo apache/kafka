@@ -185,6 +185,10 @@ public class StreamsConfig extends AbstractConfig {
     public static final String APPLICATION_SERVER_CONFIG = "application.server";
     private static final String APPLICATION_SERVER_DOC = "A host:port pair pointing to an embedded user defined endpoint that can be used for discovering the locations of state stores within a single KafkaStreams application";
 
+    /**{@code rack.id} */
+    public static final String RACK_ID_CONFIG = "rack.id";
+    private static final String RACK_ID_DOC = "An identifier for the rack of a node for rack-aware replication.";
+
     /** {@code bootstrap.servers} */
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 
@@ -418,6 +422,11 @@ public class StreamsConfig extends AbstractConfig {
                     0,
                     Importance.MEDIUM,
                     NUM_STANDBY_REPLICAS_DOC)
+            .define(RACK_ID_CONFIG,
+                    Type.STRING,
+                    "",
+                    Importance.LOW,
+                    RACK_ID_DOC)
             .define(NUM_STREAM_THREADS_CONFIG,
                     Type.INT,
                     1,
@@ -781,6 +790,7 @@ public class StreamsConfig extends AbstractConfig {
         // add configs required for stream partition assignor
         consumerProps.put(REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
         consumerProps.put(APPLICATION_SERVER_CONFIG, getString(APPLICATION_SERVER_CONFIG));
+        consumerProps.put(RACK_ID_CONFIG, getString(RACK_ID_CONFIG));
         consumerProps.put(NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
         consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());
         consumerProps.put(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, getLong(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));

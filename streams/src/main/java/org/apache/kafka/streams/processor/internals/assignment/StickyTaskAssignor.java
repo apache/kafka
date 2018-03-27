@@ -37,6 +37,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
     private final Map<ID, ClientState> clients;
     private final Set<TaskId> taskIds;
     private final Map<TaskId, ID> previousActiveTaskAssignment = new HashMap<>();
+    private final Map<TaskId, Set<String>> rackAssignments = new HashMap<>();
     private final Map<TaskId, Set<ID>> previousStandbyTaskAssignment = new HashMap<>();
     private final TaskPairs taskPairs;
 
@@ -56,7 +57,7 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
     private void assignStandby(final int numStandbyReplicas) {
         for (final TaskId taskId : taskIds) {
             for (int i = 0; i < numStandbyReplicas; i++) {
-                final Set<ID> ids = findClientsWithoutAssignedTask(taskId);
+                final Set<ID> ids = findClientsWithoutAssignedTaskAndDifferentRack(taskId);
                 if (ids.isEmpty()) {
                     log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
                                      "There is not enough available capacity. You should " +
@@ -119,21 +120,45 @@ public class StickyTaskAssignor<ID> implements TaskAssignor<ID, TaskId> {
     private void allocateTaskWithClientCandidates(final TaskId taskId, final Set<ID> clientsWithin, final boolean active) {
         final ClientState client = findClient(taskId, clientsWithin, active);
         taskPairs.addPairs(taskId, client.assignedTasks());
+        updateRackAssignments(taskId,client);
         client.assign(taskId, active);
     }
 
     private void assignTaskToClient(final Set<TaskId> assigned, final TaskId taskId, final ClientState client) {
         taskPairs.addPairs(taskId, client.assignedTasks());
+        updateRackAssignments(taskId,client);
         client.assign(taskId, true);
         assigned.add(taskId);
     }
 
-    private Set<ID> findClientsWithoutAssignedTask(final TaskId taskId) {
+    private void updateRackAssignments(final TaskId task, ClientState client){
+        if(!rackAssignments.containsKey(task)){
+            rackAssignments.put(task, new HashSet<String>());
+        }
+        rackAssignments.get(task).add(client.getRackId());
+    }
+
+    private Set<ID> findClientsWithoutAssignedTask(final TaskId taskId){
         final Set<ID> clientIds = new HashSet<>();
         for (final Map.Entry<ID, ClientState> client : clients.entrySet()) {
             if (!client.getValue().hasAssignedTask(taskId)) {
                 clientIds.add(client.getKey());
             }
+        }
+        return clientIds;
+    }
+
+    private Set<ID> findClientsWithoutAssignedTaskAndDifferentRack(final TaskId taskId){
+        Set<String> racksForTaskId = rackAssignments.get(taskId);
+        final Set<ID> clientIds = new HashSet<>();
+        for (final Map.Entry<ID, ClientState> client : clients.entrySet()) {
+            if(!racksForTaskId.contains(client.getValue().getRackId())) {
+                clientIds.add(client.getKey());
+            }
+        }
+        // If a different free rack is not found, resort back to all available clients without assigned task.
+        if(clientIds.size()==0){
+            return findClientsWithoutAssignedTask(taskId);
         }
         return clientIds;
     }

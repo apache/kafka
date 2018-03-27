@@ -34,21 +34,26 @@ public class SubscriptionInfo {
     private static final int CURRENT_VERSION = 2;
 
     public final int version;
+    public final String rackId;
     public final UUID processId;
     public final Set<TaskId> prevTasks;
     public final Set<TaskId> standbyTasks;
     public final String userEndPoint;
 
     public SubscriptionInfo(UUID processId, Set<TaskId> prevTasks, Set<TaskId> standbyTasks, String userEndPoint) {
-        this(CURRENT_VERSION, processId, prevTasks, standbyTasks, userEndPoint);
+        this(CURRENT_VERSION, processId, prevTasks, standbyTasks, userEndPoint, "");
+    }
+    public SubscriptionInfo(UUID processId, Set<TaskId> prevTasks, Set<TaskId> standbyTasks, String userEndPoint, String rackId) {
+        this(CURRENT_VERSION, processId, prevTasks, standbyTasks, userEndPoint, rackId);
     }
 
-    private SubscriptionInfo(int version, UUID processId, Set<TaskId> prevTasks, Set<TaskId> standbyTasks, String userEndPoint) {
+    private SubscriptionInfo(int version, UUID processId, Set<TaskId> prevTasks, Set<TaskId> standbyTasks, String userEndPoint, String rackId) {
         this.version = version;
         this.processId = processId;
         this.prevTasks = prevTasks;
         this.standbyTasks = standbyTasks;
         this.userEndPoint = userEndPoint;
+        this.rackId = rackId;
     }
 
     /**
@@ -61,9 +66,16 @@ public class SubscriptionInfo {
         } else {
             endPointBytes = userEndPoint.getBytes(Charset.forName("UTF-8"));
         }
+        byte[] rackIdBytes;
+        if(rackId == null){
+            rackIdBytes = new byte[0];
+        }else{
+            rackIdBytes = rackId.getBytes(Charset.forName("UTF-8"));
+        }
         ByteBuffer buf = ByteBuffer.allocate(4 /* version */ + 16 /* process id */ + 4 +
                 prevTasks.size() * 8 + 4 + standbyTasks.size() * 8
                 + 4 /* length of bytes */ + endPointBytes.length
+                + 4 /* length of bytes */ + rackIdBytes.length
         );
         // version
         buf.putInt(version);
@@ -80,8 +92,12 @@ public class SubscriptionInfo {
         for (TaskId id : standbyTasks) {
             id.writeTo(buf);
         }
+        // encode endPoint
         buf.putInt(endPointBytes.length);
         buf.put(endPointBytes);
+        // encode rackId
+        buf.putInt(rackIdBytes.length);
+        buf.put(rackIdBytes);
         buf.rewind();
         return buf;
     }
@@ -122,7 +138,19 @@ public class SubscriptionInfo {
                 }
 
             }
-            return new SubscriptionInfo(version, processId, prevTasks, standbyTasks, userEndPoint);
+
+            String rackId = null;
+            if (version == CURRENT_VERSION) {
+                int bytesLength = data.getInt();
+                if (bytesLength != 0) {
+                    byte[] bytes = new byte[bytesLength];
+                    data.get(bytes);
+                    rackId = new String(bytes, Charset.forName("UTF-8"));
+                }
+
+            }
+
+            return new SubscriptionInfo(version, processId, prevTasks, standbyTasks, userEndPoint, rackId);
 
         } else {
             TaskAssignmentException ex = new TaskAssignmentException("unable to decode subscription data: version=" + version);
@@ -134,10 +162,13 @@ public class SubscriptionInfo {
     @Override
     public int hashCode() {
         int hashCode = version ^ processId.hashCode() ^ prevTasks.hashCode() ^ standbyTasks.hashCode();
-        if (userEndPoint == null) {
-            return hashCode;
+        if (userEndPoint != null) {
+            hashCode ^= userEndPoint.hashCode();
         }
-        return hashCode ^ userEndPoint.hashCode();
+        if (rackId != null) {
+            hashCode ^= rackId.hashCode();
+        }
+        return hashCode;
     }
 
     @Override
@@ -148,6 +179,7 @@ public class SubscriptionInfo {
                     this.processId.equals(other.processId) &&
                     this.prevTasks.equals(other.prevTasks) &&
                     this.standbyTasks.equals(other.standbyTasks) &&
+                    this.rackId != null ? this.rackId.equals(other.rackId) : other.rackId == null &&
                     this.userEndPoint != null ? this.userEndPoint.equals(other.userEndPoint) : other.userEndPoint == null;
         } else {
             return false;

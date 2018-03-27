@@ -124,6 +124,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             state.addPreviousActiveTasks(info.prevTasks);
             state.addPreviousStandbyTasks(info.standbyTasks);
             state.incrementCapacity();
+            state.updateRackId(info.rackId);
         }
 
         @Override
@@ -169,6 +170,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     };
 
     private String userEndPoint;
+    private String rackId;
     private int numStandbyReplicas;
 
     private TaskManager taskManager;
@@ -229,6 +231,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             this.userEndPoint = userEndPoint;
         }
 
+        rackId = streamsConfig.getString(StreamsConfig.RACK_ID_CONFIG);
+
         internalTopicManager = new InternalTopicManager(taskManager.adminClient, streamsConfig);
 
         copartitionedTopicsValidator = new CopartitionedTopicsValidator(logPrefix);
@@ -249,7 +253,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         final Set<TaskId> previousActiveTasks = taskManager.prevActiveTaskIds();
         final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
         standbyTasks.removeAll(previousActiveTasks);
-        final SubscriptionInfo data = new SubscriptionInfo(taskManager.processId(), previousActiveTasks, standbyTasks, this.userEndPoint);
+        final SubscriptionInfo data = new SubscriptionInfo(taskManager.processId(), previousActiveTasks, standbyTasks, this.userEndPoint, this.rackId);
 
         taskManager.updateSubscriptionsFromMetadata(topics);
 
