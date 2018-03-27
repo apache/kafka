@@ -98,7 +98,9 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     )
 
     assertEquals(100, newLeaderServer.replicaManager.getReplicaOrException(topicPartition).highWatermark.messageOffset)
-    servers.foreach(server => waitUntilTrue(() => server.replicaManager.getReplicaOrException(topicPartition).highWatermark.messageOffset == 100, ""))
+    val replicaServer = servers.find(_.config.brokerId == 102).get
+    TestUtils.waitUntilTrue(() => replicaServer.replicaManager.getReplicaOrException(topicPartition).highWatermark.messageOffset == 100,
+      "partition follower's highWatermark should be 100")
   }
 
 
