@@ -34,6 +34,8 @@ import streams._
 
 class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging with EmbeddedKafkaStreamsAllInOne {
 
+  implicit val config = EmbeddedKafkaConfig(kafkaPort = 8000, zooKeeperPort = 8001)
+
   @Test def testShouldCountWords(): Unit = {
 
     import DefaultSerdes._
