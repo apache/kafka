@@ -707,7 +707,7 @@ public class KafkaStreams {
             final String globalThreadId = clientId + "-GlobalStreamThread";
             globalStreamThread = new GlobalStreamThread(globalTaskTopology,
                                                         config,
-                                                        clientSupplier.getRestoreConsumer(config.getRestoreConsumerConfigs(clientId + "-global")),
+                                                        clientSupplier.getGlobalConsumer(config.getGlobalConsumerConfigs(clientId)),
                                                         stateDirectory,
                                                         cacheSizePerThread,
                                                         metrics,
