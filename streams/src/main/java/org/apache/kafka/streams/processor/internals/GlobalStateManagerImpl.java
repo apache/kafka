@@ -337,9 +337,9 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
     public void checkpoint(final Map<TopicPartition, Long> offsets) {
 
         // Find non persistent store's topics
-        Map<String, String> storeToChangelogTopic = topology.storeToChangelogTopic();
-        Set<String> globalNonPersistentStoresTopics = new HashSet<>();
-        for (StateStore store : topology.globalStateStores()) {
+        final Map<String, String> storeToChangelogTopic = topology.storeToChangelogTopic();
+        final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
+        for (final StateStore store : topology.globalStateStores()) {
             if (!store.persistent() && storeToChangelogTopic.containsKey(store.name())) {
                 globalNonPersistentStoresTopics.add(storeToChangelogTopic.get(store.name()));
             }
@@ -350,8 +350,8 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
         final Map<TopicPartition, Long> filteredOffsets = new HashMap<>();
 
         // Skip non persistent store
-        for (Map.Entry<TopicPartition, Long> topicPartitionOffset : checkpointableOffsets.entrySet()) {
-            String topic = topicPartitionOffset.getKey().topic();
+        for (final Map.Entry<TopicPartition, Long> topicPartitionOffset : checkpointableOffsets.entrySet()) {
+            final String topic = topicPartitionOffset.getKey().topic();
             if (globalNonPersistentStoresTopics.contains(topic)) {
                 log.debug("Skipping global store' topic {}", topic);
             } else {
