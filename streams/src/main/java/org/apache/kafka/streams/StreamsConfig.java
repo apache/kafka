@@ -501,6 +501,12 @@ public class StreamsConfig extends AbstractConfig {
                     10 * 60 * 1000,
                     Importance.LOW,
                     STATE_CLEANUP_DELAY_MS_DOC)
+            .define(UPGRADE_FROM_CONFIG,
+                    ConfigDef.Type.STRING,
+                    null,
+                    in(null, UPGRADE_FROM_0100),
+                    Importance.LOW,
+                    UPGRADE_FROM_DOC)
             .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
                     Type.LONG,
                     24 * 60 * 60 * 1000,
@@ -519,12 +525,6 @@ public class StreamsConfig extends AbstractConfig {
                     null,
                     Importance.LOW,
                     TIMESTAMP_EXTRACTOR_CLASS_DOC)
-            .define(UPGRADE_FROM_CONFIG,
-                    ConfigDef.Type.STRING,
-                    null,
-                    in(null, UPGRADE_FROM_0100),
-                    Importance.LOW,
-                    UPGRADE_FROM_DOC)
             .define(VALUE_SERDE_CLASS_CONFIG,
                     Type.CLASS,
                     null,
