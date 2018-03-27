@@ -1,0 +1,9 @@
+#Sphinx 1.5.x breaks search box (See stacktrace in browser console)
+Sphinx==1.4.9
+
+# We need 0.2.5b1 as it fixes: Include fontawesome-webfont.woff2 in pip package
+sphinx_rtd_theme==0.2.5b1
+requests==2.18.4
+
+sphinxcontrib-httpdomain>=1.4.0
+livereload==2.5.1

@@ -232,6 +232,11 @@ def command_stage_docs():
     jdk8_env = get_jdk(prefs, 8)
     save_prefs(prefs)
 
+    # Validate
+    if not os.environ.get("VIRTUAL_ENV"):
+        fail("Expected to be in virtualenv for building docs")
+    cmd("Validating virtualenv", "which sphinx-build")
+
     version = get_version()
     # We explicitly override the version of the project that we normally get from gradle.properties since we want to be
     # able to run this from a release branch where we made some updates, but the build would show an incorrect SNAPSHOT

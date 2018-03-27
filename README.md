@@ -32,6 +32,18 @@ Follow instructions in http://kafka.apache.org/documentation.html#quickstart
     ./gradlew scaladocJar # builds a scaladoc jar for each module
     ./gradlew docsJar # builds both (if applicable) javadoc and scaladoc jars for each module
 
+### Build documentation ###
+    # One-time: create virtualenv, ensure it is activated
+    virtualenv docs-venv
+    . docs-venv/bin/activate
+    pip install -r docs/requirements.txt
+    # Build main docs files
+    ./gradlew genMainDocs
+    open docs/_build/html/index.html
+    # Build all docs, including main docs, auto-generated, and compile into tar.
+    # Also viewable as above
+    ./gradlew siteDocsTar
+
 ### Run unit/integration tests ###
     ./gradlew test # runs both unit and integration tests
     ./gradlew unitTest
