@@ -249,10 +249,33 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     @Override
     public void checkpoint(final Map<TopicPartition, Long> offsets) {
+
+        // Find non persistent store's topics
+        Map<String, String> storeToChangelogTopic = topology.storeToChangelogTopic();
+        Set<String> globalNonPersistentStoresTopics = new HashSet<>();
+        for (StateStore store : topology.globalStateStores()) {
+            if (!store.persistent() && storeToChangelogTopic.containsKey(store.name())) {
+                globalNonPersistentStoresTopics.add(storeToChangelogTopic.get(store.name()));
+            }
+        }
+
         checkpointableOffsets.putAll(offsets);
-        if (!checkpointableOffsets.isEmpty()) {
+
+        final Map<TopicPartition, Long> filteredOffsets = new HashMap<>();
+
+        // Skip non persistent store
+        for (Map.Entry<TopicPartition, Long> topicPartitionOffset : checkpointableOffsets.entrySet()) {
+            String topic = topicPartitionOffset.getKey().topic();
+            if (globalNonPersistentStoresTopics.contains(topic)) {
+                log.debug("Skipping global store' topic {}", topic);
+            } else {
+                filteredOffsets.put(topicPartitionOffset.getKey(), topicPartitionOffset.getValue());
+            }
+        }
+
+        if (!filteredOffsets.isEmpty()) {
             try {
-                checkpoint.write(checkpointableOffsets);
+                checkpoint.write(filteredOffsets);
             } catch (IOException e) {
                 log.warn("Failed to write offsets checkpoint for global stores", e);
             }
