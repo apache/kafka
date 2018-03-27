@@ -547,7 +547,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     /**
      * Needs to be called before any other methods when the transactional.id is set in the configuration.
-     * This method could be retried if a {@link TimeoutException} or {@link InterruptException} is raised.
      *
      * This method does the following:
      *   1. Ensures any transactions initiated by previous instances of the producer with the same
@@ -556,6 +555,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *      but not yet finished, this method awaits its completion.
      *   2. Gets the internal producer id and epoch, used in all future transactional
      *      messages issued by the producer.
+     *
+     * Note that this method will raise {@link TimeoutException} if the transactional state cannot
+     * be initialized before expiration of {@code max.block.ms}. Additionally, it will raise {@link InterruptException}
+     * if interrupted. It is safe to retry in either case, but once the transactional state has been successfully
+     * initialized, this method should no longer be used.
      *
      * @throws IllegalStateException if no transactional.id has been configured
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
