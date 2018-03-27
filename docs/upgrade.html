@@ -77,6 +77,7 @@
     <li>New Kafka Streams configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from older version. </li>
     <li><a href="https://cwiki.apache.org/confluence/x/DVyHB">KIP-284</a> changed the retention time for Kafka Streams repartition topics by setting its default value to <code>Long.MAX_VALUE</code>.</li>
     <li>Updated <code>ProcessorStateManager</code> APIs in Kafka Streams for registering state stores to the processor topology. For more details please read the Streams <a href="/{{version}}/documentation/streams/upgrade-guide#streams_api_changes_200">Upgrade Guide</a>.</li>
+    <li><a href="https://cwiki.apache.org/confluence/x/AZQ7B">KIP-174</a> deprecates the <code>internal.key.converter</code> and <code>internal.value.converter</code> configurations for Kafka Connect, and establishes <code>org.apache.kafka.connect.json.JsonConverter</code> with the <code>schemas.enable</code> property set to <code>false</code> as the default value for both.</li>
 </ul>
 
 <h5><a id="upgrade_200_new_protocols" href="#upgrade_200_new_protocols">New Protocol Versions</a></h5>
