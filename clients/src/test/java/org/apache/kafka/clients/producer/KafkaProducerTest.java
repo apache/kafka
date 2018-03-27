@@ -553,34 +553,60 @@ public class KafkaProducerTest {
     public void testInitTransactionTimeout() {
         Properties props = new Properties();
         props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "bad-transaction");
-        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 1000);
+        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5);
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
 
-        try (Producer<byte[], byte[]> producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer())) {
+        Time time = new MockTime();
+        Cluster cluster = TestUtils.singletonCluster("topic", 1);
+        Node node = cluster.nodes().get(0);
+
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+
+        Producer<String, String> producer = new KafkaProducer<>(
+                new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
+                new StringSerializer(), new StringSerializer(), metadata, client);
+        try {
             producer.initTransactions();
-            producer.beginTransaction();
+            fail("initTransactions() should have raised TimeoutException");
+        } finally {
+            producer.close(0, TimeUnit.MILLISECONDS);
         }
     }
 
     @Test(expected = KafkaException.class)
-    public void testOnlyCanExecuteCloseAfterFailInitTransaction() {
+    public void testOnlyCanExecuteCloseAfterInitTransactionsTimeout() {
         Properties props = new Properties();
         props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "bad-transaction");
-        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 1000);
+        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5);
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
 
-        Producer<byte[], byte[]> producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
+        Time time = new MockTime();
+        Cluster cluster = TestUtils.singletonCluster("topic", 1);
+        Node node = cluster.nodes().get(0);
 
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+
+        Producer<String, String> producer = new KafkaProducer<>(
+                new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
+                new StringSerializer(), new StringSerializer(), metadata, client);
         try {
             producer.initTransactions();
         } catch (TimeoutException e) {
             // expected
         }
-        // other transactional operations should not be allowed even when we capture the error after initTransaction failed
+        // other transactional operations should not be allowed if we catch the error after initTransactions failed
         try {
             producer.beginTransaction();
         } finally {
-            producer.close();
+            producer.close(0, TimeUnit.MILLISECONDS);
         }
     }
 }
