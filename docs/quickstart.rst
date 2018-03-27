@@ -18,14 +18,12 @@ Unix-based and Windows platforms, on Windows platforms use
 Step 1: Download the code
 =========================
 
+:kafka-download:`Download` the |release| release and un-tar it.
 
-`Download <https://www.apache.org/dyn/closer.cgi?path=/kafka/%7B%7BfullDotVersion%7D%7D/kafka_2.11-%7B%7BfullDotVersion%7D%7D.tgz>`__
-the {{fullDotVersion}} release and un-tar it.
+.. codewithvars:: bash
 
-.. code:: bash
-
-    > tar -xzf kafka_2.11-{{fullDotVersion}}.tgz
-    > cd kafka_2.11-{{fullDotVersion}}
+    > tar -xzf kafka_2.11-|release|.tgz
+    > cd kafka_2.11-|release|
 
 .. _quickstart_startserver:
 

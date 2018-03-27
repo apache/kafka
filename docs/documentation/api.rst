@@ -41,12 +41,12 @@ Examples showing how to use the producer are given in the
 
 To use the producer, you can use the following maven dependency:
 
-.. code:: bash
+.. codewithvars:: bash
 
             <dependency>
                 <groupId>org.apache.kafka</groupId>
                 <artifactId>kafka-clients</artifactId>
-                <version>{{fullDotVersion}}</version>
+                <version>|release|</version>
             </dependency>
         
 
@@ -64,12 +64,12 @@ Examples showing how to use the consumer are given in the
 
 To use the consumer, you can use the following maven dependency:
 
-.. code:: bash
+.. codewithvars:: bash
 
             <dependency>
                 <groupId>org.apache.kafka</groupId>
                 <artifactId>kafka-clients</artifactId>
-                <version>{{fullDotVersion}}</version>
+                <version>|release|</version>
             </dependency>
         
 
@@ -90,12 +90,12 @@ Additional documentation on using the Streams API is available
 
 To use Kafka Streams you can use the following maven dependency:
 
-.. code:: bash
+.. codewithvars:: bash
 
             <dependency>
                 <groupId>org.apache.kafka</groupId>
                 <artifactId>kafka-streams</artifactId>
-                <version>{{fullDotVersion}}</version>
+                <version>|release|</version>
             </dependency>
         
 
@@ -128,12 +128,12 @@ acls, and other Kafka objects.
 
 To use the AdminClient API, add the following Maven dependency:
 
-.. code:: bash
+.. codewithvars:: bash
 
             <dependency>
                 <groupId>org.apache.kafka</groupId>
                 <artifactId>kafka-clients</artifactId>
-                <version>{{fullDotVersion}}</version>
+                <version>|release|</version>
             </dependency>
         
 

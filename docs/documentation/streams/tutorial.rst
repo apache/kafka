@@ -17,12 +17,12 @@ you have not done so.
 We are going to use a Kafka Streams Maven Archetype for creating a
 Streams project structure with the following commands:
 
-.. code:: bash
+.. codewithvars:: bash
 
             mvn archetype:generate \
                 -DarchetypeGroupId=org.apache.kafka \
                 -DarchetypeArtifactId=streams-quickstart-java \
-                -DarchetypeVersion={{fullDotVersion}} \
+                -DarchetypeVersion=|release| \
                 -DgroupId=streams.examples \
                 -DartifactId=streams.examples \
                 -Dversion=0.1 \
