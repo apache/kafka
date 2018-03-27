@@ -2348,7 +2348,7 @@ public class KafkaAdminClient extends AdminClient {
 
                         @Override
                         AbstractRequest.Builder createRequest(int timeoutMs) {
-                            return new DeleteGroupsRequest.Builder(groupIdList);
+                            return new DeleteGroupsRequest.Builder(Collections.singleton(groupId));
                         }
 
                         @Override
