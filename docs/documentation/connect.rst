@@ -302,7 +302,9 @@ with Kafka Connect:
 
 Details on how to configure each transformation are listed below:
 
-.. include:: ../generated/connect_transforms.rst
+.. raw:: html
+   :file: ../generated/connect_transforms.html
+
 
 `REST API <#connect_rest>`__
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

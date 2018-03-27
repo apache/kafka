@@ -25,6 +25,9 @@ The essential configurations are the following:
 Topic-level configurations and defaults are discussed in more detail
 `below <#topicconfigs>`__.
 
+.. raw:: html
+   :file: ../generated/kafka_config.html
+
 More details about broker configuration can be found in the scala class
 ``kafka.server.KafkaConfig``.
 
@@ -74,6 +77,9 @@ configuration for this property is given under the Server Default
 Property heading. A given server default config value only applies to a
 topic if it does not have an explicit topic config override.
 
+.. raw:: html
+   :file: ../generated/topic_config.html
+
 .. _producerconfigs:
 
 --------------------
@@ -81,6 +87,10 @@ topic if it does not have an explicit topic config override.
 --------------------
 
 Below is the configuration of the Java producer:
+
+.. raw:: html
+   :file: ../generated/producer_config.html
+
 
 For those interested in the legacy Scala producer configs, information
 can be found
@@ -103,6 +113,10 @@ new and old consumers are described below.
 --------------------------
 
 Below is the configuration for the new consumer:
+
+.. raw:: html
+   :file: ../generated/consumer_config.html
+
 
 .. _oldconsumerconfigs:
 
@@ -496,7 +510,8 @@ class ``kafka.consumer.ConsumerConfig``.
 
 Below is the configuration of the Kafka Connect framework.
 
-.. include:: ../generated/connect_config.rst
+.. raw:: html
+   :file: ../generated/connect_config.html
 
 .. _streamsconfigs:
 
@@ -506,7 +521,8 @@ Below is the configuration of the Kafka Connect framework.
 
 Below is the configuration of the Kafka Streams client library.
 
-.. include:: ../generated/streams_config.rst
+.. raw:: html
+   :file: ../generated/streams_config.html
 
 .. _adminclientconfigs:
 
@@ -516,4 +532,5 @@ Below is the configuration of the Kafka Streams client library.
 
 Below is the configuration of the Kafka Admin client library.
 
-.. include:: ../generated/admin_client_config.rst
+.. raw:: html
+   :file: ../generated/admin_client_config.html

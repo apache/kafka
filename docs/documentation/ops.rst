@@ -1772,6 +1772,10 @@ The following metrics are available on producer instances.
 `Producer Sender Metrics <#producer_sender_monitoring>`__
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+.. raw:: html
+   :file: ../generated/producer_metrics.html
+
+
 `New consumer monitoring <#new_consumer_monitoring>`__
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1852,6 +1856,10 @@ The following metrics are available on new consumer instances.
 `Consumer Fetch Metrics <#new_consumer_fetch_monitoring>`__
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+.. raw:: html
+   :file: ../generated/consumer_metrics.html
+
+
 `Connect Monitoring <#connect_monitoring>`__
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1859,6 +1867,10 @@ A Connect worker process contains all the producer and consumer metrics
 as well as metrics specific to Connect. The worker process itself has a
 number of metrics, while each connector and task have additional
 metrics.
+
+.. raw:: html
+   :file: ../generated/connect_metrics.html
+
 
 `Streams Monitoring <#kafka_streams_monitoring>`__
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
