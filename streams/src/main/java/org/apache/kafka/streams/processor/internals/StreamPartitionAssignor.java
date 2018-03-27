@@ -165,6 +165,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private String userEndPoint;
     private int numStandbyReplicas;
 
+    private int userMetadataVersion = SubscriptionInfo.CURRENT_VERSION;
+
     private Cluster metadataWithInternalTopics;
     private Map<HostInfo, Set<TopicPartition>> partitionsByHostState;
 
@@ -191,6 +193,12 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     @Override
     public void configure(Map<String, ?> configs) {
         numStandbyReplicas = (Integer) configs.get(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
+
+        final String upgradeMode = (String) configs.get(StreamsConfig.UPGRADE_FROM_CONFIG);
+        if (StreamsConfig.UPGRADE_FROM_0100.equals(upgradeMode)) {
+            log.info("Downgrading metadata version from 2 to 1 for upgrade from 0.10.0.x.");
+            userMetadataVersion = 1;
+        }
 
         Object o = configs.get(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE);
         if (o == null) {
@@ -251,7 +259,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         final Set<TaskId> previousActiveTasks = streamThread.prevActiveTasks();
         Set<TaskId> standbyTasks = streamThread.cachedTasks();
         standbyTasks.removeAll(previousActiveTasks);
-        SubscriptionInfo data = new SubscriptionInfo(streamThread.processId, previousActiveTasks, standbyTasks, this.userEndPoint);
+        SubscriptionInfo data = new SubscriptionInfo(userMetadataVersion, streamThread.processId, previousActiveTasks, standbyTasks, this.userEndPoint);
 
         if (streamThread.builder.sourceTopicPattern() != null &&
             !streamThread.builder.subscriptionUpdates().getUpdates().equals(topics)) {
@@ -295,11 +303,16 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // construct the client metadata from the decoded subscription info
         Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
 
+        int minUserMetadataVersion = SubscriptionInfo.CURRENT_VERSION;
         for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             String consumerId = entry.getKey();
             Subscription subscription = entry.getValue();
 
             SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
+            final int usedVersion = info.version;
+            if (usedVersion < minUserMetadataVersion) {
+                minUserMetadataVersion = usedVersion;
+            }
 
             // create the new client metadata if necessary
             ClientMetadata clientMetadata = clientsMetadata.get(info.processId);
@@ -556,7 +569,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 }
 
                 // finally, encode the assignment before sending back to coordinator
-                assignment.put(consumer, new Assignment(activePartitions, new AssignmentInfo(active, standby, partitionsByHostState).encode()));
+                assignment.put(consumer, new Assignment(activePartitions, new AssignmentInfo(minUserMetadataVersion, active, standby, partitionsByHostState).encode()));
                 i++;
             }
         }

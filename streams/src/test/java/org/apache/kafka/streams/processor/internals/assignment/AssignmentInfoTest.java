@@ -64,9 +64,8 @@ public class AssignmentInfoTest {
         assertEquals(oldVersion.activeTasks, decoded.activeTasks);
         assertEquals(oldVersion.standbyTasks, decoded.standbyTasks);
         assertEquals(0, decoded.partitionsByHost.size()); // should be empty as wasn't in V1
-        assertEquals(2, decoded.version); // automatically upgraded to v2 on decode;
+        assertEquals(1, decoded.version);
     }
-
 
     /**
      * This is a clone of what the V1 encoding did. The encode method has changed for V2
