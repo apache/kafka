@@ -972,13 +972,6 @@ project(':streams:streams-scala') {
   apply plugin: 'scala'
   archivesBaseName = "kafka-streams-streams-scala"
 
-  // use experimental flag to enable SAM type conversions in compiler
-  if (versions.baseScala == '2.11') {
-    tasks.withType(ScalaCompile) {
-      scalaCompileOptions.additionalParameters += ["-Xexperimental"]
-    }
-  }
-
   dependencies {
     compile project(':streams')
 

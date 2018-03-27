@@ -35,11 +35,11 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
     inner.count(materialized)
 
   def reduce(adder: (V, V) => V,
-             subTractor: (V, V) => V): KTable[K, V] = {
+             subtractor: (V, V) => V): KTable[K, V] = {
 
     // need this explicit asReducer for Scala 2.11 or else the SAM conversion doesn't take place
     // works perfectly with Scala 2.12 though
-    inner.reduce(((v1, v2) => adder(v1, v2)).asReducer, ((v1, v2) => subTractor(v1, v2)).asReducer)
+    inner.reduce(adder.asReducer, subtractor.asReducer)
   }
 
   def reduce(adder: (V, V) => V,
@@ -48,7 +48,7 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
 
     // need this explicit asReducer for Scala 2.11 or else the SAM conversion doesn't take place
     // works perfectly with Scala 2.12 though
-    inner.reduce(((v1, v2) => adder(v1, v2)).asReducer, ((v1, v2) => subtractor(v1, v2)).asReducer, materialized)
+    inner.reduce(adder.asReducer, subtractor.asReducer, materialized)
   }
 
   def aggregate[VR](initializer: () => VR,

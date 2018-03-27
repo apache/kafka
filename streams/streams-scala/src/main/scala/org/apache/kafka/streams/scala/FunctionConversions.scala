@@ -19,6 +19,7 @@ package org.apache.kafka.streams.scala
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream._
 import scala.collection.JavaConverters._
+import java.lang.{Iterable => JIterable}
 
 /**
  * Implicit classes that offer conversions of Scala function literals to
@@ -27,52 +28,75 @@ import scala.collection.JavaConverters._
  */
 object FunctionConversions {
 
-  implicit class PredicateFromFunction[K, V](val test: (K, V) => Boolean) extends AnyVal {
-    def asPredicate: Predicate[K,V] = test(_,_)
+  implicit class PredicateFromFunction[K, V](val p: (K, V) => Boolean) extends AnyVal {
+    def asPredicate: Predicate[K, V] = new Predicate[K, V] {
+      override def test(key: K, value: V): Boolean = p(key, value)
+    }
   }
 
   implicit class MapperFromFunction[T, U, VR](val f:(T,U) => VR) extends AnyVal {
-    def asKeyValueMapper: KeyValueMapper[T, U, VR] = (k: T, v: U) => f(k, v)
-    def asValueJoiner: ValueJoiner[T,U,VR] = (v1, v2) => f(v1, v2)
+    def asKeyValueMapper: KeyValueMapper[T, U, VR] = new KeyValueMapper[T, U, VR] {
+      override def apply(key: T, value: U): VR = f(key, value)
+    }
+    def asValueJoiner: ValueJoiner[T, U, VR] = new ValueJoiner[T, U, VR] {
+      override def apply(value1: T, value2: U): VR = f(value1, value2)
+    }
   }
 
   implicit class KeyValueMapperFromFunction[K, V, KR, VR](val f:(K,V) => (KR, VR)) extends AnyVal {
-    def asKeyValueMapper: KeyValueMapper[K, V, KeyValue[KR, VR]] = (k, v) => {
-      val (kr, vr) = f(k, v)
-      KeyValue.pair(kr, vr)
+    def asKeyValueMapper: KeyValueMapper[K, V, KeyValue[KR, VR]] = new KeyValueMapper[K, V, KeyValue[KR, VR]] {
+      override def apply(key: K, value: V): KeyValue[KR, VR] = {
+        val (kr, vr) = f(key, value)
+        KeyValue.pair(kr, vr)
+      }
     }
   }
 
   implicit class ValueMapperFromFunction[V, VR](val f: V => VR) extends AnyVal {
-    def asValueMapper: ValueMapper[V, VR] = v => f(v)
+    def asValueMapper: ValueMapper[V, VR] = new ValueMapper[V, VR] {
+      override def apply(value: V): VR = f(value)
+    }
   }
 
   implicit class FlatValueMapperFromFunction[V, VR](val f: V => Iterable[VR]) extends AnyVal {
-    def asValueMapper: ValueMapper[V, java.lang.Iterable[VR]] = v => f(v).asJava
+    def asValueMapper: ValueMapper[V, JIterable[VR]] = new ValueMapper[V, JIterable[VR]] {
+      override def apply(value: V): JIterable[VR] = f(value).asJava
+    }
   }
 
   implicit class ValueMapperWithKeyFromFunction[K, V, VR](val f: (K, V) => VR) extends AnyVal {
-    def asValueMapperWithKey: ValueMapperWithKey[K, V, VR] = (k, v) => f(k, v)
+    def asValueMapperWithKey: ValueMapperWithKey[K, V, VR] = new ValueMapperWithKey[K, V, VR] {
+      override def apply(readOnlyKey: K, value: V): VR = f(readOnlyKey, value)
+    }
   }
 
   implicit class FlatValueMapperWithKeyFromFunction[K, V, VR](val f: (K, V) => Iterable[VR]) extends AnyVal {
-    def asValueMapperWithKey: ValueMapperWithKey[K, V, java.lang.Iterable[VR]] = (k, v) => f(k, v).asJava
+    def asValueMapperWithKey: ValueMapperWithKey[K, V, JIterable[VR]] = new ValueMapperWithKey[K, V, JIterable[VR]] {
+      override def apply(readOnlyKey: K, value: V): JIterable[VR] = f(readOnlyKey, value).asJava
+    }
   }
 
   implicit class AggregatorFromFunction[K, V, VA](val f: (K, V, VA) => VA) extends AnyVal {
-    def asAggregator: Aggregator[K, V, VA] = (k,v,r) => f(k,v,r)
+    def asAggregator: Aggregator[K, V, VA] = new Aggregator[K, V, VA] {
+      override def apply(key: K, value: V, aggregate: VA): VA = f(key, value, aggregate)
+    }
   }
 
-  implicit class MergerFromFunction[K,VR](val f: (K, VR, VR) => VR) extends  AnyVal {
-    def asMerger: Merger[K, VR] = (k, v1, v2) => f(k, v1, v2)
+  implicit class MergerFromFunction[K,VR](val f: (K, VR, VR) => VR) extends AnyVal {
+    def asMerger: Merger[K, VR] = new Merger[K, VR] {
+      override def apply(aggKey: K, aggOne: VR, aggTwo: VR): VR = f(aggKey, aggOne, aggTwo)
+    }
   }
 
   implicit class ReducerFromFunction[V](val f: (V, V) => V) extends AnyVal {
-    def asReducer: Reducer[V] = (v1, v2) => f(v1, v2)
+    def asReducer: Reducer[V] = new Reducer[V] {
+      override def apply(value1: V, value2: V): V = f(value1, value2)
+    }
   }
 
   implicit class InitializerFromFunction[VA](val f: () => VA) extends AnyVal {
-    def asInitializer: Initializer[VA] = () => f()
+    def asInitializer: Initializer[VA] = new Initializer[VA] {
+      override def apply(): VA = f()
+    }
   }
-
 }

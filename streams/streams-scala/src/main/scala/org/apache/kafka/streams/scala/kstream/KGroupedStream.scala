@@ -41,7 +41,7 @@ class KGroupedStream[K, V](inner: KGroupedStreamJ[K, V]) {
   }
 
   def reduce(reducer: (V, V) => V): KTable[K, V] = {
-    inner.reduce((v1, v2) => reducer(v1, v2))
+    inner.reduce(reducer.asReducer)
   }
 
   def reduce(reducer: (V, V) => V,

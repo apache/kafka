@@ -32,11 +32,16 @@ trait StatelessScalaSerde[T >: Null] extends Serde[T] with ScalaSerde[T] {
   def serialize(data: T): Array[Byte]
   def deserialize(data: Array[Byte]): Option[T]
 
-  override def deserializer(): Deserializer[T] =
-    (data: Array[Byte]) => deserialize(data)
+  private def outerSerialize(data: T): Array[Byte] = serialize(data)
+  private def outerDeserialize(data: Array[Byte]): Option[T] = deserialize(data)
 
-  override def serializer(): Serializer[T] =
-    (data: T) => serialize(data)
+  override def deserializer(): Deserializer[T] = new Deserializer[T] {
+    override def deserialize(data: Array[Byte]): Option[T] = outerDeserialize(data)
+  }
+
+  override def serializer(): Serializer[T] = new Serializer[T] {
+    override def serialize(data: T): Array[Byte] = outerSerialize(data)
+  }
 }
 
 trait Deserializer[T >: Null] extends JDeserializer[T] {
