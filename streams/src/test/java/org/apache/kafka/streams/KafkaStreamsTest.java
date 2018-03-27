@@ -130,7 +130,7 @@ public class KafkaStreamsTest {
             Collections.<String>emptySet(), nodes.get(0));
         MockClientSupplier clientSupplier = new MockClientSupplier();
         clientSupplier.setClusterForAdminClient(cluster);
-        final KafkaStreams streams = new KafkaStreams(builder.build(), new StreamsConfig(props), clientSupplier);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props, clientSupplier);
         streams.close();
         TestUtils.waitForCondition(new TestCondition() {
             @Override

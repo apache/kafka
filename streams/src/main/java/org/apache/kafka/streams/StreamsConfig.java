@@ -123,7 +123,7 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
  * </ul>
  *
  *
- * @see KafkaStreams#KafkaStreams(org.apache.kafka.streams.Topology, StreamsConfig)
+ * @see KafkaStreams#KafkaStreams(org.apache.kafka.streams.Topology, Properties)
  * @see ConsumerConfig
  * @see ProducerConfig
  */
