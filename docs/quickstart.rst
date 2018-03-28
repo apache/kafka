@@ -370,7 +370,6 @@ data is stored in Kafka clusters. Kafka Streams combines the simplicity
 of writing and deploying standard Java and Scala applications on the
 client side with the benefits of Kafka's server-side cluster technology
 to make these applications highly scalable, elastic, fault-tolerant,
-distributed, and much more. This `quickstart
-example </%7B%7Bversion%7D%7D/documentation/streams/quickstart>`__ will
+distributed, and much more. This :ref:`quickstart example <streams_quickstart>` will
 demonstrate how to run a streaming application coded in this library.
 

@@ -29,17 +29,15 @@ See `below <#streams_api_changes_0110>`__ for a complete list of 0.11.0
 API and semantic changes that allow you to advance your application
 and/or simplify your code base.
 
-If you want to upgrade from 0.10.1.x to 0.10.2, see the `**Upgrade
-Section for
-0.10.2** </%7B%7Bversion%7D%7D/documentation/#upgrade_1020_streams>`__.
+If you want to upgrade from 0.10.1.x to 0.10.2, see the
+:ref`**Upgrade Section for 0.10.2** <upgrade_1020_streams>`.
 It highlights incompatible changes you need to consider to upgrade your
 code and application. See `below <#streams_api_changes_0102>`__ for a
 complete list of 0.10.2 API and semantic changes that allow you to
 advance your application and/or simplify your code base.
 
-If you want to upgrade from 0.10.0.x to 0.10.1, see the `**Upgrade
-Section for
-0.10.1** </%7B%7Bversion%7D%7D/documentation/#upgrade_1010_streams>`__.
+If you want to upgrade from 0.10.0.x to 0.10.1, see the
+`**Upgrade Section for 0.10.1** <upgrade_1010_streams>`.
 It highlights incompatible changes you need to consider to upgrade your
 code and application. See `below <#streams_api_changes_0101>`__ a
 complete list of 0.10.1 API changes that allow you to advance your
@@ -138,8 +136,7 @@ class ``StreamsBuilder`` one can get the constructed ``Topology`` via
 dependent classes) were added. Those can be used to get a detailed
 description of the specified topology and can be obtained by calling
 ``Topology#describe()``. An example using this new API is shown in the
-`quickstart
-section </%7B%7Bversion%7D%7D/documentation/streams/quickstart>`__.
+:ref:`quickstart section <streams_quickstart>`.
 
 New methods in ``KStream``:
 
@@ -194,8 +191,7 @@ Modified methods in ``Processor``:
    interface, which triggers its ``punctuate`` API method periodically
    based on the ``PunctuationType``. The ``PunctuationType`` determines
    what notion of time is used for the punctuation scheduling: either
-   `stream
-   time </%7B%7Bversion%7D%7D/documentation/streams/core-concepts#streams_time>`__
+   :ref:`stream time <streams_time>`
    or wall-clock time (by default, **stream time** is configured to
    represent event time via ``TimestampExtractor``). In addition, the
    ``punctuate`` function inside ``Processor`` is also deprecated.

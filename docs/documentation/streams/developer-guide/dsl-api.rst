@@ -65,8 +65,8 @@ continuously executed (i.e., the processing plan is put into action). A
 step-by-step guide for writing a stream processing application using the
 DSL is provided below.
 
-For a complete list of available API functionality, see also the `Kafka
-Streams Javadocs <../javadocs.html#streams-javadocs>`__.
+For a complete list of available API functionality, see also the
+:javadoc:`Kafka Streams Javadocs|org/apache/kafka/streams/KafkaStreams.html`.
 
 .. contents:: Table of Contents
    :local:
@@ -1075,7 +1075,7 @@ readability of the table, assume that (1) all records have the same key
 single join window, and (3) all records are processed in timestamp
 order. The columns INNER JOIN, LEFT JOIN, and OUTER JOIN denote what is
 passed as arguments to the user-supplied
-`ValueJoiner <../javadocs/org/apache/kafka/streams/kstream/ValueJoiner.html>`__
+:javadoc:`ValueJoiner|org/apache/kafka/streams/kstream/ValueJoiner.html`
 for the ``join``, ``leftJoin``, and ``outerJoin`` methods, respectively,
 whenever a new input record is received on either side of the join. An
 empty table cell denotes that the ``ValueJoiner`` is not called at all.
@@ -1157,9 +1157,9 @@ user-supplied ``ValueJoiner``:
 | **Inner | Performs an INNER JOIN of this table with another table.   |
 | Join**  | The result is an ever-updating KTable that represents the  |
 |         | “current” result of the join.                              |
-| -  (KTa | `(details) <../javadocs/org/apache/kafka/streams/kstream/K |
-| ble,    | Table.html#join-org.apache.kafka.streams.kstream.KTable-or |
-|    KTab | g.apache.kafka.streams.kstream.ValueJoiner->`__            |
+| -  (KTa | :javadoc:`(details)|org/apache/kafka/streams/kstream/KTabl |
+| ble,    | e.html#join-org.apache.kafka.streams.kstream.KTable-org.ap |
+|    KTab | ache.kafka.streams.kstream.ValueJoiner-`                   |
 | le)     |                                                            |
 |    →    | **Data must be co-partitioned**: The input data for both   |
 |    KTab | sides must be                                              |
@@ -1238,9 +1238,9 @@ user-supplied ``ValueJoiner``:
 |         | for a detailed description.                                |
 +---------+------------------------------------------------------------+
 | **Left  | Performs a LEFT JOIN of this table with another table.     |
-| Join**  | `(details) <../javadocs/org/apache/kafka/streams/kstream/K |
-|         | Table.html#leftJoin-org.apache.kafka.streams.kstream.KTabl |
-| -  (KTa | e-org.apache.kafka.streams.kstream.ValueJoiner->`__        |
+| Join**  | :javadoc:`(details)|org/apache/kafka/streams/kstream/KTabl |
+|         | e.html#leftJoin-org.apache.kafka.streams.kstream.KTable-or |
+| -  (KTa | g.apache.kafka.streams.kstream.ValueJoiner-`               |
 | ble,    |                                                            |
 |    KTab | **Data must be co-partitioned**: The input data for both   |
 | le)     | sides must be                                              |
@@ -1326,9 +1326,9 @@ user-supplied ``ValueJoiner``:
 |         | for a detailed description.                                |
 +---------+------------------------------------------------------------+
 | **Outer | Performs an OUTER JOIN of this table with another table.   |
-| Join**  | `(details) <../javadocs/org/apache/kafka/streams/kstream/K |
-|         | Table.html#outerJoin-org.apache.kafka.streams.kstream.KTab |
-| -  (KTa | le-org.apache.kafka.streams.kstream.ValueJoiner->`__       |
+| Join**  | :javadoc:`(details)|org/apache/kafka/streams/kstream/KTabl |
+|         | e.html#outerJoin-org.apache.kafka.streams.kstream.KTable-o |
+| -  (KTa | rg.apache.kafka.streams.kstream.ValueJoiner-`              |
 | ble,    |                                                            |
 |    KTab | **Data must be co-partitioned**: The input data for both   |
 | le)     | sides must be                                              |
@@ -1424,7 +1424,7 @@ same key (and thus the key in the table is omitted) and that (2) all
 records are processed in timestamp order. The columns INNER JOIN, LEFT
 JOIN, and OUTER JOIN denote what is passed as arguments to the
 user-supplied
-`ValueJoiner <../javadocs/org/apache/kafka/streams/kstream/ValueJoiner.html>`__
+:javadoc:`ValueJoiner|org/apache/kafka/streams/kstream/ValueJoiner.html`
 for the ``join``, ``leftJoin``, and ``outerJoin`` methods, respectively,
 whenever a new input record is received on either side of the join. An
 empty table cell denotes that the ``ValueJoiner`` is not called at all.
@@ -1553,7 +1553,7 @@ readability of the table we assume that (1) all records have the same
 key (and thus we omit the key in the table) and that (2) all records are
 processed in timestamp order. The columns INNER JOIN and LEFT JOIN
 denote what is passed as arguments to the user-supplied
-`ValueJoiner <../javadocs/org/apache/kafka/streams/kstream/ValueJoiner.html>`__
+:javadoc:`ValueJoiner|org/apache/kafka/streams/kstream/ValueJoiner.html`
 for the ``join`` and ``leftJoin`` methods, respectively, whenever a new
 input record is received on either side of the join. An empty table cell
 denotes that the ``ValueJoiner`` is not called at all.

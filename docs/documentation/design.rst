@@ -303,7 +303,7 @@ servers. This buffering is configurable and gives a mechanism to trade
 off a small amount of additional latency for better throughput.
 
 Details on `configuration <#producerconfigs>`__ and the
-`api <http://kafka.apache.org/082/javadoc/index.html?org/apache/kafka/clients/producer/KafkaProducer.html>`__
+:javadoc:`API|org/apache/kafka/clients/producer/KafkaProducer.html`
 for the producer can be found elsewhere in the documentation.
 
 ===================================

@@ -7,7 +7,7 @@ Tutorial: Write a Kafka Streams Application
 In this guide we will start from scratch on setting up your own project
 to write a stream processing application using Kafka Streams. It is
 highly recommended to read the
-`quickstart </%7B%7Bversion%7D%7D/documentation/streams/quickstart>`__
+:ref:`quickstart <streams_quickstart>`
 first on how to run a Streams application written in Kafka Streams if
 you have not done so.
 
@@ -116,7 +116,7 @@ record key-value pairs:
         
 
 For a full list of configurations of Kafka Streams please refer to this
-`table </%7B%7Bversion%7D%7D/documentation/#streamsconfigs>`__.
+:ref:`table <streamsconfigs>`.
 
 Next we will define the computational logic of our Streams application.
 In Kafka Streams this computational logic is defined as a ``topology``
@@ -308,8 +308,8 @@ your IDE or on the command line, using Maven:
         
 
 For detailed instructions on how to run a Streams application and
-observe its computing results, please read the `Play with a Streams
-Application </%7B%7Bversion%7D%7D/documentation/streams/quickstart>`__
+observe its computing results, please read the
+:ref:`Play with a Streams Application <streams_quickstart>`
 section. We will not talk about this in the rest of this section.
 
 `Writing a second Streams application: Line Split <#tutorial_code_linesplit>`__
@@ -512,8 +512,7 @@ generates a running count on each of the grouped keys:
 Note that the ``count`` operator has a ``Materialized`` parameter that
 specifies that the running count should be stored in a state store named
 ``counts-store``. This ``Counts`` store can be queried in real-time,
-with details described in the `Developer
-Manual </%7B%7Bversion%7D%7D/documentation/streams/developer-guide#streams_interactive_queries>`__.
+with details described in the :ref:`Developer Manual <streams_developer-guide_interactive-queries>`.
 
 We can also write the ``counts`` KTable's changelog stream back into
 another Kafka topic, say ``streams-wordcount-output``. Because the
@@ -533,8 +532,7 @@ thrown:
 Note that in order to read the changelog stream from topic
 ``streams-wordcount-output``, one needs to set the value deserialization
 as ``org.apache.kafka.common.serialization.LongDeserializer``. Details
-of this can be found in the `Play with a Streams
-Application </%7B%7Bversion%7D%7D/documentation/streams/quickstart>`__
+of this can be found in the :ref:`Play with a Streams Application <streams_quickstart>`
 section. Assuming lambda expression from JDK 8 can be used, the above
 code can be simplified as:
 

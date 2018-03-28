@@ -84,12 +84,10 @@ system.
     :width: 400px
 
 Kafka Streams offers two ways to define the stream processing topology:
-the `Kafka Streams
-DSL </%7B%7Bversion%7D%7D/documentation/streams/developer-guide#streams_dsl>`__
+the :ref:`Kafka Streams DSL <streams_developer-guide_dsl>`
 provides the most common data transformation operations such as ``map``,
 ``filter``, ``join`` and ``aggregations`` out of the box; the
-lower-level `Processor
-API </%7B%7Bversion%7D%7D/documentation/streams/developer-guide#streams_processor>`__
+lower-level :ref:`Processor API <streams_developer-guide_processor-api>`
 allows developers define and connect custom processors as well as to
 interact with `state stores <#streams_state>`__.
 
@@ -183,8 +181,7 @@ processing of a message is independent from the processing of all other
 messages. However, being able to maintain state opens up many
 possibilities for sophisticated stream processing applications: you can
 join input streams, or group and aggregate data records. Many such
-stateful operators are provided by the `Kafka Streams
-DSL </%7B%7Bversion%7D%7D/documentation/streams/developer-guide#streams_dsl>`__.
+stateful operators are provided by the :ref:`Kafka Streams DSL <streams_developer-guide_dsl>`.
 
 Kafka Streams provides so-called **state stores**, which can be used by
 stream processing applications to store and query data. This is an
@@ -242,8 +239,7 @@ recommended to read
 In order to achieve exactly-once semantics when running Kafka Streams
 applications, users can simply set the ``processing.guarantee`` config
 value to **exactly_once** (default value is **at_least_once**). More
-details can be found in the `Kafka Streams
-Configs </%7B%7Bversion%7D%7D/documentation#streamsconfigs>`__
+details can be found in the :ref:`Kafka Streams Configs <streamsconfigs>`
 section.
 
 

@@ -461,7 +461,7 @@ configuration property will vary across the instances of your
 application. When this property is set, Kafka Streams will keep track of
 the RPC endpoint information for every instance of an application, its
 state stores, and assigned stream partitions through instances of
-`StreamsMetadata <../javadocs/org/apache/kafka/streams/state/StreamsMetadata.html>`__.
+:javadoc:`StreamsMetadata|org/apache/kafka/streams/state/StreamsMetadata.html`.
 
 .. tip::
 
@@ -514,7 +514,7 @@ that supports the discovery of its state stores.
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
 
 The following methods return
-`StreamsMetadata <../javadocs/org/apache/kafka/streams/state/StreamsMetadata.html>`__
+:javadoc:`StreamsMetadata|org/apache/kafka/streams/state/StreamsMetadata.html`
 objects, which provide meta-information about application instances such
 as their RPC endpoint and locally available state stores.
 
@@ -535,7 +535,7 @@ as their RPC endpoint and locally available state stores.
 
    If ``application.server`` is not configured for an application instance,
    then the above methods will not find any
-   `StreamsMetadata <../javadocs/org/apache/kafka/streams/state/StreamsMetadata.html>`__
+   :javadoc:`StreamsMetadata|org/apache/kafka/streams/state/StreamsMetadata.html`
    for it.
 
 

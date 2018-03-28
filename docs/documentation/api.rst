@@ -37,7 +37,7 @@ The Producer API allows applications to send streams of data to topics
 in the Kafka cluster.
 
 Examples showing how to use the producer are given in the
-`javadocs </%7B%7Bversion%7D%7D/javadoc/index.html?org/apache/kafka/clients/producer/KafkaProducer.html>`__.
+:javadoc:`javadocs|org/apache/kafka/clients/producer/KafkaProducer.html`.
 
 To use the producer, you can use the following maven dependency:
 
@@ -60,7 +60,7 @@ The Consumer API allows applications to read streams of data from topics
 in the Kafka cluster.
 
 Examples showing how to use the consumer are given in the
-`javadocs </%7B%7Bversion%7D%7D/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaConsumer.html>`__.
+:javadoc:`javadocs|org/apache/kafka/clients/consumer/KafkaConsumer.html`.
 
 To use the consumer, you can use the following maven dependency:
 
@@ -83,10 +83,10 @@ The `Streams <#streamsapi>`__ API allows transforming streams of data
 from input topics to output topics.
 
 Examples showing how to use this library are given in the
-`javadocs </%7B%7Bversion%7D%7D/javadoc/index.html?org/apache/kafka/streams/KafkaStreams.html>`__
+:javadoc:`javadocs|org/apache/kafka/streams/KafkaStreams.html`
 
 Additional documentation on using the Streams API is available
-`here </%7B%7Bversion%7D%7D/documentation/streams>`__.
+:ref:`here <kafka-streams>`.
 
 To use Kafka Streams you can use the following maven dependency:
 
@@ -115,7 +115,7 @@ Additional information on using Connect is available
 `here </documentation.html#connect>`__.
 
 Those who want to implement custom connectors can see the
-`javadoc </%7B%7Bversion%7D%7D/javadoc/index.html?org/apache/kafka/connect>`__.
+:javadoc:`javadoc|org/apache/kafka/connect>`.
 
 .. _adminapi:
 
@@ -138,7 +138,7 @@ To use the AdminClient API, add the following Maven dependency:
         
 
 For more information about the AdminClient APIs, see the
-`javadoc </%7B%7Bversion%7D%7D/javadoc/index.html?org/apache/kafka/clients/admin/AdminClient.html>`__.
+:javadoc:`javadoc|org/apache/kafka/clients/admin/AdminClient.html`.
 
 .. _legacyapis:
 

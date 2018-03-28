@@ -60,6 +60,11 @@ def setup(app):
         # add link prefix per link macro
         if role == 'kafka-file':
             linkPrefix = 'https://github.com/apache/kafka/blob/' + version + '/'
+        elif role == 'javadoc':
+            # TODO can we make these relative using a similar approach as in the layout template instead of using
+            # absolute paths with the version in them (which would make this work more cleanly with and without the
+            # version number in the URL)
+            linkPrefix = '/' + doc_url_version + "/javadoc/index.html?"
         # The following module is only used /streams/developer-guide/
         elif role == 'streams-apidocs-kstream':
             linkPrefix = '../javadocs/org/apache/kafka/streams/kstream/KStream.html'
@@ -101,6 +106,7 @@ def setup(app):
 
     # add link macros
     app.add_role('kafka-file', makeLink)
+    app.add_role('javadoc', makeLink)
     app.add_role('streams-apidocs-kstream', makeLink)
     app.add_role('streams-apidocs-ktable', makeLink)
     app.add_role('streams-apidocs-kgroupedstream', makeLink)
@@ -162,6 +168,8 @@ if full_scala_version is None:
     raise RuntimeError("Couldn't find scala version in gradle.properties")
 # The short X.Y version.
 version = release.rsplit('.', 1)[0]
+# Shortened, dot-less versions used in docs URLs
+doc_url_version = ''.join(version.split('.'))
 # Short X.Y scala version
 scala_version = full_scala_version.rsplit('.', 1)[0]
 

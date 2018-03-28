@@ -104,9 +104,8 @@ partition to process.
 
 Kafka Streams provides so-called **state stores**, which can be used by
 stream processing applications to store and query data, which is an
-important capability when implementing stateful operations. The `Kafka
-Streams
-DSL </%7B%7Bversion%7D%7D/documentation/streams/developer-guide#streams_dsl>`__,
+important capability when implementing stateful operations. The
+:ref:`Kafka Streams DSL <streams_developer-guide_dsl>`,
 for example, automatically creates and manages such state stores when
 you are calling stateful operators such as ``join()`` or
 ``aggregate()``, or when you are windowing a stream.
@@ -140,8 +139,7 @@ robust to failures, too. For each state store, it maintains a replicated
 changelog Kafka topic in which it tracks any state updates. These
 changelog topics are partitioned as well so that each local state store
 instance, and hence the task accessing the store, has its own dedicated
-changelog topic partition. `Log
-compaction </%7B%7Bversion%7D%7D/documentation/#compaction>`__ is
+changelog topic partition. :ref:`Log compaction <compaction>` is
 enabled on the changelog topics so that old data can be purged safely to
 prevent the topics from growing indefinitely. If tasks run on a machine
 that fails and are restarted on another machine, Kafka Streams
@@ -158,8 +156,7 @@ local states (i.e. fully replicated copies of the state). When a task
 migration happens, Kafka Streams then attempts to assign a task to an
 application instance where such a standby replica already exists in
 order to minimize the task (re)initialization cost. See
-``num.standby.replicas`` in the `Kafka Streams
-Configs </%7B%7Bversion%7D%7D/documentation/#streamsconfigs>`__
+``num.standby.replicas`` in the :ref:`Kafka Streams Configs <streamsconfigs>`
 section.
 
 

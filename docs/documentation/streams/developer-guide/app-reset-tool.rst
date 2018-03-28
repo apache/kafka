@@ -152,6 +152,6 @@ same machine. You can use either of these methods:
 -  The API method ``KafkaStreams#cleanUp()`` in your application code.
 -  Manually delete the corresponding local state directory (default
    location: ``/var/lib/kafka-streams/<application.id>``). For more
-   information, see `state.dir <../javadocs.html#streams-javadocs>`__
+   information, see :javadoc:`state.dir|org/apache/kafka/streams/StreamsConfig.html`
    StreamsConfig class.
 

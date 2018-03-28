@@ -1,3 +1,5 @@
+.. _streams_quickstart:
+
 Run Kafka Streams Demo Application
 ==================================
 

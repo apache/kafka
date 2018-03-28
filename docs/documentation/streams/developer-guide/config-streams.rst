@@ -37,8 +37,7 @@ in a ``StreamsConfig`` instance.
 
 This section contains the most common Streams configuration parameters.
 For a full reference, see the
-`Streams </current/streams/javadocs/index.html>`__ and
-`Client </current/clients/javadocs/index.html>`__ Javadocs.
+:javadoc:`StreamsConfig class|org/apache/kafka/streams/StreamsConfig.html`.
 
 .. contents::
    :local:
@@ -91,9 +90,8 @@ bootstrap.servers
 `Optional configuration parameters <#optional-configuration-parameters>`__
 --------------------------------------------------------------------------
 
-Here are the optional `Streams configuration
-parameters <../javadocs.html#streams-javadocs>`__, sorted by level of
-importance:
+Here are the optional :javadoc:`Streams configuration parameters|org/apache/kafka/streams/StreamsConfig.html`, sorted by
+level of importance:
 
 -  High: These parameters can have a significant impact on
    performance. Take care when deciding the values of these
@@ -167,11 +165,11 @@ default.deserialization.exception.handler
     can be caused by corrupt data, incorrect serialization logic, or unhandled record types. These exception handlers
     are available:
 
-    * :cp-javadoc:`LogAndContinueExceptionHandler|streams/javadocs/org/apache/kafka/streams/errors/LogAndContinueExceptionHandler.html`:
+    * :javadoc:`LogAndContinueExceptionHandler|org/apache/kafka/streams/errors/LogAndContinueExceptionHandler.html`:
       This handler logs the deserialization exception and then signals the processing pipeline to continue processing more records.
       This log-and-skip strategy allows Kafka Streams to make progress instead of failing if there are records that fail
       to deserialize.
-    * :cp-javadoc:`LogAndFailExceptionHandler|streams/javadocs/org/apache/kafka/streams/errors/LogAndFailExceptionHandler.html`.
+    * :javadoc:`LogAndFailExceptionHandler|org/apache/kafka/streams/errors/LogAndFailExceptionHandler.html`.
       This handler logs the deserialization exception and then signals the processing pipeline to stop processing more records.
 
 -----------------
@@ -220,7 +218,7 @@ num.stream.threads
 partition.grouper
 -----------------
     A partition grouper creates a list of stream tasks from the partitions of source topics, where each created task is assigned with a group of source topic partitions.
-    The default implementation provided by Kafka Streams is :cp-javadoc:`DefaultPartitionGrouper|streams/javadocs/org/apache/kafka/streams/processor/DefaultPartitionGrouper.html`.
+    The default implementation provided by Kafka Streams is :javadoc:`DefaultPartitionGrouper|org/apache/kafka/streams/processor/DefaultPartitionGrouper.html`.
     It assigns each task with one partition for each of the source topic partitions. The generated number of tasks equals the largest
     number of partitions among the input topics. Usually an application does not need to customize the partition grouper.
 
@@ -249,11 +247,11 @@ state.dir
 -------------------
 timestamp.extractor
 -------------------
-    A timestamp extractor pulls a timestamp from an instance of :cp-javadoc:`ConsumerRecord|clients/src/main/java/org/apache/kafka/clients/consumer/ConsumerRecord.html`.
+    A timestamp extractor pulls a timestamp from an instance of :javadoc:`ConsumerRecord|org/apache/kafka/clients/consumer/ConsumerRecord.html`.
     Timestamps are used to control the progress of streams.
 
     The default extractor is
-    :cp-javadoc:`FailOnInvalidTimestamp|streams/javadocs/org/apache/kafka/streams/processor/FailOnInvalidTimestamp.html`.
+    :javadoc:`FailOnInvalidTimestamp|org/apache/kafka/streams/processor/FailOnInvalidTimestamp.html`.
     This extractor retrieves built-in timestamps that are automatically embedded into Kafka messages by the Kafka producer
     client since
     `Kafka version 0.10 <https://cwiki.apache.org/confluence/display/KAFKA/KIP-32+-+Add+timestamps+to+Kafka+message>`__.
@@ -276,19 +274,19 @@ timestamp.extractor
     If you have data with invalid timestamps and want to process it, then there are two alternative extractors available.
     Both work on built-in timestamps, but handle invalid timestamps differently.
 
-    * :cp-javadoc:`LogAndSkipOnInvalidTimestamp|streams/javadocs/org/apache/kafka/streams/processor/LogAndSkipOnInvalidTimestamp.html`:
+    * :javadoc:`LogAndSkipOnInvalidTimestamp|org/apache/kafka/streams/processor/LogAndSkipOnInvalidTimestamp.html`:
       This extractor logs a warn message and returns the invalid timestamp to Kafka Streams, which will not process but
       silently drop the record.
       This log-and-skip strategy allows Kafka Streams to make progress instead of failing if there are records with an
       invalid built-in timestamp in your input data.
-    * :cp-javadoc:`UsePreviousTimeOnInvalidTimestamp|streams/javadocs/org/apache/kafka/streams/processor/UsePreviousTimeOnInvalidTimestamp.html`.
+    * :javadoc:`UsePreviousTimeOnInvalidTimestamp|org/apache/kafka/streams/processor/UsePreviousTimeOnInvalidTimestamp.html`.
       This extractor returns the record's built-in timestamp if it is valid (i.e. not negative).  If the record does not
       have a valid built-in timestamps, the extractor returns the previously extracted valid timestamp from a record of the
       same topic partition as the current record as a timestamp estimation.  In case that no timestamp can be estimated, it
       throws an exception.
 
     Another built-in extractor is
-    :cp-javadoc:`WallclockTimestampExtractor|streams/javadocs/org/apache/kafka/streams/processor/WallclockTimestampExtractor.html`.
+    :javadoc:`WallclockTimestampExtractor|org/apache/kafka/streams/processor/WallclockTimestampExtractor.html`.
     This extractor does not actually "extract" a timestamp from the consumed record but rather returns the current time in
     milliseconds from the system clock (think: ``System.currentTimeMillis()``), which effectively means Streams will operate
     on the basis of the so-called **processing-time** of events.
@@ -344,10 +342,10 @@ timestamp.extractor
 Kafka consumers, producer, and admin client configuration parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-You can specify parameters for the Kafka :cp-javadoc:`consumers|clients/javadocs/org/apache/kafka/clients/consumer/package-summary.html`, :cp-javadoc:`producers|clients/javadocs/org/apache/kafka/clients/producer/package-summary.html`, and :cp-javadoc:`admin client|clients/javadocs/org/apache/kafka/clients/admin/package-summary.html` that are used internally.
+You can specify parameters for the Kafka :javadoc:`consumers|org/apache/kafka/clients/consumer/package-summary.html`, :javadoc:`org/apache/kafka/clients/producer/package-summary.html`, and :javadoc:`admin client|org/apache/kafka/clients/admin/package-summary.html` that are used internally.
 The consumer, producer, and admin client settings are defined by specifying parameters in a ``StreamsConfig`` instance.
 
-In this example, the Kafka :cp-javadoc:`consumer session timeout|clients/javadocs/org/apache/kafka/clients/consumer/ConsumerConfig.html#SESSION_TIMEOUT_MS_CONFIG` is configured to be 60000 milliseconds in the Streams settings:
+In this example, the Kafka :javadoc:`consumer session timeout|org/apache/kafka/clients/consumer/ConsumerConfig.html#SESSION_TIMEOUT_MS_CONFIG` is configured to be 60000 milliseconds in the Streams settings:
 
 .. sourcecode:: java
 
@@ -431,7 +429,7 @@ enable.auto.commit
 rocksdb.config.setter
 ---------------------
     The RocksDB configuration. Kafka Streams uses RocksDB as the default storage engine for persistent stores. To change the default
-    configuration for RocksDB, implement ``RocksDBConfigSetter`` and provide your custom class via `rocksdb.config.setter </current/streams/javadocs/org/apache/kafka/streams/state/RocksDBConfigSetter.html>`_.
+    configuration for RocksDB, implement ``RocksDBConfigSetter`` and provide your custom class via :javadoc:`rocksdb.config.setter|org/apache/kafka/streams/state/RocksDBConfigSetter.html`.
 
     Here is an example that adjusts the memory size consumed by RocksDB.
 
@@ -513,4 +511,4 @@ You define these settings via ``StreamsConfig``:
 .. note::
 A future version of Kafka Streams will allow developers to set their own app-specific configuration settings through
   ``StreamsConfig`` as well, which can then be accessed through
-  :cp-javadoc:`ProcessorContext|streams/javadocs/org/apache/kafka/streams/processor/ProcessorContext.html`.
+  :javadoc:`ProcessorContext|org/apache/kafka/streams/processor/ProcessorContext.html`.
