@@ -53,7 +53,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -91,6 +90,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     private final int maxMessages;
     private int consumedMessages = 0;
 
+    private volatile boolean isRunning = false;
     private CountDownLatch shutdownLatch = new CountDownLatch(1);
 
     public VerifiableConsumer(KafkaConsumer<String, String> consumer,
@@ -215,10 +215,10 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     }
 
     public void run() {
+        isRunning = true;
         try {
             printJson(new StartupComplete());
             consumer.subscribe(Collections.singletonList(topic), this);
-
             while (!isFinished()) {
                 ConsumerRecords<String, String> records = consumer.poll(Long.MAX_VALUE);
                 Map<TopicPartition, OffsetAndMetadata> offsets = onRecordsReceived(records);
@@ -236,10 +236,14 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             consumer.close();
             printJson(new ShutdownComplete());
             shutdownLatch.countDown();
+            isRunning = false;
         }
     }
 
     public void close() {
+        if (!isRunning) {
+            return;
+        }
         boolean interrupted = false;
         try {
             consumer.wakeup();
@@ -252,6 +256,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 }
             }
         } finally {
+            isRunning = false;
             if (interrupted)
                 Thread.currentThread().interrupt();
         }
@@ -486,7 +491,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
     }
 
-    private static ArgumentParser argParser() {
+    // visible for testing
+    static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
                 .newArgumentParser("verifiable-consumer")
                 .defaultHelp(true)
@@ -581,10 +587,10 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         boolean verbose = res.getBoolean("verbose");
         String configFile = res.getString("consumer.config");
 
-        Properties consumerProps = new Properties();
+        Map<String, Object> consumerProps = new HashMap<>();
         if (configFile != null) {
             try {
-                consumerProps.putAll(Utils.loadProps(configFile));
+                consumerProps.putAll(Utils.propsToStringMap(Utils.loadProps(configFile)));
             } catch (IOException e) {
                 throw new ArgumentParserException(e.getMessage(), parser);
             }
@@ -598,6 +604,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, res.getString("assignmentStrategy"));
 
         StringDeserializer deserializer = new StringDeserializer();
+        // configure the deserializer only once
+        deserializer.configure(consumerProps, true);
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps, deserializer, deserializer);
 
         return new VerifiableConsumer(
