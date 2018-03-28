@@ -469,7 +469,7 @@ public class GlobalStateManagerImplTest {
         stateManager.register(store3, stateRestoreCallback);
         stateManager.close(Collections.<TopicPartition, Long>emptyMap());
 
-        assertThat(readOffsetsCheckpoint(), equalTo(Collections.<TopicPartition, Long>emptyMap()));
+        assertThat(readOffsetsCheckpoint(), equalTo(Collections.singletonMap(t3, (long) StateRestorer.NO_CHECKPOINT)));
     }
 
     private Map<TopicPartition, Long> readOffsetsCheckpoint() throws IOException {

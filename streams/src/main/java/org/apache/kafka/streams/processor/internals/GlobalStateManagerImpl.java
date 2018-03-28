@@ -267,7 +267,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         for (final Map.Entry<TopicPartition, Long> topicPartitionOffset : checkpointableOffsets.entrySet()) {
             final String topic = topicPartitionOffset.getKey().topic();
             if (globalNonPersistentStoresTopics.contains(topic)) {
-                log.debug("Skipping global store' topic {}", topic);
+                filteredOffsets.put(topicPartitionOffset.getKey(), (long) StateRestorer.NO_CHECKPOINT);
             } else {
                 filteredOffsets.put(topicPartitionOffset.getKey(), topicPartitionOffset.getValue());
             }
