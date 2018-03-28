@@ -33,10 +33,8 @@ class KGroupedStream[K, V](inner: KGroupedStreamJ[K, V]) {
     c.mapValues[Long](Long2long _)
   }
 
-  def count(store: String, keySerde: Option[Serde[K]] = None): KTable[K, Long] = {
-    val materialized = keySerde.foldLeft(Materialized.as[K, java.lang.Long, ByteArrayKeyValueStore](store))((m, serde)=> m.withKeySerde(serde))
-
-    val c: KTable[K, java.lang.Long] = inner.count(materialized)
+  def count(materialized: Materialized[K, Long, ByteArrayKeyValueStore]): KTable[K, Long] = { 
+    val c: KTable[K, java.lang.Long] = inner.count(materialized.asInstanceOf[Materialized[K, java.lang.Long, ByteArrayKeyValueStore]])
     c.mapValues[Long](Long2long _)
   }
 

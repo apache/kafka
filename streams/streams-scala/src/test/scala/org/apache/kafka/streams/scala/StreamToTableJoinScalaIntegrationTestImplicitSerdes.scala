@@ -13,36 +13,55 @@
  */
 package org.apache.kafka.streams.scala
 
+import java.util.Properties
+
 import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
-import org.junit.{Before, After, Test}
+import org.junit._
+
+import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
+import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.clients.producer.ProducerConfig
 
 import org.apache.kafka.common.serialization._
+import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.test.TestUtils
 import org.apache.kafka.streams._
+import org.apache.kafka.streams.scala.kstream._
+
 import ImplicitConversions._
 import com.typesafe.scalalogging.LazyLogging
 import _root_.scala.util.Random
-import org.apache.kafka.streams.scala.kstream._
-
-import net.manub.embeddedkafka._
-import ConsumerExtensions._
-import streams._
-
-/**
-  * End-to-end integration test that demonstrates how to perform a join between a KStream and a
-  * KTable (think: KStream.leftJoin(KTable)), i.e. an example of a stateful computation.
-  *
-  * See StreamToTableJoinIntegrationTest for the equivalent Java example.
-  *
-  * Note: We intentionally use JUnit4 (wrapped by ScalaTest) for implementing this Scala integration
-  * test so it is easier to compare this Scala code with the equivalent Java code at
-  * StreamToTableJoinIntegrationTest.  One difference is that, to simplify the Scala/Junit integration, we
-  * switched from BeforeClass (which must be `static`) to Before as well as from @ClassRule (which
-  * must be `static` and `public`) to a workaround combination of `@Rule def` and a `private val`.
-  */
 
 class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
-  with StreamToTableJoinTestData with LazyLogging with EmbeddedKafkaStreamsAllInOne {
+  with StreamToTableJoinTestData with LazyLogging {
+
+  private val privateCluster: EmbeddedKafkaCluster = new EmbeddedKafkaCluster(1)
+
+  @Rule def cluster: EmbeddedKafkaCluster = privateCluster
+
+  final val alignedTime = (System.currentTimeMillis() / 1000 + 1) * 1000
+  val mockTime: MockTime = cluster.time
+  mockTime.setCurrentTimeMs(alignedTime)
+
+  val streamsConfiguration: Properties = new Properties()
+
+  @Before
+  def startKafkaCluster() {
+    cluster.createTopic(userClicksTopic)
+    cluster.createTopic(userRegionsTopic)
+    cluster.createTopic(outputTopic)
+  }
+
+  @After
+  def cleanup() {
+    try {
+      IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration)
+    } catch {
+      case e: Exception => e.printStackTrace
+    }
+
+  }
 
   @Test def testShouldCountClicksPerRegion(): Unit = {
 
@@ -50,6 +69,12 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
     // Consumed and Joined instances. So all APIs below that accept Serialized, Produced, Consumed or Joined will
     // get these instances automatically
     import DefaultSerdes._
+
+    streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "stream-table-join-scala-integration-test")
+    streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
+    streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "10000")
+    streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.IO_TMP_DIR.getAbsolutePath)
 
     val builder = new StreamsBuilder()
 
@@ -74,28 +99,50 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
     // Write the (continuously updating) results to the output topic.
     clicksPerRegion.toStream.to(outputTopic)
 
-    runStreams(
-      topicsToCreate = Seq(userRegionsTopic, userClicksTopic, outputTopic),
-      topology = builder.build()){ 
+    val streams: KafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration)
+    streams.start()
 
-      implicit val ks = stringSerde.serializer()
-      implicit val vs = longSerde.serializer()
-      implicit val kds = stringSerde.deserializer()
-      implicit val vds = longSerde.deserializer()
-
-      userRegions.foreach { r =>
-        publishToKafka(userRegionsTopic, r.key, r.value)
-      }
-
-      userClicks.foreach { r =>
-        publishToKafka(userClicksTopic, r.key, r.value)
-      }
-
-      withConsumer[String, Long, Unit] { consumer =>
-        implicit val cr = ConsumerRetryConfig(10, 3000)
-        val consumedMessages = consumer.consumeLazily(outputTopic)
-        assertEquals(consumedMessages.sortBy(_.key).map(m => new KeyValue(m.key, m.value)), expectedClicksPerRegion.sortBy(_.key))
-      }
+    // Publish user-region information.
+    val userRegionsProducerConfig: Properties = {
+      val p = new Properties()
+      p.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
+      p.put(ProducerConfig.ACKS_CONFIG, "all")
+      p.put(ProducerConfig.RETRIES_CONFIG, "0")
+      p.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer])
+      p.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer])
+      p
     }
+    import collection.JavaConverters._
+    IntegrationTestUtils.produceKeyValuesSynchronously(userRegionsTopic, userRegions.asJava, userRegionsProducerConfig, mockTime, false)
+
+    // Publish user-click information.
+    val userClicksProducerConfig: Properties = {
+      val p = new Properties()
+      p.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
+      p.put(ProducerConfig.ACKS_CONFIG, "all")
+      p.put(ProducerConfig.RETRIES_CONFIG, "0")
+      p.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer])
+      p.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[LongSerializer])
+      p
+    }
+    IntegrationTestUtils.produceKeyValuesSynchronously(userClicksTopic, userClicks.asJava, userClicksProducerConfig, mockTime, false)
+
+    // consume and verify result
+    val consumerConfig = {
+      val p = new Properties()
+      p.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
+      p.put(ConsumerConfig.GROUP_ID_CONFIG, "join-scala-integration-test-standard-consumer")
+      p.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+      p.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[StringDeserializer])
+      p.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[LongDeserializer])
+      p
+    }
+
+    val actualClicksPerRegion: java.util.List[KeyValue[String, Long]] = 
+      IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, outputTopic, expectedClicksPerRegion.size)
+
+    streams.close()
+    assertEquals(actualClicksPerRegion.asScala.sortBy(_.key), expectedClicksPerRegion.sortBy(_.key))
   }
 }
+

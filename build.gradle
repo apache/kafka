@@ -978,13 +978,13 @@ project(':streams:streams-scala') {
     compile libs.scalaLibrary
 
     testCompile project(':core')
-    testCompile libs.avro4s
+    testCompile project(':core').sourceSets.test.output
+    testCompile project(':streams').sourceSets.test.output
+    testCompile project(':clients').sourceSets.test.output
     testCompile libs.scalaLogging
 
     testCompile libs.junit
     testCompile libs.scalatest
-    testCompile libs.scalatestEmbeddedKafka
-    testCompile libs.scalatestEmbeddedKafkaStreams
 
     testRuntime libs.slf4jlog4j
   }
