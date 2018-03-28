@@ -56,6 +56,7 @@ class CodeWithVarsDirective(CodeBlock):
 
 def setup(app):
     def makeLink(role, rawtext, text, lineno, inliner, options={}, content=[]):
+        javadocLinkBase = '/' + doc_url_version + "/javadoc/"
         tokens = text.split('|')
         # add link prefix per link macro
         if role == 'kafka-file':
@@ -64,37 +65,34 @@ def setup(app):
             # TODO can we make these relative using a similar approach as in the layout template instead of using
             # absolute paths with the version in them (which would make this work more cleanly with and without the
             # version number in the URL)
-            linkPrefix = '/' + doc_url_version + "/javadoc/index.html?"
+            linkPrefix = javadocLinkBase + "index.html?"
         # The following module is only used /streams/developer-guide/
         elif role == 'streams-apidocs-kstream':
-            linkPrefix = '../javadocs/org/apache/kafka/streams/kstream/KStream.html'
+            linkPrefix = javadocLinkBase + 'org/apache/kafka/streams/kstream/KStream.html'
         # The following module is only used /streams/developer-guide/
         elif role == 'streams-apidocs-ktable':
-            linkPrefix = '../javadocs/org/apache/kafka/streams/kstream/KTable.html'
+            linkPrefix = javadocLinkBase + 'org/apache/kafka/streams/kstream/KTable.html'
         # The following module is only used /streams/developer-guide/
         elif role == 'streams-apidocs-kgroupedstream':
-            linkPrefix = '../javadocs/org/apache/kafka/streams/kstream/KGroupedStream.html'
+            linkPrefix = javadocLinkBase + 'org/apache/kafka/streams/kstream/KGroupedStream.html'
         # The following module is only used /streams/developer-guide/
         elif role == 'streams-apidocs-kgroupedtable':
-            linkPrefix = '../javadocs/org/apache/kafka/streams/kstream/KGroupedTable.html'
-        # The following module is only used /streams/developer-guide/
-        elif role == 'streams-apidocs-kstreambuilder':
-            linkPrefix = '../javadocs/org/apache/kafka/streams/kstream/KStreamBuilder.html'
+            linkPrefix = javadocLinkBase + 'org/apache/kafka/streams/kstream/KGroupedTable.html'
         # The following module is only used /streams/developer-guide/
         elif role == 'streams-apidocs-streamsbuilder':
-            linkPrefix = '../javadocs/org/apache/kafka/streams/StreamsBuilder.html'
+            linkPrefix = javadocLinkBase + 'org/apache/kafka/streams/StreamsBuilder.html'
         # The following module is only used /streams/developer-guide/
         elif role == 'streams-apidocs-store-inmem':
-            linkPrefix = '../javadocs/org/apache/kafka/streams/state/Stores.InMemoryKeyValueFactory.html'
+            linkPrefix = javadocLinkBase + 'org/apache/kafka/streams/state/Stores.InMemoryKeyValueFactory.html'
         # The following module is only used /streams/developer-guide/
         elif role == 'streams-apidocs-store-persistent':
-            linkPrefix = '../javadocs/org/apache/kafka/streams/state/Stores.PersistentKeyValueFactory.html'
+            linkPrefix = javadocLinkBase + 'org/apache/kafka/streams/state/Stores.PersistentKeyValueFactory.html'
         # The following module is only used /streams/developer-guide/
         elif role == 'streams-apidocs-timewindowedkstream':
-            linkPrefix = '../javadocs/org/apache/kafka/streams/kstream/TimeWindowedKStream.html'
+            linkPrefix = javadocLinkBase + 'org/apache/kafka/streams/kstream/TimeWindowedKStream.html'
         # The following module is only used /streams/developer-guide/
         elif role == 'streams-apidocs-sessionwindowedkstream':
-            linkPrefix = '../javadocs/org/apache/kafka/streams/kstream/SessionWindowedKStream.html'
+            linkPrefix = javadocLinkBase + 'org/apache/kafka/streams/kstream/SessionWindowedKStream.html'
         linktext = tokens[0]
         if len(tokens) == 2:
             ref = linkPrefix + tokens[1]
