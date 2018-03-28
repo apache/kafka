@@ -185,7 +185,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         for (final StateRestorer restorer : needsPositionUpdate) {
-            final long position = restoreConsumer.position(restorer.partition(), 20000L, TimeUnit.MILLISECONDS);
+            final long position = restoreConsumer.position(restorer.partition());
             logRestoreOffsets(restorer.partition(),
                               position,
                               endOffsets.get(restorer.partition()));
