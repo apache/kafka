@@ -332,10 +332,8 @@ public class SimpleBenchmark {
         // the performance will be too good.
         new Random().nextBytes(value);
 
-        long startTime = System.currentTimeMillis();
-
         for (int i = 0; i < numRecords; i++) {
-            producer.send(new ProducerRecord<>(topic, null, System.currentTimeMillis() - startTime, keyGen.next(), value));
+            producer.send(new ProducerRecord<>(topic, keyGen.next(), value));
         }
 
         producer.close();
@@ -799,24 +797,26 @@ public class SimpleBenchmark {
             }
         }
 
-        // the next() method returns an random rank id.
-        // The frequency of returned rank ids are follows Zipf distribution.
         int next() {
-            int rank;
-            double dice;
-            double friquency;
+            if (skew == 0.0d) {
+                return rand.nextInt(size);
+            } else {
+                int rank;
+                double dice;
+                double friquency;
 
-            rank = rand.nextInt(size);
-            friquency = (1.0d / Math.pow(rank, this.skew)) / this.bottom;
-            dice = rand.nextDouble();
-
-            while (!(dice < friquency)) {
                 rank = rand.nextInt(size);
                 friquency = (1.0d / Math.pow(rank, this.skew)) / this.bottom;
                 dice = rand.nextDouble();
-            }
 
-            return rank;
+                while (!(dice < friquency)) {
+                    rank = rand.nextInt(size);
+                    friquency = (1.0d / Math.pow(rank, this.skew)) / this.bottom;
+                    dice = rand.nextDouble();
+                }
+
+                return rank;
+            }
         }
     }
 }
