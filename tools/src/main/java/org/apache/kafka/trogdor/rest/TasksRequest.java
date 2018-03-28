@@ -29,6 +29,9 @@ import java.util.Set;
  * The request to /coordinator/tasks
  */
 public class TasksRequest extends Message {
+    public final static TasksRequest ALL =
+        new TasksRequest(null, 0, 0, 0, 0);
+
     /**
      * The task IDs to list.
      * An empty set of task IDs indicates that we should list all task IDs.

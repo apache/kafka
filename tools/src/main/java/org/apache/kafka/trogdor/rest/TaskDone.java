@@ -55,7 +55,7 @@ public class TaskDone extends TaskState {
         super(spec, status);
         this.startedMs = startedMs;
         this.doneMs = doneMs;
-        this.error = error;
+        this.error = error == null ? "" : error;
         this.cancelled = cancelled;
     }
 
