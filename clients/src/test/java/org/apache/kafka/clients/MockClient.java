@@ -89,7 +89,7 @@ public class MockClient implements KafkaClient {
     private final Queue<MetadataUpdate> metadataUpdates = new ArrayDeque<>();
     private volatile NodeApiVersions nodeApiVersions = NodeApiVersions.create();
     private volatile int numBlockingWakeups = 0;
-    private final AtomicInteger requestCount = new AtomicInteger(0);
+    private final AtomicInteger totalRequestCount = new AtomicInteger(0);
     public MockClient(Time time) {
         this(time, null);
     }
@@ -395,6 +395,7 @@ public class MockClient implements KafkaClient {
         futureResponses.clear();
         metadataUpdates.clear();
         authenticationErrors.clear();
+        totalRequestCount.set(0);
     }
 
     public boolean hasPendingMetadataUpdates() {
@@ -462,7 +463,7 @@ public class MockClient implements KafkaClient {
     @Override
     public ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder, long createdTimeMs,
                                           boolean expectResponse, RequestCompletionHandler callback) {
-        requestCount.incrementAndGet();
+        totalRequestCount.incrementAndGet();
         return new ClientRequest(nodeId, requestBuilder, 0, "mockClientId", createdTimeMs,
                 expectResponse, callback);
     }
@@ -508,6 +509,6 @@ public class MockClient implements KafkaClient {
 
     // visible for testing
     public int requestCount() {
-        return requestCount.get();
+        return totalRequestCount.get();
     }
 }
