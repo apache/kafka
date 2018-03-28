@@ -875,6 +875,7 @@ project(':tools') {
     compile libs.jacksonDatabind
     compile libs.slf4jApi
 
+    compile libs.awsEc2
     compile libs.jacksonJaxrsJsonProvider
     compile libs.jerseyContainerServlet
     compile libs.jerseyHk2
