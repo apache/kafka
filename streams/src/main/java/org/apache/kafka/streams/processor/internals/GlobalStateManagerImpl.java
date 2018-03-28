@@ -243,7 +243,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
         for (final TopicPartition topicPartition : topicPartitions) {
             globalConsumer.assign(Collections.singletonList(topicPartition));
             final Long checkpoint = checkpointableOffsets.get(topicPartition);
-            if (checkpoint != null) {
+            if (checkpoint != null && checkpoint > StateRestorer.NO_CHECKPOINT) {
                 globalConsumer.seek(topicPartition, checkpoint);
             } else {
                 globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
