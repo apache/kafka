@@ -117,7 +117,7 @@ public class SimpleBenchmark {
 
     private static final long STREAM_STREAM_JOIN_WINDOW = 10000L;
 
-    private static final int SOCKET_SIZE_BYTES = 1 * 1024 * 1024;
+    private static final int SOCKET_SIZE_BYTES = 1024 * 1024;
 
     /* ----------- benchmark variables that can be specified ----------- */
 
@@ -422,35 +422,7 @@ public class SimpleBenchmark {
 
         KStream<Integer, byte[]> source = builder.stream(topic, Consumed.with(INTEGER_SERDE, BYTE_SERDE));
 
-        source.process(new ProcessorSupplier<Integer, byte[]>() {
-            @Override
-            public Processor<Integer, byte[]> get() {
-                return new AbstractProcessor<Integer, byte[]>() {
-
-                    @Override
-                    public void init(ProcessorContext context) {
-                    }
-
-                    @Override
-                    public void process(Integer key, byte[] value) {
-                        processedRecords.getAndIncrement();
-                        processedBytes += value.length + Integer.SIZE;
-                        if (processedRecords.get() == numRecords) {
-                            latch.countDown();
-                        }
-                    }
-
-                    @Override
-                    public void punctuate(long timestamp) {
-                    }
-
-                    @Override
-                    public void close() {
-                    }
-                };
-            }
-        });
-        source.to(SINK_TOPIC);
+        source.peek(new CountDownAction(latch));
 
         final KafkaStreams streams = createKafkaStreamsWithExceptionHandler(builder, props);
         long latency = startStreamsThread(streams, latch);
@@ -467,35 +439,7 @@ public class SimpleBenchmark {
 
         KStream<Integer, byte[]> source = builder.stream(topic);
 
-        source.process(new ProcessorSupplier<Integer, byte[]>() {
-            @Override
-            public Processor<Integer, byte[]> get() {
-                return new AbstractProcessor<Integer, byte[]>() {
-                    @Override
-                    public void init(ProcessorContext context) {
-                    }
-
-                    @Override
-                    public void process(Integer key, byte[] value) {
-                        processedRecords.getAndIncrement();
-                        processedBytes += value.length + Integer.SIZE;
-                        if (processedRecords.get() == numRecords) {
-                            latch.countDown();
-                        }
-                    }
-
-                    @Override
-                    public void punctuate(long timestamp) {
-                    }
-
-                    @Override
-                    public void close() {
-                    }
-                };
-            }
-        });
-
-        source.to(SINK_TOPIC);
+        source.peek(new CountDownAction(latch)).to(SINK_TOPIC);
 
         final KafkaStreams streams = createKafkaStreamsWithExceptionHandler(builder, props);
         long latency = startStreamsThread(streams, latch);
@@ -515,7 +459,7 @@ public class SimpleBenchmark {
 
         KStream<Integer, byte[]> source = builder.stream(topic);
 
-        source.process(new ProcessorSupplier<Integer, byte[]>() {
+        source.peek(new CountDownAction(latch)).process(new ProcessorSupplier<Integer, byte[]>() {
             @Override
             public Processor<Integer, byte[]> get() {
                 return new AbstractProcessor<Integer, byte[]>() {
@@ -530,20 +474,13 @@ public class SimpleBenchmark {
                     @Override
                     public void process(Integer key, byte[] value) {
                         store.put(key, value);
-                        processedRecords.getAndIncrement();
-                        processedBytes += value.length + Integer.SIZE;
-                        if (processedRecords.get() == numRecords) {
-                            latch.countDown();
-                        }
                     }
 
                     @Override
-                    public void punctuate(long timestamp) {
-                    }
+                    public void punctuate(long timestamp) {}
 
                     @Override
-                    public void close() {
-                    }
+                    public void close() {}
                 };
             }
         }, "store");
@@ -567,10 +504,9 @@ public class SimpleBenchmark {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, byte[]> input = builder.stream(sourceTopic);
 
-        input.groupByKey()
-                .count()
-                .toStream()
-                .foreach(new CountDownAction<>(latch));
+        input.peek(new CountDownAction(latch))
+                .groupByKey()
+                .count();
 
         final KafkaStreams streams = createKafkaStreamsWithExceptionHandler(builder, props);
         runGenericBenchmark(streams, "Streams Count Performance [records/latency/rec-sec/MB-sec counted]: ", latch);
@@ -589,11 +525,10 @@ public class SimpleBenchmark {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, byte[]> input = builder.stream(sourceTopic);
 
-        input.groupByKey()
+        input.peek(new CountDownAction(latch))
+                .groupByKey()
                 .windowedBy(TimeWindows.of(1000).advanceBy(500))
-                .count()
-                .toStream()
-                .foreach(new CountDownAction<>(latch));
+                .count();
 
         final KafkaStreams streams = createKafkaStreamsWithExceptionHandler(builder, props);
         runGenericBenchmark(streams, "Streams Count Windowed Performance [records/latency/rec-sec/MB-sec counted]: ", latch);
@@ -610,10 +545,10 @@ public class SimpleBenchmark {
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<Long, byte[]> input1 = builder.stream(kStreamTopic);
-        final KTable<Long, byte[]> input2 = builder.table(kTableTopic);
+        final KStream<Integer, byte[]> input1 = builder.stream(kStreamTopic);
+        final KTable<Integer, byte[]> input2 = builder.table(kTableTopic);
 
-        input1.leftJoin(input2, VALUE_JOINER).foreach(new CountDownAction<byte[]>(latch));
+        input1.leftJoin(input2, VALUE_JOINER).foreach(new CountDownAction(latch));
 
         final KafkaStreams streams = createKafkaStreamsWithExceptionHandler(builder, props);
 
@@ -632,10 +567,10 @@ public class SimpleBenchmark {
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KStream<Long, byte[]> input1 = builder.stream(kStreamTopic1);
-        final KStream<Long, byte[]> input2 = builder.stream(kStreamTopic2);
+        final KStream<Integer, byte[]> input1 = builder.stream(kStreamTopic1);
+        final KStream<Integer, byte[]> input2 = builder.stream(kStreamTopic2);
 
-        input1.leftJoin(input2, VALUE_JOINER, JoinWindows.of(STREAM_STREAM_JOIN_WINDOW)).foreach(new CountDownAction<>(latch));
+        input1.leftJoin(input2, VALUE_JOINER, JoinWindows.of(STREAM_STREAM_JOIN_WINDOW)).foreach(new CountDownAction(latch));
 
         final KafkaStreams streams = createKafkaStreamsWithExceptionHandler(builder, props);
 
@@ -655,10 +590,10 @@ public class SimpleBenchmark {
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTable<Long, byte[]> input1 = builder.table(kTableTopic1);
-        final KTable<Long, byte[]> input2 = builder.table(kTableTopic2);
+        final KTable<Integer, byte[]> input1 = builder.table(kTableTopic1);
+        final KTable<Integer, byte[]> input2 = builder.table(kTableTopic2);
 
-        input1.leftJoin(input2, VALUE_JOINER).toStream().foreach(new CountDownAction<>(latch));
+        input1.leftJoin(input2, VALUE_JOINER).toStream().foreach(new CountDownAction(latch));
 
         final KafkaStreams streams = createKafkaStreamsWithExceptionHandler(builder, props);
 
@@ -722,21 +657,19 @@ public class SimpleBenchmark {
         return endTime - startTime;
     }
 
-    private class CountDownAction<V> implements ForeachAction<Object, V> {
+    private class CountDownAction implements ForeachAction<Integer, byte[]> {
+
         private CountDownLatch latch;
+
         CountDownAction(final CountDownLatch latch) {
             this.latch = latch;
         }
+
         @Override
-        public void apply(Object key, V value) {
+        public void apply(Integer key, byte[] value) {
             processedRecords.getAndIncrement();
-            if (value instanceof byte[]) {
-                processedBytes += ((byte[]) value).length + Integer.SIZE;
-            } else if (value instanceof Long) {
-                processedBytes += Long.SIZE + Integer.SIZE;
-            } else {
-                System.err.println("Unknown value type in CountDownAction");
-            }
+            processedBytes += Integer.SIZE + value.length;
+
             if (processedRecords.get() == numRecords) {
                 this.latch.countDown();
             }
