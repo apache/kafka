@@ -351,7 +351,10 @@ class Log(@volatile var dir: File,
           time = time,
           fileAlreadyExists = true)
 
-        try segment.sanityCheck(timeIndexFileNewlyCreated)
+        try {
+          segment.sanityCheck(timeIndexFileNewlyCreated)
+          segment.initializeTimestampMetadata()
+        }
         catch {
           case _: NoSuchFileException =>
             error(s"Could not find offset index file corresponding to log file ${segment.log.file.getAbsolutePath}, " +

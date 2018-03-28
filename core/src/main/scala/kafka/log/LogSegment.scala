@@ -93,28 +93,20 @@ class LogSegment private[log] (val log: FileRecords,
   private var rollingBasedTimestamp: Option[Long] = None
 
   /* The maximum timestamp we see so far */
-  @volatile private var maxTimestampSoFar: Long = _
-  @volatile private var offsetOfMaxTimestamp: Long = _
+  @volatile private var maxTimestampSoFar: Long = timeIndex.lastEntry.timestamp
+  @volatile private var offsetOfMaxTimestamp: Long = timeIndex.lastEntry.offset
 
-
-  locally {
-    try {
-      /* For some cases (like KAFKA-6264), it might not be enough to lookup the last entry in time-index because we could
-       * have messages that were appended after time index was last updated. So lookup the last entry and scan messages
-       * that appear after that to make sure we have the correct maximum timestamp and its corresponding offset.
-       * Calling loadLargestTimestamp should not have a performance impact for the normal case where the last entry
-       * was appended successfully during shutdown.
-       */
-      loadLargestTimestamp()
-    } catch {
-      /* Log layer is responsible for initiating recovery of a segment, so ignore the exceptions here */
-      case _: CorruptRecordException |
-           _: CorruptIndexException |
-           _: NoSuchFileException => {
-        maxTimestampSoFar = timeIndex.lastEntry.timestamp
-        offsetOfMaxTimestamp = timeIndex.lastEntry.offset
-      }
-    }
+  /**
+    * Initialize timestamp metadata accurately for a log segment that already exists. This method must be called when an
+    * existing log segment is opened.
+    * For some cases (like KAFKA-6264), it might not be enough to lookup the last entry in time index because we could
+    * have messages that were appended after time index was last updated. So lookup the last entry and scan messages
+    * that appear after that to make sure we have the correct maximum timestamp and its corresponding offset.
+    * @throws CorruptIndexException
+    * @throws NoSuchFileException
+    */
+  def initializeTimestampMetadata(): Unit = {
+    loadLargestTimestamp()
   }
 
   /* Return the size in bytes of this log segment */
@@ -146,15 +138,13 @@ class LogSegment private[log] (val log: FileRecords,
   }
 
   /**
-   * NOTE: Read the function description carefully. For most cases, you might want to call
-   * append(Long, Long, Long, MemoryRecords) instead of invoking this function directly.
+   * NOTE: For most cases, you might want to call append(Long, Long, Long, MemoryRecords) instead of invoking this method
+   * directly. This option is directly exposed only for the LogCleaner.
    *
    * Append the given messages ending at the given last offset and allow for the possibility that the offset might
    * overflow the index. If it does and overflow is allowed, append to the log, but skip the index append. Note that
    * this only affects log segments that were created before the patch for KAFKA-5413. For such a segment, all oversize
    * offsets will be at the end of the log segment, so it should be fine to skip the index entries.
-   *
-   * Note this option is only exposed for the LogCleaner.
    */
   @nonthreadsafe
   private[log] def append(largestOffset: Long,
@@ -376,10 +366,9 @@ class LogSegment private[log] (val log: FileRecords,
 
     log.truncateTo(validBytes)
     offsetIndex.trimToValidSize()
-    /* A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well. This
-     * segment, if created before the patch for KAFKA-5413, could have messages that overflow the index so skip the entry
-     * in such cases.
-     */
+    // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well. This
+    // segment, if created before the patch for KAFKA-5413, could have messages that overflow the index so skip the entry
+    // in such cases.
     timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipIndexFullCheck = true, mayHaveIndexOverflow = true)
     timeIndex.trimToValidSize()
     truncated

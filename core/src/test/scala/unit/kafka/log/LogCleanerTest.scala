@@ -1216,9 +1216,14 @@ class LogCleanerTest extends JUnitSuite {
     */
   @Test
   def testLogSegmentWithIndexOffsetOverflow(): Unit = {
+    val props = logProps
+    // Make sure every append is potentially able to create an index entry
+    props.put(LogConfig.IndexIntervalBytesProp, 1)
+    val config = LogConfig(props)
+
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
-    var log = makeLog()
+    var log = makeLog(config = config)
 
     val keys = List(1, 2, 2, 3)
     val offsets = List(0L, 1L, Int.MaxValue + 0L, Int.MaxValue + 1L)
@@ -1228,7 +1233,7 @@ class LogCleanerTest extends JUnitSuite {
       val records = MemoryRecords.withRecords(offsets(i), CompressionType.NONE, 0,
         new SimpleRecord(keys(i).toString.getBytes, keys(i).toString.getBytes))
       // write to the segment directly since offsets will overflow the index
-      log.activeSegment.append(offsets.last, 0, offsets.last, records, allowOversizeIndexOffset = true)
+      log.activeSegment.append(offsets(i), i, offsets(i), records, allowOversizeIndexOffset = true)
     }
 
     // Since we wrote messages directly to the log segment, bypassing the log layer, the log now would be in an

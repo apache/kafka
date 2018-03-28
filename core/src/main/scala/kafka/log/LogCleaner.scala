@@ -621,6 +621,12 @@ private[log] class Cleaner(val id: Int,
         val largestOffsetToAppend = result.maxOffset
 
         if ((largestOffsetToAppend - baseOffsetOfLog) > Integer.MAX_VALUE) {
+          // Typically, a segment can only include messages whose offsets can be represented as an integer offset relative
+          // to the baseOffset. #groupSegmentsBySize must already make sure that we do not cross this threshold on a
+          // segment-boundary. So if the largest offset cannot be represented as its base-relative form, we must only
+          // have exactly one segment in such a group.
+          // Note that having a segment with messages that cannot be expressed as an integer in base-relative form is not
+          // a typical scenario, and is only true for segments created before the patch for KAFKA-5413.
           require(numSegmentsInGroup == 1, s"Constructed segment group causes index offset overflow for $topicPartition")
           allowOversizeIndexOffset = true
 

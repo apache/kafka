@@ -139,10 +139,11 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
     * @return Base-relative offset
     * @throws InvalidOffsetException
     */
-  def getRelativeOffset(offset: Long): Int = {
+  def relativeOffset(offset: Long): Int = {
     val relativeOffset = (offset - baseOffset)
     if (relativeOffset > Integer.MAX_VALUE || relativeOffset < 0)
-      throw new InvalidOffsetException(s"Attempt to append offset $offset to offset index with base offset $baseOffset will cause offset overflow")
+      throw new InvalidOffsetException(
+        s"Attempt to append offset $offset to time index with base offset $baseOffset will cause overflow (${file.getAbsolutePath})")
     relativeOffset.toInt
   }
 
@@ -153,9 +154,9 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
     inLock(lock) {
       require(!isFull, "Attempt to append to a full index (size = " + _entries + ").")
       if (_entries == 0 || offset > _lastOffset) {
-        val relativeOffset = getRelativeOffset(offset)
+        val relOffset = relativeOffset(offset)
         debug("Adding index entry %d => %d to %s.".format(offset, position, file.getName))
-        mmap.putInt(relativeOffset)
+        mmap.putInt(relOffset)
         mmap.putInt(position)
         _entries += 1
         _lastOffset = offset

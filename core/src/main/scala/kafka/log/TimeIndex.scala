@@ -103,11 +103,11 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
     * @return Base-relative offset.
     * @throws InvalidOffsetException
     */
-  def getRelativeOffset(offset: Long): Int = {
+  def relativeOffset(offset: Long): Int = {
     val relativeOffset = (offset - baseOffset)
     if (relativeOffset > Integer.MAX_VALUE || relativeOffset < 0)
-      throw new InvalidOffsetException(s"Attempt to append offset $offset to time index with base offset $baseOffset will cause offset overflow")
-
+      throw new InvalidOffsetException(
+        s"Attempt to append offset $offset to time index with base offset $baseOffset will cause overflow (${file.getAbsolutePath})")
     relativeOffset.toInt
   }
 
@@ -126,16 +126,16 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
   }
 
   /**
-    * NOTE: Read the function description carefully. For most cases, you might want to call append(Long, Int) instead
-    * of calling this function directly.
+    * For most cases, you might want to call append(Long, Int) instead of calling this method directly. This option is
+    * only exposed for segments created before the patch for KAFKA-5413.
     *
-    * Append an entry for the given offset/location pair to the index, allowing for the possiblity that the offset might
+    * Append an entry for the given offset/location pair to the index, allowing for the possibility that the offset might
     * overflow the index. If it does and overflow is allowed, this function silently returns without appending to the
     * index. Note that this `mayHaveIndexOverflow` must only be used for log segments that were created before the patch
     * for KAFKA-5413. For such segments, it should be fine to skip index entries corresponding to messages that cause an
     * index overflow.
     *
-    * This option is only exposed for log recovery and log close.
+    * This option is directly exposed only for log recovery and log close.
     */
   private[log] def maybeAppend(timestamp: Long, offset: Long, skipIndexFullCheck: Boolean, mayHaveIndexOverflow: Boolean) {
     inLock(lock) {
@@ -159,10 +159,8 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
       // If all the messages are in message format v0, the timestamp will always be NoTimestamp. In that case, the time
       // index will be empty.
       if (timestamp > lastEntry.timestamp) {
-        val relativeOffset =
-          try {
-            getRelativeOffset(offset)
-          }
+        val relOffset =
+          try relativeOffset(offset)
           catch {
             case _: InvalidOffsetException if (mayHaveIndexOverflow) => {
               debug(s"Skipping time index append: overflow for offset: $offset baseOffset: $baseOffset (${file.getAbsolutePath})")
@@ -172,7 +170,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
 
         debug("Adding index entry %d => %d to %s.".format(timestamp, offset, file.getName))
         mmap.putLong(timestamp)
-        mmap.putInt(relativeOffset)
+        mmap.putInt(relOffset)
         _entries += 1
         _lastEntry = TimestampOffset(timestamp, offset)
         require(_entries * entrySize == mmap.position(), _entries + " entries but file position in index is " + mmap.position() + ".")
