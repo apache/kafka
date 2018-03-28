@@ -36,18 +36,15 @@ available for writing your Kafka Streams applications.
 You can define dependencies on the following libraries for your Kafka
 Streams applications.
 
-+---------+------------+-------+--------------------------------------+
-| Group   | Artifact   | Versi | Description                          |
-| ID      | ID         | on    |                                      |
-+=========+============+=======+======================================+
-| ``org.a | ``kafka-st | ``1.0 | (Required) Base library for Kafka    |
-| pache.k | reams``    | .0``  | Streams.                             |
-| afka``  |            |       |                                      |
-+---------+------------+-------+--------------------------------------+
-| ``org.a | ``kafka-cl | ``1.0 | (Required) Kafka client library.     |
-| pache.k | ients``    | .0``  | Contains built-in                    |
-| afka``  |            |       | serializers/deserializers.           |
-+---------+------------+-------+--------------------------------------+
++----------------------+-------------------+--------------------------+---------------------------------------------+
+| Group ID             | Artifact ID       | Version                  | Description                                 |
++======================+===================+==========================+=============================================+
+| ``org.apache.kafka`` | ``kafka-streams`` | :litwithvars:`|release|` | (Required) Base library for Kafka Streams.  |
++----------------------+-------------------+--------------------------+---------------------------------------------+
+| ``org.apache.kafka`` | ``kafka-clients`` | :litwithvars:`|release|` | (Required) Kafka client library.            |
+|                      |                   |                          | Contains built-in                           |
+|                      |                   |                          | serializers/deserializers.                  |
++----------------------+-------------------+--------------------------+---------------------------------------------+
 
 .. tip::
 

@@ -42,17 +42,29 @@ custom_config_names = [
 ]
 
 
+def _do_substitutions(config, content):
+    def replacement(match):
+        """Replace with either the substitution from config, or the original text if we don't have a substitution"""
+        refname = match.group(1)
+        return unicode(getattr(config, refname, match.group(0)))
+
+    return re.sub("\|(\w+)\|", replacement, content)
+
 class CodeWithVarsDirective(CodeBlock):
     def run(self):
         config = self.state.document.settings.env.config
 
-        def replacement(match):
-            """Replace with either the substitution from config, or the original text if we don't have a substitution"""
-            refname = match.group(1)
-            return unicode(getattr(config, refname, match.group(0)))
-
-        self.content = [re.sub("\|(\w+)\|", replacement, content) for content in self.content]
+        self.content = [_do_substitutions(config, content) for content in self.content]
         return super(CodeWithVarsDirective, self).run()
+
+def literal_with_vars_role(typ, rawtext, text, lineno, inliner, options={}, content=[]):
+    config = inliner.document.settings.env.app.config
+    text = utils.unescape(text)
+
+    substituted_text = _do_substitutions(config, text)
+    retnode = nodes.literal(role=typ.lower(), classes=[typ])
+    retnode += nodes.Text(substituted_text, substituted_text)
+    return [retnode], []
 
 def setup(app):
     def makeLink(role, rawtext, text, lineno, inliner, options={}, content=[]):
@@ -122,6 +134,7 @@ def setup(app):
         return [node], []
 
     app.add_role('kafka-download', downloadLink)
+    app.add_role('litwithvars', literal_with_vars_role)
 
     app.add_directive('codewithvars', CodeWithVarsDirective)
 
