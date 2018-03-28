@@ -167,7 +167,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         for (final TopicPartition topicPartition : topicPartitions) {
             consumer.assign(Collections.singletonList(topicPartition));
             final Long checkpoint = checkpointableOffsets.get(topicPartition);
-            if (checkpoint != null) {
+            if (checkpoint != null && checkpoint > StateRestorer.NO_CHECKPOINT) {
                 consumer.seek(topicPartition, checkpoint);
             } else {
                 consumer.seekToBeginning(Collections.singletonList(topicPartition));

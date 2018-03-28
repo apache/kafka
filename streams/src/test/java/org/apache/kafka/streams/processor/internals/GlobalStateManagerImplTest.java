@@ -68,12 +68,13 @@ public class GlobalStateManagerImplTest {
     private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private final TopicPartition t1 = new TopicPartition("t1", 1);
     private final TopicPartition t2 = new TopicPartition("t2", 1);
+    private final TopicPartition t3 = new TopicPartition("t3", 1);
     private GlobalStateManagerImpl stateManager;
     private NoOpProcessorContext context;
     private StateDirectory stateDirectory;
     private String stateDirPath;
     private NoOpReadOnlyStore<Object, Object> store1;
-    private NoOpReadOnlyStore store2;
+    private NoOpReadOnlyStore store2, store3;
     private MockConsumer<byte[], byte[]> consumer;
     private File checkpointFile;
     private ProcessorTopology topology;
@@ -83,18 +84,21 @@ public class GlobalStateManagerImplTest {
         final Map<String, String> storeToTopic = new HashMap<>();
         storeToTopic.put("t1-store", "t1");
         storeToTopic.put("t2-store", "t2");
+        storeToTopic.put("t3-store", "t3");
 
         final Map<StateStore, ProcessorNode> storeToProcessorNode = new HashMap<>();
-        store1 = new NoOpReadOnlyStore<>("t1-store");
+        store1 = new NoOpReadOnlyStore<>("t1-store", true);
         storeToProcessorNode.put(store1, new MockProcessorNode(-1));
-        store2 = new NoOpReadOnlyStore("t2-store");
+        store2 = new NoOpReadOnlyStore("t2-store", true);
         storeToProcessorNode.put(store2, new MockProcessorNode(-1));
+        store3 = new NoOpReadOnlyStore("t3-store", false);
+        storeToProcessorNode.put(store3, new MockProcessorNode(-1));
         topology = new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
                                          Collections.<String, SourceNode>emptyMap(),
                                          Collections.<String, SinkNode>emptyMap(),
                                          Collections.<StateStore>emptyList(),
                                          storeToTopic,
-                                         Arrays.<StateStore>asList(store1, store2));
+                                         Arrays.<StateStore>asList(store1, store2, store3));
 
         context = new NoOpProcessorContext();
         stateDirPath = TestUtils.tempDirectory().getPath();
@@ -158,7 +162,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldReturnInitializedStoreNames() {
         final Set<String> storeNames = stateManager.initialize(context);
-        assertEquals(Utils.mkSet(store1.name(), store2.name()), storeNames);
+        assertEquals(Utils.mkSet(store1.name(), store2.name(), store3.name()), storeNames);
     }
 
     @Test
@@ -464,7 +468,7 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldSkipGlobalInMemoryStoreOffsetsToFile() throws IOException {
-        stateManager.initialize();
+        stateManager.initialize(context);
         initializeConsumer(10, 1, t3);
         stateManager.register(store3, stateRestoreCallback);
         stateManager.close(Collections.<TopicPartition, Long>emptyMap());

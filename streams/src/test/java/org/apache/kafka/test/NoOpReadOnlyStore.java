@@ -28,14 +28,21 @@ public class NoOpReadOnlyStore<K, V>
     private boolean open = true;
     public boolean initialized;
     public boolean flushed;
+    public boolean rocksdbStore;
 
 
     public NoOpReadOnlyStore() {
-        this("");
+        this("", false);
     }
 
+
     public NoOpReadOnlyStore(final String name) {
+        this(name, false);
+    }
+
+    public NoOpReadOnlyStore(final String name, final boolean rocksdbStore) {
         this.name = name;
+        this.rocksdbStore = rocksdbStore;
     }
 
     @Override
