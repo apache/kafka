@@ -161,7 +161,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
 
   def join[VT, VR](table: KTable[K, VT],
     joiner: (V, VT) => VR)(implicit joined: Joined[K, V, VT]): KStream[K, VR] =
-      inner.leftJoin[VT, VR](table.inner, joiner.asValueJoiner, joined)
+      inner.join[VT, VR](table.inner, joiner.asValueJoiner, joined)
 
   def join[GK, GV, RV](globalKTable: GlobalKTable[GK, GV],
     keyValueMapper: (K, V) => GK,
