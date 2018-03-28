@@ -198,13 +198,4 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
   def peek(action: (K, V) => Unit): KStream[K, V] = {
     inner.peek((k: K, v: V) => action(k, v))
   }
-
-  // -- EXTENSIONS TO KAFKA STREAMS --
-
-  // applies the predicate to know what messages should go to the left stream (predicate == true)
-  // or to the right stream (predicate == false)
-  def split(predicate: (K, V) => Boolean): (KStream[K, V], KStream[K, V]) = {
-    (this.filter(predicate), this.filterNot(predicate))
-  }
-
 }

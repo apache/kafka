@@ -17,6 +17,7 @@ import java.util.Properties
 
 import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
+import org.junit.rules.TemporaryFolder
 import org.junit._
 
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
@@ -31,7 +32,6 @@ import org.apache.kafka.streams.scala.kstream._
 
 import ImplicitConversions._
 import com.typesafe.scalalogging.LazyLogging
-import _root_.scala.util.Random
 
 class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
   with StreamToTableJoinTestData with LazyLogging {
@@ -46,21 +46,14 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
 
   val streamsConfiguration: Properties = new Properties()
 
+  val tFolder: TemporaryFolder = new TemporaryFolder(TestUtils.tempDirectory())
+  @Rule def testFolder: TemporaryFolder = tFolder
+
   @Before
-  def startKafkaCluster() {
+  def startKafkaCluster(): Unit = {
     cluster.createTopic(userClicksTopic)
     cluster.createTopic(userRegionsTopic)
     cluster.createTopic(outputTopic)
-  }
-
-  @After
-  def cleanup() {
-    try {
-      IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration)
-    } catch {
-      case e: Exception => e.printStackTrace
-    }
-
   }
 
   @Test def testShouldCountClicksPerRegion(): Unit = {
@@ -74,7 +67,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends JUnitSuite
     streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
     streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "10000")
     streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.IO_TMP_DIR.getAbsolutePath)
+    streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath())
 
     val builder = new StreamsBuilder()
 

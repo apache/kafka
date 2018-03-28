@@ -22,6 +22,7 @@ import java.util.regex.Pattern
 import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit._
+import org.junit.rules.TemporaryFolder
 
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams._
@@ -37,7 +38,6 @@ import org.apache.kafka.test.TestUtils
 
 import ImplicitConversions._
 import com.typesafe.scalalogging.LazyLogging
-import _root_.scala.util.Random
 
 class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
 
@@ -51,19 +51,14 @@ class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
 
   val streamsConfiguration: Properties = new Properties()
 
+  val tFolder: TemporaryFolder = new TemporaryFolder(TestUtils.tempDirectory())
+  @Rule def testFolder: TemporaryFolder = tFolder
+    
+
   @Before
-  def startKafkaCluster() {
+  def startKafkaCluster(): Unit = {
     cluster.createTopic(inputTopic)
     cluster.createTopic(outputTopic)
-  }
-
-  @After
-  def cleanup() {
-    try {
-      IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration)
-    } catch {
-      case e: Exception => e.printStackTrace
-    }
   }
 
   @Test def testShouldCountWords(): Unit = {
@@ -74,7 +69,9 @@ class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
     streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
     streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "10000")
     streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.IO_TMP_DIR.getAbsolutePath)
+    streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath())
+
+    println(s"**** ${TestUtils.IO_TMP_DIR.getAbsolutePath}")
 
     val streamBuilder = new StreamsBuilder
     val textLines = streamBuilder.stream[String, String](inputTopic)
@@ -126,10 +123,9 @@ class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
 }
 
 trait WordCountTestData {
-  val inputTopic = s"inputTopic.${Random.nextInt(100)}"
-  val outputTopic = s"outputTopic.${Random.nextInt(100)}"
-  val brokers = "localhost:9092"
-  val localStateDir = "local_state_data"
+  val inputTopic = s"inputTopic"
+  val outputTopic = s"outputTopic"
+  val localStateDir = "local_state_data_wc"
 
   val inputValues = List(
     "Hello Kafka Streams",

@@ -28,7 +28,7 @@ trait ScalaSerde[T] extends Serde[T] {
   override def close(): Unit = ()
 }
 
-trait StatelessScalaSerde[T >: Null] extends Serde[T] with ScalaSerde[T] {
+trait SimpleScalaSerde[T >: Null] extends Serde[T] with ScalaSerde[T] {
   def serialize(data: T): Array[Byte]
   def deserialize(data: Array[Byte]): Option[T]
 
