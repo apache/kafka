@@ -89,9 +89,11 @@ public class YahooBenchmark {
     }
 
     // just for Yahoo benchmark
-    private boolean maybeSetupPhaseCampaigns(final String topic, final String clientId,
+    private boolean maybeSetupPhaseCampaigns(final String topic,
+                                             final String clientId,
                                              final boolean skipIfAllTests,
-                                             final int numCampaigns, final int adsPerCampaign,
+                                             final int numCampaigns,
+                                             final int adsPerCampaign,
                                              final List<String> ads) {
         parent.resetStats();
         // initialize topics
@@ -111,7 +113,7 @@ public class YahooBenchmark {
                 String concat = adId + ":" + campaignID;
                 producer.send(new ProducerRecord<>(topic, adId, concat));
                 ads.add(adId);
-                parent.processedRecords.getAndIncrement();
+                parent.processedRecords++;
                 parent.processedBytes += concat.length() + adId.length();
             }
         }
@@ -158,7 +160,7 @@ public class YahooBenchmark {
             event.eventTime = System.currentTimeMillis();
             byte[] value = projectedEventSerializer.serialize(topic, event);
             producer.send(new ProducerRecord<>(topic, event.adID, value));
-            parent.processedRecords.getAndIncrement();
+            parent.processedRecords++;
             parent.processedBytes += value.length + event.adID.length();
         }
         producer.close();
@@ -282,11 +284,11 @@ public class YahooBenchmark {
             .peek(new ForeachAction<String, ProjectedEvent>() {
                 @Override
                 public void apply(String key, ProjectedEvent value) {
-                    parent.processedRecords.getAndIncrement();
-                    if (parent.processedRecords.get() % 1000000 == 0) {
-                        System.out.println("Processed " + parent.processedRecords.get());
+                    parent.processedRecords++;
+                    if (parent.processedRecords % 1000000 == 0) {
+                        System.out.println("Processed " + parent.processedRecords);
                     }
-                    if (parent.processedRecords.get() >= numRecords) {
+                    if (parent.processedRecords >= numRecords) {
                         latch.countDown();
                     }
                 }
