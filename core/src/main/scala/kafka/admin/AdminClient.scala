@@ -351,13 +351,13 @@ class AdminClient(val time: Time,
   }
 
   def renewToken(hmac: ByteBuffer, renewTimePeriod: Long = -1): (Errors, Long) = {
-    val responseBody = sendAnyNode(ApiKeys.RENEW_DELEGATION_TOKEN, new RenewDelegationTokenRequest.Builder(hmac, renewTimePeriod))
+    val responseBody = sendAnyNode(ApiKeys.RENEW_DELEGATION_TOKEN, new RenewDelegationTokenRequest.Builder(new Array[Byte](hmac.remaining), renewTimePeriod))
     val response = responseBody.asInstanceOf[RenewDelegationTokenResponse]
     (response.error, response.expiryTimestamp)
   }
 
   def expireToken(hmac: ByteBuffer, expiryTimeStamp: Long = -1): (Errors, Long) = {
-    val responseBody = sendAnyNode(ApiKeys.EXPIRE_DELEGATION_TOKEN, new ExpireDelegationTokenRequest.Builder(hmac, expiryTimeStamp))
+    val responseBody = sendAnyNode(ApiKeys.EXPIRE_DELEGATION_TOKEN, new ExpireDelegationTokenRequest.Builder(new Array[Byte](hmac.remaining), expiryTimeStamp))
     val response = responseBody.asInstanceOf[ExpireDelegationTokenResponse]
     (response.error, response.expiryTimestamp)
   }

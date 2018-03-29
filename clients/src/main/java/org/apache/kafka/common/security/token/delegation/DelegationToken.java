@@ -18,7 +18,6 @@ package org.apache.kafka.common.security.token.delegation;
 
 import org.apache.kafka.common.utils.Base64;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 public class DelegationToken {
@@ -40,10 +39,6 @@ public class DelegationToken {
 
     public String hmacAsBase64String() {
         return Base64.encoder().encodeToString(hmac);
-    }
-
-    public ByteBuffer hmacBuffer() {
-        return ByteBuffer.wrap(hmac);
     }
 
     @Override

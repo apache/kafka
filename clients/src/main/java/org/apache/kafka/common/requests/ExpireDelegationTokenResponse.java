@@ -93,4 +93,8 @@ public class ExpireDelegationTokenResponse extends AbstractResponse {
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
+
+    public boolean hasError() {
+        return this.error != Errors.NONE;
+    }
 }

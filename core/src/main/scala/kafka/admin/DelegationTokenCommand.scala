@@ -17,12 +17,12 @@
 
 package kafka.admin
 
-import java.nio.ByteBuffer
+import java.text.SimpleDateFormat
 
 import joptsimple._
 import kafka.utils.{CommandLineUtils, Exit, Logging}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.clients.admin.{CreateDelegationTokenOptions, DescribeDelegationTokenOptions, ExpireDelegationTokenOptions, RenewDelegationTokenOptions, AdminClient => JAdminClient}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.apache.kafka.common.utils.{Base64, SecurityUtils, Utils}
@@ -71,19 +71,19 @@ object DelegationTokenCommand extends Logging {
     }
   }
 
-  def createToken(adminClient: AdminClient, opts: DelegationTokenCommandOptions) = {
-    val renewerPrincipals = getPrincipals(opts, opts.renewPrincipalsOpt)
+  def createToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions) = {
+    val renewerPrincipals = getPrincipals(opts, opts.renewPrincipalsOpt).asJava
     val maxLifeTimeMs = opts.options.valueOf(opts.maxLifeTimeOpt).longValue
 
     println("Calling create token operation with renewers :" + renewerPrincipals +" , max-life-time-period :"+ maxLifeTimeMs)
-    val response = adminClient.createToken(renewerPrincipals, maxLifeTimeMs)
-    response  match {
-        case (Errors.NONE, token) => println("Created delegation token with tokenId : %s".format(token.tokenInfo.tokenId)); printToken(List(token))
-        case (e, _) =>  throw new AdminOperationException(e.message)
-    }
+    val createDelegationTokenOptions = new CreateDelegationTokenOptions().maxlifeTimeMs(maxLifeTimeMs).renewers(renewerPrincipals)
+    val createResult = adminClient.createDelegationToken(createDelegationTokenOptions)
+    val token = createResult.delegationToken().get()
+    println("Created delegation token with tokenId : %s".format(token.tokenInfo.tokenId)); printToken(List(token))
   }
 
   def printToken(tokens: List[DelegationToken]): Unit = {
+    val dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm")
     print("\n%-15s %-30s %-15s %-25s %-15s %-15s %-15s".format("TOKENID", "HMAC", "OWNER", "RENEWERS", "ISSUEDATE", "EXPIRYDATE", "MAXDATE"))
     for (token <- tokens) {
       val tokenInfo = token.tokenInfo
@@ -92,9 +92,9 @@ object DelegationTokenCommand extends Logging {
         token.hmacAsBase64String,
         tokenInfo.owner,
         tokenInfo.renewersAsString,
-        tokenInfo.issueTimestamp,
-        tokenInfo.expiryTimestamp,
-        tokenInfo.maxTimestamp))
+        dateFormat.format(tokenInfo.issueTimestamp),
+        dateFormat.format(tokenInfo.expiryTimestamp),
+        dateFormat.format(tokenInfo.maxTimestamp)))
       println()
     }
   }
@@ -106,42 +106,36 @@ object DelegationTokenCommand extends Logging {
       List.empty[KafkaPrincipal]
   }
 
-  def renewToken(adminClient: AdminClient, opts: DelegationTokenCommandOptions) = {
+  def renewToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions) = {
     val hmac = opts.options.valueOf(opts.hmacOpt)
     val renewTimePeriodMs = opts.options.valueOf(opts.renewTimePeriodOpt).longValue()
     println("Calling renew token operation with hmac :" + hmac +" , renew-time-period :"+ renewTimePeriodMs)
-    val response = adminClient.renewToken(ByteBuffer.wrap(Base64.decoder.decode(hmac)), renewTimePeriodMs)
-    response match {
-      case (Errors.NONE, expiryTimeStamp) => println("Completed renew operation. New expiry timestamp : %s".format(expiryTimeStamp))
-      case (e, expiryTimeStamp) => throw new AdminOperationException(e.message)
-    }
+    val renewResult = adminClient.renewDelegationToken(Base64.decoder.decode(hmac), new RenewDelegationTokenOptions().renewTimePeriodMs(renewTimePeriodMs))
+    val expiryTimeStamp = renewResult.expiryTimestamp().get()
+    println("Completed renew operation. New expiry timestamp : %s".format(expiryTimeStamp))
   }
 
-  def expireToken(adminClient: AdminClient, opts: DelegationTokenCommandOptions) = {
+  def expireToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions) = {
     val hmac = opts.options.valueOf(opts.hmacOpt)
     val expiryTimePeriodMs = opts.options.valueOf(opts.expiryTimePeriodOpt).longValue()
     println("Calling expire token operation with hmac :" + hmac +" , expire-time-period : "+ expiryTimePeriodMs)
-    val response = adminClient.expireToken(ByteBuffer.wrap(Base64.decoder.decode(hmac)), expiryTimePeriodMs)
-    response match {
-      case (Errors.NONE, expiryTimeStamp) => println("Completed expire operation. New expiry timestamp : %s".format(expiryTimeStamp))
-      case (e, expiryTimeStamp) => throw new AdminOperationException(e.message)
-    }
+    val expireResult = adminClient.expireDelegationToken(Base64.decoder.decode(hmac), new ExpireDelegationTokenOptions().expiryTimePeriodMs(expiryTimePeriodMs))
+    val expiryTimeStamp = expireResult.expiryTimestamp().get()
+    println("Completed expire operation. New expiry timestamp : %s".format(expiryTimeStamp))
   }
 
-  def describeToken(adminClient: AdminClient, opts: DelegationTokenCommandOptions) = {
-    val ownerPrincipals = getPrincipals(opts, opts.ownerPrincipalsOpt)
+  def describeToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions) = {
+    val ownerPrincipals = getPrincipals(opts, opts.ownerPrincipalsOpt).asJava
     println("Calling describe token operation for owners :" + ownerPrincipals)
-    val response = adminClient.describeToken(ownerPrincipals)
-    response  match {
-      case (Errors.NONE, tokens) => println("Total Number of tokens : %s".format(tokens.size)); printToken(tokens)
-      case (e, tokens) => throw new AdminOperationException(e.message)
-    }
+    val describeResult = adminClient.describeDelegationToken(new DescribeDelegationTokenOptions().owners(ownerPrincipals))
+    val tokens = describeResult.delegationTokens().get().asScala.toList
+    println("Total Number of tokens : %s".format(tokens.size)); printToken(tokens)
   }
 
-  private def createAdminClient(opts: DelegationTokenCommandOptions): AdminClient = {
+  private def createAdminClient(opts: DelegationTokenCommandOptions): JAdminClient = {
     val props = Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
-    AdminClient.create(props)
+    JAdminClient.create(props)
   }
 
   class DelegationTokenCommandOptions(args: Array[String]) {
