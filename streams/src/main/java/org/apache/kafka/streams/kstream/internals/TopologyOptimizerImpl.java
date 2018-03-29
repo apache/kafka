@@ -55,7 +55,8 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
             buildAndMaybeOptimize(internalTopologyBuilder, streamGraphNode);
 
             for (StreamsGraphNode descendant : streamGraphNode.getDescendants()) {
-                if (streamGraphNode.descendants.size() > 1) {
+                if (streamGraphNode.descendants.size() > 1 || descendant.topologyNodeType == TopologyNodeType.MERGE ||
+                    (descendant.topologyNodeType == TopologyNodeType.STREAM_KTABLE_JOIN && (graphNodeStack.peek() != null && graphNodeStack.peek().topologyNodeType == TopologyNodeType.KTABLE))) {
                     LOG.debug(String.format("Adding to bottom of stack %s descendants %s", descendant, descendant.descendants));
                     graphNodeStack.addLast(descendant);
                 } else {
@@ -77,10 +78,12 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
             case TOPOLOGY_PARENT:
                 LOG.info("Root of entire topology will process descendant nodes");
                 break;
+            case KGROUPED_STREAM:
+                LOG.info("KGroupedStream Node moving to next node");
+                break;
 
             case SOURCE:
                 buildSourceNode(internalTopologyBuilder, descendant, processDetails);
-
                 break;
 
             case SINK:
@@ -89,6 +92,9 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
 
             case KTABLE:
                 buildKTableNode(internalTopologyBuilder, descendant, processDetails);
+                break;
+            case MERGE:
+                internalTopologyBuilder.addProcessor(descendant.name(), new KStreamPassThrough<>(), processDetails.getParentNames());
 
                 break;
 
@@ -96,12 +102,13 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
             case SELECT_KEY:
             case MAP:
             case FLATMAP:
-
+            case MAP_VALUES:
                 internalTopologyBuilder.addProcessor(descendant.name(),
                                                      processDetails.getProcessorSupplier(),
                                                      descendant.getPredecessorName());
 
                 break;
+
             case PROCESSOR:
             case TRANSFORM:
             case TRANSFORM_VALUES:

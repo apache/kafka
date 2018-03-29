@@ -127,6 +127,10 @@ public class StreamsGraphNode {
         return predecessorName;
     }
 
+    public void setPredecessorName(String predecessorName) {
+        this.predecessorName = predecessorName;
+    }
+
     public TopologyNodeType getType() {
         return this.topologyNodeType;
     }

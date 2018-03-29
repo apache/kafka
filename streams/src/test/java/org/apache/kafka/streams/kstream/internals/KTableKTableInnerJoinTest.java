@@ -169,7 +169,7 @@ public class KTableKTableInnerJoinTest {
         table2 = builder.table(topic2, consumed);
         joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
         joined.toStream().process(processor);
-
+        builder.build();
         doTestJoin(builder, expectedKeys, processor, joined);
     }
 
@@ -190,7 +190,7 @@ public class KTableKTableInnerJoinTest {
         table2 = builder.table(topic2, consumed);
         joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER, Serdes.String(), "anyQueryableName");
         joined.toStream().process(processor);
-
+        builder.build();
         doTestJoin(builder, expectedKeys, processor, joined);
     }
 

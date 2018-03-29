@@ -763,7 +763,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                               graphBuilder);
 
         if (internalQueryableName != null) {
-            builder.internalTopologyBuilder.addStateStore(storeSupplier, joinMergeName);
             graphBuilder.withProcessDetails(ProcessDetails.builder().withStoreSupplier(storeSupplier).build());
         }
 

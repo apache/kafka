@@ -123,6 +123,7 @@ public class StreamsMetadataStateTest {
 
         cluster = new Cluster(null, Collections.<Node>emptyList(), partitionInfos, Collections.<String>emptySet(), Collections.<String>emptySet());
         discovery = new StreamsMetadataState(StreamsBuilderTest.internalTopologyBuilder(builder), hostOne);
+        builder.build();
         discovery.onChange(hostToPartitions, cluster);
         partitioner = new StreamPartitioner<String, Object>() {
             @Override

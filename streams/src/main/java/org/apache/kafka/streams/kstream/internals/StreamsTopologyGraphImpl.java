@@ -21,13 +21,29 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class StreamsTopologyGraphImpl extends StreamsTopologyGraph {
 
     private static final Logger LOG = LoggerFactory.getLogger(StreamsTopologyGraphImpl.class);
+    private final AtomicInteger kgroupedCounter = new AtomicInteger(0);
+    private final AtomicInteger streamStreamJoinCounter = new AtomicInteger(0);
+    private StreamsGraphNode previousNode;
 
     @Override
     public void addNode(final StreamsGraphNode node) {
+
+        if (node.topologyNodeType == TopologyNodeType.KGROUPED_STREAM) {
+            node.setName(node.name() + "-" + kgroupedCounter.incrementAndGet());
+            node.setPredecessorName(previousNode.name());
+        } else if (node.topologyNodeType == TopologyNodeType.AGGREGATE && previousNode.topologyNodeType == TopologyNodeType.KGROUPED_STREAM) {
+            node.setPredecessorName(previousNode.name());
+        }
+
+//        else if (node.topologyNodeType == TopologyNodeType.STREAM_STREAM_JOIN) {
+//            node.setName(node.name() + "-" + streamStreamJoinCounter.incrementAndGet());
+//            node.setPredecessorName(previousNode.name());
+//        }
 
         final StreamsGraphNode predecessorNode = node.getPredecessorName() != null ? nameToGraphNode.get(node.getPredecessorName()) : null;
 
@@ -68,6 +84,8 @@ public class StreamsTopologyGraphImpl extends StreamsTopologyGraph {
         if (!nameToGraphNode.containsKey(node.name())) {
             nameToGraphNode.put(node.name(), node);
         }
+
+        previousNode = node;
     }
 
 }

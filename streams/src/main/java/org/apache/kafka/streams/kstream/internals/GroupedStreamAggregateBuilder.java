@@ -74,10 +74,8 @@ class GroupedStreamAggregateBuilder<K, V> {
                                                           TopologyNodeType.AGGREGATE,
                                                           false,
                                                           processDetails,
-                                                          null);
+                                                          name);
         builder.addNode(graphNode);
-//        builder.internalTopologyBuilder.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
-//        builder.internalTopologyBuilder.addStateStore(storeBuilder, aggFunctionName);
 
         return new KTableImpl<>(
                 builder,

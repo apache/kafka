@@ -79,7 +79,7 @@ public class KStreamKStreamJoinTest {
                               MockValueJoiner.TOSTRING_JOINER,
                               JoinWindows.of(100),
                               Joined.with(intSerde, stringSerde, stringSerde));
-        builder.build();
+
         joined.process(processor);
 
         Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);

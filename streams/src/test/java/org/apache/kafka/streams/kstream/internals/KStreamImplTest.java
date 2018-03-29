@@ -163,6 +163,7 @@ public class KStreamImplTest {
         stream4.to("topic-5");
 
         streams2[1].through("topic-6").process(new MockProcessorSupplier<String, Integer>());
+        builder.build();
 
         assertEquals(2 + // sources
             2 + // stream1
@@ -187,6 +188,7 @@ public class KStreamImplTest {
         stream1.to("topic-5");
         stream2.through("topic-6");
 
+        builder.build();
         ProcessorTopology processorTopology = StreamsBuilderTest.internalTopologyBuilder(builder).setApplicationId("X").build(null);
         assertThat(processorTopology.source("topic-6").getTimestampExtractor(), instanceOf(FailOnInvalidTimestamp.class));
         assertEquals(processorTopology.source("topic-4").getTimestampExtractor(), null);
@@ -490,6 +492,7 @@ public class KStreamImplTest {
     
     @Test
     public void shouldMergeTwoStreams() {
+        builder = new StreamsBuilder();
         final String topic1 = "topic-1";
         final String topic2 = "topic-2";
 
@@ -513,6 +516,7 @@ public class KStreamImplTest {
     
     @Test
     public void shouldMergeMultipleStreams() {
+        builder = new StreamsBuilder();
         final String topic1 = "topic-1";
         final String topic2 = "topic-2";
         final String topic3 = "topic-3";

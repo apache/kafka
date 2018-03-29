@@ -60,6 +60,7 @@ class ProcessDetails<K, V, S extends StateStore> {
     private final KTableSource<K, V> kTableSource;
     private final String[] storeNames;
     private final String connectProcessorName;
+    private final String[] parentNames;
 
 
     private ProcessDetails(final Collection<String> sourceTopics,
@@ -73,7 +74,8 @@ class ProcessDetails<K, V, S extends StateStore> {
                            final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
                            final KTableSource<K, V> kTableSource,
                            final String[] storeNames,
-                           final String connectProcessorName) {
+                           final String connectProcessorName,
+                           final String[] parentNames) {
         this.sourceTopics = sourceTopics;
         this.sinkTopic = sinkTopic;
         this.sourcePattern = sourcePattern;
@@ -86,6 +88,7 @@ class ProcessDetails<K, V, S extends StateStore> {
         this.kTableSource = kTableSource;
         this.storeNames = storeNames;
         this.connectProcessorName = connectProcessorName;
+        this.parentNames = parentNames;
         if (this.materialized != null) {
             this.materializedInternal = new MaterializedInternal(materialized);
         }
@@ -197,6 +200,10 @@ class ProcessDetails<K, V, S extends StateStore> {
         return connectProcessorName;
     }
 
+    public String[] getParentNames() {
+        return parentNames;
+    }
+
     public static Builder builder() {
         return new Builder<>();
     }
@@ -214,6 +221,7 @@ class ProcessDetails<K, V, S extends StateStore> {
         private StoreBuilder<KeyValueStore<K, V>> storeBuilder;
         private KTableSource<K, V> kTableSource;
         private String[] storeNames;
+        private String[] parentNames;
         private String connectProcessorName;
 
         private Builder() {
@@ -280,6 +288,11 @@ class ProcessDetails<K, V, S extends StateStore> {
             return this;
         }
 
+        public Builder withParentNames(String[] parentNames) {
+            this.parentNames = parentNames;
+            return this;
+        }
+
         public ProcessDetails<K, V, S> build() {
             return new ProcessDetails<>(sourceTopics,
                                         sinkTopic,
@@ -292,7 +305,8 @@ class ProcessDetails<K, V, S extends StateStore> {
                                         storeBuilder,
                                         kTableSource,
                                         storeNames,
-                                        connectProcessorName);
+                                        connectProcessorName,
+                                        parentNames);
         }
     }
 }

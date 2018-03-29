@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -51,6 +49,8 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
+import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.KGROUPED_STREAM;
+import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.MERGE;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.PROCESSING;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.SINK;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.SOURCE_SINK;
@@ -468,7 +468,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         allSourceNodes.addAll(sourceNodes);
         allSourceNodes.addAll(streamImpl.sourceNodes);
 
-        builder.internalTopologyBuilder.addProcessor(name, new KStreamPassThrough<>(), parentNames);
+        ProcessDetails processDetails = ProcessDetails.builder().withParentNames(parentNames).build();
+        StreamsGraphNode graphNode = new StreamsGraphNode(name,
+                                                          MERGE,
+                                                          requireRepartitioning,
+                                                          processDetails,
+                                                          this.name);
+        builder.addNode(graphNode);
 
         return new KStreamImpl<>(builder, name, allSourceNodes, requireRepartitioning);
     }
@@ -484,6 +490,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public KStream<K, V> through(final String topic, final Produced<K, V> produced) {
         final ProducedInternal<K, V> producedInternal = new ProducedInternal<>(produced);
+        Objects.requireNonNull(topic, "topic can't be null");
         to(topic, producedInternal);
         return builder.stream(Collections.singleton(topic),
                               new ConsumedInternal<>(producedInternal.keySerde(),
@@ -656,6 +663,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
                         final String... stateStoreNames) {
+        Objects.requireNonNull(processorSupplier, "ProcessSupplier can't be null");
         final String name = builder.newProcessorName(PROCESSOR_NAME);
 
         ProcessDetails processDetails = ProcessDetails.builder()
@@ -774,10 +782,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                      final Serde<V1> valSerde,
                                                      final String topicNamePrefix,
                                                      final String name) {
-        Serializer<K1> keySerializer = keySerde != null ? keySerde.serializer() : null;
-        Serializer<V1> valSerializer = valSerde != null ? valSerde.serializer() : null;
-        Deserializer<K1> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
-        Deserializer<V1> valDeserializer = valSerde != null ? valSerde.deserializer() : null;
+
         String baseName = topicNamePrefix != null ? topicNamePrefix : name;
 
         String repartitionTopic = baseName + REPARTITION_TOPIC_SUFFIX;
@@ -978,6 +983,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Objects.requireNonNull(serialized, "serialized can't be null");
         final SerializedInternal<KR, V> serializedInternal = new SerializedInternal<>(serialized);
         String selectName = internalSelectKey(selector);
+
+        StreamsGraphNode graphNode = new StreamsGraphNode("KGROUPED",
+                                                          KGROUPED_STREAM,
+                                                          repartitionRequired,
+                                                          ProcessDetails.builder().build(),
+                                                          this.name);
+        builder.addNode(graphNode);
         return new KGroupedStreamImpl<>(builder,
                                         selectName,
                                         sourceNodes,
@@ -1003,6 +1015,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public KGroupedStream<K, V> groupByKey(final Serialized<K, V> serialized) {
         final SerializedInternal<K, V> serializedInternal = new SerializedInternal<>(serialized);
+
+        StreamsGraphNode graphNode = new StreamsGraphNode("KGROUPED",
+                                                          KGROUPED_STREAM,
+                                                          repartitionRequired,
+                                                          ProcessDetails.builder().build(),
+                                                          this.name);
+        builder.addNode(graphNode);
+
         return new KGroupedStreamImpl<>(builder,
                                         this.name,
                                         sourceNodes,
