@@ -17,47 +17,68 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collection;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 public class ConfigTest {
+    private static final ConfigEntry E1 = new ConfigEntry("a", "b");
+    private static final ConfigEntry E2 = new ConfigEntry("c", "d");
+    private Config config;
+
+    @Before
+    public void setUp() {
+        final Collection<ConfigEntry> entries = new ArrayList<>();
+        entries.add(E1);
+        entries.add(E2);
+
+        config = new Config(entries);
+    }
+
+    @Test
+    public void shouldGetEntry() {
+        assertThat(config.get("a"), is(E1));
+        assertThat(config.get("c"), is(E2));
+    }
+
+    @Test
+    public void shouldReturnNullOnGetUnknownEntry() {
+        assertThat(config.get("unknown"), is(nullValue()));
+    }
+
+    @Test
+    public void shouldGetAllEntries() {
+        assertThat(config.entries().size(), is(2));
+        assertThat(config.entries(), hasItems(E1, E2));
+    }
 
     @Test
     public void shouldImplementEqualsProperly() {
-        final ConfigEntry e1 = new ConfigEntry("a", "b");
-        final ConfigEntry e2 = new ConfigEntry("c", "d");
+        final Collection<ConfigEntry> entries = new ArrayList<>();
+        entries.add(E1);
 
-        final Collection<ConfigEntry> entries1 = new ArrayList<>();
-        entries1.add(e1);
-
-        final Collection<ConfigEntry> entries2 = new ArrayList<>();
-        entries2.add(e1);
-        entries2.add(e2);
-
-        assertThat(new Config(entries1), is(equalTo(new Config(entries1))));
-        assertThat(new Config(entries1), is(not(equalTo(new Config(entries2)))));
+        assertThat(config, is(equalTo(config)));
+        assertThat(config, is(equalTo(new Config(config.entries()))));
+        assertThat(config, is(not(equalTo(new Config(entries)))));
+        assertThat(config, is(not(equalTo((Object)"this"))));
     }
 
     @Test
     public void shouldImplementHashCodeProperly() {
-        final ConfigEntry e1 = new ConfigEntry("a", "b");
-        final ConfigEntry e2 = new ConfigEntry("c", "d");
+        final Collection<ConfigEntry> entries = new ArrayList<>();
+        entries.add(E1);
 
-        final Collection<ConfigEntry> entries1 = new ArrayList<>();
-        entries1.add(e1);
-
-        final Collection<ConfigEntry> entries2 = new ArrayList<>();
-        entries2.add(e1);
-        entries2.add(e2);
-
-        assertThat(new Config(entries1).hashCode(), is(new Config(entries1).hashCode()));
-        assertThat(new Config(entries1).hashCode(), is(not(new Config(entries2).hashCode())));
+        assertThat(config.hashCode(), is(config.hashCode()));
+        assertThat(config.hashCode(), is(new Config(config.entries()).hashCode()));
+        assertThat(config.hashCode(), is(not(new Config(entries).hashCode())));
     }
 }
