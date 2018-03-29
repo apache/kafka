@@ -122,7 +122,7 @@ public class SimpleBenchmark {
     // be considered for updates when perf results have significantly changed
     private static final int DEFAULT_NUM_RECORDS = 10000000;
 
-    private static final int MAX_WAIT_MS = 3 * 60 * 1000;   // all streams tests will take more than 3min with 10m records
+    private static final int MAX_WAIT_MS = 3 * 60 * 1000;   // this is for 10million records
 
     /* ----------- benchmark variables that can be specified ----------- */
 
@@ -429,9 +429,7 @@ public class SimpleBenchmark {
         source.peek(new CountDownAction(latch));
 
         final KafkaStreams streams = createKafkaStreamsWithExceptionHandler(builder, props);
-        long latency = startStreamsThread(streams, latch);
-
-        printResults("Streams Source Performance [records/latency/rec-sec/MB-sec source]: ", latency);
+        runGenericBenchmark(streams, "Streams Source Performance [records/latency/rec-sec/MB-sec joined]: ", latch);
     }
 
     private void processStreamWithSink(String topic) {
@@ -446,9 +444,7 @@ public class SimpleBenchmark {
         source.peek(new CountDownAction(latch)).to(SINK_TOPIC);
 
         final KafkaStreams streams = createKafkaStreamsWithExceptionHandler(builder, props);
-        long latency = startStreamsThread(streams, latch);
-
-        printResults("Streams SourceSink Performance [records/latency/rec-sec/MB-sec source+sink]: ", latency);
+        runGenericBenchmark(streams, "Streams SourceSink Performance [records/latency/rec-sec/MB-sec joined]: ", latch);
     }
 
     private void processStreamWithStateStore(String topic) {
@@ -490,9 +486,7 @@ public class SimpleBenchmark {
         }, "store");
 
         final KafkaStreams streams = createKafkaStreamsWithExceptionHandler(builder, props);
-        long latency = startStreamsThread(streams, latch);
-        printResults("Streams Stateful Performance [records/latency/rec-sec/MB-sec source+store]: ", latency);
-
+        runGenericBenchmark(streams, "Streams Stateful Performance [records/latency/rec-sec/MB-sec joined]: ", latch);
     }
 
     /**
@@ -590,7 +584,7 @@ public class SimpleBenchmark {
         CountDownLatch latch = new CountDownLatch(1);
 
         // setup join
-        setStreamProperties("simple-benchmark-ktable-ktable-join");
+        setStreamProperties("simple-benchmark-table-table-join");
 
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -617,29 +611,6 @@ public class SimpleBenchmark {
         streams.start();
 
         long startTime = System.currentTimeMillis();
-
-        while (latch.getCount() > 0) {
-            try {
-                latch.await();
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-            }
-        }
-        long endTime = System.currentTimeMillis();
-        printResults(nameOfBenchmark, endTime - startTime);
-
-        streams.close();
-    }
-
-    private long startStreamsThread(final KafkaStreams streams, final CountDownLatch latch) {
-        Thread thread = new Thread() {
-            public void run() {
-                streams.start();
-            }
-        };
-        thread.start();
-
-        long startTime = System.currentTimeMillis();
         long endTime = startTime;
 
         while (latch.getCount() > 0 && (endTime - startTime < MAX_WAIT_MS)) {
@@ -651,15 +622,9 @@ public class SimpleBenchmark {
 
             endTime = System.currentTimeMillis();
         }
-
         streams.close();
-        try {
-            thread.join();
-        } catch (Exception ex) {
-            // ignore
-        }
 
-        return endTime - startTime;
+        printResults(nameOfBenchmark, endTime - startTime);
     }
 
     private class CountDownAction implements ForeachAction<Integer, byte[]> {
