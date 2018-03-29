@@ -1231,7 +1231,8 @@ class LogCleanerTest extends JUnitSuite {
     // Create a "legacy" log segment, consisting of messages that would result in index overflow
     for (i <- keys.indices) {
       val records = MemoryRecords.withRecords(offsets(i), CompressionType.NONE, 0,
-        new SimpleRecord(keys(i).toString.getBytes, keys(i).toString.getBytes))
+        new SimpleRecord(i, keys(i).toString.getBytes, keys(i).toString.getBytes))
+
       // write to the segment directly since offsets will overflow the index
       log.activeSegment.append(offsets(i), i, offsets(i), records, allowOversizeIndexOffset = true)
     }
@@ -1245,6 +1246,14 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(keys, keysInLog(log))
     assertEquals(offsets, offsetsInLog(log))
     assertEquals(offsets.last + 1L, log.logEndOffset)
+
+    // Make sure the offset index and time index last offsets correspond to baseOffset + Int.MaxValue
+    // We'd also have two index entries in total for the four messages we added, corresponding the the second and
+    // third append
+    assertEquals(2, log.activeSegment.timeIndex._entries)
+    assertEquals(Int.MaxValue + 0L, log.activeSegment.timeIndex.lastEntry.offset)
+    assertEquals(2, log.activeSegment.offsetIndex._entries)
+    assertEquals(Int.MaxValue + 0L, log.activeSegment.offsetIndex.lastOffset)
 
     // Roll the log so that the segment we are interested in becomes inactive
     log.roll()
