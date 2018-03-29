@@ -21,7 +21,9 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -70,6 +72,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -1732,6 +1735,50 @@ public class ConsumerCoordinatorTest {
         assertEquals(100L, subscriptions.position(t1p).longValue());
     }
 
+    @Test
+    public void testAutoCommitAfterInvokingOffsetCommitCallback() throws InterruptedException {
+        final List<Long> committedOffset = new ArrayList<>();
+        ConsumerInterceptor ci = new ConsumerInterceptor<Object, Object>() {
+            @Override
+            public void configure(Map<String, ?> configs) {
+            }
+            @Override
+            public ConsumerRecords onConsume(ConsumerRecords records) {
+                return records;
+            }
+            @Override
+            public void close() {
+            }
+            @Override
+            public void onCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+                for (OffsetAndMetadata oam : offsets.values()) {
+                    committedOffset.add(oam.offset());
+                }
+            }
+        };
+
+        ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
+                ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true, true, ci);
+        subscriptions.assignFromUser(Collections.singleton(t1p));
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NONE);
+        prepareOffsetCommitRequest(singletonMap(t1p, 110L), Errors.NONE);
+
+        final CountDownLatch latch = new CountDownLatch(1);
+        coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), new OffsetCommitCallback() {
+            @Override
+            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+                time.sleep(autoCommitIntervalMs + 500);
+                latch.countDown();
+            }
+        });
+        subscriptions.seek(t1p, 110L);
+        // the callback sleep autoCommitIntervalMs + 500 ms so this poll should trigger the auto commit
+        coordinator.poll(time.milliseconds(), Long.MAX_VALUE);
+        assertTrue(latch.await(autoCommitIntervalMs * 2, TimeUnit.MILLISECONDS));
+        assertEquals(Arrays.asList(100L, 110L), committedOffset);
+    }
+
     private ConsumerCoordinator prepareCoordinatorForCloseTest(final boolean useGroupManagement,
                                                                final boolean autoCommit,
                                                                final boolean leaveGroup) {
@@ -1829,6 +1876,16 @@ public class ConsumerCoordinatorTest {
                                                  final boolean excludeInternalTopics,
                                                  final boolean autoCommitEnabled,
                                                  final boolean leaveGroup) {
+        return buildCoordinator(metrics, assignors, excludeInternalTopics, autoCommitEnabled, leaveGroup, null);
+    }
+
+    // erase the type of ConsumerInterceptor is ok since the ConsumerInterceptor#onConsume isn't used here
+    private ConsumerCoordinator buildCoordinator(final Metrics metrics,
+                                                 final List<PartitionAssignor> assignors,
+                                                 final boolean excludeInternalTopics,
+                                                 final boolean autoCommitEnabled,
+                                                 final boolean leaveGroup,
+                                                 ConsumerInterceptor interceptors) {
         return new ConsumerCoordinator(
                 new LogContext(),
                 consumerClient,
@@ -1845,7 +1902,7 @@ public class ConsumerCoordinatorTest {
                 retryBackoffMs,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
-                null,
+                interceptors == null ? null : new ConsumerInterceptors(Collections.singletonList(interceptors)),
                 excludeInternalTopics,
                 leaveGroup);
     }

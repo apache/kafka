@@ -273,6 +273,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      */
     public void poll(long now, long remainingMs) {
         invokeCompletedOffsetCommitCallbacks();
+        now = time.milliseconds();
 
         if (subscriptions.partitionsAutoAssigned()) {
             if (coordinatorUnknown()) {
