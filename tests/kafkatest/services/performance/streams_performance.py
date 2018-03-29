@@ -25,12 +25,12 @@ from kafkatest.services import streams_property
 class StreamsSimpleBenchmarkService(StreamsTestBaseService):
     """Base class for simple Kafka Streams benchmark"""
 
-    def __init__(self, test_context, kafka, test_name, num_threads, num_recs, key_skew, value_size):
+    def __init__(self, test_context, kafka, test_name, num_threads, num_recs_or_wait_ms, key_skew, value_size):
         super(StreamsSimpleBenchmarkService, self).__init__(test_context,
                                                             kafka,
                                                             "org.apache.kafka.streams.perf.SimpleBenchmark",
                                                             test_name,
-                                                            num_recs,
+                                                            num_recs_or_wait_ms,
                                                             key_skew,
                                                             value_size)
 

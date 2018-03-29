@@ -35,11 +35,12 @@ class StreamsSimpleBenchmarkTest(Test):
     def __init__(self, test_context):
         super(StreamsSimpleBenchmarkTest, self).__init__(test_context)
         self.num_records = 10000000L
+        self.wait_ms = 180000
         self.replication = 1
         self.num_threads = 1
 
     @cluster(num_nodes=9)
-    @matrix(test=["consume", "consumeproduce", "streamcount", "streamwindowedcount", "streamprocess", "streamprocesswithsink", "streamprocesswithstatestore", "streamtablejoin", "streamstreamjoin", "tabletablejoin"], scale=[1, 3])
+    @matrix(test=["consume", "consumeproduce", "streamcount", "streamcountwindowed", "streamprocess", "streamprocesswithsink", "streamprocesswithstatestore", "streamtablejoin", "streamstreamjoin", "tabletablejoin"], scale=[1, 3])
     def test_simple_benchmark(self, test, scale):
         """
         Run simple Kafka Streams benchmark
@@ -100,7 +101,7 @@ class StreamsSimpleBenchmarkTest(Test):
                                                              self.kafka,
                                                              test,
                                                              self.num_threads,
-                                                             self.num_records/(scale),
+                                                             self.wait_ms,
                                                              self.key_skew,
                                                              self.value_size)
             self.driver[num].start()

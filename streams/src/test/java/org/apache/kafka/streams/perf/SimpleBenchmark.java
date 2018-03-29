@@ -58,7 +58,6 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Class that provides support for a series of benchmarks. It is usually driven by
@@ -104,8 +103,8 @@ public class SimpleBenchmark {
     private static final Serde<byte[]> BYTE_SERDE = Serdes.ByteArray();
     private static final Serde<Integer> INTEGER_SERDE = Serdes.Integer();
 
-    long processedBytes = 0;
-    final AtomicInteger processedRecords = new AtomicInteger(0);
+    long processedBytes = 0L;
+    int processedRecords = 0;
 
     private static final long POLL_MS = 500L;
     private static final long COMMIT_INTERVAL_MS = 30000L;
@@ -118,6 +117,12 @@ public class SimpleBenchmark {
     private static final long STREAM_STREAM_JOIN_WINDOW = 10000L;
 
     private static final int SOCKET_SIZE_BYTES = 1024 * 1024;
+
+    // the following numbers are based on empirical results and should only
+    // be considered for updates when perf results have significantly changed
+    private static final int DEFAULT_NUM_RECORDS = 10000000;
+
+    private static final int MAX_WAIT_MS = 3 * 60 * 1000;   // all streams tests will take more than 3min with 10m records
 
     /* ----------- benchmark variables that can be specified ----------- */
 
@@ -149,7 +154,6 @@ public class SimpleBenchmark {
         this.keySkew = keySkew;
         this.valueSize = valueSize;
         this.numRecords = numRecords;
-
     }
 
     private void run() {
@@ -238,7 +242,7 @@ public class SimpleBenchmark {
     public static void main(String[] args) throws IOException {
         String propFileName = args.length > 0 ? args[0] : null;
         String testName = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : ALL_TESTS;
-        int numRecords = args.length > 2 ? Integer.parseInt(args[2]) : 10000000;
+        int numRecords = args.length > 2 ? Integer.parseInt(args[2]) : DEFAULT_NUM_RECORDS;
         double keySkew = args.length > 3 ? Double.parseDouble(args[3]) : 0d; // default to even distribution
         int valueSize = args.length > 4 ? Integer.parseInt(args[4]) : 1;
 
@@ -302,8 +306,8 @@ public class SimpleBenchmark {
     }
 
     void resetStats() {
-        processedRecords.set(0);
-        processedBytes = 0;
+        processedRecords = 0;
+        processedBytes = 0L;
     }
 
     /**
@@ -355,18 +359,18 @@ public class SimpleBenchmark {
         while (true) {
             ConsumerRecords<Integer, byte[]> records = consumer.poll(POLL_MS);
             if (records.isEmpty()) {
-                if (processedRecords.get() == numRecords)
+                if (processedRecords == numRecords)
                     break;
             } else {
                 for (ConsumerRecord<Integer, byte[]> record : records) {
                     producer.send(new ProducerRecord<>(SINK_TOPIC, record.key(), record.value()));
-                    processedRecords.getAndIncrement();
+                    processedRecords++;
                     processedBytes += record.value().length + Integer.SIZE;
-                    if (processedRecords.get() == numRecords)
+                    if (processedRecords == numRecords)
                         break;
                 }
             }
-            if (processedRecords.get() == numRecords)
+            if (processedRecords == numRecords)
                 break;
         }
 
@@ -392,17 +396,17 @@ public class SimpleBenchmark {
         while (true) {
             ConsumerRecords<Integer, byte[]> records = consumer.poll(POLL_MS);
             if (records.isEmpty()) {
-                if (processedRecords.get() == numRecords)
+                if (processedRecords == numRecords)
                     break;
             } else {
                 for (ConsumerRecord<Integer, byte[]> record : records) {
-                    processedRecords.getAndIncrement();
+                    processedRecords++;
                     processedBytes += record.value().length + Integer.SIZE;
-                    if (processedRecords.get() == numRecords)
+                    if (processedRecords == numRecords)
                         break;
                 }
             }
-            if (processedRecords.get() == numRecords)
+            if (processedRecords == numRecords)
                 break;
         }
 
@@ -603,9 +607,9 @@ public class SimpleBenchmark {
 
     void printResults(final String nameOfBenchmark, final long latency) {
         System.out.println(nameOfBenchmark +
-            processedRecords.get() + "/" +
+            processedRecords + "/" +
             latency + "/" +
-            recordsPerSec(latency, processedRecords.get()) + "/" +
+            recordsPerSec(latency, processedRecords) + "/" +
             megabytesPerSec(latency, processedBytes));
     }
 
@@ -636,16 +640,17 @@ public class SimpleBenchmark {
         thread.start();
 
         long startTime = System.currentTimeMillis();
+        long endTime = startTime;
 
-        while (latch.getCount() > 0) {
+        while (latch.getCount() > 0 && (endTime - startTime < MAX_WAIT_MS)) {
             try {
-                latch.await();
+                latch.await(1000, TimeUnit.MILLISECONDS);
             } catch (InterruptedException ex) {
                 Thread.interrupted();
             }
-        }
 
-        long endTime = System.currentTimeMillis();
+            endTime = System.currentTimeMillis();
+        }
 
         streams.close();
         try {
@@ -667,10 +672,10 @@ public class SimpleBenchmark {
 
         @Override
         public void apply(Integer key, byte[] value) {
-            processedRecords.getAndIncrement();
+            processedRecords++;
             processedBytes += Integer.SIZE + value.length;
 
-            if (processedRecords.get() == numRecords) {
+            if (processedRecords == numRecords) {
                 this.latch.countDown();
             }
         }
