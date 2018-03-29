@@ -260,7 +260,7 @@ public class StreamThread extends Thread {
                 taskManager.createTasks(assignment);
             } catch (final Throwable t) {
                 log.error("Error caught during partition assignment, " +
-                        "will abort the current process and re-throw at the end of rebalance: {}", t.getMessage());
+                        "will abort the current process and re-throw at the end of rebalance: {}", t);
                 streamThread.setRebalanceException(t);
             } finally {
                 log.info("partition assignment took {} ms.\n" +
@@ -291,7 +291,7 @@ public class StreamThread extends Thread {
                     taskManager.suspendTasksAndState();
                 } catch (final Throwable t) {
                     log.error("Error caught during partition revocation, " +
-                              "will abort the current process and re-throw at the end of rebalance: {}", t.getMessage());
+                              "will abort the current process and re-throw at the end of rebalance: {}", t);
                     streamThread.setRebalanceException(t);
                 } finally {
                     streamThread.clearStandbyRecords();

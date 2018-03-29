@@ -26,7 +26,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -56,7 +56,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
     private final long retention = 60000L;
     private final int numSegments = 3;
-    private MockProcessorContext context;
+    private InternalMockProcessorContext context;
     private final String storeName = "bytes-store";
     private RocksDBSegmentedBytesStore bytesStore;
     private File stateDir;
@@ -71,7 +71,7 @@ public class RocksDBSegmentedBytesStoreTest {
                                                     schema);
 
         stateDir = TestUtils.tempDirectory();
-        context = new MockProcessorContext(
+        context = new InternalMockProcessorContext(
             stateDir,
             Serdes.String(),
             Serdes.Long(),

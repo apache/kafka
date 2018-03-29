@@ -13,14 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
+from ducktape.mark import ignore
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
-from ducktape.mark import matrix
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
+from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.version import LATEST_0_10_2, LATEST_0_11, LATEST_1_0, DEV_BRANCH, KafkaVersion
-import time
 
 upgrade_versions = [str(LATEST_0_10_2), str(LATEST_0_11), str(LATEST_1_0), str(DEV_BRANCH)]
 
@@ -77,6 +78,7 @@ class StreamsUpgradeTest(Test):
             node.version = KafkaVersion(to_version)
             self.kafka.start_node(node)
 
+    @ignore
     @cluster(num_nodes=6)
     @matrix(from_version=upgrade_versions, to_version=upgrade_versions)
     def test_upgrade_downgrade_streams(self, from_version, to_version):
@@ -124,7 +126,7 @@ class StreamsUpgradeTest(Test):
             self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
 
 
-
+    @ignore
     @cluster(num_nodes=6)
     @matrix(from_version=upgrade_versions, to_version=upgrade_versions)
     def test_upgrade_brokers(self, from_version, to_version):

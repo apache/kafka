@@ -37,6 +37,7 @@
       <ul class="simple">
           <li><a class="reference internal" href="#libraries-and-maven-artifacts" id="id1">Libraries and Maven artifacts</a></li>
           <li><a class="reference internal" href="#using-kafka-streams-within-your-application-code" id="id2">Using Kafka Streams within your application code</a></li>
+          <li><a class="reference internal" href="#testing-a-streams-app" id="id3">Testing a Streams application</a></li>
       </ul>
     <p>Any Java application that makes use of the Kafka Streams library is considered a Kafka Streams application.
       The computational logic of a Kafka Streams application is defined as a <a class="reference internal" href="../concepts.html#streams-concepts"><span class="std std-ref">processor topology</span></a>,
@@ -196,6 +197,11 @@
       <p>After an application is stopped, Kafka Streams will migrate any tasks that had been running in this instance to available remaining
         instances.</p>
 </div>
+
+      <div class="section" id="testing-a-streams-app">
+          <a class="headerlink" href="#testing-a-streams-app" title="Permalink to this headline"><h2>Testing a Streams application</a></h2>
+          Kafka Streams comes with a <code>test-utils</code> module to help you test your application <a href="testing.html">here</a>.
+      </div>
 </div>
 
 
