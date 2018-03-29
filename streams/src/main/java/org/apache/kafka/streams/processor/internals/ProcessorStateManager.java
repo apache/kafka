@@ -328,13 +328,6 @@ public class ProcessorStateManager extends AbstractStateManager {
         return partition == null ? taskId.partition : partition.partition();
     }
 
-    void registerGlobalStateStores(final List<StateStore> stateStores) {
-        log.debug("Register global stores {}", stateStores);
-        for (final StateStore stateStore : stateStores) {
-            globalStores.put(stateStore.name(), stateStore);
-        }
-    }
-
     @Override
     public StateStore getGlobalStore(final String name) {
         return globalStores.get(name);

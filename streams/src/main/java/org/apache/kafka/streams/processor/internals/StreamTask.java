@@ -147,8 +147,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         recordInfo = new PartitionGroup.RecordInfo();
         partitionGroup = new PartitionGroup(partitionQueues);
 
-        stateMgr.registerGlobalStateStores(topology.globalStateStores());
-
         // initialize transactions if eos is turned on, which will block if the previous transaction has not
         // completed yet; do not start the first transaction until the topology has been initialized later
         if (eosEnabled) {
