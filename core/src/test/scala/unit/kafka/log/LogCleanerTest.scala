@@ -1218,7 +1218,7 @@ class LogCleanerTest extends JUnitSuite {
   def testLogSegmentWithIndexOffsetOverflow(): Unit = {
     val props = logProps
     // Make sure every append is potentially able to create an index entry
-    props.put(LogConfig.IndexIntervalBytesProp, 1)
+    props.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
     val config = LogConfig(props)
 
     val tp = new TopicPartition("test", 0)
