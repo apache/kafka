@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Objects;
 
 /**
  * A configuration object containing the configuration entries for a resource.
@@ -36,14 +37,14 @@ public class Config {
      * Create a configuration instance with the provided entries.
      */
     public Config(Collection<ConfigEntry> entries) {
-        this.entries = Collections.unmodifiableCollection(entries);
+        this.entries = Objects.requireNonNull(entries);
     }
 
     /**
      * Configuration entries for a resource.
      */
     public Collection<ConfigEntry> entries() {
-        return entries;
+        return Collections.unmodifiableCollection(entries);
     }
 
     /**
