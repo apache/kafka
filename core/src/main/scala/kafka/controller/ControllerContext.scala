@@ -39,12 +39,12 @@ class ControllerContext {
   private var liveBrokersUnderlying: Set[Broker] = Set.empty
   private var liveBrokerIdsUnderlying: Set[Int] = Set.empty
 
-  def partitionReplicaAssignment(topicPartition: TopicPartition) : Seq[Int] = {
+  def partitionReplicaAssignment(topicPartition: TopicPartition): Seq[Int] = {
     partitionReplicaAssignmentUnderlying.getOrElse(topicPartition.topic, mutable.Map.empty)
       .getOrElse(topicPartition.partition, Seq.empty)
   }
 
-  def clearTopicsState(): Unit = {
+  private def clearTopicsState(): Unit = {
     allTopics = Set.empty
     partitionReplicaAssignmentUnderlying.clear()
     partitionLeadershipInfo.clear()
@@ -52,18 +52,18 @@ class ControllerContext {
     replicasOnOfflineDirs.clear()
   }
 
-  def updatePartitionReplicaAssignment(topicPartition: TopicPartition, newReplicas: Seq[Int]) : Unit = {
+  def updatePartitionReplicaAssignment(topicPartition: TopicPartition, newReplicas: Seq[Int]): Unit = {
     partitionReplicaAssignmentUnderlying.getOrElseUpdate(topicPartition.topic, mutable.Map.empty)
       .put(topicPartition.partition, newReplicas)
   }
 
-  def partitionReplicaAssignmentForTopic(topic : String) : Map[TopicPartition, Seq[Int]] = {
+  def partitionReplicaAssignmentForTopic(topic : String): Map[TopicPartition, Seq[Int]] = {
     partitionReplicaAssignmentUnderlying.getOrElse(topic, Map.empty).map {
       case (partition, replicas) => (new TopicPartition(topic, partition), replicas)
     }.toMap
   }
 
-  def allPartitions : Set[TopicPartition] = {
+  def allPartitions: Set[TopicPartition] = {
     partitionReplicaAssignmentUnderlying.flatMap {
       case (topic, topicReplicaAssignment) => topicReplicaAssignment.map {
         case (partition, _) => new TopicPartition(topic, partition)
@@ -138,7 +138,7 @@ class ControllerContext {
     }
   }
 
-  def resetContext() : Unit = {
+  def resetContext(): Unit = {
     if (controllerChannelManager != null) {
       controllerChannelManager.shutdown()
       controllerChannelManager = null
@@ -150,7 +150,7 @@ class ControllerContext {
     liveBrokers = Set.empty
   }
 
-  def removeTopic(topic: String) = {
+  def removeTopic(topic: String): Unit = {
     allTopics -= topic
     partitionReplicaAssignmentUnderlying.remove(topic)
     partitionLeadershipInfo.foreach {
