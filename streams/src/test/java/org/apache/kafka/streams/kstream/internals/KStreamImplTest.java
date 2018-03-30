@@ -545,7 +545,27 @@ public class KStreamImplTest {
     }
 
     @Test
-    public void shouldProcessFromSourcesThatMatchPattern() {
+    public void shouldProcessFromSourceThatMatchPattern() {
+        final KStream<String, String> pattern2Source = builder.stream(Pattern.compile("topic-\\d"));
+
+        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        pattern2Source.process(processorSupplier);
+
+        driver.setUp(builder);
+        driver.setTime(0L);
+
+        driver.process("topic-3", "A", "aa");
+        driver.process("topic-4", "B", "bb");
+        driver.process("topic-5", "C", "cc");
+        driver.process("topic-6", "D", "dd");
+        driver.process("topic-7", "E", "ee");
+
+        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
+                processorSupplier.processed);
+    }
+
+    @Test
+    public void shouldProcessFromSourcesThatMatchMultiplePattern() {
         final String topic3 = "topic-without-pattern";
 
         final KStream<String, String> pattern2Source1 = builder.stream(Pattern.compile("topic-\\d"));
