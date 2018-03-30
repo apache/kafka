@@ -30,27 +30,28 @@ public class TaskMigratedException extends StreamsException {
 
     private final Task task;
 
-    public TaskMigratedException(final Task task) {
-        this(task, null);
-    }
-
     public TaskMigratedException(final Task task,
                                  final TopicPartition topicPartition,
                                  final long endOffset,
                                  final long pos) {
-        super(String.format("Log end offset of %s should not change while restoring: old end offset %d, current offset %d%n%s",
+        super(String.format("Log end offset of %s should not change while restoring: old end offset %d, current offset %d",
                             topicPartition,
                             endOffset,
-                            pos,
-                            task.toString("> ")),
+                            pos),
             null);
+
+        this.task = task;
+    }
+
+    public TaskMigratedException(final Task task) {
+        super(String.format("Task %s is unexpectedly closed during processing", task.id()), null);
 
         this.task = task;
     }
 
     public TaskMigratedException(final Task task,
                                  final Throwable throwable) {
-        super(task.toString(), throwable);
+        super(String.format("Client request for task %s has been fenced due to a rebalance", task.id()), throwable);
 
         this.task = task;
     }
