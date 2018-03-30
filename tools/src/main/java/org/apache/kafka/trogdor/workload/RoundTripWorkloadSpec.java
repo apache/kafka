@@ -43,6 +43,7 @@ public class RoundTripWorkloadSpec extends TaskSpec {
     private final PayloadGenerator valueGenerator;
     private final int maxMessages;
     private final Map<String, String> commonClientConf;
+    private final Map<String, String> adminClientConf;
 
     @JsonCreator
     public RoundTripWorkloadSpec(@JsonProperty("startMs") long startMs,
@@ -50,6 +51,7 @@ public class RoundTripWorkloadSpec extends TaskSpec {
              @JsonProperty("clientNode") String clientNode,
              @JsonProperty("bootstrapServers") String bootstrapServers,
              @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
+             @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
              @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
              @JsonProperty("partitionAssignments") NavigableMap<Integer, List<Integer>> partitionAssignments,
              @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
@@ -65,6 +67,8 @@ public class RoundTripWorkloadSpec extends TaskSpec {
         this.maxMessages = maxMessages;
         this.commonClientConf = (commonClientConf == null)
                                 ? new TreeMap<String, String>() : commonClientConf;
+        this.adminClientConf = (adminClientConf == null)
+                               ? new TreeMap<String, String>() : adminClientConf;
     }
 
     @JsonProperty
@@ -100,6 +104,11 @@ public class RoundTripWorkloadSpec extends TaskSpec {
     @JsonProperty
     public Map<String, String> commonClientConf() {
         return commonClientConf;
+    }
+
+    @JsonProperty
+    public Map<String, String> adminClientConf() {
+        return adminClientConf;
     }
 
     @Override

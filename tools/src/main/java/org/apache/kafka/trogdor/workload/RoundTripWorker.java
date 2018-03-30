@@ -124,7 +124,7 @@ public class RoundTripWorker implements TaskWorker {
                     throw new ConfigException("Invalid null or empty partitionAssignments.");
                 }
                 WorkerUtils.createTopics(
-                    log, spec.bootstrapServers(), spec.commonClientConf(),
+                    log, spec.bootstrapServers(), spec.commonClientConf(), spec.adminClientConf(),
                     Collections.singletonMap(TOPIC_NAME,
                                              new NewTopic(TOPIC_NAME, spec.partitionAssignments())),
                     true);

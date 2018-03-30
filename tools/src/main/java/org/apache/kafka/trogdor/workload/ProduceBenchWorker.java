@@ -113,7 +113,7 @@ public class ProduceBenchWorker implements TaskWorker {
                                                      spec.replicationFactor()));
                 }
                 WorkerUtils.createTopics(log, spec.bootstrapServers(), spec.commonClientConf(),
-                                         newTopics, false);
+                                         spec.adminClientConf(), newTopics, false);
 
                 executor.submit(new SendRecords());
             } catch (Throwable e) {

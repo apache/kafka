@@ -45,6 +45,7 @@ public class ProduceBenchSpec extends TaskSpec {
     private final PayloadGenerator keyGenerator;
     private final PayloadGenerator valueGenerator;
     private final Map<String, String> producerConf;
+    private final Map<String, String> adminClientConf;
     private final Map<String, String> commonClientConf;
     private final int totalTopics;
     private final int activeTopics;
@@ -63,6 +64,7 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
                          @JsonProperty("producerConf") Map<String, String> producerConf,
                          @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
+                         @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
                          @JsonProperty("totalTopics") int totalTopics,
                          @JsonProperty("activeTopics") int activeTopics,
                          @JsonProperty("topicPrefix") String topicPrefix,
@@ -79,6 +81,7 @@ public class ProduceBenchSpec extends TaskSpec {
             new ConstantPayloadGenerator(512, new byte[0]) : valueGenerator;
         this.producerConf = configOrEmptyMap(producerConf);
         this.commonClientConf = configOrEmptyMap(commonClientConf);
+        this.adminClientConf = configOrEmptyMap(adminClientConf);
         this.totalTopics = totalTopics;
         this.activeTopics = activeTopics;
         this.topicPrefix = (topicPrefix == null) ? DEFAULT_TOPIC_PREFIX : topicPrefix;
@@ -130,6 +133,11 @@ public class ProduceBenchSpec extends TaskSpec {
     @JsonProperty
     public Map<String, String> commonClientConf() {
         return commonClientConf;
+    }
+
+    @JsonProperty
+    public Map<String, String> adminClientConf() {
+        return adminClientConf;
     }
 
     @JsonProperty
