@@ -749,18 +749,14 @@ public class StreamThread extends Thread {
             try {
                 recordsProcessedBeforeCommit = runOnce(recordsProcessedBeforeCommit);
             } catch (final TaskMigratedException ignoreAndRejoinGroup) {
-                log.warn("Detected task {} that got migrated to another thread. " +
-                        "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
+                log.warn("Detected task {} that got migrated to another thread: {} " +
+                        "This implies that the thread may have missed a rebalance and dropped out of the consumer group. " +
                         "Will try to rejoin the consumer group. Below is the detailed description of the task:\n{}",
-                        ignoreAndRejoinGroup.migratedTask().id(), ignoreAndRejoinGroup.migratedTask().toString(">"));
+                        ignoreAndRejoinGroup.migratedTask().id(), ignoreAndRejoinGroup.getMessage(), ignoreAndRejoinGroup.migratedTask().toString(">"));
 
                 // re-subscribe to enforce a rebalance in the next poll call
                 consumer.unsubscribe();
                 consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
-
-                log.warn("Detected a task that got migrated to another thread. " +
-                    "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
-                    "Trying to rejoin the consumer group now.", ignoreAndRejoinGroup);
             }
         }
     }
