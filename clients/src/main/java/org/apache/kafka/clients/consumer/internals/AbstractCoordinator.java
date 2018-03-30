@@ -20,7 +20,6 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
@@ -376,7 +375,6 @@ public abstract class AbstractCoordinator implements Closeable {
                 RuntimeException exception = future.exception();
                 if (exception instanceof UnknownMemberIdException ||
                         exception instanceof RebalanceInProgressException ||
-                        exception instanceof CoordinatorLoadInProgressException ||
                         exception instanceof IllegalGenerationException)
                     continue;
                 else if (!future.isRetriable())
@@ -551,11 +549,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
                 if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     future.raise(new GroupAuthorizationException(groupId));
-                } else if (error == Errors.REBALANCE_IN_PROGRESS
-                        || error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
-                    // Note that if the coordinator is loading, then the state of the current rebalance
-                    // could have been lost. We treat this the same as if a rebalance were in progress
-                    // and try to rejoin the group again.
+                } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                     log.debug("SyncGroup failed because the group began another rebalance");
                     future.raise(error);
                 } else if (error == Errors.UNKNOWN_MEMBER_ID

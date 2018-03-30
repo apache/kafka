@@ -249,9 +249,9 @@ class GroupCoordinator(val brokerId: Int,
 
       case None =>
         groupManager.getGroup(groupId) match {
-        case None => responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
-        case Some(group) => doSyncGroup(group, generation, memberId, groupAssignment, responseCallback)
-      }
+          case None => responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
+          case Some(group) => doSyncGroup(group, generation, memberId, groupAssignment, responseCallback)
+        }
     }
   }
 
