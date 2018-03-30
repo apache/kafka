@@ -71,8 +71,6 @@ class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
     streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath())
 
-    println(s"**** ${TestUtils.IO_TMP_DIR.getAbsolutePath}")
-
     val streamBuilder = new StreamsBuilder
     val textLines = streamBuilder.stream[String, String](inputTopic)
 
