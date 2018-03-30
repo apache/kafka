@@ -131,7 +131,7 @@ public class ChannelBuilders {
                         tokenCache);
                 break;
             case PLAINTEXT:
-                channelBuilder = new PlaintextChannelBuilder();
+                channelBuilder = new PlaintextChannelBuilder(listenerName);
                 break;
             default:
                 throw new IllegalArgumentException("Unexpected securityProtocol " + securityProtocol);

@@ -436,6 +436,8 @@ public class SslTransportLayerTest {
             fail("SSL channel configured with invalid SecureRandom implementation");
         } catch (KafkaException e) {
             // Expected exception
+        } finally {
+            channelBuilder.close();
         }
     }
 
@@ -451,6 +453,8 @@ public class SslTransportLayerTest {
             fail("SSL channel configured with invalid truststore password");
         } catch (KafkaException e) {
             // Expected exception
+        } finally {
+            channelBuilder.close();
         }
     }
 
@@ -466,6 +470,8 @@ public class SslTransportLayerTest {
             fail("SSL channel configured with invalid keystore password");
         } catch (KafkaException e) {
             // Expected exception
+        } finally {
+            channelBuilder.close();
         }
     }
 
@@ -767,7 +773,7 @@ public class SslTransportLayerTest {
 
     @Test
     public void testClosePlaintext() throws Exception {
-        testClose(SecurityProtocol.PLAINTEXT, new PlaintextChannelBuilder());
+        testClose(SecurityProtocol.PLAINTEXT, new PlaintextChannelBuilder(null));
     }
 
     private void testClose(SecurityProtocol securityProtocol, ChannelBuilder clientChannelBuilder) throws Exception {

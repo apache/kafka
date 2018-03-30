@@ -17,17 +17,22 @@
 package org.apache.kafka.common.security.auth;
 
 import javax.security.sasl.SaslServer;
+
+import org.apache.kafka.common.network.ListenerName;
+
 import java.net.InetAddress;
 
 public class SaslAuthenticationContext implements AuthenticationContext {
     private final SaslServer server;
     private final SecurityProtocol securityProtocol;
     private final InetAddress clientAddress;
+    private final ListenerName listenerName;
 
-    public SaslAuthenticationContext(SaslServer server, SecurityProtocol securityProtocol, InetAddress clientAddress) {
+    public SaslAuthenticationContext(SaslServer server, SecurityProtocol securityProtocol, InetAddress clientAddress, ListenerName listenerName) {
         this.server = server;
         this.securityProtocol = securityProtocol;
         this.clientAddress = clientAddress;
+        this.listenerName = listenerName;
     }
 
     public SaslServer server() {
@@ -42,5 +47,10 @@ public class SaslAuthenticationContext implements AuthenticationContext {
     @Override
     public InetAddress clientAddress() {
         return clientAddress;
+    }
+
+    @Override
+    public ListenerName listenerName() {
+        return listenerName;
     }
 }

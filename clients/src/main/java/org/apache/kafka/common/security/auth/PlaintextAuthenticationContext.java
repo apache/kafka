@@ -18,11 +18,15 @@ package org.apache.kafka.common.security.auth;
 
 import java.net.InetAddress;
 
+import org.apache.kafka.common.network.ListenerName;
+
 public class PlaintextAuthenticationContext implements AuthenticationContext {
     private final InetAddress clientAddress;
+    private final ListenerName listenerName;
 
-    public PlaintextAuthenticationContext(InetAddress clientAddress) {
+    public PlaintextAuthenticationContext(InetAddress clientAddress, ListenerName listenerName) {
         this.clientAddress = clientAddress;
+        this.listenerName = listenerName;
     }
 
     @Override
@@ -33,6 +37,11 @@ public class PlaintextAuthenticationContext implements AuthenticationContext {
     @Override
     public InetAddress clientAddress() {
         return clientAddress;
+    }
+
+    @Override
+    public ListenerName listenerName() {
+        return listenerName;
     }
 
 }
