@@ -498,6 +498,7 @@ class WorkerSinkTask extends WorkerTask {
         if (recordHeaders != null) {
             String topic = record.topic();
             for (org.apache.kafka.common.header.Header recordHeader : recordHeaders) {
+                if (recordHeader == null) continue;
                 SchemaAndValue schemaAndValue = headerConverter.toConnectHeader(topic, recordHeader.key(), recordHeader.value());
                 result.add(recordHeader.key(), schemaAndValue);
             }
