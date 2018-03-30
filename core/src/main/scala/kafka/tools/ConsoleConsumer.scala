@@ -328,6 +328,18 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("deserializer for values")
       .ofType(classOf[String])
+    val innerKeyDeserializerOpt = parser.accepts("default.windowed.key.serde.inner",
+      "inner serde for key when windowed deserialzier is used; would be ignored otherwise. " +
+        "For example: org.apache.kafka.common.serialization.Serdes\\$StringSerde")
+      .withRequiredArg
+      .describedAs("inner serde for key")
+      .ofType(classOf[String])
+    val innerValueDeserializerOpt = parser.accepts("default.windowed.value.serde.inner",
+      "inner serde for value when windowed deserialzier is used; would be ignored otherwise. " +
+        "For example: org.apache.kafka.common.serialization.Serdes\\$StringSerde")
+      .withRequiredArg
+      .describedAs("inner serde for values")
+      .ofType(classOf[String])
     val enableSystestEventsLoggingOpt = parser.accepts("enable-systest-events",
                                                        "Log lifecycle events of the consumer in addition to logging consumed " +
                                                        "messages. (This is specific for system tests.)")
@@ -372,6 +384,8 @@ object ConsoleConsumer extends Logging {
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
     val keyDeserializer = options.valueOf(keyDeserializerOpt)
     val valueDeserializer = options.valueOf(valueDeserializerOpt)
+    val innerKeyDeserializer = options.valueOf(innerKeyDeserializerOpt)
+    val innerValueDeserializer = options.valueOf(innerValueDeserializerOpt)
     val isolationLevel = options.valueOf(isolationLevelOpt).toString
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
 
@@ -381,6 +395,13 @@ object ConsoleConsumer extends Logging {
     if (valueDeserializer != null && !valueDeserializer.isEmpty) {
       formatterArgs.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer)
     }
+    if (innerKeyDeserializer != null && !innerKeyDeserializer.isEmpty) {
+      formatterArgs.setProperty("default.windowed.key.serde.inner", innerKeyDeserializer)
+    }
+    if (innerValueDeserializer != null && !innerValueDeserializer.isEmpty) {
+      formatterArgs.setProperty("default.windowed.value.serde.inner", innerValueDeserializer)
+    }
+
     formatter.init(formatterArgs)
 
     if (useOldConsumer) {
@@ -521,11 +542,21 @@ class DefaultMessageFormatter extends MessageFormatter {
     if (props.containsKey("line.separator"))
       lineSeparator = props.getProperty("line.separator").getBytes(StandardCharsets.UTF_8)
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
-    if (props.containsKey("key.deserializer"))
+    if (props.containsKey("key.deserializer")) {
       keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
+      // Instantiate the inner key class if `default.windowed.key.serde.inner` is specified
+      val innerKeySerdeName = "default.windowed.key.serde.inner"
+      if (props.containsKey(innerKeySerdeName))
+        keyDeserializer.get.configure(Map(innerKeySerdeName -> props.get(innerKeySerdeName)).asJava, true)
+    }
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
-    if (props.containsKey("value.deserializer"))
+    if (props.containsKey("value.deserializer")) {
       valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
+      // Instantiate the inner value class if `default.windowed.value.serde.inner` is specified
+      val innerValueSerdeName = "default.windowed.value.serde.inner"
+      if (props.containsKey(innerValueSerdeName))
+        valueDeserializer.get.configure(Map(innerValueSerdeName -> props.get(innerValueSerdeName)).asJava, false)
+    }
   }
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
