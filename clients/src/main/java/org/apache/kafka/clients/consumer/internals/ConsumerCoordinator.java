@@ -272,8 +272,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @param now current time in milliseconds
      */
     public void poll(long now, long remainingMs) {
-        invokeCompletedOffsetCommitCallbacks();
-        now = time.milliseconds();
+        if (invokeCompletedOffsetCommitCallbacks()) {
+            now = time.milliseconds();
+        }
 
         if (subscriptions.partitionsAutoAssigned()) {
             if (coordinatorUnknown()) {
@@ -497,14 +498,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    // visible for testing
-    void invokeCompletedOffsetCommitCallbacks() {
+    /**
+     * visible for testing
+     * @return true if any callback is invoked
+     */
+    boolean invokeCompletedOffsetCommitCallbacks() {
+        boolean hasOffsetCommitCompletion = false;
         while (true) {
             OffsetCommitCompletion completion = completedOffsetCommits.poll();
             if (completion == null)
                 break;
             completion.invoke();
+            hasOffsetCommitCompletion = true;
         }
+        return hasOffsetCommitCompletion;
     }
 
     public void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
