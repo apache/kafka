@@ -28,6 +28,8 @@ public class TaskMigratedException extends StreamsException {
 
     private final static long serialVersionUID = 1L;
 
+    private final Task task;
+
     public TaskMigratedException(final Task task) {
         this(task, null);
     }
@@ -36,17 +38,24 @@ public class TaskMigratedException extends StreamsException {
                                  final TopicPartition topicPartition,
                                  final long endOffset,
                                  final long pos) {
-        super(String.format("Log end offset of %s should not change while restoring: old end offset %d, current offset %d%n%s",
-                            topicPartition,
-                            endOffset,
-                            pos,
-                            task.toString("> ")),
-            null);
+        super(String.format("Log end offset of %s should not change while restoring: old end offset %d, current offset %d",
+                topicPartition,
+                endOffset,
+                pos),
+                null);
+
+        this.task = task;
     }
 
     public TaskMigratedException(final Task task,
                                  final Throwable throwable) {
         super(task.toString(), throwable);
+
+        this.task = task;
+    }
+
+    public Task migratedTask() {
+        return task;
     }
 
 }
