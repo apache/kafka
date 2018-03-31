@@ -30,6 +30,13 @@ public class TaskMigratedException extends StreamsException {
 
     private final Task task;
 
+    // this is for unit test only
+    public TaskMigratedException() {
+        super("A task has been migrated unexpectedly", null);
+
+        this.task = null;
+    }
+
     public TaskMigratedException(final Task task,
                                  final TopicPartition topicPartition,
                                  final long endOffset,
