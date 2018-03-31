@@ -145,7 +145,7 @@ class JsonTest {
   }
 
   @Test
-  def testParseTo_invalidJson() = {
+  def testParseToWithInvalidJson() = {
     val result = Json.parseStringAs[TestObject]("{invalid json}")
 
     assertTrue(result.isLeft)
