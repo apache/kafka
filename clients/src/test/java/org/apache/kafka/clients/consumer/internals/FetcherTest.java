@@ -199,6 +199,18 @@ public class FetcherTest {
     }
 
     @Test
+    public void testFetchSkipsBlackedOutNodes() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        client.blackout(node, 500);
+        assertEquals(0, fetcher.sendFetches());
+
+        time.sleep(500);
+        assertEquals(1, fetcher.sendFetches());
+    }
+
+    @Test
     public void testFetcherIgnoresControlRecords() {
         subscriptions.assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 0);
@@ -962,6 +974,30 @@ public class FetcherTest {
     }
 
     @Test
+    public void testResetOffsetsSkipsBlackedOutConnections() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+
+        // Check that we skip sending the ListOffset request when the node is blacked out
+        client.blackout(node, 500);
+        fetcher.resetOffsetsIfNeeded();
+        assertEquals(0, consumerClient.pendingRequestCount());
+        consumerClient.pollNoWakeup();
+        assertTrue(subscriptions.isOffsetResetNeeded(tp0));
+        assertEquals(OffsetResetStrategy.EARLIEST, subscriptions.resetStrategy(tp0));
+
+        time.sleep(500);
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.EARLIEST_TIMESTAMP),
+                listOffsetResponse(Errors.NONE, 1L, 5L));
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertTrue(subscriptions.isFetchable(tp0));
+        assertEquals(5, subscriptions.position(tp0).longValue());
+    }
+
+    @Test
     public void testUpdateFetchPositionResetToEarliestOffset() {
         subscriptions.assignFromUser(singleton(tp0));
         subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
@@ -1447,26 +1483,50 @@ public class FetcherTest {
 
     @Test
     public void testFetchResponseMetrics() {
-        subscriptions.assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
+        String topic1 = "foo";
+        String topic2 = "bar";
+        TopicPartition tp1 = new TopicPartition(topic1, 0);
+        TopicPartition tp2 = new TopicPartition(topic2, 0);
+
+        Map<String, Integer> partitionCounts = new HashMap<>();
+        partitionCounts.put(topic1, 1);
+        partitionCounts.put(topic2, 1);
+        Cluster cluster = TestUtils.clusterWith(1, partitionCounts);
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+
+        subscriptions.assignFromUser(Utils.mkSet(tp1, tp2));
+
+        int expectedBytes = 0;
+        LinkedHashMap<TopicPartition, FetchResponse.PartitionData> fetchPartitionData = new LinkedHashMap<>();
+
+        for (TopicPartition tp : Utils.mkSet(tp1, tp2)) {
+            subscriptions.seek(tp, 0);
+
+            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+                    TimestampType.CREATE_TIME, 0L);
+            for (int v = 0; v < 3; v++)
+                builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
+            MemoryRecords records = builder.build();
+            for (Record record : records.records())
+                expectedBytes += record.sizeInBytes();
+
+            fetchPartitionData.put(tp, new FetchResponse.PartitionData(Errors.NONE, 15L,
+                    FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, null, records));
+        }
+
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(new FetchResponse(Errors.NONE, fetchPartitionData, 0, INVALID_SESSION_ID));
+        consumerClient.poll(0);
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
+        assertEquals(3, fetchedRecords.get(tp1).size());
+        assertEquals(3, fetchedRecords.get(tp2).size());
 
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
         KafkaMetric fetchSizeAverage = allMetrics.get(metrics.metricInstance(metricsRegistry.fetchSizeAvg));
         KafkaMetric recordsCountAverage = allMetrics.get(metrics.metricInstance(metricsRegistry.recordsPerRequestAvg));
-
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
-                TimestampType.CREATE_TIME, 0L);
-        for (int v = 0; v < 3; v++)
-            builder.appendWithOffset(v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), ("value-" + v).getBytes());
-        MemoryRecords records = builder.build();
-
-        int expectedBytes = 0;
-        for (Record record : records.records())
-            expectedBytes += record.sizeInBytes();
-
-        fetchRecords(tp0, records, Errors.NONE, 100L, 0);
         assertEquals(expectedBytes, fetchSizeAverage.value(), EPSILON);
-        assertEquals(3, recordsCountAverage.value(), EPSILON);
+        assertEquals(6, recordsCountAverage.value(), EPSILON);
     }
 
     @Test

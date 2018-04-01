@@ -315,7 +315,6 @@ public class ProducerPerformance {
         public Stats(long numRecords, int reportingInterval) {
             this.start = System.currentTimeMillis();
             this.windowStart = System.currentTimeMillis();
-            this.index = 0;
             this.iteration = 0;
             this.sampling = (int) (numRecords / Math.min(numRecords, 500000));
             this.latencies = new int[(int) (numRecords / this.sampling) + 1];

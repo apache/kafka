@@ -32,6 +32,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
@@ -94,10 +95,15 @@ public class SmokeTestDriver extends SmokeTestUtil {
             }
         };
 
-        SmokeTestClient streams1 = new SmokeTestClient(createDir(stateDir, "1"), kafka);
-        SmokeTestClient streams2 = new SmokeTestClient(createDir(stateDir, "2"), kafka);
-        SmokeTestClient streams3 = new SmokeTestClient(createDir(stateDir, "3"), kafka);
-        SmokeTestClient streams4 = new SmokeTestClient(createDir(stateDir, "4"), kafka);
+        final Properties props = new Properties();
+        props.put(StreamsConfig.STATE_DIR_CONFIG, createDir(stateDir, "1").getAbsolutePath());
+        SmokeTestClient streams1 = new SmokeTestClient(props, kafka);
+        props.put(StreamsConfig.STATE_DIR_CONFIG, createDir(stateDir, "2").getAbsolutePath());
+        SmokeTestClient streams2 = new SmokeTestClient(props, kafka);
+        props.put(StreamsConfig.STATE_DIR_CONFIG, createDir(stateDir, "3").getAbsolutePath());
+        SmokeTestClient streams3 = new SmokeTestClient(props, kafka);
+        props.put(StreamsConfig.STATE_DIR_CONFIG, createDir(stateDir, "4").getAbsolutePath());
+        SmokeTestClient streams4 = new SmokeTestClient(props, kafka);
 
         System.out.println("starting the driver");
         driver.start();

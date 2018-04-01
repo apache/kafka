@@ -16,22 +16,16 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
@@ -39,9 +33,6 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamPrintTest {
 
-    private final Serde<Integer> intSerd = Serdes.Integer();
-    private final Serde<String> stringSerd = Serdes.String();
-    private PrintWriter printWriter;
     private ByteArrayOutputStream byteOutStream;
 
     private KeyValueMapper<Integer, String, String> mapper;
@@ -49,9 +40,8 @@ public class KStreamPrintTest {
     private Processor printProcessor;
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         byteOutStream = new ByteArrayOutputStream();
-        printWriter = new PrintWriter(new OutputStreamWriter(byteOutStream, StandardCharsets.UTF_8));
 
         mapper = new KeyValueMapper<Integer, String, String>() {
             @Override
@@ -60,7 +50,7 @@ public class KStreamPrintTest {
             }
         };
 
-        kStreamPrint = new KStreamPrint<>(new PrintForeachAction<>(printWriter, mapper, "test-stream"));
+        kStreamPrint = new KStreamPrint<>(new PrintForeachAction<>(byteOutStream, mapper, "test-stream"));
 
         printProcessor = kStreamPrint.get();
         ProcessorContext processorContext = EasyMock.createNiceMock(ProcessorContext.class);
@@ -98,7 +88,7 @@ public class KStreamPrintTest {
         for (KeyValue<K, V> record: inputRecords) {
             printProcessor.process(record.key, record.value);
         }
-        printWriter.flush();
+        printProcessor.close();
         assertFlushData(expectedResult, byteOutStream);
     }
 }

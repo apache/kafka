@@ -971,13 +971,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
+        if (pattern == null)
+            throw new IllegalArgumentException("Topic pattern to subscribe to cannot be null");
+
         acquireAndEnsureOpen();
         try {
-            if (pattern == null)
-                throw new IllegalArgumentException("Topic pattern to subscribe to cannot be null");
-
             throwIfNoAssignorsConfigured();
-
             log.debug("Subscribed to pattern: {}", pattern);
             this.subscriptions.subscribe(pattern, listener);
             this.metadata.needMetadataForAllTopics(true);
@@ -1387,11 +1386,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void seek(TopicPartition partition, long offset) {
+        if (offset < 0)
+            throw new IllegalArgumentException("seek offset must not be a negative number");
+
         acquireAndEnsureOpen();
         try {
-            if (offset < 0)
-                throw new IllegalArgumentException("seek offset must not be a negative number");
-
             log.debug("Seeking to offset {} for partition {}", offset, partition);
             this.subscriptions.seek(partition, offset);
         } finally {
@@ -1407,11 +1406,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws IllegalArgumentException if {@code partitions} is {@code null} or the provided TopicPartition is not assigned to this consumer
      */
     public void seekToBeginning(Collection<TopicPartition> partitions) {
+        if (partitions == null)
+            throw new IllegalArgumentException("Partitions collection cannot be null");
+
         acquireAndEnsureOpen();
         try {
-            if (partitions == null) {
-                throw new IllegalArgumentException("Partitions collection cannot be null");
-            }
             Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
                 log.debug("Seeking to beginning of partition {}", tp);
@@ -1433,11 +1432,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws IllegalArgumentException if {@code partitions} is {@code null} or the provided TopicPartition is not assigned to this consumer
      */
     public void seekToEnd(Collection<TopicPartition> partitions) {
+        if (partitions == null)
+            throw new IllegalArgumentException("Partitions collection cannot be null");
+
         acquireAndEnsureOpen();
         try {
-            if (partitions == null) {
-                throw new IllegalArgumentException("Partitions collection cannot be null");
-            }
             Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
                 log.debug("Seeking to end of partition {}", tp);

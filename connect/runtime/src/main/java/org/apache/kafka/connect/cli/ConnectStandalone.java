@@ -62,58 +62,65 @@ public class ConnectStandalone {
             Exit.exit(1);
         }
 
-        Time time = Time.SYSTEM;
-        log.info("Kafka Connect standalone worker initializing ...");
-        long initStart = time.hiResClockMs();
-        WorkerInfo initInfo = new WorkerInfo();
-        initInfo.logAll();
-
-        String workerPropsFile = args[0];
-        Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
-                Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
-
-        log.info("Scanning for plugin classes. This might take a moment ...");
-        Plugins plugins = new Plugins(workerProps);
-        plugins.compareAndSwapWithDelegatingLoader();
-        StandaloneConfig config = new StandaloneConfig(workerProps);
-
-        String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
-        log.debug("Kafka cluster ID: {}", kafkaClusterId);
-
-        RestServer rest = new RestServer(config);
-        URI advertisedUrl = rest.advertisedUrl();
-        String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
-
-        Worker worker = new Worker(workerId, time, plugins, config, new FileOffsetBackingStore());
-
-        Herder herder = new StandaloneHerder(worker, kafkaClusterId);
-        final Connect connect = new Connect(herder, rest);
-        log.info("Kafka Connect standalone worker initialization took {}ms", time.hiResClockMs() - initStart);
-
         try {
-            connect.start();
-            for (final String connectorPropsFile : Arrays.copyOfRange(args, 1, args.length)) {
-                Map<String, String> connectorProps = Utils.propsToStringMap(Utils.loadProps(connectorPropsFile));
-                FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>(new Callback<Herder.Created<ConnectorInfo>>() {
-                    @Override
-                    public void onCompletion(Throwable error, Herder.Created<ConnectorInfo> info) {
-                        if (error != null)
-                            log.error("Failed to create job for {}", connectorPropsFile);
-                        else
-                            log.info("Created connector {}", info.result().name());
-                    }
-                });
-                herder.putConnectorConfig(
-                        connectorProps.get(ConnectorConfig.NAME_CONFIG),
-                        connectorProps, false, cb);
-                cb.get();
-            }
-        } catch (Throwable t) {
-            log.error("Stopping after connector error", t);
-            connect.stop();
-        }
+            Time time = Time.SYSTEM;
+            log.info("Kafka Connect standalone worker initializing ...");
+            long initStart = time.hiResClockMs();
+            WorkerInfo initInfo = new WorkerInfo();
+            initInfo.logAll();
 
-        // Shutdown will be triggered by Ctrl-C or via HTTP shutdown request
-        connect.awaitStop();
+            String workerPropsFile = args[0];
+            Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
+                    Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
+
+            log.info("Scanning for plugin classes. This might take a moment ...");
+            Plugins plugins = new Plugins(workerProps);
+            plugins.compareAndSwapWithDelegatingLoader();
+            StandaloneConfig config = new StandaloneConfig(workerProps);
+
+            String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
+            log.debug("Kafka cluster ID: {}", kafkaClusterId);
+
+            RestServer rest = new RestServer(config);
+            URI advertisedUrl = rest.advertisedUrl();
+            String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
+
+            Worker worker = new Worker(workerId, time, plugins, config, new FileOffsetBackingStore());
+
+            Herder herder = new StandaloneHerder(worker, kafkaClusterId);
+            final Connect connect = new Connect(herder, rest);
+            log.info("Kafka Connect standalone worker initialization took {}ms", time.hiResClockMs() - initStart);
+
+            try {
+                connect.start();
+                for (final String connectorPropsFile : Arrays.copyOfRange(args, 1, args.length)) {
+                    Map<String, String> connectorProps = Utils.propsToStringMap(Utils.loadProps(connectorPropsFile));
+                    FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>(new Callback<Herder.Created<ConnectorInfo>>() {
+                        @Override
+                        public void onCompletion(Throwable error, Herder.Created<ConnectorInfo> info) {
+                            if (error != null)
+                                log.error("Failed to create job for {}", connectorPropsFile);
+                            else
+                                log.info("Created connector {}", info.result().name());
+                        }
+                    });
+                    herder.putConnectorConfig(
+                            connectorProps.get(ConnectorConfig.NAME_CONFIG),
+                            connectorProps, false, cb);
+                    cb.get();
+                }
+            } catch (Throwable t) {
+                log.error("Stopping after connector error", t);
+                connect.stop();
+                Exit.exit(3);
+            }
+
+            // Shutdown will be triggered by Ctrl-C or via HTTP shutdown request
+            connect.awaitStop();
+
+        } catch (Throwable t) {
+            log.error("Stopping due to error", t);
+            Exit.exit(2);
+        }
     }
 }

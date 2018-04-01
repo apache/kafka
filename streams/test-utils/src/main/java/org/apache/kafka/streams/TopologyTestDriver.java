@@ -172,6 +172,7 @@ public class TopologyTestDriver {
     private StreamTask task;
     private GlobalStateUpdateTask globalStateTask;
 
+    private final StateDirectory stateDirectory;
     private final ProcessorTopology processorTopology;
     private final MockProducer<byte[], byte[]> producer;
 
@@ -221,7 +222,7 @@ public class TopologyTestDriver {
         };
 
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-        final StateDirectory stateDirectory = new StateDirectory(streamsConfig, mockTime);
+        stateDirectory = new StateDirectory(streamsConfig, mockTime);
         final StreamsMetrics streamsMetrics = new StreamsMetricsImpl(
             new Metrics(),
             "topology-test-driver-stream-metrics",
@@ -564,6 +565,7 @@ public class TopologyTestDriver {
             }
         }
         captureOutputRecords();
+        stateDirectory.clean();
     }
 
     static class MockTime implements Time {

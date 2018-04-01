@@ -39,7 +39,6 @@ class StoreChangeLogger<K, V> {
     private final ProcessorContext context;
     private final RecordCollector collector;
 
-
     StoreChangeLogger(String storeName, ProcessorContext context, StateSerdes<K, V> serialization) {
         this(storeName, context, context.taskId().partition, serialization);
     }
@@ -59,5 +58,4 @@ class StoreChangeLogger<K, V> {
             collector.send(this.topic, key, value, this.partition, context.timestamp(), keySerializer, valueSerializer);
         }
     }
-
 }

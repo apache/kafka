@@ -684,6 +684,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     public void maybeAutoCommitOffsetsAsync(long now) {
         if (autoCommitEnabled && now >= nextAutoCommitDeadline) {
+            this.nextAutoCommitDeadline = now + autoCommitIntervalMs;
             doAutoCommitOffsetsAsync();
         }
     }
@@ -696,14 +697,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             @Override
             public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
                 if (exception != null) {
-                    log.warn("Asynchronous auto-commit of offsets {} failed: {}", offsets, exception.getMessage());
-                    if (exception instanceof RetriableException)
+                    if (exception instanceof RetriableException) {
+                        log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", offsets,
+                                exception);
                         nextAutoCommitDeadline = Math.min(time.milliseconds() + retryBackoffMs, nextAutoCommitDeadline);
-                    else
-                        nextAutoCommitDeadline = time.milliseconds() + autoCommitIntervalMs;
+                    } else {
+                        log.warn("Asynchronous auto-commit of offsets {} failed: {}", offsets, exception.getMessage());
+                    }
                 } else {
                     log.debug("Completed asynchronous auto-commit of offsets {}", offsets);
-                    nextAutoCommitDeadline = time.milliseconds() + autoCommitIntervalMs;
                 }
             }
         });
@@ -747,7 +749,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (offsets.isEmpty())
             return RequestFuture.voidSuccess();
 
-        Node coordinator = coordinator();
+        Node coordinator = checkAndGetCoordinator();
         if (coordinator == null)
             return RequestFuture.coordinatorNotAvailable();
 
@@ -825,7 +827,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                             || error == Errors.NOT_COORDINATOR
                             || error == Errors.REQUEST_TIMED_OUT) {
-                        coordinatorDead();
+                        markCoordinatorUnknown();
                         future.raise(error);
                         return;
                     } else if (error == Errors.UNKNOWN_MEMBER_ID
@@ -862,7 +864,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @return A request future containing the committed offsets.
      */
     private RequestFuture<Map<TopicPartition, OffsetAndMetadata>> sendOffsetFetchRequest(Set<TopicPartition> partitions) {
-        Node coordinator = coordinator();
+        Node coordinator = checkAndGetCoordinator();
         if (coordinator == null)
             return RequestFuture.coordinatorNotAvailable();
 
@@ -888,7 +890,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     future.raise(error);
                 } else if (error == Errors.NOT_COORDINATOR) {
                     // re-discover the coordinator and retry
-                    coordinatorDead();
+                    markCoordinatorUnknown();
                     future.raise(error);
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     future.raise(new GroupAuthorizationException(groupId));

@@ -358,17 +358,20 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         for (final Predicate<? super K, ? super V> predicate : predicates) {
             Objects.requireNonNull(predicate, "predicates can't have null values");
         }
+
         String branchName = builder.newProcessorName(BRANCH_NAME);
 
-        builder.internalTopologyBuilder.addProcessor(branchName, new KStreamBranch(predicates.clone()), this.name);
+        String[] childNames = new String[predicates.length];
+        for (int i = 0; i < predicates.length; i++) {
+            childNames[i] = builder.newProcessorName(BRANCHCHILD_NAME);
+        }
+
+        builder.internalTopologyBuilder.addProcessor(branchName, new KStreamBranch(predicates.clone(), childNames), this.name);
 
         KStream<K, V>[] branchChildren = (KStream<K, V>[]) Array.newInstance(KStream.class, predicates.length);
         for (int i = 0; i < predicates.length; i++) {
-            String childName = builder.newProcessorName(BRANCHCHILD_NAME);
-
-            builder.internalTopologyBuilder.addProcessor(childName, new KStreamPassThrough<K, V>(), branchName);
-
-            branchChildren[i] = new KStreamImpl<>(builder, childName, sourceNodes, this.repartitionRequired);
+            builder.internalTopologyBuilder.addProcessor(childNames[i], new KStreamPassThrough<K, V>(), branchName);
+            branchChildren[i] = new KStreamImpl<>(builder, childNames[i], sourceNodes, this.repartitionRequired);
         }
 
         return branchChildren;
@@ -499,9 +502,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         final Serializer<V> valSerializer = produced.valueSerde() == null ? null : produced.valueSerde().serializer();
         final StreamPartitioner<? super K, ? super V> partitioner = produced.streamPartitioner();
 
-        if (partitioner == null && keySerializer != null && keySerializer instanceof WindowedSerializer) {
-            final WindowedSerializer<Object> windowedSerializer = (WindowedSerializer<Object>) keySerializer;
-            final StreamPartitioner<K, V> windowedPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>(topic, windowedSerializer);
+        if (partitioner == null && keySerializer instanceof WindowedSerializer) {
+            final StreamPartitioner<K, V> windowedPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>(topic, (WindowedSerializer) keySerializer);
             builder.internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, windowedPartitioner, this.name);
         } else {
             builder.internalTopologyBuilder.addSink(name, topic, keySerializer, valSerializer, partitioner, this.name);
@@ -653,16 +655,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
      */
     private KStreamImpl<K, V> repartitionForJoin(final Serde<K> keySerde,
                                                  final Serde<V> valSerde) {
-        String repartitionedSourceName = createReparitionedSource(builder, keySerde, valSerde, null, name);
+        String repartitionedSourceName = createRepartitionedSource(builder, keySerde, valSerde, null, name);
         return new KStreamImpl<>(builder, repartitionedSourceName, Collections
             .singleton(repartitionedSourceName), false);
     }
 
-    static <K1, V1> String createReparitionedSource(final InternalStreamsBuilder builder,
-                                                    final Serde<K1> keySerde,
-                                                    final Serde<V1> valSerde,
-                                                    final String topicNamePrefix,
-                                                    final String name) {
+    static <K1, V1> String createRepartitionedSource(final InternalStreamsBuilder builder,
+                                                     final Serde<K1> keySerde,
+                                                     final Serde<V1> valSerde,
+                                                     final String topicNamePrefix,
+                                                     final String name) {
         Serializer<K1> keySerializer = keySerde != null ? keySerde.serializer() : null;
         Serializer<V1> valSerializer = valSerde != null ? valSerde.serializer() : null;
         Deserializer<K1> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
