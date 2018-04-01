@@ -776,6 +776,7 @@ public class StreamTaskTest {
     @Test
     public void shouldInitAndBeginTransactionOnCreateIfEosEnabled() {
         task = createStatelessTask(true);
+        task.initializeTopology();
 
         assertTrue(producer.transactionInitialized());
         assertTrue(producer.transactionInFlight());
@@ -792,6 +793,7 @@ public class StreamTaskTest {
     @Test
     public void shouldSendOffsetsAndCommitTransactionButNotStartNewTransactionOnSuspendIfEosEnabled() {
         task = createStatelessTask(true);
+        task.initializeTopology();
 
         task.addRecords(partition1, Collections.singletonList(
             new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
@@ -806,6 +808,7 @@ public class StreamTaskTest {
     @Test
     public void shouldCommitTransactionOnSuspendEvenIfTransactionIsEmptyIfEosEnabled() {
         task = createStatelessTask(true);
+        task.initializeTopology();
         task.suspend();
 
         assertTrue(producer.transactionCommitted());
@@ -828,6 +831,7 @@ public class StreamTaskTest {
     @Test
     public void shouldStartNewTransactionOnResumeIfEosEnabled() {
         task = createStatelessTask(true);
+        task.initializeTopology();
 
         task.addRecords(partition1, Collections.singletonList(
             new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
@@ -835,6 +839,7 @@ public class StreamTaskTest {
         task.suspend();
 
         task.resume();
+        task.initializeTopology();
         assertTrue(producer.transactionInFlight());
     }
 
@@ -854,6 +859,7 @@ public class StreamTaskTest {
     @Test
     public void shouldStartNewTransactionOnCommitIfEosEnabled() {
         task = createStatelessTask(true);
+        task.initializeTopology();
 
         task.addRecords(partition1, Collections.singletonList(
             new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
@@ -878,6 +884,7 @@ public class StreamTaskTest {
     @Test
     public void shouldAbortTransactionOnDirtyClosedIfEosEnabled() {
         task = createStatelessTask(true);
+        task.initializeTopology();
         task.close(false, false);
         task = null;
 

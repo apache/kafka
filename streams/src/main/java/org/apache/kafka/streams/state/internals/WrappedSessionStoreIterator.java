@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 
@@ -37,14 +36,13 @@ class WrappedSessionStoreIterator<K, V> implements KeyValueIterator<Windowed<K>,
         @Override
         public Windowed<Bytes> peekNextKey() {
             final Bytes key = bytesIterator.peekNextKey();
-
-            return SessionKeySerde.fromBytes(key);
+            return SessionKeySchema.from(key);
         }
 
         @Override
         public KeyValue<Windowed<Bytes>, byte[]> next() {
             final KeyValue<Bytes, byte[]> next = bytesIterator.next();
-            return KeyValue.pair(SessionKeySerde.fromBytes(next.key), next.value);
+            return KeyValue.pair(SessionKeySchema.from(next.key), next.value);
         }
     }
 
@@ -66,7 +64,7 @@ class WrappedSessionStoreIterator<K, V> implements KeyValueIterator<Windowed<K>,
     @Override
     public Windowed<K> peekNextKey() {
         final Bytes bytes = bytesIterator.peekNextKey();
-        return SessionKeySerde.from(bytes.get(), serdes.keyDeserializer(), serdes.topic());
+        return SessionKeySchema.from(bytes.get(), serdes.keyDeserializer(), serdes.topic());
     }
 
     @Override
@@ -77,8 +75,7 @@ class WrappedSessionStoreIterator<K, V> implements KeyValueIterator<Windowed<K>,
     @Override
     public KeyValue<Windowed<K>, V> next() {
         final KeyValue<Bytes, byte[]> next = bytesIterator.next();
-        return KeyValue.pair(SessionKeySerde.from(next.key.get(), serdes.keyDeserializer(), serdes.topic()),
-                             serdes.valueFrom(next.value));
+        return KeyValue.pair(SessionKeySchema.from(next.key.get(), serdes.keyDeserializer(), serdes.topic()), serdes.valueFrom(next.value));
     }
 
     @Override

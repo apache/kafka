@@ -144,6 +144,8 @@ public class StandbyTask extends AbstractTask {
         } finally {
             closeStateManager(committedSuccessfully);
         }
+
+        taskClosed = true;
     }
 
     @Override

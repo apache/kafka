@@ -376,7 +376,6 @@ public class QueryableStateIntegrationTest {
         }
     }
 
-
     @Test
     public void queryOnRebalance() throws InterruptedException {
         final int numThreads = STREAM_TWO_PARTITIONS;

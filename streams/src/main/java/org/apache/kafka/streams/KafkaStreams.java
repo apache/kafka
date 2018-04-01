@@ -517,10 +517,16 @@ public class KafkaStreams {
     }
 
     /**
-     * @deprecated use {@link #KafkaStreams(Topology, Properties)} instead
+     * Create a {@code KafkaStreams} instance.
+     * <p>
+     * Note: even if you never call {@link #start()} on a {@code KafkaStreams} instance,
+     * you still must {@link #close()} it to avoid resource leaks.
+     *
+     * @param topology the topology specifying the computational logic
+     * @param props    properties for {@link StreamsConfig}
+     * @throws StreamsException if any fatal error occurs
      */
-    @Deprecated
-    public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
+    public KafkaStreams(final Topology topology,
                         final Properties props) {
         this(builder.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
     }
@@ -542,36 +548,7 @@ public class KafkaStreams {
                         final StreamsConfig config,
                         final KafkaClientSupplier clientSupplier) {
         this(builder.internalTopologyBuilder, config, clientSupplier, DEFAULT_BLOCKING_TIME);
-    }
-
-    /**
-     * Create a {@code KafkaStreams} instance.
-     * <p>
-     * Note: even if you never call {@link #start()} on a {@code KafkaStreams} instance,
-     * you still must {@link #close()} it to avoid resource leaks.
-     *
-     * @param topology the topology specifying the computational logic
-     * @param props   properties for {@link StreamsConfig}
-     * @throws StreamsException if any fatal error occurs
-     */
-    public KafkaStreams(final Topology topology,
-                        final Properties props) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
-    }
-
-    /**
-     * Create a {@code KafkaStreams} instance.
-     * <p>
-     * Note: even if you never call {@link #start()} on a {@code KafkaStreams} instance,
-     * you still must {@link #close()} it to avoid resource leaks.
-     *
-     * @param topology the topology specifying the computational logic
-     * @param config  the Kafka Streams configuration
-     * @throws StreamsException if any fatal error occurs
-     */
-    public KafkaStreams(final Topology topology,
-                        final StreamsConfig config) {
-        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
+        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
     }
 
     /**
@@ -581,11 +558,99 @@ public class KafkaStreams {
      * you still must {@link #close()} it to avoid resource leaks.
      *
      * @param topology       the topology specifying the computational logic
-     * @param config         the Kafka Streams configuration
+     * @param props          properties for {@link StreamsConfig}
      * @param clientSupplier the Kafka clients supplier which provides underlying producer and consumer clients
      *                       for the new {@code KafkaStreams} instance
      * @throws StreamsException if any fatal error occurs
      */
+    public KafkaStreams(final Topology topology,
+                        final Properties props) {
+        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
+                        final Properties props,
+                        final KafkaClientSupplier clientSupplier) {
+        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, Time.SYSTEM);
+    }
+
+    /**
+     * Create a {@code KafkaStreams} instance.
+     * <p>
+     * Note: even if you never call {@link #start()} on a {@code KafkaStreams} instance,
+     * you still must {@link #close()} it to avoid resource leaks.
+     *
+     * @param topology       the topology specifying the computational logic
+     * @param props          properties for {@link StreamsConfig}
+     * @param time           {@code Time} implementation; cannot be null
+     * @throws StreamsException if any fatal error occurs
+     */
+    public KafkaStreams(final Topology topology,
+                        final StreamsConfig config) {
+        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
+                        final Properties props,
+                        final Time time) {
+        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), time);
+    }
+
+    /**
+     * Create a {@code KafkaStreams} instance.
+     * <p>
+     * Note: even if you never call {@link #start()} on a {@code KafkaStreams} instance,
+     * you still must {@link #close()} it to avoid resource leaks.
+     *
+     * @param topology       the topology specifying the computational logic
+     * @param props          properties for {@link StreamsConfig}
+     * @param clientSupplier the Kafka clients supplier which provides underlying producer and consumer clients
+     *                       for the new {@code KafkaStreams} instance
+     * @param time           {@code Time} implementation; cannot be null
+     * @throws StreamsException if any fatal error occurs
+     */
+    public KafkaStreams(final Topology topology,
+                        final Properties props,
+                        final KafkaClientSupplier clientSupplier,
+                        final Time time) {
+        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, time);
+    }
+
+    /**
+     * @deprecated use {@link #KafkaStreams(Topology, Properties)} instead
+     */
+    @Deprecated
+    public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
+                        final Properties props) {
+        this(builder.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
+    }
+
+    /**
+     * @deprecated use {@link #KafkaStreams(Topology, Properties)} instead
+     */
+    @Deprecated
+    public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
+                        final StreamsConfig config) {
+        this(builder.internalTopologyBuilder, config, new DefaultKafkaClientSupplier());
+    }
+
+    /**
+     * @deprecated use {@link #KafkaStreams(Topology, Properties, KafkaClientSupplier)} instead
+     */
+    @Deprecated
+    public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
+                        final StreamsConfig config,
+                        final KafkaClientSupplier clientSupplier) {
+        this(builder.internalTopologyBuilder, config, clientSupplier);
+    }
+
+    /**
+     * @deprecated use {@link #KafkaStreams(Topology, Properties)} instead
+     */
+    @Deprecated
+    public KafkaStreams(final Topology topology,
+                        final StreamsConfig config) {
+        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier());
+    }
+
+    /**
+     * @deprecated use {@link #KafkaStreams(Topology, Properties, KafkaClientSupplier)} instead
+     */
+    @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config,
                         final KafkaClientSupplier clientSupplier) {
@@ -593,13 +658,9 @@ public class KafkaStreams {
     }
 
     /**
-     * Create a {@code KafkaStreams} instance.
-     *
-     * @param topology       the topology specifying the computational logic
-     * @param config         the Kafka Streams configuration
-     * @param time           {@code Time} implementation; cannot be null
-     * @throws StreamsException if any fatal error occurs
+     * @deprecated use {@link #KafkaStreams(Topology, Properties, Time)} instead
      */
+    @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config,
                         final long maxCommitMs) {

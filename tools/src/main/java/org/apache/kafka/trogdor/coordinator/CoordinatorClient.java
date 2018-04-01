@@ -34,6 +34,8 @@ import org.apache.kafka.trogdor.rest.JsonRestServer.HttpResponse;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
 import org.apache.kafka.trogdor.rest.StopTaskResponse;
 import org.apache.kafka.trogdor.rest.TasksResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
@@ -42,6 +44,8 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
  * A client for the Trogdor coordinator.
  */
 public class CoordinatorClient {
+    private final Logger log;
+
     /**
      * The maximum number of tries to make.
      */
@@ -52,11 +56,44 @@ public class CoordinatorClient {
      */
     private final String target;
 
-    public CoordinatorClient(int maxTries, String host, int port) {
-        this(maxTries, String.format("%s:%d", host, port));
+    public static class Builder {
+        private Logger log = LoggerFactory.getLogger(CoordinatorClient.class);
+        private int maxTries = 1;
+        private String target = null;
+
+        public Builder() {
+        }
+
+        public Builder log(Logger log) {
+            this.log = log;
+            return this;
+        }
+
+        public Builder maxTries(int maxTries) {
+            this.maxTries = maxTries;
+            return this;
+        }
+
+        public Builder target(String target) {
+            this.target = target;
+            return this;
+        }
+
+        public Builder target(String host, int port) {
+            this.target = String.format("%s:%d", host, port);
+            return this;
+        }
+
+        public CoordinatorClient build() {
+            if (target == null) {
+                throw new RuntimeException("You must specify a target.");
+            }
+            return new CoordinatorClient(log, maxTries, target);
+        }
     }
 
-    public CoordinatorClient(int maxTries, String target) {
+    private CoordinatorClient(Logger log, int maxTries, String target) {
+        this.log = log;
         this.maxTries = maxTries;
         this.target = target;
     }
@@ -78,28 +115,28 @@ public class CoordinatorClient {
 
     public CreateTaskResponse createTask(CreateTaskRequest request) throws Exception {
         HttpResponse<CreateTaskResponse> resp =
-            JsonRestServer.<CreateTaskResponse>httpRequest(url("/coordinator/task/create"), "POST",
+            JsonRestServer.<CreateTaskResponse>httpRequest(log, url("/coordinator/task/create"), "POST",
                 request, new TypeReference<CreateTaskResponse>() { }, maxTries);
         return resp.body();
     }
 
     public StopTaskResponse stopTask(StopTaskRequest request) throws Exception {
         HttpResponse<StopTaskResponse> resp =
-            JsonRestServer.<StopTaskResponse>httpRequest(url("/coordinator/task/stop"), "PUT",
+            JsonRestServer.<StopTaskResponse>httpRequest(log, url("/coordinator/task/stop"), "PUT",
                 request, new TypeReference<StopTaskResponse>() { }, maxTries);
         return resp.body();
     }
 
     public TasksResponse tasks() throws Exception {
         HttpResponse<TasksResponse> resp =
-            JsonRestServer.<TasksResponse>httpRequest(url("/coordinator/tasks"), "GET",
+            JsonRestServer.<TasksResponse>httpRequest(log, url("/coordinator/tasks"), "GET",
                 null, new TypeReference<TasksResponse>() { }, maxTries);
         return resp.body();
     }
 
     public void shutdown() throws Exception {
         HttpResponse<Empty> resp =
-            JsonRestServer.<Empty>httpRequest(url("/coordinator/shutdown"), "PUT",
+            JsonRestServer.<Empty>httpRequest(log, url("/coordinator/shutdown"), "PUT",
                 null, new TypeReference<Empty>() { }, maxTries);
         resp.body();
     }
@@ -158,7 +195,10 @@ public class CoordinatorClient {
             }
         }
         String target = res.getString("target");
-        CoordinatorClient client = new CoordinatorClient(3, target);
+        CoordinatorClient client = new Builder().
+            maxTries(3).
+            target(target).
+            build();
         if (res.getBoolean("status")) {
             System.out.println("Got coordinator status: " +
                 JsonUtil.toPrettyJsonString(client.status()));

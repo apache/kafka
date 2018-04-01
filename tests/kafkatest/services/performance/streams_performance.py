@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.streams import StreamsTestBaseService
-
 
 #
 # Class used to start the simple Kafka Streams benchmark
@@ -30,6 +30,55 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
                                                             load_phase,
                                                             test_name,
                                                             num_threads)
+
+        self.load_phase = load_phase
+
+        if self.load_phase == "false":
+            JmxMixin.__init__(self,
+                              num_nodes=1,
+                              jmx_object_names=['kafka.streams:type=stream-metrics,client-id=simple-benchmark-StreamThread-%d' %(i+1) for i in range(num_threads)],
+                              jmx_attributes=['process-latency-avg',
+                                              'process-rate',
+                                              'commit-latency-avg',
+                                              'commit-rate',
+                                              'poll-latency-avg',
+                                              'poll-rate'],
+                              root=StreamsTestBaseService.PERSISTENT_ROOT)
+
+    def start_cmd(self, node):
+        cmd = super(StreamsSimpleBenchmarkService, self).start_cmd(node)
+
+        if self.load_phase == "false":
+            args = self.args.copy()
+            args['jmx_port'] = self.jmx_port
+            args['kafka'] = self.kafka.bootstrap_servers()
+            args['config_file'] = self.CONFIG_FILE
+            args['stdout'] = self.STDOUT_FILE
+            args['stderr'] = self.STDERR_FILE
+            args['pidfile'] = self.PID_FILE
+            args['log4j'] = self.LOG4J_CONFIG_FILE
+            args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
+
+            cmd = "( export JMX_PORT=%(jmx_port)s; export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
+                  "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
+                  " %(kafka)s %(config_file)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
+                  " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+
+        self.logger.info("Executing streams simple benchmark cmd: " + cmd)
+
+        return cmd
+
+    def start_node(self, node):
+        super(StreamsSimpleBenchmarkService, self).start_node(node)
+
+        if self.load_phase == "false":
+            self.start_jmx_tool(1, node)
+
+
+    def clean_node(self, node):
+        if self.load_phase == "false":
+            JmxMixin.clean_node(self, node)
+        super(StreamsSimpleBenchmarkService, self).clean_node(node)
 
     def collect_data(self, node, tag = None):
         # Collect the data and return it to the framework

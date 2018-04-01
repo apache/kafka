@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.To;
 
 /**
  * The {@code Transformer} interface is for stateful mapping of an input record to zero, one, or multiple new output
@@ -69,9 +70,8 @@ public interface Transformer<K, V, R> {
      * attached} to this operator can be accessed and modified
      * arbitrarily (cf. {@link ProcessorContext#getStateStore(String)}).
      * <p>
-     * If more than one output record should be forwarded downstream {@link ProcessorContext#forward(Object, Object)},
-     * {@link ProcessorContext#forward(Object, Object, int)}, and
-     * {@link ProcessorContext#forward(Object, Object, String)} can be used.
+     * If more than one output record should be forwarded downstream {@link ProcessorContext#forward(Object, Object)}
+     * and {@link ProcessorContext#forward(Object, Object, To)} can be used.
      * If not record should be forwarded downstream, {@code transform} can return {@code null}.
      *
      * @param key the key for the record
@@ -86,9 +86,8 @@ public interface Transformer<K, V, R> {
      * {@link ProcessorContext#schedule(long) schedules itself} with the context during
      * {@link #init(ProcessorContext) initialization}.
      * <p>
-     * To generate new {@link KeyValue} pairs {@link ProcessorContext#forward(Object, Object)},
-     * {@link ProcessorContext#forward(Object, Object, int)}, and
-     * {@link ProcessorContext#forward(Object, Object, String)} can be used.
+     * To generate new {@link KeyValue} pairs {@link ProcessorContext#forward(Object, Object)} and
+     * {@link ProcessorContext#forward(Object, Object, To)} can be used.
      * <p>
      * Note that {@code punctuate} is called based on <it>stream time</it> (i.e., time progresses with regard to
      * timestamps return by the used {@link TimestampExtractor})
@@ -105,9 +104,8 @@ public interface Transformer<K, V, R> {
     /**
      * Close this processor and clean up any resources.
      * <p>
-     * To generate new {@link KeyValue} pairs {@link ProcessorContext#forward(Object, Object)},
-     * {@link ProcessorContext#forward(Object, Object, int)}, and
-     * {@link ProcessorContext#forward(Object, Object, String)} can be used.
+     * To generate new {@link KeyValue} pairs {@link ProcessorContext#forward(Object, Object)} and
+     * {@link ProcessorContext#forward(Object, Object, To)} can be used.
      */
     void close();
 

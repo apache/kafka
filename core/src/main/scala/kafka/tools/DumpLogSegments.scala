@@ -155,9 +155,13 @@ object DumpLogSegments {
   private def dumpProducerIdSnapshot(file: File): Unit = {
     try {
       ProducerStateManager.readSnapshot(file).foreach { entry =>
-        println(s"producerId: ${entry.producerId} producerEpoch: ${entry.producerEpoch} " +
-          s"coordinatorEpoch: ${entry.coordinatorEpoch} currentTxnFirstOffset: ${entry.currentTxnFirstOffset} " +
-          s"cachedMetadata: ${entry.batchMetadata}")
+        print(s"producerId: ${entry.producerId} producerEpoch: ${entry.producerEpoch} " +
+          s"coordinatorEpoch: ${entry.coordinatorEpoch} currentTxnFirstOffset: ${entry.currentTxnFirstOffset} ")
+        entry.batchMetadata.headOption.foreach { metadata =>
+          print(s"firstSequence: ${metadata.firstSeq} lastSequence: ${metadata.lastSeq} " +
+            s"lastOffset: ${metadata.lastOffset} offsetDelta: ${metadata.offsetDelta} timestamp: ${metadata.timestamp}")
+        }
+        println()
       }
     } catch {
       case e: CorruptSnapshotException =>
@@ -417,7 +421,7 @@ object DumpLogSegments {
         }
       } else {
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-          print("baseOffset: " + batch.baseOffset + " lastOffset: " + batch.lastOffset +
+          print("baseOffset: " + batch.baseOffset + " lastOffset: " + batch.lastOffset + " count: " + batch.countOrNull +
             " baseSequence: " + batch.baseSequence + " lastSequence: " + batch.lastSequence +
             " producerId: " + batch.producerId + " producerEpoch: " + batch.producerEpoch +
             " partitionLeaderEpoch: " + batch.partitionLeaderEpoch + " isTransactional: " + batch.isTransactional)

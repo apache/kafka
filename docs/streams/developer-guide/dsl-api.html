@@ -66,6 +66,7 @@
                 </ul>
                 </li>
                 <li><a class="reference internal" href="#writing-streams-back-to-kafka" id="id25">Writing streams back to Kafka</a></li>
+                <li><a class="reference internal" href="#testing-a-streams-app" id="id26">Testing a Streams application</a></li>
             </ul>
         </div>
         <div class="section" id="overview">
@@ -154,7 +155,7 @@
                         interpreted as a changelog stream, where records with the same key are interpreted as UPSERT aka INSERT/UPDATE
                         (when the record value is not <code class="docutils literal"><span class="pre">null</span></code>) or as DELETE (when the value is <code class="docutils literal"><span class="pre">null</span></code>) for that key.
                         <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/StreamsBuilder.html#table-java.lang.String(java.lang.String)">(details)</a></p>
-                        <p>In the case of a KStream, the local KStream instance of every application instance will
+                        <p>In the case of a KTable, the local KTable instance of every application instance will
                             be populated with data from only <strong>a subset</strong> of the partitions of the input topic.  Collectively, across
                             all application instances, all input topic partitions are read and processed.</p>
                         <p>You must provide a name for the table (more precisely, for the internal
@@ -180,8 +181,7 @@
                         (when the record value is not <code class="docutils literal"><span class="pre">null</span></code>) or as DELETE (when the value is <code class="docutils literal"><span class="pre">null</span></code>) for that key.
                         <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/StreamsBuilder.html#globalTable-java.lang.String(java.lang.String)">(details)</a></p>
                         <p>In the case of a GlobalKTable, the local GlobalKTable instance of every application instance will
-                            be populated with data from only <strong>a subset</strong> of the partitions of the input topic.  Collectively, across
-                            all application instances, all input topic partitions are read and processed.</p>
+                            be populated with data from <strong>all</strong> the partitions of the input topic.</p>
                         <p>You must provide a name for the table (more precisely, for the internal
                             <a class="reference internal" href="../architecture.html#streams-architecture-state"><span class="std std-ref">state store</span></a> that backs the table).  This is required for
                             supporting <a class="reference internal" href="interactive-queries.html#streams-developer-guide-interactive-queries"><span class="std std-ref">interactive queries</span></a> against the table. When a
@@ -3155,6 +3155,10 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                     retry on delivery failure or to prevent message duplication).</p>
 </div>
 </div>
+        <div class="section" id="testing-a-streams-app">
+            <a class="headerlink" href="#testing-a-streams-app" title="Permalink to this headline"><h2>Testing a Streams application</a></h2>
+            Kafka Streams comes with a <code>test-utils</code> module to help you test your application <a href="testing.html">here</a>.
+        </div>
 </div>
 
 

@@ -31,7 +31,7 @@ public class SampleTaskSpec extends TaskSpec {
                         @JsonProperty("error") String error) {
         super(startMs, durationMs);
         this.exitMs = exitMs;
-        this.error = error;
+        this.error = error == null ? "" : error;
     }
 
     @JsonProperty

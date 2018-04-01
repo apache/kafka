@@ -197,11 +197,11 @@ public class YahooBenchmark {
         }
 
         CountDownLatch latch = new CountDownLatch(1);
-        Properties props = parent.setStreamProperties("simple-benchmark-yahoo" + new Random().nextInt());
+        parent.setStreamProperties("simple-benchmark-yahoo" + new Random().nextInt());
         //TODO remove this config or set to smaller value when KIP-91 is merged
-        props.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 60000);
+        parent.props.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 60000);
 
-        final KafkaStreams streams = createYahooBenchmarkStreams(props, campaignsTopic, eventsTopic, latch, parent.numRecords);
+        final KafkaStreams streams = createYahooBenchmarkStreams(parent.props, campaignsTopic, eventsTopic, latch, parent.numRecords);
         parent.runGenericBenchmark(streams, "Streams Yahoo Performance [records/latency/rec-sec/MB-sec counted]: ", latch);
 
     }

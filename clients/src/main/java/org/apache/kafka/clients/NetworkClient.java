@@ -603,11 +603,13 @@ public class NetworkClient implements KafkaClient {
         nodesNeedingApiVersionsFetch.remove(nodeId);
         switch (disconnectState.state()) {
             case AUTHENTICATION_FAILED:
-                connectionStates.authenticationFailed(nodeId, now, disconnectState.exception());
-                log.error("Connection to node {} failed authentication due to: {}", nodeId, disconnectState.exception().getMessage());
+                AuthenticationException exception = disconnectState.exception();
+                connectionStates.authenticationFailed(nodeId, now, exception);
+                metadataUpdater.handleAuthenticationFailure(exception);
+                log.error("Connection to node {} failed authentication due to: {}", nodeId, exception.getMessage());
                 break;
             case AUTHENTICATE:
-                // This warning applies to older brokers which dont provide feedback on authentication failures
+                // This warning applies to older brokers which don't provide feedback on authentication failures
                 log.warn("Connection to node {} terminated during authentication. This may indicate " +
                         "that authentication failed due to invalid credentials.", nodeId);
                 break;
@@ -625,9 +627,6 @@ public class NetworkClient implements KafkaClient {
             else if (request.header.apiKey() == ApiKeys.METADATA)
                 metadataUpdater.handleDisconnection(request.destination);
         }
-        AuthenticationException authenticationException = connectionStates.authenticationException(nodeId);
-        if (authenticationException != null)
-            metadataUpdater.handleAuthenticationFailure(authenticationException);
     }
 
     /**

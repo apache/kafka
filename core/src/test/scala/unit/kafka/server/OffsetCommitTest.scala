@@ -249,11 +249,11 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     Thread.sleep(retentionCheckInterval * 2)
     assertEquals(2L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
 
-    // v1 version commit request with commit timestamp set to now - two days
+    // v1 version commit request with commit timestamp set to now - seven + a bit days
     // committed offset should expire
     val commitRequest2 = OffsetCommitRequest(
       groupId = group,
-      requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(3L, "metadata", Time.SYSTEM.milliseconds - 2*24*60*60*1000L)),
+      requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(3L, "metadata", Time.SYSTEM.milliseconds - (Defaults.OffsetsRetentionMinutes + 1) * 60 * 1000L)),
       versionId = 1
     )
     assertEquals(Errors.NONE, simpleConsumer.commitOffsets(commitRequest2).commitStatus.get(topicPartition).get)
