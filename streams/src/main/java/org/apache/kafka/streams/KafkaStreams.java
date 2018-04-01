@@ -528,27 +528,7 @@ public class KafkaStreams {
      */
     public KafkaStreams(final Topology topology,
                         final Properties props) {
-        this(builder.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
-    }
-
-    /**
-     * @deprecated use {@link #KafkaStreams(Topology, StreamsConfig)} instead
-     */
-    @Deprecated
-    public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
-                        final StreamsConfig config) {
-        this(builder.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
-    }
-
-    /**
-     * @deprecated use {@link #KafkaStreams(Topology, StreamsConfig, KafkaClientSupplier)} instead
-     */
-    @Deprecated
-    public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
-                        final StreamsConfig config,
-                        final KafkaClientSupplier clientSupplier) {
-        this(builder.internalTopologyBuilder, config, clientSupplier, DEFAULT_BLOCKING_TIME);
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
+        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
     }
 
     /**
@@ -564,11 +544,9 @@ public class KafkaStreams {
      * @throws StreamsException if any fatal error occurs
      */
     public KafkaStreams(final Topology topology,
-                        final Properties props) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
                         final Properties props,
                         final KafkaClientSupplier clientSupplier) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, Time.SYSTEM);
+        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, Time.SYSTEM, 20000L);
     }
 
     /**
@@ -583,11 +561,10 @@ public class KafkaStreams {
      * @throws StreamsException if any fatal error occurs
      */
     public KafkaStreams(final Topology topology,
-                        final StreamsConfig config) {
-        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
+                        final StreamsConfig config,
                         final Properties props,
                         final Time time) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), time);
+        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
     }
 
     /**
@@ -607,7 +584,7 @@ public class KafkaStreams {
                         final Properties props,
                         final KafkaClientSupplier clientSupplier,
                         final Time time) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, time);
+        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, time, DEFAULT_BLOCKING_TIME);
     }
 
     /**
@@ -616,7 +593,7 @@ public class KafkaStreams {
     @Deprecated
     public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
                         final Properties props) {
-        this(builder.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
+        this(builder.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
     }
 
     /**
@@ -625,7 +602,7 @@ public class KafkaStreams {
     @Deprecated
     public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
                         final StreamsConfig config) {
-        this(builder.internalTopologyBuilder, config, new DefaultKafkaClientSupplier());
+        this(builder.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
     }
 
     /**
@@ -635,7 +612,7 @@ public class KafkaStreams {
     public KafkaStreams(final org.apache.kafka.streams.processor.TopologyBuilder builder,
                         final StreamsConfig config,
                         final KafkaClientSupplier clientSupplier) {
-        this(builder.internalTopologyBuilder, config, clientSupplier);
+        this(builder.internalTopologyBuilder, config, clientSupplier, DEFAULT_BLOCKING_TIME);
     }
 
     /**
@@ -644,7 +621,7 @@ public class KafkaStreams {
     @Deprecated
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config) {
-        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier());
+        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), DEFAULT_BLOCKING_TIME);
     }
 
     /**

@@ -167,7 +167,6 @@ public class PurgeRepartitionTopicIntegrationTest {
                .count();
 
         kafkaStreams = new KafkaStreams(builder.build(), new StreamsConfig(streamsConfiguration), 20000);
-        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration, time);
     }
 
     @After
