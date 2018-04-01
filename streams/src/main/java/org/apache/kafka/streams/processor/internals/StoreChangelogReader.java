@@ -39,6 +39,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 public class StoreChangelogReader implements ChangelogReader {
 
@@ -50,13 +51,16 @@ public class StoreChangelogReader implements ChangelogReader {
     private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsRestoring = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> needsInitializing = new HashMap<>();
+    private final long commitTimeMs;
 
     public StoreChangelogReader(final Consumer<byte[], byte[]> restoreConsumer,
                                 final StateRestoreListener userStateRestoreListener,
-                                final LogContext logContext) {
+                                final LogContext logContext,
+                                final long commitTimeMs) {
         this.restoreConsumer = restoreConsumer;
         this.log = logContext.logger(getClass());
         this.userStateRestoreListener = userStateRestoreListener;
+        this.commitTimeMs = commitTimeMs;
     }
 
     @Override
@@ -175,7 +179,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 logRestoreOffsets(restorer.partition(),
                                   restorer.checkpoint(),
                                   endOffsets.get(restorer.partition()));
-                restorer.setStartingOffset(restoreConsumer.position(restorer.partition()));
+                restorer.setStartingOffset(restoreConsumer.position(restorer.partition(), commitTimeMs, TimeUnit.MILLISECONDS));
                 restorer.restoreStarted();
             } else {
                 restoreConsumer.seekToBeginning(Collections.singletonList(restorer.partition()));
@@ -184,7 +188,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         for (final StateRestorer restorer : needsPositionUpdate) {
-            final long position = restoreConsumer.position(restorer.partition());
+            final long position = restoreConsumer.position(restorer.partition(), commitTimeMs, TimeUnit.MILLISECONDS);
             logRestoreOffsets(restorer.partition(),
                               position,
                               endOffsets.get(restorer.partition()));
