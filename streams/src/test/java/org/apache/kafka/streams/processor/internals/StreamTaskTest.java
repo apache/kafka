@@ -24,6 +24,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -34,14 +35,13 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
@@ -125,7 +125,8 @@ public class StreamTaskTest {
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
     private final Metrics metrics = new Metrics();
-    private final StreamsMetrics streamsMetrics = new MockStreamsMetrics(metrics);
+    private final Sensor skippedRecordsSensor = metrics.sensor("skipped-records");
+    private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
     private final TaskId taskId00 = new TaskId(0, 0);
     private final MockTime time = new MockTime();
     private final File baseDir = TestUtils.tempDirectory();
@@ -246,7 +247,7 @@ public class StreamTaskTest {
             String.format(nameFormat, "commit"),
             "stream-task-metrics",
             String.format(descriptionFormat, "commit"),
-            mkMap(mkEntry("task-id", taskId))
+            mkMap(mkEntry("task-id", taskId), mkEntry("client-id", "test"))
         ));
     }
 
@@ -647,21 +648,26 @@ public class StreamTaskTest {
     @Test
     public void shouldFlushRecordCollectorOnFlushState() {
         final AtomicBoolean flushed = new AtomicBoolean(false);
-        final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
-        final StreamTask streamTask = new StreamTask(taskId00, partitions, topology, consumer,
-            changelogReader, createConfig(false), streamsMetrics, stateDirectory, null, time, producer) {
-
-            @Override
-            RecordCollector createRecordCollector(final LogContext logContext,
-                                                  final ProductionExceptionHandler exHandler) {
-                return new NoOpRecordCollector() {
-                    @Override
-                    public void flush() {
-                        flushed.set(true);
-                    }
-                };
+        final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(new Metrics());
+        final StreamTask streamTask = new StreamTask(
+            taskId00,
+            partitions,
+            topology,
+            consumer,
+            changelogReader,
+            createConfig(false),
+            streamsMetrics,
+            stateDirectory,
+            null,
+            time,
+            producer,
+            new NoOpRecordCollector() {
+                @Override
+                public void flush() {
+                    flushed.set(true);
+                }
             }
-        };
+        );
         streamTask.flushState();
         assertTrue(flushed.get());
     }

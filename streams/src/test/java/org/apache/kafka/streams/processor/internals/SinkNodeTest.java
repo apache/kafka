@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.MockProducer;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -43,7 +44,8 @@ public class SinkNodeTest {
             new MockProducer<>(true, anySerializer, anySerializer),
             null,
             new LogContext("sinknode-test "),
-            new DefaultProductionExceptionHandler()
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("skipped-records")
         )
     );
     private final SinkNode sink = new SinkNode<>("anyNodeName", "any-output-topic", anySerializer, anySerializer, null);

@@ -26,27 +26,25 @@ import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Meter;
-import org.apache.kafka.common.metrics.stats.SampledStat;
-import org.apache.kafka.common.metrics.stats.Sum;
+import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
@@ -60,9 +58,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.singleton;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsConventions.threadLevelSensorName;
 
 public class StreamThread extends Thread {
 
@@ -322,9 +322,8 @@ public class StreamThread extends Thread {
         final String applicationId;
         final InternalTopologyBuilder builder;
         final StreamsConfig config;
-        final StreamsMetrics streamsMetrics;
+        final StreamsMetricsThreadImpl streamsMetrics;
         final StateDirectory stateDirectory;
-        final Sensor taskCreatedSensor;
         final ChangelogReader storeChangelogReader;
         final Time time;
         final Logger log;
@@ -332,9 +331,8 @@ public class StreamThread extends Thread {
 
         AbstractTaskCreator(final InternalTopologyBuilder builder,
                             final StreamsConfig config,
-                            final StreamsMetrics streamsMetrics,
+                            final StreamsMetricsThreadImpl streamsMetrics,
                             final StateDirectory stateDirectory,
-                            final Sensor taskCreatedSensor,
                             final ChangelogReader storeChangelogReader,
                             final Time time,
                             final Logger log) {
@@ -343,7 +341,6 @@ public class StreamThread extends Thread {
             this.config = config;
             this.streamsMetrics = streamsMetrics;
             this.stateDirectory = stateDirectory;
-            this.taskCreatedSensor = taskCreatedSensor;
             this.storeChangelogReader = storeChangelogReader;
             this.time = time;
             this.log = log;
@@ -386,9 +383,8 @@ public class StreamThread extends Thread {
 
         TaskCreator(final InternalTopologyBuilder builder,
                     final StreamsConfig config,
-                    final StreamsMetrics streamsMetrics,
+                    final StreamsMetricsThreadImpl streamsMetrics,
                     final StateDirectory stateDirectory,
-                    final Sensor taskCreatedSensor,
                     final ChangelogReader storeChangelogReader,
                     final ThreadCache cache,
                     final Time time,
@@ -401,7 +397,6 @@ public class StreamThread extends Thread {
                 config,
                 streamsMetrics,
                 stateDirectory,
-                taskCreatedSensor,
                 storeChangelogReader,
                 time,
                 log);
@@ -415,7 +410,7 @@ public class StreamThread extends Thread {
         StreamTask createTask(final Consumer<byte[], byte[]> consumer,
                               final TaskId taskId,
                               final Set<TopicPartition> partitions) {
-            taskCreatedSensor.record();
+            streamsMetrics.taskCreatedSensor.record();
 
             return new StreamTask(
                 taskId,
@@ -428,8 +423,8 @@ public class StreamThread extends Thread {
                 stateDirectory,
                 cache,
                 time,
-                createProducer(taskId));
-
+                createProducer(taskId)
+            );
         }
 
         private Producer<byte[], byte[]> createProducer(final TaskId id) {
@@ -459,9 +454,8 @@ public class StreamThread extends Thread {
     static class StandbyTaskCreator extends AbstractTaskCreator<StandbyTask> {
         StandbyTaskCreator(final InternalTopologyBuilder builder,
                            final StreamsConfig config,
-                           final StreamsMetrics streamsMetrics,
+                           final StreamsMetricsThreadImpl streamsMetrics,
                            final StateDirectory stateDirectory,
-                           final Sensor taskCreatedSensor,
                            final ChangelogReader storeChangelogReader,
                            final Time time,
                            final Logger log) {
@@ -470,7 +464,6 @@ public class StreamThread extends Thread {
                 config,
                 streamsMetrics,
                 stateDirectory,
-                taskCreatedSensor,
                 storeChangelogReader,
                 time,
                 log);
@@ -480,7 +473,7 @@ public class StreamThread extends Thread {
         StandbyTask createTask(final Consumer<byte[], byte[]> consumer,
                                final TaskId taskId,
                                final Set<TopicPartition> partitions) {
-            taskCreatedSensor.record();
+            streamsMetrics.taskCreatedSensor.record();
 
             final ProcessorTopology topology = builder.build(taskId.topicGroupId);
 
@@ -510,64 +503,49 @@ public class StreamThread extends Thread {
      * overrides one of its functions for efficiency
      */
     static class StreamsMetricsThreadImpl extends StreamsMetricsImpl {
-        final Sensor commitTimeSensor;
-        final Sensor pollTimeSensor;
-        final Sensor processTimeSensor;
-        final Sensor punctuateTimeSensor;
-        final Sensor taskCreatedSensor;
-        final Sensor tasksClosedSensor;
-        final Sensor skippedRecordsSensor;
 
-        StreamsMetricsThreadImpl(final Metrics metrics, final String groupName, final String prefix, final Map<String, String> tags) {
-            super(metrics, groupName, tags);
-            commitTimeSensor = metrics.sensor(prefix + ".commit-latency", Sensor.RecordingLevel.INFO);
-            commitTimeSensor.add(metrics.metricName("commit-latency-avg", this.groupName, "The average commit time in ms", this.tags), new Avg());
-            commitTimeSensor.add(metrics.metricName("commit-latency-max", this.groupName, "The maximum commit time in ms", this.tags), new Max());
-            commitTimeSensor.add(createMeter(metrics, new Count(), "commit", "commit calls"));
+        private final Sensor commitTimeSensor;
+        private final Sensor pollTimeSensor;
+        private final Sensor processTimeSensor;
+        private final Sensor punctuateTimeSensor;
+        private final Sensor taskCreatedSensor;
+        private final Sensor tasksClosedSensor;
 
-            pollTimeSensor = metrics.sensor(prefix + ".poll-latency", Sensor.RecordingLevel.INFO);
-            pollTimeSensor.add(metrics.metricName("poll-latency-avg", this.groupName, "The average poll time in ms", this.tags), new Avg());
-            pollTimeSensor.add(metrics.metricName("poll-latency-max", this.groupName, "The maximum poll time in ms", this.tags), new Max());
-            pollTimeSensor.add(createMeter(metrics, new Count(), "poll", "record-poll calls"));
+        StreamsMetricsThreadImpl(final Metrics metrics, final String threadName) {
+            super(metrics, threadName);
+            final String groupName = "stream-metrics";
 
-            processTimeSensor = metrics.sensor(prefix + ".process-latency", Sensor.RecordingLevel.INFO);
-            processTimeSensor.add(metrics.metricName("process-latency-avg", this.groupName, "The average process time in ms", this.tags), new Avg());
-            processTimeSensor.add(metrics.metricName("process-latency-max", this.groupName, "The maximum process time in ms", this.tags), new Max());
-            processTimeSensor.add(createMeter(metrics, new Count(), "process", "process calls"));
+            commitTimeSensor = metrics.sensor(threadLevelSensorName(threadName, "commit-latency"), Sensor.RecordingLevel.INFO);
+            commitTimeSensor.add(metrics.metricName("commit-latency-avg", groupName, "The average commit time in ms", tags()), new Avg());
+            commitTimeSensor.add(metrics.metricName("commit-latency-max", groupName, "The maximum commit time in ms", tags()), new Max());
+            commitTimeSensor.add(metrics.metricName("commit-rate", groupName, "The average per-second number of commit calls", tags()), new Rate(TimeUnit.SECONDS, new Count()));
+            commitTimeSensor.add(metrics.metricName("commit-total", groupName, "The total number of commit calls", tags()), new Count());
 
-            punctuateTimeSensor = metrics.sensor(prefix + ".punctuate-latency", Sensor.RecordingLevel.INFO);
-            punctuateTimeSensor.add(metrics.metricName("punctuate-latency-avg", this.groupName, "The average punctuate time in ms", this.tags), new Avg());
-            punctuateTimeSensor.add(metrics.metricName("punctuate-latency-max", this.groupName, "The maximum punctuate time in ms", this.tags), new Max());
-            punctuateTimeSensor.add(createMeter(metrics, new Count(), "punctuate", "punctuate calls"));
+            pollTimeSensor = metrics.sensor(threadLevelSensorName(threadName, "poll-latency"), Sensor.RecordingLevel.INFO);
+            pollTimeSensor.add(metrics.metricName("poll-latency-avg", groupName, "The average poll time in ms", tags()), new Avg());
+            pollTimeSensor.add(metrics.metricName("poll-latency-max", groupName, "The maximum poll time in ms", tags()), new Max());
+            pollTimeSensor.add(metrics.metricName("poll-rate", groupName, "The average per-second number of record-poll calls", tags()), new Rate(TimeUnit.SECONDS, new Count()));
+            pollTimeSensor.add(metrics.metricName("poll-total", groupName, "The total number of record-poll calls", tags()), new Count());
 
-            taskCreatedSensor = metrics.sensor(prefix + ".task-created", Sensor.RecordingLevel.INFO);
-            taskCreatedSensor.add(createMeter(metrics, new Count(), "task-created", "newly created tasks"));
+            processTimeSensor = metrics.sensor(threadLevelSensorName(threadName, "process-latency"), Sensor.RecordingLevel.INFO);
+            processTimeSensor.add(metrics.metricName("process-latency-avg", groupName, "The average process time in ms", tags()), new Avg());
+            processTimeSensor.add(metrics.metricName("process-latency-max", groupName, "The maximum process time in ms", tags()), new Max());
+            processTimeSensor.add(metrics.metricName("process-rate", groupName, "The average per-second number of process calls", tags()), new Rate(TimeUnit.SECONDS, new Count()));
+            processTimeSensor.add(metrics.metricName("process-total", groupName, "The total number of process calls", tags()), new Count());
 
-            tasksClosedSensor = metrics.sensor(prefix + ".task-closed", Sensor.RecordingLevel.INFO);
-            tasksClosedSensor.add(createMeter(metrics, new Count(), "task-closed", "closed tasks"));
+            punctuateTimeSensor = metrics.sensor(threadLevelSensorName(threadName, "punctuate-latency"), Sensor.RecordingLevel.INFO);
+            punctuateTimeSensor.add(metrics.metricName("punctuate-latency-avg", groupName, "The average punctuate time in ms", tags()), new Avg());
+            punctuateTimeSensor.add(metrics.metricName("punctuate-latency-max", groupName, "The maximum punctuate time in ms", tags()), new Max());
+            punctuateTimeSensor.add(metrics.metricName("punctuate-rate", groupName, "The average per-second number of punctuate calls", tags()), new Rate(TimeUnit.SECONDS, new Count()));
+            punctuateTimeSensor.add(metrics.metricName("punctuate-total", groupName, "The total number of punctuate calls", tags()), new Count());
 
-            skippedRecordsSensor = metrics.sensor(prefix + ".skipped-records");
-            skippedRecordsSensor.add(createMeter(metrics, new Sum(), "skipped-records", "skipped records"));
+            taskCreatedSensor = metrics.sensor(threadLevelSensorName(threadName, "task-created"), Sensor.RecordingLevel.INFO);
+            taskCreatedSensor.add(metrics.metricName("task-created-rate", "stream-metrics", "The average per-second number of newly created tasks", tags()), new Rate(TimeUnit.SECONDS, new Count()));
+            taskCreatedSensor.add(metrics.metricName("task-created-total", "stream-metrics", "The total number of newly created tasks", tags()), new Total());
 
-        }
-
-        private Meter createMeter(final Metrics metrics,
-                                  final SampledStat stat,
-                                  final String baseName,
-                                  final String descriptiveName) {
-            final MetricName rateMetricName = metrics.metricName(
-                baseName + "-rate",
-                groupName,
-                String.format("The average per-second number of %s", descriptiveName),
-                tags
-            );
-            final MetricName totalMetricName = metrics.metricName(
-                baseName + "-total",
-                groupName,
-                String.format("The total number of %s", descriptiveName),
-                tags
-            );
-            return new Meter(stat, rateMetricName, totalMetricName);
+            tasksClosedSensor = metrics.sensor(threadLevelSensorName(threadName, "task-closed"), Sensor.RecordingLevel.INFO);
+            tasksClosedSensor.add(metrics.metricName("task-closed-rate", groupName, "The average per-second number of closed tasks", tags()), new Rate(TimeUnit.SECONDS, new Count()));
+            tasksClosedSensor.add(metrics.metricName("task-closed-total", groupName, "The total number of closed tasks", tags()), new Total());
         }
 
         void removeAllSensors() {
@@ -577,8 +555,7 @@ public class StreamThread extends Thread {
             removeSensor(punctuateTimeSensor);
             removeSensor(taskCreatedSensor);
             removeSensor(tasksClosedSensor);
-            removeSensor(skippedRecordsSensor);
-
+            removeSensor(skippedRecordsSensor());
         }
     }
 
@@ -640,9 +617,8 @@ public class StreamThread extends Thread {
 
         final StreamsMetricsThreadImpl streamsMetrics = new StreamsMetricsThreadImpl(
             metrics,
-            "stream-metrics",
-            "thread." + threadClientId,
-            Collections.singletonMap("client-id", threadClientId));
+            threadClientId
+        );
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
@@ -651,7 +627,6 @@ public class StreamThread extends Thread {
             config,
             streamsMetrics,
             stateDirectory,
-            streamsMetrics.taskCreatedSensor,
             changelogReader,
             cache,
             time,
@@ -664,7 +639,6 @@ public class StreamThread extends Thread {
             config,
             streamsMetrics,
             stateDirectory,
-            streamsMetrics.taskCreatedSensor,
             changelogReader,
             time,
             log);
@@ -930,7 +904,6 @@ public class StreamThread extends Thread {
      * @param records Records, can be null
      */
     private void addRecordsToTasks(final ConsumerRecords<byte[], byte[]> records) {
-        int numAddedRecords = 0;
 
         for (final TopicPartition partition : records.partitions()) {
             final StreamTask task = taskManager.activeTask(partition);
@@ -941,9 +914,8 @@ public class StreamThread extends Thread {
                 throw new TaskMigratedException(task);
             }
 
-            numAddedRecords += task.addRecords(partition, records.records(partition));
+            task.addRecords(partition, records.records(partition));
         }
-        streamsMetrics.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);
     }
 
     /**

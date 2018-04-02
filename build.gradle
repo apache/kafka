@@ -932,10 +932,12 @@ project(':streams') {
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':core')
     testCompile project(':core').sourceSets.test.output
+    testCompile libs.log4j
     testCompile libs.junit
     testCompile libs.easymock
     testCompile libs.bcpkix
 
+    testRuntimeOnly project(':streams:test-utils')
     testRuntime libs.slf4jlog4j
   }
 

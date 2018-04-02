@@ -19,11 +19,11 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -106,7 +106,7 @@ public class ProcessorNode<K, V> {
         childByName.put(child.name, child);
     }
 
-    public void init(final ProcessorContext context) {
+    public void init(final InternalProcessorContext context) {
         this.context = context;
         try {
             nodeMetrics = new NodeMetrics(context.metrics(), name, context);
@@ -172,25 +172,20 @@ public class ProcessorNode<K, V> {
         return nodeMetrics.sourceNodeForwardSensor;
     }
 
-    Sensor sourceNodeSkippedDueToDeserializationErrorSensor() {
-        return nodeMetrics.sourceNodeSkippedDueToDeserializationError;
-    }
-
     private static final class NodeMetrics {
         private final StreamsMetricsImpl metrics;
 
         private final Sensor nodeProcessTimeSensor;
         private final Sensor nodePunctuateTimeSensor;
         private final Sensor sourceNodeForwardSensor;
-        private final Sensor sourceNodeSkippedDueToDeserializationError;
         private final Sensor nodeCreationSensor;
         private final Sensor nodeDestructionSensor;
 
-        private NodeMetrics(final StreamsMetrics metrics, final String name, final ProcessorContext context) {
+        private NodeMetrics(final StreamsMetricsImpl metrics, final String name, final ProcessorContext context) {
             final String scope = "processor-node";
             final String tagKey = "task-id";
             final String tagValue = context.taskId().toString();
-            this.metrics = (StreamsMetricsImpl) metrics;
+            this.metrics = metrics;
 
             // these are all latency metrics
             this.nodeProcessTimeSensor = metrics.addLatencyAndThroughputSensor(
@@ -208,9 +203,6 @@ public class ProcessorNode<K, V> {
             this.sourceNodeForwardSensor = metrics.addThroughputSensor(
                 scope, name, "forward", Sensor.RecordingLevel.DEBUG, tagKey, tagValue
             );
-            this.sourceNodeSkippedDueToDeserializationError = metrics.addThroughputSensor(
-                scope, name, "skippedDueToDeserializationError", Sensor.RecordingLevel.DEBUG, tagKey, tagValue
-            );
         }
 
         private void removeAllSensors() {
@@ -219,7 +211,6 @@ public class ProcessorNode<K, V> {
             metrics.removeSensor(sourceNodeForwardSensor);
             metrics.removeSensor(nodeCreationSensor);
             metrics.removeSensor(nodeDestructionSensor);
-            metrics.removeSensor(sourceNodeSkippedDueToDeserializationError);
         }
     }
 }
