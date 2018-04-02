@@ -323,14 +323,11 @@ public class SimpleBenchmark {
                          final int numRecords,
                          final double keySkew,
                          final int valueSize) {
+        final Properties props = setProduceConsumeProperties(clientId);
+        final ZipfGenerator keyGen = new ZipfGenerator(KEY_SPACE_SIZE, keySkew);
+        final KafkaProducer<Integer, byte[]> producer = new KafkaProducer<>(props);
 
-        Properties props = setProduceConsumeProperties(clientId);
-
-        ZipfGenerator keyGen = new ZipfGenerator(KEY_SPACE_SIZE, keySkew);
-
-        KafkaProducer<Integer, byte[]> producer = new KafkaProducer<>(props);
-
-        byte[] value = new byte[valueSize];
+        final byte[] value = new byte[valueSize];
         // put some random values to increase entropy. Some devices
         // like SSDs do compression and if the array is all zeros
         // the performance will be too good.
@@ -343,35 +340,34 @@ public class SimpleBenchmark {
         producer.close();
     }
 
-    private void consumeAndProduce(String topic) {
-        Properties consumerProps = setProduceConsumeProperties("simple-benchmark-consumer");
-        Properties producerProps = setProduceConsumeProperties("simple-benchmark-producer");
+    private void consumeAndProduce(final String topic) {
+        final Properties consumerProps = setProduceConsumeProperties("simple-benchmark-consumer");
+        final Properties producerProps = setProduceConsumeProperties("simple-benchmark-producer");
 
-        KafkaConsumer<Integer, byte[]> consumer = new KafkaConsumer<>(consumerProps);
-        KafkaProducer<Integer, byte[]> producer = new KafkaProducer<>(producerProps);
+        final KafkaConsumer<Integer, byte[]> consumer = new KafkaConsumer<>(consumerProps);
+        final KafkaProducer<Integer, byte[]> producer = new KafkaProducer<>(producerProps);
+        final List<TopicPartition> partitions = getAllPartitions(consumer, topic);
 
-        List<TopicPartition> partitions = getAllPartitions(consumer, topic);
         consumer.assign(partitions);
         consumer.seekToBeginning(partitions);
 
         long startTime = System.currentTimeMillis();
 
-        while (true) {
+        boolean keepProcessing = true;
+        while (keepProcessing) {
             ConsumerRecords<Integer, byte[]> records = consumer.poll(POLL_MS);
             if (records.isEmpty()) {
                 if (processedRecords == numRecords)
-                    break;
+                    keepProcessing = false;
             } else {
                 for (ConsumerRecord<Integer, byte[]> record : records) {
                     producer.send(new ProducerRecord<>(SINK_TOPIC, record.key(), record.value()));
                     processedRecords++;
                     processedBytes += record.value().length + Integer.SIZE;
-                    if (processedRecords == numRecords)
-                        break;
                 }
             }
             if (processedRecords == numRecords)
-                break;
+                keepProcessing = false;
         }
 
         long endTime = System.currentTimeMillis();
@@ -382,12 +378,11 @@ public class SimpleBenchmark {
         printResults("ConsumerProducer Performance [records/latency/rec-sec/MB-sec read]: ", endTime - startTime);
     }
 
-    private void consume(String topic) {
-        Properties consumerProps = setProduceConsumeProperties("simple-benchmark-consumer");
+    private void consume(final String topic) {
+        final Properties consumerProps = setProduceConsumeProperties("simple-benchmark-consumer");
+        final KafkaConsumer<Integer, byte[]> consumer = new KafkaConsumer<>(consumerProps);
+        final List<TopicPartition> partitions = getAllPartitions(consumer, topic);
 
-        KafkaConsumer<Integer, byte[]> consumer = new KafkaConsumer<>(consumerProps);
-
-        List<TopicPartition> partitions = getAllPartitions(consumer, topic);
         consumer.assign(partitions);
         consumer.seekToBeginning(partitions);
 
@@ -432,7 +427,7 @@ public class SimpleBenchmark {
         runGenericBenchmark(streams, "Streams Source Performance [records/latency/rec-sec/MB-sec joined]: ", latch);
     }
 
-    private void processStreamWithSink(String topic) {
+    private void processStreamWithSink(final String topic) {
         final CountDownLatch latch = new CountDownLatch(1);
 
         setStreamProperties("simple-benchmark-streams-source-sink");
@@ -495,7 +490,7 @@ public class SimpleBenchmark {
      * example counts numbers)
      */
     private void countStreamsNonWindowed(String sourceTopic) {
-        CountDownLatch latch = new CountDownLatch(1);
+        final CountDownLatch latch = new CountDownLatch(1);
 
         setStreamProperties("simple-benchmark-nonwindowed-count");
 
@@ -516,7 +511,7 @@ public class SimpleBenchmark {
      * example counts numbers)
      */
     private void countStreamsWindowed(String sourceTopic) {
-        CountDownLatch latch = new CountDownLatch(1);
+        final CountDownLatch latch = new CountDownLatch(1);
 
         setStreamProperties("simple-benchmark-windowed-count");
 
@@ -537,7 +532,7 @@ public class SimpleBenchmark {
      * KStream record joins to exactly one element in the KTable
      */
     private void streamTableJoin(String kStreamTopic, String kTableTopic) {
-        CountDownLatch latch = new CountDownLatch(1);
+        final CountDownLatch latch = new CountDownLatch(1);
 
         setStreamProperties("simple-benchmark-stream-table-join");
 
@@ -559,7 +554,7 @@ public class SimpleBenchmark {
      * KStream record joins to exactly one element in the other KStream
      */
     private void streamStreamJoin(String kStreamTopic1, String kStreamTopic2) {
-        CountDownLatch latch = new CountDownLatch(1);
+        final CountDownLatch latch = new CountDownLatch(1);
 
         setStreamProperties("simple-benchmark-stream-stream-join");
 
@@ -581,7 +576,7 @@ public class SimpleBenchmark {
      * KTable record joins to exactly one element in the other KTable
      */
     private void tableTableJoin(String kTableTopic1, String kTableTopic2) {
-        CountDownLatch latch = new CountDownLatch(1);
+        final CountDownLatch latch = new CountDownLatch(1);
 
         // setup join
         setStreamProperties("simple-benchmark-table-table-join");
@@ -628,15 +623,14 @@ public class SimpleBenchmark {
     }
 
     private class CountDownAction implements ForeachAction<Integer, byte[]> {
-
-        private CountDownLatch latch;
+        private final CountDownLatch latch;
 
         CountDownAction(final CountDownLatch latch) {
             this.latch = latch;
         }
 
         @Override
-        public void apply(Integer key, byte[] value) {
+        public void apply(final Integer key, final byte[] value) {
             processedRecords++;
             processedBytes += Integer.SIZE + value.length;
 

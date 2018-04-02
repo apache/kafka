@@ -137,7 +137,7 @@ public class YahooBenchmark {
         }
         System.out.println("Initializing topic " + topic);
 
-        Properties props = new Properties();
+        final Properties props = new Properties();
         props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parent.kafka);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
@@ -145,7 +145,7 @@ public class YahooBenchmark {
 
         KafkaProducer<String, byte[]> producer = new KafkaProducer<>(props);
 
-        long startTime = System.currentTimeMillis();
+        final long startTime = System.currentTimeMillis();
 
         ProjectedEvent event = new ProjectedEvent();
 
