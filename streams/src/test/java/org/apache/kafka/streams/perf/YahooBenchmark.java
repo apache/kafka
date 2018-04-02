@@ -121,20 +121,13 @@ public class YahooBenchmark {
     }
 
     // just for Yahoo benchmark
-    private boolean maybeSetupPhaseEvents(final String topic, final String clientId,
-                                          final boolean skipIfAllTests, final int numRecords,
-                                          final List<String> ads) {
+    private void maybeSetupPhaseEvents(final String topic,
+                                       final String clientId,
+                                       final int numRecords,
+                                       final List<String> ads) {
         parent.resetStats();
         String[] eventTypes = new String[]{"view", "click", "purchase"};
         Random rand = new Random();
-        // initialize topics
-        if (skipIfAllTests) {
-            // if we run all tests, the produce test will have already loaded the data
-            if (parent.testName.equals(SimpleBenchmark.ALL_TESTS)) {
-                // Skipping loading phase since previously loaded
-                return true;
-            }
-        }
         System.out.println("Initializing topic " + topic);
 
         final Properties props = new Properties();
@@ -167,9 +160,7 @@ public class YahooBenchmark {
 
         long endTime = System.currentTimeMillis();
 
-
         parent.printResults("Producer Performance [records/latency/rec-sec/MB-sec write]: ", endTime - startTime);
-        return true;
     }
 
 
@@ -179,7 +170,7 @@ public class YahooBenchmark {
 
         List<String> ads = new ArrayList<>(numCampaigns * adsPerCampaign);
         maybeSetupPhaseCampaigns(campaignsTopic, "simple-benchmark-produce-campaigns", false, numCampaigns, adsPerCampaign, ads);
-        maybeSetupPhaseEvents(eventsTopic, "simple-benchmark-produce-events", false, parent.numRecords, ads);
+        maybeSetupPhaseEvents(eventsTopic, "simple-benchmark-produce-events", parent.numRecords, ads);
 
         CountDownLatch latch = new CountDownLatch(1);
         parent.setStreamProperties("simple-benchmark-yahoo" + new Random().nextInt());
