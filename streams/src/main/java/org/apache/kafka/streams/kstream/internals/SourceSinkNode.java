@@ -133,8 +133,8 @@ class SourceSinkNode extends StreamsGraphNode {
             return this;
         }
 
-        public Builder withProcessorDetails(ProcessDetails processorDetails) {
-            this.processDetails = processorDetails;
+        public Builder withProcessDetails(ProcessDetails processDetails) {
+            this.processDetails = processDetails;
             return this;
         }
 

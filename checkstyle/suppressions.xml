@@ -80,7 +80,7 @@
               files="(KafkaConfigBackingStore|RequestResponseTest|WorkerSinkTaskTest|InternalTopologyBuilderOptimizerImpl).java"/>
 
     <suppress checks="ParameterNumber"
-              files="WorkerSourceTask.java"/>
+              files="WorkerSourceTask.java|ProcessDetails.java"/>
     <suppress checks="ParameterNumber"
               files="JoinGraphNode"/>
     <suppress checks="ParameterNumber"

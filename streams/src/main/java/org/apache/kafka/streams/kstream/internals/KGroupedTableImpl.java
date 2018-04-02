@@ -153,8 +153,12 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                        sinkName,
                        sourceSinkBuilder);
 
-        sourceSinkBuilder.withProcessorDetails(ProcessDetails.builder().withStoreSupplier(storeSupplier).build());
-        builder.addNode(sourceSinkBuilder.build());
+
+        sourceSinkBuilder.withProcessDetails(ProcessDetails.builder().withStoreSupplier(storeSupplier).build());
+        SourceSinkNode sourceSinkNode = sourceSinkBuilder.build();
+        sourceSinkNode.setPredecessorName(this.name);
+
+        builder.addNode(sourceSinkNode);
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(builder, funcName, aggregateSupplier, Collections.singleton(sourceName), storeSupplier.name(), isQueryable);
@@ -166,8 +170,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                 final String sourceName,
                                 final String sinkName,
                                 final SourceSinkNode.Builder sourceSinkBuilder) {
-//        final Serializer<? extends K> keySerializer = keySerde == null ? null : keySerde.serializer();
-//        final Deserializer<? extends K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
         final Serializer<? extends V> valueSerializer = valSerde == null ? null : valSerde.serializer();
         final Deserializer<? extends V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
 
@@ -185,7 +187,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
             .withSourceName(sourceName)
             .withProcessorSupplier(aggregateSupplier)
             .withSinkName(sinkName)
-            .withName(this.name)
+            .withName(funcName)
             .withTopologyNodeType(TopologyNodeType.SOURCE_SINK);
 
 //
@@ -212,7 +214,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                        funcName,
                        sourceName, sinkName, sourceSinkBuilder);
 
-        sourceSinkBuilder.withProcessorDetails(ProcessDetails.builder().withMaterialized(materialized).build());
+        sourceSinkBuilder.withProcessDetails(ProcessDetails.builder().withMaterialized(materialized).build());
         builder.addNode(sourceSinkBuilder.build());
 
 //        builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized)

@@ -75,6 +75,7 @@ public class StreamsGraphNode {
 
     public void setPredecessor(StreamsGraphNode predecessor) {
         this.predecessor = predecessor;
+        this.predecessorName = predecessor.name();
     }
 
 
@@ -167,8 +168,8 @@ public class StreamsGraphNode {
     public String toString() {
         return "StreamsGraphNode{" +
                "topologyNodeType=" + topologyNodeType +
-               ", predecessor=" + predecessor +
                ", name='" + name + '\'' +
+               ", predecessor=" + predecessor +
                ", predecessorName='" + predecessorName + '\'' +
                '}';
     }

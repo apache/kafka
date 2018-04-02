@@ -36,27 +36,26 @@ public class StreamsTopologyGraphImpl extends StreamsTopologyGraph {
         if (node.topologyNodeType == TopologyNodeType.KGROUPED_STREAM) {
             node.setName(node.name() + "-" + kgroupedCounter.incrementAndGet());
             node.setPredecessorName(previousNode.name());
-        } else if (node.topologyNodeType == TopologyNodeType.AGGREGATE && previousNode.topologyNodeType == TopologyNodeType.KGROUPED_STREAM) {
+            System.out.println("UPDATED KGroupedStream node " + node);
+        } else if (node.getPredecessorName() == null) {
+            System.out.println("UPDATED regular node " + node);
             node.setPredecessorName(previousNode.name());
         }
-
-//        else if (node.topologyNodeType == TopologyNodeType.STREAM_STREAM_JOIN) {
-//            node.setName(node.name() + "-" + streamStreamJoinCounter.incrementAndGet());
-//            node.setPredecessorName(previousNode.name());
-//        }
+        System.out.println("Adding node " + node);
+        if (nameToGraphNode.get(node.getPredecessorName()) == null) {
+            node.setPredecessor(previousNode);
+        }
 
         final StreamsGraphNode predecessorNode = node.getPredecessorName() != null ? nameToGraphNode.get(node.getPredecessorName()) : null;
 
-        if (predecessorNode == null && !node.isSourceNode()) {
-            LOG.warn("Only SOURCE nodes should have a null predecessor.  Type " + node.getType() + " predecessor name " + node.getPredecessorName());
+        if (predecessorNode == null) {
+            throw new IllegalStateException(
+                "Nodes should not have a null predecessor.  Name: " + node.name() + " Type: " + node.getType() + " predecessor name " + node
+                    .getPredecessorName());
         }
 
-        if (predecessorNode == null) {
-            root.addDescendant(node);
-        } else {
-            node.setPredecessor(predecessorNode);
-            predecessorNode.addDescendant(node);
-        }
+        node.setPredecessor(predecessorNode);
+        predecessorNode.addDescendant(node);
 
         if (node.triggersRepartitioning()) {
             repartitioningNodeToRepartitioned.put(node, new HashSet<StreamsGraphNode>());

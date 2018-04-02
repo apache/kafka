@@ -801,13 +801,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             .withTopologyNodeType(SOURCE_SINK)
             .withProcessorSupplier(new KStreamFilter<>(new Predicate<K1, V1>() {
                 @Override
-                public boolean test(final K1 key,  final V1 value) {
+                public boolean test(final K1 key, final V1 value) {
                     return key != null;
                 }
             }, false))
-            .withName(name);
-
-        builder.addNode(repartitionNodeBuilder.build());
+            .withName(sourceName);
+        SourceSinkNode sourceSinkNode = repartitionNodeBuilder.build();
+        sourceSinkNode.setPredecessorName(name);
+        builder.addNode(sourceSinkNode);
 
         return sourceName;
     }
@@ -1118,7 +1119,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                 .withJoinMergeName(joinMergeName)
                 .withThisWindowBuilder(thisWindow)
                 .withOtherWindowBuilder(otherWindow)
-                .withName(((AbstractStream) lhs).name + ((AbstractStream) other).name);
+                .withName(joinMergeName);
 
 
             builder.addNode(joinGraphBuilder.build());

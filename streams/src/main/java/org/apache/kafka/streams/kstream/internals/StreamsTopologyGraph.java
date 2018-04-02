@@ -28,11 +28,16 @@ import java.util.Set;
  */
 public abstract class StreamsTopologyGraph {
 
-    protected final StreamsGraphNode root = new StreamsGraphNode("TOPOLOGY_ROOT", TopologyNodeType.TOPOLOGY_PARENT);
+    public static final String TOPOLOGY_ROOT = "root";
+    protected final StreamsGraphNode root = new StreamsGraphNode(TOPOLOGY_ROOT, TopologyNodeType.TOPOLOGY_PARENT);
 
     protected final Map<StreamsGraphNode, Set<StreamsGraphNode>> repartitioningNodeToRepartitioned = new HashMap<>();
     protected final Map<StreamsGraphNode, StreamsGraphNode> stateStoreNodeToSinkNodes = new HashMap<>();
     protected final Map<String, StreamsGraphNode> nameToGraphNode = new HashMap<>();
+
+    public StreamsTopologyGraph() {
+        nameToGraphNode.put(TOPOLOGY_ROOT, root);
+    }
 
     /**
      * Add a StreamsGraphNode to the graph

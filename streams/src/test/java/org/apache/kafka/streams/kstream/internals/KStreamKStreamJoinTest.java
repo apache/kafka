@@ -81,6 +81,7 @@ public class KStreamKStreamJoinTest {
                               Joined.with(intSerde, stringSerde, stringSerde));
 
         joined.process(processor);
+        builder.build();
 
         Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
@@ -183,6 +184,7 @@ public class KStreamKStreamJoinTest {
                                    JoinWindows.of(100),
                                    Joined.with(intSerde, stringSerde, stringSerde));
         joined.process(processor);
+        builder.build();
         Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
@@ -286,7 +288,7 @@ public class KStreamKStreamJoinTest {
                               JoinWindows.of(100),
                               Joined.with(intSerde, stringSerde, stringSerde));
         joined.process(processor);
-
+        builder.build();
         Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
@@ -518,7 +520,7 @@ public class KStreamKStreamJoinTest {
                                           stringSerde,
                                           stringSerde));
         joined.process(processor);
-
+        builder.build();
         Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
@@ -630,7 +632,7 @@ public class KStreamKStreamJoinTest {
                               JoinWindows.of(0).before(100),
                               Joined.with(intSerde, stringSerde, stringSerde));
         joined.process(processor);
-
+        builder.build();
         Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());

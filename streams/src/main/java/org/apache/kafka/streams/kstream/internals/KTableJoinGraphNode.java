@@ -33,11 +33,12 @@ public class KTableJoinGraphNode extends StreamsGraphNode {
     final String[] joinThisStoreNames;
     final String[] joinOtherStoreNames;
     final String otherKTableName;
+    final String thisKtableName;
 
 
     public KTableJoinGraphNode(TopologyNodeType topologyNodeType, ProcessorSupplier joinThisProcessor, ProcessorSupplier joinOtherProcessor,
                                ProcessorSupplier joinMergeProcessor, String joinThisName, String joinOtherName, String joinMerggeName,
-                               String[] joinThisStoreNames, String[] joinOtherStoreNames, String otherKTableName) {
+                               String[] joinThisStoreNames, String[] joinOtherStoreNames, String otherKTableName, String thisKtableName) {
         super(topologyNodeType);
         this.joinThisProcessor = joinThisProcessor;
         this.joinOtherProcessor = joinOtherProcessor;
@@ -48,6 +49,7 @@ public class KTableJoinGraphNode extends StreamsGraphNode {
         this.joinThisStoreNames = joinThisStoreNames;
         this.joinOtherStoreNames = joinOtherStoreNames;
         this.otherKTableName = otherKTableName;
+        this.thisKtableName = thisKtableName;
 
     }
 
@@ -69,6 +71,7 @@ public class KTableJoinGraphNode extends StreamsGraphNode {
         String[] joinThisStoreNames;
         String[] joinOtherStoreNames;
         String otherKTableName;
+        String thisKTableName;
 
         private Builder() {
         }
@@ -137,13 +140,18 @@ public class KTableJoinGraphNode extends StreamsGraphNode {
             return this;
         }
 
+        public Builder withThisKTableName(String thisKTableName) {
+            this.thisKTableName = thisKTableName;
+            return this;
+        }
+
 
 
         public KTableJoinGraphNode build() {
             KTableJoinGraphNode
                 kTableJoinGraphNode =
                 new KTableJoinGraphNode(topologyTopologyNodeType, joinThisProcessor, joinOtherProcessor, joinMergeProcessor, joinThisName, joinOtherName, joinMerggeName,
-                                        joinThisStoreNames, joinOtherStoreNames, otherKTableName);
+                                        joinThisStoreNames, joinOtherStoreNames, otherKTableName, thisKTableName);
             kTableJoinGraphNode.setName(name);
             kTableJoinGraphNode.setProcessed(processDetails);
             return kTableJoinGraphNode;

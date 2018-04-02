@@ -28,7 +28,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.List;
 
 /**
  * The {@code TopologyOptimizer} used to optimize topology built using the DSL.
@@ -38,12 +40,13 @@ import java.util.Deque;
 @SuppressWarnings("unchecked")
 public class TopologyOptimizerImpl implements TopologyOptimizer {
 
+    private Deque<StreamsGraphNode> graphNodeStack;
 
     private static final Logger LOG = LoggerFactory.getLogger(TopologyOptimizerImpl.class);
 
     @Override
     public void optimize(StreamsTopologyGraph topologyGraph, InternalTopologyBuilder internalTopologyBuilder) {
-        final Deque<StreamsGraphNode> graphNodeStack = new ArrayDeque<>();
+        graphNodeStack = new ArrayDeque<>();
 
         graphNodeStack.push(topologyGraph.root);
 
@@ -52,17 +55,18 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
         while (!graphNodeStack.isEmpty()) {
             final StreamsGraphNode streamGraphNode = graphNodeStack.pop();
 
+            if (LOG.isDebugEnabled()) {
+                List<StreamsGraphNode> allDescendantNodes = new ArrayList<>();
+                if (streamGraphNode.topologyNodeType == TopologyNodeType.SOURCE) {
+                    allDescendantNodes = getAllDescendants(streamGraphNode, new ArrayList<StreamsGraphNode>());
+                }
+                LOG.debug("{} descendant nodes {}", streamGraphNode, allDescendantNodes);
+            }
+
             buildAndMaybeOptimize(internalTopologyBuilder, streamGraphNode);
 
             for (StreamsGraphNode descendant : streamGraphNode.getDescendants()) {
-                if (streamGraphNode.descendants.size() > 1 || descendant.topologyNodeType == TopologyNodeType.MERGE ||
-                    (descendant.topologyNodeType == TopologyNodeType.STREAM_KTABLE_JOIN && (graphNodeStack.peek() != null && graphNodeStack.peek().topologyNodeType == TopologyNodeType.KTABLE))) {
-                    LOG.debug(String.format("Adding to bottom of stack %s descendants %s", descendant, descendant.descendants));
-                    graphNodeStack.addLast(descendant);
-                } else {
-                    LOG.debug(String.format("Adding to top of stack %s descendants %s", descendant, descendant.descendants));
-                    graphNodeStack.push(descendant);
-                }
+                graphNodeStack.addLast(descendant);
             }
         }
     }
@@ -103,10 +107,10 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
             case MAP:
             case FLATMAP:
             case MAP_VALUES:
+
                 internalTopologyBuilder.addProcessor(descendant.name(),
                                                      processDetails.getProcessorSupplier(),
                                                      descendant.getPredecessorName());
-
                 break;
 
             case PROCESSOR:
@@ -159,6 +163,20 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
         }
     }
 
+    private List<StreamsGraphNode> getAllDescendants(StreamsGraphNode parentNode, List<StreamsGraphNode> graphNodes) {
+        if (parentNode.getDescendants().isEmpty()) {
+            return graphNodes;
+        }
+        if (graphNodes.isEmpty()) {
+            graphNodes.add(parentNode);
+        }
+        graphNodes.addAll(parentNode.getDescendants());
+        for (StreamsGraphNode graphNode : parentNode.getDescendants()) {
+            graphNodes = getAllDescendants(graphNode, graphNodes);
+        }
+        return graphNodes;
+    }
+
     private void buildAggregateProcessor(InternalTopologyBuilder internalTopologyBuilder, StreamsGraphNode descendant, ProcessDetails processDetails) {
         internalTopologyBuilder.addProcessor(descendant.name(), processDetails.getProcessorSupplier(), processDetails.getConnectProcessorName());
         if (processDetails.getStoreBuilder() != null) {
@@ -180,13 +198,13 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
                                                keyDeserializer,
                                                valDeserializer,
                                                topic,
-                                               descendant.getPredecessorName(),
+                                               processDetails.getConnectProcessorName(),
                                                processDetails.getkTableSource());
     }
 
     private void buildKTableKTableJoin(InternalTopologyBuilder internalTopologyBuilder, KTableJoinGraphNode ktg, ProcessDetails processDetails) {
 
-        internalTopologyBuilder.addProcessor(ktg.joinThisName, ktg.joinThisProcessor, ktg.name);
+        internalTopologyBuilder.addProcessor(ktg.joinThisName, ktg.joinThisProcessor, ktg.thisKtableName);
         internalTopologyBuilder.addProcessor(ktg.joinOtherName, ktg.joinOtherProcessor, ktg.otherKTableName);
         internalTopologyBuilder.addProcessor(ktg.joinMerggeName, ktg.joinMergeProcessor, ktg.joinThisName, ktg.joinOtherName);
         internalTopologyBuilder.connectProcessorAndStateStores(ktg.joinThisName, ktg.joinThisStoreNames);
@@ -212,16 +230,17 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
         Deserializer keyDeserializer = rgn.keySerde != null ? rgn.keySerde.deserializer() : null;
         Deserializer valDeserializer = rgn.valueSerde != null ? rgn.valueSerde.deserializer() : null;
 
-        internalTopologyBuilder.addInternalTopic(rgn.sinkTopic);
-        internalTopologyBuilder.addProcessor(rgn.funcOrFilterName, rgn.processorSupplier, rgn.name());
-
         valDeserializer = rgn.changedDeserializer != null ? rgn.changedDeserializer : valDeserializer;
         valSerializer = rgn.changedSerializer != null ? rgn.changedSerializer : valSerializer;
 
+        internalTopologyBuilder.addInternalTopic(rgn.sinkTopic);
         internalTopologyBuilder.addSink(rgn.sinkName, rgn.sinkTopic, keySerializer, valSerializer,
-                                        null, rgn.funcOrFilterName);
+                                        null, rgn.predecessorName);
+
         internalTopologyBuilder.addSource(null, rgn.sourceName, new FailOnInvalidTimestamp(),
                                           keyDeserializer, valDeserializer, rgn.sinkTopic);
+
+        internalTopologyBuilder.addProcessor(rgn.funcOrFilterName, rgn.processorSupplier, rgn.sourceName);
 
         if (processDetails != null && processDetails.getStoreSupplier() != null) {
             internalTopologyBuilder.addStateStore(processDetails.getStoreSupplier(), rgn.funcOrFilterName);
@@ -268,7 +287,7 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
         Deserializer valDeserializer = getDeserializer(processDetails.consumedValueSerde());
 
         internalTopologyBuilder.addSource(processDetails.getConsumedResetPolicy(),
-                                          descendant.predecessorName,
+                                          processDetails.getSourceName(),
                                           processDetails.getConsumedTimestampExtractor(),
                                           keyDeserializer,
                                           valDeserializer,
@@ -276,7 +295,7 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
 
         internalTopologyBuilder.addProcessor(descendant.name(),
                                              processDetails.getProcessorSupplier(),
-                                             descendant.getPredecessorName());
+                                             processDetails.getSourceName());
 
         if (processDetails.getStoreBuilder() != null) {
             internalTopologyBuilder.addStateStore(processDetails.getStoreBuilder(), descendant.name());

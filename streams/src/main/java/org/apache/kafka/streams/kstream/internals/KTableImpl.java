@@ -766,7 +766,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             graphBuilder.withProcessDetails(ProcessDetails.builder().withStoreSupplier(storeSupplier).build());
         }
 
-        graphBuilder.withName(this.name);
+        graphBuilder.withName(joinMergeName);
         graphBuilder.withTopologyNodeType(TopologyNodeType.KTABLE_KTABLE_JOIN);
         builder.addNode(graphBuilder.build());
         return result;
@@ -796,7 +796,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                 = new KeyValueStoreMaterializer<>(materialized).materialize();
             graphBuilder.withProcessDetails(ProcessDetails.builder().withStoreBuilder(storeBuilder).build());
         }
-        graphBuilder.withName(this.name);
+        graphBuilder.withName(joinMergeName);
         graphBuilder.withTopologyNodeType(TopologyNodeType.KTABLE_KTABLE_JOIN);
         builder.addNode(graphBuilder.build());
         return result;
@@ -849,7 +849,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             .withJoinThisName(joinThisName)
             .withJoinOtherName(joinOtherName)
             .withJoinMerggeName(joinMergeName)
-            .withName(this.name)
+            .withThisKTableName(this.name)
             .withOtherKtableName(((KTableImpl) other).name)
             .withJoinThisStoreNames(((KTableImpl) other).valueGetterSupplier().storeNames())
             .withJoinOtherStoreNames(valueGetterSupplier().storeNames());

@@ -31,6 +31,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.streams.kstream.internals.StreamsTopologyGraph.TOPOLOGY_ROOT;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.GLOBAL_KTABLE;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.KTABLE;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.SOURCE;
@@ -53,7 +54,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
 
         ProcessDetails processDetails = ProcessDetails.builder().withConsumed(consumed).withSourceTopics(topics).build();
-        StreamsGraphNode node = new StreamsGraphNode(name, SOURCE, false, processDetails, null);
+        StreamsGraphNode node = new StreamsGraphNode(name, SOURCE, false, processDetails, TOPOLOGY_ROOT);
 
         topologyGraph.addNode(node);
 
@@ -64,7 +65,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
 
         ProcessDetails processDetails = ProcessDetails.builder().withSourcePattern(topicPattern).withConsumed(consumed).build();
-        StreamsGraphNode node = new StreamsGraphNode(name, SOURCE, false, processDetails, null);
+        StreamsGraphNode node = new StreamsGraphNode(name, SOURCE, false, processDetails, TOPOLOGY_ROOT);
         topologyGraph.addNode(node);
 
         return new KStreamImpl<>(this, name, Collections.singleton(name), false);
@@ -90,8 +91,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         processDetailsBuilder.withSourceTopics(Collections.singleton(topic))
             .withStoreSupplier(storeSupplier)
+            .withSourceName(source)
             .withConsumed(consumed);
-        StreamsGraphNode graphNode = new StreamsGraphNode(name, KTABLE, false, processDetailsBuilder.build(), source);
+        StreamsGraphNode graphNode = new StreamsGraphNode(name, KTABLE, false, processDetailsBuilder.build(), TOPOLOGY_ROOT);
         topologyGraph.addNode(graphNode);
 
         return kTable;
@@ -119,8 +121,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         processDetailsBuilder.withSourceTopics(Collections.singleton(topic))
             .withStoreBuilder(storeBuilder)
+            .withSourceName(source)
             .withConsumed(consumed);
-        StreamsGraphNode graphNode = new StreamsGraphNode(name, KTABLE, false, processDetailsBuilder.build(), source);
+        StreamsGraphNode graphNode = new StreamsGraphNode(name, KTABLE, false, processDetailsBuilder.build(), TOPOLOGY_ROOT);
         topologyGraph.addNode(graphNode);
 
         return kTable;
@@ -158,9 +161,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         ProcessDetails processDetails = ProcessDetails.builder().withConsumed(consumed)
             .withStoreBuilder(storeBuilder)
             .withKTableSource(tableSource)
+            .withConnectProcessorName(processorName)
             .withSourceTopics(Collections.singleton(topic)).build();
 
-        StreamsGraphNode streamsGraphNode = new StreamsGraphNode(sourceName, GLOBAL_KTABLE, false, processDetails, processorName);
+        StreamsGraphNode streamsGraphNode = new StreamsGraphNode(sourceName, GLOBAL_KTABLE, false, processDetails, TOPOLOGY_ROOT);
 
         topologyGraph.addNode(streamsGraphNode);
 
