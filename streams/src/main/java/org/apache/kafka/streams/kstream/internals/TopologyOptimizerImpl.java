@@ -276,7 +276,7 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
         } else if (processDetails.getStoreBuilder() != null) {
             internalTopologyBuilder.addStateStore(processDetails.getStoreBuilder(), descendant.name());
         } else if (processDetails.getMaterialized() != null) {
-            internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(processDetails.getMaterializedInternal()).materialize());
+            internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(processDetails.getMaterializedInternal()).materialize(), descendant.name());
         }
     }
 
