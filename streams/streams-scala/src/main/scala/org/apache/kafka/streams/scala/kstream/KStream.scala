@@ -199,7 +199,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * The user can either supply the `Produced` instance as an implicit in scope or she can also provide implicit
    * key and value serdes that will be converted to a `Produced` instance implicitly.
    * <p>
-   * <pre>
+   * {{{
    * Example:
    *
    * // brings implicit serdes in scope
@@ -214,7 +214,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    *
    * // Similarly you can create an implicit Produced and it will be passed implicitly
    * // to the through call
-   * </pre>
+   * }}}
    *
    * @param topic the topic name
    * @param (implicit) produced the instance of Produced that gives the serdes and `StreamPartitioner`
@@ -231,7 +231,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * The user can either supply the `Produced` instance as an implicit in scope or she can also provide implicit
    * key and value serdes that will be converted to a `Produced` instance implicitly.
    * <p>
-   * <pre>
+   * {{{
    * Example:
    *
    * // brings implicit serdes in scope
@@ -246,7 +246,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    *
    * // Similarly you can create an implicit Produced and it will be passed implicitly
    * // to the through call
-   * </pre>
+   * }}}
    *
    * @param topic the topic name
    * @param (implicit) produced the instance of Produced that gives the serdes and `StreamPartitioner`
@@ -348,7 +348,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * The user can either supply the `Serialized` instance as an implicit in scope or she can also provide an implicit
    * serdes that will be converted to a `Serialized` instance implicitly.
    * <p>
-   * <pre>
+   * {{{
    * Example:
    *
    * // brings implicit serdes in scope
@@ -366,7 +366,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    *
    * // Similarly you can create an implicit Serialized and it will be passed implicitly
    * // to the groupByKey call
-   * </pre>
+   * }}}
    *
    * @param (implicit) serialized the instance of Serialized that gives the serdes 
    * @return a [[KGroupedStream]] that contains the grouped records of the original [[KStream]]
@@ -382,7 +382,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * The user can either supply the `Serialized` instance as an implicit in scope or she can also provide an implicit
    * serdes that will be converted to a `Serialized` instance implicitly.
    * <p>
-   * <pre>
+   * {{{
    * Example:
    *
    * // brings implicit serdes in scope
@@ -400,7 +400,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    *     .groupBy((k, v) => v)
    *
    *     .count()
-   * </pre>
+   * }}}
    *
    * @param selector a function that computes a new key for grouping
    * @return a [[KGroupedStream]] that contains the grouped records of the original [[KStream]]

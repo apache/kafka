@@ -25,6 +25,9 @@ import java.lang.{Iterable => JIterable}
  * Implicit classes that offer conversions of Scala function literals to
  * SAM (Single Abstract Method) objects in Java. These make the Scala APIs much
  * more expressive, with less boilerplate and more succinct.
+ * <p>
+ * For Scala 2.11, most of these conversions need to be invoked explicitly, as Scala 2.11 does not
+ * have full support for SAM types. 
  */
 object FunctionConversions {
 

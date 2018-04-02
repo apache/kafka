@@ -23,17 +23,50 @@ import org.apache.kafka.streams.scala.FunctionConversions._
 
 /**
  * Wraps the Java class KGroupedTable and delegates method calls to the underlying Java object.
+ *
+ * @param [K] Type of keys
+ * @param [V] Type of values
+ * @param inner The underlying Java abstraction for KGroupedTable
+ *
+ * @see `org.apache.kafka.streams.kstream.KGroupedTable`
  */
 class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
 
+  /**
+   * Count number of records of the original [[KTable]] that got [[KTable#groupBy]] to
+   * the same key into a new instance of [[KTable]].
+   *
+   * @return a [[KTable]] that contains "update" records with unmodified keys and `Long` values that
+   * represent the latest (rolling) count (i.e., number of records) for each key
+   * @see `org.apache.kafka.streams.kstream.KGroupedTable#count`
+   */ 
   def count(): KTable[K, Long] = {
     val c: KTable[K, java.lang.Long] = inner.count()
     c.mapValues[Long](Long2long(_))
   }
 
+  /**
+   * Count number of records of the original [[KTable]] that got [[KTable#groupBy]] to
+   * the same key into a new instance of [[KTable]].
+   *
+   * @param materialized  an instance of `Materialized` used to materialize a state store. 
+   * @return a [[KTable]] that contains "update" records with unmodified keys and `Long` values that
+   * represent the latest (rolling) count (i.e., number of records) for each key
+   * @see `org.apache.kafka.streams.kstream.KGroupedTable#count`
+   */ 
   def count(materialized: Materialized[K, Long, ByteArrayKeyValueStore]): KTable[K, Long] =
     inner.count(materialized)
 
+  /**
+   * Combine the value of records of the original [[KTable]] that got [[KTable#groupBy]]
+   * to the same key into a new instance of [[KTable]].
+   *
+   * @param adder      a function that adds a new value to the aggregate result
+   * @param subtractor a function that removed an old value from the aggregate result
+   * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
+   * latest (rolling) aggregate for each key
+   * @see `org.apache.kafka.streams.kstream.KGroupedTable#reduce`
+   */
   def reduce(adder: (V, V) => V,
              subtractor: (V, V) => V): KTable[K, V] = {
 
@@ -42,6 +75,17 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
     inner.reduce(adder.asReducer, subtractor.asReducer)
   }
 
+  /**
+   * Combine the value of records of the original [[KTable]] that got [[KTable#groupBy]]
+   * to the same key into a new instance of [[KTable]].
+   *
+   * @param adder      a function that adds a new value to the aggregate result
+   * @param subtractor a function that removed an old value from the aggregate result
+   * @param materialized  an instance of `Materialized` used to materialize a state store. 
+   * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
+   * latest (rolling) aggregate for each key
+   * @see `org.apache.kafka.streams.kstream.KGroupedTable#reduce`
+   */
   def reduce(adder: (V, V) => V,
              subtractor: (V, V) => V,
              materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] = {
@@ -51,6 +95,17 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
     inner.reduce(adder.asReducer, subtractor.asReducer, materialized)
   }
 
+  /**
+   * Aggregate the value of records of the original [[KTable]] that got [[KTable#groupBy]]
+   * to the same key into a new instance of [[KTable]] using default serializers and deserializers.
+   *
+   * @param initializer a function that provides an initial aggregate result value
+   * @param adder       a function that adds a new record to the aggregate result
+   * @param subtractor  an aggregator function that removed an old record from the aggregate result
+   * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
+   * latest (rolling) aggregate for each key
+   * @see `org.apache.kafka.streams.kstream.KGroupedTable#aggregate`
+   */
   def aggregate[VR](initializer: () => VR,
                     adder: (K, V, VR) => VR,
                     subtractor: (K, V, VR) => VR): KTable[K, VR] = {
@@ -58,6 +113,18 @@ class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
     inner.aggregate(initializer.asInitializer, adder.asAggregator, subtractor.asAggregator)
   }
 
+  /**
+   * Aggregate the value of records of the original [[KTable]] that got [[KTable#groupBy]]
+   * to the same key into a new instance of [[KTable]] using default serializers and deserializers.
+   *
+   * @param initializer a function that provides an initial aggregate result value
+   * @param adder       a function that adds a new record to the aggregate result
+   * @param subtractor  an aggregator function that removed an old record from the aggregate result
+   * @param materialized  an instance of `Materialized` used to materialize a state store. 
+   * @return a [[KTable]] that contains "update" records with unmodified keys, and values that represent the
+   * latest (rolling) aggregate for each key
+   * @see `org.apache.kafka.streams.kstream.KGroupedTable#aggregate`
+   */
   def aggregate[VR](initializer: () => VR,
                     adder: (K, V, VR) => VR,
                     subtractor: (K, V, VR) => VR,

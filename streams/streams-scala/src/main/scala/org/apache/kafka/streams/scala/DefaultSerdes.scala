@@ -24,7 +24,9 @@ import org.apache.kafka.streams.kstream.WindowedSerdes
 
 
 /**
- * Implicit values for default serdes
+ * Implicit values for default serdes.
+ * <p>
+ * Bring them in scope for default serializers / de-serializers to work.
  */
 object DefaultSerdes {
   implicit val stringSerde: Serde[String] = Serdes.String()
