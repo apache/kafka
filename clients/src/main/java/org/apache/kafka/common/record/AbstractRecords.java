@@ -130,8 +130,12 @@ public abstract class AbstractRecords implements Records {
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, batch.compressionType(),
                 timestampType, recordBatchAndRecords.baseOffset, logAppendTime);
-        for (Record record : recordBatchAndRecords.records)
-            builder.append(record);
+        for (Record record : recordBatchAndRecords.records) {
+            if (magic > RecordBatch.MAGIC_VALUE_V1)
+                builder.append(record);
+            else
+                builder.appendWithOffset(record.offset(), record.timestamp(), record.key(), record.value());
+        }
 
         builder.close();
         return builder;
