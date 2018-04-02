@@ -292,6 +292,7 @@ class WorkerSourceTask extends WorkerTask {
         if (headers != null) {
             String topic = record.topic();
             for (Header header : headers) {
+                if (header == null) continue;
                 String key = header.key();
                 byte[] rawHeader = headerConverter.fromConnectHeader(topic, key, header.schema(), header.value());
                 result.add(key, rawHeader);
