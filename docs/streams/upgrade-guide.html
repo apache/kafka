@@ -34,9 +34,17 @@
     </div>
 
     <p>
-        If you are using Java 7 and want to upgrade from 1.0.x to 1.1.0 you don't need to make any code changes as the public API is fully backward compatible.
-        If you are using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguties.
-	Hot-swaping the jar-file only might not work for this case.
+        If you want to upgrade from 1.1.x to 1.2.0 and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
+        you'd need to update your code to incorporate the newly added public APIs; otherwise you don't need to make any code changes.
+        See <a href="#streams_api_changes_120">below</a> for a complete list of 1.2.0 API and semantic changes that allow you to advance your application and/or simplify your code base.
+    </p>
+
+    <p>
+        If you want to upgrade from 1.0.x to 1.1.0 and you have customized window store implementations on the <code>ReadOnlyWindowStore</code> interface
+        you'd need to update your code to incorporate the newly added public APIs.
+        Otherwise, if you are using Java 7 you don't need to make any code changes as the public API is fully backward compatible;
+        but if you are using Java 8 method references in your Kafka Streams code you might need to update your code to resolve method ambiguities.
+        Hot-swaping the jar-file only might not work for this case.
         See <a href="#streams_api_changes_110">below</a> for a complete list of 1.1.0 API and semantic changes that allow you to advance your application and/or simplify your code base.
     </p>
 
@@ -64,17 +72,46 @@
         See <a href="#streams_api_changes_0101">below</a> a complete list of 0.10.1 API changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
     </p>
 
-    <h3><a id="streams_api_changes_120" href="#streams_api_changes_120">Streams API changes in 1.1.0</a></h3>
+    <h3><a id="streams_api_changes_110" href="#streams_api_changes_110">Streams API changes in 1.1.0</a></h3>
+    <!-- TODO: verify release verion and update `id` and `href` attributes (also at other places that link to this headline) -->
+    
+    <h3><a id="streams_api_changes_120" href="#streams_api_changes_120">Streams API changes in 1.2.0</a></h3>
+    <p>
+        We have added support for methods in <code>ReadOnlyWindowStore</code> which allows for querying a single window's key-value pair.
+        For users who have customized window store implementations on the above interface, they'd need to update their code to implement the newly added method as well.
+        For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-261%3A+Add+Single+Value+Fetch+in+Window+Stores">KIP-261</a>.
+    </p>
+
+    <p>
+        We have added public <code>WindowedSerdes</code> to allow users to read from / write to a topic storing windowed table changelogs directly.
+        In addition, in <code>StreamsConfig</code> we have also added <code>default.windowed.key.serde.inner</code> and <code>default.windowed.value.serde.inner</code>
+        to let users specify inner serdes if the default serde classes are windowed serdes.
+        For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-265%3A+Make+Windowed+Serde+to+public+APIs">KIP-265</a>.
+    /<p>
+
+     <p>
+        We have deprecated constructors of <code>KafkaStreams</code> that take a <code>StreamsConfig</code> as parameter.
+        Please use the other corresponding constructors that accept <code>java.util.Properties</code> instead.
+        For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-245%3A+Use+Properties+instead+of+StreamsConfig+in+KafkaStreams+constructor">KIP-245</a>.
+    </p>
+    <p>
+      Kafka 1.2.0 allows to manipulate timestamps of output records using the Processor API (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-251%3A+Allow+timestamp+manipulation+in+Processor+API">KIP-251</a>).
+      To enable this new feature, <code>ProcessorContext#forward(...)</code> was modified.
+      The two existing overloads <code>#forward(Object key, Object value, String childName)</code> and <code>#forward(Object key, Object value, int childIndex)</code> were deprecated and a new overload <code>#forward(Object key, Object value, To to)</code> was added.
+      The new class <code>To</code> allows you to send records to all or specific downstream processors by name and to set the timestamp for the output record.
+      Forwarding based on child index is not supported in the new API any longer.
+    </p>
     <p>
         We have change the default value for methods  <code>retention.ms</code>  to infinity to allow any records be pushed to it with old timestamps.
         You must rely on the purging API to keep the storage small.
     </p>
-
+    
     <h3><a id="streams_api_changes_110" href="#streams_api_changes_110">Streams API changes in 1.1.0</a></h3>
     <p>
-	We have added support for methods in <code>ReadOnlyWindowStore</code> which allows for querying <code>WindowStore</code>s without the neccesity of providing keys.
+        We have added support for methods in <code>ReadOnlyWindowStore</code> which allows for querying <code>WindowStore</code>s without the necessity of providing keys.
+        For users who have customized window store implementations on the above interface, they'd need to update their code to implement the newly added method as well.
+        For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-205%3A+Add+all%28%29+and+range%28%29+API+to+ReadOnlyWindowStore">KIP-205</a>.
     </p>
-
 
     <p>
 	There is a new artifact <code>kafka-streams-test-utils</code> providing a <code>TopologyTestDriver</code>, <code>ConsumerRecordFactory</code>, and <code>OutputVerifier</code> class.

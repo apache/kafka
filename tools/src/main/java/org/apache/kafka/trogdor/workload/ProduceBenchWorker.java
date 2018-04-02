@@ -37,8 +37,7 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Callable;
@@ -51,13 +50,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class ProduceBenchWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ProduceBenchWorker.class);
-
-    private static final short NUM_PARTITIONS = 1;
-
-    private static final short REPLICATION_FACTOR = 3;
-
-    private static final int MESSAGE_SIZE = 512;
-
+    
     private static final int THROTTLE_PERIOD_MS = 100;
 
     private final String id;
@@ -78,8 +71,8 @@ public class ProduceBenchWorker implements TaskWorker {
      * @param topicIndex        The topic number.
      * @return                  The topic name.
      */
-    public static String topicIndexToName(int topicIndex) {
-        return String.format("topic%05d", topicIndex);
+    public String topicIndexToName(int topicIndex) {
+        return String.format("%s%05d", spec.topicPrefix(), topicIndex);
     }
 
     public ProduceBenchWorker(String id, ProduceBenchSpec spec) {
@@ -93,7 +86,7 @@ public class ProduceBenchWorker implements TaskWorker {
         if (!running.compareAndSet(false, true)) {
             throw new IllegalStateException("ProducerBenchWorker is already running.");
         }
-        log.info("{}: Activating ProduceBenchWorker.", id);
+        log.info("{}: Activating ProduceBenchWorker with {}", id, spec);
         this.executor = Executors.newScheduledThreadPool(1,
             ThreadUtils.createThreadFactory("ProduceBenchWorkerThread%d", false));
         this.status = status;
@@ -113,11 +106,13 @@ public class ProduceBenchWorker implements TaskWorker {
                         "activeTopics was %d, but totalTopics was only %d.  activeTopics must " +
                             "be less than or equal to totalTopics.", spec.activeTopics(), spec.totalTopics()));
                 }
-                List<NewTopic> newTopics = new ArrayList<>();
+                Map<String, NewTopic> newTopics = new HashMap<>();
                 for (int i = 0; i < spec.totalTopics(); i++) {
-                    newTopics.add(new NewTopic(topicIndexToName(i), NUM_PARTITIONS, REPLICATION_FACTOR));
+                    String name = topicIndexToName(i);
+                    newTopics.put(name, new NewTopic(name, spec.numPartitions(), spec.replicationFactor()));
                 }
-                WorkerUtils.createTopics(log, spec.bootstrapServers(), newTopics);
+                WorkerUtils.createTopics(log, spec.bootstrapServers(), newTopics, false);
+
                 executor.submit(new SendRecords());
             } catch (Throwable e) {
                 WorkerUtils.abort(log, "Prepare", e, doneFuture);
@@ -174,6 +169,10 @@ public class ProduceBenchWorker implements TaskWorker {
 
         private final KafkaProducer<byte[], byte[]> producer;
 
+        private final PayloadIterator keys;
+
+        private final PayloadIterator values;
+
         private final Throttle throttle;
 
         SendRecords() {
@@ -187,6 +186,8 @@ public class ProduceBenchWorker implements TaskWorker {
                 props.setProperty(entry.getKey(), entry.getValue());
             }
             this.producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
+            this.keys = new PayloadIterator(spec.keyGenerator());
+            this.values = new PayloadIterator(spec.valueGenerator());
             this.throttle = new SendRecordsThrottle(perPeriod, producer);
         }
 
@@ -194,14 +195,14 @@ public class ProduceBenchWorker implements TaskWorker {
         public Void call() throws Exception {
             long startTimeMs = Time.SYSTEM.milliseconds();
             try {
-                byte[] key = new byte[MESSAGE_SIZE];
-                byte[] value = new byte[MESSAGE_SIZE];
                 Future<RecordMetadata> future = null;
                 try {
                     for (int m = 0; m < spec.maxMessages(); m++) {
                         for (int i = 0; i < spec.activeTopics(); i++) {
-                            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(topicIndexToName(i), key, value);
-                            future = producer.send(record, new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
+                            ProducerRecord<byte[], byte[]> record = new ProducerRecord<byte[], byte[]>(
+                                topicIndexToName(i), 0, keys.next(), values.next());
+                            future = producer.send(record,
+                                new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
                         }
                         throttle.increment();
                     }

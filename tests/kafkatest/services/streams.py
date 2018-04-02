@@ -19,16 +19,23 @@ import signal
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.services.monitor.jmx import JmxMixin
+from kafkatest.services.kafka import KafkaConfig
 
+STATE_DIR = "state.dir"
 
-class StreamsTestBaseService(KafkaPathResolverMixin, Service):
+class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
     """Base class for Streams Test services providing some common settings and functionality"""
 
     PERSISTENT_ROOT = "/mnt/streams"
+
     # The log file contains normal log4j logs written using a file appender. stdout and stderr are handled separately
+    CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "streams.properties")
     LOG_FILE = os.path.join(PERSISTENT_ROOT, "streams.log")
     STDOUT_FILE = os.path.join(PERSISTENT_ROOT, "streams.stdout")
     STDERR_FILE = os.path.join(PERSISTENT_ROOT, "streams.stderr")
+    JMX_LOG_FILE = os.path.join(PERSISTENT_ROOT, "jmx_tool.log")
+    JMX_ERR_FILE = os.path.join(PERSISTENT_ROOT, "jmx_tool.err.log")
     LOG4J_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
     PID_FILE = os.path.join(PERSISTENT_ROOT, "streams.pid")
 
@@ -42,10 +49,16 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
         "streams_stderr": {
             "path": STDERR_FILE,
             "collect_default": True},
+        "jmx_log": {
+            "path": JMX_LOG_FILE,
+            "collect_default": True},
+        "jmx_err": {
+            "path": JMX_ERR_FILE,
+            "collect_default": True},
     }
 
     def __init__(self, test_context, kafka, streams_class_name, user_test_args, user_test_args1=None, user_test_args2=None, user_test_args3=None):
-        super(StreamsTestBaseService, self).__init__(test_context, 1)
+        Service.__init__(self, test_context, num_nodes=1)
         self.kafka = kafka
         self.args = {'streams_class_name': streams_class_name,
                      'user_test_args': user_test_args,
@@ -112,7 +125,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
     def start_cmd(self, node):
         args = self.args.copy()
         args['kafka'] = self.kafka.bootstrap_servers()
-        args['state_dir'] = self.PERSISTENT_ROOT
+        args['config_file'] = self.CONFIG_FILE
         args['stdout'] = self.STDOUT_FILE
         args['stderr'] = self.STDERR_FILE
         args['pidfile'] = self.PID_FILE
@@ -121,14 +134,21 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
-              " %(kafka)s %(state_dir)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
+              " %(kafka)s %(config_file)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
               " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+
+        self.logger.info("Executing streams cmd: " + cmd)
 
         return cmd
 
-    def start_node(self, node):
-        node.account.ssh("mkdir -p %s" % self.PERSISTENT_ROOT, allow_fail=False)
+    def prop_file(self, node):
+        cfg = KafkaConfig(**{STATE_DIR: self.PERSISTENT_ROOT})
+        return cfg.render()
 
+    def start_node(self, node):
+        node.account.mkdirs(self.PERSISTENT_ROOT)
+        prop_file = self.prop_file(node)
+        node.account.create_file(self.CONFIG_FILE, prop_file)
         node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('tools_log4j.properties', log_file=self.LOG_FILE))
 
         self.logger.info("Starting StreamsTest process on " + str(node.account))
@@ -163,7 +183,7 @@ class StreamsEosTestBaseService(StreamsTestBaseService):
 
     def clean_node(self, node):
         if self.clean_node_enabled:
-            super.clean_node(self, node)
+            super(StreamsEosTestBaseService, self).clean_node(node)
 
 
 class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
@@ -222,7 +242,7 @@ class StreamsBrokerDownResilienceService(StreamsTestBaseService):
     def start_cmd(self, node):
         args = self.args.copy()
         args['kafka'] = self.kafka.bootstrap_servers(validate=False)
-        args['state_dir'] = self.PERSISTENT_ROOT
+        args['config_file'] = self.CONFIG_FILE
         args['stdout'] = self.STDOUT_FILE
         args['stderr'] = self.STDERR_FILE
         args['pidfile'] = self.PID_FILE
@@ -231,8 +251,10 @@ class StreamsBrokerDownResilienceService(StreamsTestBaseService):
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s %(streams_class_name)s " \
-              " %(kafka)s %(state_dir)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
+              " %(kafka)s %(config_file)s %(user_test_args)s %(user_test_args1)s %(user_test_args2)s" \
               " %(user_test_args3)s & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+
+        self.logger.info("Executing: " + cmd)
 
         return cmd
 

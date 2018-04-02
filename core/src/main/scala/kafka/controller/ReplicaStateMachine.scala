@@ -80,7 +80,8 @@ class ReplicaStateMachine(config: KafkaConfig,
    * in zookeeper
    */
   private def initializeReplicaState() {
-    controllerContext.partitionReplicaAssignment.foreach { case (partition, replicas) =>
+    controllerContext.allPartitions.foreach { partition =>
+      val replicas = controllerContext.partitionReplicaAssignment(partition)
       replicas.foreach { replicaId =>
         val partitionAndReplica = PartitionAndReplica(partition, replicaId)
         if (controllerContext.isReplicaOnline(replicaId, partition))
@@ -181,7 +182,7 @@ class ReplicaStateMachine(config: KafkaConfig,
             case NewReplica =>
               val assignment = controllerContext.partitionReplicaAssignment(partition)
               if (!assignment.contains(replicaId)) {
-                controllerContext.partitionReplicaAssignment.put(partition, assignment :+ replicaId)
+                controllerContext.updatePartitionReplicaAssignment(partition, assignment :+ replicaId)
               }
             case _ =>
               controllerContext.partitionLeadershipInfo.get(partition) match {
@@ -237,7 +238,7 @@ class ReplicaStateMachine(config: KafkaConfig,
       case NonExistentReplica =>
         validReplicas.foreach { replica =>
           val currentAssignedReplicas = controllerContext.partitionReplicaAssignment(replica.topicPartition)
-          controllerContext.partitionReplicaAssignment.put(replica.topicPartition, currentAssignedReplicas.filterNot(_ == replica.replica))
+          controllerContext.updatePartitionReplicaAssignment(replica.topicPartition, currentAssignedReplicas.filterNot(_ == replica.replica))
           logSuccessfulTransition(replicaId, replica.topicPartition, replicaState(replica), NonExistentReplica)
           replicaState.remove(replica)
         }

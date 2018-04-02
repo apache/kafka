@@ -25,7 +25,6 @@ import java.io.DataOutput;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -505,11 +504,17 @@ public final class Utils {
      * Read a properties file from the given path
      * @param filename The path of the file to read
      */
-    public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
+    public static Properties loadProps(String filename) throws IOException {
         Properties props = new Properties();
-        try (InputStream propStream = new FileInputStream(filename)) {
-            props.load(propStream);
+
+        if (filename != null) {
+            try (InputStream propStream = new FileInputStream(filename)) {
+                props.load(propStream);
+            }
+        } else {
+            System.out.println("Did not load any properties since the property file is not specified");
         }
+
         return props;
     }
 

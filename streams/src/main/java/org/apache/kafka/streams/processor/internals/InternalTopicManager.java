@@ -130,9 +130,9 @@ public class InternalTopicManager {
                                 "Will try again (remaining retries {}).", topicName, remainingRetries - 1);
                         } else if (cause instanceof TopicExistsException) {
                             createTopicNames.add(createTopicResult.getKey());
-                            log.info(String.format("Topic %s exist already: %s",
+                            log.info("Topic {} exist already: {}",
                                 topicName,
-                                couldNotCreateTopic.getMessage()));
+                                couldNotCreateTopic.toString());
                         } else {
                             throw new StreamsException(String.format("Could not create topic %s.", topicName),
                                 couldNotCreateTopic);
@@ -197,8 +197,8 @@ public class InternalTopicManager {
                         log.debug("Could not get number of partitions for topic {} due to timeout. " +
                             "Will try again (remaining retries {}).", topicFuture.getKey(), remainingRetries - 1);
                     } else {
-                        final String error = "Could not get number of partitions for topic {}.";
-                        log.debug(error, topicFuture.getKey(), cause.getMessage());
+                        final String error = "Could not get number of partitions for topic {} due to {}";
+                        log.debug(error, topicFuture.getKey(), cause.toString());
                     }
                 }
             }

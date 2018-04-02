@@ -28,12 +28,14 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.CompositeRestoreListener;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.WrappedBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -46,31 +48,32 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public class MockProcessorContext extends AbstractProcessorContext implements RecordCollector.Supplier {
+public class InternalMockProcessorContext extends AbstractProcessorContext implements RecordCollector.Supplier {
 
     private final File stateDir;
     private final Metrics metrics;
     private final RecordCollector.Supplier recordCollectorSupplier;
     private final Map<String, StateStore> storeMap = new LinkedHashMap<>();
     private final Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
+    private final ToInternal toInternal = new ToInternal();
 
     private Serde<?> keySerde;
     private Serde<?> valSerde;
     private long timestamp = -1L;
 
-    public MockProcessorContext(final File stateDir,
-                                final StreamsConfig config) {
+    public InternalMockProcessorContext(final File stateDir,
+                                        final StreamsConfig config) {
         this(stateDir, null, null, new Metrics(), config, null, null);
     }
 
-    public MockProcessorContext(final StateSerdes<?, ?> serdes,
-                                final RecordCollector collector) {
+    public InternalMockProcessorContext(final StateSerdes<?, ?> serdes,
+                                        final RecordCollector collector) {
         this(null, serdes.keySerde(), serdes.valueSerde(), collector, null);
     }
 
-    public MockProcessorContext(final StateSerdes<?, ?> serdes,
-                                final RecordCollector collector,
-                                final Metrics metrics) {
+    public InternalMockProcessorContext(final StateSerdes<?, ?> serdes,
+                                        final RecordCollector collector,
+                                        final Metrics metrics) {
         this(null, serdes.keySerde(), serdes.valueSerde(), metrics, new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()), new RecordCollector.Supplier() {
             @Override
             public RecordCollector recordCollector() {
@@ -79,11 +82,11 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
         }, null);
     }
 
-    public MockProcessorContext(final File stateDir,
-                                final Serde<?> keySerde,
-                                final Serde<?> valSerde,
-                                final RecordCollector collector,
-                                final ThreadCache cache) {
+    public InternalMockProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valSerde,
+                                        final RecordCollector collector,
+                                        final ThreadCache cache) {
         this(stateDir, keySerde, valSerde, new Metrics(), new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()), new RecordCollector.Supplier() {
             @Override
             public RecordCollector recordCollector() {
@@ -92,13 +95,13 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
         }, cache);
     }
 
-    private MockProcessorContext(final File stateDir,
-                                final Serde<?> keySerde,
-                                final Serde<?> valSerde,
-                                final Metrics metrics,
-                                final StreamsConfig config,
-                                final RecordCollector.Supplier collectorSupplier,
-                                final ThreadCache cache) {
+    private InternalMockProcessorContext(final File stateDir,
+                                         final Serde<?> keySerde,
+                                         final Serde<?> valSerde,
+                                         final Metrics metrics,
+                                         final StreamsConfig config,
+                                         final RecordCollector.Supplier collectorSupplier,
+                                         final ThreadCache cache) {
         super(new TaskId(0, 0),
               config,
               new MockStreamsMetrics(metrics),
@@ -179,44 +182,39 @@ public class MockProcessorContext extends AbstractProcessorContext implements Re
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(final K key, final V value) {
-        final ProcessorNode thisNode = currentNode;
-        for (final ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-            currentNode = childNode;
-            try {
-                childNode.process(key, value);
-            } finally {
-                currentNode = thisNode;
-            }
-        }
+        forward(key, value, To.all());
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(final K key, final V value, final int childIndex) {
-        final ProcessorNode thisNode = currentNode;
-        final ProcessorNode childNode = (ProcessorNode<K, V>) thisNode.children().get(childIndex);
-        currentNode = childNode;
-        try {
-            childNode.process(key, value);
-        } finally {
-            currentNode = thisNode;
-        }
+        forward(key, value, To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <K, V> void forward(final K key, final V value, final String childName) {
+        forward(key, value, To.child(childName));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <K, V> void forward(final K key, final V value, final To to) {
+        toInternal.update(to);
+        if (toInternal.hasTimestamp()) {
+            setTime(toInternal.timestamp());
+        }
         final ProcessorNode thisNode = currentNode;
-        for (final ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-            if (childNode.name().equals(childName)) {
-                currentNode = childNode;
-                try {
+        try {
+            for (final ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+                if (toInternal.child() == null || toInternal.child().equals(childNode.name())) {
+                    currentNode = childNode;
                     childNode.process(key, value);
-                } finally {
-                    currentNode = thisNode;
+                    toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple Processors and toInternal might have been modified
                 }
-                break;
             }
+        } finally {
+            currentNode = thisNode;
         }
     }
 

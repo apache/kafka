@@ -16,26 +16,31 @@
  */
 package org.apache.kafka.streams.tests;
 
-import java.io.File;
+import org.apache.kafka.common.utils.Utils;
+
+import java.io.IOException;
+import java.util.Properties;
 
 public class StreamsEosTest {
 
     /**
-     *  args ::= command kafka zookeeper stateDir
+     *  args ::= kafka propFileName command
      *  command := "run" | "process" | "verify"
      */
-    public static void main(final String[] args) {
+    public static void main(final String[] args) throws IOException {
         final String kafka = args[0];
-        final String stateDir = args.length > 1 ? args[1] : null;
+        final String propFileName = args.length > 1 ? args[1] : null;
         final String command = args.length > 2 ? args[2] : null;
+
+        final Properties streamsProperties = Utils.loadProps(propFileName);
 
         System.out.println("StreamsTest instance started");
         System.out.println("kafka=" + kafka);
-        System.out.println("stateDir=" + stateDir);
+        System.out.println("props=" + streamsProperties);
         System.out.println("command=" + command);
         System.out.flush();
 
-        if (command == null || stateDir == null) {
+        if (command == null || propFileName == null) {
             System.exit(-1);
         }
 
@@ -44,10 +49,10 @@ public class StreamsEosTest {
                 EosTestDriver.generate(kafka);
                 break;
             case "process":
-                new EosTestClient(kafka, new File(stateDir), false).start();
+                new EosTestClient(kafka, streamsProperties, false).start();
                 break;
             case "process-complex":
-                new EosTestClient(kafka, new File(stateDir), true).start();
+                new EosTestClient(kafka, streamsProperties, true).start();
                 break;
             case "verify":
                 EosTestDriver.verify(kafka, false);

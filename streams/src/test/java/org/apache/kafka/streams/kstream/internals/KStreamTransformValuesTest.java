@@ -23,18 +23,19 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueTransformer;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Rule;
 import org.junit.Test;
 
-import static org.junit.Assert.fail;
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.fail;
 
 public class KStreamTransformValuesTest {
 
@@ -192,6 +193,13 @@ public class KStreamTransformValuesTest {
         }
 
         try {
+            transformValueProcessor.process(null, 3);
+            fail("should not allow call to context.forward() within ValueTransformer");
+        } catch (final StreamsException e) {
+            // expected
+        }
+
+        try {
             transformValueProcessor.punctuate(0);
             fail("should not allow ValueTransformer#puntuate() to return not-null value");
         } catch (final StreamsException e) {
@@ -213,10 +221,13 @@ public class KStreamTransformValuesTest {
                 context.forward(null, null);
             }
             if (value == 1) {
-                context.forward(null, null, null);
+                context.forward(null, null, (String) null);
             }
             if (value == 2) {
                 context.forward(null, null, 0);
+            }
+            if (value == 3) {
+                context.forward(null, null, To.all());
             }
             throw new RuntimeException("Should never happen in this test");
         }
