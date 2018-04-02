@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -35,6 +36,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -236,6 +238,7 @@ class ProcessDetails<K, V, S extends StateStore> {
         }
 
         public Builder withSourceTopics(Collection<String> sourceTopics) {
+            validateSourceTopics(sourceTopics);
             this.sourceTopics = sourceTopics;
             return this;
         }
@@ -304,6 +307,18 @@ class ProcessDetails<K, V, S extends StateStore> {
         public Builder withSourceName(String sourceName) {
             this.sourceName = sourceName;
             return this;
+        }
+
+
+        private void validateSourceTopics(Collection<String> topics) {
+            if (topics == null || topics.isEmpty()) {
+                throw new TopologyException("Source topics can't be null or empty");
+            }
+
+            for (String topic : topics) {
+                Objects.requireNonNull(topic, "Source topics can't be null");
+            }
+
         }
 
         public ProcessDetails<K, V, S> build() {

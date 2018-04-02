@@ -42,6 +42,8 @@ import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
+import org.apache.kafka.streams.kstream.internals.TopologyOptimizer;
+import org.apache.kafka.streams.kstream.internals.TopologyOptimizerImpl;
 import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -96,6 +98,8 @@ public class StreamThreadTest {
     private final StateDirectory stateDirectory  = new StateDirectory(config, mockTime);
     private StreamsMetadataState streamsMetadataState;
     private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>();
+    final TopologyOptimizer topologyOptimizer = new TopologyOptimizerImpl();
+
 
     @Before
     public void setUp() {
@@ -759,6 +763,7 @@ public class StreamThreadTest {
     public void shouldReturnStandbyTaskMetadataWhileRunningState() {
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
             .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count-one"));
+        buildGraphForTest();
 
         final StreamThread thread = createStreamThread(clientId, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
@@ -806,6 +811,8 @@ public class StreamThreadTest {
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
                 .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as(storeName1));
         internalStreamsBuilder.table(topic2, new ConsumedInternal(), new MaterializedInternal(Materialized.as(storeName2), internalStreamsBuilder, ""));
+
+        buildGraphForTest();
 
         final StreamThread thread = createStreamThread(clientId, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
@@ -896,6 +903,7 @@ public class StreamThreadTest {
         };
 
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed).process(punctuateProcessor);
+        buildGraphForTest();
 
         final StreamThread thread = createStreamThread(clientId, config, false);
 
@@ -1005,6 +1013,8 @@ public class StreamThreadTest {
     public void shouldRecoverFromInvalidOffsetExceptionOnRestoreAndFinishRestore() throws Exception {
         internalStreamsBuilder.stream(Collections.singleton("topic"), consumed)
             .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("count"));
+
+        buildGraphForTest();
 
         final StreamThread thread = createStreamThread("cliendId", config, false);
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.consumer;
@@ -1136,6 +1146,10 @@ public class StreamThreadTest {
         mockConsumer.addRecord(new ConsumerRecord<>(t1p1.topic(), t1p1.partition(), ++offset, 1, TimestampType.CREATE_TIME, -1, -1, -1, new byte[0], new byte[0]));
         thread.runOnce(-1);
         assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
+    }
+
+    private void buildGraphForTest() {
+        topologyOptimizer.optimize(internalStreamsBuilder.getTopologyGraph(), internalTopologyBuilder);
     }
 
     private void assertThreadMetadataHasEmptyTasksWithState(ThreadMetadata metadata, StreamThread.State state) {
