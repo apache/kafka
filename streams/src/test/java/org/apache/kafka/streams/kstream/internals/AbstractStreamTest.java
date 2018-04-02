@@ -77,8 +77,9 @@ public class AbstractStreamTest {
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
         final MockProcessorSupplier<Integer, String> processor = new MockProcessorSupplier<>();
         final String topicName = "topic";
-
-        ExtendedKStream<Integer, String> stream = new ExtendedKStream<>(builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String())));
+        KStream<Integer, String> baseStream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
+        builder.build();
+        ExtendedKStream<Integer, String> stream = new ExtendedKStream<>(baseStream);
 
         stream.randomFilter().process(processor);
 

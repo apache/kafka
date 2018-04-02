@@ -108,9 +108,7 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
             case FLATMAP:
             case MAP_VALUES:
 
-                internalTopologyBuilder.addProcessor(descendant.name(),
-                                                     processDetails.getProcessorSupplier(),
-                                                     descendant.getPredecessorName());
+                buildProcessingNodeWithPossibleStateStore(internalTopologyBuilder, descendant, processDetails);
                 break;
 
             case PROCESSOR:

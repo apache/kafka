@@ -81,6 +81,7 @@ public class KTableKTableLeftJoinTest {
         processor = new MockProcessorSupplier<>();
         joined.toStream().process(processor);
 
+        builder.build();
         Collection<Set<String>> copartitionGroups = StreamsBuilderTest.getCopartitionedGroups(builder);
 
         assertEquals(1, copartitionGroups.size());
