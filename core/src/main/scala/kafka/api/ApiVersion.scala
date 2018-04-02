@@ -210,6 +210,6 @@ case object KAFKA_1_1_IV0 extends ApiVersion {
 
 case object KAFKA_2_0_IV0 extends ApiVersion {
   val version: String = "2.0-IV0"
-  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
+  val messageFormatVersion = RecordFormat.V2
   val id: Int = 15
 }
