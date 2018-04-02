@@ -108,17 +108,14 @@ class GroupCoordinator(val brokerId: Int,
                       sessionTimeoutMs: Int,
                       protocolType: String,
                       protocols: List[(String, Array[Byte])],
-                      responseCallback: JoinCallback) {
-    if (!isActive.get) {
-      responseCallback(joinError(memberId, Errors.COORDINATOR_NOT_AVAILABLE))
-    } else if (!validGroupId(groupId)) {
-      responseCallback(joinError(memberId, Errors.INVALID_GROUP_ID))
-    } else if (!isCoordinatorForGroup(groupId)) {
-      responseCallback(joinError(memberId, Errors.NOT_COORDINATOR))
-    } else if (isCoordinatorLoadInProgress(groupId)) {
-      responseCallback(joinError(memberId, Errors.COORDINATOR_LOAD_IN_PROGRESS))
-    } else if (sessionTimeoutMs < groupConfig.groupMinSessionTimeoutMs ||
-               sessionTimeoutMs > groupConfig.groupMaxSessionTimeoutMs) {
+                      responseCallback: JoinCallback): Unit = {
+    validateGroup(groupId).foreach { error =>
+      responseCallback(joinError(memberId, error))
+      return
+    }
+
+    if (sessionTimeoutMs < groupConfig.groupMinSessionTimeoutMs ||
+      sessionTimeoutMs > groupConfig.groupMaxSessionTimeoutMs) {
       responseCallback(joinError(memberId, Errors.INVALID_SESSION_TIMEOUT))
     } else {
       // only try to create the group if the group is not unknown AND
@@ -169,7 +166,8 @@ class GroupCoordinator(val brokerId: Int,
             responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
           case PreparingRebalance =>
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
-              addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, protocols, group, responseCallback)
+              addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType,
+                protocols, group, responseCallback)
             } else {
               val member = group.get(memberId)
               updateMemberAndRebalance(group, member, protocols, responseCallback)
@@ -177,7 +175,8 @@ class GroupCoordinator(val brokerId: Int,
 
           case CompletingRebalance =>
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
-              addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, protocols, group, responseCallback)
+              addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType,
+                protocols, group, responseCallback)
             } else {
               val member = group.get(memberId)
               if (member.matches(protocols)) {
@@ -204,7 +203,8 @@ class GroupCoordinator(val brokerId: Int,
           case Empty | Stable =>
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
               // if the member id is unknown, register the member to the group
-              addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, protocols, group, responseCallback)
+              addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType,
+                protocols, group, responseCallback)
             } else {
               val member = group.get(memberId)
               if (group.isLeader(memberId) || !member.matches(protocols)) {
@@ -236,16 +236,22 @@ class GroupCoordinator(val brokerId: Int,
                       generation: Int,
                       memberId: String,
                       groupAssignment: Map[String, Array[Byte]],
-                      responseCallback: SyncCallback) {
-    if (!isActive.get) {
-      responseCallback(Array.empty, Errors.COORDINATOR_NOT_AVAILABLE)
-    } else if (!isCoordinatorForGroup(groupId)) {
-      responseCallback(Array.empty, Errors.NOT_COORDINATOR)
-    } else {
-      groupManager.getGroup(groupId) match {
-        case None => responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
-        case Some(group) => doSyncGroup(group, generation, memberId, groupAssignment, responseCallback)
-      }
+                      responseCallback: SyncCallback): Unit = {
+    validateGroup(groupId) match {
+      case Some(error) if error == Errors.COORDINATOR_LOAD_IN_PROGRESS =>
+        // The coordinator is loading, which means we've lost the state of the active rebalance and the
+        // group will need to start over at JoinGroup. By returning rebalance in progress, the consumer
+        // will attempt to rejoin without needing to rediscover the coordinator. Note that we cannot
+        // return COORDINATOR_LOAD_IN_PROGRESS since older clients do not expect the error.
+        responseCallback(Array.empty, Errors.REBALANCE_IN_PROGRESS)
+
+      case Some(error) => responseCallback(Array.empty, error)
+
+      case None =>
+        groupManager.getGroup(groupId) match {
+          case None => responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
+          case Some(group) => doSyncGroup(group, generation, memberId, groupAssignment, responseCallback)
+        }
     }
   }
 
@@ -306,53 +312,45 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def handleLeaveGroup(groupId: String, memberId: String, responseCallback: Errors => Unit) {
-    if (!isActive.get) {
-      responseCallback(Errors.COORDINATOR_NOT_AVAILABLE)
-    } else if (!isCoordinatorForGroup(groupId)) {
-      responseCallback(Errors.NOT_COORDINATOR)
-    } else if (isCoordinatorLoadInProgress(groupId)) {
-      responseCallback(Errors.COORDINATOR_LOAD_IN_PROGRESS)
-    } else {
-      groupManager.getGroup(groupId) match {
-        case None =>
-          // if the group is marked as dead, it means some other thread has just removed the group
-          // from the coordinator metadata; this is likely that the group has migrated to some other
-          // coordinator OR the group is in a transient unstable phase. Let the consumer to retry
-          // joining without specified consumer id,
-          responseCallback(Errors.UNKNOWN_MEMBER_ID)
+  def handleLeaveGroup(groupId: String, memberId: String, responseCallback: Errors => Unit): Unit = {
+    validateGroup(groupId).foreach { error =>
+      responseCallback(error)
+      return
+    }
 
-        case Some(group) =>
-          group.inLock {
-            if (group.is(Dead) || !group.has(memberId)) {
-              responseCallback(Errors.UNKNOWN_MEMBER_ID)
-            } else {
-              val member = group.get(memberId)
-              removeHeartbeatForLeavingMember(group, member)
-              debug(s"Member ${member.memberId} in group ${group.groupId} has left, removing it from the group")
-              removeMemberAndUpdateGroup(group, member)
-              responseCallback(Errors.NONE)
-            }
+    groupManager.getGroup(groupId) match {
+      case None =>
+        // if the group is marked as dead, it means some other thread has just removed the group
+        // from the coordinator metadata; this is likely that the group has migrated to some other
+        // coordinator OR the group is in a transient unstable phase. Let the consumer to retry
+        // joining without specified consumer id,
+        responseCallback(Errors.UNKNOWN_MEMBER_ID)
+
+      case Some(group) =>
+        group.inLock {
+          if (group.is(Dead) || !group.has(memberId)) {
+            responseCallback(Errors.UNKNOWN_MEMBER_ID)
+          } else {
+            val member = group.get(memberId)
+            removeHeartbeatForLeavingMember(group, member)
+            debug(s"Member ${member.memberId} in group ${group.groupId} has left, removing it from the group")
+            removeMemberAndUpdateGroup(group, member)
+            responseCallback(Errors.NONE)
           }
-      }
+        }
     }
   }
 
   def handleDeleteGroups(groupIds: Set[String]): Map[String, Errors] = {
-    if (!isActive.get) {
-      groupIds.map(_ -> Errors.COORDINATOR_NOT_AVAILABLE).toMap
-    } else {
-      var groupErrors: Map[String, Errors] = Map()
-      var eligibleGroups: Seq[GroupMetadata] = Seq()
+    var groupErrors: Map[String, Errors] = Map()
+    var groupsEligibleForDeletion: Seq[GroupMetadata] = Seq()
 
-      groupIds.foreach { groupId =>
-        if (!validGroupId(groupId))
-          groupErrors += groupId -> Errors.INVALID_GROUP_ID
-        else if (!isCoordinatorForGroup(groupId))
-          groupErrors += groupId -> Errors.NOT_COORDINATOR
-        else if (isCoordinatorLoadInProgress(groupId))
-          groupErrors += groupId -> Errors.COORDINATOR_LOAD_IN_PROGRESS
-        else {
+    groupIds.foreach { groupId =>
+      validateGroup(groupId) match {
+        case Some(error) =>
+          groupErrors += groupId -> error
+
+        case None =>
           groupManager.getGroup(groupId) match {
             case None =>
               groupErrors += groupId ->
@@ -365,85 +363,82 @@ class GroupCoordinator(val brokerId: Int,
                       (if (groupManager.groupNotExists(groupId)) Errors.GROUP_ID_NOT_FOUND else Errors.NOT_COORDINATOR)
                   case Empty =>
                     group.transitionTo(Dead)
-                    eligibleGroups :+= group
+                    groupsEligibleForDeletion :+= group
                   case _ =>
                     groupErrors += groupId -> Errors.NON_EMPTY_GROUP
                 }
               }
           }
-        }
       }
-
-      if (eligibleGroups.nonEmpty) {
-        val offsetsRemoved = groupManager.cleanupGroupMetadata(eligibleGroups, group => {
-          group.removeAllOffsets()
-        })
-        groupErrors ++= eligibleGroups.map(_.groupId -> Errors.NONE).toMap
-        info(s"The following groups were deleted: ${eligibleGroups.map(_.groupId).mkString(", ")}. A total of $offsetsRemoved offsets were removed.")
-      }
-
-      groupErrors
     }
+
+    if (groupsEligibleForDeletion.nonEmpty) {
+      val offsetsRemoved = groupManager.cleanupGroupMetadata(groupsEligibleForDeletion, _.removeAllOffsets())
+      groupErrors ++= groupsEligibleForDeletion.map(_.groupId -> Errors.NONE).toMap
+      info(s"The following groups were deleted: ${groupsEligibleForDeletion.map(_.groupId).mkString(", ")}. " +
+        s"A total of $offsetsRemoved offsets were removed.")
+    }
+
+    groupErrors
   }
 
   def handleHeartbeat(groupId: String,
                       memberId: String,
                       generationId: Int,
                       responseCallback: Errors => Unit) {
-    if (!isActive.get) {
-      responseCallback(Errors.COORDINATOR_NOT_AVAILABLE)
-    } else if (!isCoordinatorForGroup(groupId)) {
-      responseCallback(Errors.NOT_COORDINATOR)
-    } else if (isCoordinatorLoadInProgress(groupId)) {
-      // the group is still loading, so respond just blindly
-      responseCallback(Errors.NONE)
-    } else {
-      groupManager.getGroup(groupId) match {
-        case None =>
-          responseCallback(Errors.UNKNOWN_MEMBER_ID)
+    validateGroup(groupId).foreach { error =>
+      if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS)
+        // the group is still loading, so respond just blindly
+        responseCallback(Errors.NONE)
+      else
+        responseCallback(error)
+      return
+    }
 
-        case Some(group) =>
-          group.inLock {
-            group.currentState match {
-              case Dead =>
-                // if the group is marked as dead, it means some other thread has just removed the group
-                // from the coordinator metadata; this is likely that the group has migrated to some other
-                // coordinator OR the group is in a transient unstable phase. Let the member retry
-                // joining without the specified member id,
-                responseCallback(Errors.UNKNOWN_MEMBER_ID)
+    groupManager.getGroup(groupId) match {
+      case None =>
+        responseCallback(Errors.UNKNOWN_MEMBER_ID)
 
-              case Empty =>
-                responseCallback(Errors.UNKNOWN_MEMBER_ID)
+      case Some(group) => group.inLock {
+        group.currentState match {
+          case Dead =>
+            // if the group is marked as dead, it means some other thread has just removed the group
+            // from the coordinator metadata; this is likely that the group has migrated to some other
+            // coordinator OR the group is in a transient unstable phase. Let the member retry
+            // joining without the specified member id,
+            responseCallback(Errors.UNKNOWN_MEMBER_ID)
 
-              case CompletingRebalance =>
-                if (!group.has(memberId))
-                  responseCallback(Errors.UNKNOWN_MEMBER_ID)
-                else
-                  responseCallback(Errors.REBALANCE_IN_PROGRESS)
+          case Empty =>
+            responseCallback(Errors.UNKNOWN_MEMBER_ID)
 
-              case PreparingRebalance =>
-                if (!group.has(memberId)) {
-                  responseCallback(Errors.UNKNOWN_MEMBER_ID)
-                } else if (generationId != group.generationId) {
-                  responseCallback(Errors.ILLEGAL_GENERATION)
-                } else {
-                  val member = group.get(memberId)
-                  completeAndScheduleNextHeartbeatExpiration(group, member)
-                  responseCallback(Errors.REBALANCE_IN_PROGRESS)
-                }
+          case CompletingRebalance =>
+            if (!group.has(memberId))
+              responseCallback(Errors.UNKNOWN_MEMBER_ID)
+            else
+              responseCallback(Errors.REBALANCE_IN_PROGRESS)
 
-              case Stable =>
-                if (!group.has(memberId)) {
-                  responseCallback(Errors.UNKNOWN_MEMBER_ID)
-                } else if (generationId != group.generationId) {
-                  responseCallback(Errors.ILLEGAL_GENERATION)
-                } else {
-                  val member = group.get(memberId)
-                  completeAndScheduleNextHeartbeatExpiration(group, member)
-                  responseCallback(Errors.NONE)
-                }
+          case PreparingRebalance =>
+            if (!group.has(memberId)) {
+              responseCallback(Errors.UNKNOWN_MEMBER_ID)
+            } else if (generationId != group.generationId) {
+              responseCallback(Errors.ILLEGAL_GENERATION)
+            } else {
+              val member = group.get(memberId)
+              completeAndScheduleNextHeartbeatExpiration(group, member)
+              responseCallback(Errors.REBALANCE_IN_PROGRESS)
             }
-          }
+
+          case Stable =>
+            if (!group.has(memberId)) {
+              responseCallback(Errors.UNKNOWN_MEMBER_ID)
+            } else if (generationId != group.generationId) {
+              responseCallback(Errors.ILLEGAL_GENERATION)
+            } else {
+              val member = group.get(memberId)
+              completeAndScheduleNextHeartbeatExpiration(group, member)
+              responseCallback(Errors.NONE)
+            }
+        }
       }
     }
   }
@@ -526,19 +521,15 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def handleFetchOffsets(groupId: String,
-                         partitions: Option[Seq[TopicPartition]] = None): (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) = {
-    if (!isActive.get)
-      (Errors.COORDINATOR_NOT_AVAILABLE, Map())
-    else if (!isCoordinatorForGroup(groupId)) {
-      debug(s"Could not fetch offsets for group $groupId (not group coordinator)")
-      (Errors.NOT_COORDINATOR, Map())
-    } else if (isCoordinatorLoadInProgress(groupId))
-      (Errors.COORDINATOR_LOAD_IN_PROGRESS, Map())
-    else {
-      // return offsets blindly regardless the current group state since the group may be using
-      // Kafka commit storage without automatic group management
-      (Errors.NONE, groupManager.getOffsets(groupId, partitions))
+  def handleFetchOffsets(groupId: String, partitions: Option[Seq[TopicPartition]] = None):
+  (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) = {
+
+    validateGroup(groupId) match {
+      case Some(error) => error -> Map.empty
+      case None =>
+        // return offsets blindly regardless the current group state since the group may be using
+        // Kafka commit storage without automatic group management
+        (Errors.NONE, groupManager.getOffsets(groupId, partitions))
     }
   }
 
@@ -552,20 +543,16 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def handleDescribeGroup(groupId: String): (Errors, GroupSummary) = {
-    if (!isActive.get) {
-      (Errors.COORDINATOR_NOT_AVAILABLE, GroupCoordinator.EmptyGroup)
-    } else if (!isCoordinatorForGroup(groupId)) {
-      (Errors.NOT_COORDINATOR, GroupCoordinator.EmptyGroup)
-    } else if (isCoordinatorLoadInProgress(groupId)) {
-      (Errors.COORDINATOR_LOAD_IN_PROGRESS, GroupCoordinator.EmptyGroup)
-    } else {
-      groupManager.getGroup(groupId) match {
-        case None => (Errors.NONE, GroupCoordinator.DeadGroup)
-        case Some(group) =>
-          group.inLock {
-            (Errors.NONE, group.summary)
-          }
-      }
+    validateGroup(groupId) match {
+      case Some(error) => (error, GroupCoordinator.EmptyGroup)
+      case None =>
+        groupManager.getGroup(groupId) match {
+          case None => (Errors.NONE, GroupCoordinator.DeadGroup)
+          case Some(group) =>
+            group.inLock {
+              (Errors.NONE, group.summary)
+            }
+        }
     }
   }
 
@@ -577,12 +564,14 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def validateGroup(groupId: String): Option[Errors] = {
-    if (!isActive.get)
+    if (!validGroupId(groupId))
+      Some(Errors.INVALID_GROUP_ID)
+    else if (!isActive.get)
       Some(Errors.COORDINATOR_NOT_AVAILABLE)
-    else if (!isCoordinatorForGroup(groupId))
-      Some(Errors.NOT_COORDINATOR)
     else if (isCoordinatorLoadInProgress(groupId))
       Some(Errors.COORDINATOR_LOAD_IN_PROGRESS)
+    else if (!isCoordinatorForGroup(groupId))
+      Some(Errors.NOT_COORDINATOR)
     else
       None
   }
@@ -625,7 +614,7 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def handleGroupImmigration(offsetTopicPartitionId: Int) {
-    groupManager.loadGroupsForPartition(offsetTopicPartitionId, onGroupLoaded)
+    groupManager.scheduleLoadGroupAndOffsets(offsetTopicPartitionId, onGroupLoaded)
   }
 
   def handleGroupEmigration(offsetTopicPartitionId: Int) {

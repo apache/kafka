@@ -195,7 +195,7 @@ public class AssignedStreamsTasksTest {
     public void shouldCloseTaskOnSuspendIfTaskMigratedException() {
         mockTaskInitialization();
         t1.suspend();
-        EasyMock.expectLastCall().andThrow(new TaskMigratedException(t1));
+        EasyMock.expectLastCall().andThrow(new TaskMigratedException());
         t1.close(false, true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
@@ -226,7 +226,7 @@ public class AssignedStreamsTasksTest {
         mockRunningTaskSuspension();
         t1.resume();
         t1.initializeTopology();
-        EasyMock.expectLastCall().andThrow(new TaskMigratedException(t1));
+        EasyMock.expectLastCall().andThrow(new TaskMigratedException());
         t1.close(false, true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
@@ -267,7 +267,7 @@ public class AssignedStreamsTasksTest {
     public void shouldCloseTaskOnCommitIfTaskMigratedException() {
         mockTaskInitialization();
         t1.commit();
-        EasyMock.expectLastCall().andThrow(new TaskMigratedException(t1));
+        EasyMock.expectLastCall().andThrow(new TaskMigratedException());
         t1.close(false, true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
@@ -319,7 +319,7 @@ public class AssignedStreamsTasksTest {
         mockTaskInitialization();
         EasyMock.expect(t1.commitNeeded()).andReturn(true);
         t1.commit();
-        EasyMock.expectLastCall().andThrow(new TaskMigratedException(t1));
+        EasyMock.expectLastCall().andThrow(new TaskMigratedException());
         t1.close(false, true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
@@ -338,7 +338,7 @@ public class AssignedStreamsTasksTest {
     public void shouldCloseTaskOnProcessesIfTaskMigratedException() {
         mockTaskInitialization();
         t1.process();
-        EasyMock.expectLastCall().andThrow(new TaskMigratedException(t1));
+        EasyMock.expectLastCall().andThrow(new TaskMigratedException());
         t1.close(false, true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
@@ -370,7 +370,7 @@ public class AssignedStreamsTasksTest {
     public void shouldCloseTaskOnMaybePunctuateStreamTimeIfTaskMigratedException() {
         mockTaskInitialization();
         t1.maybePunctuateStreamTime();
-        EasyMock.expectLastCall().andThrow(new TaskMigratedException(t1));
+        EasyMock.expectLastCall().andThrow(new TaskMigratedException());
         t1.close(false, true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
@@ -390,7 +390,7 @@ public class AssignedStreamsTasksTest {
         mockTaskInitialization();
         EasyMock.expect(t1.maybePunctuateStreamTime()).andReturn(true);
         t1.maybePunctuateSystemTime();
-        EasyMock.expectLastCall().andThrow(new TaskMigratedException(t1));
+        EasyMock.expectLastCall().andThrow(new TaskMigratedException());
         t1.close(false, true);
         EasyMock.expectLastCall();
         EasyMock.replay(t1);
