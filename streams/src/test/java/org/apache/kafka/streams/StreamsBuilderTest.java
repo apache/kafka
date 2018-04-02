@@ -147,12 +147,12 @@ public class StreamsBuilderTest {
         builder.<Bytes, String>stream("stream-topic").join(joinedTable, MockValueJoiner.TOSTRING_JOINER);
 
         driver.setUp(builder, TestUtils.tempDirectory());
-        builder.build();
+
         ProcessorTopology topology = builder.internalTopologyBuilder.build();
 
         assertThat(topology.stateStores().size(), equalTo(3));
         assertThat(topology.processorConnectedStateStores("KSTREAM-JOIN-0000000010"), equalTo(Collections.singleton("store")));
-        assertThat(topology.processorConnectedStateStores("KTABLE-MERGE-0000000007"), equalTo(Collections.singleton("store")));
+        assertThat(topology.processorConnectedStateStores("KTABLE-MERGE-0000000006"), equalTo(Collections.singleton("store")));
     }
 
     @Test
