@@ -131,6 +131,7 @@ public abstract class AbstractRecords implements Records {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, batch.compressionType(),
                 timestampType, recordBatchAndRecords.baseOffset, logAppendTime);
         for (Record record : recordBatchAndRecords.records) {
+            // Down-convert this record. Ignore the presence of headers when down-converting to V0 and V1 (see KAFKA-6739).
             if (magic > RecordBatch.MAGIC_VALUE_V1)
                 builder.append(record);
             else
