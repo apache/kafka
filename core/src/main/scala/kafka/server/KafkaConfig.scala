@@ -1351,11 +1351,11 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
       s"${KafkaConfig.AdvertisedListenersProp} cannot use the nonroutable meta-address 0.0.0.0. "+
       s"Use a routable IP address.")
 
-    val messageFormatVersion = logMessageFormatVersion.messageFormatVersion
-    require(interBrokerProtocolVersion.messageFormatVersion.value >= messageFormatVersion.value,
+    val messageFormatVersion = logMessageFormatVersion.recordVersion
+    require(interBrokerProtocolVersion.recordVersion.value >= messageFormatVersion.value,
       s"log.message.format.version $logMessageFormatVersionString can only be used when " +
         "inter.broker.protocol.version is set to version " +
-        s"${ApiVersion.minVersionForMessageFormat(messageFormatVersion)} or higher")
+        s"${ApiVersion.minVersionForRecordVersion(messageFormatVersion)} or higher")
 
     val interBrokerUsesSasl = interBrokerSecurityProtocol == SecurityProtocol.SASL_PLAINTEXT || interBrokerSecurityProtocol == SecurityProtocol.SASL_SSL
     require(!interBrokerUsesSasl || saslInterBrokerHandshakeRequestEnable || saslMechanismInterBrokerProtocol == SaslConfigs.GSSAPI_MECHANISM,

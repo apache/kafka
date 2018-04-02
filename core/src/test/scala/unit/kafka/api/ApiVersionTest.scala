@@ -17,7 +17,7 @@
 
 package kafka.api
 
-import org.apache.kafka.common.record.RecordFormat
+import org.apache.kafka.common.record.RecordVersion
 import org.junit.Test
 import org.junit.Assert._
 
@@ -77,14 +77,14 @@ class ApiVersionTest {
 
   @Test
   def testMinVersionForMessageFormat(): Unit = {
-    assertEquals("0.8.0", ApiVersion.minVersionForMessageFormat(RecordFormat.V0))
-    assertEquals("0.10.0", ApiVersion.minVersionForMessageFormat(RecordFormat.V1))
-    assertEquals("0.11.0", ApiVersion.minVersionForMessageFormat(RecordFormat.V2))
+    assertEquals("0.8.0", ApiVersion.minVersionForRecordVersion(RecordVersion.V0))
+    assertEquals("0.10.0", ApiVersion.minVersionForRecordVersion(RecordVersion.V1))
+    assertEquals("0.11.0", ApiVersion.minVersionForRecordVersion(RecordVersion.V2))
 
     // Ensure that all message format versions have a defined min version so that we remember
     // to update the function
-    for (messageFormatVersion <- RecordFormat.values)
-      assertNotNull(ApiVersion.minVersionForMessageFormat(messageFormatVersion))
+    for (messageFormatVersion <- RecordVersion.values)
+      assertNotNull(ApiVersion.minVersionForRecordVersion(messageFormatVersion))
   }
 
 }
