@@ -1286,7 +1286,6 @@ public class InternalTopologyBuilder {
             final List<String> topics = ((SourceNodeFactory) nodeFactory).topics;
             return topics != null && topics.size() == 1 && globalTopics.contains(topics.get(0));
         }
-
         return false;
     }
 
