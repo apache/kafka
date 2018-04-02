@@ -37,6 +37,7 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
 import org.apache.kafka.common.utils.Utils
 
+import scala.collection.JavaConversions
 import scala.collection.JavaConverters._
 
 /**
@@ -45,6 +46,10 @@ import scala.collection.JavaConverters._
 object ConsoleConsumer extends Logging {
 
   var messageCount = 0
+  // Keep same names with StreamConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS
+  // and StreamConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS
+  private val innerKeySerdeName = "default.windowed.key.serde.inner"
+  private val innerValueSerdeName = "default.windowed.value.serde.inner"
 
   private val shutdownLatch = new CountDownLatch(1)
 
@@ -291,7 +296,17 @@ object ConsoleConsumer extends Logging {
       .describedAs("class")
       .ofType(classOf[String])
       .defaultsTo(classOf[DefaultMessageFormatter].getName)
-    val messageFormatterArgOpt = parser.accepts("property", "The properties to initialize the message formatter.")
+    val messageFormatterArgOpt = parser.accepts("property",
+      "The properties to initialize the message formatter. Default properties include:\n" +
+        "\tprint.timestamp=true|false\n" +
+        "\tprint.key=true|false\n" +
+        "\tprint.value=true|false\n" +
+        "\tkey.separator=<key.separator>\n" +
+        "\tline.separator=<line.separator>\n" +
+        "\tkey.deserializer=<key.deserializer>\n" +
+        "\tvalue.deserializer=<value.deserializer>\n" +
+        "\tdefault.windowed.key.serde.inner=<windowed.key.serde.inner>\n" +
+        "\tdefault.windowed.value.serde.inner=<windowed.value.serde.inner>")
       .withRequiredArg
       .describedAs("prop")
       .ofType(classOf[String])
@@ -328,13 +343,13 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("deserializer for values")
       .ofType(classOf[String])
-    val innerKeyDeserializerOpt = parser.accepts("default.windowed.key.serde.inner",
+    val innerKeyDeserializerOpt = parser.accepts(innerKeySerdeName,
       "inner serde for key when windowed deserialzier is used; would be ignored otherwise. " +
         "For example: org.apache.kafka.common.serialization.Serdes\\$StringSerde")
       .withRequiredArg
       .describedAs("inner serde for key")
       .ofType(classOf[String])
-    val innerValueDeserializerOpt = parser.accepts("default.windowed.value.serde.inner",
+    val innerValueDeserializerOpt = parser.accepts(innerValueSerdeName,
       "inner serde for value when windowed deserialzier is used; would be ignored otherwise. " +
         "For example: org.apache.kafka.common.serialization.Serdes\\$StringSerde")
       .withRequiredArg
@@ -396,10 +411,10 @@ object ConsoleConsumer extends Logging {
       formatterArgs.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer)
     }
     if (innerKeyDeserializer != null && !innerKeyDeserializer.isEmpty) {
-      formatterArgs.setProperty("default.windowed.key.serde.inner", innerKeyDeserializer)
+      formatterArgs.setProperty(innerKeySerdeName, innerKeyDeserializer)
     }
     if (innerValueDeserializer != null && !innerValueDeserializer.isEmpty) {
-      formatterArgs.setProperty("default.windowed.value.serde.inner", innerValueDeserializer)
+      formatterArgs.setProperty(innerValueSerdeName, innerValueDeserializer)
     }
 
     formatter.init(formatterArgs)
@@ -544,18 +559,12 @@ class DefaultMessageFormatter extends MessageFormatter {
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
     if (props.containsKey("key.deserializer")) {
       keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
-      // Instantiate the inner key class if `default.windowed.key.serde.inner` is specified
-      val innerKeySerdeName = "default.windowed.key.serde.inner"
-      if (props.containsKey(innerKeySerdeName))
-        keyDeserializer.get.configure(Map(innerKeySerdeName -> props.get(innerKeySerdeName)).asJava, true)
+      keyDeserializer.get.configure(JavaConversions.propertiesAsScalaMap(props).asJava, true)
     }
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
     if (props.containsKey("value.deserializer")) {
       valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
-      // Instantiate the inner value class if `default.windowed.value.serde.inner` is specified
-      val innerValueSerdeName = "default.windowed.value.serde.inner"
-      if (props.containsKey(innerValueSerdeName))
-        valueDeserializer.get.configure(Map(innerValueSerdeName -> props.get(innerValueSerdeName)).asJava, false)
+      valueDeserializer.get.configure(JavaConversions.propertiesAsScalaMap(props).asJava, false)
     }
   }
 
