@@ -75,9 +75,6 @@ import java.util.concurrent.TimeUnit;
  * is still running "consume"
  */
 public class SimpleBenchmark {
-
-    static final String ALL_TESTS = "all";
-
     private static final String LOADING_PRODUCER_CLIENT_ID = "simple-benchmark-loading-producer";
 
     private static final String SOURCE_TOPIC_ONE = "simpleBenchmarkSourceTopic1";
@@ -120,9 +117,9 @@ public class SimpleBenchmark {
 
     // the following numbers are based on empirical results and should only
     // be considered for updates when perf results have significantly changed
-    private static final int DEFAULT_NUM_RECORDS = 10000000;
 
-    private static final int MAX_WAIT_MS = 3 * 60 * 1000;   // this is for 10million records
+    // with at least 50 million records, we run for at most 15 minutes
+    private static final int MAX_WAIT_MS = 15 * 60 * 1000;
 
     /* ----------- benchmark variables that can be specified ----------- */
 
@@ -158,41 +155,7 @@ public class SimpleBenchmark {
 
     private void run() {
         switch (testName) {
-            case ALL_TESTS:
-                // load source topics
-                produce(LOADING_PRODUCER_CLIENT_ID, SOURCE_TOPIC_ONE, numRecords, keySkew, valueSize);
-                produce(LOADING_PRODUCER_CLIENT_ID, SOURCE_TOPIC_TWO, numRecords, keySkew, valueSize);
-
-                // consume performance
-                consume(SOURCE_TOPIC_ONE);
-
-                // consume-produce performance
-                consumeAndProduce(SOURCE_TOPIC_ONE);
-
-                // simple stream performance source->process, comparing with consumer
-                processStream(SOURCE_TOPIC_ONE);
-
-                // simple stream performance source->sink, comparing with consumer-producer
-                processStreamWithSink(SOURCE_TOPIC_ONE);
-
-                // simple stream performance source->store
-                processStreamWithStateStore(SOURCE_TOPIC_ONE);
-
-                // simple aggregation performance
-                countStreamsNonWindowed(SOURCE_TOPIC_ONE);
-
-                // simple windowed aggregation performance
-                countStreamsWindowed(SOURCE_TOPIC_ONE);
-
-                // simple streams performance KSTREAM-KTABLE join
-                streamTableJoin(SOURCE_TOPIC_ONE, SOURCE_TOPIC_TWO);
-
-                // simple streams performance KSTREAM-KSTREAM join
-                streamStreamJoin(SOURCE_TOPIC_ONE, SOURCE_TOPIC_TWO);
-
-                // simple streams performance KTABLE-KTABLE join
-                tableTableJoin(SOURCE_TOPIC_ONE, SOURCE_TOPIC_TWO);
-                break;
+            // loading phases
             case "load-one":
                 produce(LOADING_PRODUCER_CLIENT_ID, SOURCE_TOPIC_ONE, numRecords, keySkew, valueSize);
                 break;
@@ -200,6 +163,8 @@ public class SimpleBenchmark {
                 produce(LOADING_PRODUCER_CLIENT_ID, SOURCE_TOPIC_ONE, numRecords, keySkew, valueSize);
                 produce(LOADING_PRODUCER_CLIENT_ID, SOURCE_TOPIC_TWO, numRecords, keySkew, valueSize);
                 break;
+
+            // testing phases
             case "consume":
                 consume(SOURCE_TOPIC_ONE);
                 break;
@@ -240,11 +205,16 @@ public class SimpleBenchmark {
     }
 
     public static void main(String[] args) throws IOException {
-        String propFileName = args.length > 0 ? args[0] : null;
-        String testName = args.length > 1 ? args[1].toLowerCase(Locale.ROOT) : ALL_TESTS;
-        int numRecords = args.length > 2 ? Integer.parseInt(args[2]) : DEFAULT_NUM_RECORDS;
-        double keySkew = args.length > 3 ? Double.parseDouble(args[3]) : 0d; // default to even distribution
-        int valueSize = args.length > 4 ? Integer.parseInt(args[4]) : 1;
+        if (args.length < 5) {
+            System.err.println("Not enough parameters are provided; expecting propFileName, testName, numRecords, keySkew, valueSize");
+            System.exit(1);
+        }
+
+        String propFileName = args[0];
+        String testName = args[1].toLowerCase(Locale.ROOT);
+        int numRecords = Integer.parseInt(args[2]);
+        double keySkew = Double.parseDouble(args[3]); // 0d means even distribution
+        int valueSize = Integer.parseInt(args[4]);
 
         final Properties props = Utils.loadProps(propFileName);
         final String kafka = props.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);

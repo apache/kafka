@@ -26,6 +26,7 @@ from kafkatest.version import DEV_BRANCH
 STREAMS_SIMPLE_TEST = ["streamcount", "streamcountwindowed", "streamprocess", "streamprocesswithsink", "streamprocesswithstatestore"]
 STREAMS_JOIN_TEST = ["streamtablejoin", "streamstreamjoin", "tabletablejoin"]
 NON_STREAMS_TEST = ["consume", "consumeproduce"]
+ALL_TESTS = "all"
 
 class StreamsSimpleBenchmarkTest(Test):
     """
@@ -34,19 +35,24 @@ class StreamsSimpleBenchmarkTest(Test):
 
     def __init__(self, test_context):
         super(StreamsSimpleBenchmarkTest, self).__init__(test_context)
-        self.num_records = 10000000L
-        self.replication = 1
+
+        # these values could be updated in ad-hoc benchmarks
+        self.key_skew = 0
+        self.value_size = 1024
+        self.num_records = 50000000L
         self.num_threads = 1
 
+        self.replication = 1
+
     @cluster(num_nodes=9)
-    @matrix(test=["consume", "consumeproduce", "streamcount", "streamcountwindowed", "streamprocess", "streamprocesswithsink", "streamprocesswithstatestore", "streamtablejoin", "streamstreamjoin", "tabletablejoin"], scale=[1])
+    @matrix(test=["consume", "consumeproduce", "all"], scale=[1])
     def test_simple_benchmark(self, test, scale):
         """
         Run simple Kafka Streams benchmark
         """
         self.driver = [None] * (scale + 1)
-        node = [None] * (scale)
-        data = [None] * (scale)
+
+        self.final = {}
 
         #############
         # SETUP PHASE
@@ -63,16 +69,17 @@ class StreamsSimpleBenchmarkTest(Test):
         self.kafka.log_level = "INFO"
         self.kafka.start()
 
-        self.key_skew = 0
-        self.value_size = 1024
 
         load_test = ""
-        if test in STREAMS_SIMPLE_TEST:
-            load_test = "load-one"
+        if test == ALL_TESTS:
+            load_test = "load-two"
         if test in STREAMS_JOIN_TEST:
             load_test = "load-two"
+        if test in STREAMS_SIMPLE_TEST:
+            load_test = "load-one"
         if test in NON_STREAMS_TEST:
             load_test = "load-one"
+
 
 
         ################
@@ -90,7 +97,15 @@ class StreamsSimpleBenchmarkTest(Test):
         self.load_driver.wait()
         self.load_driver.stop()
 
+        if test == ALL_TESTS:
+            for single_test in STREAMS_SIMPLE_TEST + STREAMS_JOIN_TEST:
+                self.run_test(single_test, scale)
+        else:
+            self.run_test(test, scale)
 
+        return self.final
+
+    def run_test(self, test, scale):
 
         ################
         # RUN PHASE
@@ -108,24 +123,21 @@ class StreamsSimpleBenchmarkTest(Test):
         #######################
         # STOP + COLLECT PHASE
         #######################
-        for num in range(0, scale):    
-            self.driver[num].wait()    
+        data = [None] * (scale)
+
+        for num in range(0, scale):
+            self.driver[num].wait()
             self.driver[num].stop()
-            node[num] = self.driver[num].node
-            node[num].account.ssh("grep Performance %s" % self.driver[num].STDOUT_FILE, allow_fail=False)
-            data[num] = self.driver[num].collect_data(node[num], "" )
+            self.driver[num].node.account.ssh("grep Performance %s" % self.driver[num].STDOUT_FILE, allow_fail=False)
+            data[num] = self.driver[num].collect_data(self.driver[num].node, "")
             self.driver[num].read_jmx_output_all_nodes()
 
-
-        final = {}
         for num in range(0, scale):
             for key in data[num]:
-                final[key + str(num)] = data[num][key]
+                self.final[key + "-" + str(num)] = data[num][key]
 
             for key in sorted(self.driver[num].jmx_stats[0]):
                 self.logger.info("%s: %s" % (key, self.driver[num].jmx_stats[0][key]))
 
-            final["jmx-avg" + str(num)] = self.driver[num].average_jmx_value
-            final["jmx-max" + str(num)] = self.driver[num].maximum_jmx_value
-
-        return final
+            self.final[test + "-jmx-avg-" + str(num)] = self.driver[num].average_jmx_value
+            self.final[test + "-jmx-max-" + str(num)] = self.driver[num].maximum_jmx_value
