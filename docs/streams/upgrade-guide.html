@@ -64,6 +64,12 @@
         See <a href="#streams_api_changes_0101">below</a> a complete list of 0.10.1 API changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
     </p>
 
+    <h3><a id="streams_api_changes_120" href="#streams_api_changes_120">Streams API changes in 1.1.0</a></h3>
+    <p>
+        We have change the default value for methods  <code>retention.ms</code>  to infinity to allow any records be pushed to it with old timestamps.
+        You must rely on the purging API to keep the storage small.
+    </p>
+
     <h3><a id="streams_api_changes_110" href="#streams_api_changes_110">Streams API changes in 1.1.0</a></h3>
     <p>
 	We have added support for methods in <code>ReadOnlyWindowStore</code> which allows for querying <code>WindowStore</code>s without the neccesity of providing keys.
