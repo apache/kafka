@@ -44,8 +44,10 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 
 import java.lang.reflect.Array;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -419,19 +421,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             Objects.requireNonNull(predicate, "predicates can't have null values");
         }
         String branchName = builder.newProcessorName(BRANCH_NAME);
-
-        ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(new KStreamBranch(predicates)).build();
-        StreamsGraphNode graphNode = new StreamsGraphNode(branchName,
-                                                          TopologyNodeType.PROCESSOR,
-                                                          this.repartitionRequired,
-                                                          processDetails,
-                                                          this.name);
-
-        builder.addNode(graphNode);
+        String[] childNames = new String[predicates.length];
+        List<StreamsGraphNode> branchChildNodes = new ArrayList<>();
 
         KStream<K, V>[] branchChildren = (KStream<K, V>[]) Array.newInstance(KStream.class, predicates.length);
         for (int i = 0; i < predicates.length; i++) {
             String childName = builder.newProcessorName(BRANCHCHILD_NAME);
+            childNames[i] = childName;
 
             ProcessDetails processDetailsInner = ProcessDetails.builder().withProcessorSupplier(new KStreamPassThrough<K, V>()).build();
 
@@ -440,13 +436,23 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                    this.repartitionRequired,
                                                                    processDetailsInner,
                                                                    branchName);
-
-            builder.addNode(graphNodeInner);
-
-            //builder.internalTopologyBuilder.addProcessor(childName, new KStreamPassThrough<K, V>(), branchName);
+            branchChildNodes.add(graphNodeInner);
 
             branchChildren[i] = new KStreamImpl<>(builder, childName, sourceNodes, this.repartitionRequired);
         }
+
+        ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(new KStreamBranch(predicates, childNames)).build();
+        StreamsGraphNode graphNode = new StreamsGraphNode(branchName,
+                                                          TopologyNodeType.PROCESSOR,
+                                                          this.repartitionRequired,
+                                                          processDetails,
+                                                          this.name);
+
+        builder.addNode(graphNode);
+        for (StreamsGraphNode branchChildNode : branchChildNodes) {
+            builder.addNode(branchChildNode);
+        }
+
 
         return branchChildren;
     }
