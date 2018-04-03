@@ -94,7 +94,7 @@ class StreamsSimpleBenchmarkTest(Test):
                                                          self.value_size)
 
         self.load_driver.start()
-        self.load_driver.wait()
+        self.load_driver.wait(3600) # wait at most 30 minutes
         self.load_driver.stop()
 
         if test == ALL_TESTS:
