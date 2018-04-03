@@ -45,15 +45,26 @@ import static org.junit.Assert.assertTrue;
 
 public class PluginsTest {
 
-    private static Map<String, String> props;
+    private static Map<String, String> pluginProps;
     private static Plugins plugins;
+    private Map<String, String> props;
     private AbstractConfig config;
     private TestConverter converter;
     private TestHeaderConverter headerConverter;
 
     @BeforeClass
     public static void beforeAll() {
-        props = new HashMap<>();
+        pluginProps = new HashMap<>();
+
+        // Set up the plugins to have no additional plugin directories.
+        // This won't allow us to test classpath isolation, but it will allow us to test some of the utility methods.
+        pluginProps.put(WorkerConfig.PLUGIN_PATH_CONFIG, "");
+        plugins = new Plugins(pluginProps);
+    }
+
+    @Before
+    public void setup() {
+        props = new HashMap<>(pluginProps);
         props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
         props.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
         props.put("key.converter." + JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "true");
@@ -69,14 +80,10 @@ public class PluginsTest {
         props.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, TestHeaderConverter.class.getName());
         props.put("header.converter.extra.config", "baz");
 
-        // Set up the plugins to have no additional plugin directories.
-        // This won't allow us to test classpath isolation, but it will allow us to test some of the utility methods.
-        props.put(WorkerConfig.PLUGIN_PATH_CONFIG, "");
-        plugins = new Plugins(props);
+        createConfig();
     }
 
-    @Before
-    public void setup() {
+    protected void createConfig() {
         this.config = new TestableWorkerConfig(props);
     }
 
@@ -107,17 +114,36 @@ public class PluginsTest {
     }
 
     @Test
-    public void shouldInstantiateAndConfigureHeaderConverter() {
-        instantiateAndConfigureHeaderConverter(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG);
+    public void shouldInstantiateAndConfigureExplicitlySetHeaderConverterWithCurrentClassLoader() {
+        assertNotNull(props.get(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG));
+        HeaderConverter headerConverter = plugins.newHeaderConverter(config,
+                                                                     WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
+                                                                     ClassLoaderUsage.CURRENT_CLASSLOADER);
+        assertNotNull(headerConverter);
+        assertTrue(headerConverter instanceof TestHeaderConverter);
+        this.headerConverter = (TestHeaderConverter) headerConverter;
+
         // Validate extra configs got passed through to overridden converters
-        assertConverterType(ConverterType.HEADER, headerConverter.configs);
-        assertEquals("baz", headerConverter.configs.get("extra.config"));
+        assertConverterType(ConverterType.HEADER, this.headerConverter.configs);
+        assertEquals("baz", this.headerConverter.configs.get("extra.config"));
+
+        headerConverter = plugins.newHeaderConverter(config,
+                                                     WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
+                                                     ClassLoaderUsage.PLUGINS);
+        assertNotNull(headerConverter);
+        assertTrue(headerConverter instanceof TestHeaderConverter);
+        this.headerConverter = (TestHeaderConverter) headerConverter;
+
+        // Validate extra configs got passed through to overridden converters
+        assertConverterType(ConverterType.HEADER, this.headerConverter.configs);
+        assertEquals("baz", this.headerConverter.configs.get("extra.config"));
     }
 
     @Test
     public void shouldInstantiateAndConfigureDefaultHeaderConverter() {
         props.remove(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG);
-        this.config = new TestableWorkerConfig(props);
+        createConfig();
+
         // Because it's not explicitly set, the logic to use the current classloader will exit immediately,
         // and this method always returns null (we may want to change this at some point) ...
         HeaderConverter headerConverter = plugins.newHeaderConverter(config,
@@ -135,11 +161,6 @@ public class PluginsTest {
     protected void instantiateAndConfigureConverter(String configPropName, ClassLoaderUsage classLoaderUsage) {
         converter = (TestConverter) plugins.newConverter(config, configPropName, classLoaderUsage);
         assertNotNull(converter);
-    }
-
-    protected void instantiateAndConfigureHeaderConverter(String configPropName) {
-        headerConverter = (TestHeaderConverter) plugins.newHeaderConverter(config, configPropName, ClassLoaderUsage.CURRENT_CLASSLOADER);
-        assertNotNull(headerConverter);
     }
 
     protected void assertConverterType(ConverterType type, Map<String, ?> props) {
