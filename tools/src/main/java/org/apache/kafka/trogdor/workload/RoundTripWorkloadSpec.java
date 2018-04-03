@@ -43,6 +43,8 @@ public class RoundTripWorkloadSpec extends TaskSpec {
     private final PayloadGenerator valueGenerator;
     private final int maxMessages;
     private final Map<String, String> commonClientConf;
+    private final Map<String, String> producerConf;
+    private final Map<String, String> consumerConf;
     private final Map<String, String> adminClientConf;
 
     @JsonCreator
@@ -52,6 +54,8 @@ public class RoundTripWorkloadSpec extends TaskSpec {
              @JsonProperty("bootstrapServers") String bootstrapServers,
              @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
              @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
+             @JsonProperty("consumerConf") Map<String, String> consumerConf,
+             @JsonProperty("producerConf") Map<String, String> producerConf,
              @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
              @JsonProperty("partitionAssignments") NavigableMap<Integer, List<Integer>> partitionAssignments,
              @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
@@ -65,10 +69,14 @@ public class RoundTripWorkloadSpec extends TaskSpec {
         this.valueGenerator = valueGenerator == null ?
             new UniformRandomPayloadGenerator(32, 123, 10) : valueGenerator;
         this.maxMessages = maxMessages;
-        this.commonClientConf = (commonClientConf == null)
-                                ? new TreeMap<String, String>() : commonClientConf;
-        this.adminClientConf = (adminClientConf == null)
-                               ? new TreeMap<String, String>() : adminClientConf;
+        this.commonClientConf = configOrEmptyMap(commonClientConf);
+        this.adminClientConf = configOrEmptyMap(adminClientConf);
+        this.producerConf = configOrEmptyMap(producerConf);
+        this.consumerConf = configOrEmptyMap(consumerConf);
+    }
+
+    private Map<String, String> configOrEmptyMap(Map<String, String> config) {
+        return (config == null) ? new TreeMap<String, String>() : config;
     }
 
     @JsonProperty
@@ -109,6 +117,16 @@ public class RoundTripWorkloadSpec extends TaskSpec {
     @JsonProperty
     public Map<String, String> adminClientConf() {
         return adminClientConf;
+    }
+
+    @JsonProperty
+    public Map<String, String> producerConf() {
+        return producerConf;
+    }
+
+    @JsonProperty
+    public Map<String, String> consumerConf() {
+        return consumerConf;
     }
 
     @Override

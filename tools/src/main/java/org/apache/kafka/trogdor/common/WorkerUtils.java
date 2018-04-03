@@ -45,7 +45,6 @@ import java.util.concurrent.Future;
  * Utilities for Trogdor TaskWorkers.
  */
 public final class WorkerUtils {
-
     /**
      * Handle an exception in a TaskWorker.
      *

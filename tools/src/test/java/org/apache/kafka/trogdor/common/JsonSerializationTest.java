@@ -50,7 +50,7 @@ public class JsonSerializationTest {
         verify(new WorkerStopping(null, 0, null));
         verify(new ProduceBenchSpec(0, 0, null, null,
             0, 0, null, null, null, null, null, 0, 0, "test-topic", 1, (short) 3));
-        verify(new RoundTripWorkloadSpec(0, 0, null, null, null, null,
+        verify(new RoundTripWorkloadSpec(0, 0, null, null, null, null, null, null,
             0, null, null, 0));
         verify(new SampleTaskSpec(0, 0, 0, null));
     }
