@@ -41,12 +41,13 @@ import java.util.PriorityQueue;
 @SuppressWarnings("unchecked")
 public class TopologyOptimizerImpl implements TopologyOptimizer {
 
-    private NodeIdComparator nodeIdComparator = new NodeIdComparator();
+    private final NodeIdComparator nodeIdComparator = new NodeIdComparator();
 
     private static final Logger LOG = LoggerFactory.getLogger(TopologyOptimizerImpl.class);
 
     @Override
-    public void optimize(StreamsTopologyGraph topologyGraph, InternalTopologyBuilder internalTopologyBuilder) {
+    public void optimize(final StreamsTopologyGraph topologyGraph,
+                         final InternalTopologyBuilder internalTopologyBuilder) {
 
         final PriorityQueue<StreamsGraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, nodeIdComparator);
 
@@ -158,7 +159,7 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
         }
     }
 
-    private List<StreamsGraphNode> getAllDescendants(StreamsGraphNode parentNode, List<StreamsGraphNode> graphNodes) {
+    private List<StreamsGraphNode> getAllDescendants(final StreamsGraphNode parentNode, List<StreamsGraphNode> graphNodes) {
         if (parentNode.getDescendants().isEmpty()) {
             return graphNodes;
         }

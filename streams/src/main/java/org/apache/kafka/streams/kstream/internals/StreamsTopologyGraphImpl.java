@@ -36,21 +36,16 @@ public class StreamsTopologyGraphImpl extends StreamsTopologyGraph {
 
         if (node.topologyNodeType == TopologyNodeType.KGROUPED_STREAM) {
             node.setName(node.name() + "-" + kgroupedCounter.incrementAndGet());
-
         }
 
         if (node.getPredecessorName() == null) {
-            System.out.println("UPDATED regular node " + node + " with predecessor  " + previousNode);
+            LOG.warn("Updating node {} with predecessor name {}", node, previousNode.name());
             node.setPredecessorName(previousNode.name());
         }
 
         LOG.debug("Adding node {}", node);
 
-        if (nameToGraphNode.get(node.getPredecessorName()) == null) {
-            node.setPredecessor(previousNode);
-        }
-
-        final StreamsGraphNode predecessorNode = node.getPredecessorName() != null ? nameToGraphNode.get(node.getPredecessorName()) : null;
+        final StreamsGraphNode predecessorNode = nameToGraphNode.get(node.getPredecessorName());
 
         if (predecessorNode == null) {
             throw new IllegalStateException(

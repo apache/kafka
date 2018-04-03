@@ -71,6 +71,7 @@ public class StreamsGraphNode {
 
 
     public void setPredecessor(StreamsGraphNode predecessor) {
+        Objects.requireNonNull(predecessor, "Can't set a null predecessor");
         this.predecessor = predecessor;
         this.predecessorName = predecessor.name();
     }
