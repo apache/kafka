@@ -65,7 +65,7 @@ object ConsumerPerformance extends LazyLogging {
       val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
       consumer.subscribe(Collections.singletonList(config.topic))
       startMs = System.currentTimeMillis
-      consume(consumer, List(config.topic), config.numMessages, 1000, config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, startMs)
+      consume(consumer, List(config.topic), config.numMessages, config.pollLoopTimeout, config, totalMessagesRead, totalBytesRead, joinGroupTimeInMs, startMs)
       endMs = System.currentTimeMillis
 
       if (config.printMetrics) {
@@ -302,6 +302,11 @@ object ConsumerPerformance extends LazyLogging {
     val printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics. This only applies to new consumer.")
     val showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
       "interval as configured by reporting-interval")
+    val pollLoopTimeoutOpt = parser.accepts("polling-loop-timeout", "Consumer polling loop timeout.")
+      .withOptionalArg()
+      .describedAs("count")
+      .ofType(classOf[Long])
+      .defaultsTo(1000)
 
     val options = parser.parse(args: _*)
 
@@ -354,6 +359,7 @@ object ConsumerPerformance extends LazyLogging {
     val showDetailedStats = options.has(showDetailedStatsOpt)
     val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
     val hideHeader = options.has(hideHeaderOpt)
+    val pollLoopTimeout = options.valueOf(pollLoopTimeoutOpt).longValue()
   }
 
   class ConsumerPerfThread(threadId: Int,
