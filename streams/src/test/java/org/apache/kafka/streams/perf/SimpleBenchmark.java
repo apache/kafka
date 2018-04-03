@@ -255,7 +255,7 @@ public class SimpleBenchmark {
 
         // improve producer throughput
         props.put(ProducerConfig.LINGER_MS_CONFIG, 5000);
-        props.put(ProducerConfig.BATCH_SIZE_CONFIG, 1024 * 1024);
+        props.put(ProducerConfig.BATCH_SIZE_CONFIG, 128 * 1024);
 
         //TODO remove this config or set to smaller value when KIP-91 is merged
         props.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 60000);
@@ -268,7 +268,7 @@ public class SimpleBenchmark {
         // the socket buffer needs to be large, especially when running in AWS with
         // high latency. if running locally the default is fine.
         props.put(ProducerConfig.LINGER_MS_CONFIG, 5000);
-        props.put(ProducerConfig.BATCH_SIZE_CONFIG, 1024 * 1024);
+        props.put(ProducerConfig.BATCH_SIZE_CONFIG, 128 * 1024);
         props.put(ProducerConfig.SEND_BUFFER_CONFIG, SOCKET_SIZE_BYTES);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
