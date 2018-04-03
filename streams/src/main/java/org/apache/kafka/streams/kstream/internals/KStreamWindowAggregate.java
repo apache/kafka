@@ -132,10 +132,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
             K key = windowedKey.key();
             W window = (W) windowedKey.window();
 
-            // this iterator should contain at most one element
-            try (WindowStoreIterator<T> iter = windowStore.fetch(key, window.start(), window.start())) {
-                return iter.hasNext() ? iter.next().value : null;
-            }
+            return windowStore.fetch(key, window.start());
         }
     }
 }

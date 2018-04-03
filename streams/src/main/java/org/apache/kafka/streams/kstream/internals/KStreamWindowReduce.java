@@ -128,10 +128,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
             K key = windowedKey.key();
             W window = (W) windowedKey.window();
 
-            // this iterator should only contain one element
-            try (WindowStoreIterator<V> iter = windowStore.fetch(key, window.start(), window.start())) {
-                return iter.hasNext() ? iter.next().value : null;
-            }
+            return windowStore.fetch(key, window.start());
         }
     }
 }
