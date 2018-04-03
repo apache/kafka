@@ -55,7 +55,7 @@ public class AssignmentInfo {
         this(CURRENT_VERSION, activeTasks, standbyTasks, hostState);
     }
 
-    protected AssignmentInfo(int version, List<TaskId> activeTasks, Map<TaskId, Set<TopicPartition>> standbyTasks,
+    public AssignmentInfo(int version, List<TaskId> activeTasks, Map<TaskId, Set<TopicPartition>> standbyTasks,
                              Map<HostInfo, Set<TopicPartition>> hostState) {
         this.version = version;
         this.activeTasks = activeTasks;
@@ -153,8 +153,7 @@ public class AssignmentInfo {
                 }
             }
 
-            return new AssignmentInfo(activeTasks, standbyTasks, hostStateToTopicPartitions);
-
+            return new AssignmentInfo(version, activeTasks, standbyTasks, hostStateToTopicPartitions);
         } catch (IOException ex) {
             throw new TaskAssignmentException("Failed to decode AssignmentInfo", ex);
         }
