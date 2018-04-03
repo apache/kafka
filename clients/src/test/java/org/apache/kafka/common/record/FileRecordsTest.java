@@ -38,7 +38,11 @@ import java.util.List;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.TestUtils.tempFile;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.junit.Assert.assertArrayEquals;
 
 public class FileRecordsTest {
 
@@ -358,11 +362,9 @@ public class FileRecordsTest {
     private void doTestConversion(CompressionType compressionType, byte toMagic) throws IOException {
         List<Long> offsets = asList(0L, 2L, 3L, 9L, 11L, 15L, 16L, 17L, 22L, 24L);
 
-        Header headers[] = {
-                new RecordHeader("headerKey1", "headerValue1".getBytes()),
-                new RecordHeader("headerKey2", "headerValue2".getBytes()),
-                new RecordHeader("headerKey3", "headerValue3".getBytes()),
-        };
+        Header[] headers = {new RecordHeader("headerKey1", "headerValue1".getBytes()),
+                            new RecordHeader("headerKey2", "headerValue2".getBytes()),
+                            new RecordHeader("headerKey3", "headerValue3".getBytes())};
 
         List<SimpleRecord> records = asList(
                 new SimpleRecord(1L, "k1".getBytes(), "hello".getBytes()),
