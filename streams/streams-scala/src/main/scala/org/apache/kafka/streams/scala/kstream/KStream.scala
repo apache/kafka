@@ -553,7 +553,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a merged stream containing all records from this and the provided [[KStream]]
    * @see `org.apache.kafka.streams.kstream.KStream#merge`
    */
-  def merge(stream: KStream[K, V]): KStream[K, V] = inner.merge(stream)
+  def merge(stream: KStream[K, V]): KStream[K, V] = inner.merge(stream.inner)
 
   /**
    * Perform an action on each record of {@code KStream}.
