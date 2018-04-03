@@ -397,12 +397,21 @@ public class Worker {
             );
             if (keyConverter == null) {
                 keyConverter = plugins.newConverter(config, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.PLUGINS);
+                log.info("Set up the key converter {} for task {} using the worker config", keyConverter.getClass(), id);
+            } else {
+                log.info("Set up the key converter {} for task {} using the connector config", keyConverter.getClass(), id);
             }
             if (valueConverter == null) {
                 valueConverter = plugins.newConverter(config, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.PLUGINS);
+                log.info("Set up the value converter {} for task {} using the worker config", valueConverter.getClass(), id);
+            } else {
+                log.info("Set up the value converter {} for task {} using the connector config", valueConverter.getClass(), id);
             }
             if (headerConverter == null) {
                 headerConverter = plugins.newHeaderConverter(config, WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.PLUGINS);
+                log.info("Set up the header converter {} for task {} using the worker config", headerConverter.getClass(), id);
+            } else {
+                log.info("Set up the header converter {} for task {} using the connector config", headerConverter.getClass(), id);
             }
 
             workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, connectorLoader);
