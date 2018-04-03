@@ -671,7 +671,7 @@ public class SslTransportLayerTest {
                 } catch (IOException e) {
                     return false;
                 }
-                return selector.completedReceives().size() > 0;
+                return !selector.completedReceives().isEmpty();
             }
         }, "Timed out waiting for a message to receive from echo server");
 
