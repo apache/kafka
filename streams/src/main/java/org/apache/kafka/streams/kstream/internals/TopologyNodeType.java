@@ -26,7 +26,6 @@ public enum TopologyNodeType {
     SINK,
     STREAM_STREAM_JOIN,
     FLATMAP,
-    PROCESSING,
     FILTER,
     TRANSFORM,
     TRANSFORM_VALUES,

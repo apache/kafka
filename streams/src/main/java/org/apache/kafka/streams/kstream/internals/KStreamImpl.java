@@ -51,7 +51,7 @@ import java.util.Set;
 
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.KGROUPED_STREAM;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.MERGE;
-import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.PROCESSING;
+import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.PROCESSOR;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.SINK;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.SOURCE_SINK;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.STREAM_GLOBAL_TABLE_JOIN;
@@ -138,7 +138,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(new KStreamFilter<>(predicate, false)).build();
         StreamsGraphNode graphNode = new StreamsGraphNode(name,
-                                                          TopologyNodeType.PROCESSING,
+                                                          TopologyNodeType.PROCESSOR,
                                                           this.repartitionRequired,
                                                           processDetails,
                                                           this.name);
@@ -154,7 +154,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(new KStreamFilter<>(predicate, true)).build();
         StreamsGraphNode graphNode = new StreamsGraphNode(name,
-                                                          TopologyNodeType.PROCESSING,
+                                                          TopologyNodeType.PROCESSOR,
                                                           this.repartitionRequired,
                                                           processDetails,
                                                           this.name);
@@ -298,7 +298,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(printedInternal.build(this.name)).build();
         StreamsGraphNode graphNode = new StreamsGraphNode(name,
-                                                          TopologyNodeType.PROCESSING,
+                                                          TopologyNodeType.PROCESSOR,
                                                           false,
                                                           processDetails,
                                                           this.name);
@@ -399,7 +399,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(new KStreamFlatMapValues<>(mapper)).build();
         StreamsGraphNode graphNode = new StreamsGraphNode(name,
-                                                          TopologyNodeType.PROCESSING,
+                                                          TopologyNodeType.PROCESSOR,
                                                           this.repartitionRequired,
                                                           processDetails,
                                                           this.name);
@@ -422,7 +422,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(new KStreamBranch(predicates)).build();
         StreamsGraphNode graphNode = new StreamsGraphNode(branchName,
-                                                          TopologyNodeType.PROCESSING,
+                                                          TopologyNodeType.PROCESSOR,
                                                           this.repartitionRequired,
                                                           processDetails,
                                                           this.name);
@@ -436,7 +436,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             ProcessDetails processDetailsInner = ProcessDetails.builder().withProcessorSupplier(new KStreamPassThrough<K, V>()).build();
 
             StreamsGraphNode graphNodeInner = new StreamsGraphNode(childName,
-                                                                   TopologyNodeType.PROCESSING,
+                                                                   TopologyNodeType.PROCESSOR,
                                                                    this.repartitionRequired,
                                                                    processDetailsInner,
                                                                    branchName);
@@ -506,7 +506,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(new KStreamPeek<>(action, false)).build();
         StreamsGraphNode graphNode = new StreamsGraphNode(name,
-                                                          PROCESSING,
+                                                          PROCESSOR,
                                                           false,
                                                           processDetails,
                                                           this.name);
@@ -520,7 +520,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(new KStreamPeek<>(action, true)).build();
         StreamsGraphNode graphNode = new StreamsGraphNode(name,
-                                                          PROCESSING,
+                                                          PROCESSOR,
                                                           this.repartitionRequired,
                                                           processDetails,
                                                           this.name);
@@ -671,7 +671,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             .withStoreNames(stateStoreNames)
             .build();
         StreamsGraphNode graphNode = new StreamsGraphNode(name,
-                                                          PROCESSING,
+                                                          PROCESSOR,
                                                           false,
                                                           processDetails,
                                                           this.name);

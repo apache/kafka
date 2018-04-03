@@ -105,7 +105,6 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
 
                 break;
 
-            case PROCESSING:
             case SELECT_KEY:
             case MAP:
             case FLATMAP:
@@ -150,7 +149,6 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
                 break;
 
             case AGGREGATE:
-
                 buildAggregateProcessor(internalTopologyBuilder, descendant, processDetails);
 
                 break;

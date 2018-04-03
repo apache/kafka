@@ -451,7 +451,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }, false);
         ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(processorSupplier).build();
         StreamsGraphNode graphNode = new StreamsGraphNode(name,
-                                                          TopologyNodeType.PROCESSING,
+                                                          TopologyNodeType.PROCESSOR,
                                                           false,
                                                           processDetails,
                                                           this.name);
@@ -611,7 +611,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         })).build();
 
         StreamsGraphNode graphNode = new StreamsGraphNode(name,
-                                                          TopologyNodeType.PROCESSING,
+                                                          TopologyNodeType.PROCESSOR,
                                                           false,
                                                           processDetails,
                                                           this.name);
@@ -880,9 +880,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
-        //builder.internalTopologyBuilder.addProcessor(selectName, selectSupplier, this.name);
         StreamsGraphNode graphNode = new StreamsGraphNode(selectName,
-                                                          TopologyNodeType.PROCESSING,
+                                                          TopologyNodeType.PROCESSOR,
                                                           false,
                                                           ProcessDetails.builder().withProcessorSupplier(selectSupplier).build(),
                                                           this.name);
