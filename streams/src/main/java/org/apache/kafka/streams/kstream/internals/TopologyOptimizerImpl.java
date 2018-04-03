@@ -159,7 +159,8 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
         }
     }
 
-    private List<StreamsGraphNode> getAllDescendants(final StreamsGraphNode parentNode, List<StreamsGraphNode> graphNodes) {
+    private List<StreamsGraphNode> getAllDescendants(final StreamsGraphNode parentNode,
+                                                     List<StreamsGraphNode> graphNodes) {
         if (parentNode.getDescendants().isEmpty()) {
             return graphNodes;
         }
@@ -173,7 +174,9 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
         return graphNodes;
     }
 
-    private void buildAggregateProcessor(InternalTopologyBuilder internalTopologyBuilder, StreamsGraphNode descendant, ProcessDetails processDetails) {
+    private void buildAggregateProcessor(final InternalTopologyBuilder internalTopologyBuilder,
+                                         final StreamsGraphNode descendant,
+                                         final ProcessDetails processDetails) {
         internalTopologyBuilder.addProcessor(descendant.name(), processDetails.getProcessorSupplier(), processDetails.getConnectProcessorName());
         if (processDetails.getStoreBuilder() != null) {
             internalTopologyBuilder.addStateStore(processDetails.getStoreBuilder(), descendant.name());
@@ -182,7 +185,9 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
         }
     }
 
-    private void buildGlobalKTable(InternalTopologyBuilder internalTopologyBuilder, StreamsGraphNode descendant, ProcessDetails processDetails) {
+    private void buildGlobalKTable(final InternalTopologyBuilder internalTopologyBuilder,
+                                   final  StreamsGraphNode descendant,
+                                   final ProcessDetails processDetails) {
 
         String topic = processDetails.getSourceTopicArray()[0];
         Deserializer keyDeserializer = getDeserializer(processDetails.consumedKeySerde());
@@ -198,7 +203,9 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
                                                processDetails.getkTableSource());
     }
 
-    private void buildKTableKTableJoin(InternalTopologyBuilder internalTopologyBuilder, KTableJoinGraphNode ktg, ProcessDetails processDetails) {
+    private void buildKTableKTableJoin(final InternalTopologyBuilder internalTopologyBuilder,
+                                       final KTableJoinGraphNode ktg,
+                                       final ProcessDetails processDetails) {
 
         internalTopologyBuilder.addProcessor(ktg.joinThisName, ktg.joinThisProcessor, ktg.thisKtableName);
         internalTopologyBuilder.addProcessor(ktg.joinOtherName, ktg.joinOtherProcessor, ktg.otherKTableName);
@@ -213,13 +220,17 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
         }
     }
 
-    private void buildStreamKTableJoin(InternalTopologyBuilder internalTopologyBuilder, StreamsGraphNode descendant, ProcessDetails processDetails) {
+    private void buildStreamKTableJoin(final InternalTopologyBuilder internalTopologyBuilder,
+                                       final StreamsGraphNode descendant,
+                                       final ProcessDetails processDetails) {
         internalTopologyBuilder.addProcessor(descendant.name(), processDetails.getProcessorSupplier(), descendant.getPredecessorName());
         internalTopologyBuilder.connectProcessorAndStateStores(descendant.name(), processDetails.getStoreNames());
         internalTopologyBuilder.connectProcessors(descendant.name(), processDetails.getConnectProcessorName());
     }
 
-    private void buildSourceSinkNode(InternalTopologyBuilder internalTopologyBuilder, SourceSinkNode rgn, ProcessDetails processDetails) {
+    private void buildSourceSinkNode(final InternalTopologyBuilder internalTopologyBuilder,
+                                     final SourceSinkNode rgn,
+                                     final ProcessDetails processDetails) {
 
         Serializer keySerializer = rgn.keySerde != null ? rgn.keySerde.serializer() : null;
         Serializer valSerializer = rgn.valueSerde != null ? rgn.valueSerde.serializer() : null;
@@ -246,7 +257,8 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
         }
     }
 
-    private void buildStreamStreamJoin(InternalTopologyBuilder internalTopologyBuilder, StreamStreamJoinGraphNode jgn) {
+    private void buildStreamStreamJoin(final InternalTopologyBuilder internalTopologyBuilder,
+                                       final StreamStreamJoinGraphNode jgn) {
 
         internalTopologyBuilder.addProcessor(jgn.thisWindowStreamName, jgn.thisWindowedStreamProcessor, jgn.leftHandSideCallingStream);
         internalTopologyBuilder.addProcessor(jgn.otherWindowStreamName, jgn.otherWindowedStreamProcessor, jgn.otherStreamName);
@@ -257,8 +269,9 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
         internalTopologyBuilder.addStateStore(jgn.otherWindowBuilder, jgn.otherWindowStreamName, jgn.joinThisName);
     }
 
-    private void buildProcessingNodeWithPossibleStateStore(InternalTopologyBuilder internalTopologyBuilder, StreamsGraphNode descendant,
-                                                           ProcessDetails processDetails) {
+    private void buildProcessingNodeWithPossibleStateStore(final InternalTopologyBuilder internalTopologyBuilder,
+                                                           final StreamsGraphNode descendant,
+                                                           final ProcessDetails processDetails) {
         internalTopologyBuilder.addProcessor(descendant.name(),
                                              processDetails.getProcessorSupplier(),
                                              descendant.getPredecessorName());
@@ -276,7 +289,9 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
         }
     }
 
-    private void buildKTableNode(InternalTopologyBuilder internalTopologyBuilder, StreamsGraphNode descendant, ProcessDetails processDetails) {
+    private void buildKTableNode(final InternalTopologyBuilder internalTopologyBuilder,
+                                 final StreamsGraphNode descendant,
+                                 final ProcessDetails processDetails) {
 
         String topic = processDetails.getSourceTopicArray()[0];
         Deserializer keyDeserializer = getDeserializer(processDetails.consumedKeySerde());
@@ -303,7 +318,9 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
         }
     }
 
-    private void buildSinkNode(InternalTopologyBuilder internalTopologyBuilder, StreamsGraphNode descendant, ProcessDetails processDetails) {
+    private void buildSinkNode(final InternalTopologyBuilder internalTopologyBuilder,
+                               final StreamsGraphNode descendant,
+                               final ProcessDetails processDetails) {
 
         Serializer keySerializer = getSerializer(processDetails.producedKeySerde());
         Serializer valSerializer = getSerializer(processDetails.producedValueSerde());
@@ -318,7 +335,9 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
                                         descendant.getPredecessorName());
     }
 
-    private void buildSourceNode(InternalTopologyBuilder internalTopologyBuilder, StreamsGraphNode descendant, ProcessDetails processDetails) {
+    private void buildSourceNode(final InternalTopologyBuilder internalTopologyBuilder,
+                                 final StreamsGraphNode descendant,
+                                 final ProcessDetails processDetails) {
         Deserializer keyDeserializer = getDeserializer(processDetails.consumedKeySerde());
         Deserializer valDeserializer = getDeserializer(processDetails.consumedValueSerde());
 
@@ -340,18 +359,19 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
     }
 
 
-    private Serializer getSerializer(Serde serde) {
+    private Serializer getSerializer(final Serde serde) {
         return serde == null ? null : serde.serializer();
     }
 
-    private Deserializer getDeserializer(Serde serde) {
+    private Deserializer getDeserializer(final Serde serde) {
         return serde == null ? null : serde.deserializer();
     }
 
     private static class NodeIdComparator implements Comparator<StreamsGraphNode>, Serializable {
 
         @Override
-        public int compare(StreamsGraphNode o1, StreamsGraphNode o2) {
+        public int compare(final StreamsGraphNode o1,
+                           final StreamsGraphNode o2) {
             return o1.id.compareTo(o2.id);
         }
     }
