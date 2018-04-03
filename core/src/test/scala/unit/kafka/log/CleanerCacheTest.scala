@@ -23,6 +23,7 @@ import kafka.utils.Exit
 import org.junit._
 import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
+import unit.kafka.log.FakeRecord
 
 class CleanerCacheTest extends JUnitSuite {
 

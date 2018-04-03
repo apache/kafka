@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Test}
 import org.scalatest.junit.JUnitSuite
+import unit.kafka.log.FakeRecord
 
 import scala.collection.JavaConverters._
 import scala.collection._
