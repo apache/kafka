@@ -970,7 +970,7 @@ project(':streams') {
 project(':streams:streams-scala') {
   println "Building project 'streams-scala' with Scala version ${versions.scala}"
   apply plugin: 'scala'
-  archivesBaseName = "kafka-streams-streams-scala"
+  archivesBaseName = "kafka-streams-scala"
 
   dependencies {
     compile project(':streams')

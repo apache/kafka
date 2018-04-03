@@ -39,13 +39,13 @@
           <li><a class="reference internal" href="#using-kafka-streams-within-your-application-code" id="id2">Using Kafka Streams within your application code</a></li>
           <li><a class="reference internal" href="#testing-a-streams-app" id="id3">Testing a Streams application</a></li>
       </ul>
-    <p>Any Java application that makes use of the Kafka Streams library is considered a Kafka Streams application.
+    <p>Any Java or Scala application that makes use of the Kafka Streams library is considered a Kafka Streams application.
       The computational logic of a Kafka Streams application is defined as a <a class="reference internal" href="../core-concepts#streams_topology"><span class="std std-ref">processor topology</span></a>,
       which is a graph of stream processors (nodes) and streams (edges).</p>
     <p>You can define the processor topology with the Kafka Streams APIs:</p>
     <dl class="docutils">
       <dt><a class="reference internal" href="dsl-api.html#streams-developer-guide-dsl"><span class="std std-ref">Kafka Streams DSL</span></a></dt>
-      <dd>A high-level API that provides provides the most common data transformation operations such as <code class="docutils literal"><span class="pre">map</span></code>, <code class="docutils literal"><span class="pre">filter</span></code>, <code class="docutils literal"><span class="pre">join</span></code>, and <code class="docutils literal"><span class="pre">aggregations</span></code> out of the box. The DSL is the recommended starting point for developers new to Kafka Streams, and should cover many use cases and stream processing needs.</dd>
+        <dd>A high-level API that provides provides the most common data transformation operations such as <code class="docutils literal"><span class="pre">map</span></code>, <code class="docutils literal"><span class="pre">filter</span></code>, <code class="docutils literal"><span class="pre">join</span></code>, and <code class="docutils literal"><span class="pre">aggregations</span></code> out of the box. The DSL is the recommended starting point for developers new to Kafka Streams, and should cover many use cases and stream processing needs.  If you're writing a Scala application you can use the <a href="dsl-api.html#streams-developer-guide-scala"><span class="std std-ref">Scala Kafka Streams DSL</span> library which removes the Java/Scala integraiton boilerplate when working with the Java DSL.</a></dd>
       <dt><a class="reference internal" href="processor-api.html#streams-developer-guide-processor-api"><span class="std std-ref">Processor API</span></a></dt>
       <dd>A low-level API that lets you add and connect processors as well as interact directly with state stores. The Processor API provides you with even more flexibility than the DSL but at the expense of requiring more manual work on the side of the application developer (e.g., more lines of code).</dd>
     </dl>
@@ -69,9 +69,14 @@
               </thead>
               <tbody valign="top">
               <tr class="row-even"><td><code class="docutils literal"><span class="pre">org.apache.kafka</span></code></td>
-                  <td><code>kafka-streams</code></td>
+                  <td><code class="docutils literal"><span class="pre">kafka-streams</span></code></td>
                   <td><code class="docutils literal"><span class="pre">{{fullDotVersion}}</span></code></td>
                   <td>(Required) Base library for Kafka Streams.</td>
+              </tr>
+              <tr class="row-odd"><td><code class="docutils literal"><span class="pre">org.apache.kafka</span></code></td>
+                  <td><code class="docutils literal"><span class="pre">kafka-streams-scala</span></code></td>
+                  <td><code class="docutils literal"><span class="pre">{{fullDotVersion}}</span></code></td>
+                  <td>(Optional) Scala DSL API library to write Scala Kafka Streams applications.</td>
               </tr>
               <tr class="row-odd"><td><code class="docutils literal"><span class="pre">org.apache.kafka</span></code></td>
                   <td><code class="docutils literal"><span class="pre">kafka-clients</span></code></td>
