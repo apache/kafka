@@ -234,9 +234,9 @@ public class Plugins {
         // Configure the Converter using only the old configuration mechanism ...
         String configPrefix = classPropertyName + ".";
         Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
-        plugin.configure(converterConfig, isKeyConverter);
         log.debug("Configuring the {} converter with configuration:{}{}",
                   isKeyConverter ? "key" : "value", System.lineSeparator(), converterConfig);
+        plugin.configure(converterConfig, isKeyConverter);
         return plugin;
     }
 
@@ -291,8 +291,8 @@ public class Plugins {
         String configPrefix = classPropertyName + ".";
         Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
         converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName());
-        plugin.configure(converterConfig);
         log.debug("Configuring the header converter with configuration:{}{}", System.lineSeparator(), converterConfig);
+        plugin.configure(converterConfig);
         return plugin;
     }
 
