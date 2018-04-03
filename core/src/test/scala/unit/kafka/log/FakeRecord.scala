@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.log
+package unit.kafka.log
 
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
