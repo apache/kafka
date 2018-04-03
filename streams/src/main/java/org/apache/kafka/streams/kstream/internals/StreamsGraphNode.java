@@ -22,13 +22,9 @@ import java.util.LinkedHashSet;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.FLATMAP;
-import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.GLOBAL_KTABLE;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.GROUP_BY;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.MAP;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.SELECT_KEY;
-import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.SOURCE;
-import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.STREAM_STREAM_JOIN;
-import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.TABLE;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.TRANSFORM;
 
 /**
@@ -47,6 +43,7 @@ public class StreamsGraphNode {
     protected ProcessDetails processDetails;
     protected String name;
     protected String predecessorName;
+    protected Integer id;
 
     public StreamsGraphNode(final TopologyNodeType topologyNodeType) {
         this.topologyNodeType = topologyNodeType;
@@ -94,12 +91,6 @@ public class StreamsGraphNode {
                topologyNodeType == FLATMAP || topologyNodeType == TRANSFORM || topologyNodeType == SELECT_KEY;
     }
 
-    public boolean isSourceNode() {
-        return topologyNodeType == SOURCE || topologyNodeType == TABLE || topologyNodeType == GLOBAL_KTABLE || topologyNodeType
-                                                                                                               == STREAM_STREAM_JOIN;
-    }
-
-
     public boolean needsRepartitioning() {
         return repartitionRequired;
     }
@@ -140,6 +131,11 @@ public class StreamsGraphNode {
         this.processDetails = processDetails;
     }
 
+    public void setId(int id) {
+        if (this.id == null) {
+            this.id = id;
+        }
+    }
 
     public ProcessDetails getProcessed() {
         return this.processDetails;
@@ -153,15 +149,16 @@ public class StreamsGraphNode {
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        StreamsGraphNode that = (StreamsGraphNode) o;
-        return topologyNodeType == that.topologyNodeType &&
-               Objects.equals(name, that.name);
+        StreamsGraphNode graphNode = (StreamsGraphNode) o;
+        return topologyNodeType == graphNode.topologyNodeType &&
+               Objects.equals(name, graphNode.name) &&
+               Objects.equals(id, graphNode.id);
     }
 
     @Override
     public int hashCode() {
 
-        return Objects.hash(topologyNodeType, name);
+        return Objects.hash(topologyNodeType, name, id);
     }
 
     @Override

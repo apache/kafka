@@ -27,21 +27,25 @@ public class StreamsTopologyGraphImpl extends StreamsTopologyGraph {
 
     private static final Logger LOG = LoggerFactory.getLogger(StreamsTopologyGraphImpl.class);
     private final AtomicInteger kgroupedCounter = new AtomicInteger(0);
-    private final AtomicInteger streamStreamJoinCounter = new AtomicInteger(0);
     private StreamsGraphNode previousNode;
+    private final AtomicInteger nodeIdCounter = new AtomicInteger(0);
 
     @Override
     public void addNode(final StreamsGraphNode node) {
+        node.setId(nodeIdCounter.getAndIncrement());
 
         if (node.topologyNodeType == TopologyNodeType.KGROUPED_STREAM) {
             node.setName(node.name() + "-" + kgroupedCounter.incrementAndGet());
-            node.setPredecessorName(previousNode.name());
-            System.out.println("UPDATED KGroupedStream node " + node);
-        } else if (node.getPredecessorName() == null) {
-            System.out.println("UPDATED regular node " + node);
+
+        }
+
+        if (node.getPredecessorName() == null) {
+            System.out.println("UPDATED regular node " + node + " with predecessor  " + previousNode);
             node.setPredecessorName(previousNode.name());
         }
-        System.out.println("Adding node " + node);
+
+        LOG.debug("Adding node {}", node);
+
         if (nameToGraphNode.get(node.getPredecessorName()) == null) {
             node.setPredecessor(previousNode);
         }

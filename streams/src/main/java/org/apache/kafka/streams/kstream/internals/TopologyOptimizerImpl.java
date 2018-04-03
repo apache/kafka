@@ -27,10 +27,11 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayDeque;
+import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Deque;
+import java.util.Comparator;
 import java.util.List;
+import java.util.PriorityQueue;
 
 /**
  * The {@code TopologyOptimizer} used to optimize topology built using the DSL.
@@ -40,20 +41,21 @@ import java.util.List;
 @SuppressWarnings("unchecked")
 public class TopologyOptimizerImpl implements TopologyOptimizer {
 
-    private Deque<StreamsGraphNode> graphNodeStack;
+    private NodeIdComparator nodeIdComparator = new NodeIdComparator();
 
     private static final Logger LOG = LoggerFactory.getLogger(TopologyOptimizerImpl.class);
 
     @Override
     public void optimize(StreamsTopologyGraph topologyGraph, InternalTopologyBuilder internalTopologyBuilder) {
-        graphNodeStack = new ArrayDeque<>();
 
-        graphNodeStack.push(topologyGraph.root);
+        final PriorityQueue<StreamsGraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, nodeIdComparator);
 
-        LOG.debug(String.format("Root node %s descendants %s", topologyGraph.root, topologyGraph.root.descendants));
+        graphNodePriorityQueue.offer(topologyGraph.root);
 
-        while (!graphNodeStack.isEmpty()) {
-            final StreamsGraphNode streamGraphNode = graphNodeStack.pop();
+        LOG.debug("Root node {} descendants {}", topologyGraph.root, topologyGraph.root.descendants);
+
+        while (!graphNodePriorityQueue.isEmpty()) {
+            final StreamsGraphNode streamGraphNode = graphNodePriorityQueue.remove();
 
             if (LOG.isDebugEnabled()) {
                 List<StreamsGraphNode> allDescendantNodes = new ArrayList<>();
@@ -64,15 +66,16 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
             }
 
             buildAndMaybeOptimize(internalTopologyBuilder, streamGraphNode);
-
-            for (StreamsGraphNode descendant : streamGraphNode.getDescendants()) {
-                graphNodeStack.addLast(descendant);
+            for (StreamsGraphNode graphNode : streamGraphNode.getDescendants()) {
+                graphNodePriorityQueue.offer(graphNode);
             }
         }
     }
 
     private void buildAndMaybeOptimize(final InternalTopologyBuilder internalTopologyBuilder,
                                        final StreamsGraphNode descendant) {
+
+        LOG.debug("Building with node {}", descendant);
 
         final TopologyNodeType nodeType = descendant.getType();
         final ProcessDetails processDetails = descendant.getProcessed();
@@ -107,10 +110,6 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
             case MAP:
             case FLATMAP:
             case MAP_VALUES:
-
-                buildProcessingNodeWithPossibleStateStore(internalTopologyBuilder, descendant, processDetails);
-                break;
-
             case PROCESSOR:
             case TRANSFORM:
             case TRANSFORM_VALUES:
@@ -348,6 +347,14 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
 
     private Deserializer getDeserializer(Serde serde) {
         return serde == null ? null : serde.deserializer();
+    }
+
+    private static class NodeIdComparator implements Comparator<StreamsGraphNode>, Serializable {
+
+        @Override
+        public int compare(StreamsGraphNode o1, StreamsGraphNode o2) {
+            return o1.id.compareTo(o2.id);
+        }
     }
 
 }
