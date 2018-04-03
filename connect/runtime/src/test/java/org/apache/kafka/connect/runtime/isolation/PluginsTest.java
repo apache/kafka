@@ -29,6 +29,7 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.ConverterConfig;
 import org.apache.kafka.connect.storage.ConverterType;
 import org.apache.kafka.connect.storage.HeaderConverter;
+import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -39,6 +40,8 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class PluginsTest {
 
@@ -109,6 +112,24 @@ public class PluginsTest {
         // Validate extra configs got passed through to overridden converters
         assertConverterType(ConverterType.HEADER, headerConverter.configs);
         assertEquals("baz", headerConverter.configs.get("extra.config"));
+    }
+
+    @Test
+    public void shouldInstantiateAndConfigureDefaultHeaderConverter() {
+        props.remove(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG);
+        this.config = new TestableWorkerConfig(props);
+        // Because it's not explicitly set, the logic to use the current classloader will exit immediately,
+        // and this method always returns null (we may want to change this at some point) ...
+        HeaderConverter headerConverter = plugins.newHeaderConverter(config,
+                                                                     WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
+                                                                     ClassLoaderUsage.CURRENT_CLASSLOADER);
+        assertNull(headerConverter);
+        // But we should always find it when using the plugins classloader ...
+        headerConverter = plugins.newHeaderConverter(config,
+                                                     WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
+                                                     ClassLoaderUsage.PLUGINS);
+        assertNotNull(headerConverter);
+        assertTrue(headerConverter instanceof SimpleHeaderConverter);
     }
 
     protected void instantiateAndConfigureConverter(String configPropName, ClassLoaderUsage classLoaderUsage) {

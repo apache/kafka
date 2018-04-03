@@ -249,13 +249,13 @@ public class Plugins {
      * @throws ConnectException if the {@link HeaderConverter} implementation class could not be found
      */
     public HeaderConverter newHeaderConverter(AbstractConfig config, String classPropertyName, ClassLoaderUsage classLoaderUsage) {
-        if (!config.originals().containsKey(classPropertyName)) {
-            // This configuration does not define the header converter via the specified property name
-            return null;
-        }
         HeaderConverter plugin = null;
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
+                if (!config.originals().containsKey(classPropertyName)) {
+                    // This configuration does not define the header converter via the specified property name
+                    return null;
+                }
                 // Attempt to load first with the current classloader, and plugins as a fallback.
                 // Note: we can't use config.getConfiguredInstance because we have to remove the property prefixes
                 // before calling config(...)
