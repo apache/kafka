@@ -144,13 +144,13 @@ public class PluginsTest {
         props.remove(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG);
         createConfig();
 
-        // Because it's not explicitly set, the logic to use the current classloader will exit immediately,
-        // and this method always returns null (we may want to change this at some point) ...
+        // Because it's not explicitly set on the supplied configuration, the logic to use the current classloader for the connector
+        // will exit immediately, and so this method always returns null
         HeaderConverter headerConverter = plugins.newHeaderConverter(config,
                                                                      WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
                                                                      ClassLoaderUsage.CURRENT_CLASSLOADER);
         assertNull(headerConverter);
-        // But we should always find it when using the plugins classloader ...
+        // But we should always find it (or the worker's default) when using the plugins classloader ...
         headerConverter = plugins.newHeaderConverter(config,
                                                      WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
                                                      ClassLoaderUsage.PLUGINS);

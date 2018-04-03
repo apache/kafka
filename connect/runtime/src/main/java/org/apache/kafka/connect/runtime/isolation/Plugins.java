@@ -235,6 +235,8 @@ public class Plugins {
         String configPrefix = classPropertyName + ".";
         Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
         plugin.configure(converterConfig, isKeyConverter);
+        log.debug("Configuring the {} converter with configuration:{}{}",
+                  isKeyConverter ? "key" : "value", System.lineSeparator(), converterConfig);
         return plugin;
     }
 
@@ -253,7 +255,7 @@ public class Plugins {
         switch (classLoaderUsage) {
             case CURRENT_CLASSLOADER:
                 if (!config.originals().containsKey(classPropertyName)) {
-                    // This configuration does not define the header converter via the specified property name
+                    // This connector configuration does not define the header converter via the specified property name
                     return null;
                 }
                 // Attempt to load first with the current classloader, and plugins as a fallback.
@@ -262,7 +264,8 @@ public class Plugins {
                 plugin = getInstance(config, classPropertyName, HeaderConverter.class);
                 break;
             case PLUGINS:
-                // Attempt to load with the plugin class loader, which uses the current classloader as a fallback
+                // Attempt to load with the plugin class loader, which uses the current classloader as a fallback.
+                // Note that there will always be at least a default header converter for the worker
                 String converterClassOrAlias = config.getClass(classPropertyName).getName();
                 Class<? extends HeaderConverter> klass;
                 try {
@@ -289,6 +292,7 @@ public class Plugins {
         Map<String, Object> converterConfig = config.originalsWithPrefix(configPrefix);
         converterConfig.put(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName());
         plugin.configure(converterConfig);
+        log.debug("Configuring the header converter with configuration:{}{}", System.lineSeparator(), converterConfig);
         return plugin;
     }
 
