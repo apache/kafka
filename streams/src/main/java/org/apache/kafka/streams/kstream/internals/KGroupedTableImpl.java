@@ -189,17 +189,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
             .withSinkName(sinkName)
             .withName(funcName)
             .withTopologyNodeType(TopologyNodeType.SOURCE_SINK);
-
-//
-//        // send the aggregate key-value pairs to the intermediate topic for partitioning
-//        builder.internalTopologyBuilder.addInternalTopic(topic);
-//        builder.internalTopologyBuilder.addSink(sinkName, topic, keySerializer, changedValueSerializer, null, this.name);
-//
-//        // read the intermediate topic with RecordMetadataTimestampExtractor
-//        builder.internalTopologyBuilder.addSource(null, sourceName, new FailOnInvalidTimestamp(), keyDeserializer, changedValueDeserializer, topic);
-//
-//        // aggregate the values with the aggregator and local store
-//        builder.internalTopologyBuilder.addProcessor(funcName, aggregateSupplier, sourceName);
     }
 
     private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
@@ -216,9 +205,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
         sourceSinkBuilder.withProcessDetails(ProcessDetails.builder().withMaterialized(materialized).build());
         builder.addNode(sourceSinkBuilder.build());
-
-//        builder.internalTopologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(materialized)
-//                                                              .materialize(), funcName);
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(builder, funcName, aggregateSupplier, Collections.singleton(sourceName), materialized.storeName(), isQueryable);
