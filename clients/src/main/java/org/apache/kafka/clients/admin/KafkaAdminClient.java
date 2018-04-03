@@ -1517,11 +1517,9 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DescribeConfigsResult describeConfigs(Collection<ConfigResource> configResources, final DescribeConfigsOptions options) {
         final Map<ConfigResource, KafkaFutureImpl<Config>> unifiedRequestFutures = new HashMap<>();
-        final Map<ConfigResource, KafkaFutureImpl<Config>> brokerFutures = new HashMap<>(configResources.size());
-
         // The BROKER resources which we want to describe.  We must make a separate DescribeConfigs
         // request for every BROKER resource we want to describe.
-        final Collection<Resource> brokerResources = new ArrayList<>();
+        final Map<ConfigResource, KafkaFutureImpl<Config>> brokerFutures = new HashMap<>(configResources.size());
 
         // The non-BROKER resources which we want to describe.  These resources can be described by a
         // single, unified DescribeConfigs request.
@@ -1530,7 +1528,6 @@ public class KafkaAdminClient extends AdminClient {
         for (ConfigResource resource : configResources) {
             if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
                 brokerFutures.put(resource, new KafkaFutureImpl<Config>());
-                brokerResources.add(configResourceToResource(resource));
             } else {
                 unifiedRequestFutures.put(resource, new KafkaFutureImpl<Config>());
                 unifiedRequestResources.add(configResourceToResource(resource));
