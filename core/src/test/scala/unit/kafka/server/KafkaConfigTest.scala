@@ -695,6 +695,7 @@ class KafkaConfigTest {
         case KafkaConfig.SaslClientCallbackHandlerClassProp =>
         case KafkaConfig.SaslServerCallbackHandlerClassProp =>
         case KafkaConfig.SaslLoginClassProp =>
+        case KafkaConfig.SaslLoginCallbackHandlerClassProp =>
         case KafkaConfig.SaslKerberosServiceNameProp => // ignore string
         case KafkaConfig.SaslKerberosKinitCmdProp =>
         case KafkaConfig.SaslKerberosTicketRenewWindowFactorProp =>

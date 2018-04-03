@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.scram.internal;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -101,9 +100,15 @@ public class ScramSaslClient implements SaslClient {
                     ScramExtensionsCallback extensionsCallback = new ScramExtensionsCallback();
 
                     try {
-                        callbackHandler.handle(new Callback[]{nameCallback, extensionsCallback});
-                    } catch (IOException | UnsupportedCallbackException e) {
-                        throw new SaslException("User name could not be obtained", e);
+                        callbackHandler.handle(new Callback[]{nameCallback});
+                        try {
+                            callbackHandler.handle(new Callback[]{extensionsCallback});
+                        } catch (UnsupportedCallbackException e) {
+                            log.debug("Extensions callback is not supported by client callback handler {}, no extensions will be added",
+                                    callbackHandler);
+                        }
+                    } catch (Throwable e) {
+                        throw new SaslException("User name or extensions could not be obtained", e);
                     }
 
                     String username = nameCallback.getName();
@@ -122,7 +127,7 @@ public class ScramSaslClient implements SaslClient {
                     PasswordCallback passwordCallback = new PasswordCallback("Password:", false);
                     try {
                         callbackHandler.handle(new Callback[]{passwordCallback});
-                    } catch (IOException | UnsupportedCallbackException e) {
+                    } catch (Throwable e) {
                         throw new SaslException("User name could not be obtained", e);
                     }
                     this.clientFinalMessage = handleServerFirstMessage(passwordCallback.getPassword());

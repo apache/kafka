@@ -95,9 +95,9 @@ object SaslPlainSslEndToEndAuthorizationTest {
 
 
 // This test uses SASL callback handler overrides for server connections of Kafka broker
-// and client connections of Kafka producers and consumers. Client connections of Kafka brokers
-// use default callback handlers. The second client used in the multi-user test
-// SaslEndToEndAuthorizationTest#testTwoConsumersWithDifferentSaslCredentials uses
+// and client connections of Kafka producers and consumers. Client connections from Kafka brokers
+// used for inter-broker communication use default callback handlers. The second client used in
+// the multi-user test SaslEndToEndAuthorizationTest#testTwoConsumersWithDifferentSaslCredentials uses
 // static JAAS configuration with default callback handlers to test those code paths as well.
 class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   import SaslPlainSslEndToEndAuthorizationTest._

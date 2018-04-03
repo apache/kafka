@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.plain.internal;
 
-import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
 import java.util.Map;
@@ -24,7 +23,6 @@ import java.util.Map;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.NameCallback;
-import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslException;
 import javax.security.sasl.SaslServer;
@@ -106,7 +104,7 @@ public class PlainSaslServer implements SaslServer {
         PlainAuthenticateCallback authenticateCallback = new PlainAuthenticateCallback(password.toCharArray());
         try {
             callbackHandler.handle(new Callback[]{nameCallback, authenticateCallback});
-        } catch (IOException | UnsupportedCallbackException e) {
+        } catch (Throwable e) {
             throw new SaslAuthenticationException("Authentication failed: credentials for user could not be verified", e);
         }
         if (!authenticateCallback.authenticated())

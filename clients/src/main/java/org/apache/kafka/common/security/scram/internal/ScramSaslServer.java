@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.scram.internal;
 
-import java.io.IOException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
@@ -27,11 +26,11 @@ import java.util.Set;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.NameCallback;
-import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.sasl.SaslException;
 import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslServerFactory;
 
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.scram.ScramCredential;
@@ -136,7 +135,9 @@ public class ScramSaslServer implements SaslServer {
                                 scramCredential.iterations());
                         setState(State.RECEIVE_CLIENT_FINAL_MESSAGE);
                         return serverFirstMessage.toBytes();
-                    } catch (IOException | NumberFormatException | UnsupportedCallbackException e) {
+                    } catch (SaslException | AuthenticationException e) {
+                        throw e;
+                    } catch (Throwable e) {
                         throw new SaslException("Authentication failed: Credentials could not be obtained", e);
                     }
 
@@ -157,7 +158,7 @@ public class ScramSaslServer implements SaslServer {
                 default:
                     throw new IllegalSaslStateException("Unexpected challenge in Sasl server state " + state);
             }
-        } catch (SaslException e) {
+        } catch (SaslException | AuthenticationException e) {
             clearCredentials();
             setState(State.FAILED);
             throw e;

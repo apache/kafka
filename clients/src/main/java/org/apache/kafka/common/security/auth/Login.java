@@ -30,8 +30,17 @@ public interface Login {
 
     /**
      * Configures this login instance.
+     * @param configs Key-value pairs containing the parsed configuration options of
+     *        the client or broker. Note that these are the Kafka configuration options
+     *        and not the JAAS configuration options. The JAAS options may be obtained
+     *        from `jaasConfiguration`.
+     * @param contextName JAAS context name for this login which may be used to obtain
+     *        the login context from `jaasConfiguration`.
+     * @param loginCallbackHandler Login callback handler instance to use for this Login.
+     *        Login callback handler class may be configured using
+     *        {@link org.apache.kafka.common.config.SaslConfigs#SASL_LOGIN_CALLBACK_HANDLER_CLASS}.
      */
-    void configure(Map<String, ?> configs, String contextName, Configuration configuration,
+    void configure(Map<String, ?> configs, String contextName, Configuration jaasConfiguration,
                    AuthenticateCallbackHandler loginCallbackHandler);
 
     /**

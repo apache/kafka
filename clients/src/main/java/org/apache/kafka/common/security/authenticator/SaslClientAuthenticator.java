@@ -40,7 +40,6 @@ import org.apache.kafka.common.requests.SaslAuthenticateRequest;
 import org.apache.kafka.common.requests.SaslAuthenticateResponse;
 import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
-import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Utils;
@@ -88,7 +87,6 @@ public class SaslClientAuthenticator implements Authenticator {
     private final SaslClient saslClient;
     private final Map<String, ?> configs;
     private final String clientPrincipalName;
-    private final JaasContext jaasContext;
     private final AuthenticateCallbackHandler callbackHandler;
 
     // buffers used in `authenticate`
@@ -109,7 +107,6 @@ public class SaslClientAuthenticator implements Authenticator {
     public SaslClientAuthenticator(Map<String, ?> configs,
                                    AuthenticateCallbackHandler callbackHandler,
                                    String node,
-                                   JaasContext jaasContext,
                                    Subject subject,
                                    String servicePrincipal,
                                    String host,
@@ -118,7 +115,6 @@ public class SaslClientAuthenticator implements Authenticator {
                                    TransportLayer transportLayer) throws IOException {
         this.node = node;
         this.subject = subject;
-        this.jaasContext = jaasContext;
         this.callbackHandler = callbackHandler;
         this.host = host;
         this.servicePrincipal = servicePrincipal;
@@ -138,8 +134,6 @@ public class SaslClientAuthenticator implements Authenticator {
                 this.clientPrincipalName = firstPrincipal(subject);
             else
                 this.clientPrincipalName = null;
-
-            callbackHandler.configure(configs, mechanism, jaasContext.configurationEntries());
 
             saslClient = createSaslClient();
         } catch (Exception e) {

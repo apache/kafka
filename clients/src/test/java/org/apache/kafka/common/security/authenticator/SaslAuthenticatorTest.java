@@ -733,27 +733,31 @@ public class SaslAuthenticatorTest {
                 TestServerCallbackHandler.class.getName());
         server = createEchoServer(securityProtocol);
 
+        // Set client username/password to the values used by `TestServerCallbackHandler`
         jaasConfig.setClientOptions("PLAIN", TestServerCallbackHandler.USERNAME, TestServerCallbackHandler.PASSWORD);
         createAndCheckClientConnection(securityProtocol, "good");
 
+        // Set client username/password to the invalid values
         jaasConfig.setClientOptions("PLAIN", TestJaasConfig.USERNAME, "invalid-password");
         createAndCheckClientConnectionFailure(securityProtocol, "invalid");
     }
 
     /**
      * Test that callback handlers are only applied to connections for the mechanisms
-     * configured for the handler.
+     * configured for the handler. Test enables two mechanisms 'PLAIN` and `DIGEST-MD5`
+     * on the servers with different callback handlers for the two mechanisms. Verifies
+     * that clients using both mechanisms authenticate successfully.
      */
     @Test
     public void testAuthenticateCallbackHandlerMechanisms() throws Exception {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
-        configureMechanisms("DIGEST-MD5", Arrays.asList("DIGEST-MD5", "PLAIN"));
+        TestJaasConfig jaasConfig = configureMechanisms("DIGEST-MD5", Arrays.asList("DIGEST-MD5", "PLAIN"));
 
         // Connections should fail using the digest callback handler if listener.mechanism prefix not specified
         saslServerConfigs.put("plain." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
-                TestServerCallbackHandler.class.getName());
+                TestServerCallbackHandler.class);
         saslServerConfigs.put("digest-md5." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
-                DigestServerCallbackHandler.class.getName());
+                DigestServerCallbackHandler.class);
         server = createEchoServer(securityProtocol);
         createAndCheckClientConnectionFailure(securityProtocol, "invalid");
 
@@ -762,11 +766,18 @@ public class SaslAuthenticatorTest {
         saslServerConfigs.remove("plain." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS);
         saslServerConfigs.remove("digest-md5." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS);
         saslServerConfigs.put(listener.saslMechanismConfigPrefix("plain") + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
-                TestServerCallbackHandler.class.getName());
+                TestServerCallbackHandler.class);
         saslServerConfigs.put(listener.saslMechanismConfigPrefix("digest-md5") + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
-                DigestServerCallbackHandler.class.getName());
+                DigestServerCallbackHandler.class);
         server = createEchoServer(securityProtocol);
-        createAndCheckClientConnection(securityProtocol, "good2");
+
+        // Verify that DIGEST-MD5 (currently configured for client) works with `DigestServerCallbackHandler`
+        createAndCheckClientConnection(securityProtocol, "good-digest-md5");
+
+        // Verify that PLAIN works with `TestServerCallbackHandler`
+        jaasConfig.setClientOptions("PLAIN", TestServerCallbackHandler.USERNAME, TestServerCallbackHandler.PASSWORD);
+        saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
+        createAndCheckClientConnection(securityProtocol, "good-plain");
     }
 
     /**
@@ -800,6 +811,8 @@ public class SaslAuthenticatorTest {
         String prefix = ListenerName.forSecurityProtocol(securityProtocol).saslMechanismConfigPrefix("PLAIN");
         saslServerConfigs.put(prefix + SaslConfigs.SASL_LOGIN_CLASS, TestLogin.class.getName());
         server = createEchoServer(securityProtocol);
+
+        // Login is performed when server channel builder is created (before any connections are made on the server)
         assertEquals(1, TestLogin.loginCount.get());
 
         createAndCheckClientConnection(securityProtocol, "1");
@@ -843,8 +856,8 @@ public class SaslAuthenticatorTest {
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         String prefix = listenerName.saslMechanismConfigPrefix("PLAIN");
         saslServerConfigs.put(prefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
-                TestServerCallbackHandler.class.getName());
-        String loginCallback = TestLoginCallbackHandler.class.getName();
+                TestServerCallbackHandler.class);
+        Class<?> loginCallback = TestLoginCallbackHandler.class;
 
         try {
             createEchoServer(securityProtocol);
@@ -1239,8 +1252,7 @@ public class SaslAuthenticatorTest {
                                                                        String id,
                                                                        TransportLayer transportLayer,
                                                                        Map<String, Subject> subjects) throws IOException {
-                return new SaslServerAuthenticator(configs, callbackHandlers, id, jaasContexts, subjects, null,
-                                credentialCache, listenerName, securityProtocol, transportLayer, null) {
+                return new SaslServerAuthenticator(configs, callbackHandlers, id, subjects, null, listenerName, securityProtocol, transportLayer) {
 
                     @Override
                     protected ApiVersionsResponse apiVersionsResponse() {
@@ -1289,7 +1301,7 @@ public class SaslAuthenticatorTest {
                                                                        TransportLayer transportLayer,
                                                                        Subject subject) throws IOException {
 
-                return new SaslClientAuthenticator(configs, callbackHandler, id, jaasContext, subject,
+                return new SaslClientAuthenticator(configs, callbackHandler, id, subject,
                         servicePrincipal, serverHost, saslMechanism, true, transportLayer) {
                     @Override
                     protected SaslHandshakeRequest createSaslHandshakeRequest(short version) {
@@ -1396,7 +1408,7 @@ public class SaslAuthenticatorTest {
     private void configureDigestMd5ServerCallback(SecurityProtocol securityProtocol) {
         String callbackPrefix = ListenerName.forSecurityProtocol(securityProtocol).saslMechanismConfigPrefix("DIGEST-MD5");
         saslServerConfigs.put(callbackPrefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
-                TestDigestLoginModule.DigestServerCallbackHandler.class.getName());
+                TestDigestLoginModule.DigestServerCallbackHandler.class);
     }
 
     private void createSelector(SecurityProtocol securityProtocol, Map<String, Object> clientConfigs) {
@@ -1488,9 +1500,20 @@ public class SaslAuthenticatorTest {
 
         static final String USERNAME = "TestServerCallbackHandler-user";
         static final String PASSWORD = "TestServerCallbackHandler-password";
+        private volatile boolean configured;
+
+        @Override
+        public void configure(Map<String, ?> configs, String mechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+            if (configured)
+                throw new IllegalStateException("Server callback handler configured twice");
+            configured = true;
+            super.configure(configs, mechanism, jaasConfigEntries);
+        }
 
         @Override
         protected boolean authenticate(String username, char[] password) throws IOException {
+            if (!configured)
+                throw new IllegalStateException("Server callback handler not configured");
             return USERNAME.equals(username) && new String(password).equals(PASSWORD);
         }
     }
@@ -1528,13 +1551,19 @@ public class SaslAuthenticatorTest {
 
         static final String USERNAME = "TestClientCallbackHandler-user";
         static final String PASSWORD = "TestClientCallbackHandler-password";
+        private volatile boolean configured;
 
         @Override
         public void configure(Map<String, ?> configs, String mechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+            if (configured)
+                throw new IllegalStateException("Client callback handler configured twice");
+            configured = true;
         }
 
         @Override
         public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+            if (!configured)
+                throw new IllegalStateException("Client callback handler not configured");
             for (Callback callback : callbacks) {
                 if (callback instanceof NameCallback)
                     ((NameCallback) callback).setName(USERNAME);
@@ -1594,12 +1623,19 @@ public class SaslAuthenticatorTest {
     }
 
     public static class TestLoginCallbackHandler implements AuthenticateCallbackHandler {
+        private volatile boolean configured = false;
         @Override
         public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+            if (configured)
+                throw new IllegalStateException("Login callback handler configured twice");
+            configured = true;
         }
 
         @Override
         public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+            if (!configured)
+                throw new IllegalStateException("Login callback handler not configured");
+
             for (Callback callback : callbacks) {
                 if (callback instanceof NameCallback)
                     ((NameCallback) callback).setName(TestJaasConfig.USERNAME);
@@ -1616,7 +1652,6 @@ public class SaslAuthenticatorTest {
     public static final class TestPlainLoginModule extends PlainLoginModule {
         @Override
         public void initialize(Subject subject, CallbackHandler callbackHandler, Map<String, ?> sharedState, Map<String, ?> options) {
-            assertEquals(TestLoginCallbackHandler.class, callbackHandler.getClass());
             try {
                 NameCallback nameCallback = new NameCallback("name:");
                 PasswordCallback passwordCallback = new PasswordCallback("password:", false);

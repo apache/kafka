@@ -49,14 +49,16 @@ public class LoginManager {
 
     private final Login login;
     private final LoginMetadata<?> loginMetadata;
+    private final AuthenticateCallbackHandler loginCallbackHandler;
     private int refCount;
 
-    private LoginManager(JaasContext jaasContext, Map<String, ?> configs,
+    private LoginManager(JaasContext jaasContext, String saslMechanism, Map<String, ?> configs,
                          LoginMetadata<?> loginMetadata) throws IOException, LoginException {
         this.loginMetadata = loginMetadata;
         this.login = Utils.newInstance(loginMetadata.loginClass);
-        AuthenticateCallbackHandler callbackHandler = Utils.newInstance(loginMetadata.loginCallbackClass);
-        login.configure(configs, jaasContext.name(), jaasContext.configuration(), callbackHandler);
+        loginCallbackHandler = Utils.newInstance(loginMetadata.loginCallbackClass);
+        loginCallbackHandler.configure(configs, saslMechanism, jaasContext.configurationEntries());
+        login.configure(configs, jaasContext.name(), jaasContext.configuration(), loginCallbackHandler);
         login.login();
     }
 
@@ -98,14 +100,14 @@ public class LoginManager {
                 LoginMetadata<Password> loginMetadata = new LoginMetadata<>(jaasConfigValue, loginClass, loginCallbackClass);
                 loginManager = DYNAMIC_INSTANCES.get(loginMetadata);
                 if (loginManager == null) {
-                    loginManager = new LoginManager(jaasContext, configs, loginMetadata);
+                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata);
                     DYNAMIC_INSTANCES.put(loginMetadata, loginManager);
                 }
             } else {
                 LoginMetadata<String> loginMetadata = new LoginMetadata<>(jaasContext.name(), loginClass, loginCallbackClass);
                 loginManager = STATIC_INSTANCES.get(loginMetadata);
                 if (loginManager == null) {
-                    loginManager = new LoginManager(jaasContext, configs, loginMetadata);
+                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata);
                     STATIC_INSTANCES.put(loginMetadata, loginManager);
                 }
             }
@@ -146,6 +148,7 @@ public class LoginManager {
                     STATIC_INSTANCES.remove(loginMetadata);
                 }
                 login.close();
+                loginCallbackHandler.close();
             }
             --refCount;
             LOGGER.trace("{} released", this);

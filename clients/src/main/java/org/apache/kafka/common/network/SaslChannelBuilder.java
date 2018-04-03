@@ -227,8 +227,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                                                                String id,
                                                                TransportLayer transportLayer,
                                                                Map<String, Subject> subjects) throws IOException {
-        return new SaslServerAuthenticator(configs, callbackHandlers, id, jaasContexts, subjects,
-                kerberosShortNamer, credentialCache, listenerName, securityProtocol, transportLayer, tokenCache);
+        return new SaslServerAuthenticator(configs, callbackHandlers, id, subjects,
+                kerberosShortNamer, listenerName, securityProtocol, transportLayer);
     }
 
     // Visible to override for testing
@@ -238,8 +238,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                                                                String serverHost,
                                                                String servicePrincipal,
                                                                TransportLayer transportLayer, Subject subject) throws IOException {
-        return new SaslClientAuthenticator(configs, callbackHandler,
-                id, jaasContexts.get(clientSaslMechanism), subject, servicePrincipal,
+        return new SaslClientAuthenticator(configs, callbackHandler, id, subject, servicePrincipal,
                 serverHost, clientSaslMechanism, handshakeRequestEnable, transportLayer);
     }
 
@@ -281,9 +280,10 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         for (String mechanism : jaasContexts.keySet()) {
             AuthenticateCallbackHandler callbackHandler;
             String prefix = ListenerName.saslMechanismPrefix(mechanism);
-            String className = (String) configs.get(prefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS);
-            if (className != null)
-                callbackHandler = Utils.newInstance(className, AuthenticateCallbackHandler.class);
+            Class<? extends AuthenticateCallbackHandler> clazz =
+                    (Class<? extends AuthenticateCallbackHandler>) configs.get(prefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS);
+            if (clazz != null)
+                callbackHandler = Utils.newInstance(clazz);
             else if (mechanism.equals(PlainSaslServer.PLAIN_MECHANISM))
                 callbackHandler = new PlainServerCallbackHandler();
             else if (ScramMechanism.isScram(mechanism))
