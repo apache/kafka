@@ -211,6 +211,7 @@ object LogConfig {
 
   private val configDef: LogConfigDef = {
     import org.apache.kafka.common.config.ConfigDef.Importance._
+    import org.apache.kafka.common.config.ConfigDef.NonEmptyString._
     import org.apache.kafka.common.config.ConfigDef.Range._
     import org.apache.kafka.common.config.ConfigDef.Type._
     import org.apache.kafka.common.config.ConfigDef.ValidString._
@@ -242,7 +243,7 @@ object LogConfig {
         DeleteRetentionMsDoc, KafkaConfig.LogCleanerDeleteRetentionMsProp)
       .define(MinCompactionLagMsProp, LONG, Defaults.MinCompactionLagMs, atLeast(0), MEDIUM, MinCompactionLagMsDoc,
         KafkaConfig.LogCleanerMinCompactionLagMsProp)
-      .define(CompactionStrategyProp, STRING, Defaults.CompactionStrategy, MEDIUM, CompactionStrategyDoc,
+      .define(CompactionStrategyProp, STRING, Defaults.CompactionStrategy, nonEmptyString(), MEDIUM, CompactionStrategyDoc,
         KafkaConfig.LogCleanerCompactionStrategyProp)
       .define(FileDeleteDelayMsProp, LONG, Defaults.FileDeleteDelayMs, atLeast(0), MEDIUM, FileDeleteDelayMsDoc,
         KafkaConfig.LogDeleteDelayMsProp)
