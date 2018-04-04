@@ -31,10 +31,11 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
-import static org.apache.kafka.streams.kstream.internals.StreamsTopologyGraph.TOPOLOGY_ROOT;
+import static org.apache.kafka.streams.kstream.internals.StreamsTopologyGraphImpl.TOPOLOGY_ROOT;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.GLOBAL_KTABLE;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.KTABLE;
 import static org.apache.kafka.streams.kstream.internals.TopologyNodeType.SOURCE;
+
 @SuppressWarnings("unchecked")
 public class InternalStreamsBuilder implements InternalNameProvider {
 

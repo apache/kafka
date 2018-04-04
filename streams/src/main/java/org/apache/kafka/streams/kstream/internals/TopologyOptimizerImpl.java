@@ -51,9 +51,9 @@ public class TopologyOptimizerImpl implements TopologyOptimizer {
 
         final PriorityQueue<StreamsGraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, nodeIdComparator);
 
-        graphNodePriorityQueue.offer(topologyGraph.root);
+        graphNodePriorityQueue.offer(topologyGraph.getRoot());
 
-        LOG.debug("Root node {} descendants {}", topologyGraph.root, topologyGraph.root.descendants);
+        LOG.debug("Root node {} descendants {}", topologyGraph.getRoot(), topologyGraph.getRoot().descendants);
 
         while (!graphNodePriorityQueue.isEmpty()) {
             final StreamsGraphNode streamGraphNode = graphNodePriorityQueue.remove();
