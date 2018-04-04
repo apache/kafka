@@ -20,7 +20,6 @@ package kafka.log
 import java.io.File
 import java.nio._
 import java.nio.file.Paths
-import java.security.MessageDigest
 import java.util.Properties
 
 import kafka.common._
@@ -77,7 +76,7 @@ class LogCleanerTest extends JUnitSuite {
 
     // pretend we have the following keys
     val keys = immutable.ListSet(1, 3, 5, 7, 9)
-    val cache = cleanerCache(Int.MaxValue)
+    val cache = new FakeCleanerCache(Int.MaxValue)
     keys.foreach(k => cache.putIfGreater(new FakeRecord(key(k), Long.MaxValue, Long.MaxValue)))
 
     // clean the log
@@ -459,7 +458,7 @@ class LogCleanerTest extends JUnitSuite {
 
     // pretend we have the following keys
     val keys = immutable.ListSet(1, 3, 5, 7, 9)
-    val cache = cleanerCache(Int.MaxValue)
+    val cache = new FakeCleanerCache(Int.MaxValue)
     keys.foreach(k => cache.putIfGreater(new FakeRecord(key(k), Long.MaxValue, Long.MaxValue)))
 
     // clean the log
@@ -777,7 +776,7 @@ class LogCleanerTest extends JUnitSuite {
       log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
 
     val keys = keysInLog(log)
-    val cache = cleanerCache(Int.MaxValue)
+    val cache = new FakeCleanerCache(Int.MaxValue)
     keys.foreach(k => cache.putIfGreater(new FakeRecord(key(k), Long.MaxValue, Long.MaxValue)))
     intercept[LogCleaningAbortedException] {
       cleaner.cleanSegments(log, log.logSegments.take(3).toSeq, cache, 0L, new CleanerStats())
@@ -935,7 +934,7 @@ class LogCleanerTest extends JUnitSuite {
    */
   @Test
   def testBuildOffsetMap(): Unit = {
-    val cache = cleanerCache(1000)
+    val cache = new FakeCleanerCache(1000)
     val log = makeLog()
     val cleaner = makeCleaner(Int.MaxValue)
     val start = 0
@@ -1004,7 +1003,7 @@ class LogCleanerTest extends JUnitSuite {
     val allKeys = keysInLog(log)
 
     // pretend we have odd-numbered keys
-    val cache = cleanerCache(Int.MaxValue)
+    val cache = new FakeCleanerCache(Int.MaxValue)
     for (k <- 1 until messageCount by 2)
       cache.putIfGreater(new FakeRecord(key(k), Long.MaxValue, Long.MaxValue))
 
@@ -1076,7 +1075,7 @@ class LogCleanerTest extends JUnitSuite {
 
   @Test
   def testBuildOffsetMapFakeLarge(): Unit = {
-    val cache = cleanerCache(1000)
+    val cache = new FakeCleanerCache(1000)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 120: java.lang.Integer)
     logProps.put(LogConfig.SegmentIndexBytesProp, 120: java.lang.Integer)
@@ -1103,7 +1102,7 @@ class LogCleanerTest extends JUnitSuite {
   @Test
   def testBuildPartialOffsetMap(): Unit = {
     // because loadFactor is 0.75, this means we can fit 2 messages in the map
-    val cache = cleanerCache(3)
+    val cache = new FakeCleanerCache(3)
     val log = makeLog()
     val cleaner = makeCleaner(2)
 
@@ -1259,7 +1258,7 @@ class LogCleanerTest extends JUnitSuite {
 
   private def makeCleaner(capacity: Int, checkDone: TopicPartition => Unit = _ => (), maxMessageSize: Int = 64*1024) =
     new Cleaner(id = 0,
-                cache = cleanerCache(capacity),
+                cache = new FakeCleanerCache(capacity),
                 ioBufferSize = maxMessageSize,
                 maxIoBufferSize = maxMessageSize,
                 dupBufferLoadFactor = 0.75,
@@ -1325,12 +1324,47 @@ class LogCleanerTest extends JUnitSuite {
 
   private def tombstoneRecord(key: Int): MemoryRecords = record(key, null)
 
-  def cleanerCache(slots: Int): CleanerCache = {
-    val hashAlgorithm = "MD5"
-    val digest = MessageDigest.getInstance(hashAlgorithm)
-    val memoryMax = Runtime.getRuntime.freeMemory.toInt
-    var memory = slots * (digest.getDigestLength + 8)
-    memory = if (memory > 0 && memory < memoryMax) memory else memoryMax
-    new SkimpyCleanerCache(memory, hashAlgorithm)
+}
+
+class FakeCleanerCache(val slots: Int) extends CleanerCache {
+  val map = new java.util.HashMap[String, Record]()
+  var lastOffset: Long = -1L
+
+  private def keyFor(key: ByteBuffer) =
+    new String(Utils.readBytes(key.duplicate), "UTF-8")
+
+  override def putIfGreater(record: Record): Boolean = {
+    if (!record.hasKey || !greater(record)) {
+      return false
+    }
+    updateLatestOffset(record.offset)
+    map.put(keyFor(record.key), record)
+    true
   }
+
+  override def greater(record: Record): Boolean = {
+    record.offset >= 0 && offset(record.key) <= record.offset
+  }
+
+  override def offset(key: ByteBuffer): Long = {
+    val k = keyFor(key)
+    if (map.containsKey(k))
+      map.get(k).offset
+    else
+      -1L
+  }
+
+  override def version(key: ByteBuffer): Long = -1L
+
+  override def clear(): Unit = map.clear()
+
+  override def size: Int = map.size
+
+  override def latestOffset: Long = lastOffset
+
+  override def updateLatestOffset(offset: Long): Unit = {
+    if (lastOffset < offset) lastOffset = offset
+  }
+
+  override def toString: String = map.toString
 }
