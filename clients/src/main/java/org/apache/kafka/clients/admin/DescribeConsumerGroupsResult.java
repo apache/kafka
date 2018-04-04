@@ -32,28 +32,38 @@ import java.util.Map;
 @InterfaceStability.Evolving
 public class DescribeConsumerGroupsResult {
 
-    private final Map<String, KafkaFuture<ConsumerGroupDescription>> futures;
+    private final KafkaFuture<Map<String, KafkaFuture<ConsumerGroupDescription>>> futures;
 
-    public DescribeConsumerGroupsResult(Map<String, KafkaFuture<ConsumerGroupDescription>> futures) {
+    public DescribeConsumerGroupsResult(KafkaFuture<Map<String, KafkaFuture<ConsumerGroupDescription>>> futures) {
         this.futures = futures;
     }
 
     /**
      * Return a map from group name to futures which can be used to check the description of a consumer group.
      */
-    public Map<String, KafkaFuture<ConsumerGroupDescription>> values() {
+    public KafkaFuture<Map<String, KafkaFuture<ConsumerGroupDescription>>> values() {
         return futures;
     }
 
-    public Collection<String> names() {
-        return futures.keySet();
+    public KafkaFuture<Collection<String>> names() {
+        return futures.thenApply(new KafkaFuture.Function<Map<String, KafkaFuture<ConsumerGroupDescription>>, Collection<String>>() {
+            @Override
+            public Collection<String> apply(Map<String, KafkaFuture<ConsumerGroupDescription>> stringKafkaFutureMap) {
+                return stringKafkaFutureMap.keySet();
+            }
+        });
     }
 
     /**
      * Return a future which succeeds only if all the consumer group descriptions succeed.
      */
-    public Collection<KafkaFuture<ConsumerGroupDescription>> all() {
-        return futures.values();
+    public KafkaFuture<Collection<KafkaFuture<ConsumerGroupDescription>>> all() {
+        return futures.thenApply(new KafkaFuture.Function<Map<String, KafkaFuture<ConsumerGroupDescription>>, Collection<KafkaFuture<ConsumerGroupDescription>>>() {
+            @Override
+            public Collection<KafkaFuture<ConsumerGroupDescription>> apply(Map<String, KafkaFuture<ConsumerGroupDescription>> stringKafkaFutureMap) {
+                return stringKafkaFutureMap.values();
+            }
+        });
     }
 
 }

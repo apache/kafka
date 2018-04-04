@@ -29,21 +29,31 @@ import java.util.Map;
  */
 @InterfaceStability.Evolving
 public class DeleteConsumerGroupsResult {
-    final Map<String, KafkaFuture<Void>> futures;
+    final KafkaFuture<Map<String, KafkaFuture<Void>>> futures;
 
-    DeleteConsumerGroupsResult(Map<String, KafkaFuture<Void>> futures) {
+    DeleteConsumerGroupsResult(KafkaFuture<Map<String, KafkaFuture<Void>>> futures) {
         this.futures = futures;
     }
 
-    public Map<String, KafkaFuture<Void>> values() {
+    public KafkaFuture<Map<String, KafkaFuture<Void>>> values() {
         return futures;
     }
 
-    public Collection<String> groups() {
-        return futures.keySet();
+    public KafkaFuture<Collection<String>> groups() {
+        return futures.thenApply(new KafkaFuture.Function<Map<String, KafkaFuture<Void>>, Collection<String>>() {
+            @Override
+            public Collection<String> apply(Map<String, KafkaFuture<Void>> results) {
+                return results.keySet();
+            }
+        });
     }
 
-    public Collection<KafkaFuture<Void>> all() {
-        return futures.values();
+    public KafkaFuture<Collection<KafkaFuture<Void>>> all() {
+        return futures.thenApply(new KafkaFuture.Function<Map<String, KafkaFuture<Void>>, Collection<KafkaFuture<Void>>>() {
+            @Override
+            public Collection<KafkaFuture<Void>> apply(Map<String, KafkaFuture<Void>> stringKafkaFutureMap) {
+                return stringKafkaFutureMap.values();
+            }
+        });
     }
 }

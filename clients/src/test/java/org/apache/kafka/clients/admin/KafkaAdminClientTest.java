@@ -676,10 +676,15 @@ public class KafkaAdminClientTest {
                     )));
 
             final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups();
+            final List<ConsumerGroupListing> consumerGroups = new ArrayList<>();
 
-            final Collection<ConsumerGroupListing> listings = result.listings().get();
+            final Collection<KafkaFuture<Collection<ConsumerGroupListing>>> listings = result.listings().get();
+            for (KafkaFuture<Collection<ConsumerGroupListing>> futures : listings) {
+                final Collection<ConsumerGroupListing> collection = futures.get();
+                consumerGroups.addAll(collection);
+            }
 
-            assertEquals(1, listings.size());
+            assertEquals(1, consumerGroups.size());
         }
     }
 
@@ -739,10 +744,10 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(groupMetadataMap));
 
             final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(Collections.singletonList("group-0"));
-            final KafkaFuture<ConsumerGroupDescription> groupDescriptionFuture = result.values().get("group-0");
+            final KafkaFuture<ConsumerGroupDescription> groupDescriptionFuture = result.values().get().get("group-0");
             final ConsumerGroupDescription groupDescription = groupDescriptionFuture.get();
 
-            assertEquals(1, result.values().size());
+            assertEquals(1, result.values().get().size());
             assertEquals("group-0", groupDescription.groupId());
             assertEquals(2, groupDescription.members().size());
         }
@@ -816,7 +821,7 @@ public class KafkaAdminClientTest {
 
             final DeleteConsumerGroupsResult result = env.adminClient().deleteConsumerGroups(groupIds);
 
-            final Map<String, KafkaFuture<Void>> results = result.values();
+            final Map<String, KafkaFuture<Void>> results = result.values().get();
             assertNull(results.get("group-0").get());
         }
     }
