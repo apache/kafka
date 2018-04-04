@@ -1323,7 +1323,6 @@ class LogCleanerTest extends JUnitSuite {
     TestUtils.singletonRecords(value = value.toString.getBytes)
 
   private def tombstoneRecord(key: Int): MemoryRecords = record(key, null)
-
 }
 
 class FakeCleanerCache(val slots: Int) extends CleanerCache {
