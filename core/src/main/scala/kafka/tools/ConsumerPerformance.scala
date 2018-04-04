@@ -186,6 +186,8 @@ object ConsumerPerformance extends LazyLogging {
           lastBytesRead = bytesRead
         }
       }
+      if (messagesRead < count)
+        println(s"Exiting before consuming all messages: polling-loop-timeout ($timeout ms) exceeded. Check --polling-loop-timeout option")
     }
 
     totalMessagesRead.set(messagesRead)
@@ -306,7 +308,7 @@ object ConsumerPerformance extends LazyLogging {
       .withOptionalArg()
       .describedAs("count")
       .ofType(classOf[Long])
-      .defaultsTo(1000)
+      .defaultsTo(60000)
 
     val options = parser.parse(args: _*)
 
