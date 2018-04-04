@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 
 import java.util.Collections;
@@ -42,7 +42,7 @@ public class StateStoreTestUtils {
 
         final StateStore stateStore = supplier.get();
         stateStore.init(
-            new MockProcessorContext(
+            new InternalMockProcessorContext(
                 StateSerdes.withBuiltinTypes(
                     ProcessorStateManager.storeChangelogTopic(applicationId, name),
                     keyType,

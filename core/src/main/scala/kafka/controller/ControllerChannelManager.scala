@@ -36,7 +36,6 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.slf4j.event.Level
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
@@ -375,20 +374,14 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
       }
     }
 
-    val filteredPartitions = {
-      val givenPartitions = if (partitions.isEmpty)
-        controllerContext.partitionLeadershipInfo.keySet
-      else
-        partitions
-      if (controller.topicDeletionManager.partitionsToBeDeleted.isEmpty)
-        givenPartitions
-      else
-        givenPartitions -- controller.topicDeletionManager.partitionsToBeDeleted
-    }
+    val givenPartitions = if (partitions.isEmpty)
+      controllerContext.partitionLeadershipInfo.keySet
+    else
+      partitions
 
     updateMetadataRequestBrokerSet ++= brokerIds.filter(_ >= 0)
-    filteredPartitions.foreach(partition => updateMetadataRequestPartitionInfo(partition, beingDeleted = false))
-    controller.topicDeletionManager.partitionsToBeDeleted.foreach(partition => updateMetadataRequestPartitionInfo(partition, beingDeleted = true))
+    givenPartitions.foreach(partition => updateMetadataRequestPartitionInfo(partition,
+      beingDeleted = controller.topicDeletionManager.partitionsToBeDeleted.contains(partition)))
   }
 
   def sendRequestsToBrokers(controllerEpoch: Int) {

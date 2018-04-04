@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable
 import scala.collection.{Map, Set}
-import scala.collection.JavaConverters._
 
 abstract class AbstractFetcherManager(protected val name: String, clientId: String, numFetchers: Int = 1)
   extends Logging with KafkaMetricsGroup {
@@ -91,7 +90,8 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
     }
   }
 
-  private def getFetcherId(topic: String, partitionId: Int) : Int = {
+  // Visibility for testing
+  private[server] def getFetcherId(topic: String, partitionId: Int) : Int = {
     lock synchronized {
       Utils.abs(31 * topic.hashCode() + partitionId) % numFetchersPerBroker
     }

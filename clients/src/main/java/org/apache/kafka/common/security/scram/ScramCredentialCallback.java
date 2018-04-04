@@ -20,36 +20,12 @@ import javax.security.auth.callback.Callback;
 
 public class ScramCredentialCallback implements Callback {
     private ScramCredential scramCredential;
-    private boolean tokenAuthenticated;
-    private String tokenOwner;
-    private String mechanism;
-
-    public ScramCredentialCallback(boolean tokenAuthenticated, String mechanism) {
-        this.tokenAuthenticated = tokenAuthenticated;
-        this.mechanism = mechanism;
-    }
 
     public ScramCredential scramCredential() {
         return scramCredential;
     }
 
-    public boolean tokenauth() {
-        return tokenAuthenticated;
-    }
-
     public void scramCredential(ScramCredential scramCredential) {
         this.scramCredential = scramCredential;
-    }
-
-    public void tokenOwner(String tokenOwner) {
-        this.tokenOwner = tokenOwner;
-    }
-
-    public String tokenOwner() {
-        return tokenOwner;
-    }
-
-    public String mechanism() {
-        return mechanism;
     }
 }

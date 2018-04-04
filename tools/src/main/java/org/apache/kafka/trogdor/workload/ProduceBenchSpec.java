@@ -26,19 +26,30 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.Set;
 
 /**
  * The specification for a benchmark that produces messages to a set of topics.
  */
 public class ProduceBenchSpec extends TaskSpec {
+
+    private static final String DEFAULT_TOPIC_PREFIX = "produceBenchTopic";
+    private static final int DEFAULT_NUM_PARTITIONS = 1;
+    private static final short DEFAULT_REPLICATION_FACTOR = 3;
+
     private final String producerNode;
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
     private final int maxMessages;
+    private final PayloadGenerator keyGenerator;
+    private final PayloadGenerator valueGenerator;
     private final Map<String, String> producerConf;
     private final int totalTopics;
     private final int activeTopics;
+    private final String topicPrefix;
+    private final int numPartitions;
+    private final short replicationFactor;
 
     @JsonCreator
     public ProduceBenchSpec(@JsonProperty("startMs") long startMs,
@@ -47,17 +58,31 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("bootstrapServers") String bootstrapServers,
                          @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
                          @JsonProperty("maxMessages") int maxMessages,
+                         @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
+                         @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
                          @JsonProperty("producerConf") Map<String, String> producerConf,
                          @JsonProperty("totalTopics") int totalTopics,
-                         @JsonProperty("activeTopics") int activeTopics) {
+                         @JsonProperty("activeTopics") int activeTopics,
+                         @JsonProperty("topicPrefix") String topicPrefix,
+                         @JsonProperty("partitionsPerTopic") int partitionsPerTopic,
+                         @JsonProperty("replicationFactor") short replicationFactor) {
         super(startMs, durationMs);
-        this.producerNode = producerNode;
-        this.bootstrapServers = bootstrapServers;
+        this.producerNode = (producerNode == null) ? "" : producerNode;
+        this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
         this.targetMessagesPerSec = targetMessagesPerSec;
         this.maxMessages = maxMessages;
-        this.producerConf = producerConf;
+        this.keyGenerator = keyGenerator == null ?
+            new SequentialPayloadGenerator(4, 0) : keyGenerator;
+        this.valueGenerator = valueGenerator == null ?
+            new ConstantPayloadGenerator(512, new byte[0]) : valueGenerator;
+        this.producerConf = (producerConf == null) ? new TreeMap<String, String>() : producerConf;
         this.totalTopics = totalTopics;
         this.activeTopics = activeTopics;
+        this.topicPrefix = (topicPrefix == null) ? DEFAULT_TOPIC_PREFIX : topicPrefix;
+        this.numPartitions = (partitionsPerTopic == 0)
+                             ? DEFAULT_NUM_PARTITIONS : partitionsPerTopic;
+        this.replicationFactor = (replicationFactor == 0)
+                                 ? DEFAULT_REPLICATION_FACTOR : replicationFactor;
     }
 
     @JsonProperty
@@ -81,6 +106,16 @@ public class ProduceBenchSpec extends TaskSpec {
     }
 
     @JsonProperty
+    public PayloadGenerator keyGenerator() {
+        return keyGenerator;
+    }
+
+    @JsonProperty
+    public PayloadGenerator valueGenerator() {
+        return valueGenerator;
+    }
+
+    @JsonProperty
     public Map<String, String> producerConf() {
         return producerConf;
     }
@@ -93,6 +128,21 @@ public class ProduceBenchSpec extends TaskSpec {
     @JsonProperty
     public int activeTopics() {
         return activeTopics;
+    }
+
+    @JsonProperty
+    public String topicPrefix() {
+        return topicPrefix;
+    }
+
+    @JsonProperty
+    public int numPartitions() {
+        return numPartitions;
+    }
+
+    @JsonProperty
+    public short replicationFactor() {
+        return replicationFactor;
     }
 
     @Override

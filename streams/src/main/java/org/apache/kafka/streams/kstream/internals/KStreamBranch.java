@@ -16,18 +16,21 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.processor.To;
 
 class KStreamBranch<K, V> implements ProcessorSupplier<K, V> {
 
     private final Predicate<K, V>[] predicates;
+    private final String[] childNodes;
 
-    @SuppressWarnings("unchecked")
-    public KStreamBranch(Predicate<K, V> ... predicates) {
+    KStreamBranch(final Predicate<K, V>[] predicates,
+                  final String[] childNodes) {
         this.predicates = predicates;
+        this.childNodes = childNodes;
     }
 
     @Override
@@ -37,12 +40,12 @@ class KStreamBranch<K, V> implements ProcessorSupplier<K, V> {
 
     private class KStreamBranchProcessor extends AbstractProcessor<K, V> {
         @Override
-        public void process(K key, V value) {
+        public void process(final K key, final V value) {
             for (int i = 0; i < predicates.length; i++) {
                 if (predicates[i].test(key, value)) {
-                    // use forward with childIndex here and then break the loop
+                    // use forward with child here and then break the loop
                     // so that no record is going to be piped to multiple streams
-                    context().forward(key, value, i);
+                    context().forward(key, value, To.child(childNodes[i]));
                     break;
                 }
             }

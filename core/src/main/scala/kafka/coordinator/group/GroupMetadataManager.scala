@@ -156,7 +156,7 @@ class GroupMetadataManager(brokerId: Int,
 
   def isGroupLoading(groupId: String): Boolean = isPartitionLoading(partitionFor(groupId))
 
-  def isLoading(): Boolean = inLock(partitionLock) { loadingPartitions.nonEmpty }
+  def isLoading: Boolean = inLock(partitionLock) { loadingPartitions.nonEmpty }
 
   // return true iff group is owned and the group doesn't exist
   def groupNotExists(groupId: String) = inLock(partitionLock) {
@@ -482,37 +482,32 @@ class GroupMetadataManager(brokerId: Int,
   /**
    * Asynchronously read the partition from the offsets topic and populate the cache
    */
-  def loadGroupsForPartition(offsetsPartition: Int, onGroupLoaded: GroupMetadata => Unit) {
+  def scheduleLoadGroupAndOffsets(offsetsPartition: Int, onGroupLoaded: GroupMetadata => Unit) {
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
-    info(s"Scheduling loading of offsets and group metadata from $topicPartition")
-    scheduler.schedule(topicPartition.toString, doLoadGroupsAndOffsets)
-
-    def doLoadGroupsAndOffsets() {
-      inLock(partitionLock) {
-        if (loadingPartitions.contains(offsetsPartition)) {
-          info(s"Offset load from $topicPartition already in progress.")
-          return
-        } else {
-          loadingPartitions.add(offsetsPartition)
-        }
-      }
-
-      try {
-        val startMs = time.milliseconds()
-        loadGroupsAndOffsets(topicPartition, onGroupLoaded)
-        info(s"Finished loading offsets and group metadata from $topicPartition in ${time.milliseconds() - startMs} milliseconds.")
-      } catch {
-        case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
-      } finally {
-        inLock(partitionLock) {
-          ownedPartitions.add(offsetsPartition)
-          loadingPartitions.remove(offsetsPartition)
-        }
-      }
+    if (addLoadingPartition(offsetsPartition)) {
+      info(s"Scheduling loading of offsets and group metadata from $topicPartition")
+      scheduler.schedule(topicPartition.toString, () => loadGroupsAndOffsets(topicPartition, onGroupLoaded))
+    } else {
+      info(s"Already loading offsets and group metadata from $topicPartition")
     }
   }
 
   private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit) {
+    try {
+      val startMs = time.milliseconds()
+      doLoadGroupsAndOffsets(topicPartition, onGroupLoaded)
+      info(s"Finished loading offsets and group metadata from $topicPartition in ${time.milliseconds() - startMs} milliseconds.")
+    } catch {
+      case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
+    } finally {
+      inLock(partitionLock) {
+        ownedPartitions.add(topicPartition.partition)
+        loadingPartitions.remove(topicPartition.partition)
+      }
+    }
+  }
+
+  private def doLoadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit) {
     def highWaterMark = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
 
     replicaManager.getLog(topicPartition) match {
@@ -555,8 +550,11 @@ class GroupMetadataManager(brokerId: Int,
               }
               pendingOffsets.remove(batch.producerId)
             } else {
+              var batchBaseOffset: Option[Long] = None
               for (record <- batch.asScala) {
                 require(record.hasKey, "Group metadata/offset entry key should not be null")
+                if (batchBaseOffset.isEmpty)
+                  batchBaseOffset = Some(record.offset)
                 GroupMetadataManager.readMessageKey(record.key) match {
 
                   case offsetKey: OffsetKey =>
@@ -573,9 +571,9 @@ class GroupMetadataManager(brokerId: Int,
                     } else {
                       val offsetAndMetadata = GroupMetadataManager.readOffsetMessageValue(record.value)
                       if (isTxnOffsetCommit)
-                        pendingOffsets(batch.producerId).put(groupTopicPartition, CommitRecordMetadataAndOffset(Some(batch.baseOffset), offsetAndMetadata))
+                        pendingOffsets(batch.producerId).put(groupTopicPartition, CommitRecordMetadataAndOffset(batchBaseOffset, offsetAndMetadata))
                       else
-                        loadedOffsets.put(groupTopicPartition, CommitRecordMetadataAndOffset(Some(batch.baseOffset), offsetAndMetadata))
+                        loadedOffsets.put(groupTopicPartition, CommitRecordMetadataAndOffset(batchBaseOffset, offsetAndMetadata))
                     }
 
                   case groupMetadataKey: GroupMetadataKey =>
@@ -647,7 +645,6 @@ class GroupMetadataManager(brokerId: Int,
             throw new IllegalStateException(s"Unexpected unload of active group $groupId while " +
               s"loading partition $topicPartition")
         }
-
     }
   }
 
@@ -713,22 +710,27 @@ class GroupMetadataManager(brokerId: Int,
 
   // visible for testing
   private[group] def cleanupGroupMetadata(): Unit = {
-    cleanupGroupMetadata(None, groupMetadataCache.values, time.milliseconds())
+    val startMs = time.milliseconds()
+    val offsetsRemoved = cleanupGroupMetadata(groupMetadataCache.values, group => {
+      group.removeExpiredOffsets(time.milliseconds())
+    })
+    info(s"Removed $offsetsRemoved expired offsets in ${time.milliseconds() - startMs} milliseconds.")
   }
 
-  def cleanupGroupMetadata(deletedTopicPartitions: Option[Seq[TopicPartition]],
-                           groups: Iterable[GroupMetadata],
-                           startMs: Long) {
+  /**
+    * This function is used to clean up group offsets given the groups and also a function that performs the offset deletion.
+    * @param groups Groups whose metadata are to be cleaned up
+    * @param selector A function that implements deletion of (all or part of) group offsets. This function is called while
+    *                 a group lock is held, therefore there is no need for the caller to also obtain a group lock.
+    * @return The cumulative number of offsets removed
+    */
+  def cleanupGroupMetadata(groups: Iterable[GroupMetadata], selector: GroupMetadata => Map[TopicPartition, OffsetAndMetadata]): Int = {
     var offsetsRemoved = 0
 
     groups.foreach { group =>
       val groupId = group.groupId
       val (removedOffsets, groupIsDead, generation) = group.inLock {
-        val removedOffsets = deletedTopicPartitions match {
-          case Some(topicPartitions) => group.removeOffsets(topicPartitions)
-          case None => group.removeExpiredOffsets(startMs)
-        }
-
+        val removedOffsets = selector(group)
         if (group.is(Empty) && !group.hasOffsets) {
           info(s"Group $groupId transitioned to Dead in generation ${group.generationId}")
           group.transitionTo(Dead)
@@ -736,13 +738,13 @@ class GroupMetadataManager(brokerId: Int,
         (removedOffsets, group.is(Dead), group.generationId)
       }
 
-      val offsetsPartition = partitionFor(groupId)
-      val appendPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
-      getMagic(offsetsPartition) match {
-        case Some(magicValue) =>
-          // We always use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
-          val timestampType = TimestampType.CREATE_TIME
-          val timestamp = time.milliseconds()
+    val offsetsPartition = partitionFor(groupId)
+    val appendPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
+    getMagic(offsetsPartition) match {
+      case Some(magicValue) =>
+        // We always use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
+        val timestampType = TimestampType.CREATE_TIME
+        val timestamp = time.milliseconds()
 
           replicaManager.nonOfflinePartition(appendPartition).foreach { partition =>
             val tombstones = ListBuffer.empty[SimpleRecord]
@@ -788,7 +790,7 @@ class GroupMetadataManager(brokerId: Int,
       }
     }
 
-    info(s"Removed $offsetsRemoved expired offsets in ${time.milliseconds() - startMs} milliseconds.")
+    offsetsRemoved
   }
 
   def handleTxnCompletion(producerId: Long, completedPartitions: Set[Int], isCommit: Boolean) {
@@ -868,11 +870,24 @@ class GroupMetadataManager(brokerId: Int,
    *
    * NOTE: this is for test only
    */
-  def addPartitionOwnership(partition: Int) {
+  private[group] def addPartitionOwnership(partition: Int) {
     inLock(partitionLock) {
       ownedPartitions.add(partition)
     }
   }
+
+  /**
+   * Add a partition to the loading partitions set. Return true if the partition was not
+   * already loading.
+   *
+   * Visible for testing
+   */
+  private[group] def addLoadingPartition(partition: Int): Boolean = {
+    inLock(partitionLock) {
+      loadingPartitions.add(partition)
+    }
+  }
+
 }
 
 /**

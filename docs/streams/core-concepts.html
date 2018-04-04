@@ -127,6 +127,10 @@
         <li> For aggregations, the timestamp of a resulting aggregate update record will be that of the latest arrived input record that triggered the update.</li>
     </ul>
 
+    <p>
+	Note, that the describe default behavior can be changed in the Processor API by assigning timestamps to output records explicitly when calling <code>#forward()</code>.
+    </p>
+
     <h3><a id="streams_state" href="#streams_state">States</a></h3>
 
     <p>

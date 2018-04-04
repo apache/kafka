@@ -104,7 +104,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
         for (int i = 0; i < brokers.length; i++) {
             brokerConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), i);
-            log.debug("Starting a Kafka instance on port {} ...", brokerConfig.getProperty(KafkaConfig$.MODULE$.PortProp()));
+            log.debug("Starting a Kafka instance on port {} ...", brokerConfig.get(KafkaConfig$.MODULE$.PortProp()));
             brokers[i] = new KafkaEmbedded(brokerConfig, time);
 
             log.debug("Kafka instance is running at {}, connected to ZooKeeper at {}",

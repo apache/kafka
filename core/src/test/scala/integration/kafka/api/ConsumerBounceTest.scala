@@ -173,7 +173,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     val consumer = this.consumers.head
     consumer.subscribe(Collections.singleton(newtopic))
     executor.schedule(new Runnable {
-        def run() = TestUtils.createTopic(zkClient, newtopic, serverCount, serverCount, servers)
+        def run() = createTopic(newtopic, numPartitions = serverCount, replicationFactor = serverCount)
       }, 2, TimeUnit.SECONDS)
     consumer.poll(0)
 

@@ -255,9 +255,8 @@ class TopicDeletionManager(controller: KafkaController,
     // send update metadata so that brokers stop serving data for topics to be deleted
     val partitions = topics.flatMap(controllerContext.partitionsForTopic)
     controller.sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, partitions)
-    val partitionReplicaAssignmentByTopic = controllerContext.partitionReplicaAssignment.groupBy(p => p._1.topic)
     topics.foreach { topic =>
-      onPartitionDeletion(partitionReplicaAssignmentByTopic(topic).keySet)
+      onPartitionDeletion(controllerContext.partitionsForTopic(topic))
     }
   }
 

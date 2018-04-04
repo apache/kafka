@@ -222,7 +222,7 @@ public class StreamThread extends Thread {
 
     public boolean isRunning() {
         synchronized (stateLock) {
-            return state == State.RUNNING || state == State.PARTITIONS_REVOKED || state == State.PARTITIONS_ASSIGNED;
+            return state.isRunning();
         }
     }
 
@@ -260,7 +260,7 @@ public class StreamThread extends Thread {
                 taskManager.createTasks(assignment);
             } catch (final Throwable t) {
                 log.error("Error caught during partition assignment, " +
-                        "will abort the current process and re-throw at the end of rebalance: {}", t.getMessage());
+                        "will abort the current process and re-throw at the end of rebalance: {}", t);
                 streamThread.setRebalanceException(t);
             } finally {
                 log.info("partition assignment took {} ms.\n" +
@@ -291,7 +291,7 @@ public class StreamThread extends Thread {
                     taskManager.suspendTasksAndState();
                 } catch (final Throwable t) {
                     log.error("Error caught during partition revocation, " +
-                              "will abort the current process and re-throw at the end of rebalance: {}", t.getMessage());
+                              "will abort the current process and re-throw at the end of rebalance: {}", t);
                     streamThread.setRebalanceException(t);
                 } finally {
                     streamThread.clearStandbyRecords();
@@ -346,9 +346,6 @@ public class StreamThread extends Thread {
             return stateDirectory;
         }
 
-        /**
-         * @throws TaskMigratedException if the task producer got fenced (EOS only)
-         */
         Collection<T> createTasks(final Consumer<byte[], byte[]> consumer, final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
             final List<T> createdTasks = new ArrayList<>();
             for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
@@ -394,16 +391,13 @@ public class StreamThread extends Thread {
                   taskCreatedSensor,
                   storeChangelogReader,
                   time,
-                    log);
+                  log);
             this.cache = cache;
             this.clientSupplier = clientSupplier;
             this.threadProducer = threadProducer;
             this.threadClientId = threadClientId;
         }
 
-        /**
-         * @throws TaskMigratedException if the task producer got fenced (EOS only)
-         */
         @Override
         StreamTask createTask(final Consumer<byte[], byte[]> consumer, final TaskId taskId, final Set<TopicPartition> partitions) {
             taskCreatedSensor.record();
@@ -463,7 +457,7 @@ public class StreamThread extends Thread {
                   taskCreatedSensor,
                   storeChangelogReader,
                   time,
-                    log);
+                  log);
         }
 
         @Override
@@ -757,7 +751,12 @@ public class StreamThread extends Thread {
             } catch (final TaskMigratedException ignoreAndRejoinGroup) {
                 log.warn("Detected task {} that got migrated to another thread. " +
                     "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
-                    "Trying to rejoin the consumer group now. Below is the detailed description of the task:\n{}", ignoreAndRejoinGroup.migratedTask().id(), ignoreAndRejoinGroup.migratedTask().toString(">"));
+                    "Will try to rejoin the consumer group. Below is the detailed description of the task:\n{}",
+                        ignoreAndRejoinGroup.migratedTask().id(), ignoreAndRejoinGroup.migratedTask().toString(">"));
+
+                // re-subscribe to enforce a rebalance in the next poll call
+                consumer.unsubscribe();
+                consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
             }
         }
     }
@@ -894,15 +893,20 @@ public class StreamThread extends Thread {
      * @param records Records, can be null
      */
     private void addRecordsToTasks(final ConsumerRecords<byte[], byte[]> records) {
-        if (records != null && !records.isEmpty()) {
-            int numAddedRecords = 0;
+        int numAddedRecords = 0;
 
-            for (final TopicPartition partition : records.partitions()) {
-                final StreamTask task = taskManager.activeTask(partition);
-                numAddedRecords += task.addRecords(partition, records.records(partition));
+        for (final TopicPartition partition : records.partitions()) {
+            final StreamTask task = taskManager.activeTask(partition);
+
+            if (task.isClosed()) {
+                log.info("Stream task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
+                        "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                throw new TaskMigratedException(task);
             }
-            streamsMetrics.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);
+
+            numAddedRecords += task.addRecords(partition, records.records(partition));
         }
+        streamsMetrics.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);
     }
 
     /**
@@ -1026,6 +1030,13 @@ public class StreamThread extends Thread {
                         List<ConsumerRecord<byte[], byte[]>> remaining = entry.getValue();
                         if (remaining != null) {
                             final StandbyTask task = taskManager.standbyTask(partition);
+
+                            if (task.isClosed()) {
+                                log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
+                                        "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                                throw new TaskMigratedException(task);
+                            }
+
                             remaining = task.update(partition, remaining);
                             if (remaining != null) {
                                 remainingStandbyRecords.put(partition, remaining);
@@ -1053,6 +1064,12 @@ public class StreamThread extends Thread {
                             throw new StreamsException(logPrefix + "Missing standby task for partition " + partition);
                         }
 
+                        if (task.isClosed()) {
+                            log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
+                                    "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                            throw new TaskMigratedException(task);
+                        }
+
                         final List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
                         if (remaining != null) {
                             restoreConsumer.pause(singleton(partition));
@@ -1065,6 +1082,13 @@ public class StreamThread extends Thread {
                 final Set<TopicPartition> partitions = recoverableException.partitions();
                 for (final TopicPartition partition : partitions) {
                     final StandbyTask task = taskManager.standbyTask(partition);
+
+                    if (task.isClosed()) {
+                        log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
+                                "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                        throw new TaskMigratedException(task);
+                    }
+
                     log.info("Reinitializing StandbyTask {}", task);
                     task.reinitializeStateStoresForPartitions(recoverableException.partitions());
                 }
@@ -1183,8 +1207,12 @@ public class StreamThread extends Thread {
         return sb.toString();
     }
 
-    // this is for testing only
+    // the following are for testing only
     TaskManager taskManager() {
         return taskManager;
+    }
+
+    Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords() {
+        return standbyRecords;
     }
 }
