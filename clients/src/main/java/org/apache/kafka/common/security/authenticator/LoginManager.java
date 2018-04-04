@@ -204,7 +204,7 @@ public class LoginManager {
 
         @Override
         public int hashCode() {
-            return Objects.hash(configInfo, loginClass);
+            return Objects.hash(configInfo, loginClass, loginCallbackClass);
         }
 
         @Override

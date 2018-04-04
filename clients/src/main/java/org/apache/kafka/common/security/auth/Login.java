@@ -36,6 +36,9 @@ public interface Login {
      *        from `jaasConfiguration`.
      * @param contextName JAAS context name for this login which may be used to obtain
      *        the login context from `jaasConfiguration`.
+     * @param jaasConfiguration JAAS configuration containing the login context named
+     *        `contextName`. If static JAAS configuration is used, this `Configuration`
+     *         may also contain other login contexts.
      * @param loginCallbackHandler Login callback handler instance to use for this Login.
      *        Login callback handler class may be configured using
      *        {@link org.apache.kafka.common.config.SaslConfigs#SASL_LOGIN_CALLBACK_HANDLER_CLASS}.
