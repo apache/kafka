@@ -746,6 +746,7 @@ object KafkaConfig {
 
   private val configDef = {
     import ConfigDef.Importance._
+    import ConfigDef.NonEmptyString._
     import ConfigDef.Range._
     import ConfigDef.Type._
     import ConfigDef.ValidString._
@@ -823,7 +824,7 @@ object KafkaConfig {
       .define(LogCleanerEnableProp, BOOLEAN, Defaults.LogCleanerEnable, MEDIUM, LogCleanerEnableDoc)
       .define(LogCleanerDeleteRetentionMsProp, LONG, Defaults.LogCleanerDeleteRetentionMs, MEDIUM, LogCleanerDeleteRetentionMsDoc)
       .define(LogCleanerMinCompactionLagMsProp, LONG, Defaults.LogCleanerMinCompactionLagMs, MEDIUM, LogCleanerMinCompactionLagMsDoc)
-      .define(LogCleanerCompactionStrategyProp, STRING, Defaults.LogCleanerCompactionStrategy, MEDIUM, LogCleanerCompactionStrategyDoc)
+      .define(LogCleanerCompactionStrategyProp, STRING, Defaults.LogCleanerCompactionStrategy, nonEmptyString(), MEDIUM, LogCleanerCompactionStrategyDoc)
       .define(LogIndexSizeMaxBytesProp, INT, Defaults.LogIndexSizeMaxBytes, atLeast(4), MEDIUM, LogIndexSizeMaxBytesDoc)
       .define(LogIndexIntervalBytesProp, INT, Defaults.LogIndexIntervalBytes, atLeast(0), MEDIUM, LogIndexIntervalBytesDoc)
       .define(LogFlushIntervalMessagesProp, LONG, Defaults.LogFlushIntervalMessages, atLeast(1), HIGH, LogFlushIntervalMessagesDoc)

@@ -1329,7 +1329,7 @@ class LogCleanerTest extends JUnitSuite {
     val hashAlgorithm = "MD5"
     val digest = MessageDigest.getInstance(hashAlgorithm)
     val memoryMax = Runtime.getRuntime.freeMemory.toInt
-    var memory = slots * (digest.getDigestLength + 8 + 8)
+    var memory = slots * (digest.getDigestLength + 8)
     memory = if (memory > 0 && memory < memoryMax) memory else memoryMax
     new SkimpyCleanerCache(memory, hashAlgorithm)
   }
