@@ -2276,11 +2276,17 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 final OffsetFetchResponse response = (OffsetFetchResponse) abstractResponse;
                 final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
-                for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry :
-                    response.responseData().entrySet()) {
+
+                for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : response.responseData().entrySet()) {
+                    final OffsetFetchResponse.PartitionData partitionData = entry.getValue();
+
+                    if (partitionData.error != Errors.NONE) {
+                        groupOffsetListingFuture.completeExceptionally(partitionData.error.exception());
+                    }
+
                     final TopicPartition topicPartition = entry.getKey();
-                    final Long offset = entry.getValue().offset;
-                    final String metadata = entry.getValue().metadata;
+                    final Long offset = partitionData.offset;
+                    final String metadata = partitionData.metadata;
                     groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, metadata));
                 }
                 groupOffsetListingFuture.complete(groupOffsetsListing);
