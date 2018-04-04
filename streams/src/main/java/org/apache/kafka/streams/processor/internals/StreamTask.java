@@ -482,7 +482,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             if (eosEnabled) {
                 if (!clean) {
                     try {
-                        if (!isZombie) {
+                        if (!isZombie && transactionInFlight) {
                             producer.abortTransaction();
                         }
                         transactionInFlight = false;
