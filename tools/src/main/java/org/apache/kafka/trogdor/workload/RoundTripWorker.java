@@ -185,7 +185,9 @@ public class RoundTripWorker implements TaskWorker {
             props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer." + id);
             props.put(ProducerConfig.ACKS_CONFIG, "all");
             props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 105000);
-            // or entries can be overridden by the user via producerConf field in the spec
+            for (Map.Entry<String, String> commonEntry : spec.commonClientConf().entrySet()) {
+                props.setProperty(commonEntry.getKey(), commonEntry.getValue());
+            }
             for (Map.Entry<String, String> entry : spec.producerConf().entrySet()) {
                 props.setProperty(entry.getKey(), entry.getValue());
             }
@@ -280,7 +282,9 @@ public class RoundTripWorker implements TaskWorker {
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
             props.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, 105000);
             props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 100000);
-            // or entries can be overridden by the user via consumerConf field in the spec
+            for (Map.Entry<String, String> commonEntry : spec.commonClientConf().entrySet()) {
+                props.setProperty(commonEntry.getKey(), commonEntry.getValue());
+            }
             for (Map.Entry<String, String> entry : spec.consumerConf().entrySet()) {
                 props.setProperty(entry.getKey(), entry.getValue());
             }
