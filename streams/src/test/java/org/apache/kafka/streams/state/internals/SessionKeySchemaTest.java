@@ -149,14 +149,6 @@ public class SessionKeySchemaTest {
         );
     }
 
-
-    @Test
-    public void testLowerBoundWithoutTimestamp() {
-        Bytes lower = sessionKeySchema.lowerRangeWithoutTimestamp(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 5);
-
-        assertThat(lower, equalTo(Bytes.wrap(new byte[]{0xA, 0xB, 0xC})));
-    }
-
     @Test
     public void shouldSerializeDeserialize() {
         final byte[] bytes = keySerde.serializer().serialize(topic, windowedKey);

@@ -151,12 +151,6 @@ public class WindowKeySchemaTest {
     }
 
     @Test
-    public void testLowerBoundWithoutTimestamp() {
-        Bytes lower = windowKeySchema.lowerRangeWithoutTimestamp(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 42);
-        assertThat(lower, equalTo(Bytes.wrap(new byte[]{0xA, 0xB, 0xC})));
-    }
-
-    @Test
     public void shouldSerializeDeserialize() {
         final byte[] bytes = keySerde.serializer().serialize(topic, windowedKey);
         final Windowed<String> result = keySerde.deserializer().deserialize(topic, bytes);
