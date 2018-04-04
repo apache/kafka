@@ -123,7 +123,7 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldRollSegments() {
         // just to validate directories
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, numSegments, schema.bytesComparator());
         final String key = "a";
         bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(0L, 0L))), serializeValue(50L));
         assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
@@ -158,7 +158,7 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldGetAllSegments() {
         // just to validate directories
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, numSegments, schema.bytesComparator());
         final String key = "a";
         bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(0L, 0L))), serializeValue(50L));
         assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
@@ -183,7 +183,7 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldFetchAllSegments() {
         // just to validate directories
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, numSegments, schema.bytesComparator());
         final String key = "a";
         bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(0L, 0L))), serializeValue(50L));
         assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
@@ -206,7 +206,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @Test
     public void shouldLoadSegementsWithOldStyleDateFormattedName() {
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, numSegments, schema.bytesComparator());
         final String key = "a";
         bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(0L, 0L))), serializeValue(50L));
         bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(30000L, 60000L))), serializeValue(100L));
@@ -235,7 +235,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @Test
     public void shouldLoadSegementsWithOldStyleColonFormattedName() {
-        final Segments segments = new Segments(storeName, retention, numSegments);
+        final Segments segments = new Segments(storeName, retention, numSegments, schema.bytesComparator());
         final String key = "a";
         bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(0L, 0L))), serializeValue(50L));
         bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(30000L, 60000L))), serializeValue(100L));

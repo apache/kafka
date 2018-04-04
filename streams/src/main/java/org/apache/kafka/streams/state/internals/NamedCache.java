@@ -32,7 +32,6 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -271,17 +270,12 @@ class NamedCache {
     }
 
     private Iterator<Bytes> keySetIterator(final Set<Bytes> keySet) {
-        final TreeSet<Bytes> copy = new TreeSet<>();
-        copy.addAll(keySet);
+        final TreeSet<Bytes> copy = new TreeSet<>(keySet);
         return copy.iterator();
     }
 
     synchronized Iterator<Bytes> allKeys() {
         return keySetIterator(cache.navigableKeySet());
-    }
-    
-    synchronized NavigableSet<Bytes> keySet() {
-        return cache.navigableKeySet();
     }
 
     synchronized LRUCacheEntry first() {

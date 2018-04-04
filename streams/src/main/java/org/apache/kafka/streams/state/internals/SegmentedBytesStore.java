@@ -106,54 +106,26 @@ public interface SegmentedBytesStore extends StateStore {
         void init(final String topic);
 
         /**
-         * Given a range of record keys and a time, construct a Segmented key that represents
+         * Given a range of fixed size record keys and a time, construct a Segmented key that represents
          * the upper range of keys to search when performing range queries.
-         * @see SessionKeySchema#upperRange
-         * @see WindowKeySchema#upperRange
-         * @param key
-         * @param to
-         * @return      The key that represents the upper range to search for in the store
+         * @param key the last key in the range
+         * @param to the last timestamp in the range
+         * @return The key that represents the upper range to search for in the store
          */
         Bytes upperRange(final Bytes key, final long to);
 
         /**
-         * Given a range of record keys and a time, construct a Segmented key that represents
+         * Given a range of fixed size record keys and a time, construct a Segmented key that represents
          * the lower range of keys to search when performing range queries.
-         * @see SessionKeySchema#lowerRange
-         * @see WindowKeySchema#lowerRange
-         * @param key
-         * @param from
+         * @param key the first key in the range
+         * @param from the first timestamp in the range
          * @return      The key that represents the lower range to search for in the store
          */
         Bytes lowerRange(final Bytes key, final long from);
 
         /**
-         * Given a range of fixed size record keys and a time, construct a Segmented key that represents
-         * the upper range of keys to search when performing range queries.
-         * @see SessionKeySchema#upperRange
-         * @see WindowKeySchema#upperRange
-         * @param key the last key in the range
-         * @param to the last timestamp in the range
-         * @return The key that represents the upper range to search for in the store
-         */
-        Bytes upperRangeFixedSize(final Bytes key, final long to);
-
-        /**
-         * Given a range of fixed size record keys and a time, construct a Segmented key that represents
-         * the lower range of keys to search when performing range queries.
-         * @see SessionKeySchema#lowerRange
-         * @see WindowKeySchema#lowerRange
-         * @param key the first key in the range
-         * @param from the first timestamp in the range
-         * @return      The key that represents the lower range to search for in the store
-         */
-        Bytes lowerRangeFixedSize(final Bytes key, final long from);
-
-        /**
          * Extract the timestamp of the segment from the key. The key is a composite of
          * the record-key, any timestamps, plus any additional information.
-         * @see SessionKeySchema#lowerRange
-         * @see WindowKeySchema#lowerRange
          * @param key
          * @return
          */
@@ -179,5 +151,10 @@ public interface SegmentedBytesStore extends StateStore {
          * @return  List of segments to search
          */
         List<Segment> segmentsToSearch(Segments segments, long from, long to);
+
+        /**
+         * Return the bytes comparator for a window key
+         */
+        Bytes.ByteArrayComparator bytesComparator();
     }
 }

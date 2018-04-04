@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -59,7 +60,7 @@ public class SegmentsTest {
                                            Serdes.Long(),
                                            new NoOpRecordCollector(),
                                            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
-        segments = new Segments(storeName, retentionPeriod, NUM_SEGMENTS);
+        segments = new Segments(storeName, retentionPeriod, NUM_SEGMENTS, Bytes.BYTES_LEXICO_COMPARATOR);
         segmentInterval = Segments.segmentInterval(retentionPeriod, NUM_SEGMENTS);
     }
 
@@ -79,7 +80,7 @@ public class SegmentsTest {
 
     @Test
     public void shouldBaseSegmentIntervalOnRetentionAndNumSegments() {
-        final Segments segments = new Segments("test", 8 * 60 * 1000, 5);
+        final Segments segments = new Segments("test", 8 * 60 * 1000, 5, Bytes.BYTES_LEXICO_COMPARATOR);
         assertEquals(0, segments.segmentId(0));
         assertEquals(0, segments.segmentId(60000));
         assertEquals(1, segments.segmentId(120000));
@@ -160,7 +161,7 @@ public class SegmentsTest {
         // close existing.
         segments.close();
 
-        segments = new Segments("test", 4 * 60 * 1000, 5);
+        segments = new Segments("test", 4 * 60 * 1000, 5, Bytes.BYTES_LEXICO_COMPARATOR);
         segments.openExisting(context);
 
         assertTrue(segments.getSegmentForTimestamp(0).isOpen());

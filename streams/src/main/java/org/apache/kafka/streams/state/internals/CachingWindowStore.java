@@ -152,14 +152,14 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         final Bytes keyBytes = WindowKeySchema.toStoreKeyBinary(key, timestamp, 0);
         final LRUCacheEntry entry = new LRUCacheEntry(value, true, context.offset(),
                                                       timestamp, context.partition(), context.topic());
-        cache.put(name, cacheFunction.cacheKey(keyBytes), entry);
+        cache.put(name, cacheFunction.cacheKey(keyBytes, timestamp), entry);
     }
 
     @Override
     public byte[] fetch(final Bytes key, final long timestamp) {
         validateStoreOpen();
         final Bytes bytesKey = WindowKeySchema.toStoreKeyBinary(key, timestamp, 0);
-        final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
+        final Bytes cacheKey = cacheFunction.cacheKey(bytesKey, timestamp);
         final LRUCacheEntry entry = cache.get(name, cacheKey);
         if (entry == null) {
             return underlying.fetch(key, timestamp);
@@ -176,8 +176,8 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
 
         final WindowStoreIterator<byte[]> underlyingIterator = underlying.fetch(key, timeFrom, timeTo);
 
-        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, timeFrom));
-        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo));
+        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(key, timeFrom), Math.max(0, timeFrom));
+        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(key, timeTo), timeTo);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, cacheKeyFrom, cacheKeyTo);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key,
@@ -199,8 +199,8 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = underlying.fetch(from, to, timeFrom, timeTo);
 
-        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom));
-        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(to, timeTo));
+        final Bytes cacheKeyFrom = cacheFunction.cacheKey(from, Math.max(0, timeFrom));
+        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(to, timeTo), timeTo);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, cacheKeyFrom, cacheKeyTo);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(from,

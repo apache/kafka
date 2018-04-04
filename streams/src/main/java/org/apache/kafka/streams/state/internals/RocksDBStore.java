@@ -48,7 +48,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -80,6 +79,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
     private final String name;
     private final String parentDir;
+    private final Bytes.ByteArrayComparator comparator;
     private final Set<KeyValueIterator> openIterators = Collections.synchronizedSet(new HashSet<KeyValueIterator>());
 
     File dbDir;
@@ -98,12 +98,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     protected volatile boolean open = false;
 
     RocksDBStore(String name) {
-        this(name, DB_FILE_DIR);
+        this(name, DB_FILE_DIR, Bytes.BYTES_LEXICO_COMPARATOR);
     }
 
-    RocksDBStore(String name, String parentDir) {
+    RocksDBStore(String name, String parentDir, Bytes.ByteArrayComparator comparator) {
         this.name = name;
         this.parentDir = parentDir;
+        this.comparator = comparator;
     }
 
     @SuppressWarnings("unchecked")
@@ -510,7 +511,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         // RocksDB's JNI interface does not expose getters/setters that allow the
         // comparator to be pluggable, and the default is lexicographic, so it's
         // safe to just force lexicographic comparator here for now.
-        private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
         private final byte[] rawToKey;
 
         RocksDBRangeIterator(final String storeName,

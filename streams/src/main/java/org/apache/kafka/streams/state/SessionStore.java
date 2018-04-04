@@ -34,7 +34,7 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      *
      * @param key the key to return sessions for
      * @param earliestSessionEndTime the end timestamp of the earliest session to search for
-     * @param latestSessionStartTime the end timestamp of the latest session to search for
+     * @param latestSessionStartTime the start timestamp of the latest session to search for
      * @return iterator of sessions with the matching key and aggregated values
      * @throws NullPointerException If null is used for key.
      */
@@ -49,7 +49,7 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      * @param keyFrom The first key that could be in the range
      * @param keyTo The last key that could be in the range
      * @param earliestSessionEndTime the end timestamp of the earliest session to search for
-     * @param latestSessionStartTime the end timestamp of the latest session to search for
+     * @param latestSessionStartTime the start timestamp of the latest session to search for
      * @return iterator of sessions with the matching keys and aggregated values
      * @throws NullPointerException If null is used for any key.
      */

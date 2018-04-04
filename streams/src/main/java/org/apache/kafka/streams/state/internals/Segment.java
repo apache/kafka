@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
@@ -24,8 +25,18 @@ import java.io.IOException;
 class Segment extends RocksDBStore implements Comparable<Segment> {
     public final long id;
 
-    Segment(String segmentName, String windowName, long id) {
-        super(segmentName, windowName);
+    // for test only
+    Segment(final String segmentName,
+            final String windowName,
+            final long id) {
+        this(segmentName, windowName, id, Bytes.BYTES_LEXICO_COMPARATOR);
+    }
+
+    Segment(final String segmentName,
+            final String windowName,
+            final long id,
+            final Bytes.ByteArrayComparator comparator) {
+        super(segmentName, windowName, comparator);
         this.id = id;
     }
 

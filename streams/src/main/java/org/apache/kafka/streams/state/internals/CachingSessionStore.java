@@ -94,8 +94,8 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
         validateStoreOpen();
-        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime));
-        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime));
+        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(key, earliestSessionEndTime), Math.max(0, earliestSessionEndTime));
+        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(key, latestSessionStartTime), Long.MAX_VALUE);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = bytesStore.findSessions(key,
@@ -116,8 +116,8 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
                                                                   final long latestSessionStartTime) {
         validateStoreOpen();
 
-        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, earliestSessionEndTime));
-        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime));
+        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keyFrom, Math.max(0, earliestSessionEndTime));
+        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime), Long.MAX_VALUE);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = bytesStore.findSessions(
@@ -143,7 +143,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
         final Bytes binaryKey = Bytes.wrap(SessionKeySchema.toBinary(key));
         final LRUCacheEntry entry = new LRUCacheEntry(value, true, context.offset(),
                                                       key.window().end(), context.partition(), context.topic());
-        cache.put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
+        cache.put(cacheName, cacheFunction.cacheKey(binaryKey, key.window().end()), entry);
     }
 
     @Override

@@ -34,27 +34,31 @@ class SegmentedCacheFunction implements CacheFunction {
         this.segmentInterval = segmentInterval;
     }
 
+    static byte[] bytesFromCacheKey(Bytes cacheKey) {
+        byte[] binaryKey = new byte[cacheKey.get().length - SEGMENT_ID_BYTES];
+        System.arraycopy(cacheKey.get(), SEGMENT_ID_BYTES, binaryKey, 0, binaryKey.length);
+        return binaryKey;
+    }
+
     @Override
     public Bytes key(Bytes cacheKey) {
         return Bytes.wrap(bytesFromCacheKey(cacheKey));
     }
 
     @Override
-    public Bytes cacheKey(Bytes key) {
+    public Bytes cacheKey(Bytes key, long timestamp) {
         final byte[] keyBytes = key.get();
         ByteBuffer buf = ByteBuffer.allocate(SEGMENT_ID_BYTES + keyBytes.length);
-        buf.putLong(segmentId(key)).put(keyBytes);
+        buf.putLong(segmentId(timestamp)).put(keyBytes);
         return Bytes.wrap(buf.array());
     }
 
-    static byte[] bytesFromCacheKey(Bytes cacheKey) {
-        byte[] binaryKey = new byte[cacheKey.get().length - SEGMENT_ID_BYTES];
-        System.arraycopy(cacheKey.get(), SEGMENT_ID_BYTES, binaryKey, 0, binaryKey.length);
-        return binaryKey;
+    private long segmentId(Bytes key) {
+        return segmentId(keySchema.segmentTimestamp(key));
     }
-    
-    public long segmentId(Bytes key) {
-        return keySchema.segmentTimestamp(key) / segmentInterval;
+
+    private long segmentId(long timestamp) {
+        return timestamp / segmentInterval;
     }
 
     int compareSegmentedKeys(Bytes cacheKey, Bytes storeKey) {
