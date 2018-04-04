@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -32,6 +31,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.NoSuchElementException;
 
 import static org.junit.Assert.assertEquals;
@@ -107,41 +107,14 @@ public class SegmentIteratorTest {
 
     @Test
     public void shouldNotThrowExceptionOnHasNextWhenStoreClosed() {
-        iterator = new SegmentIterator(Arrays.asList(segmentOne, segmentTwo).iterator(),
+        iterator = new SegmentIterator(Collections.singletonList(segmentOne).iterator(),
                                        hasNextCondition,
                                        Bytes.wrap("a".getBytes()),
                                        Bytes.wrap("z".getBytes()));
-        segmentTwo.close();
+
+
+        iterator.currentIterator = segmentOne.all();
         segmentOne.close();
-
-        iterator.currentIterator = new KeyValueIterator<Bytes, byte[]>() {
-            @Override
-            public void close() {
-
-            }
-
-            @Override
-            public Bytes peekNextKey() {
-                return null;
-            }
-
-            @Override
-            public boolean hasNext() {
-                throw new InvalidStateStoreException("Store is closed");
-            }
-
-            @Override
-            public KeyValue<Bytes, byte[]> next() {
-                return null;
-            }
-
-            @Override
-            public void remove() {
-
-            }
-        };
-
-
         assertFalse(iterator.hasNext());
     }
 
