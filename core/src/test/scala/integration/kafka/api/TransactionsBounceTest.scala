@@ -102,8 +102,9 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
         producer.beginTransaction()
         val shouldAbort = iteration % 3 == 0
         records.foreach { record =>
-          producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(outputTopic, record.key, record.value,
-            !shouldAbort), new ErrorLoggingCallback(outputTopic, record.key, record.value, true))
+          val producerRecord = TestUtils.producerRecordWithExpectedTransactionStatus(outputTopic, record.key, record.value,
+            !shouldAbort)
+          producer.send(producerRecord, new ErrorLoggingCallback(producerRecord))
         }
         trace(s"Sent ${records.size} messages. Committing offsets.")
         producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumerGroup)

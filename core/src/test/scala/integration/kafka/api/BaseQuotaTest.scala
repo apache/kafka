@@ -165,8 +165,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     var throttled = false
     do {
       val payload = numProduced.toString.getBytes
-      p.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, null, null, payload),
-             new ErrorLoggingCallback(topic1, null, null, true)).get()
+      val record = new ProducerRecord[Array[Byte], Array[Byte]](topic1, null, null, payload)
+      p.send(record, new ErrorLoggingCallback(record)).get()
       numProduced += 1
       val throttleMetric = producerThrottleMetric
       throttled = throttleMetric != null && throttleMetric.value > 0
