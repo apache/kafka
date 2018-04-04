@@ -68,17 +68,10 @@ public class FileStreamSourceTask extends SourceTask {
             streamOffset = null;
             reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
         }
+        // Missing topic or parsing error is not possible because we've parsed the config in the
+        // Connector
         topic = props.get(FileStreamSourceConnector.TOPIC_CONFIG);
-        if (topic == null)
-            throw new ConnectException("FileStreamSourceTask config missing topic setting");
-
-        if (props.containsKey(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG)) {
-            try {
-                batchSize = Integer.parseInt(props.get(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG));
-            } catch (NumberFormatException e) {
-                throw new ConnectException("Invalid FileStreamSourceTask configuration", e);
-            }
-        }
+        batchSize = Integer.parseInt(props.get(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG));
     }
 
     @Override

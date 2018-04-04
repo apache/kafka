@@ -121,7 +121,7 @@ public class RecordCollectorImpl implements RecordCollector {
             errorLogMessage += PARAMETER_HINT;
             errorMessage += PARAMETER_HINT;
         }
-        log.error(errorLogMessage, key, value, timestamp, topic, exception);
+        log.error(errorLogMessage, key, value, timestamp, topic, exception.toString());
         sendException = new StreamsException(
             String.format(errorMessage,
                           logPrefix,
@@ -130,7 +130,7 @@ public class RecordCollectorImpl implements RecordCollector {
                           value,
                           timestamp,
                           topic,
-                          exception.getMessage()),
+                          exception.toString()),
             exception);
     }
 
@@ -163,7 +163,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     } else {
                         if (sendException == null) {
                             if (exception instanceof ProducerFencedException) {
-                                log.warn(LOG_MESSAGE, key, value, timestamp, topic, exception.getMessage());
+                                log.warn(LOG_MESSAGE, key, value, timestamp, topic, exception.toString());
                                 sendException = new ProducerFencedException(
                                     String.format(EXCEPTION_MESSAGE,
                                                   logPrefix,
@@ -172,7 +172,7 @@ public class RecordCollectorImpl implements RecordCollector {
                                                   value,
                                                   timestamp,
                                                   topic,
-                                                  exception.getMessage()));
+                                                  exception.toString()));
                             } else {
                                 if (productionExceptionIsFatal(exception)) {
                                     recordSendError(key, value, timestamp, topic, exception);
@@ -201,7 +201,7 @@ public class RecordCollectorImpl implements RecordCollector {
                               value,
                               timestamp,
                               topic,
-                              uncaughtException.getMessage()),
+                              uncaughtException.toString()),
                 uncaughtException);
         }
     }

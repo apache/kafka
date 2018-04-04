@@ -430,13 +430,13 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(KafkaConfig.ListenerSecurityProtocolMapProp, listenerSecurityProtocolMap.name)
     assertFalse(listenerSecurityProtocolMap.isDefault)
     assertFalse(listenerSecurityProtocolMap.isSensitive)
-    assertTrue(listenerSecurityProtocolMap.isReadOnly)
+    assertFalse(listenerSecurityProtocolMap.isReadOnly)
     val truststorePassword = configs.get(brokerResource1).get(KafkaConfig.SslTruststorePasswordProp)
     assertEquals(KafkaConfig.SslTruststorePasswordProp, truststorePassword.name)
     assertNull(truststorePassword.value)
     assertFalse(truststorePassword.isDefault)
     assertTrue(truststorePassword.isSensitive)
-    assertTrue(truststorePassword.isReadOnly)
+    assertFalse(truststorePassword.isReadOnly)
     val compressionType = configs.get(brokerResource1).get(KafkaConfig.CompressionTypeProp)
     assertEquals(servers(1).config.compressionType.toString, compressionType.value)
     assertEquals(KafkaConfig.CompressionTypeProp, compressionType.name)
@@ -809,15 +809,15 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     subscribeAndWaitForAssignment(topic, consumer)
 
     sendRecords(producers.head, 10, topicPartition)
-    assertEquals(0L, consumer.offsetsForTimes(Map(topicPartition -> new JLong(0L)).asJava).get(topicPartition).offset())
+    assertEquals(0L, consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava).get(topicPartition).offset())
 
     var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
     result.all().get()
-    assertEquals(5L, consumer.offsetsForTimes(Map(topicPartition -> new JLong(0L)).asJava).get(topicPartition).offset())
+    assertEquals(5L, consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava).get(topicPartition).offset())
 
     result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava)
     result.all().get()
-    assertNull(consumer.offsetsForTimes(Map(topicPartition -> new JLong(0L)).asJava).get(topicPartition))
+    assertNull(consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava).get(topicPartition))
 
     client.close()
   }

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -25,7 +24,6 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.util.Map;
 
@@ -37,7 +35,9 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
     private boolean sendOldValues = false;
 
-    public KStreamWindowReduce(Windows<W> windows, String storeName, Reducer<V> reducer) {
+    KStreamWindowReduce(final Windows<W> windows,
+                        final String storeName,
+                        final Reducer<V> reducer) {
         this.windows = windows;
         this.storeName = storeName;
         this.reducer = reducer;
@@ -60,63 +60,37 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
             windowStore = (WindowStore<K, V>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues), sendOldValues);
         }
 
         @Override
-        public void process(K key, V value) {
+        public void process(final K key, final V value) {
             // if the key is null, we do not need proceed aggregating
             // the record with the table
             if (key == null)
                 return;
 
             // first get the matching windows
-            long timestamp = context().timestamp();
+            final long timestamp = context().timestamp();
+            final Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
 
-            Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
-
-            long timeFrom = Long.MAX_VALUE;
-            long timeTo = Long.MIN_VALUE;
-
-            // use range query on window store for efficient reads
-            for (long windowStartMs : matchedWindows.keySet()) {
-                timeFrom = windowStartMs < timeFrom ? windowStartMs : timeFrom;
-                timeTo = windowStartMs > timeTo ? windowStartMs : timeTo;
-            }
-
-            try (WindowStoreIterator<V> iter = windowStore.fetch(key, timeFrom, timeTo)) {
-                // for each matching window, try to update the corresponding key and send to the downstream
-                while (iter.hasNext()) {
-                    KeyValue<Long, V> entry = iter.next();
-                    W window = matchedWindows.get(entry.key);
-
-                    if (window != null) {
-
-                        V oldAgg = entry.value;
-                        V newAgg = oldAgg;
-
-                        // try to add the new value (there will never be old value)
-                        if (newAgg == null) {
-                            newAgg = value;
-                        } else {
-                            newAgg = reducer.apply(newAgg, value);
-                        }
-
-                        // update the store with the new value
-                        windowStore.put(key, newAgg, window.start());
-                        tupleForwarder.maybeForward(new Windowed<>(key, window), newAgg, oldAgg);
-                        matchedWindows.remove(entry.key);
-                    }
-                }
-            }
-
-            // create the new window for the rest of unmatched window that do not exist yet
+            // try update the window, and create the new window for the rest of unmatched window that do not exist yet
             for (final Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
-                windowStore.put(key, value, entry.getKey());
-                tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), value, null);
+                final V oldAgg = windowStore.fetch(key, entry.getKey());
+
+                V newAgg;
+                if (oldAgg == null) {
+                    newAgg = value;
+                } else {
+                    newAgg = reducer.apply(oldAgg, value);
+                }
+
+                // update the store with the new value
+                windowStore.put(key, newAgg, entry.getKey());
+                tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, oldAgg);
             }
         }
     }
@@ -143,20 +117,17 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             windowStore = (WindowStore<K, V>) context.getStateStore(storeName);
         }
 
         @SuppressWarnings("unchecked")
         @Override
-        public V get(Windowed<K> windowedKey) {
+        public V get(final Windowed<K> windowedKey) {
             K key = windowedKey.key();
             W window = (W) windowedKey.window();
 
-            // this iterator should only contain one element
-            try (WindowStoreIterator<V> iter = windowStore.fetch(key, window.start(), window.start())) {
-                return iter.hasNext() ? iter.next().value : null;
-            }
+            return windowStore.fetch(key, window.start());
         }
     }
 }

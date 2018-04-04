@@ -80,7 +80,7 @@ class PartitionStateMachineTest extends JUnitSuite {
   @Test
   def testNewPartitionToOnlinePartitionTransition(): Unit = {
     controllerContext.liveBrokers = Set(TestUtils.createBroker(brokerId, "host", 0))
-    controllerContext.partitionReplicaAssignment.put(partition, Seq(brokerId))
+    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
     partitionState.put(partition, NewPartition)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
@@ -98,7 +98,7 @@ class PartitionStateMachineTest extends JUnitSuite {
   @Test
   def testNewPartitionToOnlinePartitionTransitionZkUtilsExceptionFromCreateStates(): Unit = {
     controllerContext.liveBrokers = Set(TestUtils.createBroker(brokerId, "host", 0))
-    controllerContext.partitionReplicaAssignment.put(partition, Seq(brokerId))
+    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
     partitionState.put(partition, NewPartition)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
@@ -114,7 +114,7 @@ class PartitionStateMachineTest extends JUnitSuite {
   @Test
   def testNewPartitionToOnlinePartitionTransitionErrorCodeFromCreateStates(): Unit = {
     controllerContext.liveBrokers = Set(TestUtils.createBroker(brokerId, "host", 0))
-    controllerContext.partitionReplicaAssignment.put(partition, Seq(brokerId))
+    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
     partitionState.put(partition, NewPartition)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
@@ -144,7 +144,7 @@ class PartitionStateMachineTest extends JUnitSuite {
   @Test
   def testOnlinePartitionToOnlineTransition(): Unit = {
     controllerContext.liveBrokers = Set(TestUtils.createBroker(brokerId, "host", 0))
-    controllerContext.partitionReplicaAssignment.put(partition, Seq(brokerId))
+    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
     partitionState.put(partition, OnlinePartition)
     val leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId))
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
@@ -175,7 +175,7 @@ class PartitionStateMachineTest extends JUnitSuite {
     val otherBrokerId = brokerId + 1
     controllerContext.liveBrokers = Set(TestUtils.createBroker(brokerId, "host", 0), TestUtils.createBroker(otherBrokerId, "host", 0))
     controllerContext.shuttingDownBrokerIds.add(brokerId)
-    controllerContext.partitionReplicaAssignment.put(partition, Seq(brokerId, otherBrokerId))
+    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId, otherBrokerId))
     partitionState.put(partition, OnlinePartition)
     val leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId, otherBrokerId))
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
@@ -226,7 +226,7 @@ class PartitionStateMachineTest extends JUnitSuite {
   @Test
   def testOfflinePartitionToOnlinePartitionTransition(): Unit = {
     controllerContext.liveBrokers = Set(TestUtils.createBroker(brokerId, "host", 0))
-    controllerContext.partitionReplicaAssignment.put(partition, Seq(brokerId))
+    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
     partitionState.put(partition, OfflinePartition)
     val leaderAndIsr = LeaderAndIsr(LeaderAndIsr.NoLeader, List(brokerId))
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
@@ -257,7 +257,7 @@ class PartitionStateMachineTest extends JUnitSuite {
   @Test
   def testOfflinePartitionToOnlinePartitionTransitionZkUtilsExceptionFromStateLookup(): Unit = {
     controllerContext.liveBrokers = Set(TestUtils.createBroker(brokerId, "host", 0))
-    controllerContext.partitionReplicaAssignment.put(partition, Seq(brokerId))
+    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
     partitionState.put(partition, OfflinePartition)
     val leaderAndIsr = LeaderAndIsr(LeaderAndIsr.NoLeader, List(brokerId))
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
@@ -278,7 +278,7 @@ class PartitionStateMachineTest extends JUnitSuite {
   @Test
   def testOfflinePartitionToOnlinePartitionTransitionErrorCodeFromStateLookup(): Unit = {
     controllerContext.liveBrokers = Set(TestUtils.createBroker(brokerId, "host", 0))
-    controllerContext.partitionReplicaAssignment.put(partition, Seq(brokerId))
+    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
     partitionState.put(partition, OfflinePartition)
     val leaderAndIsr = LeaderAndIsr(LeaderAndIsr.NoLeader, List(brokerId))
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)

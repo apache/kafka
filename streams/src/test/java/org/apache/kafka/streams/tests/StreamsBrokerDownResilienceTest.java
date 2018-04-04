@@ -21,13 +21,14 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.test.TestUtils;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -43,17 +44,17 @@ public class StreamsBrokerDownResilienceTest {
 
     private static final String SINK_TOPIC = "streamsResilienceSink";
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
 
         System.out.println("StreamsTest instance started");
 
         final String kafka = args.length > 0 ? args[0] : "localhost:9092";
-        final String stateDirStr = args.length > 1 ? args[1] : TestUtils.tempDirectory().getAbsolutePath();
+        final String propFileName = args.length > 1 ? args[1] : null;
         final String additionalConfigs = args.length > 2 ? args[2] : null;
 
         final Serde<String> stringSerde = Serdes.String();
 
-        final Properties streamsProperties = new Properties();
+        final Properties streamsProperties = Utils.loadProps(propFileName);
         streamsProperties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         streamsProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, "kafka-streams-resilience");
         streamsProperties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
@@ -78,13 +79,16 @@ public class StreamsBrokerDownResilienceTest {
 
             System.exit(1);
         }
-
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(Collections.singletonList(SOURCE_TOPIC_1), Consumed.with(stringSerde, stringSerde))
             .peek(new ForeachAction<String, String>() {
+                int messagesProcessed = 0;
                 @Override
                 public void apply(String key, String value) {
                     System.out.println("received key " + key + " and value " + value);
+                    messagesProcessed++;
+                    System.out.println("processed" + messagesProcessed + "messages");
+                    System.out.flush();
                 }
             }).to(SINK_TOPIC);
 
@@ -104,8 +108,9 @@ public class StreamsBrokerDownResilienceTest {
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
             @Override
             public void run() {
-                System.out.println("Shutting down streams now");
-                streams.close(10, TimeUnit.SECONDS);
+                streams.close(30, TimeUnit.SECONDS);
+                System.out.println("Complete shutdown of streams resilience test app now");
+                System.out.flush();
             }
         }));
 

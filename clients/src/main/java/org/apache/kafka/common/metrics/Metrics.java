@@ -232,12 +232,22 @@ public class Metrics implements Closeable {
         return tags;
     }
 
-    public static String toHtmlTable(String domain, List<MetricNameTemplate> allMetrics) {
+    /**
+     * Use the specified domain and metric name templates to generate an HTML table documenting the metrics. A separate table section
+     * will be generated for each of the MBeans and the associated attributes. The MBean names are lexicographically sorted to
+     * determine the order of these sections. This order is therefore dependent upon the order of the
+     * tags in each {@link MetricNameTemplate}.
+     *
+     * @param domain the domain or prefix for the JMX MBean names; may not be null
+     * @param allMetrics the collection of all {@link MetricNameTemplate} instances each describing one metric; may not be null
+     * @return the string containing the HTML table; never null
+     */
+    public static String toHtmlTable(String domain, Iterable<MetricNameTemplate> allMetrics) {
         Map<String, Map<String, String>> beansAndAttributes = new TreeMap<String, Map<String, String>>();
     
         try (Metrics metrics = new Metrics()) {
             for (MetricNameTemplate template : allMetrics) {
-                Map<String, String> tags = new TreeMap<String, String>();
+                Map<String, String> tags = new LinkedHashMap<>();
                 for (String s : template.tags()) {
                     tags.put(s, "{" + s + "}");
                 }
@@ -451,7 +461,7 @@ public class Metrics implements Closeable {
      * This is a way to expose existing values as metrics.
      *
      * This method is kept for binary compatibility purposes, it has the same behaviour as
-     * {@link #addMetric(MetricName, MetricValue)}.
+     * {@link #addMetric(MetricName, MetricValueProvider)}.
      *
      * @param metricName The name of the metric
      * @param measurable The measurable that will be measured by this metric

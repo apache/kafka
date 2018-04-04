@@ -104,6 +104,7 @@ public class SaslAuthenticatorTest {
 
     @Before
     public void setup() throws Exception {
+        LoginManager.closeAll();
         serverCertStores = new CertStores(true, "localhost");
         clientCertStores = new CertStores(false, "localhost");
         saslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
@@ -715,7 +716,7 @@ public class SaslAuthenticatorTest {
      * property override is used during authentication.
      */
     @Test
-    public void testDynamicJaasConfiguration() throws Exception {
+    public void testClientDynamicJaasConfiguration() throws Exception {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
         saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, Arrays.asList("PLAIN"));
@@ -754,6 +755,37 @@ public class SaslAuthenticatorTest {
         } catch (IllegalArgumentException e) {
             // Expected
         }
+    }
+
+    /**
+     * Tests dynamic JAAS configuration property for SASL server. Invalid server credentials
+     * are set in the static JVM-wide configuration instance to ensure that the dynamic
+     * property override is used during authentication.
+     */
+    @Test
+    public void testServerDynamicJaasConfiguration() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
+        saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
+        saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, Arrays.asList("PLAIN"));
+        Map<String, Object> serverOptions = new HashMap<>();
+        serverOptions.put("user_user1", "user1-secret");
+        serverOptions.put("user_user2", "user2-secret");
+        saslServerConfigs.put("listener.name.sasl_ssl.plain." + SaslConfigs.SASL_JAAS_CONFIG,
+                TestJaasConfig.jaasConfigProperty("PLAIN", serverOptions));
+        TestJaasConfig staticJaasConfig = new TestJaasConfig();
+        staticJaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(),
+                Collections.<String, Object>emptyMap());
+        staticJaasConfig.setClientOptions("PLAIN", "user1", "user1-secret");
+        Configuration.setConfiguration(staticJaasConfig);
+        server = createEchoServer(securityProtocol);
+
+        // Check that 'user1' can connect with static Jaas config
+        createAndCheckClientConnection(securityProtocol, "1");
+
+        // Check that user 'user2' can also connect with a Jaas config override
+        saslClientConfigs.put(SaslConfigs.SASL_JAAS_CONFIG,
+                TestJaasConfig.jaasConfigProperty("PLAIN", "user2", "user2-secret"));
+        createAndCheckClientConnection(securityProtocol, "2");
     }
 
     @Test
@@ -986,18 +1018,19 @@ public class SaslAuthenticatorTest {
             throws Exception {
         final ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         final Map<String, ?> configs = Collections.emptyMap();
-        final JaasContext jaasContext = JaasContext.load(JaasContext.Type.SERVER, listenerName, configs);
+        final JaasContext jaasContext = JaasContext.loadServerContext(listenerName, saslMechanism, configs);
+        final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
 
         boolean isScram = ScramMechanism.isScram(saslMechanism);
         if (isScram)
             ScramCredentialUtils.createCache(credentialCache, Arrays.asList(saslMechanism));
-        SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContext,
+        SaslChannelBuilder serverChannelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism, true, credentialCache, null) {
 
             @Override
             protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs, String id,
-                            TransportLayer transportLayer, Subject subject) throws IOException {
-                return new SaslServerAuthenticator(configs, id, jaasContext, subject, null,
+                            TransportLayer transportLayer, Map<String, Subject> subjects) throws IOException {
+                return new SaslServerAuthenticator(configs, id, jaasContexts, subjects, null,
                                 credentialCache, listenerName, securityProtocol, transportLayer, null) {
 
                     @Override
@@ -1032,8 +1065,10 @@ public class SaslAuthenticatorTest {
 
         final ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         final Map<String, ?> configs = Collections.emptyMap();
-        final JaasContext jaasContext = JaasContext.load(JaasContext.Type.CLIENT, null, configs);
-        SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContext,
+        final JaasContext jaasContext = JaasContext.loadClientContext(configs);
+        final Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
+
+        SaslChannelBuilder clientChannelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContexts,
                 securityProtocol, listenerName, false, saslMechanism, true, null, null) {
 
             @Override

@@ -25,7 +25,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
-import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -1323,7 +1322,7 @@ public interface KStream<K, V> {
      * and default serializers and deserializers.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
-     * The {@link KeyValueMapper} selects a new key (with should be of the same type) while preserving the original values.
+     * The {@link KeyValueMapper} selects a new key (which should be of the same type) while preserving the original values.
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}
      * <p>
      * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
@@ -1349,7 +1348,7 @@ public interface KStream<K, V> {
      * and {@link Serde}s as specified by {@link Serialized}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
-     * The {@link KeyValueMapper} selects a new key (with should be of the same type) while preserving the original values.
+     * The {@link KeyValueMapper} selects a new key (which should be of the same type) while preserving the original values.
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
      * <p>
      * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
@@ -2635,8 +2634,10 @@ public interface KStream<K, V> {
      * For each {@code KStream} record that finds a corresponding record in {@link GlobalKTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as the key of this {@code KStream}.
-     * If an {@code KStream} input record key or value is {@code null} the record will not be included in the join
+     * If a {@code KStream} input record key or value is {@code null} the record will not be included in the join
      * operation and thus no output record will be added to the resulting {@code KStream}.
+     * If {@code keyValueMapper} returns {@code null} implying no match exists, no output record will be added to the
+     * resulting {@code KStream}.
      *
      * @param globalKTable   the {@link GlobalKTable} to be joined with this stream
      * @param keyValueMapper instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
@@ -2667,11 +2668,13 @@ public interface KStream<K, V> {
      * <p>
      * For each {@code KStream} record whether or not it finds a corresponding record in {@link GlobalKTable} the
      * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
+     * The key of the result record is the same as this {@code KStream}.
+     * If a {@code KStream} input record key or value is {@code null} the record will not be included in the join
+     * operation and thus no output record will be added to the resulting {@code KStream}.
+     * If {@code keyValueMapper} returns {@code null} implying no match exists, a {@code null} value will be
+     * provided to {@link ValueJoiner}.
      * If no {@link GlobalKTable} record was found during lookup, a {@code null} value will be provided to
      * {@link ValueJoiner}.
-     * The key of the result record is the same as this {@code KStream}.
-     * If an {@code KStream} input record key or value is {@code null} the record will not be included in the join
-     * operation and thus no output record will be added to the resulting {@code KStream}.
      *
      * @param globalKTable   the {@link GlobalKTable} to be joined with this stream
      * @param keyValueMapper instance of {@link KeyValueMapper} used to map from the (key, value) of this stream

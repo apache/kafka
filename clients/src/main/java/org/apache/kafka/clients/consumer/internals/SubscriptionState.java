@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
@@ -48,10 +49,6 @@ import java.util.regex.Pattern;
  *
  * Note that pause state as well as fetch/consumed positions are not preserved when partition
  * assignment is changed whether directly by the user or through a group rebalance.
- *
- * This class also maintains a cache of the latest commit position for each of the assigned
- * partitions. This is updated through {@link #committed(TopicPartition, OffsetAndMetadata)} and can be used
- * to set the initial fetch position (e.g. {@link Fetcher#resetOffsets(Set)}.
  */
 public class SubscriptionState {
     private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =
@@ -76,24 +73,20 @@ public class SubscriptionState {
     /* the partitions that are currently assigned, note that the order of partition matters (see FetchBuilder for more details) */
     private final PartitionStates<TopicPartitionState> assignment;
 
-    /* do we need to request the latest committed offsets from the coordinator? */
-    private boolean needsFetchCommittedOffsets;
-
     /* Default offset reset strategy */
     private final OffsetResetStrategy defaultResetStrategy;
 
-    /* User-provided listener to be invoked when assignment changes */
-    private ConsumerRebalanceListener listener;
-
     /* Listeners provide a hook for internal state cleanup (e.g. metrics) on assignment changes */
-    private List<Listener> listeners = new ArrayList<>();
+    private final List<Listener> listeners = new ArrayList<>();
+
+    /* User-provided listener to be invoked when assignment changes */
+    private ConsumerRebalanceListener rebalanceListener;
 
     public SubscriptionState(OffsetResetStrategy defaultResetStrategy) {
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = Collections.emptySet();
         this.assignment = new PartitionStates<>();
         this.groupSubscription = new HashSet<>();
-        this.needsFetchCommittedOffsets = true; // initialize to true for the consumers to fetch offset upon starting up
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
     }
@@ -117,7 +110,7 @@ public class SubscriptionState {
 
         setSubscriptionType(SubscriptionType.AUTO_TOPICS);
 
-        this.listener = listener;
+        this.rebalanceListener = listener;
 
         changeSubscription(topics);
     }
@@ -174,7 +167,6 @@ public class SubscriptionState {
                 partitionToState.put(partition, state);
             }
             this.assignment.set(partitionToState);
-            this.needsFetchCommittedOffsets = true;
         }
     }
 
@@ -200,9 +192,7 @@ public class SubscriptionState {
                     throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic; subscription is " + this.subscription);
         }
 
-        // after rebalancing, we always reinitialize the assignment value
         this.assignment.set(assignedPartitionStates);
-        this.needsFetchCommittedOffsets = true;
     }
 
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
@@ -211,7 +201,7 @@ public class SubscriptionState {
 
         setSubscriptionType(SubscriptionType.AUTO_PATTERN);
 
-        this.listener = listener;
+        this.rebalanceListener = listener;
         this.subscribedPattern = pattern;
     }
 
@@ -270,26 +260,6 @@ public class SubscriptionState {
         return state;
     }
 
-    public void committed(TopicPartition tp, OffsetAndMetadata offset) {
-        assignedState(tp).committed(offset);
-    }
-
-    public OffsetAndMetadata committed(TopicPartition tp) {
-        return assignedState(tp).committed;
-    }
-
-    public void needRefreshCommits() {
-        this.needsFetchCommittedOffsets = true;
-    }
-
-    public boolean refreshCommitsNeeded() {
-        return this.needsFetchCommittedOffsets;
-    }
-
-    public void commitsRefreshed() {
-        this.needsFetchCommittedOffsets = false;
-    }
-
     public void seek(TopicPartition tp, long offset) {
         assignedState(tp).seek(offset);
     }
@@ -327,8 +297,17 @@ public class SubscriptionState {
             return topicPartitionState.highWatermark == null ? null : topicPartitionState.highWatermark - topicPartitionState.position;
     }
 
+    public Long partitionLead(TopicPartition tp) {
+        TopicPartitionState topicPartitionState = assignedState(tp);
+        return topicPartitionState.logStartOffset == null ? null : topicPartitionState.position - topicPartitionState.logStartOffset;
+    }
+
     public void updateHighWatermark(TopicPartition tp, long highWatermark) {
         assignedState(tp).highWatermark = highWatermark;
+    }
+
+    public void updateLogStartOffset(TopicPartition tp, long logStartOffset) {
+        assignedState(tp).logStartOffset = logStartOffset;
     }
 
     public void updateLastStableOffset(TopicPartition tp, long lastStableOffset) {
@@ -344,12 +323,18 @@ public class SubscriptionState {
         return allConsumed;
     }
 
-    public void needOffsetReset(TopicPartition partition, OffsetResetStrategy offsetResetStrategy) {
-        assignedState(partition).awaitReset(offsetResetStrategy);
+    public void requestOffsetReset(TopicPartition partition, OffsetResetStrategy offsetResetStrategy) {
+        assignedState(partition).reset(offsetResetStrategy);
     }
 
-    public void needOffsetReset(TopicPartition partition) {
-        needOffsetReset(partition, defaultResetStrategy);
+    public void requestOffsetReset(TopicPartition partition) {
+        requestOffsetReset(partition, defaultResetStrategy);
+    }
+
+    public void setResetPending(Set<TopicPartition> partitions, long nextAllowResetTimeMs) {
+        for (TopicPartition partition : partitions) {
+            assignedState(partition).setResetPending(nextAllowResetTimeMs);
+        }
     }
 
     public boolean hasDefaultOffsetResetPolicy() {
@@ -364,24 +349,48 @@ public class SubscriptionState {
         return assignedState(partition).resetStrategy;
     }
 
-    public boolean hasAllFetchPositions(Collection<TopicPartition> partitions) {
-        for (TopicPartition partition : partitions)
-            if (!hasValidPosition(partition))
-                return false;
-        return true;
-    }
-
     public boolean hasAllFetchPositions() {
-        return hasAllFetchPositions(this.assignedPartitions());
+        for (PartitionStates.PartitionState<TopicPartitionState> state : assignment.partitionStates()) {
+            if (!state.value().hasValidPosition())
+                return false;
+        }
+        return true;
     }
 
     public Set<TopicPartition> missingFetchPositions() {
         Set<TopicPartition> missing = new HashSet<>();
         for (PartitionStates.PartitionState<TopicPartitionState> state : assignment.partitionStates()) {
-            if (!state.value().hasValidPosition())
+            if (state.value().isMissingPosition())
                 missing.add(state.topicPartition());
         }
         return missing;
+    }
+
+    public void resetMissingPositions() {
+        final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
+        for (PartitionStates.PartitionState<TopicPartitionState> state : assignment.partitionStates()) {
+            TopicPartition tp = state.topicPartition();
+            TopicPartitionState partitionState = state.value();
+            if (partitionState.isMissingPosition()) {
+                if (defaultResetStrategy == OffsetResetStrategy.NONE)
+                    partitionsWithNoOffsets.add(tp);
+                else
+                    partitionState.reset(defaultResetStrategy);
+            }
+        }
+
+        if (!partitionsWithNoOffsets.isEmpty())
+            throw new NoOffsetForPartitionException(partitionsWithNoOffsets);
+    }
+
+    public Set<TopicPartition> partitionsNeedingReset(long nowMs) {
+        Set<TopicPartition> partitions = new HashSet<>();
+        for (PartitionStates.PartitionState<TopicPartitionState> state : assignment.partitionStates()) {
+            TopicPartitionState partitionState = state.value();
+            if (partitionState.awaitingReset() && partitionState.isResetAllowed(nowMs))
+                partitions.add(state.topicPartition());
+        }
+        return partitions;
     }
 
     public boolean isAssigned(TopicPartition tp) {
@@ -408,12 +417,17 @@ public class SubscriptionState {
         assignedState(tp).resume();
     }
 
+    public void resetFailed(Set<TopicPartition> partitions, long nextRetryTimeMs) {
+        for (TopicPartition partition : partitions)
+            assignedState(partition).resetFailed(nextRetryTimeMs);
+    }
+
     public void movePartitionToEnd(TopicPartition tp) {
         assignment.moveToEnd(tp);
     }
 
-    public ConsumerRebalanceListener listener() {
-        return listener;
+    public ConsumerRebalanceListener rebalanceListener() {
+        return rebalanceListener;
     }
 
     public void addListener(Listener listener) {
@@ -435,46 +449,62 @@ public class SubscriptionState {
     private static class TopicPartitionState {
         private Long position; // last consumed position
         private Long highWatermark; // the high watermark from last fetch
+        private Long logStartOffset; // the log start offset
         private Long lastStableOffset;
-        private OffsetAndMetadata committed;  // last committed position
         private boolean paused;  // whether this partition has been paused by the user
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
+        private Long nextAllowedRetryTimeMs;
 
-        public TopicPartitionState() {
+        TopicPartitionState() {
             this.paused = false;
             this.position = null;
             this.highWatermark = null;
+            this.logStartOffset = null;
             this.lastStableOffset = null;
-            this.committed = null;
             this.resetStrategy = null;
+            this.nextAllowedRetryTimeMs = null;
         }
 
-        private void awaitReset(OffsetResetStrategy strategy) {
+        private void reset(OffsetResetStrategy strategy) {
             this.resetStrategy = strategy;
             this.position = null;
+            this.nextAllowedRetryTimeMs = null;
         }
 
-        public boolean awaitingReset() {
+        private boolean isResetAllowed(long nowMs) {
+            return nextAllowedRetryTimeMs == null || nowMs >= nextAllowedRetryTimeMs;
+        }
+
+        private boolean awaitingReset() {
             return resetStrategy != null;
         }
 
-        public boolean hasValidPosition() {
+        private void setResetPending(long nextAllowedRetryTimeMs) {
+            this.nextAllowedRetryTimeMs = nextAllowedRetryTimeMs;
+        }
+
+        private void resetFailed(long nextAllowedRetryTimeMs) {
+            this.nextAllowedRetryTimeMs = nextAllowedRetryTimeMs;
+        }
+
+        private boolean hasValidPosition() {
             return position != null;
+        }
+
+        private boolean isMissingPosition() {
+            return !hasValidPosition() && !awaitingReset();
         }
 
         private void seek(long offset) {
             this.position = offset;
             this.resetStrategy = null;
+            this.nextAllowedRetryTimeMs = null;
         }
 
         private void position(long offset) {
             if (!hasValidPosition())
                 throw new IllegalStateException("Cannot set a new position without a valid current position");
             this.position = offset;
-        }
-
-        private void committed(OffsetAndMetadata offset) {
-            this.committed = offset;
         }
 
         private void pause() {

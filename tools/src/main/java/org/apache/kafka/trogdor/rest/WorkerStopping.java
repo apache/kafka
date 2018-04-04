@@ -42,7 +42,7 @@ public class WorkerStopping extends WorkerState {
             @JsonProperty("status") String status) {
         super(spec);
         this.startedMs = startedMs;
-        this.status = status;
+        this.status = status == null ? "" : status;
     }
 
     @JsonProperty

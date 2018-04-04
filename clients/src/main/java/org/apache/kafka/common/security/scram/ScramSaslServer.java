@@ -22,6 +22,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
@@ -37,6 +38,8 @@ import org.apache.kafka.common.security.scram.ScramMessages.ClientFinalMessage;
 import org.apache.kafka.common.security.scram.ScramMessages.ClientFirstMessage;
 import org.apache.kafka.common.security.scram.ScramMessages.ServerFinalMessage;
 import org.apache.kafka.common.security.scram.ScramMessages.ServerFirstMessage;
+import org.apache.kafka.common.security.token.delegation.DelegationTokenCredentialCallback;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +53,7 @@ import org.slf4j.LoggerFactory;
 public class ScramSaslServer implements SaslServer {
 
     private static final Logger log = LoggerFactory.getLogger(ScramSaslServer.class);
+    private static final Set<String> SUPPORTED_EXTENSIONS = Utils.mkSet(ScramLoginModule.TOKEN_AUTH_CONFIG);
 
     enum State {
         RECEIVE_CLIENT_FIRST_MESSAGE,
@@ -65,9 +69,9 @@ public class ScramSaslServer implements SaslServer {
     private String username;
     private ClientFirstMessage clientFirstMessage;
     private ServerFirstMessage serverFirstMessage;
+    private ScramExtensions scramExtensions;
     private ScramCredential scramCredential;
-    private boolean tokenAuthentication;
-    private String tokenOwner;
+    private String authorizationId;
 
     public ScramSaslServer(ScramMechanism mechanism, Map<String, ?> props, CallbackHandler callbackHandler) throws NoSuchAlgorithmException {
         this.mechanism = mechanism;
@@ -91,18 +95,29 @@ public class ScramSaslServer implements SaslServer {
             switch (state) {
                 case RECEIVE_CLIENT_FIRST_MESSAGE:
                     this.clientFirstMessage = new ClientFirstMessage(response);
+                    this.scramExtensions = clientFirstMessage.extensions();
+                    if (!SUPPORTED_EXTENSIONS.containsAll(scramExtensions.extensionNames())) {
+                        log.debug("Unsupported extensions will be ignored, supported {}, provided {}",
+                                SUPPORTED_EXTENSIONS, scramExtensions.extensionNames());
+                    }
                     String serverNonce = formatter.secureRandomString();
                     try {
                         String saslName = clientFirstMessage.saslName();
                         this.username = formatter.username(saslName);
-                        Map<String, String> extensions = clientFirstMessage.extensionsAsMap();
-                        this.tokenAuthentication = "true".equalsIgnoreCase(extensions.get(ScramLoginModule.TOKEN_AUTH_CONFIG));
                         NameCallback nameCallback = new NameCallback("username", username);
-                        ScramCredentialCallback credentialCallback = new ScramCredentialCallback(tokenAuthentication, getMechanismName());
-                        callbackHandler.handle(new Callback[]{nameCallback, credentialCallback});
-                        this.tokenOwner = credentialCallback.tokenOwner();
-                        if (tokenAuthentication && tokenOwner == null)
-                            throw new SaslException("Token Authentication failed: Invalid tokenId : " + username);
+                        ScramCredentialCallback credentialCallback;
+                        if (scramExtensions.tokenAuthenticated()) {
+                            DelegationTokenCredentialCallback tokenCallback = new DelegationTokenCredentialCallback();
+                            credentialCallback = tokenCallback;
+                            callbackHandler.handle(new Callback[]{nameCallback, tokenCallback});
+                            if (tokenCallback.tokenOwner() == null)
+                                throw new SaslException("Token Authentication failed: Invalid tokenId : " + username);
+                            this.authorizationId = tokenCallback.tokenOwner();
+                        } else {
+                            credentialCallback = new ScramCredentialCallback();
+                            callbackHandler.handle(new Callback[]{nameCallback, credentialCallback});
+                            this.authorizationId = username;
+                        }
                         this.scramCredential = credentialCallback.scramCredential();
                         if (scramCredential == null)
                             throw new SaslException("Authentication failed: Invalid user credentials");
@@ -150,11 +165,7 @@ public class ScramSaslServer implements SaslServer {
     public String getAuthorizationID() {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
-
-        if (tokenAuthentication)
-            return tokenOwner; // return token owner as principal for this session
-
-        return username;
+        return authorizationId;
     }
 
     @Override
@@ -167,8 +178,8 @@ public class ScramSaslServer implements SaslServer {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
 
-        if (ScramLoginModule.TOKEN_AUTH_CONFIG.equals(propName))
-            return tokenAuthentication;
+        if (SUPPORTED_EXTENSIONS.contains(propName))
+            return scramExtensions.extensionValue(propName);
         else
             return null;
     }

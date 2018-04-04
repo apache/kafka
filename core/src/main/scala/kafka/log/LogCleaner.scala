@@ -20,7 +20,6 @@ package kafka.log
 import java.io.{File, IOException}
 import java.nio._
 import java.nio.file.Files
-import java.util
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
@@ -55,7 +54,7 @@ import scala.collection.JavaConverters._
  * To clean a log the cleaner first builds a mapping of key=>last_offset for the dirty section of the log. See kafka.log.OffsetMap for details of
  * the implementation of the mapping.
  *
- * Once the key=>offset map is built, the log is cleaned by recopying each log segment but omitting any key that appears in the offset map with a
+ * Once the key=>last_offset map is built, the log is cleaned by recopying each log segment but omitting any key that appears in the offset map with a
  * higher offset than what is found in the segment (i.e. messages with a key that appears in the dirty section of the log).
  *
  * To avoid segments shrinking to very small sizes with repeated cleanings we implement a rule by which if we will merge successive segments when
@@ -162,9 +161,8 @@ class LogCleaner(initialConfig: CleanerConfig,
   override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     val newCleanerConfig = LogCleaner.cleanerConfig(newConfig)
     val numThreads = newCleanerConfig.numThreads
-    numThreads >= 1 && numThreads >= config.numThreads / 2 && numThreads <= config.numThreads * 2
     val currentThreads = config.numThreads
-    if (numThreads <= 0)
+    if (numThreads < 1)
       throw new ConfigException(s"Log cleaner threads should be at least 1")
     if (numThreads < currentThreads / 2)
       throw new ConfigException(s"Log cleaner threads cannot be reduced to less than half the current value $currentThreads")
@@ -262,9 +260,9 @@ class LogCleaner(initialConfig: CleanerConfig,
   private class CleanerThread(threadId: Int)
     extends ShutdownableThread(name = "kafka-log-cleaner-thread-" + threadId, isInterruptible = false) {
 
-    override val loggerName = classOf[LogCleaner].getName
+    protected override def loggerName = classOf[LogCleaner].getName
 
-    if(config.dedupeBufferSize / config.numThreads > Int.MaxValue)
+    if (config.dedupeBufferSize / config.numThreads > Int.MaxValue)
       warn("Cannot use more than 2G of cleaner buffer space per cleaner thread, ignoring excess buffer space...")
 
     val cleaner = new Cleaner(id = threadId,
@@ -406,7 +404,7 @@ private[log] class Cleaner(val id: Int,
                            time: Time,
                            checkDone: (TopicPartition) => Unit) extends Logging {
 
-  override val loggerName = classOf[LogCleaner].getName
+  protected override def loggerName = classOf[LogCleaner].getName
 
   this.logIdent = "Cleaner " + id + ": "
 
@@ -615,8 +613,7 @@ private[log] class Cleaner(val id: Int,
         val retained = MemoryRecords.readableRecords(outputBuffer)
         // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
         // after `Log.replaceSegments` (which acquires the lock) is called
-        dest.append(firstOffset = retained.batches.iterator.next().baseOffset,
-          largestOffset = result.maxOffset,
+        dest.append(largestOffset = result.maxOffset,
           largestTimestamp = result.maxTimestamp,
           shallowOffsetOfMaxTimestamp = result.shallowOffsetOfMaxTimestamp,
           records = retained)

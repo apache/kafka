@@ -35,26 +35,25 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.Stores;
 
-import java.io.File;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 public class SmokeTestClient extends SmokeTestUtil {
 
     private final String kafka;
-    private final File stateDir;
+    private final Properties streamsProperties;
     private KafkaStreams streams;
     private Thread thread;
     private boolean uncaughtException = false;
 
-    public SmokeTestClient(File stateDir, String kafka) {
+    public SmokeTestClient(final Properties streamsProperties, final String kafka) {
         super();
-        this.stateDir = stateDir;
         this.kafka = kafka;
+        this.streamsProperties = streamsProperties;
     }
 
     public void start() {
-        streams = createKafkaStreams(stateDir, kafka);
+        streams = createKafkaStreams(streamsProperties, kafka);
         streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread t, Throwable e) {
@@ -94,10 +93,8 @@ public class SmokeTestClient extends SmokeTestUtil {
         }
     }
 
-    private static KafkaStreams createKafkaStreams(File stateDir, String kafka) {
-        final Properties props = new Properties();
+    private static KafkaStreams createKafkaStreams(final Properties props, final String kafka) {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
-        props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);

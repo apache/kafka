@@ -33,7 +33,7 @@ import java.util.Map;
 
 public class JaasContext {
 
-    private static final Logger LOG = LoggerFactory.getLogger(JaasUtils.class);
+    private static final Logger LOG = LoggerFactory.getLogger(JaasContext.class);
 
     private static final String GLOBAL_CONTEXT_NAME_SERVER = "KafkaServer";
     private static final String GLOBAL_CONTEXT_NAME_CLIENT = "KafkaClient";
@@ -41,57 +41,59 @@ public class JaasContext {
     /**
      * Returns an instance of this class.
      *
-     * For contextType SERVER, the context will contain the default Configuration and the context name will be one of:
+     * The context will contain the configuration specified by the JAAS configuration property
+     * {@link SaslConfigs#SASL_JAAS_CONFIG} with prefix `listener.name.{listenerName}.{mechanism}.`
+     * with listenerName and mechanism in lower case. The context `KafkaServer` will be returned
+     * with a single login context entry loaded from the property.
+     * <p>
+     * If the property is not defined, the context will contain the default Configuration and
+     * the context name will be one of:
+     * <ol>
+     *   <li>Lowercased listener name followed by a period and the string `KafkaServer`</li>
+     *   <li>The string `KafkaServer`</li>
+     *  </ol>
+     * If both are valid entries in the default JAAS configuration, the first option is chosen.
+     * </p>
      *
-     * 1. Lowercased listener name followed by a period and the string `KafkaServer`
-     * 2. The string `KafkaServer`
+     * @throws IllegalArgumentException if listenerName or mechanism is not defined.
+     */
+    public static JaasContext loadServerContext(ListenerName listenerName, String mechanism, Map<String, ?> configs) {
+        if (listenerName == null)
+            throw new IllegalArgumentException("listenerName should not be null for SERVER");
+        if (mechanism == null)
+            throw new IllegalArgumentException("mechanism should not be null for SERVER");
+        String globalContextName = GLOBAL_CONTEXT_NAME_SERVER;
+        String listenerContextName = listenerName.value().toLowerCase(Locale.ROOT) + "." + GLOBAL_CONTEXT_NAME_SERVER;
+        Password dynamicJaasConfig = (Password) configs.get(mechanism.toLowerCase(Locale.ROOT) + "." + SaslConfigs.SASL_JAAS_CONFIG);
+        if (dynamicJaasConfig == null && configs.get(SaslConfigs.SASL_JAAS_CONFIG) != null)
+            LOG.warn("Server config {} should be prefixed with SASL mechanism name, ignoring config", SaslConfigs.SASL_JAAS_CONFIG);
+        return load(Type.SERVER, listenerContextName, globalContextName, dynamicJaasConfig);
+    }
+
+    /**
+     * Returns an instance of this class.
      *
-     * If both are valid entries in the JAAS configuration, the first option is chosen.
-     *
-     * For contextType CLIENT, if JAAS configuration property @link SaslConfigs#SASL_JAAS_CONFIG} is specified,
+     * If JAAS configuration property @link SaslConfigs#SASL_JAAS_CONFIG} is specified,
      * the configuration object is created by parsing the property value. Otherwise, the default Configuration
      * is returned. The context name is always `KafkaClient`.
      *
-     * @throws IllegalArgumentException if JAAS configuration property is specified for contextType SERVER, if
-     * listenerName is not defined for contextType SERVER of if listenerName is defined for contextType CLIENT.
      */
-    public static JaasContext load(JaasContext.Type contextType, ListenerName listenerName,
-                                   Map<String, ?> configs) {
-        String listenerContextName;
-        String globalContextName;
-        switch (contextType) {
-            case CLIENT:
-                if (listenerName != null)
-                    throw new IllegalArgumentException("listenerName should be null for CLIENT");
-                globalContextName = GLOBAL_CONTEXT_NAME_CLIENT;
-                listenerContextName = null;
-                break;
-            case SERVER:
-                if (listenerName == null)
-                    throw new IllegalArgumentException("listenerName should not be null for SERVER");
-                globalContextName = GLOBAL_CONTEXT_NAME_SERVER;
-                listenerContextName = listenerName.value().toLowerCase(Locale.ROOT) + "." + GLOBAL_CONTEXT_NAME_SERVER;
-                break;
-            default:
-                throw new IllegalArgumentException("Unexpected context type " + contextType);
-        }
-        return load(contextType, listenerContextName, globalContextName, configs);
+    public static JaasContext loadClientContext(Map<String, ?> configs) {
+        String globalContextName = GLOBAL_CONTEXT_NAME_CLIENT;
+        Password dynamicJaasConfig = (Password) configs.get(SaslConfigs.SASL_JAAS_CONFIG);
+        return load(JaasContext.Type.CLIENT, null, globalContextName, dynamicJaasConfig);
     }
 
     static JaasContext load(JaasContext.Type contextType, String listenerContextName,
-                            String globalContextName, Map<String, ?> configs) {
-        Password jaasConfigArgs = (Password) configs.get(SaslConfigs.SASL_JAAS_CONFIG);
-        if (jaasConfigArgs != null) {
-            if (contextType == JaasContext.Type.SERVER)
-                throw new IllegalArgumentException("JAAS config property not supported for server");
-            else {
-                JaasConfig jaasConfig = new JaasConfig(globalContextName, jaasConfigArgs.value());
-                AppConfigurationEntry[] clientModules = jaasConfig.getAppConfigurationEntry(globalContextName);
-                int numModules = clientModules == null ? 0 : clientModules.length;
-                if (numModules != 1)
-                    throw new IllegalArgumentException("JAAS config property contains " + numModules + " login modules, should be 1 module");
-                return new JaasContext(globalContextName, contextType, jaasConfig);
-            }
+                            String globalContextName, Password dynamicJaasConfig) {
+        if (dynamicJaasConfig != null) {
+            JaasConfig jaasConfig = new JaasConfig(globalContextName, dynamicJaasConfig.value());
+            AppConfigurationEntry[] contextModules = jaasConfig.getAppConfigurationEntry(globalContextName);
+            if (contextModules == null || contextModules.length == 0)
+                throw new IllegalArgumentException("JAAS config property does not contain any login modules");
+            else if (contextModules.length != 1)
+                throw new IllegalArgumentException("JAAS config property contains " + contextModules.length + " login modules, should be 1 module");
+            return new JaasContext(globalContextName, contextType, jaasConfig, dynamicJaasConfig);
         } else
             return defaultContext(contextType, listenerContextName, globalContextName);
     }
@@ -131,7 +133,7 @@ public class JaasContext {
             throw new IllegalArgumentException(errorMessage);
         }
 
-        return new JaasContext(contextName, contextType, jaasConfig);
+        return new JaasContext(contextName, contextType, jaasConfig, null);
     }
 
     /**
@@ -144,8 +146,9 @@ public class JaasContext {
     private final Type type;
     private final Configuration configuration;
     private final List<AppConfigurationEntry> configurationEntries;
+    private final Password dynamicJaasConfig;
 
-    public JaasContext(String name, Type type, Configuration configuration) {
+    public JaasContext(String name, Type type, Configuration configuration, Password dynamicJaasConfig) {
         this.name = name;
         this.type = type;
         this.configuration = configuration;
@@ -153,6 +156,7 @@ public class JaasContext {
         if (entries == null)
             throw new IllegalArgumentException("Could not find a '" + name + "' entry in this JAAS configuration.");
         this.configurationEntries = Collections.unmodifiableList(new ArrayList<>(Arrays.asList(entries)));
+        this.dynamicJaasConfig = dynamicJaasConfig;
     }
 
     public String name() {
@@ -169,6 +173,10 @@ public class JaasContext {
 
     public List<AppConfigurationEntry> configurationEntries() {
         return configurationEntries;
+    }
+
+    public Password dynamicJaasConfig() {
+        return dynamicJaasConfig;
     }
 
     /**

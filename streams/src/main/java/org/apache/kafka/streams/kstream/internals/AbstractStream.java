@@ -136,6 +136,7 @@ public abstract class AbstractStream<K> {
             public InternalValueTransformerWithKey<K, V, VR> get() {
                 final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
                 return new InternalValueTransformerWithKey<K, V, VR>() {
+                    @SuppressWarnings("deprecation")
                     @Override
                     public VR punctuate(final long timestamp) {
                         return valueTransformer.punctuate(timestamp);
