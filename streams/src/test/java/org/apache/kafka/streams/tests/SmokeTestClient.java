@@ -70,11 +70,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             }
         }));
 
-        thread = new Thread() {
-            public void run() {
-                streams.start();
-            }
-        };
+        thread = ()-> { streams.start();};
         thread.start();
     }
 
@@ -125,11 +121,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             data.groupByKey(Serialized.with(stringSerde, intSerde));
 
         groupedData.aggregate(
-                new Initializer<Integer>() {
-                    public Integer apply() {
-                        return Integer.MAX_VALUE;
-                    }
-                },
+                ()-> { return Integer.MAX_VALUE;},
                 new Aggregator<String, Integer, Integer>() {
                     @Override
                     public Integer apply(String aggKey, Integer value, Integer aggregate) {
@@ -147,11 +139,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // max
         groupedData.aggregate(
-                new Initializer<Integer>() {
-                    public Integer apply() {
-                        return Integer.MIN_VALUE;
-                    }
-                },
+                ()-> { return Integer.MIN_VALUE;},
                 new Aggregator<String, Integer, Integer>() {
                     @Override
                     public Integer apply(String aggKey, Integer value, Integer aggregate) {
@@ -169,11 +157,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // sum
         groupedData.aggregate(
-                new Initializer<Long>() {
-                    public Long apply() {
-                        return 0L;
-                    }
-                },
+                ()-> { return 0L;},
                 new Aggregator<String, Integer, Long>() {
                     @Override
                     public Long apply(String aggKey, Integer value, Long aggregate) {

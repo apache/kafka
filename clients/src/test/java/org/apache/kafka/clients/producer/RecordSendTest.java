@@ -83,15 +83,11 @@ public class RecordSendTest {
     /* create a new request result that will be completed after the given timeout */
     public ProduceRequestResult asyncRequest(final long baseOffset, final RuntimeException error, final long timeout) {
         final ProduceRequestResult request = new ProduceRequestResult(topicPartition);
-        Thread thread = new Thread() {
-            public void run() {
-                try {
+        Thread thread = ()-> { try {
                     sleep(timeout);
                     request.set(baseOffset, RecordBatch.NO_TIMESTAMP, error);
                     request.done();
-                } catch (InterruptedException e) { }
-            }
-        };
+                } catch (InterruptedException e) { }};
         thread.start();
         return request;
     }

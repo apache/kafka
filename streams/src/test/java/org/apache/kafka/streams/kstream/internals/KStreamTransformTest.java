@@ -45,9 +45,7 @@ public class KStreamTransformTest {
         StreamsBuilder builder = new StreamsBuilder();
 
         TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier =
-            new TransformerSupplier<Number, Number, KeyValue<Integer, Integer>>() {
-                public Transformer<Number, Number, KeyValue<Integer, Integer>> get() {
-                    return new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
+            ()-> { return new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
 
                         private int total = 0;
 
@@ -69,9 +67,7 @@ public class KStreamTransformTest {
                         @Override
                         public void close() {
                         }
-                    };
-                }
-            };
+                    };};
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 

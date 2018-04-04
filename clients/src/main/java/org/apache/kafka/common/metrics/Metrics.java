@@ -141,11 +141,7 @@ public class Metrics implements Closeable {
         if (enableExpiration) {
             this.metricsScheduler = new ScheduledThreadPoolExecutor(1);
             // Creating a daemon thread to not block shutdown
-            this.metricsScheduler.setThreadFactory(new ThreadFactory() {
-                public Thread newThread(Runnable runnable) {
-                    return KafkaThread.daemon("SensorExpiryThread", runnable);
-                }
-            });
+            this.metricsScheduler.setThreadFactory((Runnable runnable)->{ return KafkaThread.daemon("SensorExpiryThread", runnable);});
             this.metricsScheduler.scheduleAtFixedRate(new ExpireSensorTask(), 30, 30, TimeUnit.SECONDS);
         } else {
             this.metricsScheduler = null;

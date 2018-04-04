@@ -414,11 +414,7 @@ public class SimpleBenchmark {
     }
 
     private long startStreamsThread(final KafkaStreams streams, final CountDownLatch latch) {
-        Thread thread = new Thread() {
-            public void run() {
-                streams.start();
-            }
-        };
+        Thread thread = ()-> { streams.start();};
         thread.start();
 
         long startTime = System.currentTimeMillis();

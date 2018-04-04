@@ -687,11 +687,7 @@ public class Sender implements Runnable {
         }
         ProduceRequest.Builder requestBuilder = ProduceRequest.Builder.forMagic(minUsedMagic, acks, timeout,
                 produceRecordsByPartition, transactionalId);
-        RequestCompletionHandler callback = new RequestCompletionHandler() {
-            public void onComplete(ClientResponse response) {
-                handleProduceResponse(response, recordsByPartition, time.milliseconds());
-            }
-        };
+        RequestCompletionHandler callback = (ClientResponse response)->{ handleProduceResponse(response, recordsByPartition, time.milliseconds());};
 
         String nodeId = Integer.toString(destination);
         ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0, callback);
