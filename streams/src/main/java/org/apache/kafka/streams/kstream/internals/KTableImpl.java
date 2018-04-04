@@ -50,6 +50,7 @@ import java.util.Set;
  * @param <S> the source's (parent's) value type
  * @param <V> the value type
  */
+@SuppressWarnings("unchecked")
 public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, V> {
 
     // TODO: these two fields can be package-private after KStreamBuilder is removed
@@ -141,26 +142,24 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                   final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier,
                                   final boolean isFilterNot) {
         Objects.requireNonNull(predicate, "predicate can't be null");
-        String name = builder.newProcessorName(FILTER_NAME);
+        final String name = builder.newProcessorName(FILTER_NAME);
         String internalStoreName = null;
         if (storeSupplier != null) {
             internalStoreName = storeSupplier.name();
         }
         KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, isFilterNot, internalStoreName);
-        ProcessDetails.Builder processDetailsBuilder = ProcessDetails.builder().withProcessorSupplier(processorSupplier);
+        final ProcessDetails.Builder processDetailsBuilder = ProcessDetails.builder().withProcessorSupplier(processorSupplier);
         if (storeSupplier != null) {
             processDetailsBuilder.withStoreSupplier(storeSupplier);
         }
-        StreamsGraphNode graphNode = new StreamsGraphNode(name,
-                                                          TopologyNodeType.PROCESSOR,
-                                                          false,
-                                                          processDetailsBuilder.build(),
-                                                          this.name);
+        final StreamsGraphNode graphNode = new StreamsGraphNode(name,
+                                                                TopologyNodeType.PROCESSOR,
+                                                                false,
+                                                                processDetailsBuilder.build(),
+                                                                this.name);
         builder.addNode(graphNode);
 
-        //builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
         if (storeSupplier != null) {
-            //builder.internalTopologyBuilder.addStateStore(storeSupplier, name);
             return new KTableImpl<>(builder, name, processorSupplier, this.keySerde, this.valSerde, sourceNodes, internalStoreName, true);
         } else {
             return new KTableImpl<>(builder, name, processorSupplier, sourceNodes, this.queryableStoreName, false);
@@ -172,7 +171,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                   final boolean filterNot) {
         String name = builder.newProcessorName(FILTER_NAME);
 
-        KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this,
+        final KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this,
                                                                                 predicate,
                                                                                 filterNot,
                                                                                 materialized.storeName());
@@ -180,8 +179,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         final StoreBuilder builder = new KeyValueStoreMaterializer<>(materialized).materialize();
 
-        ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(processorSupplier).withStoreBuilder(builder).build();
-        StreamsGraphNode graphNode = new StreamsGraphNode(name,
+        final ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(processorSupplier).withStoreBuilder(builder).build();
+        final StreamsGraphNode graphNode = new StreamsGraphNode(name,
                                                           TopologyNodeType.PROCESSOR,
                                                           false,
                                                           processDetails,
@@ -268,23 +267,21 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                            final Serde<V1> valueSerde,
                                            final org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> storeSupplier) {
         Objects.requireNonNull(mapper);
-        String name = builder.newProcessorName(MAPVALUES_NAME);
+        final String name = builder.newProcessorName(MAPVALUES_NAME);
         String internalStoreName = null;
         if (storeSupplier != null) {
             internalStoreName = storeSupplier.name();
         }
-        KTableProcessorSupplier<K, V, V1> processorSupplier = new KTableMapValues<>(this, mapper, internalStoreName);
-        //builder.internalTopologyBuilder.addProcessor(name, processorSupplier, this.name);
+        final KTableProcessorSupplier<K, V, V1> processorSupplier = new KTableMapValues<>(this, mapper, internalStoreName);
 
-        ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(processorSupplier).withStoreSupplier(storeSupplier).build();
-        StreamsGraphNode graphNode = new StreamsGraphNode(name,
+        final ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(processorSupplier).withStoreSupplier(storeSupplier).build();
+        final StreamsGraphNode graphNode = new StreamsGraphNode(name,
                                                           TopologyNodeType.PROCESSOR,
                                                           false,
                                                           processDetails,
                                                           this.name);
         builder.addNode(graphNode);
         if (storeSupplier != null) {
-            //builder.internalTopologyBuilder.addStateStore(storeSupplier, name);
             return new KTableImpl<>(builder, name, processorSupplier, this.keySerde, valueSerde, sourceNodes, internalStoreName, true);
         } else {
             return new KTableImpl<>(builder, name, processorSupplier, sourceNodes, this.queryableStoreName, false);
@@ -321,8 +318,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             mapper,
             materializedInternal.storeName());
 
-        ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(processorSupplier).withMaterialized(materialized).build();
-        StreamsGraphNode graphNode = new StreamsGraphNode(name,
+        final ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(processorSupplier).withMaterialized(materialized).build();
+        final StreamsGraphNode graphNode = new StreamsGraphNode(name,
                                                           TopologyNodeType.PROCESSOR,
                                                           false,
                                                           processDetails,
@@ -376,14 +373,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       final String label) {
         Objects.requireNonNull(label, "label can't be null");
         final String name = builder.newProcessorName(PRINTING_NAME);
-        ProcessDetails
+        final ProcessDetails
             processDetails =
             ProcessDetails.builder().withProcessorSupplier(new KStreamPrint<>(new PrintForeachAction<>(System.out, defaultKeyValueMapper, label))).build();
-        StreamsGraphNode graphNode = new StreamsGraphNode(name,
-                                                          TopologyNodeType.PROCESSOR,
-                                                          false,
-                                                          processDetails,
-                                                          this.name);
+        final StreamsGraphNode graphNode = new StreamsGraphNode(name,
+                                                                TopologyNodeType.PROCESSOR,
+                                                                false,
+                                                                processDetails,
+                                                                this.name);
         builder.addNode(graphNode);
 
     }
@@ -425,9 +422,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }
         final String name = builder.newProcessorName(PRINTING_NAME);
         try {
-            ProcessDetails processDetails = ProcessDetails.builder()
+            final ProcessDetails processDetails = ProcessDetails.builder()
                 .withProcessorSupplier(new KStreamPrint<>(new PrintForeachAction<>(new FileOutputStream(filePath), defaultKeyValueMapper, label))).build();
-            StreamsGraphNode graphNode = new StreamsGraphNode(name,
+            final StreamsGraphNode graphNode = new StreamsGraphNode(name,
                                                               TopologyNodeType.PROCESSOR,
                                                               false,
                                                               processDetails,
@@ -442,15 +439,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @Override
     public void foreach(final ForeachAction<? super K, ? super V> action) {
         Objects.requireNonNull(action, "action can't be null");
-        String name = builder.newProcessorName(FOREACH_NAME);
-        KStreamPeek<K, Change<V>> processorSupplier = new KStreamPeek<>(new ForeachAction<K, Change<V>>() {
+        final String name = builder.newProcessorName(FOREACH_NAME);
+        final KStreamPeek<K, Change<V>> processorSupplier = new KStreamPeek<>(new ForeachAction<K, Change<V>>() {
             @Override
             public void apply(K key, Change<V> value) {
                 action.apply(key, value.newValue);
             }
         }, false);
-        ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(processorSupplier).build();
-        StreamsGraphNode graphNode = new StreamsGraphNode(name,
+        final ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(processorSupplier).build();
+        final StreamsGraphNode graphNode = new StreamsGraphNode(name,
                                                           TopologyNodeType.PROCESSOR,
                                                           false,
                                                           processDetails,
@@ -601,16 +598,16 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public KStream<K, V> toStream() {
-        String name = builder.newProcessorName(TOSTREAM_NAME);
+        final String name = builder.newProcessorName(TOSTREAM_NAME);
 
-        ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(new KStreamMapValues<>(new ValueMapperWithKey<K, Change<V>, V>() {
+        final ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(new KStreamMapValues<>(new ValueMapperWithKey<K, Change<V>, V>() {
             @Override
             public V apply(final K key, final Change<V> change) {
                 return change.newValue;
             }
         })).build();
 
-        StreamsGraphNode graphNode = new StreamsGraphNode(name,
+        final StreamsGraphNode graphNode = new StreamsGraphNode(name,
                                                           TopologyNodeType.PROCESSOR,
                                                           false,
                                                           processDetails,
@@ -877,10 +874,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         Objects.requireNonNull(serialized, "serialized can't be null");
         String selectName = builder.newProcessorName(SELECT_NAME);
 
-        KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
+        final KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
-        StreamsGraphNode graphNode = new StreamsGraphNode(selectName,
+        final StreamsGraphNode graphNode = new StreamsGraphNode(selectName,
                                                           TopologyNodeType.PROCESSOR,
                                                           false,
                                                           ProcessDetails.builder().withProcessorSupplier(selectSupplier).build(),

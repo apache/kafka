@@ -155,7 +155,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
 
         sourceSinkBuilder.withProcessDetails(ProcessDetails.builder().withStoreSupplier(storeSupplier).build());
-        SourceSinkNode sourceSinkNode = sourceSinkBuilder.build();
+        final SourceSinkNode sourceSinkNode = sourceSinkBuilder.build();
         sourceSinkNode.setPredecessorName(this.name);
 
         builder.addNode(sourceSinkNode);

@@ -24,7 +24,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collections;
 import java.util.Set;
-
+@SuppressWarnings("unchecked")
 class GroupedStreamAggregateBuilder<K, V> {
     private final InternalStreamsBuilder builder;
     private final Serde<K> keySerde;
@@ -68,9 +68,9 @@ class GroupedStreamAggregateBuilder<K, V> {
         final String aggFunctionName = builder.newProcessorName(functionName);
         final String sourceName = repartitionIfRequired(storeBuilder.name());
 
-        ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(aggregateSupplier)
+        final ProcessDetails processDetails = ProcessDetails.builder().withProcessorSupplier(aggregateSupplier)
             .withStoreBuilder(storeBuilder).withConnectProcessorName(sourceName).build();
-        StreamsGraphNode graphNode = new StreamsGraphNode(aggFunctionName,
+        final StreamsGraphNode graphNode = new StreamsGraphNode(aggFunctionName,
                                                           TopologyNodeType.AGGREGATE,
                                                           false,
                                                           processDetails,
