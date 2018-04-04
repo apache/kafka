@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
+import org.apache.kafka.streams.processor.internals.GlobalStateManager;
 import org.apache.kafka.streams.processor.internals.GlobalStateManagerImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateUpdateTask;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -59,6 +60,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.streams.test.OutputVerifier;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -162,7 +164,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @see OutputVerifier
  */
 @InterfaceStability.Evolving
-public class TopologyTestDriver {
+public class TopologyTestDriver implements Closeable {
 
     private final Time mockTime;
     private final InternalTopologyBuilder internalTopologyBuilder;
@@ -171,6 +173,7 @@ public class TopologyTestDriver {
     private final static TaskId TASK_ID = new TaskId(0, PARTITION_ID);
     private StreamTask task;
     private GlobalStateUpdateTask globalStateTask;
+    private GlobalStateManager    globalStateManager;
 
     private final StateDirectory stateDirectory;
     private final ProcessorTopology processorTopology;
@@ -264,7 +267,7 @@ public class TopologyTestDriver {
                 consumer.updateEndOffsets(Collections.singletonMap(partition, 0L));
             }
 
-            final GlobalStateManagerImpl stateManager = new GlobalStateManagerImpl(
+            globalStateManager = new GlobalStateManagerImpl(
                 new LogContext("mock "),
                 globalTopology,
                 consumer,
@@ -273,13 +276,13 @@ public class TopologyTestDriver {
                 streamsConfig);
 
             final GlobalProcessorContextImpl globalProcessorContext
-                = new GlobalProcessorContextImpl(streamsConfig, stateManager, streamsMetrics, cache);
-            stateManager.setGlobalProcessorContext(globalProcessorContext);
+                = new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache);
+            globalStateManager.setGlobalProcessorContext(globalProcessorContext);
 
             globalStateTask = new GlobalStateUpdateTask(
                 globalTopology,
                 globalProcessorContext,
-                stateManager,
+                globalStateManager,
                 new LogAndContinueExceptionHandler(),
                 new LogContext());
             globalStateTask.initialize();
@@ -372,7 +375,8 @@ public class TopologyTestDriver {
 
             // Forward back into the topology if the produced record is to an internal or a source topic ...
             final String outputTopicName = record.topic();
-            if (internalTopics.contains(outputTopicName) || processorTopology.sourceTopics().contains(outputTopicName)) {
+            if (internalTopics.contains(outputTopicName) || processorTopology.sourceTopics().contains(outputTopicName)
+            		|| globalPartitionsByTopic.containsKey(outputTopicName)) {
                 final byte[] serializedKey = record.key();
                 final byte[] serializedValue = record.value();
 
@@ -410,8 +414,10 @@ public class TopologyTestDriver {
      */
     public void advanceWallClockTime(final long advanceMs) {
         mockTime.sleep(advanceMs);
-        task.maybePunctuateSystemTime();
-        task.commit();
+        if (task != null) {
+            task.maybePunctuateSystemTime();
+            task.commit();
+        }
         captureOutputRecords();
     }
 
@@ -450,6 +456,18 @@ public class TopologyTestDriver {
         final V value = valueDeserializer.deserialize(record.topic(), record.value());
         return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value);
     }
+    
+    /**
+     * Records sent with this {@link Producer} are streamed to the topology.
+     * <p>
+     * This is useful when testing processes that are also using "normal" kafka producer, tipically in
+     * a different thread. 
+     * 
+     * @return the producer.
+     */
+    public final Producer<byte[], byte[]> getProducer() {
+    	return producer;
+    }
 
     /**
      * Get all {@link StateStore StateStores} from the topology.
@@ -467,7 +485,8 @@ public class TopologyTestDriver {
     public Map<String, StateStore> getAllStateStores() {
         final Map<String, StateStore> allStores = new HashMap<>();
         for (final String storeName : internalTopologyBuilder.allStateStoreName()) {
-            allStores.put(storeName, ((ProcessorContextImpl) task.context()).getStateMgr().getStore(storeName));
+            StateStore res = getStateStore(storeName);
+            allStores.put(storeName, res);
         }
         return allStores;
     }
@@ -487,7 +506,11 @@ public class TopologyTestDriver {
      * @see #getSessionStore(String)
      */
     public StateStore getStateStore(final String name) {
-        return ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
+        StateStore res = task == null ? null : 
+        	((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
+        if (res == null && globalStateManager != null)
+        	res = globalStateManager.getGlobalStore(name);
+        return res;
     }
 
     /**

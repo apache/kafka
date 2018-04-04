@@ -27,6 +27,9 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.streams.kstream.GlobalKTable;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -896,5 +899,121 @@ public class TopologyTestDriverTest {
                 testDriver.getKeyValueStore("storeProcessorStore").get("a")
             );
         }
+    }
+    
+    @Test
+    public void shouldFeedStoreFromKTable() {
+		StreamsBuilder builder = new StreamsBuilder();
+		@SuppressWarnings("unused")
+		final KTable<String,String> localTable = builder
+		.table("local",  
+			Consumed.with(Serdes.String(), Serdes.String()),
+			Materialized.<String,String,KeyValueStore<Bytes,byte[]>>as("localStore"))
+		;
+        final Properties config = new Properties();
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver-cleanup");
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+    	try (TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), config)) {
+    		final KeyValueStore<String,String> localStore = testDriver.getKeyValueStore("localStore");
+    		Assert.assertNotNull(localStore);
+    		Assert.assertNotNull(testDriver.getAllStateStores().get("localStore"));
+    		//
+        	final ConsumerRecordFactory<String,String> crf = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+    		testDriver.pipeInput(crf.create("local", "one", "TheOne"));
+    		//
+    		Assert.assertEquals("TheOne", localStore.get("one"));
+    	}
+    }
+
+    @Test
+    public void shouldFeedStoreViaProducerFromKTable() {
+		StreamsBuilder builder = new StreamsBuilder();
+		@SuppressWarnings("unused")
+		final KTable<String,String> localTable = builder
+		.table("local",  
+			Consumed.with(Serdes.String(), Serdes.String()),
+			Materialized.<String,String,KeyValueStore<Bytes,byte[]>>as("localStore"))
+		;
+        final Properties config = new Properties();
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver-cleanup");
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+    	try (TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), config)) {
+    		final KeyValueStore<String,String> localStore = testDriver.getKeyValueStore("localStore");
+    		Assert.assertNotNull(localStore);
+    		Assert.assertNotNull(testDriver.getAllStateStores().get("localStore"));
+    		//
+    	   	final ConsumerRecordFactory<String,String> crf = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+    		testDriver.pipeInput(crf.create("local", "one", "TheOne"));
+    		// just to serialize keys and values
+    		ConsumerRecord<byte[],byte[]> cr = crf.create("dummy", "two", "Second"); 
+    		testDriver.getProducer().send(new ProducerRecord<>("local", null, cr.timestamp(), cr.key(), cr.value()));
+    		testDriver.advanceWallClockTime(0);
+    		Assert.assertEquals("TheOne", localStore.get("one"));
+    		Assert.assertEquals("Second", localStore.get("two"));
+    		//
+    		ProducerRecord<String,String> pr = testDriver.readOutput("local", new StringDeserializer(), new StringDeserializer());
+    		Assert.assertEquals("two", pr.key());
+    		Assert.assertEquals("Second", pr.value());
+    	}
+    }
+
+    @Test
+    public void shouldFeedStoreFromGlobalKTable() {
+		StreamsBuilder builder = new StreamsBuilder();
+		@SuppressWarnings("unused")
+		final GlobalKTable<String,String> globalTable = builder
+		.globalTable("global",  
+			Consumed.with(Serdes.String(), Serdes.String()),
+			Materialized.<String,String,KeyValueStore<Bytes,byte[]>>as("globalStore"))
+		;
+        final Properties config = new Properties();
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver-cleanup");
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+    	try (TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), config)) {
+    		final KeyValueStore<String,String> globalStore = testDriver.getKeyValueStore("globalStore");
+    		Assert.assertNotNull(globalStore);
+    		Assert.assertNotNull(testDriver.getAllStateStores().get("globalStore"));
+    		//
+        	final ConsumerRecordFactory<String,String> crf = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+    		testDriver.pipeInput(crf.create("global", "one", "TheOne"));
+    		//
+    		Assert.assertEquals("TheOne", globalStore.get("one"));
+    	}
+    }
+
+    @Test
+    public void shouldFeedStoreViaProducerFromGlobalKTable() {
+		StreamsBuilder builder = new StreamsBuilder();
+		@SuppressWarnings("unused")
+		final GlobalKTable<String,String> globalTable = builder
+		.globalTable("global",  
+			Consumed.with(Serdes.String(), Serdes.String()),
+			Materialized.<String,String,KeyValueStore<Bytes,byte[]>>as("globalStore"))
+		;
+        final Properties config = new Properties();
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-TopologyTestDriver-cleanup");
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+    	try (TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), config)) {
+    		final KeyValueStore<String,String> globalStore = testDriver.getKeyValueStore("globalStore");
+    		Assert.assertNotNull(globalStore);
+    		Assert.assertNotNull(testDriver.getAllStateStores().get("globalStore"));
+    		//
+    	   	final ConsumerRecordFactory<String,String> crf = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+    		testDriver.pipeInput(crf.create("global", "one", "TheOne"));
+    		// just to serialize keys and values
+    		ConsumerRecord<byte[],byte[]> cr = crf.create("dummy", "two", "Second"); 
+    		testDriver.getProducer().send(new ProducerRecord<>("global", null, cr.timestamp(), cr.key(), cr.value()));
+    		testDriver.advanceWallClockTime(0);
+    		Assert.assertEquals("TheOne", globalStore.get("one"));
+    		Assert.assertEquals("Second", globalStore.get("two"));
+    		//
+    		ProducerRecord<String,String> pr = testDriver.readOutput("global", new StringDeserializer(), new StringDeserializer());
+    		Assert.assertEquals("two", pr.key());
+    		Assert.assertEquals("Second", pr.value());
+    	}
     }
 }
