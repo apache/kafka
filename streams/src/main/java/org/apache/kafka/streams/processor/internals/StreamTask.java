@@ -353,8 +353,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                     producer.commitTransaction();
                     transactionInFlight = false;
                     if (startNewTransaction) {
-                        transactionInFlight = true;
                         producer.beginTransaction();
+                        transactionInFlight = true;
                     }
                 } else {
                     consumer.commitSync(consumedOffsetsAndMetadata);
@@ -466,7 +466,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             if (eosEnabled) {
                 if (!clean) {
                     try {
-                        if (!isZombie) {
+                        if (!isZombie && transactionInFlight) {
                             producer.abortTransaction();
                         }
                         transactionInFlight = false;
