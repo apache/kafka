@@ -252,6 +252,9 @@ public class Sender implements Runnable {
             // and request metadata update, since there are messages to send to the topic.
             for (String topic : result.unknownLeaderTopics)
                 this.metadata.add(topic);
+
+            log.debug("Requesting metadata update due to unknown leader topics from the batched records: {}", result.unknownLeaderTopics);
+
             this.metadata.requestUpdate();
         }
 
@@ -557,9 +560,13 @@ public class Sender implements Runnable {
                 failBatch(batch, response, exception, batch.attempts() < this.retries);
             }
             if (error.exception() instanceof InvalidMetadataException) {
-                if (error.exception() instanceof UnknownTopicOrPartitionException)
+                if (error.exception() instanceof UnknownTopicOrPartitionException) {
                     log.warn("Received unknown topic or partition error in produce request on partition {}. The " +
                             "topic/partition may not exist or the user may not have Describe access to it", batch.topicPartition);
+                } else {
+                    log.warn("Received invalid metadata error in produce request on partition {} due to {}. Going " +
+                            "to request metadata update now", batch.topicPartition, error.exception().toString());
+                }
                 metadata.requestUpdate();
             }
 
