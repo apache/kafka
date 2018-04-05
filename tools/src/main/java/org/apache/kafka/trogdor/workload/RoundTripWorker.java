@@ -184,7 +184,7 @@ public class RoundTripWorker implements TaskWorker {
             props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer." + id);
             props.put(ProducerConfig.ACKS_CONFIG, "all");
             props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 105000);
-            // user may over-write the defaults with common client config and consumer config
+            // user may over-write the defaults with common client config and producer config
             WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.producerConf());
             producer = new KafkaProducer<>(props, new ByteArraySerializer(),
                 new ByteArraySerializer());

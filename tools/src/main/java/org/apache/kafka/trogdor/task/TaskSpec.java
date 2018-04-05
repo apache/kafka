@@ -21,9 +21,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import org.apache.kafka.trogdor.common.JsonUtil;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
-import java.util.TreeMap;
 
 
 /**
@@ -106,6 +106,6 @@ public abstract class TaskSpec {
     }
 
     protected Map<String, String> configOrEmptyMap(Map<String, String> config) {
-        return (config == null) ? new TreeMap<String, String>() : config;
+        return (config == null) ? Collections.<String, String>emptyMap() : config;
     }
 }
