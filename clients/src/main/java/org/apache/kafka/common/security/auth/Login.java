@@ -14,13 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.authenticator;
-
-import org.apache.kafka.common.security.JaasContext;
+package org.apache.kafka.common.security.auth;
 
 import java.util.Map;
 
 import javax.security.auth.Subject;
+import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
 
@@ -31,8 +30,21 @@ public interface Login {
 
     /**
      * Configures this login instance.
+     * @param configs Key-value pairs containing the parsed configuration options of
+     *        the client or broker. Note that these are the Kafka configuration options
+     *        and not the JAAS configuration options. The JAAS options may be obtained
+     *        from `jaasConfiguration`.
+     * @param contextName JAAS context name for this login which may be used to obtain
+     *        the login context from `jaasConfiguration`.
+     * @param jaasConfiguration JAAS configuration containing the login context named
+     *        `contextName`. If static JAAS configuration is used, this `Configuration`
+     *         may also contain other login contexts.
+     * @param loginCallbackHandler Login callback handler instance to use for this Login.
+     *        Login callback handler class may be configured using
+     *        {@link org.apache.kafka.common.config.SaslConfigs#SASL_LOGIN_CALLBACK_HANDLER_CLASS}.
      */
-    void configure(Map<String, ?> configs, JaasContext jaasContext);
+    void configure(Map<String, ?> configs, String contextName, Configuration jaasConfiguration,
+                   AuthenticateCallbackHandler loginCallbackHandler);
 
     /**
      * Performs login for each login module specified for the login context of this instance.
@@ -54,4 +66,3 @@ public interface Login {
      */
     void close();
 }
-

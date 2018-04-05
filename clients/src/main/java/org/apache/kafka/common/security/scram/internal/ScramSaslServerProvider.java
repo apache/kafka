@@ -14,12 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.scram;
+package org.apache.kafka.common.security.scram.internal;
 
 import java.security.Provider;
 import java.security.Security;
 
-import org.apache.kafka.common.security.scram.ScramSaslServer.ScramSaslServerFactory;
+import org.apache.kafka.common.security.scram.internal.ScramSaslServer.ScramSaslServerFactory;
 
 public class ScramSaslServerProvider extends Provider {
 
