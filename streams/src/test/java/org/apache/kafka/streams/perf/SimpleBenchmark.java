@@ -118,8 +118,8 @@ public class SimpleBenchmark {
     // the following numbers are based on empirical results and should only
     // be considered for updates when perf results have significantly changed
 
-    // with at least 50 million records, we run for at most 15 minutes
-    private static final int MAX_WAIT_MS = 15 * 60 * 1000;
+    // with at least 10 million records, we run for at most 3 minutes
+    private static final int MAX_WAIT_MS = 3 * 60 * 1000;
 
     /* ----------- benchmark variables that can be specified ----------- */
 

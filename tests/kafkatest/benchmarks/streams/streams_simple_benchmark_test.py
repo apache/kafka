@@ -39,7 +39,7 @@ class StreamsSimpleBenchmarkTest(Test):
         # these values could be updated in ad-hoc benchmarks
         self.key_skew = 0
         self.value_size = 1024
-        self.num_records = 50000000L
+        self.num_records = 10000000L
         self.num_threads = 1
 
         self.replication = 1
