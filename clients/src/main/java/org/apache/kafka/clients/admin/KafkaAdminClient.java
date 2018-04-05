@@ -2186,7 +2186,8 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
-        final KafkaFutureImpl<Map<Node, KafkaFuture<Collection<ConsumerGroupListing>>>> nodeAndConsumerGroupListing = new KafkaFutureImpl<>();
+        //final KafkaFutureImpl<Map<Node, KafkaFuture<Collection<ConsumerGroupListing>>>> nodeAndConsumerGroupListing = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<Collection<ConsumerGroupListing>> future = new KafkaFutureImpl<Collection<ConsumerGroupListing>>();
 
         final long nowMetadata = time.milliseconds();
         final long deadline = calcDeadlineMs(nowMetadata, options.timeoutMs());
@@ -2206,6 +2207,27 @@ public class KafkaAdminClient extends AdminClient {
                 for (final Node node : metadataResponse.brokers()) {
                     futures.put(node, new KafkaFutureImpl<Collection<ConsumerGroupListing>>());
                 }
+
+                future.combine(futures.values().toArray(new KafkaFuture[0])).thenApply(
+                        new KafkaFuture.BaseFunction<Collection<ConsumerGroupListing>, Collection<ConsumerGroupListing>>() {
+                            @Override
+                            public Collection<ConsumerGroupListing> apply(Collection<ConsumerGroupListing> v) {
+                                List<ConsumerGroupListing> listings = new ArrayList<>();
+                                for (Map.Entry<Node, KafkaFutureImpl<Collection<ConsumerGroupListing>>> entry : futures.entrySet()) {
+                                    Collection<ConsumerGroupListing> results;
+                                    try {
+                                        results = entry.getValue().get();
+                                    } catch (Throwable e) {
+                                        // This should be unreachable, since the future returned by KafkaFuture#allOf should
+                                        // have failed if any Future failed.
+                                        throw new KafkaException("ListConsumerGroupsResult#listings(): internal error", e);
+                                    }
+                                    listings.addAll(results);
+                                }
+                                return listings;
+                            }
+                        });
+
 
                 for (final Map.Entry<Node, KafkaFutureImpl<Collection<ConsumerGroupListing>>> entry : futures.entrySet()) {
                     final long nowList = time.milliseconds();
@@ -2243,17 +2265,15 @@ public class KafkaAdminClient extends AdminClient {
                     }, nowList);
 
                 }
-
-                nodeAndConsumerGroupListing.complete(new HashMap<Node, KafkaFuture<Collection<ConsumerGroupListing>>>(futures));
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                nodeAndConsumerGroupListing.completeExceptionally(throwable);
+                future.completeExceptionally(throwable);
             }
         }, nowMetadata);
 
-        return new ListConsumerGroupsResult(nodeAndConsumerGroupListing);
+        return new ListConsumerGroupsResult(future);
     }
 
     @Override
