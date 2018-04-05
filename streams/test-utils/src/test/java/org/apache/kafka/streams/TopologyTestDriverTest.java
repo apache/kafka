@@ -65,6 +65,7 @@ public class TopologyTestDriverTest {
     private final static String SOURCE_TOPIC_2 = "source-topic-2";
     private final static String SINK_TOPIC_1 = "sink-topic-1";
     private final static String SINK_TOPIC_2 = "sink-topic-2";
+    private final static String PATTERN_SOURCE_TOPIC_1 = "source-topic-\\d";
 
     private final ConsumerRecordFactory<byte[], byte[]> consumerRecordFactory = new ConsumerRecordFactory<>(
         new ByteArraySerializer(),
@@ -896,5 +897,71 @@ public class TopologyTestDriverTest {
                 testDriver.getKeyValueStore("storeProcessorStore").get("a")
             );
         }
+    }
+
+    @Test
+    public void shouldProcessFromSourcesThatMatchMultiplePattern() {
+        final  String PATTERN_SOURCE_TOPIC_3 = "source-topic-[A-Z]";
+        final  String CONSUMER_TOPIC_3 = "source-topic-Z";
+
+        final ConsumerRecord<byte[], byte[]> consumerRecord3 = consumerRecordFactory.create(CONSUMER_TOPIC_3, key1, value1, timestamp1);
+
+        testDriver = new TopologyTestDriver(setupMultipleSourceTopology(PATTERN_SOURCE_TOPIC_1, SOURCE_TOPIC_2, PATTERN_SOURCE_TOPIC_3), config);
+
+        final List<Record> processedRecords1 = mockProcessors.get(0).processedRecords;
+        final List<Record> processedRecords2 = mockProcessors.get(1).processedRecords;
+        final List<Record> processedRecords3 = mockProcessors.get(2).processedRecords;
+
+        testDriver.pipeInput(consumerRecord1);
+
+        assertEquals(1, processedRecords1.size());
+        assertEquals(0, processedRecords2.size());
+        assertEquals(0, processedRecords3.size());
+
+        Record record = processedRecords1.get(0);
+        Record expectedResult = new Record(consumerRecord1);
+        expectedResult.offset = 0L;
+        assertThat(record, equalTo(expectedResult));
+
+        testDriver.pipeInput(consumerRecord2);
+
+        assertEquals(1, processedRecords1.size());
+        assertEquals(1, processedRecords2.size());
+        assertEquals(0, processedRecords3.size());
+
+        record = processedRecords2.get(0);
+        expectedResult = new Record(consumerRecord2);
+        expectedResult.offset = 0L;
+        assertThat(record, equalTo(expectedResult));
+
+        testDriver.pipeInput(consumerRecord3);
+
+        assertEquals(1, processedRecords1.size());
+        assertEquals(1, processedRecords2.size());
+        assertEquals(1, processedRecords3.size());
+
+        record = processedRecords3.get(0);
+        expectedResult = new Record(consumerRecord3);
+        expectedResult.offset = 0L;
+        assertThat(record, equalTo(expectedResult));
+
+    }
+
+    @Test
+    public void shouldProcessFromSourceThatMatchPattern() {
+        final String sourceName = "source";
+
+        final Topology topology = new Topology();
+
+        topology.addSource(sourceName, PATTERN_SOURCE_TOPIC_1);
+        topology.addSink("sink", SINK_TOPIC_1, sourceName);
+        testDriver = new TopologyTestDriver(topology, config);
+
+        testDriver.pipeInput(consumerRecord1);
+        final ProducerRecord outputRecord = testDriver.readOutput(SINK_TOPIC_1);
+
+        assertEquals(key1, outputRecord.key());
+        assertEquals(value1, outputRecord.value());
+        assertEquals(SINK_TOPIC_1, outputRecord.topic());
     }
 }
