@@ -137,6 +137,7 @@ object Defaults {
   val AutoLeaderRebalanceEnable = true
   val LeaderImbalancePerBrokerPercentage = 10
   val LeaderImbalanceCheckIntervalSeconds = 300
+  val ControllerUpdateMetricsIntervalMs = 1000L
   val UncleanLeaderElectionEnable = false
   val InterBrokerSecurityProtocol = SecurityProtocol.PLAINTEXT.toString
   val InterBrokerProtocolVersion = ApiVersion.latestVersion.toString
@@ -344,6 +345,7 @@ object KafkaConfig {
   val AutoLeaderRebalanceEnableProp = "auto.leader.rebalance.enable"
   val LeaderImbalancePerBrokerPercentageProp = "leader.imbalance.per.broker.percentage"
   val LeaderImbalanceCheckIntervalSecondsProp = "leader.imbalance.check.interval.seconds"
+  val ControllerUpdateMetricsIntervalMsProp = "controller.update.metrics.interval.ms"
   val UncleanLeaderElectionEnableProp = "unclean.leader.election.enable"
   val InterBrokerSecurityProtocolProp = "security.inter.broker.protocol"
   val InterBrokerProtocolVersionProp = "inter.broker.protocol.version"
@@ -615,6 +617,7 @@ object KafkaConfig {
   val AutoLeaderRebalanceEnableDoc = "Enables auto leader balancing. A background thread checks and triggers leader balance if required at regular intervals"
   val LeaderImbalancePerBrokerPercentageDoc = "The ratio of leader imbalance allowed per broker. The controller would trigger a leader balance if it goes above this value per broker. The value is specified in percentage."
   val LeaderImbalanceCheckIntervalSecondsDoc = "The frequency with which the partition rebalance check is triggered by the controller"
+  val ControllerUpdateMetricsIntervalMsDoc = "The frequency with which the metrics on controller are updated"
   val UncleanLeaderElectionEnableDoc = "Indicates whether to enable replicas not in the ISR set to be elected as leader as a last resort, even though doing so may result in data loss"
   val InterBrokerSecurityProtocolDoc = "Security protocol used to communicate between brokers. Valid values are: " +
     s"${SecurityProtocol.names.asScala.mkString(", ")}. It is an error to set this and $InterBrokerListenerNameProp " +
@@ -855,6 +858,7 @@ object KafkaConfig {
       .define(AutoLeaderRebalanceEnableProp, BOOLEAN, Defaults.AutoLeaderRebalanceEnable, HIGH, AutoLeaderRebalanceEnableDoc)
       .define(LeaderImbalancePerBrokerPercentageProp, INT, Defaults.LeaderImbalancePerBrokerPercentage, HIGH, LeaderImbalancePerBrokerPercentageDoc)
       .define(LeaderImbalanceCheckIntervalSecondsProp, LONG, Defaults.LeaderImbalanceCheckIntervalSeconds, HIGH, LeaderImbalanceCheckIntervalSecondsDoc)
+      .define(ControllerUpdateMetricsIntervalMsProp, LONG, Defaults.ControllerUpdateMetricsIntervalMs, HIGH, ControllerUpdateMetricsIntervalMsDoc)
       .define(UncleanLeaderElectionEnableProp, BOOLEAN, Defaults.UncleanLeaderElectionEnable, HIGH, UncleanLeaderElectionEnableDoc)
       .define(InterBrokerSecurityProtocolProp, STRING, Defaults.InterBrokerSecurityProtocol, MEDIUM, InterBrokerSecurityProtocolDoc)
       .define(InterBrokerProtocolVersionProp, STRING, Defaults.InterBrokerProtocolVersion, MEDIUM, InterBrokerProtocolVersionDoc)
@@ -1119,6 +1123,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val autoLeaderRebalanceEnable = getBoolean(KafkaConfig.AutoLeaderRebalanceEnableProp)
   val leaderImbalancePerBrokerPercentage = getInt(KafkaConfig.LeaderImbalancePerBrokerPercentageProp)
   val leaderImbalanceCheckIntervalSeconds = getLong(KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp)
+  val controllerUpdateMetricsIntervalMs = getLong(KafkaConfig.ControllerUpdateMetricsIntervalMsProp)
   def uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(KafkaConfig.UncleanLeaderElectionEnableProp)
 
   // We keep the user-provided String as `ApiVersion.apply` can choose a slightly different version (eg if `0.10.0`

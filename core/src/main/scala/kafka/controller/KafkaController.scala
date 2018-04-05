@@ -70,7 +70,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   // visible for testing
   private[controller] val eventManager = new ControllerEventManager(config.brokerId,
-    controllerContext.stats.rateAndTimeMetrics, _ => updateMetrics())
+    controllerContext.stats.rateAndTimeMetrics, _ => updateMetricsPending = true)
 
   val topicDeletionManager = new TopicDeletionManager(this, eventManager, zkClient)
   private val brokerRequestBatch = new ControllerBrokerRequestBatch(this, stateChangeLogger)
@@ -93,6 +93,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   @volatile private var preferredReplicaImbalanceCount = 0
   @volatile private var globalTopicCount = 0
   @volatile private var globalPartitionCount = 0
+  @volatile private var updateMetricsPending = false
 
   /* single-thread scheduler to clean expired tokens */
   private val tokenCleanScheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "delegation-token-cleaner")
@@ -255,6 +256,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     if (config.autoLeaderRebalanceEnable) {
       scheduleAutoLeaderRebalanceTask(delay = 5, unit = TimeUnit.SECONDS)
     }
+    scheduleUpdateMetricsTask(delay = 5, unit = TimeUnit.SECONDS)
 
     if (config.tokenAuthEnabled) {
       info("starting the token expiry check scheduler")
@@ -264,6 +266,11 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         period = config.delegationTokenExpiryCheckIntervalMs,
         unit = TimeUnit.MILLISECONDS)
     }
+  }
+
+  private def scheduleUpdateMetricsTask(delay: Long, unit: TimeUnit): Unit = {
+    kafkaScheduler.schedule("controller-update-metrics-task", () => eventManager.put(UpdateMetricsTask),
+      delay = delay, unit = unit)
   }
 
   private def scheduleAutoLeaderRebalanceTask(delay: Long, unit: TimeUnit): Unit = {
@@ -994,6 +1001,19 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
+  case object UpdateMetricsTask extends ControllerEvent {
+    def state = ControllerState.UpdateMetrics
+
+    override def process(): Unit = {
+      if (!isActive) return
+      try {
+        maybeUpdateMetrics()
+      } finally {
+        scheduleUpdateMetricsTask(delay = config.controllerUpdateMetricsIntervalMs, unit = TimeUnit.MILLISECONDS)
+      }
+    }
+  }
+
   case object AutoPreferredReplicaLeaderElection extends ControllerEvent {
 
     def state = ControllerState.AutoLeaderBalance
@@ -1130,7 +1150,11 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   }
 
-  private def updateMetrics(): Unit = {
+  private def maybeUpdateMetrics(): Unit = {
+    if (!updateMetricsPending)
+      return
+    updateMetricsPending = false
+    
     offlinePartitionCount =
       if (!isActive) {
         0
