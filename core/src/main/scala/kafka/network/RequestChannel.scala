@@ -158,7 +158,7 @@ object RequestChannel extends Logging {
       val metricNames = fetchMetricNames :+ header.apiKey.name
       metricNames.foreach { metricName =>
         val m = metrics(metricName)
-        m.requestRate(header.apiVersion()).mark()
+        m.requestRate(header.apiVersion).mark()
         m.requestQueueTimeHist.update(Math.round(requestQueueTimeMs))
         m.localTimeHist.update(Math.round(apiLocalTimeMs))
         m.remoteTimeHist.update(Math.round(apiRemoteTimeMs))
@@ -354,7 +354,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   import RequestMetrics._
 
   val tags = Map("request" -> name)
-  val requestRateInternal = new scala.collection.mutable.HashMap[Short, Meter]
+  val requestRateInternal = new mutable.HashMap[Short, Meter]
   // time a request spent in a request queue
   val requestQueueTimeHist = newHistogram(RequestQueueTimeMs, biased = true, tags)
   // time a request takes to be processed at the local broker
@@ -423,7 +423,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   }
 
   def removeMetrics(): Unit = {
-    val maxApiVersion = ApiKeys.values().map(key => key.latestVersion()).max
+    val maxApiVersion = ApiKeys.values().map(key => key.latestVersion).max
     for (version <- 0 to maxApiVersion) removeMetric(RequestsPerSec, tags + ("version" -> version.toString))
     removeMetric(RequestQueueTimeMs, tags)
     removeMetric(LocalTimeMs, tags)
