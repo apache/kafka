@@ -508,7 +508,7 @@ public class MockClient implements KafkaClient {
     }
 
     // visible for testing
-    public int requestCount() {
+    public int totalRequestCount() {
         return totalRequestCount.get();
     }
 }

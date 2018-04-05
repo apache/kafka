@@ -230,14 +230,14 @@ public class KafkaAdminClientTest {
             for (String sillyTopicName : sillyTopicNames) {
                 assertFutureError(deleteFutures.get(sillyTopicName), InvalidTopicException.class);
             }
-            assertEquals(0, env.kafkaClient().requestCount());
+            assertEquals(0, env.kafkaClient().totalRequestCount());
 
             Map<String, KafkaFuture<TopicDescription>> describeFutures =
                     env.adminClient().describeTopics(sillyTopicNames).values();
             for (String sillyTopicName : sillyTopicNames) {
                 assertFutureError(describeFutures.get(sillyTopicName), InvalidTopicException.class);
             }
-            assertEquals(0, env.kafkaClient().requestCount());
+            assertEquals(0, env.kafkaClient().totalRequestCount());
 
             List<NewTopic> newTopics = new ArrayList<>();
             for (String sillyTopicName : sillyTopicNames) {
@@ -249,7 +249,7 @@ public class KafkaAdminClientTest {
             for (String sillyTopicName : sillyTopicNames) {
                 assertFutureError(createFutures .get(sillyTopicName), InvalidTopicException.class);
             }
-            assertEquals(0, env.kafkaClient().requestCount());
+            assertEquals(0, env.kafkaClient().totalRequestCount());
         }
     }
 
