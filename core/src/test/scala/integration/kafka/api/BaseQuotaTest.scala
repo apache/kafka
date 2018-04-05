@@ -16,12 +16,13 @@ package kafka.api
 
 import java.util.{Collections, HashMap, Properties}
 
+import kafka.api.QuotaTestClients._
 import kafka.server.{ClientQuotaManager, ClientQuotaManagerConfig, DynamicConfig, KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
-import org.apache.kafka.common.{MetricName, TopicPartition}
+import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Assert._
@@ -145,7 +146,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     while ((!throttled || quotaTestClients.exemptRequestMetric == null) && System.currentTimeMillis < endTimeMs) {
       consumer.poll(100)
       val throttleMetric = quotaTestClients.throttleMetric(QuotaType.Request, consumerClientId)
-      throttled = throttleMetric != null && throttleMetric.value > 0
+      throttled = throttleMetric != null && metricValue(throttleMetric) > 0
     }
 
     assertTrue("Should have been throttled", throttled)
@@ -154,8 +155,12 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 
     val exemptMetric = quotaTestClients.exemptRequestMetric
     assertNotNull("Exempt requests not recorded", exemptMetric)
-    assertTrue("Exempt requests not recorded", exemptMetric.value > 0)
+    assertTrue("Exempt requests not recorded", metricValue(exemptMetric) > 0)
   }
+}
+
+object QuotaTestClients {
+  def metricValue(metric: Metric): Double = metric.metricValue().asInstanceOf[Double]
 }
 
 abstract class QuotaTestClients(topic: String,
@@ -184,7 +189,7 @@ abstract class QuotaTestClients(topic: String,
         new ErrorLoggingCallback(topic, null, null, true)).get()
       numProduced += 1
       val metric = throttleMetric(QuotaType.Produce, producerClientId)
-      throttled = metric != null && metric.value > 0
+      throttled = metric != null && metricValue(metric) > 0
     } while (numProduced < maxRecords && !throttled)
     numProduced
   }
@@ -196,7 +201,7 @@ abstract class QuotaTestClients(topic: String,
     do {
       numConsumed += consumer.poll(100).count
       val metric = throttleMetric(QuotaType.Fetch, consumerClientId)
-      throttled = metric != null && metric.value > 0
+      throttled = metric != null && metricValue(metric) > 0
     }  while (numConsumed < maxRecords && !throttled)
 
     // If throttled, wait for the records from the last fetch to be received
@@ -219,7 +224,7 @@ abstract class QuotaTestClients(topic: String,
   }
 
   def verifyThrottleTimeMetric(quotaType: QuotaType, clientId: String, expectThrottle: Boolean): Unit = {
-    val throttleMetricValue = throttleMetric(quotaType, clientId).value()
+    val throttleMetricValue = metricValue(throttleMetric(quotaType, clientId))
     if (expectThrottle) {
       assertTrue("Should have been throttled", throttleMetricValue > 0)
     } else {
@@ -249,10 +254,10 @@ abstract class QuotaTestClients(topic: String,
     val maxMetric = producer.metrics.get(new MetricName("produce-throttle-time-max", "producer-metrics", "", tags))
 
     if (expectThrottle) {
-      TestUtils.waitUntilTrue(() => avgMetric.value > 0.0 && maxMetric.value > 0.0,
-        s"Producer throttle metric not updated: avg=${avgMetric.value} max=${maxMetric.value}")
+      TestUtils.waitUntilTrue(() => metricValue(avgMetric) > 0.0 && metricValue(maxMetric) > 0.0,
+        s"Producer throttle metric not updated: avg=${metricValue(avgMetric)} max=${metricValue(maxMetric)}")
     } else
-      assertEquals("Should not have been throttled", 0.0, maxMetric.value, 0.0)
+      assertEquals("Should not have been throttled", 0.0, metricValue(maxMetric), 0.0)
   }
 
   def verifyConsumerClientThrottleTimeMetric(expectThrottle: Boolean, maxThrottleTime: Option[Double] = None) {
@@ -262,12 +267,12 @@ abstract class QuotaTestClients(topic: String,
     val maxMetric = consumer.metrics.get(new MetricName("fetch-throttle-time-max", "consumer-fetch-manager-metrics", "", tags))
 
     if (expectThrottle) {
-      TestUtils.waitUntilTrue(() => avgMetric.value > 0.0 && maxMetric.value > 0.0,
-        s"Consumer throttle metric not updated: avg=${avgMetric.value} max=${maxMetric.value}")
-      maxThrottleTime.foreach(max => assertTrue(s"Maximum consumer throttle too high: ${maxMetric.value}",
-        maxMetric.value <= max))
+      TestUtils.waitUntilTrue(() => metricValue(avgMetric) > 0.0 && metricValue(maxMetric) > 0.0,
+        s"Consumer throttle metric not updated: avg=${metricValue(avgMetric)} max=${metricValue(maxMetric)}")
+      maxThrottleTime.foreach(max => assertTrue(s"Maximum consumer throttle too high: ${metricValue(maxMetric)}",
+        metricValue(maxMetric) <= max))
     } else
-      assertEquals("Should not have been throttled", 0.0, maxMetric.value, 0.0)
+      assertEquals("Should not have been throttled", 0.0, metricValue(maxMetric), 0.0)
   }
 
   def quotaProperties(producerQuota: Long, consumerQuota: Long, requestQuota: Double): Properties = {

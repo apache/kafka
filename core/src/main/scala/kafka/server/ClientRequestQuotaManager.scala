@@ -66,8 +66,8 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
     }
   }
 
-  override protected def throttleTime(clientMetric: KafkaMetric, config: MetricConfig): Long = {
-    math.min(super.throttleTime(clientMetric, config), maxThrottleTimeMs)
+  override protected def throttleTime(clientMetric: KafkaMetric): Long = {
+    math.min(super.throttleTime(clientMetric), maxThrottleTimeMs)
   }
 
   override protected def clientRateMetricName(quotaMetricTags: Map[String, String]): MetricName = {

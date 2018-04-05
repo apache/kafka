@@ -141,6 +141,11 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     user.produceConsume(expectProduceThrottle = true, expectConsumeThrottle = true)
   }
 
+  /**
+   * Creates a group with one user and one topic with one partition.
+   * @param firstUser First user to create in the group
+   * @param brokerId The broker id to use as leader of the partition
+   */
   private def createGroupWithOneUser(firstUser: String, brokerId: Int): GroupedUser = {
     val user = addUser(firstUser, brokerId)
     createTopic(user.topic, numPartitions = 1, brokerId)
@@ -280,6 +285,17 @@ object GroupedUserQuotaCallback {
   val UnlimitedQuota = new ClientQuota(Long.MaxValue, Collections.emptyMap[String, String])
 }
 
+/**
+ * Quota callback for a grouped user. Both user principals and topics of each group
+ * are prefixed with the group name followed by '_'. This callback defines quotas of different
+ * types at the group level. Group quotas are configured in ZooKeeper as user quotas with
+ * the entity name "${group}_". Default group quotas are configured in ZooKeeper as user quotas
+ * with the entity name "_".
+ *
+ * Default group quotas may also be configured using the configuration options
+ * "default.produce.quota" and "default.fetch.quota" which can be reconfigured dynamically
+ * without restarting the broker. This tests custom reconfigurable options for quota callbacks,
+ */
 class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable with Logging {
   import kafka.api.GroupedUserQuotaCallback._
 
