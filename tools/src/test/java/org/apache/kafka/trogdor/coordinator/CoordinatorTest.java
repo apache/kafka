@@ -36,6 +36,8 @@ import org.apache.kafka.trogdor.rest.StopTaskRequest;
 import org.apache.kafka.trogdor.rest.TaskDone;
 import org.apache.kafka.trogdor.rest.TaskPending;
 import org.apache.kafka.trogdor.rest.TaskRunning;
+import org.apache.kafka.trogdor.rest.TasksRequest;
+import org.apache.kafka.trogdor.rest.TasksResponse;
 import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerRunning;
 import org.apache.kafka.trogdor.task.NoOpTaskSpec;
@@ -50,6 +52,8 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class CoordinatorTest {
     private static final Logger log = LoggerFactory.getLogger(CoordinatorTest.class);
@@ -301,5 +305,93 @@ public class CoordinatorTest {
             addLine("sudo iptables " + prefix + " INPUT -p tcp -s 127.0.0.1 -j DROP " +
                 "-m comment --comment node02").
             waitFor("node03", runner);
+    }
+
+    @Test
+    public void testTasksRequestMatches() throws Exception {
+        TasksRequest req1 = new TasksRequest(null, 0, 0, 0, 0);
+        assertTrue(req1.matches("foo1", -1, -1));
+        assertTrue(req1.matches("bar1", 100, 200));
+        assertTrue(req1.matches("baz1", 100, -1));
+
+        TasksRequest req2 = new TasksRequest(null, 100, 0, 0, 0);
+        assertFalse(req2.matches("foo1", -1, -1));
+        assertTrue(req2.matches("bar1", 100, 200));
+        assertFalse(req2.matches("bar1", 99, 200));
+        assertFalse(req2.matches("baz1", 99, -1));
+
+        TasksRequest req3 = new TasksRequest(null, 200, 900, 200, 900);
+        assertFalse(req3.matches("foo1", -1, -1));
+        assertFalse(req3.matches("bar1", 100, 200));
+        assertFalse(req3.matches("bar1", 200, 1000));
+        assertTrue(req3.matches("bar1", 200, 700));
+        assertFalse(req3.matches("baz1", 101, -1));
+
+        List<String> taskIds = new ArrayList<>();
+        taskIds.add("foo1");
+        taskIds.add("bar1");
+        taskIds.add("baz1");
+        TasksRequest req4 = new TasksRequest(taskIds, 1000, -1, -1, -1);
+        assertFalse(req4.matches("foo1", -1, -1));
+        assertTrue(req4.matches("foo1", 1000, -1));
+        assertFalse(req4.matches("foo1", 900, -1));
+        assertFalse(req4.matches("baz2", 2000, -1));
+        assertFalse(req4.matches("baz2", -1, -1));
+    }
+
+    @Test
+    public void testTasksRequest() throws Exception {
+        MockTime time = new MockTime(0, 0, 0);
+        Scheduler scheduler = new MockScheduler(time);
+        try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
+            addCoordinator("node01").
+            addAgent("node02").
+            scheduler(scheduler).
+            build()) {
+            CoordinatorClient coordinatorClient = cluster.coordinatorClient();
+            new ExpectedTasks().waitFor(coordinatorClient);
+
+            NoOpTaskSpec fooSpec = new NoOpTaskSpec(1, 10);
+            NoOpTaskSpec barSpec = new NoOpTaskSpec(3, 1);
+            coordinatorClient.createTask(new CreateTaskRequest("foo", fooSpec));
+            coordinatorClient.createTask(new CreateTaskRequest("bar", barSpec));
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    taskState(new TaskPending(fooSpec)).
+                    build()).
+                addTask(new ExpectedTaskBuilder("bar").
+                    taskState(new TaskPending(barSpec)).
+                    build()).
+                waitFor(coordinatorClient);
+
+            assertEquals(0, coordinatorClient.tasks(
+                new TasksRequest(null, 10, 0, 10, 0)).tasks().size());
+            TasksResponse resp1 = coordinatorClient.tasks(
+                new TasksRequest(Arrays.asList(new String[] {"foo", "baz" }), 0, 0, 0, 0));
+            assertTrue(resp1.tasks().containsKey("foo"));
+            assertFalse(resp1.tasks().containsKey("bar"));
+            assertEquals(1, resp1.tasks().size());
+
+            time.sleep(2);
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    taskState(new TaskRunning(fooSpec, 2)).
+                    workerState(new WorkerRunning(fooSpec, 2, "")).
+                    build()).
+                addTask(new ExpectedTaskBuilder("bar").
+                    taskState(new TaskPending(barSpec)).
+                    build()).
+                waitFor(coordinatorClient).
+                waitFor(cluster.agentClient("node02"));
+
+            TasksResponse resp2 = coordinatorClient.tasks(
+                new TasksRequest(null, 1, 0, 0, 0));
+            assertTrue(resp2.tasks().containsKey("foo"));
+            assertFalse(resp2.tasks().containsKey("bar"));
+            assertEquals(1, resp2.tasks().size());
+
+            assertEquals(0, coordinatorClient.tasks(
+                new TasksRequest(null, 3, 0, 0, 0)).tasks().size());
+        }
     }
 };

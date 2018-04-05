@@ -25,6 +25,7 @@ import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.coordinator.CoordinatorClient;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
 import org.apache.kafka.trogdor.rest.TaskState;
+import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 import org.apache.kafka.trogdor.rest.WorkerState;
 import org.apache.kafka.trogdor.task.TaskSpec;
@@ -144,7 +145,7 @@ public class ExpectedTasks {
             public boolean conditionMet() {
                 TasksResponse tasks = null;
                 try {
-                    tasks = client.tasks();
+                    tasks = client.tasks(new TasksRequest(null, 0, 0, 0, 0));
                 } catch (Exception e) {
                     log.info("Unable to get coordinator tasks", e);
                     throw new RuntimeException(e);

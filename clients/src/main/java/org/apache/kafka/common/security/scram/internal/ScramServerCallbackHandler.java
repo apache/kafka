@@ -14,23 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.scram;
+package org.apache.kafka.common.security.scram.internal;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
-import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.NameCallback;
 import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.security.auth.login.AppConfigurationEntry;
 
-import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.common.security.authenticator.AuthCallbackHandler;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
+import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.ScramCredentialCallback;
 import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
 import org.apache.kafka.common.security.token.delegation.DelegationTokenCredentialCallback;
 
-public class ScramServerCallbackHandler implements AuthCallbackHandler {
+public class ScramServerCallbackHandler implements AuthenticateCallbackHandler {
 
     private final CredentialCache.Cache<ScramCredential> credentialCache;
     private final DelegationTokenCache tokenCache;
@@ -40,6 +42,11 @@ public class ScramServerCallbackHandler implements AuthCallbackHandler {
                                       DelegationTokenCache tokenCache) {
         this.credentialCache = credentialCache;
         this.tokenCache = tokenCache;
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs, String mechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        this.saslMechanism = mechanism;
     }
 
     @Override
@@ -58,11 +65,6 @@ public class ScramServerCallbackHandler implements AuthCallbackHandler {
             } else
                 throw new UnsupportedCallbackException(callback);
         }
-    }
-
-    @Override
-    public void configure(Map<String, ?> configs, Mode mode, Subject subject, String saslMechanism) {
-        this.saslMechanism = saslMechanism;
     }
 
     @Override

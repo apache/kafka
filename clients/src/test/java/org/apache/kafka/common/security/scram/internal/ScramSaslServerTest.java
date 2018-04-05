@@ -14,19 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.scram;
+package org.apache.kafka.common.security.scram.internal;
 
-import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
-import org.junit.Before;
-import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 
-import static org.junit.Assert.assertTrue;
-
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
+import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
+
+import org.junit.Before;
+import org.junit.Test;
+import static org.junit.Assert.assertTrue;
 
 public class ScramSaslServerTest {
 

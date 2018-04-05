@@ -29,6 +29,7 @@ import org.apache.kafka.trogdor.rest.TaskPending;
 import org.apache.kafka.trogdor.rest.TaskRunning;
 import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TaskStopping;
+import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
@@ -483,16 +484,24 @@ public final class TaskManager {
     /**
      * Get information about the tasks being managed.
      */
-    public TasksResponse tasks() throws ExecutionException, InterruptedException {
-        return executor.submit(new GetTasksResponse()).get();
+    public TasksResponse tasks(TasksRequest request) throws ExecutionException, InterruptedException {
+        return executor.submit(new GetTasksResponse(request)).get();
     }
 
     class GetTasksResponse implements Callable<TasksResponse> {
+        private final TasksRequest request;
+
+        GetTasksResponse(TasksRequest request) {
+            this.request = request;
+        }
+
         @Override
         public TasksResponse call() throws Exception {
             TreeMap<String, TaskState> states = new TreeMap<>();
             for (ManagedTask task : tasks.values()) {
-                states.put(task.id, task.taskState());
+                if (request.matches(task.id, task.startedMs, task.doneMs)) {
+                    states.put(task.id, task.taskState());
+                }
             }
             return new TasksResponse(states);
         }

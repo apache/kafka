@@ -14,9 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.scram;
+package org.apache.kafka.common.security.scram.internal;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -34,9 +33,10 @@ import javax.security.sasl.SaslClientFactory;
 import javax.security.sasl.SaslException;
 
 import org.apache.kafka.common.errors.IllegalSaslStateException;
-import org.apache.kafka.common.security.scram.ScramMessages.ClientFinalMessage;
-import org.apache.kafka.common.security.scram.ScramMessages.ServerFinalMessage;
-import org.apache.kafka.common.security.scram.ScramMessages.ServerFirstMessage;
+import org.apache.kafka.common.security.scram.ScramExtensionsCallback;
+import org.apache.kafka.common.security.scram.internal.ScramMessages.ClientFinalMessage;
+import org.apache.kafka.common.security.scram.internal.ScramMessages.ServerFinalMessage;
+import org.apache.kafka.common.security.scram.internal.ScramMessages.ServerFirstMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -100,9 +100,15 @@ public class ScramSaslClient implements SaslClient {
                     ScramExtensionsCallback extensionsCallback = new ScramExtensionsCallback();
 
                     try {
-                        callbackHandler.handle(new Callback[]{nameCallback, extensionsCallback});
-                    } catch (IOException | UnsupportedCallbackException e) {
-                        throw new SaslException("User name could not be obtained", e);
+                        callbackHandler.handle(new Callback[]{nameCallback});
+                        try {
+                            callbackHandler.handle(new Callback[]{extensionsCallback});
+                        } catch (UnsupportedCallbackException e) {
+                            log.debug("Extensions callback is not supported by client callback handler {}, no extensions will be added",
+                                    callbackHandler);
+                        }
+                    } catch (Throwable e) {
+                        throw new SaslException("User name or extensions could not be obtained", e);
                     }
 
                     String username = nameCallback.getName();
@@ -121,7 +127,7 @@ public class ScramSaslClient implements SaslClient {
                     PasswordCallback passwordCallback = new PasswordCallback("Password:", false);
                     try {
                         callbackHandler.handle(new Callback[]{passwordCallback});
-                    } catch (IOException | UnsupportedCallbackException e) {
+                    } catch (Throwable e) {
                         throw new SaslException("User name could not be obtained", e);
                     }
                     this.clientFinalMessage = handleServerFirstMessage(passwordCallback.getPassword());

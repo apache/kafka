@@ -1150,9 +1150,10 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public DeleteTopicsResult deleteTopics(final Collection<String> topicNames,
+    public DeleteTopicsResult deleteTopics(Collection<String> topicNames,
                                            DeleteTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
+        final List<String> validTopicNames = new ArrayList<>(topicNames.size());
         for (String topicName : topicNames) {
             if (topicNameIsUnrepresentable(topicName)) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
@@ -1161,6 +1162,7 @@ public class KafkaAdminClient extends AdminClient {
                 topicFutures.put(topicName, future);
             } else if (!topicFutures.containsKey(topicName)) {
                 topicFutures.put(topicName, new KafkaFutureImpl<Void>());
+                validTopicNames.add(topicName);
             }
         }
         final long now = time.milliseconds();
@@ -1169,7 +1171,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new DeleteTopicsRequest.Builder(new HashSet<>(topicNames), timeoutMs);
+                return new DeleteTopicsRequest.Builder(new HashSet<>(validTopicNames), timeoutMs);
             }
 
             @Override
@@ -1204,7 +1206,7 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
         };
-        if (!topicNames.isEmpty()) {
+        if (!validTopicNames.isEmpty()) {
             runnable.call(call, now);
         }
         return new DeleteTopicsResult(new HashMap<String, KafkaFuture<Void>>(topicFutures));
