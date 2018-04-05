@@ -363,7 +363,7 @@ public class TopologyTestDriver {
         final TopicPartition topicPartition = partitionsByTopic.get(topicName);
         if (topicPartition == null) {
                 for (final Map.Entry<String, TopicPartition> entry : partitionsByTopic.entrySet()) {
-                    if (Pattern.compile(entry.getKey()).matcher(topicName).matches()) {
+                if (Pattern.compile(entry.getKey()).matcher(topicName).matches()) {
                         return entry.getValue();
                     }
                 }
