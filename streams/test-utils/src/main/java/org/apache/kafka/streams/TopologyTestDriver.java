@@ -362,12 +362,12 @@ public class TopologyTestDriver {
     private TopicPartition getTopicPartition(final String topicName) {
         final TopicPartition topicPartition = partitionsByTopic.get(topicName);
         if (topicPartition == null) {
-                for (final Map.Entry<String, TopicPartition> entry : partitionsByTopic.entrySet()) {
+            for (final Map.Entry<String, TopicPartition> entry : partitionsByTopic.entrySet()) {
                 if (Pattern.compile(entry.getKey()).matcher(topicName).matches()) {
-                        return entry.getValue();
-                    }
+                    return entry.getValue();
                 }
             }
+        }
         return topicPartition;
     }
 

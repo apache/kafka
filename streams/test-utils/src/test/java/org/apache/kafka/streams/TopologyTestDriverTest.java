@@ -901,12 +901,12 @@ public class TopologyTestDriverTest {
 
     @Test
     public void shouldProcessFromSourcesThatMatchMultiplePattern() {
-        final  String PATTERN_SOURCE_TOPIC_3 = "source-topic-[A-Z]";
-        final  String CONSUMER_TOPIC_3 = "source-topic-Z";
+        final  String patternSourceTopic3 = "source-topic-[A-Z]";
+        final  String consumerTopic3 = "source-topic-Z";
 
-        final ConsumerRecord<byte[], byte[]> consumerRecord3 = consumerRecordFactory.create(CONSUMER_TOPIC_3, key1, value1, timestamp1);
+        final ConsumerRecord<byte[], byte[]> consumerRecord3 = consumerRecordFactory.create(consumerTopic3, key1, value1, timestamp1);
 
-        testDriver = new TopologyTestDriver(setupMultipleSourceTopology(PATTERN_SOURCE_TOPIC_1, SOURCE_TOPIC_2, PATTERN_SOURCE_TOPIC_3), config);
+        testDriver = new TopologyTestDriver(setupMultipleSourceTopology(PATTERN_SOURCE_TOPIC_1, SOURCE_TOPIC_2, patternSourceTopic3), config);
 
         final List<Record> processedRecords1 = mockProcessors.get(0).processedRecords;
         final List<Record> processedRecords2 = mockProcessors.get(1).processedRecords;
