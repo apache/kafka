@@ -128,10 +128,6 @@ public final class Metadata {
     public synchronized long timeToNextUpdate(long nowMs) {
         long timeToExpire = needUpdate ? 0 : Math.max(this.lastSuccessfulRefreshMs + this.metadataExpireMs - nowMs, 0);
         long timeToAllowUpdate = this.lastRefreshMs + this.refreshBackoffMs - nowMs;
-
-        log.debug("timeToNextUpdate: needUpdate {}, lastSuccessfulRefreshMs {}, metadataExpireMs {} now {}", needUpdate, lastSuccessfulRefreshMs, metadataExpireMs);
-        log.debug("timeToNextUpdate: timeToExpire {}, timeToAllowUpdate {}", timeToExpire, timeToAllowUpdate);
-
         return Math.max(timeToExpire, timeToAllowUpdate);
     }
 
