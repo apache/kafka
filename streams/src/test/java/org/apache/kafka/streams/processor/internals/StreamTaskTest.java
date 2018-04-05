@@ -640,7 +640,6 @@ public class StreamTaskTest {
         final MockProducer producer = new MockProducer();
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
             config, streamsMetrics, stateDirectory, null, time, producer);
-
         assertFalse(producer.transactionInitialized());
         assertFalse(producer.transactionInFlight());
     }

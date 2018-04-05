@@ -312,8 +312,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 producer.commitTransaction();
                 transactionInFlight = false;
                 if (startNewTransaction) {
-                    transactionInFlight = true;
                     producer.beginTransaction();
+                    transactionInFlight = true;
                 }
             } else {
                 try {
@@ -423,7 +423,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             if (eosEnabled) {
                 if (!clean) {
                     try {
-                        if (!isZombie) {
+                        if (!isZombie && transactionInFlight) {
                             producer.abortTransaction();
                         }
                     } catch (final ProducerFencedException e) {
