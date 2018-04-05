@@ -173,7 +173,7 @@ public class TopologyTestDriver implements Closeable {
     private final static TaskId TASK_ID = new TaskId(0, PARTITION_ID);
     private StreamTask task;
     private GlobalStateUpdateTask globalStateTask;
-    private GlobalStateManager    globalStateManager;
+    private GlobalStateManager globalStateManager;
 
     private final StateDirectory stateDirectory;
     private final ProcessorTopology processorTopology;
@@ -376,7 +376,7 @@ public class TopologyTestDriver implements Closeable {
             // Forward back into the topology if the produced record is to an internal or a source topic ...
             final String outputTopicName = record.topic();
             if (internalTopics.contains(outputTopicName) || processorTopology.sourceTopics().contains(outputTopicName)
-            		|| globalPartitionsByTopic.containsKey(outputTopicName)) {
+                    || globalPartitionsByTopic.containsKey(outputTopicName)) {
                 final byte[] serializedKey = record.key();
                 final byte[] serializedValue = record.value();
 
@@ -460,13 +460,13 @@ public class TopologyTestDriver implements Closeable {
     /**
      * Records sent with this {@link Producer} are streamed to the topology.
      * <p>
-     * This is useful when testing processes that are also using "normal" kafka producer, tipically in
-     * a different thread. 
+     * This is useful when testing processes that are also using "normal" kafka producer, typically in
+     * a different thread.
      * 
      * @return the producer.
      */
     public final Producer<byte[], byte[]> getProducer() {
-    	return producer;
+        return producer;
     }
 
     /**
@@ -485,8 +485,7 @@ public class TopologyTestDriver implements Closeable {
     public Map<String, StateStore> getAllStateStores() {
         final Map<String, StateStore> allStores = new HashMap<>();
         for (final String storeName : internalTopologyBuilder.allStateStoreName()) {
-            StateStore res = getStateStore(storeName);
-            allStores.put(storeName, res);
+            allStores.put(storeName, getStateStore(storeName));
         }
         return allStores;
     }
@@ -507,9 +506,9 @@ public class TopologyTestDriver implements Closeable {
      */
     public StateStore getStateStore(final String name) {
         StateStore res = task == null ? null : 
-        	((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
+            ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
         if (res == null && globalStateManager != null)
-        	res = globalStateManager.getGlobalStore(name);
+            res = globalStateManager.getGlobalStore(name);
         return res;
     }
 
