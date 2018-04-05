@@ -452,8 +452,8 @@ object KafkaConfig {
 
   /* Documentation */
   /** ********* Zookeeper Configuration ***********/
-  val ZkConnectDoc = "Zookeeper host string"
-  val ZkSessionTimeoutMsDoc = "Zookeeper session timeout"
+  val ZkConnectDoc = "Comma separated list of ZooKeeper host and port values in the format zkhost1:port[,zkhost2:port,zkhost3:port/chroot] with the optional ZooKeeper znode at the end. If /chroot is not provided ZooKeeper root znode will be used by default"
+  val ZkSessionTimeoutMsDoc = "ZooKeeper session timeout"
   val ZkConnectionTimeoutMsDoc = "The max time that the client waits to establish a connection to zookeeper. If not set, the value in " + ZkSessionTimeoutMsProp + " is used"
   val ZkSyncTimeMsDoc = "How far a ZK follower can be behind a ZK leader"
   val ZkEnableSecureAclsDoc = "Set client to use secure ACLs"
