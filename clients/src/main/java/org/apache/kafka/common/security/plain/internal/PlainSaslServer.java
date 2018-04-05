@@ -14,21 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.plain;
+package org.apache.kafka.common.security.plain.internal;
 
 import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
 import java.util.Map;
 
+import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.callback.NameCallback;
 import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslException;
 import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslServerFactory;
 
 import org.apache.kafka.common.errors.SaslAuthenticationException;
-import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.authenticator.SaslServerCallbackHandler;
+import org.apache.kafka.common.security.plain.PlainAuthenticateCallback;
 
 /**
  * Simple SaslServer implementation for SASL/PLAIN. In order to make this implementation
@@ -46,15 +47,13 @@ import org.apache.kafka.common.security.authenticator.SaslServerCallbackHandler;
 public class PlainSaslServer implements SaslServer {
 
     public static final String PLAIN_MECHANISM = "PLAIN";
-    private static final String JAAS_USER_PREFIX = "user_";
 
-    private final JaasContext jaasContext;
-
+    private final CallbackHandler callbackHandler;
     private boolean complete;
     private String authorizationId;
 
-    public PlainSaslServer(JaasContext jaasContext) {
-        this.jaasContext = jaasContext;
+    public PlainSaslServer(CallbackHandler callbackHandler) {
+        this.callbackHandler = callbackHandler;
     }
 
     /**
@@ -101,12 +100,15 @@ public class PlainSaslServer implements SaslServer {
             throw new SaslException("Authentication failed: password not specified");
         }
 
-        String expectedPassword = jaasContext.configEntryOption(JAAS_USER_PREFIX + username,
-                PlainLoginModule.class.getName());
-        if (!password.equals(expectedPassword)) {
-            throw new SaslAuthenticationException("Authentication failed: Invalid username or password");
+        NameCallback nameCallback = new NameCallback("username", username);
+        PlainAuthenticateCallback authenticateCallback = new PlainAuthenticateCallback(password.toCharArray());
+        try {
+            callbackHandler.handle(new Callback[]{nameCallback, authenticateCallback});
+        } catch (Throwable e) {
+            throw new SaslAuthenticationException("Authentication failed: credentials for user could not be verified", e);
         }
-
+        if (!authenticateCallback.authenticated())
+            throw new SaslAuthenticationException("Authentication failed: Invalid username or password");
         if (!authorizationIdFromClient.isEmpty() && !authorizationIdFromClient.equals(username))
             throw new SaslAuthenticationException("Authentication failed: Client requested an authorization id that is different from username");
 
@@ -167,10 +169,7 @@ public class PlainSaslServer implements SaslServer {
             if (!PLAIN_MECHANISM.equals(mechanism))
                 throw new SaslException(String.format("Mechanism \'%s\' is not supported. Only PLAIN is supported.", mechanism));
 
-            if (!(cbh instanceof SaslServerCallbackHandler))
-                throw new SaslException("CallbackHandler must be of type SaslServerCallbackHandler, but it is: " + cbh.getClass());
-
-            return new PlainSaslServer(((SaslServerCallbackHandler) cbh).jaasContext());
+            return new PlainSaslServer(cbh);
         }
 
         @Override

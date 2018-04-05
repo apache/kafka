@@ -73,6 +73,10 @@ public final class ListenerName {
     }
 
     public String saslMechanismConfigPrefix(String saslMechanism) {
-        return configPrefix() + saslMechanism.toLowerCase(Locale.ROOT) + ".";
+        return configPrefix() + saslMechanismPrefix(saslMechanism);
+    }
+
+    public static String saslMechanismPrefix(String saslMechanism) {
+        return saslMechanism.toLowerCase(Locale.ROOT) + ".";
     }
 }

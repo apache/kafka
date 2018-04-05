@@ -14,28 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.scram;
-
-import org.apache.kafka.common.utils.Base64;
-import org.junit.Before;
-import org.junit.Test;
+package org.apache.kafka.common.security.scram.internal;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 
 import javax.security.sasl.SaslException;
 
+import org.apache.kafka.common.security.scram.internal.ScramMessages.AbstractScramMessage;
+import org.apache.kafka.common.security.scram.internal.ScramMessages.ClientFinalMessage;
+import org.apache.kafka.common.security.scram.internal.ScramMessages.ClientFirstMessage;
+import org.apache.kafka.common.security.scram.internal.ScramMessages.ServerFinalMessage;
+import org.apache.kafka.common.security.scram.internal.ScramMessages.ServerFirstMessage;
+import org.apache.kafka.common.utils.Base64;
+
+import org.junit.Before;
+import org.junit.Test;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-
-import org.apache.kafka.common.security.scram.ScramMessages.AbstractScramMessage;
-import org.apache.kafka.common.security.scram.ScramMessages.ClientFinalMessage;
-import org.apache.kafka.common.security.scram.ScramMessages.ClientFirstMessage;
-import org.apache.kafka.common.security.scram.ScramMessages.ServerFinalMessage;
-import org.apache.kafka.common.security.scram.ScramMessages.ServerFirstMessage;
 
 public class ScramMessagesTest {
 

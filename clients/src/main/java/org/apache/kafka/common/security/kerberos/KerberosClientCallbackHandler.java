@@ -14,13 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.authenticator;
+package org.apache.kafka.common.security.kerberos;
 
-import java.security.AccessController;
-import java.util.List;
-import java.util.Map;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 
-import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.NameCallback;
 import javax.security.auth.callback.PasswordCallback;
@@ -28,45 +26,34 @@ import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.AuthorizeCallback;
 import javax.security.sasl.RealmCallback;
-
-import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.security.scram.ScramExtensionsCallback;
-import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import java.util.List;
+import java.util.Map;
 
 /**
- * Default callback handler for Sasl clients. The callbacks required for the SASL mechanism
- * configured for the client should be supported by this callback handler. See
- * <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/sasl/sasl-refguide.html">Java SASL API</a>
- * for the list of SASL callback handlers required for each SASL mechanism.
+ * Callback handler for SASL/GSSAPI clients.
  */
-public class SaslClientCallbackHandler implements AuthenticateCallbackHandler {
-
-    private String mechanism;
+public class KerberosClientCallbackHandler implements AuthenticateCallbackHandler {
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        this.mechanism  = saslMechanism;
+        if (!saslMechanism.equals(SaslConfigs.GSSAPI_MECHANISM))
+            throw new IllegalStateException("Kerberos callback handler should only be used with GSSAPI");
     }
 
     @Override
     public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
-        Subject subject = Subject.getSubject(AccessController.getContext());
         for (Callback callback : callbacks) {
             if (callback instanceof NameCallback) {
                 NameCallback nc = (NameCallback) callback;
-                if (subject != null && !subject.getPublicCredentials(String.class).isEmpty()) {
-                    nc.setName(subject.getPublicCredentials(String.class).iterator().next());
-                } else
-                    nc.setName(nc.getDefaultName());
+                nc.setName(nc.getDefaultName());
             } else if (callback instanceof PasswordCallback) {
-                if (subject != null && !subject.getPrivateCredentials(String.class).isEmpty()) {
-                    char[] password = subject.getPrivateCredentials(String.class).iterator().next().toCharArray();
-                    ((PasswordCallback) callback).setPassword(password);
-                } else {
-                    String errorMessage = "Could not login: the client is being asked for a password, but the Kafka" +
+                String errorMessage = "Could not login: the client is being asked for a password, but the Kafka" +
                              " client code does not currently support obtaining a password from the user.";
-                    throw new UnsupportedCallbackException(callback, errorMessage);
-                }
+                errorMessage += " Make sure -Djava.security.auth.login.config property passed to JVM and" +
+                             " the client is configured to use a ticket cache (using" +
+                             " the JAAS configuration setting 'useTicketCache=true)'. Make sure you are using" +
+                             " FQDN of the Kafka broker you are trying to connect to.";
+                throw new UnsupportedCallbackException(callback, errorMessage);
             } else if (callback instanceof RealmCallback) {
                 RealmCallback rc = (RealmCallback) callback;
                 rc.setText(rc.getDefaultText());
@@ -77,11 +64,6 @@ public class SaslClientCallbackHandler implements AuthenticateCallbackHandler {
                 ac.setAuthorized(authId.equals(authzId));
                 if (ac.isAuthorized())
                     ac.setAuthorizedID(authzId);
-            } else if (callback instanceof ScramExtensionsCallback) {
-                ScramExtensionsCallback sc = (ScramExtensionsCallback) callback;
-                if (!SaslConfigs.GSSAPI_MECHANISM.equals(mechanism) && subject != null && !subject.getPublicCredentials(Map.class).isEmpty()) {
-                    sc.extensions((Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next());
-                }
             }  else {
                 throw new UnsupportedCallbackException(callback, "Unrecognized SASL ClientCallback");
             }
