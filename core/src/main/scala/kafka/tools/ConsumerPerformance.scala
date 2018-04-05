@@ -157,8 +157,6 @@ object ConsumerPerformance extends LazyLogging {
       def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) {
         joinStart = System.currentTimeMillis
       }})
-    consumer.poll(0)
-    consumer.seekToBeginning(Collections.emptyList())
 
     // Now start the benchmark
     val startMs = System.currentTimeMillis

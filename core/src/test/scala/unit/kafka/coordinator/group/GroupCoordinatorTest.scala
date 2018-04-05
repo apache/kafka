@@ -100,7 +100,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     val joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
     groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time)
-    groupCoordinator.startup(false)
+    groupCoordinator.startup(enableMetadataExpiration = false)
 
     // add the partition into the owned partition list
     groupPartitionId = groupCoordinator.partitionFor(groupId)
@@ -112,6 +112,62 @@ class GroupCoordinatorTest extends JUnitSuite {
     EasyMock.reset(replicaManager)
     if (groupCoordinator != null)
       groupCoordinator.shutdown()
+  }
+
+  @Test
+  def testRequestHandlingWhileLoadingInProgress(): Unit = {
+    val otherGroupPartitionId = groupCoordinator.groupManager.partitionFor(otherGroupId)
+    assertTrue(otherGroupPartitionId != groupPartitionId)
+
+    groupCoordinator.groupManager.addLoadingPartition(otherGroupPartitionId)
+    assertTrue(groupCoordinator.groupManager.isGroupLoading(otherGroupId))
+
+    // JoinGroup
+    var joinGroupResponse: Option[JoinGroupResult] = None
+    groupCoordinator.handleJoinGroup(otherGroupId, memberId, "clientId", "clientHost", 60000, 10000, "consumer",
+      List("range" -> new Array[Byte](0)), result => { joinGroupResponse = Some(result)})
+    assertEquals(Some(Errors.COORDINATOR_LOAD_IN_PROGRESS), joinGroupResponse.map(_.error))
+
+    // SyncGroup
+    var syncGroupResponse: Option[Errors] = None
+    groupCoordinator.handleSyncGroup(otherGroupId, 1, memberId, Map.empty[String, Array[Byte]],
+      (_, error)=> syncGroupResponse = Some(error))
+    assertEquals(Some(Errors.REBALANCE_IN_PROGRESS), syncGroupResponse)
+
+    // OffsetCommit
+    val topicPartition = new TopicPartition("foo", 0)
+    var offsetCommitErrors = Map.empty[TopicPartition, Errors]
+    groupCoordinator.handleCommitOffsets(otherGroupId, memberId, 1,
+      immutable.Map(topicPartition -> OffsetAndMetadata(15L)), result => { offsetCommitErrors = result })
+    assertEquals(Some(Errors.COORDINATOR_LOAD_IN_PROGRESS), offsetCommitErrors.get(topicPartition))
+
+    // Heartbeat
+    var heartbeatError: Option[Errors] = None
+    groupCoordinator.handleHeartbeat(otherGroupId, memberId, 1, error => { heartbeatError = Some(error) })
+    assertEquals(Some(Errors.NONE), heartbeatError)
+
+    // DescribeGroups
+    val (describeGroupError, _) = groupCoordinator.handleDescribeGroup(otherGroupId)
+    assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, describeGroupError)
+
+    // ListGroups
+    val (listGroupsError, _) = groupCoordinator.handleListGroups()
+    assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, listGroupsError)
+
+    // DeleteGroups
+    val deleteGroupsErrors = groupCoordinator.handleDeleteGroups(immutable.Set(otherGroupId))
+    assertEquals(Some(Errors.COORDINATOR_LOAD_IN_PROGRESS), deleteGroupsErrors.get(otherGroupId))
+
+    // Check that non-loading groups are still accessible
+    assertEquals(Errors.NONE, groupCoordinator.handleDescribeGroup(groupId)._1)
+
+    // After loading, we should be able to access the group
+    val otherGroupMetadataTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, otherGroupPartitionId)
+    EasyMock.reset(replicaManager)
+    EasyMock.expect(replicaManager.getLog(otherGroupMetadataTopicPartition)).andReturn(None)
+    EasyMock.replay(replicaManager)
+    groupCoordinator.groupManager.loadGroupsAndOffsets(otherGroupMetadataTopicPartition, group => {})
+    assertEquals(Errors.NONE, groupCoordinator.handleDescribeGroup(otherGroupId)._1)
   }
 
   @Test

@@ -260,7 +260,7 @@ public class StreamThread extends Thread {
                 taskManager.createTasks(assignment);
             } catch (final Throwable t) {
                 log.error("Error caught during partition assignment, " +
-                        "will abort the current process and re-throw at the end of rebalance: {}", t.getMessage());
+                        "will abort the current process and re-throw at the end of rebalance: {}", t);
                 streamThread.setRebalanceException(t);
             } finally {
                 log.info("partition assignment took {} ms.\n" +
@@ -291,7 +291,7 @@ public class StreamThread extends Thread {
                     taskManager.suspendTasksAndState();
                 } catch (final Throwable t) {
                     log.error("Error caught during partition revocation, " +
-                              "will abort the current process and re-throw at the end of rebalance: {}", t.getMessage());
+                              "will abort the current process and re-throw at the end of rebalance: {}", t);
                     streamThread.setRebalanceException(t);
                 } finally {
                     streamThread.clearStandbyRecords();
@@ -899,7 +899,7 @@ public class StreamThread extends Thread {
             final StreamTask task = taskManager.activeTask(partition);
 
             if (task.isClosed()) {
-                log.warn("Stream task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
+                log.info("Stream task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
                         "Notifying the thread to trigger a new rebalance immediately.", task.id());
                 throw new TaskMigratedException(task);
             }
@@ -1032,7 +1032,7 @@ public class StreamThread extends Thread {
                             final StandbyTask task = taskManager.standbyTask(partition);
 
                             if (task.isClosed()) {
-                                log.warn("Standby task {} is already closed, probably because it got unexpectly migrated to another thread already. " +
+                                log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
                                         "Notifying the thread to trigger a new rebalance immediately.", task.id());
                                 throw new TaskMigratedException(task);
                             }
@@ -1065,7 +1065,7 @@ public class StreamThread extends Thread {
                         }
 
                         if (task.isClosed()) {
-                            log.warn("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
+                            log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
                                     "Notifying the thread to trigger a new rebalance immediately.", task.id());
                             throw new TaskMigratedException(task);
                         }
@@ -1084,7 +1084,7 @@ public class StreamThread extends Thread {
                     final StandbyTask task = taskManager.standbyTask(partition);
 
                     if (task.isClosed()) {
-                        log.warn("Standby task {} is already closed, probably because it got unexpectly migrated to another thread already. " +
+                        log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
                                 "Notifying the thread to trigger a new rebalance immediately.", task.id());
                         throw new TaskMigratedException(task);
                     }

@@ -111,7 +111,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       props.put(KafkaConfig.NumReplicaFetchersProp, "2") // greater than one to test reducing threads
       props.put(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, "10000000") // non-default value to trigger a new metric
       props.put(KafkaConfig.PasswordEncoderSecretProp, "dynamic-config-secret")
-      props.put(KafkaConfig.PasswordEncoderOldSecretProp, "old-dynamic-config-secret") // for testing secret rotation
 
       props ++= sslProperties1
       addKeystoreWithListenerPrefix(sslProperties1, props, SecureInternal)
@@ -667,33 +666,37 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     // ZK with newly encoded values using password.encoder.secret.
     servers.foreach { server =>
       val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, server.config.brokerId.toString)
+      val propsEncodedWithOldSecret = props.clone().asInstanceOf[Properties]
       val config = server.config
       val secret = config.passwordEncoderSecret.getOrElse(throw new IllegalStateException("Password encoder secret not configured"))
-      val oldSecret = config.passwordEncoderOldSecret.getOrElse(throw new IllegalStateException("Password encoder old secret not configured"))
-      val passwordConfigs = props.asScala.filterKeys(DynamicBrokerConfig.DynamicPasswordConfigs.contains)
+      val oldSecret = "old-dynamic-config-secret"
+      config.dynamicConfig.staticBrokerConfigs.put(KafkaConfig.PasswordEncoderOldSecretProp, oldSecret)
+      val passwordConfigs = props.asScala.filterKeys(DynamicBrokerConfig.isPasswordConfig)
+      assertTrue("Password configs not found", passwordConfigs.nonEmpty)
       val passwordDecoder = new PasswordEncoder(secret,
         config.passwordEncoderKeyFactoryAlgorithm,
         config.passwordEncoderCipherAlgorithm,
         config.passwordEncoderKeyLength,
         config.passwordEncoderIterations)
-      val passwordEncoder = new PasswordEncoder(oldSecret,
+      val passwordEncoder = new PasswordEncoder(new Password(oldSecret),
         config.passwordEncoderKeyFactoryAlgorithm,
         config.passwordEncoderCipherAlgorithm,
         config.passwordEncoderKeyLength,
         config.passwordEncoderIterations)
       passwordConfigs.foreach { case (name, value) =>
-          val decoded = passwordDecoder.decode(value).value
-          props.put(name, passwordEncoder.encode(new Password(decoded)))
+        val decoded = passwordDecoder.decode(value).value
+        propsEncodedWithOldSecret.put(name, passwordEncoder.encode(new Password(decoded)))
       }
       val brokerId = server.config.brokerId
-      adminZkClient.changeBrokerConfig(Seq(brokerId), props)
+      adminZkClient.changeBrokerConfig(Seq(brokerId), propsEncodedWithOldSecret)
       val updatedProps = adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.toString)
-      passwordConfigs.foreach { case (name, value) => assertNotEquals(value, updatedProps.get(name)) }
+      passwordConfigs.foreach { case (name, value) => assertNotEquals(props.get(value), updatedProps.get(name)) }
 
       server.startup()
       TestUtils.retry(10000) {
         val newProps = adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.toString)
-        passwordConfigs.foreach { case (name, value) => assertEquals(value, newProps.get(name)) }
+        passwordConfigs.foreach { case (name, value) =>
+          assertEquals(passwordDecoder.decode(value), passwordDecoder.decode(newProps.getProperty(name))) }
       }
     }
 
@@ -725,7 +728,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       .map { case (name, protocol) => s"${name.value}:${protocol.name}" }
       .mkString(",") + s",$listenerName:${securityProtocol.name}"
 
-    val props =  adminZkClient.fetchEntityConfig(ConfigType.Broker, config.brokerId.toString)
+    val props = fetchBrokerConfigsFromZooKeeper(servers.head)
     props.put(KafkaConfig.ListenersProp, listeners)
     props.put(KafkaConfig.ListenerSecurityProtocolMapProp, listenerMap)
     securityProtocol match {
@@ -738,6 +741,10 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
         addListenerPropsSsl(listenerName, props)
       case SecurityProtocol.PLAINTEXT => // no additional props
     }
+
+    // Add a config to verify that configs whose types are not known are not returned by describeConfigs()
+    val unknownConfig = "some.config"
+    props.put(unknownConfig, "some.config.value")
 
     alterConfigs(adminClients.head, props, perBrokerConfig = true).all.get
 
@@ -755,6 +762,15 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       saslMechanisms.foreach(mechanism => verifyListener(securityProtocol, Some(mechanism)))
     else
       verifyListener(securityProtocol, None)
+
+    val brokerConfigs = describeConfig(adminClients.head).entries.asScala
+    props.asScala.foreach { case (name, value) =>
+      val entry = brokerConfigs.find(_.name == name).getOrElse(throw new IllegalArgumentException(s"Config not found $name"))
+      if (DynamicBrokerConfig.isPasswordConfig(name) || name == unknownConfig)
+        assertNull(s"Password or unknown config returned $entry", entry.value)
+      else
+        assertEquals(value, entry.value)
+    }
   }
 
   private def verifyRemoveListener(listenerName: String, securityProtocol: SecurityProtocol,
@@ -778,7 +794,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       .map { case (listenerName, protocol) => s"${listenerName.value}:${protocol.name}" }
       .mkString(",")
 
-    val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, config.brokerId.toString)
+    val props = fetchBrokerConfigsFromZooKeeper(servers.head)
     val listenerProps = props.asScala.keySet.filter(_.startsWith(new ListenerName(listenerName).configPrefix))
     listenerProps.foreach(props.remove)
     props.put(KafkaConfig.ListenersProp, listeners)
@@ -809,6 +825,11 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val consumer = createConsumer(securityProtocol.name, securityProtocol, mechanism,
       s"add-listener-group-$securityProtocol-$mechanism")
     verifyProduceConsume(producer, consumer, numRecords = 10, topic)
+  }
+
+  private def fetchBrokerConfigsFromZooKeeper(server: KafkaServer): Properties = {
+    val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, server.config.brokerId.toString)
+    server.config.dynamicConfig.fromPersistentProps(props, perBrokerConfig = true)
   }
 
   private def bootstrapServers: String = TestUtils.bootstrapServers(servers, new ListenerName(SecureExternal))
@@ -1090,9 +1111,9 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private def configureDynamicKeystoreInZooKeeper(kafkaConfig: KafkaConfig, brokers: Seq[Int], sslProperties: Properties): Unit = {
     val keystoreProps = new Properties
     addKeystoreWithListenerPrefix(sslProperties, keystoreProps, SecureExternal)
-    kafkaConfig.dynamicConfig.toPersistentProps(keystoreProps, perBrokerConfig = true)
+    val persistentProps = kafkaConfig.dynamicConfig.toPersistentProps(keystoreProps, perBrokerConfig = true)
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
-    adminZkClient.changeBrokerConfig(brokers, keystoreProps)
+    adminZkClient.changeBrokerConfig(brokers, persistentProps)
   }
 
   private def waitForConfig(propName: String, propValue: String, maxWaitMs: Long = 10000): Unit = {

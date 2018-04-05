@@ -24,7 +24,6 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.util.Map;
 
@@ -128,10 +127,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
             K key = windowedKey.key();
             W window = (W) windowedKey.window();
 
-            // this iterator should only contain one element
-            try (WindowStoreIterator<V> iter = windowStore.fetch(key, window.start(), window.start())) {
-                return iter.hasNext() ? iter.next().value : null;
-            }
+            return windowStore.fetch(key, window.start());
         }
     }
 }

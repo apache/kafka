@@ -276,7 +276,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                 } catch (final InvalidOffsetException recoverableException) {
                     log.warn("Restoring GlobalStore {} failed due to: {}. Deleting global store to recreate from scratch.",
                         storeName,
-                        recoverableException.getMessage());
+                        recoverableException.toString());
                     reinitializeStateStoresForPartitions(recoverableException.partitions(), processorContext);
 
                     stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
@@ -318,7 +318,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                     closeFailed.append("Failed to close global state store:")
                             .append(entry.getKey())
                             .append(". Reason: ")
-                            .append(e.getMessage())
+                            .append(e.toString())
                             .append("\n");
                 }
             }
