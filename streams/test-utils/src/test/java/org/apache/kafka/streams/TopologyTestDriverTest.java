@@ -948,6 +948,8 @@ public class TopologyTestDriverTest {
             ProducerRecord<String,String> pr = testDriver.readOutput("local", new StringDeserializer(), new StringDeserializer());
             Assert.assertEquals("two", pr.key());
             Assert.assertEquals("Second", pr.value());
+            ProducerRecord<String,String> pr2 = testDriver.readOutput("local", new StringDeserializer(), new StringDeserializer());
+            Assert.assertNull(pr2);
         }
     }
 
@@ -998,6 +1000,8 @@ public class TopologyTestDriverTest {
             ProducerRecord<String,String> pr = testDriver.readOutput("global", new StringDeserializer(), new StringDeserializer());
             Assert.assertEquals("two", pr.key());
             Assert.assertEquals("Second", pr.value());
+            ProducerRecord<String,String> pr2 = testDriver.readOutput("global", new StringDeserializer(), new StringDeserializer());
+            Assert.assertNull(pr2);
         }
     }
 }

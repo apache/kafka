@@ -461,7 +461,10 @@ public class TopologyTestDriver implements Closeable {
      * Records sent with this {@link Producer} are streamed to the topology.
      * <p>
      * This is useful when testing processes that are also using "normal" kafka producer, typically in
-     * a different thread.
+     * a different thread.<br>
+     * The main difference between using it instead of the {@link #pipeInput(ConsumerRecord)} method is 
+     * that with the producer we both feed the stream and get a topic output (see: {@link #readOutput(String)})
+     * while with {@link #pipeInput(ConsumerRecord)} we only collect output from the topology sinks. 
      * 
      * @return the producer.
      */
