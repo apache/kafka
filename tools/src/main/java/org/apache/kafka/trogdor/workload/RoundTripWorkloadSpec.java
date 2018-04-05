@@ -75,10 +75,6 @@ public class RoundTripWorkloadSpec extends TaskSpec {
         this.consumerConf = configOrEmptyMap(consumerConf);
     }
 
-    private Map<String, String> configOrEmptyMap(Map<String, String> config) {
-        return (config == null) ? new TreeMap<String, String>() : config;
-    }
-
     @JsonProperty
     public String clientNode() {
         return clientNode;

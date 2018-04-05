@@ -26,7 +26,6 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.Set;
 
 /**
@@ -89,10 +88,6 @@ public class ProduceBenchSpec extends TaskSpec {
                              ? DEFAULT_NUM_PARTITIONS : partitionsPerTopic;
         this.replicationFactor = (replicationFactor == 0)
                                  ? DEFAULT_REPLICATION_FACTOR : replicationFactor;
-    }
-
-    private Map<String, String> configOrEmptyMap(Map<String, String> config) {
-        return (config == null) ? new TreeMap<String, String>() : config;
     }
 
     @JsonProperty
