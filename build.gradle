@@ -920,10 +920,11 @@ project(':streams') {
     compile libs.slf4jApi
     compile libs.rocksDBJni
 
+    // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
+    testCompileOnly project(':streams:test-utils')
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':core')
     testCompile project(':core').sourceSets.test.output
-    testCompile project(':streams:test-utils').sourceSets.main.output
     testCompile libs.junit
     testCompile libs.easymock
     testCompile libs.bcpkix
@@ -968,21 +969,11 @@ project(':streams:test-utils') {
   archivesBaseName = "kafka-streams-test-utils"
 
   dependencies {
-    // streams and streams-test-utils have a circular dependency that needs to be broken. Making streams a regular
-    // compile dependency here is a circular dependency. Making the streams project's main sourceSet output a dependency
-    // incorrectly includes raw class files as dependencies and ends up including them in output like the release tgz.
-    // Making the main sourceSet's output a compileOnly (provided) dependency resolves the circular dependency in gradle
-    // and also leaves the raw class files out of the output. This does require that users of this jar specify the
-    // streams dependency separately, but they wouldn't be using this module in tests unless they already had a
-    // compile dependency on streams. For this module, however, we need to also include streams as a separate test
-    // dependency since it is compileOnly/provided for the compile phase.
-    compileOnly project(':streams').sourceSets.main.output
+    compile project(':streams')
     compile project(':clients')
 
-    testCompile project(':streams')
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.junit
-    testCompile libs.rocksDBJni
 
     testRuntime libs.slf4jlog4j
   }
@@ -1014,8 +1005,8 @@ project(':streams:examples') {
     compile project(':connect:json')  // this dependency should be removed after we unify data API
     compile libs.slf4jlog4j
 
-    testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
     testCompile project(':streams:test-utils')
+    testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
     testCompile libs.junit
   }
 
