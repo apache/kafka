@@ -780,6 +780,15 @@ class KafkaConfigTest {
     assertFalse(isValidKafkaConfig(props))
   }
 
+  @Test
+  def testMaxConnectionsPerIpProp() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.MaxConnectionsPerIpProp, "0")
+    assertFalse(isValidKafkaConfig(props))
+    props.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, "127.0.0.1:100")
+    assertTrue(isValidKafkaConfig(props))
+  }
+
   private def assertPropertyInvalid(validRequiredProps: => Properties, name: String, values: Any*) {
     values.foreach((value) => {
       val props = validRequiredProps
