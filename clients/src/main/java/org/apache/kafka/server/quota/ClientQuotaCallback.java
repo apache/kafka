@@ -28,21 +28,24 @@ import java.util.Map;
 public interface ClientQuotaCallback extends Configurable {
 
     /**
-     * Quota callback invoked to determine the quota limit to be applied for a request.
+     * Quota callback invoked to determine the quota metric tags to be applied for a request.
+     * Quota limits are associated with quota metrics and all clients which use the same
+     * metric tags share the quota limit.
      *
      * @param principal The user principal of the connection for which quota is requested
      * @param clientId  The client id associated with the request
      * @param quotaType Type of quota requested
-     * @return the quota including the limit and metric tags that indicate which other clients share this quota
+     * @return quota metric tags that indicate which other clients share this quota
      */
-    ClientQuota quota(KafkaPrincipal principal, String clientId, ClientQuotaType quotaType);
+    Map<String, String> quotaMetricTags(KafkaPrincipal principal, String clientId, ClientQuotaType quotaType);
 
     /**
      * Returns the quota limit associated with the provided metric tags. These tags were returned from
-     * a previous call to {@link #quota(KafkaPrincipal, String, ClientQuotaType)}. This method is invoked
-     * by quota managers to obtain the current quota limit applied to a metric after a quota update or
-     * cluster metadata change. If the tags are no longer in use after the update, (e.g. this is a
-     * {user, client-id} quota metric and the quota now in use is a {user} quota), null is returned.
+     * a previous call to {@link #quotaMetricTags(KafkaPrincipal, String, ClientQuotaType)}. This method is
+     * invoked by quota managers to obtain the current quota limit applied to a metric when the first request
+     * using these tags is processed. It is also invoked after a quota update or cluster metadata change.
+     * If the tags are no longer in use after the update, (e.g. this is a {user, client-id} quota metric
+     * and the quota now in use is a {user} quota), null is returned.
      *
      * @param metricTags Metric tags for a quota metric of type `quotaType`
      * @param quotaType  Type of quota requested

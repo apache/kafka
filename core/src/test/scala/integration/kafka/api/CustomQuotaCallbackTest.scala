@@ -32,6 +32,7 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.errors.SaslAuthenticationException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
+import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.server.quota._
 import org.junit.{Before, Test}
 
@@ -176,6 +177,10 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
     val password = s"$user:secret"
     createScramCredentials(zkConnect, user, password)
+    servers.foreach { server =>
+      val cache = server.credentialProvider.credentialCache.cache(kafkaClientSaslMechanism, classOf[ScramCredential])
+      TestUtils.waitUntilTrue(() => cache.get(user) != null, "SCRAM credentials not created")
+    }
 
     val userGroup = group(user)
     val topic = s"${userGroup}_topic"
@@ -282,7 +287,7 @@ object GroupedUserQuotaCallback {
   val QuotaGroupTag = "group"
   val DefaultProduceQuotaProp = "default.produce.quota"
   val DefaultFetchQuotaProp = "default.fetch.quota"
-  val UnlimitedQuota = new ClientQuota(Long.MaxValue, Collections.emptyMap[String, String])
+  val UnlimitedQuotaMetricTags = Collections.emptyMap[String, String]
 }
 
 /**
@@ -331,17 +336,17 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
     if (value != null) Some(value.toString.toLong) else None
   }
 
-  override def quota(principal: KafkaPrincipal, clientId: String, quotaType: ClientQuotaType): ClientQuota = {
+  override def quotaMetricTags(principal: KafkaPrincipal, clientId: String, quotaType: ClientQuotaType): util.Map[String, String] = {
     principal match {
       case groupPrincipal: GroupedUserPrincipal =>
         val userGroup = groupPrincipal.userGroup
         val quotaLimit = quotaOrDefault(userGroup, quotaType)
         if (quotaLimit != null)
-          new ClientQuota(quotaLimit, Map(QuotaGroupTag -> userGroup).asJava)
+          Map(QuotaGroupTag -> userGroup).asJava
         else
-          UnlimitedQuota
+          UnlimitedQuotaMetricTags
       case _ =>
-        UnlimitedQuota
+        UnlimitedQuotaMetricTags
     }
   }
 
