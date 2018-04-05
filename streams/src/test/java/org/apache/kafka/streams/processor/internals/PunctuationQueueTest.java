@@ -161,9 +161,6 @@ public class PunctuationQueueTest {
 
         queue.mayPunctuate(now + 200L, PunctuationType.STREAM_TIME, processorNodePunctuator);
         assertEquals(1, processor.punctuatedAt.size());
-
-        queue.mayPunctuate(now + 1001L, PunctuationType.STREAM_TIME, processorNodePunctuator);
-        assertEquals(1, processor.punctuatedAt.size());
     }
 
     private static class TestProcessor extends AbstractProcessor<String, String> {
