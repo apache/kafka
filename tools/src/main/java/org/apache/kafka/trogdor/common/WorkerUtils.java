@@ -75,6 +75,23 @@ public final class WorkerUtils {
         return (int) perPeriod;
     }
 
+    /**
+     * Adds all properties from commonConf and then from clientConf to given 'props' (in
+     * that order, over-writing properties with the same keys).
+     * @param props              Properties object that may contain zero or more properties
+     * @param commonConf         Map with common client properties
+     * @param clientConf         Map with client properties
+     */
+    public static void addConfigsToProperties(
+        Properties props, Map<String, String> commonConf, Map<String, String> clientConf) {
+        for (Map.Entry<String, String> commonEntry : commonConf.entrySet()) {
+            props.setProperty(commonEntry.getKey(), commonEntry.getValue());
+        }
+        for (Map.Entry<String, String> entry : clientConf.entrySet()) {
+            props.setProperty(entry.getKey(), entry.getValue());
+        }
+    }
+
     private static final int CREATE_TOPICS_REQUEST_TIMEOUT = 25000;
     private static final int CREATE_TOPICS_CALL_TIMEOUT = 180000;
     private static final int MAX_CREATE_TOPICS_BATCH_SIZE = 10;
@@ -239,13 +256,9 @@ public final class WorkerUtils {
         Properties props = new Properties();
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, CREATE_TOPICS_REQUEST_TIMEOUT);
-        for (Map.Entry<String, String> entry : commonClientConf.entrySet()) {
-            props.setProperty(entry.getKey(), entry.getValue());
-        }
-        // admin client conf will override same fields in common client config
-        for (Map.Entry<String, String> entry : adminClientConf.entrySet()) {
-            props.setProperty(entry.getKey(), entry.getValue());
-        }
+        // first add common client config, and then admin client config to properties, possibly
+        // over-writing default or common properties.
+        addConfigsToProperties(props, commonClientConf, adminClientConf);
         return AdminClient.create(props);
     }
 }

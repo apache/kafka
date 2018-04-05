@@ -48,7 +48,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.TreeSet;
 import java.util.concurrent.CountDownLatch;
@@ -185,12 +184,8 @@ public class RoundTripWorker implements TaskWorker {
             props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer." + id);
             props.put(ProducerConfig.ACKS_CONFIG, "all");
             props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 105000);
-            for (Map.Entry<String, String> commonEntry : spec.commonClientConf().entrySet()) {
-                props.setProperty(commonEntry.getKey(), commonEntry.getValue());
-            }
-            for (Map.Entry<String, String> entry : spec.producerConf().entrySet()) {
-                props.setProperty(entry.getKey(), entry.getValue());
-            }
+            // user may over-write the defaults with common client config and consumer config
+            WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.producerConf());
             producer = new KafkaProducer<>(props, new ByteArraySerializer(),
                 new ByteArraySerializer());
             int perPeriod = WorkerUtils.
@@ -282,12 +277,8 @@ public class RoundTripWorker implements TaskWorker {
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
             props.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, 105000);
             props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 100000);
-            for (Map.Entry<String, String> commonEntry : spec.commonClientConf().entrySet()) {
-                props.setProperty(commonEntry.getKey(), commonEntry.getValue());
-            }
-            for (Map.Entry<String, String> entry : spec.consumerConf().entrySet()) {
-                props.setProperty(entry.getKey(), entry.getValue());
-            }
+            // user may over-write the defaults with common client config and consumer config
+            WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.consumerConf());
             consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
             consumer.subscribe(Collections.singleton(TOPIC_NAME));
