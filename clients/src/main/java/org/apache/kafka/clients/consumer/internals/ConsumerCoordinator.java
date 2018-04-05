@@ -462,19 +462,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      */
     public void refreshCommittedOffsetsIfNeeded(long startMs, long timeout) {
         Set<TopicPartition> missingFetchPositions = subscriptions.missingFetchPositions();
-        try {
-            Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(missingFetchPositions, startMs, timeout, time);
-            if (offsets == null) {
-                throw new TimeoutException("Offsets cannot be retrieved within set duration");
-            }
-            for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
-                TopicPartition tp = entry.getKey();
-                long offset = entry.getValue().offset();
-                log.debug("Setting offset for partition {} to the committed offset {}", tp, offset);
-                this.subscriptions.seek(tp, offset);
-            }
-        } catch (TimeoutException exc) {
-            throw new TimeoutException("Coordinator is not ready in alloted time slot");
+        Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(missingFetchPositions, startMs, timeout, time);
+        if (offsets == null) {
+            throw new TimeoutException("Offsets cannot be retrieved within set duration");
+        }
+        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+            TopicPartition tp = entry.getKey();
+            long offset = entry.getValue().offset();
+            log.debug("Setting offset for partition {} to the committed offset {}", tp, offset);
+            this.subscriptions.seek(tp, offset);
         }
     }
 
@@ -518,25 +514,21 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                                                         long startMs, long timeoutMs, Time time) {
         if (partitions.isEmpty())
             return Collections.emptyMap();
-        try {
-            while (time.milliseconds() < startMs + timeoutMs) {
-                ensureCoordinatorReady(startMs, timeoutMs);
-                if (time.milliseconds() > startMs + timeoutMs) throw new TimeoutException("Error, coordinator is not ready in allocated time!");
+        while (time.milliseconds() < startMs + timeoutMs) {
+            ensureCoordinatorReady(startMs, timeoutMs);
+            if (time.milliseconds() > startMs + timeoutMs) throw new TimeoutException("Error, coordinator is not ready in allocated time!");
 
-                // contact coordinator to fetch committed offsets
-                RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future = sendOffsetFetchRequest(partitions);
-                client.poll(timeoutMs, time.milliseconds(), future);
+            // contact coordinator to fetch committed offsets
+            RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future = sendOffsetFetchRequest(partitions);
+            client.poll(timeoutMs, time.milliseconds(), future);
 
-                if (future.succeeded())
-                    return future.value();
+            if (future.succeeded())
+                return future.value();
 
-                if (future.isDone())
-                    throw future.exception();
+            if (future.isDone())
+                throw future.exception();
 
-                time.sleep(retryBackoffMs);
-            }
-        } catch (TimeoutException exc) {
-            throw new TimeoutException("Fetching committed offsets took too long.");
+            time.sleep(retryBackoffMs);
         }
         return null;
     }
