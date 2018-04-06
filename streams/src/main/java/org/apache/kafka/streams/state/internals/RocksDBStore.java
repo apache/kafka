@@ -31,7 +31,9 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.rocksdb.BlockBasedTableConfig;
+import org.rocksdb.Comparator;
 import org.rocksdb.CompactionStyle;
+import org.rocksdb.ComparatorOptions;
 import org.rocksdb.CompressionType;
 import org.rocksdb.FlushOptions;
 import org.rocksdb.InfoLogLevel;
@@ -39,6 +41,7 @@ import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
+import org.rocksdb.Slice;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 
@@ -89,6 +92,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     private Options options;
     private WriteOptions wOptions;
     private FlushOptions fOptions;
+    private ComparatorOptions cOptions;
 
     private volatile boolean prepareForBulkload = false;
     private ProcessorContext internalProcessorContext;
@@ -96,6 +100,32 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     volatile BatchingStateRestoreCallback batchingStateRestoreCallback = null;
 
     protected volatile boolean open = false;
+
+    static {
+        RocksDB.loadLibrary();
+    }
+
+    private static class RocksComparator extends Comparator {
+        private Bytes.ByteArrayComparator inner;
+
+        RocksComparator(final ComparatorOptions cOptions, final Bytes.ByteArrayComparator inner) {
+            super(cOptions);
+            this.inner = inner;
+        }
+
+        @Override
+        public String name() {
+            if (inner != null)
+                return inner.getClass().getName();
+            else
+                return "RocksComparator [inner unknown]";
+        }
+
+        @Override
+        public int compare(final Slice a, final Slice b) {
+            return inner.compare(a.data(), b.data());
+        }
+    }
 
     RocksDBStore(String name) {
         this(name, DB_FILE_DIR, Bytes.BYTES_LEXICO_COMPARATOR);
@@ -114,6 +144,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         tableConfig.setBlockCacheSize(BLOCK_CACHE_SIZE);
         tableConfig.setBlockSize(BLOCK_SIZE);
 
+        cOptions = new ComparatorOptions();
+
         options = new Options();
         options.setTableFormatConfig(tableConfig);
         options.setWriteBufferSize(WRITE_BUFFER_SIZE);
@@ -123,6 +155,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         options.setCreateIfMissing(true);
         options.setErrorIfExists(false);
         options.setInfoLogLevel(InfoLogLevel.ERROR_LEVEL);
+        options.setComparator(new RocksComparator(cOptions, comparator));
         // this is the recommended way to increase parallelism in RocksDb
         // note that the current implementation of setIncreaseParallelism affects the number
         // of compaction threads but not flush threads (the latter remains one). Also
@@ -212,6 +245,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public synchronized byte[] get(final Bytes key) {
+        Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         return getInternal(key.get());
     }
@@ -426,11 +460,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         options.close();
         wOptions.close();
         fOptions.close();
+        cOptions.close();
         db.close();
 
         options = null;
         wOptions = null;
         fOptions = null;
+        cOptions = null;
         db = null;
     }
 

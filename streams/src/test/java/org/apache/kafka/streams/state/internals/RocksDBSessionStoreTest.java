@@ -192,7 +192,7 @@ public class RocksDBSessionStoreTest {
         while (rangeIterator.hasNext()) {
             rangeResults.add(rangeIterator.next().value);
         }
-        assertThat(rangeResults, equalTo(Arrays.asList(1L, 3L, 2L, 4L, 5L)));
+        assertThat(rangeResults, equalTo(Arrays.asList(1L, 3L, 5L, 2L, 4L)));
     }
 
     @Test(expected = NullPointerException.class)
