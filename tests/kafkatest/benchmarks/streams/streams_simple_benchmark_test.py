@@ -44,7 +44,7 @@ class StreamsSimpleBenchmarkTest(Test):
 
         self.replication = 1
 
-    @cluster(num_nodes=9)
+    @cluster(num_nodes=12)
     @matrix(test=["consume", "consumeproduce", "all"], scale=[1])
     def test_simple_benchmark(self, test, scale):
         """
