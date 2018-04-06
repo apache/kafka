@@ -46,7 +46,7 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
         KeyValue.pair(
             SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(Bytes.wrap(
                     SessionKeySchema.toBinary(new Windowed<>(cacheKey, cacheWindow))
-            ), cacheWindow.end()),
+            )),
             new LRUCacheEntry(cacheKey.get())
         )).iterator();
 

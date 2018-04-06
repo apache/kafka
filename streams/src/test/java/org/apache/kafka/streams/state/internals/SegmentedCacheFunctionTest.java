@@ -53,7 +53,7 @@ public class SegmentedCacheFunctionTest {
     public void cacheKey() {
         final long segmentId = TIMESTAMP / SEGMENT_INTERVAL;
 
-        final Bytes actualCacheKey = cacheFunction.cacheKey(THE_KEY, TIMESTAMP);
+        final Bytes actualCacheKey = cacheFunction.cacheKey(THE_KEY);
         final ByteBuffer buffer = ByteBuffer.wrap(actualCacheKey.get());
 
         assertThat(buffer.getLong(), equalTo(segmentId));
@@ -66,12 +66,12 @@ public class SegmentedCacheFunctionTest {
     @Test
     public void testRoundTripping() {
         assertThat(
-            cacheFunction.key(cacheFunction.cacheKey(THE_KEY, TIMESTAMP)),
+            cacheFunction.key(cacheFunction.cacheKey(THE_KEY)),
             equalTo(THE_KEY)
         );
 
         assertThat(
-            cacheFunction.cacheKey(cacheFunction.key(THE_CACHE_KEY), TIMESTAMP),
+            cacheFunction.cacheKey(cacheFunction.key(THE_CACHE_KEY)),
             equalTo(THE_CACHE_KEY)
         );
     }
@@ -81,7 +81,7 @@ public class SegmentedCacheFunctionTest {
         assertThat(
             "same key in same segment should be ranked the same",
             cacheFunction.compareSegmentedKeys(
-                cacheFunction.cacheKey(THE_KEY, TIMESTAMP),
+                cacheFunction.cacheKey(THE_KEY),
                 THE_KEY
             ) == 0
         );
@@ -91,7 +91,7 @@ public class SegmentedCacheFunctionTest {
         assertThat(
             "same keys in different segments should be ordered according to segment",
             cacheFunction.compareSegmentedKeys(
-                cacheFunction.cacheKey(sameKeyInPriorSegment, 1234),
+                cacheFunction.cacheKey(sameKeyInPriorSegment),
                 THE_KEY
             ) < 0
         );
@@ -99,7 +99,7 @@ public class SegmentedCacheFunctionTest {
         assertThat(
             "same keys in different segments should be ordered according to segment",
             cacheFunction.compareSegmentedKeys(
-                cacheFunction.cacheKey(THE_KEY, TIMESTAMP),
+                cacheFunction.cacheKey(THE_KEY),
                 sameKeyInPriorSegment
             ) > 0
         );
@@ -109,7 +109,7 @@ public class SegmentedCacheFunctionTest {
         assertThat(
             "different keys in same segments should be ordered according to key",
             cacheFunction.compareSegmentedKeys(
-                cacheFunction.cacheKey(THE_KEY, TIMESTAMP),
+                cacheFunction.cacheKey(THE_KEY),
                 lowerKeyInSameSegment
             ) > 0
         );
@@ -117,7 +117,7 @@ public class SegmentedCacheFunctionTest {
         assertThat(
             "different keys in same segments should be ordered according to key",
             cacheFunction.compareSegmentedKeys(
-                cacheFunction.cacheKey(lowerKeyInSameSegment, TIMESTAMP - 1),
+                cacheFunction.cacheKey(lowerKeyInSameSegment),
                 THE_KEY
             ) < 0
         );

@@ -67,6 +67,9 @@ class NamedCache {
 
         @Override
         public int compare(Bytes bytes1, Bytes bytes2) {
+            // note the reason we can directly call the inner compare is that
+            // segment id is a fixed prefix, so comparing it together with the
+            // raw key in the underlying comparator is fine.
             return inner.compare(bytes1.get(), bytes2.get());
         }
     }

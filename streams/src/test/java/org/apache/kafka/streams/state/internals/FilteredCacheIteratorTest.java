@@ -41,7 +41,7 @@ public class FilteredCacheIteratorTest {
         }
 
         @Override
-        public Bytes cacheKey(Bytes key, long timestamp) {
+        public Bytes cacheKey(Bytes key) {
             return key;
         }
     };

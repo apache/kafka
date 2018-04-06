@@ -62,11 +62,12 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         Objects.requireNonNull(keyTo, "keyTo cannot be null");
 
         final List<Segment> searchSpace = keySchema.segmentsToSearch(segments, from, to);
+        final Bytes binaryFrom = keySchema.lowerRange(keyFrom, from);
         final Bytes binaryTo = keySchema.upperRange(keyTo, to);
 
         return new SegmentIterator(searchSpace.iterator(),
                                    keySchema.hasNextCondition(keyFrom, keyTo, from, to),
-                                   keyFrom, binaryTo);
+                                   binaryFrom, binaryTo);
     }
     
     @Override

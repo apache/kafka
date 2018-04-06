@@ -563,6 +563,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
         @Override
         public synchronized boolean hasNext() {
+            System.out.println("COMPARE next: ");
             return super.hasNext() && comparator.compare(super.peekRawKey(), this.rawToKey) <= 0;
         }
     }
