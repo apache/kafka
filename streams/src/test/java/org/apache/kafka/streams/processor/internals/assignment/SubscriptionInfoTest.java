@@ -40,7 +40,7 @@ public class SubscriptionInfoTest {
         Set<TaskId> standbyTasks =
                 new HashSet<>(Arrays.asList(new TaskId(1, 1), new TaskId(2, 0)));
 
-        SubscriptionInfo info = new SubscriptionInfo(processId, activeTasks, standbyTasks, null);
+        SubscriptionInfo info = SubscriptionInfo.createSubsriptionInfo(processId, activeTasks, standbyTasks, null);
         SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
 
         assertEquals(info, decoded);
@@ -48,7 +48,7 @@ public class SubscriptionInfoTest {
 
     @Test
     public void shouldEncodeDecodeWithUserEndPoint() {
-        SubscriptionInfo original = new SubscriptionInfo(UUID.randomUUID(),
+        SubscriptionInfo original = SubscriptionInfo.createSubsriptionInfo(UUID.randomUUID(),
                 Collections.singleton(new TaskId(0, 0)), Collections.<TaskId>emptySet(), "localhost:80");
         SubscriptionInfo decoded = SubscriptionInfo.decode(original.encode());
         assertEquals(original, decoded);
