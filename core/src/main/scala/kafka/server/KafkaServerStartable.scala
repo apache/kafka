@@ -37,9 +37,9 @@ class KafkaServerStartable(val staticServerConfig: KafkaConfig, reporters: Seq[K
   def startup() {
     try server.startup()
     catch {
-      case _: Throwable =>
+        case e: Throwable =>
         // KafkaServer.startup() calls shutdown() in case of exceptions, so we invoke `exit` to set the status code
-        fatal("Exiting Kafka.")
+        fatal("Exiting Kafka.", e)
         Exit.exit(1)
     }
   }
