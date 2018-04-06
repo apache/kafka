@@ -171,9 +171,9 @@ public class TopologyTestDriver implements Closeable {
 
     private final static int PARTITION_ID = 0;
     private final static TaskId TASK_ID = new TaskId(0, PARTITION_ID);
-    private StreamTask task;
-    private GlobalStateUpdateTask globalStateTask;
-    private GlobalStateManager globalStateManager;
+    private final StreamTask task;
+    private final GlobalStateUpdateTask globalStateTask;
+    private final GlobalStateManager globalStateManager;
 
     private final StateDirectory stateDirectory;
     private final ProcessorTopology processorTopology;
@@ -287,6 +287,10 @@ public class TopologyTestDriver implements Closeable {
                 new LogContext());
             globalStateTask.initialize();
         }
+        else {
+            globalStateManager = null;
+            globalStateTask = null;
+        }
 
         if (!partitionsByTopic.isEmpty()) {
             task = new StreamTask(
@@ -306,6 +310,9 @@ public class TopologyTestDriver implements Closeable {
                 producer);
             task.initializeStateStores();
             task.initializeTopology();
+        }
+        else {
+            task = null;
         }
     }
 
@@ -463,8 +470,9 @@ public class TopologyTestDriver implements Closeable {
      * This is useful when testing processes that are also using "normal" kafka producer, typically in
      * a different thread.<br>
      * The main difference between using it instead of the {@link #pipeInput(ConsumerRecord)} method is 
-     * that with the producer we both feed the stream and get a topic output (see: {@link #readOutput(String)})
-     * while with {@link #pipeInput(ConsumerRecord)} we only collect output from the topology sinks. 
+     * that with the producer we push data to a topic and eventually feed the stream
+     * while with {@link #pipeInput(ConsumerRecord)} we feed the stream but we only collect output from 
+     * the topology sinks. 
      * 
      * @return the producer.
      */
