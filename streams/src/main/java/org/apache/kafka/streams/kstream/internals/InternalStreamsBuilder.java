@@ -42,6 +42,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     final InternalTopologyBuilder internalTopologyBuilder;
 
     private final StreamsTopologyGraph topologyGraph;
+    private boolean topologyNeedsBuilding = true;
 
     private final AtomicInteger index = new AtomicInteger(0);
 
@@ -219,6 +220,14 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     public void addNode(StreamsGraphNode graphNode) {
         topologyGraph.addNode(graphNode);
+    }
+
+    public void buildAndOptimize() {
+        if (topologyNeedsBuilding) {
+            TopologyOptimizer topologyOptimizer = new TopologyOptimizerImpl();
+            topologyOptimizer.optimize(topologyGraph, internalTopologyBuilder);
+            topologyNeedsBuilding = false;
+        }
     }
 
     public StreamsTopologyGraph getTopologyGraph() {

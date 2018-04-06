@@ -27,8 +27,6 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
-import org.apache.kafka.streams.kstream.internals.TopologyOptimizer;
-import org.apache.kafka.streams.kstream.internals.TopologyOptimizerImpl;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -61,7 +59,6 @@ public class StreamsBuilder {
     final InternalTopologyBuilder internalTopologyBuilder = topology.internalTopologyBuilder;
 
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
-    private boolean topologyBuilt = false;
 
     /**
      * Create a {@link KStream} from the specified topics.
@@ -518,11 +515,7 @@ public class StreamsBuilder {
      * @return the {@link Topology} that represents the specified processing logic
      */
     public synchronized Topology build() {
-        if (!topologyBuilt) {
-            final TopologyOptimizer topologyOptimizer = new TopologyOptimizerImpl();
-            topologyOptimizer.optimize(internalStreamsBuilder.getTopologyGraph(), internalTopologyBuilder);
-            topologyBuilt = true;
-        }
+        internalStreamsBuilder.buildAndOptimize();
         return topology;
     }
 }
