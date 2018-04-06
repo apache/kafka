@@ -36,7 +36,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
-    private static final SegmentedCacheFunction SINGLE_SEGMENT_CACHE_FUNCTION = new SegmentedCacheFunction(null, 100);
+    private static final SegmentedCacheFunction SINGLE_SEGMENT_CACHE_FUNCTION = new SegmentedCacheFunction(new WindowKeySchema(), 100);
     private static final int WINDOW_SIZE = 10;
 
     private final String storeKey = "a";

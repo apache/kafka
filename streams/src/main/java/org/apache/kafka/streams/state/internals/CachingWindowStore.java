@@ -85,7 +85,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
                                         Serdes.ByteArray());
         name = context.taskId() + "-" + underlying.name();
         cache = this.context.getCache();
-
+        cache.createCache(name, (new WindowKeySchema()).bytesComparator());
         cache.addDirtyEntryFlushListener(name, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {

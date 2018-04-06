@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.KeyValueIteratorStub;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -43,6 +44,11 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
     private final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1000000L,  new MockStreamsMetrics(new Metrics()));
     private final String namespace = "0.0-one";
     private final StateSerdes<String, String> stateSerdes = new StateSerdes<>("foo", Serdes.String(), Serdes.String());
+
+    @Before
+    public void setUp() {
+        cache.createCache(namespace, (new WindowKeySchema()).bytesComparator());
+    }
 
     @Test
     public void shouldIterateOverValueFromBothIterators() {

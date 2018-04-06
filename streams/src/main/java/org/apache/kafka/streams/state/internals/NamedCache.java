@@ -27,7 +27,9 @@ import org.apache.kafka.streams.processor.internals.StreamsMetricsImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -38,14 +40,16 @@ import java.util.TreeSet;
 
 class NamedCache {
     private static final Logger log = LoggerFactory.getLogger(NamedCache.class);
+
     private final String name;
-    private final TreeMap<Bytes, LRUNode> cache = new TreeMap<>();
+    private final TreeMap<Bytes, LRUNode> cache;
     private final Set<Bytes> dirtyKeys = new LinkedHashSet<>();
-    private ThreadCache.DirtyEntryFlushListener listener;
+
     private LRUNode tail;
     private LRUNode head;
     private long currentSizeBytes;
     private NamedCacheMetrics namedCacheMetrics;
+    private ThreadCache.DirtyEntryFlushListener listener;
 
     // internal stats
     private long numReadHits = 0;
@@ -53,9 +57,30 @@ class NamedCache {
     private long numOverwrites = 0;
     private long numFlushes = 0;
 
+    private static class WrappedBytesComparator implements Comparator<Bytes>, Serializable {
+
+        private final Bytes.ByteArrayComparator inner;
+
+        WrappedBytesComparator(Bytes.ByteArrayComparator inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public int compare(Bytes bytes1, Bytes bytes2) {
+            return inner.compare(bytes1.get(), bytes2.get());
+        }
+    }
+
+
+    // this is for testing only
     NamedCache(final String name, final StreamsMetrics metrics) {
+        this(name, metrics, Bytes.BYTES_LEXICO_COMPARATOR);
+    }
+
+    NamedCache(final String name, final StreamsMetrics metrics, final Bytes.ByteArrayComparator comparator) {
         this.name = name;
         this.namedCacheMetrics = new NamedCacheMetrics(metrics);
+        this.cache = new TreeMap<>(new WrappedBytesComparator(comparator));
     }
 
     synchronized final String name() {

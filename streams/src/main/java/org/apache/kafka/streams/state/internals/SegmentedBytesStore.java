@@ -152,6 +152,8 @@ public interface SegmentedBytesStore extends StateStore {
          */
         List<Segment> segmentsToSearch(Segments segments, long from, long to);
 
+        // TODO: this is not declared as a static method since Java7 does not support it;
+        // once we have upgraded to Java8 we should change it to static method
         /**
          * Return the bytes comparator for a window key
          */

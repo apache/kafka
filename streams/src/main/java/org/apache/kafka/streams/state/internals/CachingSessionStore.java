@@ -80,6 +80,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
 
         cacheName = context.taskId() + "-" + bytesStore.name();
         cache = context.getCache();
+        cache.createCache(cacheName, (new SessionKeySchema()).bytesComparator());
         cache.addDirtyEntryFlushListener(cacheName, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
