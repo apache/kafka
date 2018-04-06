@@ -28,6 +28,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Printed;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.ThreadMetadata;
@@ -118,6 +119,8 @@ public class StreamsStandByReplicaTest {
                 return value.toString();
             }
         };
+
+        inputStream.print(Printed.<String, String>toSysOut());
 
         inputStream.groupByKey().count(Materialized.<String, Long>as(inMemoryStoreSupplier)).toStream().mapValues(countMapper)
             .to(sinkTopic1, Produced.with(stringSerde, stringSerde));
