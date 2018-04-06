@@ -26,6 +26,7 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
@@ -41,12 +42,20 @@ public class RoundTripWorkloadSpec extends TaskSpec {
     private final NavigableMap<Integer, List<Integer>> partitionAssignments;
     private final PayloadGenerator valueGenerator;
     private final int maxMessages;
+    private final Map<String, String> commonClientConf;
+    private final Map<String, String> producerConf;
+    private final Map<String, String> consumerConf;
+    private final Map<String, String> adminClientConf;
 
     @JsonCreator
     public RoundTripWorkloadSpec(@JsonProperty("startMs") long startMs,
              @JsonProperty("durationMs") long durationMs,
              @JsonProperty("clientNode") String clientNode,
              @JsonProperty("bootstrapServers") String bootstrapServers,
+             @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
+             @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
+             @JsonProperty("consumerConf") Map<String, String> consumerConf,
+             @JsonProperty("producerConf") Map<String, String> producerConf,
              @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
              @JsonProperty("partitionAssignments") NavigableMap<Integer, List<Integer>> partitionAssignments,
              @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
@@ -60,6 +69,10 @@ public class RoundTripWorkloadSpec extends TaskSpec {
         this.valueGenerator = valueGenerator == null ?
             new UniformRandomPayloadGenerator(32, 123, 10) : valueGenerator;
         this.maxMessages = maxMessages;
+        this.commonClientConf = configOrEmptyMap(commonClientConf);
+        this.adminClientConf = configOrEmptyMap(adminClientConf);
+        this.producerConf = configOrEmptyMap(producerConf);
+        this.consumerConf = configOrEmptyMap(consumerConf);
     }
 
     @JsonProperty
@@ -90,6 +103,26 @@ public class RoundTripWorkloadSpec extends TaskSpec {
     @JsonProperty
     public int maxMessages() {
         return maxMessages;
+    }
+
+    @JsonProperty
+    public Map<String, String> commonClientConf() {
+        return commonClientConf;
+    }
+
+    @JsonProperty
+    public Map<String, String> adminClientConf() {
+        return adminClientConf;
+    }
+
+    @JsonProperty
+    public Map<String, String> producerConf() {
+        return producerConf;
+    }
+
+    @JsonProperty
+    public Map<String, String> consumerConf() {
+        return consumerConf;
     }
 
     @Override
