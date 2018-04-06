@@ -27,11 +27,12 @@ import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
+import org.scalatest.junit.JUnitSuite
 
 import scala.collection.JavaConverters._
 import scala.collection.Set
 
-class DynamicBrokerConfigTest {
+class DynamicBrokerConfigTest extends JUnitSuite {
 
   @Test
   def testConfigUpdate(): Unit = {
@@ -124,6 +125,35 @@ class DynamicBrokerConfigTest {
     }
     config.dynamicConfig.addBrokerReconfigurable(brokerReconfigurable)
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, invalidProps)
+  }
+
+  @Test
+  def testReconfigurableValidation(): Unit = {
+    val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    val config = KafkaConfig(origProps)
+    val invalidReconfigurableProps = Set(KafkaConfig.LogCleanerThreadsProp, KafkaConfig.BrokerIdProp, "some.prop")
+    val validReconfigurableProps = Set(KafkaConfig.LogCleanerThreadsProp, KafkaConfig.LogCleanerDedupeBufferSizeProp, "some.prop")
+
+    def createReconfigurable(configs: Set[String]) = new Reconfigurable {
+      override def configure(configs: util.Map[String, _]): Unit = {}
+      override def reconfigurableConfigs(): util.Set[String] = configs.asJava
+      override def validateReconfiguration(configs: util.Map[String, _]): Unit = {}
+      override def reconfigure(configs: util.Map[String, _]): Unit = {}
+    }
+    intercept[IllegalArgumentException] {
+      config.dynamicConfig.addReconfigurable(createReconfigurable(invalidReconfigurableProps))
+    }
+    config.dynamicConfig.addReconfigurable(createReconfigurable(validReconfigurableProps))
+
+    def createBrokerReconfigurable(configs: Set[String]) = new BrokerReconfigurable {
+      override def reconfigurableConfigs: collection.Set[String] = configs
+      override def validateReconfiguration(newConfig: KafkaConfig): Unit = {}
+      override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {}
+    }
+    intercept[IllegalArgumentException] {
+      config.dynamicConfig.addBrokerReconfigurable(createBrokerReconfigurable(invalidReconfigurableProps))
+    }
+    config.dynamicConfig.addBrokerReconfigurable(createBrokerReconfigurable(validReconfigurableProps))
   }
 
   @Test
