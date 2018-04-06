@@ -68,6 +68,7 @@
 <ul>
     <li><a href="https://cwiki.apache.org/confluence/x/oYtjB">KIP-186</a> increases the default offset retention time from 1 day to 7 days. This makes it less likely to "lose" offsets in an application that commits infrequently. It also increases the active set of offsets and therefore can increase memory usage on the broker. Note that the console consumer currently enables offset commit by default and can be the source of a large number of offsets which this change will now preserve for 7 days instead of 1. You can preserve the existing behavior by setting the broker config <code>offsets.retention.minutes</code> to 1440.</li>
     <li><a href="https://issues.apache.org/jira/browse/KAFKA-5674">KAFKA-5674</a> extends the lower interval of <code>max.connections.per.ip minimum</code> to zero and therefore allows IP-based filtering of inbound connections.</li>
+    <li> New Kafka Streams configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from older version. </li>
 </ul>
 
 <h5><a id="upgrade_120_new_protocols" href="#upgrade_120_new_protocols">New Protocol Versions</a></h5>
@@ -76,7 +77,7 @@
 <h5><a id="upgrade_120_streams" href="#upgrade_120_streams">Upgrading a 1.2.0 Kafka Streams Application</a></h5>
 <ul>
     <li> Upgrading your Streams application from 1.1.0 to 1.2.0 does not require a broker upgrade.
-        A Kafka Streams 1.2.0 application can connect to 1.2, 1.1, 1.0, 0.11.0, 0.10.2 and 0.10.1 brokers (it is not possible to connect to 0.10.0 brokers though). </li>
+         A Kafka Streams 1.2.0 application can connect to 1.2, 1.1, 1.0, 0.11.0, 0.10.2 and 0.10.1 brokers (it is not possible to connect to 0.10.0 brokers though). </li>
     <li> See <a href="/{{version}}/documentation/streams/upgrade-guide#streams_api_changes_120">Streams API changes in 1.2.0</a> for more details. </li>
 </ul>
 
@@ -125,11 +126,13 @@
         Hot-swaping the jar-file only might not work.</li>
 </ol>
 
+<!-- TODO add if 1.1.1 gets release
 <h5><a id="upgrade_111_notable" href="#upgrade_111_notable">Notable changes in 1.1.1</a></h5>
 <ul>
     <li> New Kafka Streams configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from version 0.10.0.x </li>
     <li> See the <a href="/{{version}}/documentation/streams/upgrade-guide.html"><b>Kafka Streams upgrade guide</b></a> for details about this new config.
 </ul>
+-->
 
 <h5><a id="upgrade_110_notable" href="#upgrade_110_notable">Notable changes in 1.1.0</a></h5>
 <ul>
@@ -202,11 +205,13 @@
         Similarly for the message format version.</li>
 </ol>
 
+<!-- TODO add if 1.0.2 gets release
 <h5><a id="upgrade_102_notable" href="#upgrade_102_notable">Notable changes in 1.0.2</a></h5>
 <ul>
     <li> New Kafka Streams configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from version 0.10.0.x </li>
     <li> See the <a href="/{{version}}/documentation/streams/upgrade-guide.html"><b>Kafka Streams upgrade guide</b></a> for details about this new config.
 </ul>
+-->
 
 <h5><a id="upgrade_101_notable" href="#upgrade_101_notable">Notable changes in 1.0.1</a></h5>
 <ul>
@@ -319,6 +324,7 @@
          <a href="/{{version}}/documentation/streams#streams_api_changes_0102">Streams API changes in 0.10.2</a>, and
          <a href="/{{version}}/documentation/streams#streams_api_changes_0101">Streams API changes in 0.10.1</a> for more details).
          Thus, you need to update and recompile your code. Just swapping the Kafka Streams library jar file will not work and will break your application. </li>
+    <!-- TODO add if 1.0.2 gets release
     <li> Upgrading from 0.10.0.x to 1.0.2 requires two rolling bounces with config <code>upgrade.from="0.10.0"</code> set for first upgrade phase
         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>).
         As an alternative, an offline upgrade is also possible.
@@ -329,7 +335,9 @@
             <li> bounce each instance of your application once more to complete the upgrade </li>
         </ul>
     </li>
+    -->
     <li> Upgrading from 0.10.0.x to 1.0.0 or 1.0.1 requires an offline upgrade (rolling bounce upgrade is not supported)
+
         <ul>
             <li> stop all old (0.10.0.x) application instances </li>
             <li> update your code and swap old code and jar file with new code and new jar file </li>
@@ -357,7 +365,7 @@
         <ul>
             <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. 0.8.2, 0.9.0, 0.10.0, 0.10.1 or 0.10.2).</li>
             <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
-		following the upgrade</a> for the details on what this configuration does.)</li>
+        following the upgrade</a> for the details on what this configuration does.)</li>
         </ul>
     </li>
     <li> Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. </li>
@@ -410,6 +418,7 @@
          <a href="/{{version}}/documentation/streams#streams_api_changes_0102">Streams API changes in 0.10.2</a>, and
          <a href="/{{version}}/documentation/streams#streams_api_changes_0101">Streams API changes in 0.10.1</a> for more details).
          Thus, you need to update and recompile your code. Just swapping the Kafka Streams library jar file will not work and will break your application. </li>
+    <!-- TODO add if 0.11.0.3 gets release
     <li> Upgrading from 0.10.0.x to 0.11.0.3 requires two rolling bounces with config <code>upgrade.from="0.10.0"</code> set for first upgrade phase
         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>).
         As an alternative, an offline upgrade is also possible.
@@ -420,6 +429,7 @@
             <li> bounce each instance of your application once more to complete the upgrade </li>
         </ul>
     </li>
+    -->
     <li> Upgrading from 0.10.0.x to 0.11.0.0, 0.11.0.1, or 0.11.0.2 requires an offline upgrade (rolling bounce upgrade is not supported)
         <ul>
             <li> stop all old (0.10.0.x) application instances </li>
@@ -429,11 +439,13 @@
     </li>
 </ul>
 
+<!-- TODO add if 0.11.0.3 gets release
 <h5><a id="upgrade_1103_notable" href="#upgrade_1103_notable">Notable changes in 0.11.0.3</a></h5>
 <ul>
-    <li> New Kafka Streams configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from version 0.10.0.x </li>
-    <li> See the <a href="/{{version}}/documentation/streams/upgrade-guide.html"><b>Kafka Streams upgrade guide</b></a> for details about this new config.
+<li> New Kafka Streams configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from version 0.10.0.x </li>
+<li> See the <a href="/{{version}}/documentation/streams/upgrade-guide.html"><b>Kafka Streams upgrade guide</b></a> for details about this new config.
 </ul>
+-->
 
 <h5><a id="upgrade_1100_notable" href="#upgrade_1100_notable">Notable changes in 0.11.0.0</a></h5>
 <ul>
@@ -590,6 +602,7 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
     <li> Upgrading your Streams application from 0.10.0 to 0.10.2 does require a <a href="#upgrade_10_1">broker upgrade</a> because a Kafka Streams 0.10.2 application can only connect to 0.10.2 or 0.10.1 brokers. </li>
     <li> There are couple of API changes, that are not backward compatible (cf. <a href="/{{version}}/documentation/streams#streams_api_changes_0102">Streams API changes in 0.10.2</a> for more details).
          Thus, you need to update and recompile your code. Just swapping the Kafka Streams library jar file will not work and will break your application. </li>
+    <!-- TODO add if 0.10.2.2 gets release
     <li> Upgrading from 0.10.0.x to 0.10.2.2 requires two rolling bounces with config <code>upgrade.from="0.10.0"</code> set for first upgrade phase
          (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>).
          As an alternative, an offline upgrade is also possible.
@@ -600,6 +613,7 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
             <li> bounce each instance of your application once more to complete the upgrade </li>
         </ul>
     </li>
+    -->
     <li> Upgrading from 0.10.0.x to 0.10.2.0 or 0.10.2.1 requires an offline upgrade (rolling bounce upgrade is not supported)
         <ul>
             <li> stop all old (0.10.0.x) application instances </li>
@@ -609,10 +623,12 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
     </li>
 </ul>
 
+<!-- TODO add if 0.10.2.2 gets release
 <h5><a id="upgrade_10202_notable" href="#upgrade_10202_notable">Notable changes in 0.10.2.2</a></h5>
 <ul>
-    <li> New configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from version 0.10.0.x </li>
+<li> New configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from version 0.10.0.x </li>
 </ul>
+-->
 
 <h5><a id="upgrade_10201_notable" href="#upgrade_10201_notable">Notable changes in 0.10.2.1</a></h5>
 <ul>
@@ -691,23 +707,25 @@ only support 0.10.1.x or later brokers while 0.10.1.x brokers also support older
 <ul>
     <li> Upgrading your Streams application from 0.10.0 to 0.10.1 does require a <a href="#upgrade_10_1">broker upgrade</a> because a Kafka Streams 0.10.1 application can only connect to 0.10.1 brokers. </li>
     <li> There are couple of API changes, that are not backward compatible (cf. <a href="/{{version}}/documentation/streams/upgrade-guide#streams_api_changes_0101">Streams API changes in 0.10.1</a> for more details).
-         Thus, you need to update and recompile your code. Just swapping the Kafka Streams library jar file will not work and will break your application. </li>
-    <li> Upgrading from 0.10.0.x to 0.10.1.2 requires two rolling bounces with config <code>upgrade.from="0.10.0"</code> set for first upgrade phase
+     Thus, you need to update and recompile your code. Just swapping the Kafka Streams library jar file will not work and will break your application. </li>
+    <!-- TODO add if 0.10.1.2 gets release
+        <li> Upgrading from 0.10.0.x to 0.10.1.2 requires two rolling bounces with config <code>upgrade.from="0.10.0"</code> set for first upgrade phase
          (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>).
          As an alternative, an offline upgrade is also possible.
-        <ul>
-            <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to <code>"0.10.0"</code> for new version 0.10.1.2 </li>
-            <li> bounce each instance of your application once </li>
-            <li> prepare your newly deployed 0.10.1.2 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
-            <li> bounce each instance of your application once more to complete the upgrade </li>
-        </ul>
-    </li>
+            <ul>
+                <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to <code>"0.10.0"</code> for new version 0.10.1.2 </li>
+                <li> bounce each instance of your application once </li>
+                <li> prepare your newly deployed 0.10.1.2 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
+                <li> bounce each instance of your application once more to complete the upgrade </li>
+            </ul>
+        </li>
+        -->
     <li> Upgrading from 0.10.0.x to 0.10.1.0 or 0.10.1.1 requires an offline upgrade (rolling bounce upgrade is not supported)
-        <ul>
-            <li> stop all old (0.10.0.x) application instances </li>
-            <li> update your code and swap old code and jar file with new code and new jar file </li>
-            <li> restart all new (0.10.1.0 or 0.10.1.1) application instances </li>
-        </ul>
+    <ul>
+        <li> stop all old (0.10.0.x) application instances </li>
+        <li> update your code and swap old code and jar file with new code and new jar file </li>
+        <li> restart all new (0.10.1.0 or 0.10.1.1) application instances </li>
+    </ul>
     </li>
 </ul>
 

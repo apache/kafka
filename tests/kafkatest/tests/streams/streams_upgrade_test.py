@@ -51,7 +51,7 @@ class StreamsUpgradeTest(Test):
     @matrix(from_version=broker_upgrade_versions, to_version=broker_upgrade_versions)
     def test_upgrade_downgrade_brokers(self, from_version, to_version):
         """
-        Start a smoke test client then perform rolling upgrades on the broker. 
+        Start a smoke test client then perform rolling upgrades on the broker.
         """
 
         if from_version == to_version:
@@ -91,10 +91,10 @@ class StreamsUpgradeTest(Test):
         self.kafka = KafkaService(self.test_context, num_nodes=3,
                                   zk=self.zk, version=KafkaVersion(from_version), topics=self.topics)
         self.kafka.start()
-        
+
         # allow some time for topics to be created
         time.sleep(10)
-        
+
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
         self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
         
