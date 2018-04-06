@@ -180,21 +180,23 @@ abstract class QuotaTestClients(topic: String,
     quotaManager.quota(userPrincipal, clientId)
   }
 
-  def produceUntilThrottled(maxRecords: Int): Int = {
+  def produceUntilThrottled(maxRecords: Int, waitForRequestCompletion: Boolean = true): Int = {
     var numProduced = 0
     var throttled = false
     do {
       val payload = numProduced.toString.getBytes
-      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, null, null, payload),
-        new ErrorLoggingCallback(topic, null, null, true)).get()
+      val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, null, null, payload),
+        new ErrorLoggingCallback(topic, null, null, true))
       numProduced += 1
-      val metric = throttleMetric(QuotaType.Produce, producerClientId)
-      throttled = metric != null && metricValue(metric) > 0
+      do {
+        val metric = throttleMetric(QuotaType.Produce, producerClientId)
+        throttled = metric != null && metricValue(metric) > 0
+      } while (!future.isDone && (!throttled || waitForRequestCompletion))
     } while (numProduced < maxRecords && !throttled)
     numProduced
   }
 
-  def consumeUntilThrottled(maxRecords: Int): Int = {
+  def consumeUntilThrottled(maxRecords: Int, waitForRequestCompletion: Boolean = true): Int = {
     consumer.subscribe(Collections.singleton(topic))
     var numConsumed = 0
     var throttled = false
@@ -205,7 +207,7 @@ abstract class QuotaTestClients(topic: String,
     }  while (numConsumed < maxRecords && !throttled)
 
     // If throttled, wait for the records from the last fetch to be received
-    if (throttled && numConsumed < maxRecords) {
+    if (throttled && numConsumed < maxRecords && waitForRequestCompletion) {
       val minRecords = numConsumed + 1
       while (numConsumed < minRecords)
         numConsumed += consumer.poll(100).count
@@ -213,14 +215,16 @@ abstract class QuotaTestClients(topic: String,
     numConsumed
   }
 
-  def verifyProduceThrottle(expectThrottle: Boolean): Unit = {
+  def verifyProduceThrottle(expectThrottle: Boolean, verifyClientMetric: Boolean = true): Unit = {
     verifyThrottleTimeMetric(QuotaType.Produce, producerClientId, expectThrottle)
-    verifyProducerClientThrottleTimeMetric(expectThrottle)
+    if (verifyClientMetric)
+      verifyProducerClientThrottleTimeMetric(expectThrottle)
   }
 
-  def verifyConsumeThrottle(expectThrottle: Boolean): Unit = {
+  def verifyConsumeThrottle(expectThrottle: Boolean, verifyClientMetric: Boolean = true): Unit = {
     verifyThrottleTimeMetric(QuotaType.Fetch, consumerClientId, expectThrottle)
-    verifyConsumerClientThrottleTimeMetric(expectThrottle)
+    if (verifyClientMetric)
+      verifyConsumerClientThrottleTimeMetric(expectThrottle)
   }
 
   def verifyThrottleTimeMetric(quotaType: QuotaType, clientId: String, expectThrottle: Boolean): Unit = {

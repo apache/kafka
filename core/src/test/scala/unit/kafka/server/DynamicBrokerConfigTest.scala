@@ -132,7 +132,7 @@ class DynamicBrokerConfigTest extends JUnitSuite {
     val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     val config = KafkaConfig(origProps)
     val invalidReconfigurableProps = Set(KafkaConfig.LogCleanerThreadsProp, KafkaConfig.BrokerIdProp, "some.prop")
-    val validProps = Set(KafkaConfig.LogCleanerThreadsProp, KafkaConfig.LogCleanerDedupeBufferSizeProp, "some.prop")
+    val validReconfigurableProps = Set(KafkaConfig.LogCleanerThreadsProp, KafkaConfig.LogCleanerDedupeBufferSizeProp, "some.prop")
 
     def createReconfigurable(configs: Set[String]) = new Reconfigurable {
       override def configure(configs: util.Map[String, _]): Unit = {}
@@ -143,7 +143,7 @@ class DynamicBrokerConfigTest extends JUnitSuite {
     intercept[IllegalArgumentException] {
       config.dynamicConfig.addReconfigurable(createReconfigurable(invalidReconfigurableProps))
     }
-    config.dynamicConfig.addReconfigurable(createReconfigurable(validProps))
+    config.dynamicConfig.addReconfigurable(createReconfigurable(validReconfigurableProps))
 
     def createBrokerReconfigurable(configs: Set[String]) = new BrokerReconfigurable {
       override def reconfigurableConfigs: collection.Set[String] = configs
@@ -153,7 +153,7 @@ class DynamicBrokerConfigTest extends JUnitSuite {
     intercept[IllegalArgumentException] {
       config.dynamicConfig.addBrokerReconfigurable(createBrokerReconfigurable(invalidReconfigurableProps))
     }
-    config.dynamicConfig.addBrokerReconfigurable(createBrokerReconfigurable(validProps))
+    config.dynamicConfig.addBrokerReconfigurable(createBrokerReconfigurable(validReconfigurableProps))
   }
 
   @Test

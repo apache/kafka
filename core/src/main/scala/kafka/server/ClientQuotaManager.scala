@@ -73,7 +73,7 @@ object QuotaTypes {
   val ClientIdQuotaEnabled = 1
   val UserQuotaEnabled = 2
   val UserClientIdQuotaEnabled = 4
-  val CustomQuotas = 8
+  val CustomQuotas = 8 // No metric update optimizations are used with custom quotas
 }
 
 object ClientQuotaManager {
@@ -280,12 +280,12 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * Note: this method is expensive, it is meant to be used by tests only
    */
   def quota(userPrincipal: KafkaPrincipal, clientId: String): Quota = {
-    val metricTags = quotaCallback.quotaMetricTags(userPrincipal, clientId, clientQuotaType)
+    val metricTags = quotaCallback.quotaMetricTags(clientQuotaType, userPrincipal, clientId)
     Quota.upperBound(quotaLimit(metricTags))
   }
 
   private def quotaLimit(metricTags: util.Map[String, String]): Double = {
-    Option(quotaCallback.quotaLimit(metricTags, clientQuotaType)).map(_.toDouble)getOrElse(Long.MaxValue)
+    Option(quotaCallback.quotaLimit(clientQuotaType, metricTags)).map(_.toDouble)getOrElse(Long.MaxValue)
   }
 
   /*
@@ -322,10 +322,10 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     // Use cached sanitized principal if using default callback
     val metricTags = quotaCallback match {
       case callback: DefaultQuotaCallback => callback.quotaMetricTags(session.sanitizedUser, clientId)
-      case _ => quotaCallback.quotaMetricTags(session.principal, clientId, clientQuotaType).asScala.toMap
+      case _ => quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId).asScala.toMap
     }
     // Names of the sensors to access
-    ClientSensors(
+    val sensors = ClientSensors(
       metricTags,
       sensorAccessor.getOrCreate(
         getQuotaSensorName(metricTags),
@@ -341,6 +341,9 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
         new Avg
       )
     )
+    if (quotaCallback.quotaResetRequired(clientQuotaType))
+      updateQuotaMetricConfigs()
+    sensors
   }
 
   private def metricTagsToSensorSuffix(metricTags: Map[String, String]): String =
@@ -352,11 +355,11 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   private def getQuotaSensorName(metricTags: Map[String, String]): String =
     s"$quotaType-${metricTagsToSensorSuffix(metricTags)}"
 
-  protected def getQuotaMetricConfig(metricTags: Map[String, String]): MetricConfig = {
+  private def getQuotaMetricConfig(metricTags: Map[String, String]): MetricConfig = {
     getQuotaMetricConfig(quotaLimit(metricTags.asJava))
   }
 
-  protected def getQuotaMetricConfig(quotaLimit: Double): MetricConfig = {
+  private def getQuotaMetricConfig(quotaLimit: Double): MetricConfig = {
     new MetricConfig()
       .timeWindow(config.quotaWindowSizeSeconds, TimeUnit.SECONDS)
       .samples(config.numQuotaSamples)
@@ -410,17 +413,15 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       } else if (clientIdEntity.nonEmpty)
         quotaTypesEnabled |= QuotaTypes.ClientIdQuotaEnabled
 
-      val needsMetricsConfigUpdate = quota match {
-        case Some(newQuota) => quotaCallback.updateQuota(quotaEntity, clientQuotaType, newQuota.bound)
-        case None => quotaCallback.removeQuota(quotaEntity, clientQuotaType)
+      quota match {
+        case Some(newQuota) => quotaCallback.updateQuota(clientQuotaType, quotaEntity, newQuota.bound)
+        case None => quotaCallback.removeQuota(clientQuotaType, quotaEntity)
       }
-      if (needsMetricsConfigUpdate) {
-        val updatedEntity = if (userEntity.contains(DefaultUserEntity) || clientIdEntity.contains(DefaultClientIdEntity))
-          None // more than one entity may need updating, so `updateQuotaMetricConfigs` will go through all metrics
-        else
-          Some(quotaEntity)
-        updateQuotaMetricConfigs(updatedEntity)
-      }
+      val updatedEntity = if (userEntity.contains(DefaultUserEntity) || clientIdEntity.contains(DefaultClientIdEntity))
+        None // more than one entity may need updating, so `updateQuotaMetricConfigs` will go through all metrics
+      else
+        Some(quotaEntity)
+      updateQuotaMetricConfigs(updatedEntity)
 
     } finally {
       lock.writeLock().unlock()
@@ -457,18 +458,17 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       // Change the underlying metric config if the sensor has been created
       val metric = allMetrics.get(quotaMetricName)
       if (metric != null) {
-        Option(quotaCallback.quotaLimit(metricTags.asJava, clientQuotaType)).foreach { newQuota =>
-          info(s"Sensor for $$quotaEntity already exists. Changing quota to $newQuota in MetricConfig")
+        Option(quotaCallback.quotaLimit(clientQuotaType, metricTags.asJava)).foreach { newQuota =>
+          info(s"Sensor for $quotaEntity already exists. Changing quota to $newQuota in MetricConfig")
           metric.config(getQuotaMetricConfig(newQuota))
         }
       }
     } else {
       val quotaMetricName = clientRateMetricName(Map.empty)
-      val allMetrics = metrics.metrics()
       allMetrics.asScala.filterKeys(n => n.name == quotaMetricName.name && n.group == quotaMetricName.group).foreach {
         case (metricName, metric) =>
           val metricTags = metricName.tags
-          Option(quotaCallback.quotaLimit(metricTags, clientQuotaType)).foreach { quota =>
+          Option(quotaCallback.quotaLimit(clientQuotaType, metricTags)).foreach { quota =>
             val newQuota = quota.asInstanceOf[Double]
             if (newQuota != metric.config.quota.bound) {
               info(s"Sensor for quota-id $metricTags already exists. Setting quota to $newQuota in MetricConfig")
@@ -510,11 +510,11 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
     override def configure(configs: util.Map[String, _]): Unit = {}
 
-    override def quotaMetricTags(principal: KafkaPrincipal, clientId: String, quotaType: ClientQuotaType): util.Map[String, String] = {
+    override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.Map[String, String] = {
       quotaMetricTags(Sanitizer.sanitize(principal.getName), clientId).asJava
     }
 
-    override def quotaLimit(metricTags: util.Map[String, String], quotaType: ClientQuotaType): lang.Double = {
+    override def quotaLimit(quotaType: ClientQuotaType, metricTags: util.Map[String, String]): lang.Double = {
       val sanitizedUser = metricTags.get(DefaultTags.User)
       val clientId = metricTags.get(DefaultTags.ClientId)
       var quota: Quota = null
@@ -563,19 +563,19 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       false
     }
 
-    override def updateQuota(entity: ClientQuotaEntity, quotaType: ClientQuotaType, newValue: Double): Boolean = {
+    override def updateQuota(quotaType: ClientQuotaType, entity: ClientQuotaEntity, newValue: Double): Unit = {
       val quotaEntity = entity.asInstanceOf[KafkaQuotaEntity]
       info(s"Changing $quotaType quota for $quotaEntity to $newValue")
       overriddenQuotas.put(quotaEntity, new Quota(newValue, true))
-      true
     }
 
-    override def removeQuota(entity: ClientQuotaEntity, quotaType: ClientQuotaType): Boolean = {
+    override def removeQuota(quotaType: ClientQuotaType, entity: ClientQuotaEntity): Unit = {
       val quotaEntity = entity.asInstanceOf[KafkaQuotaEntity]
       info(s"Removing $quotaType quota for $quotaEntity")
       overriddenQuotas.remove(quotaEntity)
-      true
     }
+
+    override def quotaResetRequired(quotaType: ClientQuotaType): Boolean = false
 
     def quotaMetricTags(sanitizedUser: String, clientId: String) : Map[String, String] = {
       val (userTag, clientIdTag) = quotaTypesEnabled match {
