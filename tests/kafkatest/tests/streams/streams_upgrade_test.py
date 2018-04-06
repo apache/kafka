@@ -24,7 +24,7 @@ import random
 import time
 
 broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), str(DEV_BRANCH)]
-simple_upgrade_versions_metadata_version_2 = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), str(DEV_VERSION)]
+simple_upgrade_versions_metadata_version_2 = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(DEV_VERSION)]
 
 class StreamsUpgradeTest(Test):
     """
@@ -102,6 +102,18 @@ class StreamsUpgradeTest(Test):
         self.processor1.start()
         time.sleep(15)
 
+        self.perform_broker_upgrade(to_version)
+
+        time.sleep(15)
+        self.driver.wait()
+        self.driver.stop()
+
+        self.processor1.stop()
+
+        node = self.driver.node
+        node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.driver.STDOUT_FILE, allow_fail=False)
+        self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
+
     @matrix(from_version=simple_upgrade_versions_metadata_version_2, to_version=simple_upgrade_versions_metadata_version_2)
     def test_simple_upgrade_downgrade(self, from_version, to_version):
         """
@@ -135,7 +147,7 @@ class StreamsUpgradeTest(Test):
         random.shuffle(self.processors)
         for p in self.processors:
             p.CLEAN_NODE_ENABLED = False
-            self.do_rolling_bounce(p, None, new_version, counter)
+            self.do_rolling_bounce(p, None, to_version, counter)
             counter = counter + 1
 
         # shutdown
@@ -340,4 +352,3 @@ class StreamsUpgradeTest(Test):
                         monitor.wait_until("processed 100 records from topic",
                                            timeout_sec=60,
                                            err_msg="Never saw output 'processed 100 records from topic' on" + str(node.account))
-
