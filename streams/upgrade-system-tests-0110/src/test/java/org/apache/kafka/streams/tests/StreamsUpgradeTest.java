@@ -31,7 +31,7 @@ import java.util.Properties;
 public class StreamsUpgradeTest {
 
     /**
-     * This test cannot be run executed, as long as Kafka 0.11.0.3 is not released
+     * This test cannot be executed, as long as Kafka 0.11.0.3 is not released
      */
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
