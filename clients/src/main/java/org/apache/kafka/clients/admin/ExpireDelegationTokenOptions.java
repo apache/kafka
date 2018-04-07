@@ -26,7 +26,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  */
 @InterfaceStability.Evolving
 public class ExpireDelegationTokenOptions extends AbstractOptions<ExpireDelegationTokenOptions> {
-    private long expiryTimePeriodMs = -1;
+    private long expiryTimePeriodMs = -1L;
 
     public ExpireDelegationTokenOptions expiryTimePeriodMs(long expiryTimePeriodMs) {
         this.expiryTimePeriodMs = expiryTimePeriodMs;

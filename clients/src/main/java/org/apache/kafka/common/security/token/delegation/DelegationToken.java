@@ -16,10 +16,16 @@
  */
 package org.apache.kafka.common.security.token.delegation;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.utils.Base64;
 
 import java.util.Arrays;
 
+/**
+ * A class representing a delegation token.
+ *
+ */
+@InterfaceStability.Evolving
 public class DelegationToken {
     private TokenInformation tokenInformation;
     private byte[] hmac;

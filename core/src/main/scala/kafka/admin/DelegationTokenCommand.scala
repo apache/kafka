@@ -18,8 +18,9 @@
 package kafka.admin
 
 import java.text.SimpleDateFormat
+import java.util
 
-import joptsimple._
+import joptsimple.{ArgumentAcceptingOptionSpec, OptionParser}
 import kafka.utils.{CommandLineUtils, Exit, Logging}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{CreateDelegationTokenOptions, DescribeDelegationTokenOptions, ExpireDelegationTokenOptions, RenewDelegationTokenOptions, AdminClient => JAdminClient}
@@ -72,7 +73,7 @@ object DelegationTokenCommand extends Logging {
   }
 
   def createToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions) = {
-    val renewerPrincipals = getPrincipals(opts, opts.renewPrincipalsOpt).asJava
+    val renewerPrincipals = getPrincipals(opts, opts.renewPrincipalsOpt).getOrElse(new util.LinkedList[KafkaPrincipal]())
     val maxLifeTimeMs = opts.options.valueOf(opts.maxLifeTimeOpt).longValue
 
     println("Calling create token operation with renewers :" + renewerPrincipals +" , max-life-time-period :"+ maxLifeTimeMs)
@@ -99,11 +100,11 @@ object DelegationTokenCommand extends Logging {
     }
   }
 
-  private def getPrincipals(opts: DelegationTokenCommandOptions, principalOptionSpec: ArgumentAcceptingOptionSpec[String]): List[KafkaPrincipal] = {
+  private def getPrincipals(opts: DelegationTokenCommandOptions, principalOptionSpec: ArgumentAcceptingOptionSpec[String]): Option[util.List[KafkaPrincipal]] = {
     if (opts.options.has(principalOptionSpec))
-      opts.options.valuesOf(principalOptionSpec).asScala.map(s => SecurityUtils.parseKafkaPrincipal(s.trim)).toList
+      Some(opts.options.valuesOf(principalOptionSpec).asScala.map(s => SecurityUtils.parseKafkaPrincipal(s.trim)).toList.asJava)
     else
-      List.empty[KafkaPrincipal]
+      None
   }
 
   def renewToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions) = {
@@ -112,7 +113,8 @@ object DelegationTokenCommand extends Logging {
     println("Calling renew token operation with hmac :" + hmac +" , renew-time-period :"+ renewTimePeriodMs)
     val renewResult = adminClient.renewDelegationToken(Base64.decoder.decode(hmac), new RenewDelegationTokenOptions().renewTimePeriodMs(renewTimePeriodMs))
     val expiryTimeStamp = renewResult.expiryTimestamp().get()
-    println("Completed renew operation. New expiry timestamp : %s".format(expiryTimeStamp))
+    val dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm")
+    println("Completed renew operation. New expiry date : %s".format(dateFormat.format(expiryTimeStamp)))
   }
 
   def expireToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions) = {
@@ -121,15 +123,20 @@ object DelegationTokenCommand extends Logging {
     println("Calling expire token operation with hmac :" + hmac +" , expire-time-period : "+ expiryTimePeriodMs)
     val expireResult = adminClient.expireDelegationToken(Base64.decoder.decode(hmac), new ExpireDelegationTokenOptions().expiryTimePeriodMs(expiryTimePeriodMs))
     val expiryTimeStamp = expireResult.expiryTimestamp().get()
-    println("Completed expire operation. New expiry timestamp : %s".format(expiryTimeStamp))
+    val dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm")
+    println("Completed expire operation. New expiry date : %s".format(dateFormat.format(expiryTimeStamp)))
   }
 
   def describeToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions) = {
-    val ownerPrincipals = getPrincipals(opts, opts.ownerPrincipalsOpt).asJava
-    println("Calling describe token operation for owners :" + ownerPrincipals)
-    val describeResult = adminClient.describeDelegationToken(new DescribeDelegationTokenOptions().owners(ownerPrincipals))
+    val ownerPrincipals = getPrincipals(opts, opts.ownerPrincipalsOpt)
+    if (ownerPrincipals.isEmpty)
+      println("Calling describe token operation for current user.")
+    else
+      println("Calling describe token operation for owners :" + ownerPrincipals.get)
+
+    val describeResult = adminClient.describeDelegationToken(new DescribeDelegationTokenOptions().owners(ownerPrincipals.orNull))
     val tokens = describeResult.delegationTokens().get().asScala.toList
-    println("Total Number of tokens : %s".format(tokens.size)); printToken(tokens)
+    println("Total number of tokens : %s".format(tokens.size)); printToken(tokens)
   }
 
   private def createAdminClient(opts: DelegationTokenCommandOptions): JAdminClient = {
@@ -151,10 +158,11 @@ object DelegationTokenCommand extends Logging {
       .withRequiredArg
       .ofType(classOf[String])
 
-    val createOpt = parser.accepts("create", "Create a new delegation token.")
-    val renewOpt = parser.accepts("renew",  "Renew delegation token.")
-    val expiryOpt = parser.accepts("expire", "Expire delegation token.")
-    val describeOpt = parser.accepts("describe", "describe delegation tokens.")
+    val createOpt = parser.accepts("create", "Create a new delegation token. Use --renewer-principal option to pass renewers principals.")
+    val renewOpt = parser.accepts("renew",  "Renew delegation token. Use --renew-time-period option to set renew time period.")
+    val expiryOpt = parser.accepts("expire", "Expire delegation token. Use --expiry-time-period option to expire the token.")
+    val describeOpt = parser.accepts("describe", "Describe delegation tokens for the given principals. Use --owner-principal to pass owner/renewer principals." +
+      " If --owner-principal option is not supplied, all the user owned tokens and tokens where user have Describe permission will be returned.")
 
     val ownerPrincipalsOpt = parser.accepts("owner-principal", "owner is a kafka principal. It is should be in principalType:name format.")
       .withOptionalArg()

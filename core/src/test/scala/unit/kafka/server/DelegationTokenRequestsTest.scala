@@ -75,6 +75,8 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
 
     //test describe token
     var describeResult = adminClient.describeDelegationToken()
+    var tokens = adminClient.describeDelegationToken().delegationTokens().get()
+    assertTrue(tokens.size() == 1)
     var token1 = describeResult.delegationTokens().get().get(0)
     assertEquals(token1, tokenCreated)
 
@@ -84,7 +86,7 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
     val token2 = createResult2.delegationToken().get()
 
     //get all tokens
-    var tokens = adminClient.describeDelegationToken().delegationTokens().get()
+    tokens = adminClient.describeDelegationToken().delegationTokens().get()
     assertTrue(tokens.size() == 2)
     assertEquals(Set(token1, token2), tokens.asScala.toSet)
 
@@ -98,7 +100,7 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
     var expiryTimestamp = renewResult.expiryTimestamp().get()
 
     describeResult = adminClient.describeDelegationToken()
-    val tokenId = token1.tokenInfo().tokenId();
+    val tokenId = token1.tokenInfo().tokenId()
     token1 = describeResult.delegationTokens().get().asScala.filter(dt => dt.tokenInfo().tokenId() == tokenId).head
     assertEquals(expiryTimestamp, token1.tokenInfo().expiryTimestamp())
 

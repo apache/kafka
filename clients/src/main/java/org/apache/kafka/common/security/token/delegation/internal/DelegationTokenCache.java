@@ -15,12 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.token.delegation;
+package org.apache.kafka.common.security.token.delegation.internal;
 
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internal.ScramCredentialUtils;
 import org.apache.kafka.common.security.scram.internal.ScramMechanism;
+import org.apache.kafka.common.security.token.delegation.DelegationToken;
+import org.apache.kafka.common.security.token.delegation.TokenInformation;
 
 import java.util.Collection;
 import java.util.HashMap;

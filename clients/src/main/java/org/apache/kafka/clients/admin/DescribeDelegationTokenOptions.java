@@ -31,6 +31,12 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 public class DescribeDelegationTokenOptions extends AbstractOptions<DescribeDelegationTokenOptions> {
     private List<KafkaPrincipal> owners;
 
+    /**
+     * if owners is null, all the user owned tokens and tokens where user have Describe permission
+     * will be returned.
+     * @param owners
+     * @return this instance
+     */
     public DescribeDelegationTokenOptions owners(List<KafkaPrincipal> owners) {
         this.owners = owners;
         return this;
