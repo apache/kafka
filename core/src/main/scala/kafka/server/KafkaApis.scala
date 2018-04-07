@@ -49,10 +49,11 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
-import org.apache.kafka.common.message.{AlterPartitionReassignmentsResponseData, CreateTopicsResponseData, DeleteGroupsResponseData, DeleteTopicsResponseData, DescribeGroupsResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
+import org.apache.kafka.common.message.{AlterPartitionReassignmentsResponseData, ApiVersionsResponseData, CreateTopicsResponseData, DeleteGroupsResponseData, DeleteTopicsResponseData, DescribeGroupsResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
+import org.apache.kafka.common.message.ApiVersionsResponseData.{ApiVersionsResponseKey, ApiVersionsResponseKeyCollection}
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult
@@ -1641,9 +1642,38 @@ class KafkaApis(val requestChannel: RequestChannel,
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception)
       else if (!apiVersionRequest.isValid)
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception)
-      else
-        ApiVersionsResponse.apiVersionsResponse(requestThrottleMs,
-          config.interBrokerProtocolVersion.recordVersion.value)
+      else {
+        /**
+          * HOTFIX LIKAFKA-16384: brokers should suggest the max ProduceRequest ApiVersion that supports the broker default
+          * configured message format version instead of always suggesting the maximum ApiVersion.
+          */
+        val maxProduceApiVersion: Short = config.logMessageFormatVersion.recordVersion match {
+          case RecordVersion.V0 => 1
+          case RecordVersion.V1 => 2
+          case RecordVersion.V2 => 8
+        }
+        val response = ApiVersionsResponse.apiVersionsResponse(requestThrottleMs, config.interBrokerProtocolVersion.recordVersion.value)
+        val apiVersions = response.data.apiKeys().asScala.toList.map { apiVersionResponseKey =>
+          if (apiVersionResponseKey.apiKey == ApiKeys.PRODUCE.id) {
+            new ApiVersionsResponseKey()
+              .setApiKey(ApiKeys.PRODUCE.id)
+              .setMinVersion(apiVersionResponseKey.minVersion())
+              .setMaxVersion(maxProduceApiVersion)
+          } else {
+            // Since the apiVersionResponseKey variable is a slice of the ImplicitLinkedHashCollection#Element object,
+            // we cannot insert the same object into the new list.
+            // Otherwise the prev and next pointers will be changed, and the original collection will be corrupted.
+            new ApiVersionsResponseKey()
+              .setApiKey(apiVersionResponseKey.apiKey())
+              .setMinVersion(apiVersionResponseKey.minVersion())
+              .setMaxVersion(apiVersionResponseKey.maxVersion())
+          }
+        }.asJava
+        new ApiVersionsResponse(new ApiVersionsResponseData()
+          .setApiKeys(new ApiVersionsResponseKeyCollection(apiVersions.iterator()))
+          .setErrorCode(Errors.NONE.code())
+          .setThrottleTimeMs(requestThrottleMs))
+      }
     }
     sendResponseMaybeThrottle(request, createResponseCallback)
   }
