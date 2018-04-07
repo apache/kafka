@@ -17,6 +17,7 @@
 package kafka.server
 
 import kafka.api.ApiVersion
+import kafka.api.ApiVersion.maxProduceApiVersionForRecordVersion
 import kafka.network
 import kafka.network.RequestChannel
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -45,6 +46,7 @@ object ApiVersionManager {
     new DefaultApiVersionManager(
       listenerType,
       config.interBrokerProtocolVersion,
+      config.logMessageFormatVersion,
       forwardingManager,
       features,
       featureCache
@@ -71,6 +73,7 @@ class SimpleApiVersionManager(
 class DefaultApiVersionManager(
   val listenerType: ListenerType,
   interBrokerProtocolVersion: ApiVersion,
+  configuredLogMessageFormatVersion: ApiVersion,
   forwardingManager: Option[ForwardingManager],
   features: BrokerFeatures,
   featureCache: FinalizedFeatureCache
@@ -80,7 +83,7 @@ class DefaultApiVersionManager(
     val supportedFeatures = features.supportedFeatures
     val finalizedFeaturesOpt = featureCache.get
     val controllerApiVersions = forwardingManager.flatMap(_.controllerApiVersions)
-
+    val maxProduceApiVersion = maxProduceApiVersionForRecordVersion(configuredLogMessageFormatVersion.recordVersion)
     val response = finalizedFeaturesOpt match {
       case Some(finalizedFeatures) => ApiVersion.apiVersionsResponse(
         throttleTimeMs,
@@ -89,13 +92,17 @@ class DefaultApiVersionManager(
         finalizedFeatures.features,
         finalizedFeatures.epoch,
         controllerApiVersions,
-        listenerType)
+        listenerType,
+        maxProduceApiVersion,
+      )
       case None => ApiVersion.apiVersionsResponse(
         throttleTimeMs,
         interBrokerProtocolVersion.recordVersion,
         supportedFeatures,
         controllerApiVersions,
-        listenerType)
+        listenerType,
+        maxProduceApiVersion,
+      )
     }
 
     // This is a temporary workaround in order to allow testing of forwarding

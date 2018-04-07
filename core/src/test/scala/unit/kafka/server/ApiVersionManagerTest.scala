@@ -38,6 +38,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = apiScope,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
+      configuredLogMessageFormatVersion = ApiVersion.latestVersion,
       forwardingManager = None,
       features = brokerFeatures,
       featureCache = featureCache
@@ -62,6 +63,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
+      configuredLogMessageFormatVersion = ApiVersion.latestVersion,
       forwardingManager = Some(forwardingManager),
       features = brokerFeatures,
       featureCache = featureCache
@@ -82,6 +84,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
+      configuredLogMessageFormatVersion = ApiVersion.latestVersion,
       forwardingManager = Some(forwardingManager),
       features = brokerFeatures,
       featureCache = featureCache
@@ -101,6 +104,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
+      configuredLogMessageFormatVersion = ApiVersion.latestVersion,
       forwardingManager = None,
       features = brokerFeatures,
       featureCache = featureCache

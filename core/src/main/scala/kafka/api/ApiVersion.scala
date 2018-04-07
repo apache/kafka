@@ -21,9 +21,14 @@ import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
-import org.apache.kafka.common.message.ApiMessageType.ListenerType
+import org.apache.kafka.common.message.ApiMessageType.{ListenerType, PRODUCE}
+import org.apache.kafka.common.message.ApiVersionsResponseData
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.RecordVersion
 import org.apache.kafka.common.requests.ApiVersionsResponse
+
+import scala.jdk.CollectionConverters._
 
 /**
  * This class contains the different Kafka versions.
@@ -151,12 +156,38 @@ object ApiVersion {
     }
   }
 
+  /*
+   * HOTFIX LIKAFKA-16384: brokers should suggest the max ProduceRequest ApiVersion that supports the broker default
+   * configured message format version instead of always suggesting the maximum ApiVersion.
+   */
+  def maxProduceApiVersionForRecordVersion: RecordVersion => Short = {
+    case RecordVersion.V0 => 1
+    case RecordVersion.V1 => 2
+    case RecordVersion.V2 => PRODUCE.highestSupportedVersion() // When next RecordVersion is added, this needs to be fixed as previous ones
+  }
+
   def apiVersionsResponse(
     throttleTimeMs: Int,
     minRecordVersion: RecordVersion,
     latestSupportedFeatures: Features[SupportedVersionRange],
     controllerApiVersions: Option[NodeApiVersions],
-    listenerType: ListenerType
+    listenerType: ListenerType,
+  ): ApiVersionsResponse = apiVersionsResponse(
+    throttleTimeMs,
+    minRecordVersion,
+    latestSupportedFeatures,
+    controllerApiVersions,
+    listenerType,
+    maxProduceApiVersionForRecordVersion(latestVersion.recordVersion),
+  )
+
+  def apiVersionsResponse(
+    throttleTimeMs: Int,
+    minRecordVersion: RecordVersion,
+    latestSupportedFeatures: Features[SupportedVersionRange],
+    controllerApiVersions: Option[NodeApiVersions],
+    listenerType: ListenerType,
+    maxProduceApiVersion: Short,
   ): ApiVersionsResponse = {
     apiVersionsResponse(
       throttleTimeMs,
@@ -165,7 +196,8 @@ object ApiVersion {
       Features.emptyFinalizedFeatures,
       ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
       controllerApiVersions,
-      listenerType
+      listenerType,
+      maxProduceApiVersion,
     )
   }
 
@@ -176,7 +208,8 @@ object ApiVersion {
     finalizedFeatures: Features[FinalizedVersionRange],
     finalizedFeaturesEpoch: Long,
     controllerApiVersions: Option[NodeApiVersions],
-    listenerType: ListenerType
+    listenerType: ListenerType,
+    maxProduceApiVersion: Short = maxProduceApiVersionForRecordVersion(latestVersion.recordVersion),
   ): ApiVersionsResponse = {
     val apiKeys = controllerApiVersions match {
       case None => ApiVersionsResponse.filterApis(minRecordVersion, listenerType)
@@ -184,9 +217,22 @@ object ApiVersion {
         listenerType, minRecordVersion, controllerApiVersion.allSupportedApiVersions())
     }
 
+    // Since the apiVersionResponseKey variable is a slice of the ImplicitLinkedHashCollection#Element object,
+    // we cannot insert the same object into the new list.
+    // Otherwise the prev and next pointers will be changed, and the original collection will be corrupted.
+    val produceApiMaxVersionPatchedApiKeys = apiKeys.asScala.toList.map { apiVersion =>
+      new ApiVersionsResponseData.ApiVersion()
+        .setApiKey(apiVersion.apiKey())
+        .setMinVersion(apiVersion.minVersion())
+        .setMaxVersion(apiVersion.apiKey match {
+          case ApiKeys.PRODUCE.id => maxProduceApiVersion min apiVersion.maxVersion()
+          case _ => apiVersion.maxVersion()
+        })
+    }
+
     ApiVersionsResponse.createApiVersionsResponse(
       throttleTimeMs,
-      apiKeys,
+      new ApiVersionCollection(produceApiMaxVersionPatchedApiKeys.asJava.iterator),
       latestSupportedFeatures,
       finalizedFeatures,
       finalizedFeaturesEpoch
