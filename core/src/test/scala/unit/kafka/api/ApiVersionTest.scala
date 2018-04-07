@@ -76,15 +76,21 @@ class ApiVersionTest {
   }
 
   @Test
-  def testMinVersionForMessageFormat(): Unit = {
-    assertEquals("0.8.0", ApiVersion.minVersionForRecordVersion(RecordVersion.V0))
-    assertEquals("0.10.0", ApiVersion.minVersionForRecordVersion(RecordVersion.V1))
-    assertEquals("0.11.0", ApiVersion.minVersionForRecordVersion(RecordVersion.V2))
+  def testMinSupportedVersionFor(): Unit = {
+    assertEquals(KAFKA_0_8_0, ApiVersion.minSupportedFor(RecordVersion.V0))
+    assertEquals(KAFKA_0_10_0_IV0, ApiVersion.minSupportedFor(RecordVersion.V1))
+    assertEquals(KAFKA_0_11_0_IV0, ApiVersion.minSupportedFor(RecordVersion.V2))
 
-    // Ensure that all message format versions have a defined min version so that we remember
-    // to update the function
-    for (messageFormatVersion <- RecordVersion.values)
-      assertNotNull(ApiVersion.minVersionForRecordVersion(messageFormatVersion))
+    // Ensure that all record versions have a defined min version so that we remember to update the method
+    for (recordVersion <- RecordVersion.values)
+      assertNotNull(ApiVersion.minSupportedFor(recordVersion))
+  }
+
+  @Test
+  def testShortVersion(): Unit = {
+    assertEquals("0.8.0", KAFKA_0_8_0.shortVersion)
+    assertEquals("0.10.0", KAFKA_0_10_0_IV0.shortVersion)
+    assertEquals("0.11.0", KAFKA_0_11_0_IV0.shortVersion)
   }
 
 }
