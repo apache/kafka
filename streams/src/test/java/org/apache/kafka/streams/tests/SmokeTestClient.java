@@ -19,6 +19,7 @@ package org.apache.kafka.streams.tests;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -30,10 +31,13 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
@@ -56,7 +60,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         streams = createKafkaStreams(streamsProperties, kafka);
         streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
-            public void uncaughtException(Thread t, Throwable e) {
+            public void uncaughtException(final Thread t, final Throwable e) {
                 System.out.println("SMOKE-TEST-CLIENT-EXCEPTION");
                 uncaughtException = true;
                 e.printStackTrace();
@@ -93,38 +97,45 @@ public class SmokeTestClient extends SmokeTestUtil {
         }
     }
 
-    private static KafkaStreams createKafkaStreams(final Properties props, final String kafka) {
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
-        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
-        props.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 100);
-        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
-        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
-        props.put(ProducerConfig.ACKS_CONFIG, "all");
+    private static Properties getStreamsConfig(final Properties props, final String kafka) {
+        final Properties config = new Properties(props);
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
+        config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
+        config.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
+        config.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 100);
+        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        config.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
+        config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        config.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
+        config.put(ProducerConfig.ACKS_CONFIG, "all");
         //TODO remove this config or set to smaller value when KIP-91 is merged
-        props.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 80000);
+        config.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 80000);
 
-        StreamsBuilder builder = new StreamsBuilder();
-        Consumed<String, Integer> stringIntConsumed = Consumed.with(stringSerde, intSerde);
-        KStream<String, Integer> source = builder.stream("data", stringIntConsumed);
-        source.to(stringSerde, intSerde, "echo");
-        KStream<String, Integer> data = source.filter(new Predicate<String, Integer>() {
+        config.putAll(props);
+        return config;
+    }
+
+    private static KafkaStreams createKafkaStreams(final Properties props, final String kafka) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Consumed<String, Integer> stringIntConsumed = Consumed.with(stringSerde, intSerde);
+        final KStream<String, Integer> source = builder.stream("data", stringIntConsumed);
+        source.to("echo", Produced.with(stringSerde, intSerde));
+        final KStream<String, Integer> data = source.filter(new Predicate<String, Integer>() {
             @Override
-            public boolean test(String key, Integer value) {
+            public boolean test(final String key, final Integer value) {
                 return value == null || value != END;
             }
         });
         data.process(SmokeTestUtil.printProcessorSupplier("data"));
 
         // min
-        KGroupedStream<String, Integer>
-            groupedData =
+        final KGroupedStream<String, Integer> groupedData =
             data.groupByKey(Serialized.with(stringSerde, intSerde));
 
-        groupedData.aggregate(
+        groupedData
+            .windowedBy(TimeWindows.of(TimeUnit.DAYS.toMillis(1)))
+            .aggregate(
                 new Initializer<Integer>() {
                     public Integer apply() {
                         return Integer.MAX_VALUE;
@@ -132,21 +143,24 @@ public class SmokeTestClient extends SmokeTestUtil {
                 },
                 new Aggregator<String, Integer, Integer>() {
                     @Override
-                    public Integer apply(String aggKey, Integer value, Integer aggregate) {
+                    public Integer apply(final String aggKey, final Integer value, final Integer aggregate) {
                         return (value < aggregate) ? value : aggregate;
                     }
                 },
-                TimeWindows.of(TimeUnit.DAYS.toMillis(1)),
-                intSerde, "uwin-min"
-        ).toStream().map(
-                new Unwindow<String, Integer>()
-        ).to(stringSerde, intSerde, "min");
+                Materialized.<String, Integer, WindowStore<Bytes, byte[]>>as("uwin-min").withValueSerde(intSerde))
+            .toStream(new Unwindow<String, Integer>())
+            .to("min", Produced.with(stringSerde, intSerde));
 
-        KTable<String, Integer> minTable = builder.table("min", stringIntConsumed);
+        final KTable<String, Integer> minTable = builder.table(
+            "min",
+            Consumed.with(stringSerde, intSerde),
+            Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("minStoreName"));
         minTable.toStream().process(SmokeTestUtil.printProcessorSupplier("min"));
 
         // max
-        groupedData.aggregate(
+        groupedData
+            .windowedBy(TimeWindows.of(TimeUnit.DAYS.toMillis(2)))
+            .aggregate(
                 new Initializer<Integer>() {
                     public Integer apply() {
                         return Integer.MIN_VALUE;
@@ -154,21 +168,24 @@ public class SmokeTestClient extends SmokeTestUtil {
                 },
                 new Aggregator<String, Integer, Integer>() {
                     @Override
-                    public Integer apply(String aggKey, Integer value, Integer aggregate) {
+                    public Integer apply(final String aggKey, final Integer value, final Integer aggregate) {
                         return (value > aggregate) ? value : aggregate;
                     }
                 },
-                TimeWindows.of(TimeUnit.DAYS.toMillis(2)),
-                intSerde, "uwin-max"
-        ).toStream().map(
-                new Unwindow<String, Integer>()
-        ).to(stringSerde, intSerde, "max");
+                Materialized.<String, Integer, WindowStore<Bytes, byte[]>>as("uwin-max").withValueSerde(intSerde))
+            .toStream(new Unwindow<String, Integer>())
+            .to("max", Produced.with(stringSerde, intSerde));
 
-        KTable<String, Integer> maxTable = builder.table("max", stringIntConsumed);
+        final KTable<String, Integer> maxTable = builder.table(
+            "max",
+            Consumed.with(stringSerde, intSerde),
+            Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("maxStoreName"));
         maxTable.toStream().process(SmokeTestUtil.printProcessorSupplier("max"));
 
         // sum
-        groupedData.aggregate(
+        groupedData
+            .windowedBy(TimeWindows.of(TimeUnit.DAYS.toMillis(2)))
+            .aggregate(
                 new Initializer<Long>() {
                     public Long apply() {
                         return 0L;
@@ -176,70 +193,74 @@ public class SmokeTestClient extends SmokeTestUtil {
                 },
                 new Aggregator<String, Integer, Long>() {
                     @Override
-                    public Long apply(String aggKey, Integer value, Long aggregate) {
+                    public Long apply(final String aggKey, final Integer value, final Long aggregate) {
                         return (long) value + aggregate;
                     }
                 },
-                TimeWindows.of(TimeUnit.DAYS.toMillis(2)),
-                longSerde, "win-sum"
-        ).toStream().map(
-                new Unwindow<String, Long>()
-        ).to(stringSerde, longSerde, "sum");
+                Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("win-sum").withValueSerde(longSerde))
+            .toStream(new Unwindow<String, Long>())
+            .to("sum", Produced.with(stringSerde, longSerde));
 
-        Consumed<String, Long> stringLongConsumed = Consumed.with(stringSerde, longSerde);
-        KTable<String, Long> sumTable = builder.table("sum", stringLongConsumed);
+        final Consumed<String, Long> stringLongConsumed = Consumed.with(stringSerde, longSerde);
+        final KTable<String, Long> sumTable = builder.table("sum", stringLongConsumed);
         sumTable.toStream().process(SmokeTestUtil.printProcessorSupplier("sum"));
-        // cnt
-        groupedData.count(TimeWindows.of(TimeUnit.DAYS.toMillis(2)), "uwin-cnt")
-            .toStream().map(
-                new Unwindow<String, Long>()
-        ).to(stringSerde, longSerde, "cnt");
 
-        KTable<String, Long> cntTable = builder.table("cnt", stringLongConsumed);
+        // cnt
+        groupedData
+            .windowedBy(TimeWindows.of(TimeUnit.DAYS.toMillis(2)))
+            .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("uwin-cnt"))
+            .toStream(new Unwindow<String, Long>())
+            .to("cnt", Produced.with(stringSerde, longSerde));
+
+        final KTable<String, Long> cntTable = builder.table(
+            "cnt",
+            Consumed.with(stringSerde, longSerde),
+            Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("cntStoreName"));
         cntTable.toStream().process(SmokeTestUtil.printProcessorSupplier("cnt"));
 
         // dif
-        maxTable.join(minTable,
+        maxTable
+            .join(
+                minTable,
                 new ValueJoiner<Integer, Integer, Integer>() {
-                    public Integer apply(Integer value1, Integer value2) {
+                    public Integer apply(final Integer value1, final Integer value2) {
                         return value1 - value2;
                     }
-                }
-        ).to(stringSerde, intSerde, "dif");
+                })
+            .toStream()
+            .to("dif", Produced.with(stringSerde, intSerde));
 
         // avg
-        sumTable.join(
+        sumTable
+            .join(
                 cntTable,
                 new ValueJoiner<Long, Long, Double>() {
-                    public Double apply(Long value1, Long value2) {
+                    public Double apply(final Long value1, final Long value2) {
                         return (double) value1 / (double) value2;
                     }
-                }
-        ).to(stringSerde, doubleSerde, "avg");
+                })
+            .toStream()
+            .to("avg", Produced.with(stringSerde, doubleSerde));
 
         // test repartition
-        Agg agg = new Agg();
-        cntTable.groupBy(agg.selector(),
-                         Serialized.with(stringSerde, longSerde)
-        ).aggregate(agg.init(),
-                    agg.adder(),
-                    agg.remover(),
-                    Materialized.<String, Long>as(Stores.inMemoryKeyValueStore("cntByCnt"))
-                            .withKeySerde(Serdes.String())
-                            .withValueSerde(Serdes.Long())
-        ).to(stringSerde, longSerde, "tagg");
+        final Agg agg = new Agg();
+        cntTable.groupBy(agg.selector(), Serialized.with(stringSerde, longSerde))
+            .aggregate(agg.init(), agg.adder(), agg.remover(),
+                Materialized.<String, Long>as(Stores.inMemoryKeyValueStore("cntByCnt"))
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(Serdes.Long()))
+            .toStream()
+            .to("tagg", Produced.with(stringSerde, longSerde));
 
-        final KafkaStreams streamsClient = new KafkaStreams(builder.build(), props);
+        final KafkaStreams streamsClient = new KafkaStreams(builder.build(), getStreamsConfig(props, kafka));
         streamsClient.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
-            public void uncaughtException(Thread t, Throwable e) {
+            public void uncaughtException(final Thread t, final Throwable e) {
                 System.out.println("FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
-                
                 streamsClient.close(30, TimeUnit.SECONDS);
             }
         });
 
         return streamsClient;
     }
-
 }

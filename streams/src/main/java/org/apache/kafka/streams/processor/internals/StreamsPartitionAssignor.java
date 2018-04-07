@@ -179,6 +179,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     private TaskManager taskManager;
     private PartitionGrouper partitionGrouper;
 
+    private int userMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
+
     private InternalTopicManager internalTopicManager;
     private CopartitionedTopicsValidator copartitionedTopicsValidator;
 
@@ -196,6 +198,12 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         logPrefix = String.format("stream-thread [%s] ", streamsConfig.getString(CommonClientConfigs.CLIENT_ID_CONFIG));
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
+
+        final String upgradeMode = (String) configs.get(StreamsConfig.UPGRADE_FROM_CONFIG);
+        if (StreamsConfig.UPGRADE_FROM_0100.equals(upgradeMode)) {
+            log.info("Downgrading metadata version from 2 to 1 for upgrade from 0.10.0.x.");
+            userMetadataVersion = 1;
+        }
 
         final Object o = configs.get(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR);
         if (o == null) {
@@ -255,6 +263,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Set<TaskId> standbyTasks = taskManager.cachedTasksIds();
         standbyTasks.removeAll(previousActiveTasks);
         final SubscriptionInfo data = new SubscriptionInfo(
+            userMetadataVersion,
             taskManager.processId(),
             previousActiveTasks,
             standbyTasks,
