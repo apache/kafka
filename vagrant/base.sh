@@ -99,8 +99,10 @@ popd
 popd
 popd
 
-# Test multiple Scala versions
-get_kafka 0.8.2.2 2.10
+# Test multiple Kafka versions
+# we want to use the latest Scala version per Kafka version
+# however, we cannot pull in Scala 2.12 builds atm, because Scala 2.12 requires Java 8, but we use Java 7 to run the system tests
+get_kafka 0.8.2.2 2.11
 chmod a+rw /opt/kafka-0.8.2.2
 get_kafka 0.9.0.1 2.11
 chmod a+rw /opt/kafka-0.9.0.1
@@ -112,10 +114,10 @@ get_kafka 0.10.2.1 2.11
 chmod a+rw /opt/kafka-0.10.2.1
 get_kafka 0.11.0.2 2.11
 chmod a+rw /opt/kafka-0.11.0.2
-get_kafka 1.0.0 2.11
-chmod a+rw /opt/kafka-1.0.0
 get_kafka 1.0.1 2.11
 chmod a+rw /opt/kafka-1.0.1
+get_kafka 1.1.0 2.11
+chmod a+rw /opt/kafka-1.1.0
 
 
 # For EC2 nodes, we want to use /mnt, which should have the local disk. On local

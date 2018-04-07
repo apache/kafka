@@ -19,8 +19,8 @@ package org.apache.kafka.common.security.token.delegation;
 
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
-import org.apache.kafka.common.security.scram.ScramCredentialUtils;
-import org.apache.kafka.common.security.scram.ScramMechanism;
+import org.apache.kafka.common.security.scram.internal.ScramCredentialUtils;
+import org.apache.kafka.common.security.scram.internal.ScramMechanism;
 
 import java.util.Collection;
 import java.util.HashMap;

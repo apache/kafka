@@ -156,7 +156,7 @@ class GroupMetadataManager(brokerId: Int,
 
   def isGroupLoading(groupId: String): Boolean = isPartitionLoading(partitionFor(groupId))
 
-  def isLoading(): Boolean = inLock(partitionLock) { loadingPartitions.nonEmpty }
+  def isLoading: Boolean = inLock(partitionLock) { loadingPartitions.nonEmpty }
 
   // return true iff group is owned and the group doesn't exist
   def groupNotExists(groupId: String) = inLock(partitionLock) {
@@ -482,37 +482,32 @@ class GroupMetadataManager(brokerId: Int,
   /**
    * Asynchronously read the partition from the offsets topic and populate the cache
    */
-  def loadGroupsForPartition(offsetsPartition: Int, onGroupLoaded: GroupMetadata => Unit) {
+  def scheduleLoadGroupAndOffsets(offsetsPartition: Int, onGroupLoaded: GroupMetadata => Unit) {
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
-    info(s"Scheduling loading of offsets and group metadata from $topicPartition")
-    scheduler.schedule(topicPartition.toString, doLoadGroupsAndOffsets)
-
-    def doLoadGroupsAndOffsets() {
-      inLock(partitionLock) {
-        if (loadingPartitions.contains(offsetsPartition)) {
-          info(s"Offset load from $topicPartition already in progress.")
-          return
-        } else {
-          loadingPartitions.add(offsetsPartition)
-        }
-      }
-
-      try {
-        val startMs = time.milliseconds()
-        loadGroupsAndOffsets(topicPartition, onGroupLoaded)
-        info(s"Finished loading offsets and group metadata from $topicPartition in ${time.milliseconds() - startMs} milliseconds.")
-      } catch {
-        case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
-      } finally {
-        inLock(partitionLock) {
-          ownedPartitions.add(offsetsPartition)
-          loadingPartitions.remove(offsetsPartition)
-        }
-      }
+    if (addLoadingPartition(offsetsPartition)) {
+      info(s"Scheduling loading of offsets and group metadata from $topicPartition")
+      scheduler.schedule(topicPartition.toString, () => loadGroupsAndOffsets(topicPartition, onGroupLoaded))
+    } else {
+      info(s"Already loading offsets and group metadata from $topicPartition")
     }
   }
 
   private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit) {
+    try {
+      val startMs = time.milliseconds()
+      doLoadGroupsAndOffsets(topicPartition, onGroupLoaded)
+      info(s"Finished loading offsets and group metadata from $topicPartition in ${time.milliseconds() - startMs} milliseconds.")
+    } catch {
+      case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
+    } finally {
+      inLock(partitionLock) {
+        ownedPartitions.add(topicPartition.partition)
+        loadingPartitions.remove(topicPartition.partition)
+      }
+    }
+  }
+
+  private def doLoadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit) {
     def highWaterMark = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
 
     replicaManager.getLog(topicPartition) match {
@@ -650,7 +645,6 @@ class GroupMetadataManager(brokerId: Int,
             throw new IllegalStateException(s"Unexpected unload of active group $groupId while " +
               s"loading partition $topicPartition")
         }
-
     }
   }
 
@@ -876,11 +870,24 @@ class GroupMetadataManager(brokerId: Int,
    *
    * NOTE: this is for test only
    */
-  def addPartitionOwnership(partition: Int) {
+  private[group] def addPartitionOwnership(partition: Int) {
     inLock(partitionLock) {
       ownedPartitions.add(partition)
     }
   }
+
+  /**
+   * Add a partition to the loading partitions set. Return true if the partition was not
+   * already loading.
+   *
+   * Visible for testing
+   */
+  private[group] def addLoadingPartition(partition: Int): Boolean = {
+    inLock(partitionLock) {
+      loadingPartitions.add(partition)
+    }
+  }
+
 }
 
 /**

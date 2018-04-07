@@ -635,7 +635,7 @@ public class SslTransportLayerTest {
     @Test
     public void testNetworkThreadTimeRecorded() throws Exception {
         selector.close();
-        this.selector = new Selector(NetworkReceive.UNLIMITED, 5000, new Metrics(), Time.SYSTEM,
+        this.selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), Time.SYSTEM,
                 "MetricGroup", new HashMap<String, String>(), false, true, channelBuilder, MemoryPool.NONE, new LogContext());
 
         String node = "0";
@@ -645,7 +645,7 @@ public class SslTransportLayerTest {
 
         String message = TestUtils.randomString(1024 * 1024);
         NetworkTestUtils.waitForChannelReady(selector, node);
-        KafkaChannel channel = selector.channel(node);
+        final KafkaChannel channel = selector.channel(node);
         assertTrue("SSL handshake time not recorded", channel.getAndResetNetworkThreadTimeNanos() > 0);
         assertEquals("Time not reset", 0, channel.getAndResetNetworkThreadTimeNanos());
 
@@ -661,10 +661,20 @@ public class SslTransportLayerTest {
         assertEquals(0, selector.completedReceives().size());
 
         selector.unmute(node);
-        while (selector.completedReceives().isEmpty()) {
-            selector.poll(100L);
-            assertEquals(0, selector.numStagedReceives(channel));
-        }
+        // Wait for echo server to send the message back
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                try {
+                    selector.poll(100L);
+                    assertEquals(0, selector.numStagedReceives(channel));
+                } catch (IOException e) {
+                    return false;
+                }
+                return !selector.completedReceives().isEmpty();
+            }
+        }, "Timed out waiting for a message to receive from echo server");
+
         long receiveTimeNanos = channel.getAndResetNetworkThreadTimeNanos();
         assertTrue("Receive time not recorded: " + receiveTimeNanos, receiveTimeNanos > 0);
     }

@@ -74,6 +74,23 @@ public final class WorkerUtils {
         return (int) perPeriod;
     }
 
+    /**
+     * Adds all properties from commonConf and then from clientConf to given 'props' (in
+     * that order, over-writing properties with the same keys).
+     * @param props              Properties object that may contain zero or more properties
+     * @param commonConf         Map with common client properties
+     * @param clientConf         Map with client properties
+     */
+    public static void addConfigsToProperties(
+        Properties props, Map<String, String> commonConf, Map<String, String> clientConf) {
+        for (Map.Entry<String, String> commonEntry : commonConf.entrySet()) {
+            props.setProperty(commonEntry.getKey(), commonEntry.getValue());
+        }
+        for (Map.Entry<String, String> entry : clientConf.entrySet()) {
+            props.setProperty(entry.getKey(), entry.getValue());
+        }
+    }
+
     private static final int CREATE_TOPICS_REQUEST_TIMEOUT = 25000;
     private static final int CREATE_TOPICS_CALL_TIMEOUT = 180000;
     private static final int MAX_CREATE_TOPICS_BATCH_SIZE = 10;
@@ -85,6 +102,9 @@ public final class WorkerUtils {
      *
      * @param log               The logger to use.
      * @param bootstrapServers  The bootstrap server list.
+     * @param commonClientConf  Common client config
+     * @param adminClientConf   AdminClient config. This config has precedence over fields in
+     *                          common client config.
      * @param topics            Maps topic names to partition assignments.
      * @param failOnExisting    If true, the method will throw TopicExistsException if one or
      *                          more topics already exist. Otherwise, the existing topics are
@@ -93,12 +113,14 @@ public final class WorkerUtils {
      *                          number of partitions, the method throws RuntimeException.
      */
     public static void createTopics(
-        Logger log, String bootstrapServers,
+        Logger log, String bootstrapServers, Map<String, String> commonClientConf,
+        Map<String, String> adminClientConf,
         Map<String, NewTopic> topics, boolean failOnExisting) throws Throwable {
         // this method wraps the call to createTopics() that takes admin client, so that we can
         // unit test the functionality with MockAdminClient. The exception is caught and
         // re-thrown so that admin client is closed when the method returns.
-        try (AdminClient adminClient = createAdminClient(bootstrapServers)) {
+        try (AdminClient adminClient
+                 = createAdminClient(bootstrapServers, commonClientConf, adminClientConf)) {
             createTopics(log, adminClient, topics, failOnExisting);
         } catch (Exception e) {
             log.warn("Failed to create or verify topics {}", topics, e);
@@ -227,10 +249,15 @@ public final class WorkerUtils {
         }
     }
 
-    private static AdminClient createAdminClient(String bootstrapServers) {
+    private static AdminClient createAdminClient(
+        String bootstrapServers, Map<String, String> commonClientConf,
+        Map<String, String> adminClientConf) {
         Properties props = new Properties();
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, CREATE_TOPICS_REQUEST_TIMEOUT);
+        // first add common client config, and then admin client config to properties, possibly
+        // over-writing default or common properties.
+        addConfigsToProperties(props, commonClientConf, adminClientConf);
         return AdminClient.create(props);
     }
 }
