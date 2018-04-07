@@ -297,7 +297,7 @@ public final class WorkerUtils {
         // first get list of matching topics
         List<String> matchedTopics = new ArrayList<>();
         ListTopicsResult res = adminClient.listTopics(
-            new ListTopicsOptions().timeoutMs(CREATE_TOPICS_CALL_TIMEOUT));
+            new ListTopicsOptions().timeoutMs(CREATE_TOPICS_REQUEST_TIMEOUT));
         Map<String, TopicListing> topicListingMap = res.namesToListings().get();
         for (Map.Entry<String, TopicListing> topicListingEntry: topicListingMap.entrySet()) {
             if (topicNamePattern.matcher(topicListingEntry.getKey()).matches()

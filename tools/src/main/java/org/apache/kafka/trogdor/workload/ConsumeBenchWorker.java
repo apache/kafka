@@ -39,7 +39,6 @@ import org.slf4j.LoggerFactory;
 import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.util.Collection;
-import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
@@ -122,9 +121,9 @@ public class ConsumeBenchWorker implements TaskWorker {
             props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumer-group-1");
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
             props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 100000);
-            for (Map.Entry<String, String> entry : spec.consumerConf().entrySet()) {
-                props.setProperty(entry.getKey(), entry.getValue());
-            }
+            // these defaults maybe over-written by the user-specified commonClientConf or
+            // consumerConf
+            WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.consumerConf());
             consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(),
                                            new ByteArrayDeserializer());
             consumer.assign(topicPartitions);
@@ -182,19 +181,16 @@ public class ConsumeBenchWorker implements TaskWorker {
         private final Histogram latencyHistogram;
         private final Histogram messageSizeHistogram;
 
-        private final float[] percentiles;
-
         StatusUpdater(Histogram latencyHistogram, Histogram messageSizeHistogram) {
             this.latencyHistogram = latencyHistogram;
             this.messageSizeHistogram = messageSizeHistogram;
-            this.percentiles = new float[] {0.50f, 0.95f, 0.99f};
         }
 
         @Override
         public void run() {
             try {
-                Histogram.Summary latSummary = latencyHistogram.summarize(percentiles);
-                Histogram.Summary msgSummary = messageSizeHistogram.summarize(percentiles);
+                Histogram.Summary latSummary = latencyHistogram.summarize(StatusData.PERCENTILES);
+                Histogram.Summary msgSummary = messageSizeHistogram.summarize(StatusData.PERCENTILES);
                 StatusData statusData = new StatusData(
                     latSummary.numSamples(),
                     (long) (msgSummary.numSamples() * msgSummary.average()),
@@ -218,8 +214,14 @@ public class ConsumeBenchWorker implements TaskWorker {
         private final long averageMessageSizeBytes;
         private final float averageLatencyMs;
         private final int p50LatencyMs;
-        private final int p90LatencyMs;
+        private final int p95LatencyMs;
         private final int p99LatencyMs;
+
+        /**
+         * The percentiles to use when calculating the histogram data.
+         * These should match up with the p50LatencyMs, p95LatencyMs, etc. fields.
+         */
+        final static float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
 
         @JsonCreator
         StatusData(@JsonProperty("totalMessagesReceived") long totalMessagesReceived,
@@ -227,14 +229,14 @@ public class ConsumeBenchWorker implements TaskWorker {
                    @JsonProperty("averageMessageSizeBytes") long averageMessageSizeBytes,
                    @JsonProperty("averageLatencyMs") float averageLatencyMs,
                    @JsonProperty("p50LatencyMs") int p50latencyMs,
-                   @JsonProperty("p90LatencyMs") int p90latencyMs,
+                   @JsonProperty("p95LatencyMs") int p95latencyMs,
                    @JsonProperty("p99LatencyMs") int p99latencyMs) {
             this.totalMessagesReceived = totalMessagesReceived;
             this.totalBytesReceived = totalBytesReceived;
             this.averageMessageSizeBytes = averageMessageSizeBytes;
             this.averageLatencyMs = averageLatencyMs;
             this.p50LatencyMs = p50latencyMs;
-            this.p90LatencyMs = p90latencyMs;
+            this.p95LatencyMs = p95latencyMs;
             this.p99LatencyMs = p99latencyMs;
         }
 
@@ -264,8 +266,8 @@ public class ConsumeBenchWorker implements TaskWorker {
         }
 
         @JsonProperty
-        public int p90LatencyMs() {
-            return p90LatencyMs;
+        public int p95LatencyMs() {
+            return p95LatencyMs;
         }
 
         @JsonProperty
