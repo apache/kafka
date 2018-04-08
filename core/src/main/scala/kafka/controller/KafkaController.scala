@@ -873,7 +873,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   }
 
   private def removePartitionsFromPreferredReplicaElection(partitionsToBeRemoved: Set[TopicPartition],
-                                                   isTriggeredByAutoRebalance : Boolean) {
+                                                           isTriggeredByAutoRebalance : Boolean) {
     for (partition <- partitionsToBeRemoved) {
       // check the status
       val currentLeader = controllerContext.partitionLeadershipInfo(partition).leaderAndIsr.leader
@@ -881,7 +881,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       if (currentLeader == preferredReplica) {
         info(s"Partition $partition completed preferred replica leader election. New leader is $preferredReplica")
       } else {
-        warn(s"Partition $partition failed to complete preferred replica leader election. Leader is $currentLeader")
+        warn(s"Partition $partition failed to complete preferred replica leader election to $preferredReplica. " +
+          s"Leader is still $currentLeader")
       }
     }
     if (!isTriggeredByAutoRebalance) {
