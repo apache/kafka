@@ -600,7 +600,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
           }
         } else {
             error(s"Ignoring request to reassign partition $tp that doesn't exist.")
-          partitionsToBeRemovedFromReassignment.add(tp)
+            partitionsToBeRemovedFromReassignment.add(tp)
         }
       }
     }
