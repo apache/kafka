@@ -109,8 +109,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public class DistributedHerder extends AbstractHerder implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(DistributedHerder.class);
 
-    private static final long FORWARD_REQUEST_SHUTDOWN_TIMEOUT_MS = 10_000L;
-    private static final long START_AND_STOP_SHUTDOWN_TIMEOUT_MS = 1000L;
+    private static final long FORWARD_REQUEST_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
+    private static final long START_AND_STOP_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1);
     private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MS = 250;
     private static final int START_STOP_THREAD_POOL_SIZE = 8;
 
