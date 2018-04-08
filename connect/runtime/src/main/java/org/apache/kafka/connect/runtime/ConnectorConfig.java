@@ -97,6 +97,7 @@ public class ConnectorConfig extends AbstractConfig {
             super(configDef, props);
         }
 
+        @Override
         public Object get(String key) {
             return super.get(key);
         }
