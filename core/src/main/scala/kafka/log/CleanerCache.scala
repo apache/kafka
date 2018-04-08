@@ -33,6 +33,9 @@ trait CleanerCache {
   /**
    * Put this record in the cache, but only if it is greater than
    * the currently associated record (if any).
+   * A record is considered to be greater than another if it has a larger version
+   * (or offset, if no version exists) than the currently cached record,
+   * or if no cached record exists at all.
    *
    * @param record  The record
    * @return True if the record was inserted, false otherwise
@@ -55,6 +58,10 @@ trait CleanerCache {
    */
   def version(key: ByteBuffer): Long
 
+  /**
+   * Sets the passed value as the latest offset.
+   * This value is not set if it is lesser than the currently kept value.
+   */
   def updateLatestOffset(offset: Long)
 
   /** Change the salt used for key hashing making all existing keys unfindable. */
@@ -76,8 +83,11 @@ trait CleanerCache {
 }
 
 /**
- * An hash table used for deduplicating the log. This hash table uses a cryptographicly secure hash of the key as a proxy for the key
- * for comparisons and to save space on object overhead. Collisions are resolved by probing. This hash table does not support deletes.
+ * A hash table used for deduplicating the log.
+ * This hash table uses a cryptographically secure hash of the key as a proxy
+ * for the key for comparisons and to save space on object overhead.
+ * Collisions are resolved by probing.
+ * This hash table does not support deletes.
  *
  * @param memory        The amount of memory this map can use
  * @param hashAlgorithm The hash algorithm instance to use: MD2, MD5, SHA-1, SHA-256, SHA-384, SHA-512
@@ -119,13 +129,13 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
   val slots: Int = memory / bytesPerEntry
 
   override def putIfGreater(record: Record): Boolean = {
+    require(entries < slots, "Attempt to add a new entry to a full offset map.")
     if (!record.hasKey || !greater(record)) {
       return false
     }
     val recordKey = record.key
     val recordOffset = record.offset
     val recordVersion = extractVersion(record)
-    require(entries < slots, "Attempt to add a new entry to a full offset map.")
     lookups += 1
     hashInto(recordKey, hash1)
     // probe until we find the first empty slot
