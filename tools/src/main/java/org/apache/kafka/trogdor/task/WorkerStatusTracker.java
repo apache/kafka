@@ -15,26 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.trogdor.rest;
+package org.apache.kafka.trogdor.task;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.TextNode;
-import org.apache.kafka.trogdor.task.TaskSpec;
 
 /**
- * When we're in the process of sending a TaskSpec to the Agent, the Worker is regarded
- * as being in WorkerReceiving state.
+ * Tracks the status of a Trogdor worker.
  */
-public final class WorkerReceiving extends WorkerState {
-    @JsonCreator
-    public WorkerReceiving(@JsonProperty("spec") TaskSpec spec) {
-        super(spec);
-    }
-
-    @Override
-    public JsonNode status() {
-        return new TextNode("receiving");
-    }
+public interface WorkerStatusTracker {
+    /**
+     * Updates the status.
+     *
+     * @param status    The new status.
+     */
+    void update(JsonNode status);
 }

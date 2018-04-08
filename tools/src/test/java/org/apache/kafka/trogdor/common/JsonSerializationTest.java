@@ -52,7 +52,7 @@ public class JsonSerializationTest {
             0, 0, null, null, null, null, null, 0, 0, "test-topic", 1, (short) 3));
         verify(new RoundTripWorkloadSpec(0, 0, null, null, null, null, null, null,
             0, null, null, 0));
-        verify(new SampleTaskSpec(0, 0, 0, null));
+        verify(new SampleTaskSpec(0, 0, null, null));
     }
 
     private <T> void verify(T val1) throws Exception {
