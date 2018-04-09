@@ -41,7 +41,6 @@ allprojects {
   }
   
   apply plugin: 'idea'
-  apply plugin: "jacoco"
   apply plugin: 'org.owasp.dependencycheck'
   apply plugin: 'com.github.ben-manes.versions'
 
@@ -384,6 +383,7 @@ subprojects {
 
   // Ignore core since its a scala project
   if (it.path != ':core') {
+    apply plugin: "jacoco"
 
     jacoco {
       toolVersion = "0.8.1"
@@ -591,8 +591,7 @@ project(':core') {
     scoverage libs.scoveragePlugin
     scoverage libs.scoverageRuntime
   }
-
-  jacocoTestReport.enabled = false
+  
   scoverage {
     reportDir = file("${rootProject.buildDir}/scoverage")
     highlighting = false
