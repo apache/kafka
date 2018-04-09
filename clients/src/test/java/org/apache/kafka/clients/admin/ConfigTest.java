@@ -23,6 +23,7 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
@@ -62,6 +63,11 @@ public class ConfigTest {
     }
 
     @Test
+    public void shouldReturnComparableEntities() {
+        assertThat(new Config(config.entries()).entries(), is(equalTo(config.entries())));
+    }
+
+    @Test
     public void shouldImplementEqualsProperly() {
         final Collection<ConfigEntry> entries = new ArrayList<>();
         entries.add(E1);
@@ -80,5 +86,11 @@ public class ConfigTest {
         assertThat(config.hashCode(), is(config.hashCode()));
         assertThat(config.hashCode(), is(new Config(config.entries()).hashCode()));
         assertThat(config.hashCode(), is(not(new Config(entries).hashCode())));
+    }
+
+    @Test
+    public void shouldImplementToStringProperly() {
+        assertThat(config.toString(), containsString(E1.toString()));
+        assertThat(config.toString(), containsString(E2.toString()));
     }
 }
