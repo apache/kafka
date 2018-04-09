@@ -72,7 +72,7 @@ object DelegationTokenCommand extends Logging {
     }
   }
 
-  def createToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions) = {
+  def createToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions): DelegationToken = {
     val renewerPrincipals = getPrincipals(opts, opts.renewPrincipalsOpt).getOrElse(new util.LinkedList[KafkaPrincipal]())
     val maxLifeTimeMs = opts.options.valueOf(opts.maxLifeTimeOpt).longValue
 
@@ -81,6 +81,7 @@ object DelegationTokenCommand extends Logging {
     val createResult = adminClient.createDelegationToken(createDelegationTokenOptions)
     val token = createResult.delegationToken().get()
     println("Created delegation token with tokenId : %s".format(token.tokenInfo.tokenId)); printToken(List(token))
+    token
   }
 
   def printToken(tokens: List[DelegationToken]): Unit = {
@@ -107,7 +108,7 @@ object DelegationTokenCommand extends Logging {
       None
   }
 
-  def renewToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions) = {
+  def renewToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions): Long = {
     val hmac = opts.options.valueOf(opts.hmacOpt)
     val renewTimePeriodMs = opts.options.valueOf(opts.renewTimePeriodOpt).longValue()
     println("Calling renew token operation with hmac :" + hmac +" , renew-time-period :"+ renewTimePeriodMs)
@@ -115,9 +116,10 @@ object DelegationTokenCommand extends Logging {
     val expiryTimeStamp = renewResult.expiryTimestamp().get()
     val dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm")
     println("Completed renew operation. New expiry date : %s".format(dateFormat.format(expiryTimeStamp)))
+    expiryTimeStamp
   }
 
-  def expireToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions) = {
+  def expireToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions): Long = {
     val hmac = opts.options.valueOf(opts.hmacOpt)
     val expiryTimePeriodMs = opts.options.valueOf(opts.expiryTimePeriodOpt).longValue()
     println("Calling expire token operation with hmac :" + hmac +" , expire-time-period : "+ expiryTimePeriodMs)
@@ -125,9 +127,10 @@ object DelegationTokenCommand extends Logging {
     val expiryTimeStamp = expireResult.expiryTimestamp().get()
     val dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm")
     println("Completed expire operation. New expiry date : %s".format(dateFormat.format(expiryTimeStamp)))
+    expiryTimeStamp
   }
 
-  def describeToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions) = {
+  def describeToken(adminClient: JAdminClient, opts: DelegationTokenCommandOptions): List[DelegationToken] = {
     val ownerPrincipals = getPrincipals(opts, opts.ownerPrincipalsOpt)
     if (ownerPrincipals.isEmpty)
       println("Calling describe token operation for current user.")
@@ -137,6 +140,7 @@ object DelegationTokenCommand extends Logging {
     val describeResult = adminClient.describeDelegationToken(new DescribeDelegationTokenOptions().owners(ownerPrincipals.orNull))
     val tokens = describeResult.delegationTokens().get().asScala.toList
     println("Total number of tokens : %s".format(tokens.size)); printToken(tokens)
+    tokens
   }
 
   private def createAdminClient(opts: DelegationTokenCommandOptions): JAdminClient = {
