@@ -87,7 +87,8 @@ object ConsumerGroupCommand extends Logging {
       }
     } catch {
       case e: Throwable =>
-        printError(s"Executing consumer group command failed due to ${e.getMessage}", Some(e))
+        printError(s"Executing consumer group command failed (${e.getMessage}) ${System.lineSeparator()}" +
+          s"${if (e.getCause != null) e.getCause}", Some(e))
     } finally {
       consumerGroupService.close()
     }
@@ -97,7 +98,7 @@ object ConsumerGroupCommand extends Logging {
 
   def printError(msg: String, e: Option[Throwable] = None): Unit = {
     println(s"Error: $msg")
-    e.foreach(debug("Exception in consumer group command", _))
+    e.foreach(error("Exception in consumer group command", _))
   }
 
   def convertTimestamp(timeString: String): java.lang.Long = {
