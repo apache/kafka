@@ -52,7 +52,7 @@ versions += [
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
   bcpkix: "1.59",
-  easymock: "3.5.1",
+  easymock: "3.6",
   jackson: "2.9.5",
   jetty: "9.2.24.v20180105",
   jersey: "2.25.1",
