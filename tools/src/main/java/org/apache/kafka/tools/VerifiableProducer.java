@@ -184,7 +184,7 @@ public class VerifiableProducer {
             .type(Integer.class)
             .metavar("REPEATING-KEYS")
             .dest("repeatingKeys")
-            .help("If specified, each produced record will have a key starting at 0 increment by 1 up to the number specified, then the key is set to 0 again");
+            .help("If specified, each produced record will have a key starting at 0 increment by 1 up to the number specified (exclusive), then the key is set to 0 again");
 
         return parser;
     }
