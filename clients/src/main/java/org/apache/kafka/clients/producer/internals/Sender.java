@@ -329,7 +329,7 @@ public class Sender implements Runnable {
             return false;
 
         AbstractRequest.Builder<?> requestBuilder = nextRequestHandler.requestBuilder();
-        while (running) {
+        while (!forceClose) {
             Node targetNode = null;
             try {
                 if (nextRequestHandler.needsCoordinator()) {
