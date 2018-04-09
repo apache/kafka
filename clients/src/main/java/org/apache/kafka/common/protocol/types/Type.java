@@ -72,9 +72,7 @@ public abstract class Type {
          * Short name of the type to identify it in documentation;
          * @return the name of the type
          */
-        public String typeName() {
-            return toString();
-        }
+        public abstract String typeName();
 
         /**
          * Documentation of the Type.
@@ -82,6 +80,11 @@ public abstract class Type {
          * @return details about valid values, representation
          */
         public abstract String documentation();
+
+        @Override
+        public String toString() {
+            return typeName();
+        }
     }
     /**
      * The Boolean type represents a boolean value in a byte by using
@@ -111,7 +114,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "BOOLEAN";
         }
 
@@ -148,7 +151,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "INT8";
         }
 
@@ -183,7 +186,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "INT16";
         }
 
@@ -219,7 +222,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "INT32";
         }
 
@@ -255,7 +258,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "UINT32";
         }
 
@@ -291,7 +294,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "INT64";
         }
 
@@ -338,7 +341,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "STRING";
         }
 
@@ -399,7 +402,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "NULLABLE_STRING";
         }
 
@@ -453,7 +456,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "BYTES";
         }
 
@@ -516,7 +519,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "NULLABLE_BYTES";
         }
 
@@ -568,7 +571,7 @@ public abstract class Type {
         }
 
         @Override
-        public String toString() {
+        public String typeName() {
             return "RECORDS";
         }
 
@@ -609,7 +612,7 @@ public abstract class Type {
             throw new SchemaException(item + " is not an integer");
         }
 
-        public String toString() {
+        public String typeName() {
             return "VARINT";
         }
 
@@ -644,7 +647,7 @@ public abstract class Type {
             throw new SchemaException(item + " is not a long");
         }
 
-        public String toString() {
+        public String typeName() {
             return "VARLONG";
         }
 
