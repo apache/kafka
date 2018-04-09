@@ -77,7 +77,6 @@ public class ConsumeBenchWorker implements TaskWorker {
             2, ThreadUtils.createThreadFactory("ConsumeBenchWorkerThread%d", false));
         this.status = status;
         this.doneFuture = doneFuture;
-        this.consumer = null;
         executor.submit(new Prepare());
     }
 
@@ -97,20 +96,20 @@ public class ConsumeBenchWorker implements TaskWorker {
                         spec.topicRegex(), spec.startPartition(), spec.endPartition());
                 log.info("Will consume from {}", topicPartitions);
 
-                executor.submit(new ConsumeRecords(topicPartitions));
+                executor.submit(new ConsumeMessages(topicPartitions));
             } catch (Throwable e) {
                 WorkerUtils.abort(log, "Prepare", e, doneFuture);
             }
         }
     }
 
-    public class ConsumeRecords implements Callable<Void> {
+    public class ConsumeMessages implements Callable<Void> {
         private final Histogram latencyHistogram;
         private final Histogram messageSizeHistogram;
         private final Future<?> statusUpdaterFuture;
         private final Throttle throttle;
 
-        ConsumeRecords(Collection<TopicPartition> topicPartitions) {
+        ConsumeMessages(Collection<TopicPartition> topicPartitions) {
             this.latencyHistogram = new Histogram(5000);
             this.messageSizeHistogram = new Histogram(2 * 1024 * 1024);
             this.statusUpdaterFuture = executor.scheduleAtFixedRate(
@@ -159,7 +158,6 @@ public class ConsumeBenchWorker implements TaskWorker {
                         messageSizeHistogram.add(messageBytes);
                         bytesConsumed += messageBytes;
                         throttle.increment();
-
                     }
                     startBatchMs = Time.SYSTEM.milliseconds();
                 }

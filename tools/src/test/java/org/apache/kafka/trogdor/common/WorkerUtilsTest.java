@@ -275,10 +275,10 @@ public class WorkerUtilsTest {
         Collection<TopicPartition> topicPartitions =
             WorkerUtils.getMatchingTopicPartitions(adminClient, topic2, 0, 2);
         assertEquals(
-            new HashSet<>(Arrays.asList(
+            Utils.mkSet(
                 new TopicPartition(topic2, 0), new TopicPartition(topic2, 1),
                 new TopicPartition(topic2, 2)
-            )),
+            ),
             new HashSet<>(topicPartitions)
         );
     }
@@ -294,12 +294,11 @@ public class WorkerUtilsTest {
 
         Collection<TopicPartition> topicPartitions =
             WorkerUtils.getMatchingTopicPartitions(adminClient, ".*-topic$", 0, 1);
-
         assertEquals(
-            new HashSet<>(Arrays.asList(
+            Utils.mkSet(
                 new TopicPartition(topic1, 0), new TopicPartition(topic1, 1),
                 new TopicPartition(topic2, 0), new TopicPartition(topic2, 1)
-            )),
+            ),
             new HashSet<>(topicPartitions)
         );
     }

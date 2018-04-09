@@ -97,7 +97,7 @@ public final class WorkerUtils {
         }
     }
 
-    private static final int CREATE_TOPICS_REQUEST_TIMEOUT = 25000;
+    private static final int ADMIN_REQUEST_TIMEOUT = 25000;
     private static final int CREATE_TOPICS_CALL_TIMEOUT = 180000;
     private static final int MAX_CREATE_TOPICS_BATCH_SIZE = 10;
 
@@ -265,7 +265,7 @@ public final class WorkerUtils {
         Logger log, AdminClient adminClient,
         Collection<String> topicsToVerify, Map<String, NewTopic> topicsInfo) throws Throwable {
         DescribeTopicsResult topicsResult = adminClient.describeTopics(
-            topicsToVerify, new DescribeTopicsOptions().timeoutMs(CREATE_TOPICS_REQUEST_TIMEOUT));
+            topicsToVerify, new DescribeTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
         Map<String, TopicDescription> topicDescriptionMap = topicsResult.all().get();
         for (TopicDescription desc: topicDescriptionMap.values()) {
             // map will always contain the topic since all topics in 'topicsExists' are in given
@@ -297,11 +297,11 @@ public final class WorkerUtils {
         // first get list of matching topics
         List<String> matchedTopics = new ArrayList<>();
         ListTopicsResult res = adminClient.listTopics(
-            new ListTopicsOptions().timeoutMs(CREATE_TOPICS_REQUEST_TIMEOUT));
+            new ListTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
         Map<String, TopicListing> topicListingMap = res.namesToListings().get();
         for (Map.Entry<String, TopicListing> topicListingEntry: topicListingMap.entrySet()) {
-            if (topicNamePattern.matcher(topicListingEntry.getKey()).matches()
-                && !topicListingEntry.getValue().isInternal()) {
+            if (!topicListingEntry.getValue().isInternal()
+                && topicNamePattern.matcher(topicListingEntry.getKey()).matches()) {
                 matchedTopics.add(topicListingEntry.getKey());
             }
         }
@@ -309,7 +309,7 @@ public final class WorkerUtils {
         // create a list of topic/partitions
         List<TopicPartition> out = new ArrayList<>();
         DescribeTopicsResult topicsResult = adminClient.describeTopics(
-            matchedTopics, new DescribeTopicsOptions().timeoutMs(CREATE_TOPICS_REQUEST_TIMEOUT));
+            matchedTopics, new DescribeTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
         Map<String, TopicDescription> topicDescriptionMap = topicsResult.all().get();
         for (TopicDescription desc: topicDescriptionMap.values()) {
             List<TopicPartitionInfo> partitions = desc.partitions();
@@ -327,7 +327,7 @@ public final class WorkerUtils {
         Map<String, String> commonClientConf, Map<String, String> adminClientConf) {
         Properties props = new Properties();
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, CREATE_TOPICS_REQUEST_TIMEOUT);
+        props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, ADMIN_REQUEST_TIMEOUT);
         // first add common client config, and then admin client config to properties, possibly
         // over-writing default or common properties.
         addConfigsToProperties(props, commonClientConf, adminClientConf);
