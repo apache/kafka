@@ -125,6 +125,7 @@ public class ArrayOf extends DocumentedType {
         return "Represents a sequence of objects of a given type T. " +
                 "Type T can be either a primitive type (e.g. " + STRING + ") or a structure. " +
                 "First, the length N is given as an " + INT32 + ". Then N instances of type T follow. " +
+                "A null array is represented with a length of -1. " +
                 "In protocol documentation an array of T instances is referred to as [T].";
     }
 }
