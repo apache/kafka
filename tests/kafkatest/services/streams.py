@@ -372,6 +372,7 @@ class StreamsBrokerDownResilienceService(StreamsTestBaseService):
 
     def start_cmd(self, node):
         args = self.args.copy()
+        args['kafka'] = self.kafka.bootstrap_servers(validate=False)
         args['config_file'] = self.CONFIG_FILE
         args['stdout'] = self.STDOUT_FILE
         args['stderr'] = self.STDERR_FILE
@@ -397,12 +398,6 @@ class StreamsStandbyTaskService(StreamsTestBaseService):
                                                         configs)
 
 
-class StreamsRepeatingIntegerKeyProducerService(StreamsTestBaseService):
-    def __init__(self, test_context, kafka, configs):
-        super(StreamsRepeatingIntegerKeyProducerService, self).__init__(test_context,
-                                                                        kafka,
-                                                                        "org.apache.kafka.streams.tests.StreamsRepeatingIntegerKeyProducer",
-                                                                        configs)
 class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsUpgradeTestJobRunnerService, self).__init__(test_context,
