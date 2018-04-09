@@ -286,8 +286,7 @@ public class TopologyTestDriver implements Closeable {
                 new LogAndContinueExceptionHandler(),
                 new LogContext());
             globalStateTask.initialize();
-        }
-        else {
+        } else {
             globalStateManager = null;
             globalStateTask = null;
         }
@@ -310,8 +309,7 @@ public class TopologyTestDriver implements Closeable {
                 producer);
             task.initializeStateStores();
             task.initializeTopology();
-        }
-        else {
+        } else {
             task = null;
         }
     }
@@ -518,8 +516,9 @@ public class TopologyTestDriver implements Closeable {
     public StateStore getStateStore(final String name) {
         StateStore res = task == null ? null : 
             ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
-        if (res == null && globalStateManager != null)
+        if (res == null && globalStateManager != null) {
             res = globalStateManager.getGlobalStore(name);
+        }
         return res;
     }
 

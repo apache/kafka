@@ -27,7 +27,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -906,41 +905,31 @@ public class TopologyTestDriverTest {
     
     @Test
     public void shouldFeedStoreFromGlobalKTable() {
-        final String topicName = "topic";
-        final String globalStoreName = "globalStore";
-        final String key1 = "k1";
-        final String value1 = "value1";
-        final String key2 = "k2";
-        final String value2 = "value2";
-        //
         final StreamsBuilder builder = new StreamsBuilder();
-        @SuppressWarnings("unused")
-        final GlobalKTable<String,String> globalTable = builder
-        .globalTable(topicName,  
+        builder.globalTable("topic",  
             Consumed.with(Serdes.String(), Serdes.String()),
-            Materialized.<String,String,KeyValueStore<Bytes,byte[]>>as(globalStoreName))
+            Materialized.<String,String,KeyValueStore<Bytes,byte[]>>as("globalStore"))
         ;
-        try (TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), config)) {
-            final KeyValueStore<String,String> globalStore = testDriver.getKeyValueStore(globalStoreName);
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), config)) {
+            final KeyValueStore<String,String> globalStore = testDriver.getKeyValueStore("globalStore");
             Assert.assertNotNull(globalStore);
-            Assert.assertNotNull(testDriver.getAllStateStores().get(globalStoreName));
-            // push data to the topology
-            final ConsumerRecordFactory<String,String> crf = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
-            testDriver.pipeInput(crf.create(topicName, key1, value1));
+            Assert.assertNotNull(testDriver.getAllStateStores().get("globalStore"));
+            final ConsumerRecordFactory<String,String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+            testDriver.pipeInput(recordFactory.create("topic", "k1", "value1"));
             // just to serialize keys and values
-            ConsumerRecord<byte[],byte[]> cr = crf.create("dummy", key2, value2); 
+            final ConsumerRecord<byte[],byte[]> record = recordFactory.create("dummy", "k2", "value2"); 
             // send data using the producer
-            testDriver.getProducer().send(new ProducerRecord<>(topicName, null, cr.timestamp(), cr.key(), cr.value()));
+            testDriver.getProducer().send(new ProducerRecord<>("topic", null, record.timestamp(), record.key(), record.value()));
             testDriver.advanceWallClockTime(0);
             // we expect to have both in the global store, the one from pipeInput and the one from the producer
-            Assert.assertEquals(value1, globalStore.get(key1));
-            Assert.assertEquals(value2, globalStore.get(key2));
+            Assert.assertEquals("value1", globalStore.get("k1"));
+            Assert.assertEquals("value2", globalStore.get("k2"));
             // read back data sent via the producer
-            ProducerRecord<String,String> pr = testDriver.readOutput(topicName, new StringDeserializer(), new StringDeserializer());
-            Assert.assertEquals(key2, pr.key());
-            Assert.assertEquals(value2, pr.value());
+            ProducerRecord<String,String> pr = testDriver.readOutput("topic", new StringDeserializer(), new StringDeserializer());
+            Assert.assertEquals("k2", pr.key());
+            Assert.assertEquals("value2", pr.value());
             // no data from pipeInput should be present here since the topology has no sink
-            ProducerRecord<String,String> pr2 = testDriver.readOutput(topicName, new StringDeserializer(), new StringDeserializer());
+            ProducerRecord<String,String> pr2 = testDriver.readOutput("topic", new StringDeserializer(), new StringDeserializer());
             Assert.assertNull(pr2);
         }
     }
