@@ -27,6 +27,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -66,7 +67,6 @@ public class TopologyTestDriverTest {
     private final static String SOURCE_TOPIC_2 = "source-topic-2";
     private final static String SINK_TOPIC_1 = "sink-topic-1";
     private final static String SINK_TOPIC_2 = "sink-topic-2";
-    private final static String PATTERN_SOURCE_TOPIC_1 = "source-topic-\\d";
 
     private final ConsumerRecordFactory<byte[], byte[]> consumerRecordFactory = new ConsumerRecordFactory<>(
         new ByteArraySerializer(),
@@ -968,5 +968,29 @@ public class TopologyTestDriverTest {
         assertEquals(key1, outputRecord.key());
         assertEquals(value1, outputRecord.value());
         assertEquals(SINK_TOPIC_1, outputRecord.topic());
+    }
+
+    @Test
+    public void shouldThrowPatternNotValidForTopicNameException() {
+        final String sourceName = "source";
+        final String pattern2Source1 = "source-topic-\\d";
+
+        final Topology topology = new Topology();
+
+        topology.addSource(sourceName, pattern2Source1);
+        topology.addSink("sink", SINK_TOPIC_1, sourceName);
+
+        testDriver = new TopologyTestDriver(topology, config);
+        try {
+            testDriver.pipeInput(consumerRecord1);
+        } catch (final TopologyException exception) {
+            String str =
+                    String.format(
+                            "Invalid topology: Topology add source of type String for topic: %s cannot contain regex pattern for " +
+                                    "consumer topic: %s and hence it cannot commit the message.",
+                            pattern2Source1,
+                            SOURCE_TOPIC_1);
+            assertEquals(str, exception.getMessage());
+        }
     }
 }

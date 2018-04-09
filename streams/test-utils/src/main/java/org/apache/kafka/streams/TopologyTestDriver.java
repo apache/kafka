@@ -34,6 +34,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -316,6 +317,9 @@ public class TopologyTestDriver {
     public void pipeInput(final ConsumerRecord<byte[], byte[]> consumerRecord) {
         final String topicName = consumerRecord.topic();
 
+        if (!internalTopologyBuilder.getSourceTopicNames().isEmpty()) {
+            validateSourceTopicNameRegexPattern(consumerRecord.topic());
+        }
         final TopicPartition topicPartition = getTopicPartition(topicName);
         if (topicPartition != null) {
             final long offset = offsetsByTopicPartition.get(topicPartition).incrementAndGet() - 1;
@@ -356,6 +360,16 @@ public class TopologyTestDriver {
                 consumerRecord.key(),
                 consumerRecord.value()));
             globalStateTask.flushState();
+        }
+    }
+
+    private void validateSourceTopicNameRegexPattern(String consumerTopic) {
+        for (final String sourceTopicName : internalTopologyBuilder.getSourceTopicNames()) {
+            if (!sourceTopicName.equals(consumerTopic) && Pattern.compile(sourceTopicName).matcher(consumerTopic).matches()) {
+                throw new TopologyException("Topology add source of type String for topic: " + sourceTopicName +
+                        " cannot contain regex pattern for consumer topic: " + consumerTopic +
+                        " and hence it cannot commit the message.");
+            }
         }
     }
 
