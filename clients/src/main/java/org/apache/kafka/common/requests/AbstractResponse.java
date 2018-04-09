@@ -156,6 +156,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new DescribeDelegationTokenResponse(struct);
             case DELETE_GROUPS:
                 return new DeleteGroupsResponse(struct);
+            case ELECT_PREFERRED_LEADERS:
+                return new ElectPreferredLeadersResponse(struct);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

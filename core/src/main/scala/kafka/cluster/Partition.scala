@@ -627,6 +627,7 @@ class Partition(val topicPartition: TopicPartition,
     replicaManager.tryCompleteDelayedFetch(requestKey)
     replicaManager.tryCompleteDelayedProduce(requestKey)
     replicaManager.tryCompleteDelayedDeleteRecords(requestKey)
+    replicaManager.tryCompleteElection(requestKey)
   }
 
   def maybeShrinkIsr(replicaMaxLagTimeMs: Long) {

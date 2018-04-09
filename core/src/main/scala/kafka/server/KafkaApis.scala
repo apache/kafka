@@ -146,6 +146,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireTokenRequest(request)
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
         case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request)
+        case ApiKeys.ELECT_PREFERRED_LEADERS => handleElectPreferredReplicaLeader(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -251,6 +252,11 @@ class KafkaApis(val requestChannel: RequestChannel,
           quotas.fetch.updateQuotaMetricConfigs()
           quotas.produce.updateQuotaMetricConfigs()
           quotas.request.updateQuotaMetricConfigs()
+        }
+      }
+      if (replicaManager.hasDelayedElectionOperations) {
+        updateMetadataRequest.partitionStates.asScala.foreach { case (tp, ps) =>
+          replicaManager.tryCompleteElection(new TopicPartitionOperationKey(tp.topic(), tp.partition()))
         }
       }
       sendResponseExemptThrottle(request, new UpdateMetadataResponse(Errors.NONE))
@@ -2223,6 +2229,26 @@ class KafkaApis(val requestChannel: RequestChannel,
       false
     else
       true
+  }
+
+  def handleElectPreferredReplicaLeader(request: RequestChannel.Request): Unit = {
+
+    val electionRequest = request.body[ElectPreferredLeadersRequest]
+    val partitions =
+      if (electionRequest.topicPartitions() == null) {
+        zkClient.getAllPartitions()
+      } else {
+        electionRequest.topicPartitions().asScala
+      }
+    def sendResponseCallback(result: Map[TopicPartition, ApiError]): Unit = {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new ElectPreferredLeadersResponse(requestThrottleMs, result.asJava))
+    }
+    if (!authorize(request.session, Alter, Resource.ClusterResource)) {
+      sendResponseCallback(partitions.map(partition => partition -> new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null)).toMap)
+    } else {
+      replicaManager.electPreferredLeaders(controller, partitions, sendResponseCallback, electionRequest.timeout)
+    }
   }
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {

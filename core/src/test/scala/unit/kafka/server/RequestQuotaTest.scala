@@ -359,6 +359,9 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.DELETE_GROUPS =>
           new DeleteGroupsRequest.Builder(Collections.singleton("test-group"))
 
+        case ApiKeys.ELECT_PREFERRED_LEADERS =>
+          new ElectPreferredLeadersRequest.Builder(Collections.singleton(new TopicPartition("my_topic", 0)), 0)
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
@@ -450,6 +453,7 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.RENEW_DELEGATION_TOKEN => new RenewDelegationTokenResponse(response).throttleTimeMs
       case ApiKeys.DELETE_GROUPS => new DeleteGroupsResponse(response).throttleTimeMs
       case ApiKeys.OFFSET_FOR_LEADER_EPOCH => new OffsetsForLeaderEpochResponse(response).throttleTimeMs
+      case ApiKeys.ELECT_PREFERRED_LEADERS => new ElectPreferredLeadersResponse(response).throttleTimeMs
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
     }
   }

@@ -304,6 +304,10 @@ public class RequestResponseTest {
         checkRequest(createRenewTokenRequest());
         checkErrorResponse(createRenewTokenRequest(), new UnknownServerException());
         checkResponse(createRenewTokenResponse(), 0);
+        checkRequest(createElectPreferredLeadersRequest());
+        checkRequest(createElectPreferredLeadersRequestNullPartitions());
+        checkErrorResponse(createElectPreferredLeadersRequest(), new UnknownServerException());
+        checkResponse(createElectPreferredLeadersResponse(), 0);
     }
 
     @Test
@@ -1322,4 +1326,22 @@ public class RequestResponseTest {
 
         return new DescribeDelegationTokenResponse(20, Errors.NONE, tokenList);
     }
+
+    private ElectPreferredLeadersRequest createElectPreferredLeadersRequestNullPartitions() {
+        return new ElectPreferredLeadersRequest.Builder(null, 100).build((short) 0);
+    }
+
+    private ElectPreferredLeadersRequest createElectPreferredLeadersRequest() {
+        return new ElectPreferredLeadersRequest.Builder(asList(
+                new TopicPartition("my_topic", 1),
+                new TopicPartition("my_topic", 2)), 100).build((short) 0);
+    }
+
+    private ElectPreferredLeadersResponse createElectPreferredLeadersResponse() {
+        Map<TopicPartition, ApiError> errors = new HashMap<>();
+        errors.put(new TopicPartition("my_topic", 0), ApiError.NONE);
+        errors.put(new TopicPartition("my_topic", 1), ApiError.fromThrowable(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception("blah")));
+        return new ElectPreferredLeadersResponse(200, errors);
+    }
+
 }

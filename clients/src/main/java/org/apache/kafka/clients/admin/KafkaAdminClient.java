@@ -111,6 +111,8 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
+import org.apache.kafka.common.requests.ElectPreferredLeadersRequest;
+import org.apache.kafka.common.requests.ElectPreferredLeadersResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
@@ -2776,5 +2778,33 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return Collections.unmodifiableMap(this.metrics.metrics());
+    }
+
+    @Override
+    public ElectPreferredLeadersResult electPreferredLeaders(final Collection<TopicPartition> partitions,
+                                                             ElectPreferredLeadersOptions options) {
+        final Set<TopicPartition> partitionSet = partitions != null ? new HashSet<>(partitions) : null;
+        final KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        runnable.call(new Call("electPreferredLeaders", calcDeadlineMs(now, options.timeoutMs()),
+                new ControllerNodeProvider()) {
+
+            @Override
+            public AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new ElectPreferredLeadersRequest.Builder(partitions, timeoutMs);
+            }
+
+            @Override
+            public void handleResponse(AbstractResponse abstractResponse) {
+                ElectPreferredLeadersResponse response = (ElectPreferredLeadersResponse) abstractResponse;
+                electionFuture.complete(response.errors());
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                electionFuture.completeExceptionally(throwable);
+            }
+        }, now);
+        return new ElectPreferredLeadersResult(electionFuture, partitionSet);
     }
 }
