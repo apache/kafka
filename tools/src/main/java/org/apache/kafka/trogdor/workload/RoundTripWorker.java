@@ -39,6 +39,7 @@ import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.apache.kafka.trogdor.common.WorkerUtils;
 import org.apache.kafka.trogdor.task.TaskWorker;
+import org.apache.kafka.trogdor.task.WorkerStatusTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,7 +56,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class RoundTripWorker implements TaskWorker {
     private static final int THROTTLE_PERIOD_MS = 100;
@@ -98,7 +98,7 @@ public class RoundTripWorker implements TaskWorker {
     }
 
     @Override
-    public void start(Platform platform, AtomicReference<String> status,
+    public void start(Platform platform, WorkerStatusTracker status,
                       KafkaFutureImpl<String> doneFuture) throws Exception {
         if (!running.compareAndSet(false, true)) {
             throw new IllegalStateException("RoundTripWorker is already running.");
@@ -124,7 +124,7 @@ public class RoundTripWorker implements TaskWorker {
                     throw new ConfigException("Invalid null or empty partitionAssignments.");
                 }
                 WorkerUtils.createTopics(
-                    log, spec.bootstrapServers(),
+                    log, spec.bootstrapServers(), spec.commonClientConf(), spec.adminClientConf(),
                     Collections.singletonMap(TOPIC_NAME,
                                              new NewTopic(TOPIC_NAME, spec.partitionAssignments())),
                     true);
@@ -184,6 +184,8 @@ public class RoundTripWorker implements TaskWorker {
             props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer." + id);
             props.put(ProducerConfig.ACKS_CONFIG, "all");
             props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 105000);
+            // user may over-write the defaults with common client config and producer config
+            WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.producerConf());
             producer = new KafkaProducer<>(props, new ByteArraySerializer(),
                 new ByteArraySerializer());
             int perPeriod = WorkerUtils.
@@ -275,6 +277,8 @@ public class RoundTripWorker implements TaskWorker {
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
             props.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, 105000);
             props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 100000);
+            // user may over-write the defaults with common client config and consumer config
+            WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.consumerConf());
             consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer());
             consumer.subscribe(Collections.singleton(TOPIC_NAME));

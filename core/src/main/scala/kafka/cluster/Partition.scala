@@ -261,7 +261,8 @@ class Partition(val topic: String,
       (assignedReplicas.map(_.brokerId) -- newAssignedReplicas).foreach(removeReplica)
       inSyncReplicas = newInSyncReplicas
 
-      info(s"$topicPartition starts at Leader Epoch ${partitionStateInfo.basePartitionState.leaderEpoch} from offset ${getReplica().get.logEndOffset.messageOffset}. Previous Leader Epoch was: $leaderEpoch")
+      info(s"$topicPartition starts at Leader Epoch ${partitionStateInfo.basePartitionState.leaderEpoch} from " +
+        s"offset ${getReplica().get.logEndOffset.messageOffset}. Previous Leader Epoch was: $leaderEpoch")
 
       //We cache the leader epoch here, persisting it only if it's local (hence having a log dir)
       leaderEpoch = partitionStateInfo.basePartitionState.leaderEpoch

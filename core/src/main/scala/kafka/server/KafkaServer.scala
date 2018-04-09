@@ -44,7 +44,7 @@ import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.security.scram.ScramMechanism
+import org.apache.kafka.common.security.scram.internal.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
@@ -595,6 +595,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         if (quotaManagers != null)
           CoreUtils.swallow(quotaManagers.shutdown(), this)
+        config.quotaCallback.foreach(_.close())
+
         // Even though socket server is stopped much earlier, controller can generate
         // response for controlled shutdown request. Shutdown server at the end to
         // avoid any failures (e.g. when metrics are recorded)

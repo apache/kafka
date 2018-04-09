@@ -17,30 +17,34 @@
 
 package org.apache.kafka.trogdor.task;
 
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.trogdor.common.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.concurrent.atomic.AtomicReference;
 
 public class NoOpTaskWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(NoOpTaskWorker.class);
 
     private final String id;
 
+    private WorkerStatusTracker status;
+
     public NoOpTaskWorker(String id) {
         this.id = id;
     }
 
     @Override
-    public void start(Platform platform, AtomicReference<String> status,
+    public void start(Platform platform, WorkerStatusTracker status,
                       KafkaFutureImpl<String> errorFuture) throws Exception {
         log.info("{}: Activating NoOpTask.", id);
+        this.status = status;
+        this.status.update(new TextNode("active"));
     }
 
     @Override
     public void stop(Platform platform) throws Exception {
         log.info("{}: Deactivating NoOpTask.", id);
+        this.status.update(new TextNode("done"));
     }
 }

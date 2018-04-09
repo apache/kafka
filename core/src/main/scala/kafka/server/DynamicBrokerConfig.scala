@@ -75,13 +75,12 @@ object DynamicBrokerConfig {
 
   private[server] val DynamicSecurityConfigs = SslConfigs.RECONFIGURABLE_CONFIGS.asScala
 
-  val AllDynamicConfigs = mutable.Set[String]()
-  AllDynamicConfigs ++= DynamicSecurityConfigs
-  AllDynamicConfigs ++= LogCleaner.ReconfigurableConfigs
-  AllDynamicConfigs ++= DynamicLogConfig.ReconfigurableConfigs
-  AllDynamicConfigs ++= DynamicThreadPool.ReconfigurableConfigs
-  AllDynamicConfigs ++= Set(KafkaConfig.MetricReporterClassesProp)
-  AllDynamicConfigs ++= DynamicListenerConfig.ReconfigurableConfigs
+  val AllDynamicConfigs = DynamicSecurityConfigs ++
+    LogCleaner.ReconfigurableConfigs ++
+    DynamicLogConfig.ReconfigurableConfigs ++
+    DynamicThreadPool.ReconfigurableConfigs ++
+    Set(KafkaConfig.MetricReporterClassesProp) ++
+    DynamicListenerConfig.ReconfigurableConfigs
 
   private val PerBrokerConfigs = DynamicSecurityConfigs  ++
     DynamicListenerConfig.ReconfigurableConfigs
@@ -159,21 +158,27 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       addBrokerReconfigurable(kafkaServer.logManager.cleaner)
     addReconfigurable(new DynamicLogConfig(kafkaServer.logManager))
     addReconfigurable(new DynamicMetricsReporters(kafkaConfig.brokerId, kafkaServer))
+    addReconfigurable(new DynamicClientQuotaCallback(kafkaConfig.brokerId, kafkaConfig))
     addBrokerReconfigurable(new DynamicListenerConfig(kafkaServer))
   }
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
-    require(reconfigurable.reconfigurableConfigs.asScala.forall(AllDynamicConfigs.contains))
+    verifyReconfigurableConfigs(reconfigurable.reconfigurableConfigs.asScala)
     reconfigurables += reconfigurable
   }
 
   def addBrokerReconfigurable(reconfigurable: BrokerReconfigurable): Unit = CoreUtils.inWriteLock(lock) {
-    require(reconfigurable.reconfigurableConfigs.forall(AllDynamicConfigs.contains))
+    verifyReconfigurableConfigs(reconfigurable.reconfigurableConfigs)
     brokerReconfigurables += reconfigurable
   }
 
   def removeReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {
     reconfigurables -= reconfigurable
+  }
+
+  private def verifyReconfigurableConfigs(configNames: Set[String]): Unit = CoreUtils.inWriteLock(lock) {
+    val nonDynamic = configNames.filter(DynamicConfig.Broker.nonDynamicProps.contains)
+    require(nonDynamic.isEmpty, s"Reconfigurable contains non-dynamic configs $nonDynamic")
   }
 
   // Visibility for testing
@@ -703,6 +708,36 @@ object DynamicListenerConfig {
     KafkaConfig.SaslKerberosMinTimeBeforeReloginProp,
     KafkaConfig.SaslKerberosPrincipalToLocalRulesProp
   )
+}
+
+class DynamicClientQuotaCallback(brokerId: Int, config: KafkaConfig) extends Reconfigurable {
+
+  override def configure(configs: util.Map[String, _]): Unit = {}
+
+  override def reconfigurableConfigs(): util.Set[String] = {
+    val configs = new util.HashSet[String]()
+    config.quotaCallback.foreach {
+      case callback: Reconfigurable => configs.addAll(callback.reconfigurableConfigs)
+      case _ =>
+    }
+    configs
+  }
+
+  override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
+    config.quotaCallback.foreach {
+      case callback: Reconfigurable => callback.validateReconfiguration(configs)
+      case _ =>
+    }
+  }
+
+  override def reconfigure(configs: util.Map[String, _]): Unit = {
+    config.quotaCallback.foreach {
+      case callback: Reconfigurable =>
+        config.dynamicConfig.maybeReconfigure(callback, config.dynamicConfig.currentKafkaConfig, configs)
+        true
+      case _ => false
+    }
+  }
 }
 
 class DynamicListenerConfig(server: KafkaServer) extends BrokerReconfigurable with Logging {
