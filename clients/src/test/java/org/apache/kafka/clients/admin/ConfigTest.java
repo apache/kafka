@@ -69,7 +69,7 @@ public class ConfigTest {
         assertThat(config, is(equalTo(config)));
         assertThat(config, is(equalTo(new Config(config.entries()))));
         assertThat(config, is(not(equalTo(new Config(entries)))));
-        assertThat(config, is(not(equalTo((Object)"this"))));
+        assertThat(config, is(not(equalTo((Object) "this"))));
     }
 
     @Test
