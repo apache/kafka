@@ -585,7 +585,7 @@ public class TopologyTestDriverTest {
     public void shouldPopulateGlobalStore() {
         testDriver = new TopologyTestDriver(setupGlobalStoreTopology(SOURCE_TOPIC_1), config);
 
-        final KeyValueStore<byte[],byte[]> globalStore = testDriver.getKeyValueStore(SOURCE_TOPIC_1 + "-globalStore");
+        final KeyValueStore<byte[], byte[]> globalStore = testDriver.getKeyValueStore(SOURCE_TOPIC_1 + "-globalStore");
         Assert.assertNotNull(globalStore);
         Assert.assertNotNull(testDriver.getAllStateStores().get(SOURCE_TOPIC_1 + "-globalStore"));
 
@@ -908,16 +908,15 @@ public class TopologyTestDriverTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.globalTable("topic",  
             Consumed.with(Serdes.String(), Serdes.String()),
-            Materialized.<String,String,KeyValueStore<Bytes,byte[]>>as("globalStore"))
-        ;
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("globalStore"));
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), config)) {
             final KeyValueStore<String,String> globalStore = testDriver.getKeyValueStore("globalStore");
             Assert.assertNotNull(globalStore);
             Assert.assertNotNull(testDriver.getAllStateStores().get("globalStore"));
-            final ConsumerRecordFactory<String,String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+            final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
             testDriver.pipeInput(recordFactory.create("topic", "k1", "value1"));
             // just to serialize keys and values
-            final ConsumerRecord<byte[],byte[]> record = recordFactory.create("dummy", "k2", "value2"); 
+            final ConsumerRecord<byte[], byte[]> record = recordFactory.create("dummy", "k2", "value2"); 
             // send data using the producer
             testDriver.getProducer().send(new ProducerRecord<>("topic", null, record.timestamp(), 
                     record.key(), record.value()));
@@ -926,17 +925,17 @@ public class TopologyTestDriverTest {
             Assert.assertEquals("value1", globalStore.get("k1"));
             Assert.assertEquals("value2", globalStore.get("k2"));
             // read back data sent via the producer
-            ProducerRecord<String,String> pr = testDriver.readOutput("topic", new StringDeserializer(), new StringDeserializer());
+            ProducerRecord<String, String> pr = testDriver.readOutput("topic", new StringDeserializer(), new StringDeserializer());
             Assert.assertEquals("k2", pr.key());
             Assert.assertEquals("value2", pr.value());
             // no data from pipeInput should be present here since the topology has no sink
-            ProducerRecord<String,String> pr2 = testDriver.readOutput("topic", new StringDeserializer(), new StringDeserializer());
+            ProducerRecord<String, String> pr2 = testDriver.readOutput("topic", new StringDeserializer(), new StringDeserializer());
             Assert.assertNull(pr2);
             // send data using the producer to a topic not used in the topology
             testDriver.getProducer().send(new ProducerRecord<>("notInTopologytopic", null, 
                     record.timestamp(), record.key(), record.value()));
             testDriver.advanceWallClockTime(0);
-            ProducerRecord<String,String> pr3 = testDriver.readOutput("notInTopologytopic", new StringDeserializer(), new StringDeserializer());
+            ProducerRecord<String, String> pr3 = testDriver.readOutput("notInTopologytopic", new StringDeserializer(), new StringDeserializer());
             Assert.assertEquals("k2", pr3.key());
             Assert.assertEquals("value2", pr3.value());
         }
