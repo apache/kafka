@@ -879,6 +879,27 @@ class GroupCoordinatorTest extends JUnitSuite {
   }
 
   @Test
+  def testCommitAndFetchOffsetsWithEmptyGroup() {
+    // For backwards compatibility, the coordinator supports committing/fetching offsets with an empty groupId
+
+    val tp = new TopicPartition("topic", 0)
+    val offset = OffsetAndMetadata(0)
+    val groupId = ""
+
+    val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
+      OffsetCommitRequest.DEFAULT_GENERATION_ID, immutable.Map(tp -> offset))
+    assertEquals(Errors.NONE, commitOffsetResult(tp))
+
+    val (fetchError, partitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
+    assertEquals(Errors.NONE, fetchError)
+    assertEquals(Some(0), partitionData.get(tp).map(_.offset))
+
+    val (describeError, summary) = groupCoordinator.handleDescribeGroup(groupId)
+    assertEquals(Errors.NONE, describeError)
+    assertEquals("Empty", summary.state)
+  }
+
+  @Test
   def testBasicFetchTxnOffsets() {
     val tp = new TopicPartition("topic", 0)
     val offset = OffsetAndMetadata(0)
