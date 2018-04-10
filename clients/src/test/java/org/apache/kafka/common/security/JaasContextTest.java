@@ -175,6 +175,11 @@ public class JaasContextTest {
     }
 
     @Test
+    public void testInvalidControlFlag() throws Exception {
+        checkInvalidConfiguration("test.testInvalidControlFlag { option1=3;");
+    }
+
+    @Test
     public void testNumericOptionWithQuotes() throws Exception {
         Map<String, Object> options = new HashMap<>();
         options.put("option1", "3");
