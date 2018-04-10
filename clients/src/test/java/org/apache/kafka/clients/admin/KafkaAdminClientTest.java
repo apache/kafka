@@ -678,12 +678,8 @@ public class KafkaAdminClientTest {
             final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups();
             final List<ConsumerGroupListing> consumerGroups = new ArrayList<>();
 
-            final Collection<KafkaFuture<Collection<ConsumerGroupListing>>> listings = result.listings().get();
-            for (KafkaFuture<Collection<ConsumerGroupListing>> futures : listings) {
-                final Collection<ConsumerGroupListing> collection = futures.get();
-                consumerGroups.addAll(collection);
-            }
-
+            final KafkaFuture<Collection<ConsumerGroupListing>> listings = result.listings();
+            consumerGroups.addAll(listings.get());
             assertEquals(1, consumerGroups.size());
         }
     }
