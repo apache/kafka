@@ -21,10 +21,13 @@ import org.apache.kafka.streams.KeyValue
 trait StreamToTableJoinTestData {
   val brokers = "localhost:9092"
 
-  val userClicksTopic = s"user-clicks.${scala.util.Random.nextInt(100)}"
-  val userRegionsTopic = s"user-regions.${scala.util.Random.nextInt(100)}"
-  val outputTopic = s"output-topic.${scala.util.Random.nextInt(100)}"
-  val localStateDir = "local_state_data"
+  val userClicksTopic = s"user-clicks"
+  val userRegionsTopic = s"user-regions"
+  val outputTopic = s"output-topic"
+
+  val userClicksTopicJ = s"user-clicks-j"
+  val userRegionsTopicJ = s"user-regions-j"
+  val outputTopicJ = s"output-topic-j"
 
   // Input 1: Clicks per user (multiple records allowed per user).
   val userClicks: Seq[KeyValue[String, Long]] = Seq(
