@@ -20,6 +20,7 @@ import kafka.server.QuotaType._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.server.quota.ClientQuotaCallback
 import org.apache.kafka.common.utils.Time
 
 object QuotaType  {
@@ -44,22 +45,28 @@ object QuotaFactory extends Logging {
                            request: ClientRequestQuotaManager,
                            leader: ReplicationQuotaManager,
                            follower: ReplicationQuotaManager,
-                           alterLogDirs: ReplicationQuotaManager) {
+                           alterLogDirs: ReplicationQuotaManager,
+                           clientQuotaCallback: Option[ClientQuotaCallback]) {
     def shutdown() {
       fetch.shutdown
       produce.shutdown
       request.shutdown
+      clientQuotaCallback.foreach(_.close())
     }
   }
 
   def instantiate(cfg: KafkaConfig, metrics: Metrics, time: Time, threadNamePrefix: String): QuotaManagers = {
+
+    val clientQuotaCallback = Option(cfg.getConfiguredInstance(KafkaConfig.ClientQuotaCallbackClassProp,
+      classOf[ClientQuotaCallback]))
     QuotaManagers(
-      new ClientQuotaManager(clientFetchConfig(cfg), metrics, Fetch, time, threadNamePrefix, cfg.quotaCallback),
-      new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, time, threadNamePrefix, cfg.quotaCallback),
-      new ClientRequestQuotaManager(clientRequestConfig(cfg), metrics, time, threadNamePrefix, cfg.quotaCallback),
+      new ClientQuotaManager(clientFetchConfig(cfg), metrics, Fetch, time, threadNamePrefix, clientQuotaCallback),
+      new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, time, threadNamePrefix, clientQuotaCallback),
+      new ClientRequestQuotaManager(clientRequestConfig(cfg), metrics, time, threadNamePrefix, clientQuotaCallback),
       new ReplicationQuotaManager(replicationConfig(cfg), metrics, LeaderReplication, time),
       new ReplicationQuotaManager(replicationConfig(cfg), metrics, FollowerReplication, time),
-      new ReplicationQuotaManager(alterLogDirsReplicationConfig(cfg), metrics, AlterLogDirsReplication, time)
+      new ReplicationQuotaManager(alterLogDirsReplicationConfig(cfg), metrics, AlterLogDirsReplication, time),
+      clientQuotaCallback
     )
   }
 

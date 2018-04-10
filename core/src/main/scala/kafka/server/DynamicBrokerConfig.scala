@@ -158,7 +158,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       addBrokerReconfigurable(kafkaServer.logManager.cleaner)
     addReconfigurable(new DynamicLogConfig(kafkaServer.logManager))
     addReconfigurable(new DynamicMetricsReporters(kafkaConfig.brokerId, kafkaServer))
-    addReconfigurable(new DynamicClientQuotaCallback(kafkaConfig.brokerId, kafkaConfig))
+    addReconfigurable(new DynamicClientQuotaCallback(kafkaConfig.brokerId, kafkaServer))
     addBrokerReconfigurable(new DynamicListenerConfig(kafkaServer))
   }
 
@@ -710,13 +710,13 @@ object DynamicListenerConfig {
   )
 }
 
-class DynamicClientQuotaCallback(brokerId: Int, config: KafkaConfig) extends Reconfigurable {
+class DynamicClientQuotaCallback(brokerId: Int, server: KafkaServer) extends Reconfigurable {
 
   override def configure(configs: util.Map[String, _]): Unit = {}
 
   override def reconfigurableConfigs(): util.Set[String] = {
     val configs = new util.HashSet[String]()
-    config.quotaCallback.foreach {
+    server.quotaManagers.clientQuotaCallback.foreach {
       case callback: Reconfigurable => configs.addAll(callback.reconfigurableConfigs)
       case _ =>
     }
@@ -724,14 +724,15 @@ class DynamicClientQuotaCallback(brokerId: Int, config: KafkaConfig) extends Rec
   }
 
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
-    config.quotaCallback.foreach {
+    server.quotaManagers.clientQuotaCallback.foreach {
       case callback: Reconfigurable => callback.validateReconfiguration(configs)
       case _ =>
     }
   }
 
   override def reconfigure(configs: util.Map[String, _]): Unit = {
-    config.quotaCallback.foreach {
+    val config = server.config
+    server.quotaManagers.clientQuotaCallback.foreach {
       case callback: Reconfigurable =>
         config.dynamicConfig.maybeReconfigure(callback, config.dynamicConfig.currentKafkaConfig, configs)
         true
