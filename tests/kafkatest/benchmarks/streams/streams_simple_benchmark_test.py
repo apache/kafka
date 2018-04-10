@@ -23,10 +23,16 @@ from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.version import DEV_BRANCH
 
-STREAMS_SIMPLE_TEST = ["streamcount", "streamcountwindowed", "streamprocess", "streamprocesswithsink", "streamprocesswithstatestore"]
-STREAMS_JOIN_TEST = ["streamtablejoin", "streamstreamjoin", "tabletablejoin"]
-NON_STREAMS_TEST = ["consume", "consumeproduce"]
-ALL_TESTS = "all"
+STREAMS_SIMPLE_TESTS = ["streamprocess", "streamprocesswithsink", "streamprocesswithstatestore"]
+STREAMS_COUNT_TESTS = ["streamcount", "streamcountwindowed", "streamprocesswithstatestore"]
+STREAMS_JOIN_TESTS = ["streamtablejoin", "streamstreamjoin", "tabletablejoin"]
+NON_STREAMS_TESTS = ["consume", "consumeproduce"]
+
+ALL_TEST = "all"
+STREAMS_SIMPLE_TEST = "streams-simple"
+STREAMS_COUNT_TEST = "streams-count"
+STREAMS_JOIN_TEST = "streams-join"
+
 
 class StreamsSimpleBenchmarkTest(Test):
     """
@@ -45,7 +51,7 @@ class StreamsSimpleBenchmarkTest(Test):
         self.replication = 1
 
     @cluster(num_nodes=12)
-    @matrix(test=["consume", "consumeproduce", "all"], scale=[1])
+    @matrix(test=["consume", "consumeproduce", "streams-simple", "streams-count", "streams-join"], scale=[1])
     def test_simple_benchmark(self, test, scale):
         """
         Run simple Kafka Streams benchmark
@@ -71,13 +77,15 @@ class StreamsSimpleBenchmarkTest(Test):
 
 
         load_test = ""
-        if test == ALL_TESTS:
+        if test == ALL_TEST:
             load_test = "load-two"
-        if test in STREAMS_JOIN_TEST:
+        if test in STREAMS_JOIN_TESTS or test == STREAMS_JOIN_TEST:
             load_test = "load-two"
-        if test in STREAMS_SIMPLE_TEST:
+        if test in STREAMS_COUNT_TESTS or test == STREAMS_COUNT_TEST:
             load_test = "load-one"
-        if test in NON_STREAMS_TEST:
+        if test in STREAMS_SIMPLE_TESTS or test == STREAMS_SIMPLE_TEST:
+            load_test = "load-one"
+        if test in NON_STREAMS_TESTS:
             load_test = "load-one"
 
 
@@ -97,8 +105,17 @@ class StreamsSimpleBenchmarkTest(Test):
         self.load_driver.wait(3600) # wait at most 30 minutes
         self.load_driver.stop()
 
-        if test == ALL_TESTS:
-            for single_test in STREAMS_SIMPLE_TEST + STREAMS_JOIN_TEST:
+        if test == ALL_TEST:
+            for single_test in STREAMS_SIMPLE_TESTS + STREAMS_COUNT_TESTS + STREAMS_JOIN_TESTS:
+                self.run_test(single_test, scale)
+        elif test == STREAMS_SIMPLE_TEST:
+            for single_test in STREAMS_COUNT_TEST:
+                self.run_test(single_test, scale)
+        elif test == STREAMS_COUNT_TEST:
+            for single_test in STREAMS_COUNT_TESTS:
+                self.run_test(single_test, scale)
+        elif test == STREAMS_JOIN_TEST:
+            for single_test in STREAMS_JOIN_TESTS:
                 self.run_test(single_test, scale)
         else:
             self.run_test(test, scale)
