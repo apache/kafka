@@ -89,98 +89,78 @@ public class YahooBenchmark {
     }
 
     // just for Yahoo benchmark
-    private boolean maybeSetupPhaseCampaigns(final String topic, final String clientId,
+    private boolean maybeSetupPhaseCampaigns(final String topic,
+                                             final String clientId,
                                              final boolean skipIfAllTests,
-                                             final int numCampaigns, final int adsPerCampaign,
+                                             final int numCampaigns,
+                                             final int adsPerCampaign,
                                              final List<String> ads) {
         parent.resetStats();
         // initialize topics
-        if (parent.loadPhase) {
-            if (skipIfAllTests) {
-                // if we run all tests, the produce test will have already loaded the data
-                if (parent.testName.equals(SimpleBenchmark.ALL_TESTS)) {
-                    // Skipping loading phase since previously loaded
-                    return true;
-                }
-            }
-            System.out.println("Initializing topic " + topic);
+        System.out.println("Initializing topic " + topic);
 
-            Properties props = new Properties();
-            props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
-            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parent.kafka);
-            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        Properties props = new Properties();
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parent.kafka);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
-            KafkaProducer<String, String> producer = new KafkaProducer<>(props);
-            for (int c = 0; c < numCampaigns; c++) {
-                String campaignID = UUID.randomUUID().toString();
-                for (int a = 0; a < adsPerCampaign; a++) {
-                    String adId = UUID.randomUUID().toString();
-                    String concat = adId + ":" + campaignID;
-                    producer.send(new ProducerRecord<>(topic, adId, concat));
-                    ads.add(adId);
-                    parent.processedRecords.getAndIncrement();
-                    parent.processedBytes += concat.length() + adId.length();
-                }
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props);
+        for (int c = 0; c < numCampaigns; c++) {
+            String campaignID = UUID.randomUUID().toString();
+            for (int a = 0; a < adsPerCampaign; a++) {
+                String adId = UUID.randomUUID().toString();
+                String concat = adId + ":" + campaignID;
+                producer.send(new ProducerRecord<>(topic, adId, concat));
+                ads.add(adId);
+                parent.processedRecords++;
+                parent.processedBytes += concat.length() + adId.length();
             }
-            return true;
         }
-        return false;
+        return true;
     }
 
     // just for Yahoo benchmark
-    private boolean maybeSetupPhaseEvents(final String topic, final String clientId,
-                                          final boolean skipIfAllTests, final int numRecords,
-                                          final List<String> ads) {
+    private void maybeSetupPhaseEvents(final String topic,
+                                       final String clientId,
+                                       final int numRecords,
+                                       final List<String> ads) {
         parent.resetStats();
         String[] eventTypes = new String[]{"view", "click", "purchase"};
         Random rand = new Random();
-        // initialize topics
-        if (parent.loadPhase) {
-            if (skipIfAllTests) {
-                // if we run all tests, the produce test will have already loaded the data
-                if (parent.testName.equals(SimpleBenchmark.ALL_TESTS)) {
-                    // Skipping loading phase since previously loaded
-                    return true;
-                }
-            }
-            System.out.println("Initializing topic " + topic);
+        System.out.println("Initializing topic " + topic);
 
-            Properties props = new Properties();
-            props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
-            props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parent.kafka);
-            props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-            props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+        final Properties props = new Properties();
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parent.kafka);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
 
-            KafkaProducer<String, byte[]> producer = new KafkaProducer<>(props);
+        KafkaProducer<String, byte[]> producer = new KafkaProducer<>(props);
 
-            long startTime = System.currentTimeMillis();
+        final long startTime = System.currentTimeMillis();
 
-            ProjectedEvent event = new ProjectedEvent();
+        ProjectedEvent event = new ProjectedEvent();
 
-            Map<String, Object> serdeProps = new HashMap<>();
-            final Serializer<ProjectedEvent> projectedEventSerializer = new JsonPOJOSerializer<>();
-            serdeProps.put("JsonPOJOClass", ProjectedEvent.class);
-            projectedEventSerializer.configure(serdeProps, false);
+        Map<String, Object> serdeProps = new HashMap<>();
+        final Serializer<ProjectedEvent> projectedEventSerializer = new JsonPOJOSerializer<>();
+        serdeProps.put("JsonPOJOClass", ProjectedEvent.class);
+        projectedEventSerializer.configure(serdeProps, false);
 
-            for (int i = 0; i < numRecords; i++) {
-                event.eventType = eventTypes[rand.nextInt(eventTypes.length - 1)];
-                event.adID = ads.get(rand.nextInt(ads.size() - 1));
-                event.eventTime = System.currentTimeMillis();
-                byte[] value = projectedEventSerializer.serialize(topic, event);
-                producer.send(new ProducerRecord<>(topic, event.adID, value));
-                parent.processedRecords.getAndIncrement();
-                parent.processedBytes += value.length + event.adID.length();
-            }
-            producer.close();
-
-            long endTime = System.currentTimeMillis();
-
-
-            parent.printResults("Producer Performance [records/latency/rec-sec/MB-sec write]: ", endTime - startTime);
-            return true;
+        for (int i = 0; i < numRecords; i++) {
+            event.eventType = eventTypes[rand.nextInt(eventTypes.length - 1)];
+            event.adID = ads.get(rand.nextInt(ads.size() - 1));
+            event.eventTime = System.currentTimeMillis();
+            byte[] value = projectedEventSerializer.serialize(topic, event);
+            producer.send(new ProducerRecord<>(topic, event.adID, value));
+            parent.processedRecords++;
+            parent.processedBytes += value.length + event.adID.length();
         }
-        return false;
+        producer.close();
+
+        long endTime = System.currentTimeMillis();
+
+        parent.printResults("Producer Performance [records/latency/rec-sec/MB-sec write]: ", endTime - startTime);
     }
 
 
@@ -189,12 +169,8 @@ public class YahooBenchmark {
         int adsPerCampaign = 10;
 
         List<String> ads = new ArrayList<>(numCampaigns * adsPerCampaign);
-        if (maybeSetupPhaseCampaigns(campaignsTopic, "simple-benchmark-produce-campaigns", false,
-            numCampaigns, adsPerCampaign, ads)) {
-            maybeSetupPhaseEvents(eventsTopic, "simple-benchmark-produce-events", false,
-                parent.numRecords, ads);
-            return;
-        }
+        maybeSetupPhaseCampaigns(campaignsTopic, "simple-benchmark-produce-campaigns", false, numCampaigns, adsPerCampaign, ads);
+        maybeSetupPhaseEvents(eventsTopic, "simple-benchmark-produce-events", parent.numRecords, ads);
 
         CountDownLatch latch = new CountDownLatch(1);
         parent.setStreamProperties("simple-benchmark-yahoo" + new Random().nextInt());
@@ -299,11 +275,11 @@ public class YahooBenchmark {
             .peek(new ForeachAction<String, ProjectedEvent>() {
                 @Override
                 public void apply(String key, ProjectedEvent value) {
-                    parent.processedRecords.getAndIncrement();
-                    if (parent.processedRecords.get() % 1000000 == 0) {
-                        System.out.println("Processed " + parent.processedRecords.get());
+                    parent.processedRecords++;
+                    if (parent.processedRecords % 1000000 == 0) {
+                        System.out.println("Processed " + parent.processedRecords);
                     }
-                    if (parent.processedRecords.get() >= numRecords) {
+                    if (parent.processedRecords >= numRecords) {
                         latch.countDown();
                     }
                 }
