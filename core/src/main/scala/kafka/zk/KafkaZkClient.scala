@@ -94,7 +94,6 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
   def registerControllerInZk(brokerId: Int, timestamp: Long): Unit = {
     val path = ControllerZNode.path
     checkedEphemeralCreate(path, ControllerZNode.encode(brokerId, timestamp))
-    info(s"Registered controller $brokerId at path $path")
   }
 
   def updateBrokerInfoInZk(brokerInfo: BrokerInfo): Unit = {
