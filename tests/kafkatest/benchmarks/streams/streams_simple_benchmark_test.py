@@ -109,7 +109,7 @@ class StreamsSimpleBenchmarkTest(Test):
             for single_test in STREAMS_SIMPLE_TESTS + STREAMS_COUNT_TESTS + STREAMS_JOIN_TESTS:
                 self.run_test(single_test, scale)
         elif test == STREAMS_SIMPLE_TEST:
-            for single_test in STREAMS_COUNT_TEST:
+            for single_test in STREAMS_SIMPLE_TESTS:
                 self.run_test(single_test, scale)
         elif test == STREAMS_COUNT_TEST:
             for single_test in STREAMS_COUNT_TESTS:
