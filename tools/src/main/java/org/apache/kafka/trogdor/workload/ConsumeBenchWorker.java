@@ -33,6 +33,7 @@ import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.apache.kafka.trogdor.common.WorkerUtils;
+import org.apache.kafka.trogdor.task.WorkerStatusTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +47,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class ConsumeBenchWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ConsumeBenchWorker.class);
@@ -57,7 +57,7 @@ public class ConsumeBenchWorker implements TaskWorker {
     private final ConsumeBenchSpec spec;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private ScheduledExecutorService executor;
-    private AtomicReference<String> status;
+    private WorkerStatusTracker status;
     private KafkaFutureImpl<String> doneFuture;
     private KafkaConsumer<byte[], byte[]> consumer;
 
@@ -67,7 +67,7 @@ public class ConsumeBenchWorker implements TaskWorker {
     }
 
     @Override
-    public void start(Platform platform, AtomicReference<String> status,
+    public void start(Platform platform, WorkerStatusTracker status,
                       KafkaFutureImpl<String> doneFuture) throws Exception {
         if (!running.compareAndSet(false, true)) {
             throw new IllegalStateException("ConsumeBenchWorker is already running.");
@@ -165,10 +165,11 @@ public class ConsumeBenchWorker implements TaskWorker {
                 WorkerUtils.abort(log, "ConsumeRecords", e, doneFuture);
             } finally {
                 statusUpdaterFuture.cancel(false);
-                new StatusUpdater(latencyHistogram, messageSizeHistogram).run();
+                StatusData statusData =
+                    new StatusUpdater(latencyHistogram, messageSizeHistogram).update();
                 long curTimeMs = Time.SYSTEM.milliseconds();
-                log.info("Consumed total number of records={}, bytes={} in {} ms.  status: {}",
-                         messagesConsumed, bytesConsumed, curTimeMs - startTimeMs, status.get());
+                log.info("Consumed total number of messages={}, bytes={} in {} ms.  status: {}",
+                         messagesConsumed, bytesConsumed, curTimeMs - startTimeMs, statusData);
             }
             doneFuture.complete("");
             return null;
@@ -187,22 +188,26 @@ public class ConsumeBenchWorker implements TaskWorker {
         @Override
         public void run() {
             try {
-                Histogram.Summary latSummary = latencyHistogram.summarize(StatusData.PERCENTILES);
-                Histogram.Summary msgSummary = messageSizeHistogram.summarize(StatusData.PERCENTILES);
-                StatusData statusData = new StatusData(
-                    latSummary.numSamples(),
-                    (long) (msgSummary.numSamples() * msgSummary.average()),
-                    (long) msgSummary.average(),
-                    latSummary.average(),
-                    latSummary.percentiles().get(0).value(),
-                    latSummary.percentiles().get(1).value(),
-                    latSummary.percentiles().get(2).value());
-                String statusDataString = JsonUtil.toJsonString(statusData);
-                status.set(statusDataString);
-                log.info("Status={}", statusDataString);
+                update();
             } catch (Exception e) {
                 WorkerUtils.abort(log, "StatusUpdater", e, doneFuture);
             }
+        }
+
+        StatusData update() {
+            Histogram.Summary latSummary = latencyHistogram.summarize(StatusData.PERCENTILES);
+            Histogram.Summary msgSummary = messageSizeHistogram.summarize(StatusData.PERCENTILES);
+            StatusData statusData = new StatusData(
+                latSummary.numSamples(),
+                (long) (msgSummary.numSamples() * msgSummary.average()),
+                (long) msgSummary.average(),
+                latSummary.average(),
+                latSummary.percentiles().get(0).value(),
+                latSummary.percentiles().get(1).value(),
+                latSummary.percentiles().get(2).value());
+            status.update(JsonUtil.JSON_SERDE.valueToTree(statusData));
+            log.info("Status={}", JsonUtil.toJsonString(statusData));
+            return statusData;
         }
     }
 
