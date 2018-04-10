@@ -168,6 +168,8 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     TestUtils.alterConfigs(servers, adminClient, newProps, perBrokerConfig = false)
     user.waitForQuotaUpdate(8000, 2500, defaultRequestQuota)
     user.produceConsume(expectProduceThrottle = true, expectConsumeThrottle = true)
+
+    assertEquals(serverCount, callbackInstances.get)
   }
 
   /**
@@ -329,6 +331,7 @@ object GroupedUserQuotaCallback {
     ClientQuotaType.FETCH -> new AtomicInteger,
     ClientQuotaType.REQUEST -> new AtomicInteger
   )
+  val callbackInstances = new AtomicInteger
 }
 
 /**
@@ -354,6 +357,7 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
 
   override def configure(configs: util.Map[String, _]): Unit = {
     brokerId = configs.get(KafkaConfig.BrokerIdProp).toString.toInt
+    callbackInstances.incrementAndGet
   }
 
   override def reconfigurableConfigs: util.Set[String] = {
