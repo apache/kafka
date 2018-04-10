@@ -18,9 +18,9 @@
 package org.apache.kafka.trogdor.common;
 
 
-
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 
 import org.apache.kafka.common.Node;
@@ -38,8 +38,10 @@ import static org.junit.Assert.assertEquals;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -261,5 +263,59 @@ public class WorkerUtilsTest {
             Collections.singletonMap(ProducerConfig.ACKS_CONFIG, "1"),
             Collections.singletonMap(ProducerConfig.ACKS_CONFIG, "0"));
         assertEquals(resultProps, props);
+    }
+
+    @Test
+    public void testGetMatchingTopicPartitionsCorrectlyMatchesExactTopicName() throws Throwable {
+        final String topic1 = "existing-topic";
+        final String topic2 = "another-topic";
+        makeExistingTopicWithOneReplica(topic1, 10);
+        makeExistingTopicWithOneReplica(topic2, 20);
+
+        Collection<TopicPartition> topicPartitions =
+            WorkerUtils.getMatchingTopicPartitions(adminClient, topic2, 0, 2);
+        assertEquals(
+            Utils.mkSet(
+                new TopicPartition(topic2, 0), new TopicPartition(topic2, 1),
+                new TopicPartition(topic2, 2)
+            ),
+            new HashSet<>(topicPartitions)
+        );
+    }
+
+    @Test
+    public void testGetMatchingTopicPartitionsCorrectlyMatchesTopics() throws Throwable {
+        final String topic1 = "test-topic";
+        final String topic2 = "another-test-topic";
+        final String topic3 = "one-more";
+        makeExistingTopicWithOneReplica(topic1, 10);
+        makeExistingTopicWithOneReplica(topic2, 20);
+        makeExistingTopicWithOneReplica(topic3, 30);
+
+        Collection<TopicPartition> topicPartitions =
+            WorkerUtils.getMatchingTopicPartitions(adminClient, ".*-topic$", 0, 1);
+        assertEquals(
+            Utils.mkSet(
+                new TopicPartition(topic1, 0), new TopicPartition(topic1, 1),
+                new TopicPartition(topic2, 0), new TopicPartition(topic2, 1)
+            ),
+            new HashSet<>(topicPartitions)
+        );
+    }
+
+    private void makeExistingTopicWithOneReplica(String topicName, int numPartitions) {
+        List<TopicPartitionInfo> tpInfo = new ArrayList<>();
+        int brokerIndex = 0;
+        for (int i = 0; i < numPartitions; ++i) {
+            Node broker = cluster.get(brokerIndex);
+            tpInfo.add(new TopicPartitionInfo(
+                i, broker, singleReplica, Collections.<Node>emptyList()));
+            brokerIndex = (brokerIndex + 1) % cluster.size();
+        }
+        adminClient.addTopic(
+            false,
+            topicName,
+            tpInfo,
+            null);
     }
 }
