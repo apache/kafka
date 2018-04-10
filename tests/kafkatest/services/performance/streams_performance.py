@@ -58,7 +58,7 @@ class StreamsSimpleBenchmarkService(StreamsTestBaseService):
 
         self.num_threads = num_threads
 
-    def prop_file(self, node):
+    def prop_file(self):
         cfg = KafkaConfig(**{streams_property.STATE_DIR: self.PERSISTENT_ROOT,
                              streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                              streams_property.NUM_THREADS: self.num_threads})
