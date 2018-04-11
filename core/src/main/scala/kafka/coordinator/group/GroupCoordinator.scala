@@ -567,8 +567,8 @@ class GroupCoordinator(val brokerId: Int,
   private def isValidGroupId(groupId: String, api: ApiKeys): Boolean = {
     api match {
       case ApiKeys.OFFSET_COMMIT | ApiKeys.OFFSET_FETCH | ApiKeys.DESCRIBE_GROUPS | ApiKeys.DELETE_GROUPS =>
-        // For backwards compatibility, we support the offset commit APIs for the empty groupId, as well
-        // as DescribeGroups and DeleteGroups so that users can view and delete state of all groups.
+        // For backwards compatibility, we support the offset commit APIs for the empty groupId, and also
+        // in DescribeGroups and DeleteGroups so that users can view and delete state of all groups.
         groupId != null
       case _ =>
         // The remaining APIs are groups using Kafka for group coordination and must have a non-empty groupId
