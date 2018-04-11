@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.record;
 
+import java.nio.ByteBuffer;
+
 abstract class AbstractRecordBatch implements RecordBatch {
 
     @Override
@@ -32,5 +34,4 @@ abstract class AbstractRecordBatch implements RecordBatch {
     public boolean isCompressed() {
         return compressionType() != CompressionType.NONE;
     }
-
 }

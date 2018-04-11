@@ -19,6 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
+import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
@@ -239,7 +240,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     @Override
     public ConvertedRecords<? extends Records> downConvert(byte toMagic, long firstOffset, Time time) {
-        ConvertedRecords<MemoryRecords> convertedRecords = downConvert(batches, toMagic, firstOffset, time);
+        ConvertedRecords<MemoryRecords> convertedRecords = RecordsUtil.downConvert(batches, toMagic, firstOffset, time);
         if (convertedRecords.recordsProcessingStats().numRecordsConverted() == 0) {
             // This indicates that the message is too large, which means that the buffer is not large
             // enough to hold a full record batch. We just return all the bytes in this instance.
@@ -356,7 +357,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
         };
     }
 
-    private Iterator<FileChannelRecordBatch> batchIterator(int start) {
+    @Override
+    public AbstractIterator<FileChannelRecordBatch> batchIterator() {
+        return batchIterator(start);
+    }
+
+    private AbstractIterator<FileChannelRecordBatch> batchIterator(int start) {
         final int end;
         if (isSlice)
             end = this.end;

@@ -165,4 +165,10 @@ public class TopicConfig {
         "the timestamp when a broker receives a message and the timestamp specified in the message. If " +
         "message.timestamp.type=CreateTime, a message will be rejected if the difference in timestamp " +
         "exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+
+    public static final String MIN_CONSUMER_FETCH_VERSION_CONFIG = "minimum.consumer.fetch.version";
+    public static final String MIN_CONSUMER_FETCH_VERSION_DOC = "Specify the minimum version consumer must be on to send " +
+            "`FetchRequest`. The value should be a valid ApiVersion. Some examples are: 0.8.2, 0.9.0.0, 0.10.0. " +
+            "Check ApiVersion for more details. After setting this property, attempts to consume messages by a consumer " +
+            "older than the set version will result in `InvalidRequestException` to be sent to the consumer.";
 }

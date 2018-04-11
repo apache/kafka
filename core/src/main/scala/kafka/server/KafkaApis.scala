@@ -17,18 +17,17 @@
 
 package kafka.server
 
-import java.nio.ByteBuffer
 import java.lang.{Long => JLong}
-import java.util.{Collections, Properties}
+import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.{Collections, Properties}
 
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
 import kafka.cluster.Partition
 import kafka.common.{OffsetAndMetadata, OffsetMetadata}
-import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
@@ -37,30 +36,30 @@ import kafka.network.RequestChannel
 import kafka.network.RequestChannel.{CloseConnectionAction, NoOpAction, SendAction}
 import kafka.security.SecurityUtils
 import kafka.security.auth.{Resource, _}
+import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, RecordsProcessingStats}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
-import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
+import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.common.requests.{SaslAuthenticateResponse, SaslHandshakeResponse}
+import org.apache.kafka.common.requests.{SaslAuthenticateResponse, SaslHandshakeResponse, Resource => RResource, ResourceType => RResourceType, _}
 import org.apache.kafka.common.resource.{Resource => AdminResource}
-import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
-import DescribeLogDirsResponse.LogDirInfo
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.{Node, TopicPartition}
 
-import scala.collection._
 import scala.collection.JavaConverters._
+import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
 
@@ -534,7 +533,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       })
     }
 
-    def convertedPartitionData(tp: TopicPartition, data: FetchResponse.PartitionData) = {
+    def convertedPartitionData(tp: TopicPartition, data: FetchResponse.PartitionData, doLazyConversion: Boolean): FetchResponse.PartitionData = {
       // Down-conversion of the fetched records is needed when the stored magic version is
       // greater than that supported by the client (as indicated by the fetch request version). If the
       // configured magic version for the topic is less than or equal to that supported by the version of the
@@ -554,17 +553,27 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         downConvertMagic.map { magic =>
           trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
-          val converted = data.records.downConvert(magic, fetchContext.getFetchOffset(tp).get, time)
-          updateRecordsProcessingStats(request, tp, converted.recordsProcessingStats)
+
+          val converted = {
+            if (doLazyConversion) {
+              new LazyDownConversionRecords(data.records, magic, fetchContext.getFetchOffset(tp).get)
+              // TODO: figure out how to update statistics
+            }
+            else {
+              val convertedRecords = data.records.downConvert(magic, fetchContext.getFetchOffset(tp).get, time)
+              updateRecordsProcessingStats(request, tp, convertedRecords.recordsProcessingStats)
+              convertedRecords.records()
+            }
+          }
           new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-            data.logStartOffset, data.abortedTransactions, converted.records)
+            data.logStartOffset, data.abortedTransactions, converted)
         }
 
       }.getOrElse(data)
     }
 
     // the callback for process a fetch response, invoked before throttling
-    def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]) {
+    def processResponseCallback(responsePartitionData: Seq[(TopicPartition, FetchPartitionData)]): Unit = {
       val partitions = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
       responsePartitionData.foreach{ case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
@@ -579,11 +588,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       def fetchResponseCallback(bandwidthThrottleTimeMs: Int) {
         def createResponse(requestThrottleTimeMs: Int): FetchResponse = {
           val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
+          var isFirstPartition = true
           unconvertedFetchResponse.responseData().asScala.foreach { case (tp, partitionData) =>
             if (partitionData.error != Errors.NONE)
               debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
                 s"on partition $tp failed due to ${partitionData.error.exceptionName}")
-            convertedData.put(tp, convertedPartitionData(tp, partitionData))
+            convertedData.put(tp, convertedPartitionData(tp, partitionData, !isFirstPartition))
+            isFirstPartition = false
           }
           val response = new FetchResponse(unconvertedFetchResponse.error(), convertedData,
             bandwidthThrottleTimeMs + requestThrottleTimeMs, unconvertedFetchResponse.sessionId())
