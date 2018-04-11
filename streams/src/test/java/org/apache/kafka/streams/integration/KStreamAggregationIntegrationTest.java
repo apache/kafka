@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import kafka.tools.ConsoleConsumer;
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -65,14 +66,19 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -80,6 +86,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 @Category({IntegrationTest.class})
 public class KStreamAggregationIntegrationTest {
@@ -225,6 +232,13 @@ public class KStreamAggregationIntegrationTest {
             String.class,
             15);
 
+        // read from ConsoleConsumer
+        String resultFromConsoleConsumer = readWindowedKeyedMsgsFromConsoleConsumer(
+                new TimeWindowedDeserializer<String>(),
+                new StringDeserializer(),
+                String.class,
+                15);
+
         final Comparator<KeyValue<Windowed<String>, String>>
             comparator =
             new Comparator<KeyValue<Windowed<String>, String>>() {
@@ -240,8 +254,7 @@ public class KStreamAggregationIntegrationTest {
         final long firstBatchWindow = firstBatchTimestamp / 500 * 500;
         final long secondBatchWindow = secondBatchTimestamp / 500 * 500;
 
-        assertThat(windowedOutput, is(
-            Arrays.asList(
+        List<KeyValue<Windowed<String>, String>> expectResult = Arrays.asList(
                 new KeyValue<>(new Windowed<>("A", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "A"),
                 new KeyValue<>(new Windowed<>("A", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "A"),
                 new KeyValue<>(new Windowed<>("A", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "A:A"),
@@ -257,8 +270,20 @@ public class KStreamAggregationIntegrationTest {
                 new KeyValue<>(new Windowed<>("E", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "E"),
                 new KeyValue<>(new Windowed<>("E", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "E"),
                 new KeyValue<>(new Windowed<>("E", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "E:E")
-            )
-        ));
+        );
+        assertThat(windowedOutput, is(expectResult));
+
+        Set<String> expectResultString = new HashSet<>(expectResult.size());
+        for (KeyValue<Windowed<String>, String> eachRecord: expectResult) {
+            expectResultString.add(eachRecord.toString());
+        }
+
+        // check every message is contained in the expect result
+        String[] allRecords = resultFromConsoleConsumer.split("\n");
+        for (String record: allRecords) {
+            record = "KeyValue(" + record + ")";
+            assertTrue(expectResultString.contains(record));
+        }
     }
 
     @SuppressWarnings("deprecation")
@@ -329,6 +354,13 @@ public class KStreamAggregationIntegrationTest {
             String.class,
             15);
 
+        // read from ConsoleConsumer
+        String resultFromConsoleConsumer = readWindowedKeyedMsgsFromConsoleConsumer(
+                new TimeWindowedDeserializer<String>(),
+                new IntegerDeserializer(),
+                String.class,
+                15);
+
         final Comparator<KeyValue<Windowed<String>, Integer>>
             comparator =
             new Comparator<KeyValue<Windowed<String>, Integer>>() {
@@ -345,25 +377,37 @@ public class KStreamAggregationIntegrationTest {
         final long firstWindow = firstTimestamp / 500 * 500;
         final long secondWindow = secondTimestamp / 500 * 500;
 
-        assertThat(windowedMessages, is(
-                Arrays.asList(
-                        new KeyValue<>(new Windowed<>("A", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1),
-                        new KeyValue<>(new Windowed<>("A", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1),
-                        new KeyValue<>(new Windowed<>("A", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2),
-                        new KeyValue<>(new Windowed<>("B", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1),
-                        new KeyValue<>(new Windowed<>("B", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1),
-                        new KeyValue<>(new Windowed<>("B", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2),
-                        new KeyValue<>(new Windowed<>("C", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1),
-                        new KeyValue<>(new Windowed<>("C", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1),
-                        new KeyValue<>(new Windowed<>("C", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2),
-                        new KeyValue<>(new Windowed<>("D", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1),
-                        new KeyValue<>(new Windowed<>("D", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1),
-                        new KeyValue<>(new Windowed<>("D", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2),
-                        new KeyValue<>(new Windowed<>("E", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1),
-                        new KeyValue<>(new Windowed<>("E", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1),
-                        new KeyValue<>(new Windowed<>("E", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2)
-                )
-        ));
+        List<KeyValue<Windowed<String>, Integer>> expectResult = Arrays.asList(
+                new KeyValue<>(new Windowed<>("A", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1),
+                new KeyValue<>(new Windowed<>("A", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1),
+                new KeyValue<>(new Windowed<>("A", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2),
+                new KeyValue<>(new Windowed<>("B", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1),
+                new KeyValue<>(new Windowed<>("B", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1),
+                new KeyValue<>(new Windowed<>("B", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2),
+                new KeyValue<>(new Windowed<>("C", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1),
+                new KeyValue<>(new Windowed<>("C", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1),
+                new KeyValue<>(new Windowed<>("C", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2),
+                new KeyValue<>(new Windowed<>("D", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1),
+                new KeyValue<>(new Windowed<>("D", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1),
+                new KeyValue<>(new Windowed<>("D", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2),
+                new KeyValue<>(new Windowed<>("E", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1),
+                new KeyValue<>(new Windowed<>("E", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1),
+                new KeyValue<>(new Windowed<>("E", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2));
+
+        assertThat(windowedMessages, is(expectResult));
+
+        Set<String> expectResultString = new HashSet<>(expectResult.size());
+        for (KeyValue<Windowed<String>, Integer> eachRecord: expectResult) {
+            expectResultString.add(eachRecord.toString());
+        }
+
+        // check every message is contained in the expect result
+        String[] allRecords = resultFromConsoleConsumer.split("\n");
+        for (String record: allRecords) {
+            record = "KeyValue(" + record + ")";
+            assertTrue(expectResultString.contains(record));
+        }
+
     }
 
     private void shouldCountHelper() throws Exception {
@@ -718,4 +762,33 @@ public class KStreamAggregationIntegrationTest {
                 60 * 1000);
     }
 
+    private <K, V> String readWindowedKeyedMsgsFromConsoleConsumer(final Deserializer<K> keyDeserializer,
+                                                  final Deserializer<V> valueDeserializer,
+                                                  final Class innerClass,
+                                                  final int numMessages) {
+        ByteArrayOutputStream newConsole = new ByteArrayOutputStream();
+        PrintStream originalStream = System.out;
+        try (PrintStream newStream = new PrintStream(newConsole)) {
+            System.setOut(newStream);
+
+            String keySeparator = ", ";
+            // manually construct the console consumer argument array
+            String[] args = new String[] {
+                    "--bootstrap-server", CLUSTER.bootstrapServers(),
+                    "--from-beginning",
+                    "--property", "print.key=true",
+                    "--topic", outputTopic,
+                    "--max-messages", String.valueOf(numMessages),
+                    "--property", "key.deserializer=" + keyDeserializer.getClass().getName(),
+                    "--property", "value.deserializer=" + valueDeserializer.getClass().getName(),
+                    "--property", "key.separator=" + keySeparator,
+                    "--" + StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS, Serdes.serdeFrom(innerClass).getClass().getName()
+            };
+            ConsoleConsumer.messageCount_$eq(0); //reset the message count
+            ConsoleConsumer.run(new ConsoleConsumer.ConsumerConfig(args));
+            newStream.flush();
+            System.setOut(originalStream);
+            return newConsole.toString();
+        }
+    }
 }

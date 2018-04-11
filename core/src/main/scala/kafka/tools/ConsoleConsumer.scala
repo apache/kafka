@@ -48,8 +48,9 @@ object ConsoleConsumer extends Logging {
   var messageCount = 0
   // Keep same names with StreamConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS
   // and StreamConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS
-  private val innerKeySerdeName = "default.windowed.key.serde.inner"
-  private val innerValueSerdeName = "default.windowed.value.serde.inner"
+  // visible for testing
+  private[tools] val innerKeySerdeName = "default.windowed.key.serde.inner"
+  private[tools] val innerValueSerdeName = "default.windowed.value.serde.inner"
 
   private val shutdownLatch = new CountDownLatch(1)
 
