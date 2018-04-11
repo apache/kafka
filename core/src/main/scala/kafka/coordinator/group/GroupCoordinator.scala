@@ -563,7 +563,6 @@ class GroupCoordinator(val brokerId: Int,
     info(s"Removed $offsetsRemoved offsets associated with deleted partitions: ${topicPartitions.mkString(", ")}.")
   }
 
-
   private def isValidGroupId(groupId: String, api: ApiKeys): Boolean = {
     api match {
       case ApiKeys.OFFSET_COMMIT | ApiKeys.OFFSET_FETCH | ApiKeys.DESCRIBE_GROUPS | ApiKeys.DELETE_GROUPS =>

@@ -880,7 +880,8 @@ class GroupCoordinatorTest extends JUnitSuite {
 
   @Test
   def testCommitAndFetchOffsetsWithEmptyGroup() {
-    // For backwards compatibility, the coordinator supports committing/fetching offsets with an empty groupId
+    // For backwards compatibility, the coordinator supports committing/fetching offsets with an empty groupId.
+    // To allow inspection and removal of the empty group, we must also support DescribeGroups and DeleteGroups
 
     val tp = new TopicPartition("topic", 0)
     val offset = OffsetAndMetadata(0)
