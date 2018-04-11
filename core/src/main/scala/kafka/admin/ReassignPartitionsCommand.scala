@@ -41,7 +41,6 @@ import scala.compat.java8.OptionConverters._
 import scala.math.Ordered.orderingToOrdered
 
 import scala.util.control.NonFatal
-import scala.util.{Failure, Success}
 
 object ReassignPartitionsCommand extends Logging {
   private[admin] val AnyLogDir = "any"
