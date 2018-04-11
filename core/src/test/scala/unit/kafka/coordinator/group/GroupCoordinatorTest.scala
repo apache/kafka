@@ -1375,7 +1375,7 @@ class GroupCoordinatorTest extends JUnitSuite {
 
   @Test
   def testDeleteGroupWithInvalidGroupId() {
-    val invalidGroupId = ""
+    val invalidGroupId = null
     val result = groupCoordinator.handleDeleteGroups(Set(invalidGroupId))
     assert(result.size == 1 && result.contains(invalidGroupId) && result.get(invalidGroupId).contains(Errors.INVALID_GROUP_ID))
   }
