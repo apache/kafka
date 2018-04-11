@@ -772,7 +772,7 @@ public class KStreamAggregationIntegrationTest {
 
             String keySeparator = ", ";
             // manually construct the console consumer argument array
-            String[] args = (String[])Arrays.asList(
+            String[] args = (String[]) Arrays.asList(
                     "--bootstrap-server", CLUSTER.bootstrapServers(),
                     "--from-beginning",
                     "--property", "print.key=true",
