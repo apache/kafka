@@ -18,7 +18,9 @@ package org.apache.kafka.common.record;
 
 import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
+import java.util.Iterator;
 
+import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
 
 /**
@@ -80,6 +82,13 @@ public interface Records {
     Iterable<? extends RecordBatch> batches();
 
     /**
+     * Get an iterator over the record batches. This is similar to {@link #batches()} but returns an {@link AbstractIterator}
+     * instead of {@link Iterator}, so that clients can use methods like {@link AbstractIterator#peek() peek}.
+     * @return An iterator over the record batches of the log
+     */
+    AbstractIterator<? extends RecordBatch> batchIterator();
+
+    /**
      * Check whether all batches in this buffer have a certain magic value.
      * @param magic The magic value to check
      * @return true if all record batches have a matching magic value, false otherwise
@@ -99,7 +108,7 @@ public interface Records {
      * deep iteration since all of the deep records must also be converted to the desired format.
      * @param toMagic The magic value to convert to
      * @param firstOffset The starting offset for returned records. This only impacts some cases. See
-     *                    {@link AbstractRecords#downConvert(Iterable, byte, long, Time) for an explanation.
+     *                    {@link RecordsUtil#downConvert(Iterable, byte, long, Time)} for an explanation.
      * @param time instance used for reporting stats
      * @return A ConvertedRecords instance which may or may not contain the same instance in its records field.
      */
