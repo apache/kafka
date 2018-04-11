@@ -40,7 +40,7 @@ import org.apache.kafka.common.security.scram.internal.ScramMessages.ClientFinal
 import org.apache.kafka.common.security.scram.internal.ScramMessages.ClientFirstMessage;
 import org.apache.kafka.common.security.scram.internal.ScramMessages.ServerFinalMessage;
 import org.apache.kafka.common.security.scram.internal.ScramMessages.ServerFirstMessage;
-import org.apache.kafka.common.security.token.delegation.DelegationTokenCredentialCallback;
+import org.apache.kafka.common.security.token.delegation.internal.DelegationTokenCredentialCallback;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

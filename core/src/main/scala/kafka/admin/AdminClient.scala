@@ -35,8 +35,6 @@ import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.requests.DescribeGroupsResponse.GroupMetadata
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.utils.LogContext
-import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
@@ -340,33 +338,6 @@ class AdminClient(val time: Time,
     }.toList
 
     ConsumerGroupSummary(metadata.state, metadata.protocol, Some(consumers), coordinator)
-  }
-
-  def createToken(renewers: List[KafkaPrincipal], maxTimePeriodMs: Long = -1): (Errors, DelegationToken) = {
-    val responseBody = sendAnyNode(ApiKeys.CREATE_DELEGATION_TOKEN, new CreateDelegationTokenRequest.Builder(renewers.asJava, maxTimePeriodMs))
-    val response = responseBody.asInstanceOf[CreateDelegationTokenResponse]
-    val tokenInfo = new TokenInformation(response.tokenId, response.owner, renewers.asJava,
-      response.issueTimestamp, response.maxTimestamp, response.expiryTimestamp)
-    (response.error, new DelegationToken(tokenInfo, response.hmacBytes))
-  }
-
-  def renewToken(hmac: ByteBuffer, renewTimePeriod: Long = -1): (Errors, Long) = {
-    val responseBody = sendAnyNode(ApiKeys.RENEW_DELEGATION_TOKEN, new RenewDelegationTokenRequest.Builder(hmac, renewTimePeriod))
-    val response = responseBody.asInstanceOf[RenewDelegationTokenResponse]
-    (response.error, response.expiryTimestamp)
-  }
-
-  def expireToken(hmac: ByteBuffer, expiryTimeStamp: Long = -1): (Errors, Long) = {
-    val responseBody = sendAnyNode(ApiKeys.EXPIRE_DELEGATION_TOKEN, new ExpireDelegationTokenRequest.Builder(hmac, expiryTimeStamp))
-    val response = responseBody.asInstanceOf[ExpireDelegationTokenResponse]
-    (response.error, response.expiryTimestamp)
-  }
-
-  def describeToken(owners: List[KafkaPrincipal]): (Errors, List[DelegationToken]) = {
-    val ownersList = if (owners == null) null else owners.asJava
-    val responseBody = sendAnyNode(ApiKeys.RENEW_DELEGATION_TOKEN, new DescribeDelegationTokenRequest.Builder(ownersList))
-    val response = responseBody.asInstanceOf[DescribeDelegationTokenResponse]
-    (response.error, response.tokens().asScala.toList)
   }
 
   def deleteConsumerGroups(groups: List[String]): Map[String, Errors] = {

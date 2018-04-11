@@ -41,7 +41,7 @@ import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internal.ScramMechanism;
 import org.apache.kafka.common.security.scram.internal.ScramServerCallbackHandler;
 import org.apache.kafka.common.security.ssl.SslFactory;
-import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
+import org.apache.kafka.common.security.token.delegation.internal.DelegationTokenCache;
 import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;

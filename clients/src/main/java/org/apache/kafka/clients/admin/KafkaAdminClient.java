@@ -69,6 +69,8 @@ import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
+import org.apache.kafka.common.requests.CreateDelegationTokenRequest;
+import org.apache.kafka.common.requests.CreateDelegationTokenResponse;
 import org.apache.kafka.common.requests.CreatePartitionsRequest;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
@@ -85,12 +87,20 @@ import org.apache.kafka.common.requests.DescribeAclsRequest;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.DescribeConfigsRequest;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.requests.DescribeDelegationTokenRequest;
+import org.apache.kafka.common.requests.DescribeDelegationTokenResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
+import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
+import org.apache.kafka.common.requests.ExpireDelegationTokenResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
+import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
 import org.apache.kafka.common.requests.Resource;
 import org.apache.kafka.common.requests.ResourceType;
+import org.apache.kafka.common.security.token.delegation.DelegationToken;
+import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
@@ -2071,5 +2081,132 @@ public class KafkaAdminClient extends AdminClient {
         }, nowMetadata);
 
         return new DeleteRecordsResult(new HashMap<TopicPartition, KafkaFuture<DeletedRecords>>(futures));
+    }
+
+    @Override
+    public CreateDelegationTokenResult createDelegationToken(final CreateDelegationTokenOptions options) {
+        final KafkaFutureImpl<DelegationToken> delegationTokenFuture = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        runnable.call(new Call("createDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
+            new LeastLoadedNodeProvider()) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new CreateDelegationTokenRequest.Builder(options.renewers(), options.maxlifeTimeMs());
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                CreateDelegationTokenResponse response = (CreateDelegationTokenResponse) abstractResponse;
+                if (response.hasError()) {
+                    delegationTokenFuture.completeExceptionally(response.error().exception());
+                } else {
+                    TokenInformation tokenInfo =  new TokenInformation(response.tokenId(), response.owner(),
+                        options.renewers(), response.issueTimestamp(), response.maxTimestamp(), response.expiryTimestamp());
+                    DelegationToken token = new DelegationToken(tokenInfo, response.hmacBytes());
+                    delegationTokenFuture.complete(token);
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                delegationTokenFuture.completeExceptionally(throwable);
+            }
+        }, now);
+
+        return new CreateDelegationTokenResult(delegationTokenFuture);
+    }
+
+    @Override
+    public RenewDelegationTokenResult renewDelegationToken(final byte[] hmac, final RenewDelegationTokenOptions options) {
+        final KafkaFutureImpl<Long>  expiryTimeFuture = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        runnable.call(new Call("renewDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
+            new LeastLoadedNodeProvider()) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new RenewDelegationTokenRequest.Builder(hmac, options.renewTimePeriodMs());
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                RenewDelegationTokenResponse response = (RenewDelegationTokenResponse) abstractResponse;
+                if (response.hasError()) {
+                    expiryTimeFuture.completeExceptionally(response.error().exception());
+                } else {
+                    expiryTimeFuture.complete(response.expiryTimestamp());
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                expiryTimeFuture.completeExceptionally(throwable);
+            }
+        }, now);
+
+        return new RenewDelegationTokenResult(expiryTimeFuture);
+    }
+
+    @Override
+    public ExpireDelegationTokenResult expireDelegationToken(final byte[] hmac, final ExpireDelegationTokenOptions options) {
+        final KafkaFutureImpl<Long>  expiryTimeFuture = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        runnable.call(new Call("expireDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
+            new LeastLoadedNodeProvider()) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new ExpireDelegationTokenRequest.Builder(hmac, options.expiryTimePeriodMs());
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                ExpireDelegationTokenResponse response = (ExpireDelegationTokenResponse) abstractResponse;
+                if (response.hasError()) {
+                    expiryTimeFuture.completeExceptionally(response.error().exception());
+                } else {
+                    expiryTimeFuture.complete(response.expiryTimestamp());
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                expiryTimeFuture.completeExceptionally(throwable);
+            }
+        }, now);
+
+        return new ExpireDelegationTokenResult(expiryTimeFuture);
+    }
+
+    @Override
+    public DescribeDelegationTokenResult describeDelegationToken(final DescribeDelegationTokenOptions options) {
+        final KafkaFutureImpl<List<DelegationToken>>  tokensFuture = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        runnable.call(new Call("describeDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
+            new LeastLoadedNodeProvider()) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new DescribeDelegationTokenRequest.Builder(options.owners());
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                DescribeDelegationTokenResponse response = (DescribeDelegationTokenResponse) abstractResponse;
+                if (response.hasError()) {
+                    tokensFuture.completeExceptionally(response.error().exception());
+                } else {
+                    tokensFuture.complete(response.tokens());
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                tokensFuture.completeExceptionally(throwable);
+            }
+        }, now);
+
+        return new DescribeDelegationTokenResult(tokensFuture);
     }
 }
