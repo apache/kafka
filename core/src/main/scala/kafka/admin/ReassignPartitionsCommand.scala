@@ -1610,13 +1610,13 @@ object ReassignPartitionsCommand extends Logging {
 
   def parsePartitionReassignmentData(jsonData: String): (Seq[(TopicPartition, Seq[Int])], Map[TopicPartitionReplica, String]) = {
     Json.tryParseFull(jsonData) match {
-      case Success(js) =>
+      case Right(js) =>
         val version = js.asJsonObject.get("version") match {
           case Some(jsonValue) => jsonValue.to[Int]
           case None => EarliestVersion
         }
         parsePartitionReassignmentData(version, js)
-      case Failure(f) =>
+      case Left(f) =>
         if (NonFatal(f))
           throw new AdminCommandFailedException("Admin command failed", f)
         else

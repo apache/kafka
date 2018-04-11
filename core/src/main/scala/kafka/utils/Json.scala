@@ -67,12 +67,14 @@ object Json {
   }
 
   /**
-   * Parse a JSON string into a JsonValue if possible. It returns a `Try` in case any exception happens.
+   * Parse a JSON string into a JsonValue if possible. It returns an `Either` where `Left` will be an exception and
+    * `Right` is the `JsonValue`.
    * @param input a JSON string to parse
-   * @return A `Try` which in case of `Success` contains either `None` if the parsing was unsuccessful or `Some(x)` if
-   *         the parsing was successful where `x` is a `JsonValue`.
+   * @return An `Either` which in case of `Left` means an exception and `Right` is the actual return value.
    */
-  def tryParseFull(input: String): Try[Option[JsonValue]] = Try(doParseFull(input))
+  def tryParseFull(input: String): Either[JsonProcessingException, Option[JsonValue]] =
+    try Right(doParseFull(input))
+    catch { case e: JsonProcessingException => Left(e) }
 
   private def doParseFull(input: String): Option[JsonValue] = Option(mapper.readTree(input)).map(JsonValue(_))
 
