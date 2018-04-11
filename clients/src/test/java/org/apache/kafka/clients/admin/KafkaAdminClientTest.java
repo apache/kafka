@@ -18,6 +18,9 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
@@ -47,10 +50,15 @@ import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
+import org.apache.kafka.common.requests.DeleteGroupsResponse;
 import org.apache.kafka.common.requests.DeleteRecordsResponse;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.requests.DescribeGroupsResponse;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceFilter;
 import org.apache.kafka.common.resource.ResourceType;
@@ -64,6 +72,7 @@ import org.junit.rules.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -81,6 +90,7 @@ import static org.apache.kafka.common.requests.ResourceType.BROKER;
 import static org.apache.kafka.common.requests.ResourceType.TOPIC;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -633,6 +643,188 @@ public class KafkaAdminClientTest {
             } catch (ExecutionException e1) {
                 assertTrue(e1.getCause() instanceof UnknownTopicOrPartitionException);
             }
+        }
+    }
+
+    //Ignoring test to be fixed on follow-up PR
+    @Ignore
+    @Test
+    public void testListConsumerGroups() throws Exception {
+        final HashMap<Integer, Node> nodes = new HashMap<>();
+        nodes.put(0, new Node(0, "localhost", 8121));
+
+        final Cluster cluster =
+            new Cluster(
+                "mockClusterId",
+                nodes.values(),
+                Collections.<PartitionInfo>emptyList(),
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet(), nodes.get(0));
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+
+            env.kafkaClient().prepareResponse(
+                new MetadataResponse(
+                    env.cluster().nodes(),
+                    env.cluster().clusterResource().clusterId(),
+                    env.cluster().controller().id(),
+                    new ArrayList<MetadataResponse.TopicMetadata>()));
+
+            env.kafkaClient().prepareResponse(
+                new ListGroupsResponse(
+                    Errors.NONE,
+                    Arrays.asList(
+                        new ListGroupsResponse.Group("group-1", ConsumerProtocol.PROTOCOL_TYPE),
+                        new ListGroupsResponse.Group("group-connect-1", "connector")
+                    )));
+
+            final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups();
+            final List<ConsumerGroupListing> consumerGroups = new ArrayList<>();
+
+            final KafkaFuture<Collection<ConsumerGroupListing>> listings = result.listings();
+            consumerGroups.addAll(listings.get());
+            assertEquals(1, consumerGroups.size());
+        }
+    }
+
+    @Test
+    public void testDescribeConsumerGroups() throws Exception {
+        final HashMap<Integer, Node> nodes = new HashMap<>();
+        nodes.put(0, new Node(0, "localhost", 8121));
+
+        final Cluster cluster =
+            new Cluster(
+                "mockClusterId",
+                nodes.values(),
+                Collections.<PartitionInfo>emptyList(),
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet(), nodes.get(0));
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+
+            env.kafkaClient().prepareResponse(new FindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            final Map<String, DescribeGroupsResponse.GroupMetadata> groupMetadataMap = new HashMap<>();
+            TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
+            TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
+            TopicPartition myTopicPartition2 = new TopicPartition("my_topic", 2);
+
+            final List<TopicPartition> topicPartitions = new ArrayList<>();
+            topicPartitions.add(0, myTopicPartition0);
+            topicPartitions.add(1, myTopicPartition1);
+            topicPartitions.add(2, myTopicPartition2);
+
+            final ByteBuffer memberAssignment = ConsumerProtocol.serializeAssignment(new PartitionAssignor.Assignment(topicPartitions));
+
+            groupMetadataMap.put(
+                "group-0",
+                new DescribeGroupsResponse.GroupMetadata(
+                    Errors.NONE,
+                    "",
+                    ConsumerProtocol.PROTOCOL_TYPE,
+                    "",
+                    Arrays.asList(
+                        new DescribeGroupsResponse.GroupMember("0", "clientId0", "clientHost", null, memberAssignment),
+                        new DescribeGroupsResponse.GroupMember("1", "clientId1", "clientHost", null, memberAssignment))));
+            groupMetadataMap.put(
+                "group-connect-0",
+                new DescribeGroupsResponse.GroupMetadata(
+                    Errors.NONE,
+                    "",
+                    "connect",
+                    "",
+                    Arrays.asList(
+                        new DescribeGroupsResponse.GroupMember("0", "clientId0", "clientHost", null, memberAssignment),
+                        new DescribeGroupsResponse.GroupMember("1", "clientId1", "clientHost", null, memberAssignment))));
+
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(groupMetadataMap));
+
+            final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(Collections.singletonList("group-0"));
+            final KafkaFuture<ConsumerGroupDescription> groupDescriptionFuture = result.describedGroups().get().get("group-0");
+            final ConsumerGroupDescription groupDescription = groupDescriptionFuture.get();
+
+            assertEquals(1, result.describedGroups().get().size());
+            assertEquals("group-0", groupDescription.groupId());
+            assertEquals(2, groupDescription.members().size());
+        }
+    }
+
+    @Test
+    public void testDescribeConsumerGroupOffsets() throws Exception {
+        final HashMap<Integer, Node> nodes = new HashMap<>();
+        nodes.put(0, new Node(0, "localhost", 8121));
+
+        final Cluster cluster =
+            new Cluster(
+                "mockClusterId",
+                nodes.values(),
+                Collections.<PartitionInfo>emptyList(),
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet(), nodes.get(0));
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+
+            env.kafkaClient().prepareResponse(new FindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
+            TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
+            TopicPartition myTopicPartition2 = new TopicPartition("my_topic", 2);
+
+            final Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<>();
+            responseData.put(myTopicPartition0, new OffsetFetchResponse.PartitionData(10, "", Errors.NONE));
+            responseData.put(myTopicPartition1, new OffsetFetchResponse.PartitionData(0, "", Errors.NONE));
+            responseData.put(myTopicPartition2, new OffsetFetchResponse.PartitionData(20, "", Errors.NONE));
+            env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.NONE, responseData));
+
+            final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets("group-0");
+
+            assertEquals(3, result.partitionsToOffsetAndMetadata().get().size());
+            final TopicPartition topicPartition = result.partitionsToOffsetAndMetadata().get().keySet().iterator().next();
+            assertEquals("my_topic", topicPartition.topic());
+            final OffsetAndMetadata offsetAndMetadata = result.partitionsToOffsetAndMetadata().get().values().iterator().next();
+            assertEquals(10, offsetAndMetadata.offset());
+        }
+    }
+
+    @Test
+    public void testDeleteConsumerGroups() throws Exception {
+        final HashMap<Integer, Node> nodes = new HashMap<>();
+        nodes.put(0, new Node(0, "localhost", 8121));
+
+        final Cluster cluster =
+            new Cluster(
+                "mockClusterId",
+                nodes.values(),
+                Collections.<PartitionInfo>emptyList(),
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet(), nodes.get(0));
+
+        final List<String> groupIds = Collections.singletonList("group-0");
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+
+            env.kafkaClient().prepareResponse(new FindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            final Map<String, Errors> response = new HashMap<>();
+            response.put("group-0", Errors.NONE);
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(response));
+
+            final DeleteConsumerGroupsResult result = env.adminClient().deleteConsumerGroups(groupIds);
+
+            final Map<String, KafkaFuture<Void>> results = result.deletedGroups().get();
+            assertNull(results.get("group-0").get());
         }
     }
 
