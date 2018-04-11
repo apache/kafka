@@ -268,30 +268,41 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * Poll for coordinator events. This ensures that the coordinator is known and that the consumer
      * has joined the group (if it is using group management). This also handles periodic offset commits
      * if they are enabled.
+     * <p>
+     * Returns early if the timeout expires
      *
-     * @param now current time in milliseconds
+     * @param startTime The current time in milliseconds
+     * @param timeoutMs The amount of time, in ms, allotted for this operation.
+     * @return true iff the operation succeeded
      */
-    public void poll(long now, long remainingMs) {
+    public boolean poll(final long startTime, final long timeoutMs) {
         invokeCompletedOffsetCommitCallbacks();
 
         if (subscriptions.partitionsAutoAssigned()) {
             if (coordinatorUnknown()) {
-                ensureCoordinatorReady();
-                now = time.milliseconds();
+                final long now = time.milliseconds();
+                final long remainingTimeout = remainingTimeMs(startTime, timeoutMs);
+                if (!ensureCoordinatorReady(now, remainingTimeout)) {
+                    return false;
+                }
             }
 
             if (needRejoin()) {
                 // due to a race condition between the initial metadata fetch and the initial rebalance,
                 // we need to ensure that the metadata is fresh before joining initially. This ensures
                 // that we have matched the pattern against the cluster's topics at least once before joining.
-                if (subscriptions.hasPatternSubscription())
-                    client.ensureFreshMetadata();
+                if (subscriptions.hasPatternSubscription()) {
+                    if (!client.ensureFreshMetadata(remainingTimeMs(startTime, timeoutMs))) {
+                        return false;
+                    }
+                }
 
-                ensureActiveGroup();
-                now = time.milliseconds();
+                if (!ensureActiveGroup(remainingTimeMs(startTime, timeoutMs))) {
+                    return false;
+                }
             }
 
-            pollHeartbeat(now);
+            pollHeartbeat(time.milliseconds());
         } else {
             // For manually assigned partitions, if there are no ready nodes, await metadata.
             // If connections to all nodes fail, wakeups triggered while attempting to send fetch
@@ -301,14 +312,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // When group management is used, metadata wait is already performed for this scenario as
             // coordinator is unknown, hence this check is not required.
             if (metadata.updateRequested() && !client.hasReadyNodes()) {
-                boolean metadataUpdated = client.awaitMetadataUpdate(remainingMs);
+                final boolean metadataUpdated = client.awaitMetadataUpdate(timeoutMs);
                 if (!metadataUpdated && !client.hasReadyNodes())
-                    return;
-                now = time.milliseconds();
+                    return false;
             }
         }
 
-        maybeAutoCommitOffsetsAsync(now);
+        maybeAutoCommitOffsetsAsync(time.milliseconds());
+        return true;
+    }
+
+    private long remainingTimeMs(final long startTime, final long executionTimeBudget) {
+        final long now = time.milliseconds();
+        return executionTimeBudget - (now - startTime);
     }
 
     /**

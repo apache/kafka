@@ -1138,28 +1138,33 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Do one round of polling. In addition to checking for new data, this does any needed offset commits
      * (if auto-commit is enabled), and offset resets (if an offset reset policy is defined).
-     * @param timeout The maximum time to block in the underlying call to {@link ConsumerNetworkClient#poll(long)}.
+     *
+     * @param timeout The maximum time to block.
      * @return The fetched records (may be empty)
      */
-    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
+    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(final long timeout) {
         client.maybeTriggerWakeup();
 
-        long startMs = time.milliseconds();
-        coordinator.poll(startMs, timeout);
+        final long startMs = time.milliseconds();
+        if (!coordinator.poll(startMs, timeout)) {
+            // we ran out of time.
+            return Collections.emptyMap();
+        }
 
         // Lookup positions of assigned partitions
-        boolean hasAllFetchPositions = updateFetchPositions();
+        final boolean hasAllFetchPositions = updateFetchPositions();
 
         // if data is available already, return it immediately
-        Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
-        if (!records.isEmpty())
+        final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
+        if (!records.isEmpty()) {
             return records;
+        }
 
         // send any new fetches (won't resend pending fetches)
         fetcher.sendFetches();
 
-        long nowMs = time.milliseconds();
-        long remainingTimeMs = Math.max(0, timeout - (nowMs - startMs));
+        final long nowMs = time.milliseconds();
+        final long remainingTimeMs = Math.max(0, timeout - (nowMs - startMs));
         long pollTimeout = Math.min(coordinator.timeToNextPoll(nowMs), remainingTimeMs);
 
         // We do not want to be stuck blocking in poll if we are missing some positions
@@ -1178,8 +1183,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         // after the long poll, we should check whether the group needs to rebalance
         // prior to returning data so that the group can stabilize faster
-        if (coordinator.needRejoin())
+        if (coordinator.needRejoin()) {
             return Collections.emptyMap();
+        }
 
         return fetcher.fetchedRecords();
     }
