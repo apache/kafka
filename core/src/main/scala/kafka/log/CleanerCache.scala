@@ -24,7 +24,7 @@ import java.util
 
 import kafka.utils.{CoreUtils, nonthreadsafe}
 import org.apache.kafka.common.record.Record
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{ByteUtils, Utils}
 
 trait CleanerCache {
   /** The maximum number of entries this map can contain */
@@ -170,6 +170,7 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
     if (enhancedCache) {
       val recordVersion = extractVersion(record)
       val cachedVersion = version(record.key)
+
       if (recordVersion >= 0 && cachedVersion >= 0 && recordVersion != cachedVersion) {
         return recordVersion >= 0 && cachedVersion < recordVersion
       }
@@ -256,11 +257,10 @@ class SkimpyCleanerCache(val memory: Int, val hashAlgorithm: String = "MD5", val
       return -1
     }
     record.headers()
-      .filter(it => it.value() != null && it.value().nonEmpty)
+      .filter(it => it.value != null && it.value.nonEmpty)
       .find(it => strategy.trim.equalsIgnoreCase(it.key.trim))
-      .map(it => ByteBuffer.wrap(it.value()))
-      .map(it => StandardCharsets.UTF_8.decode(it).toString)
-      .map(h =>  scala.util.Try { h.toLong }.getOrElse(-1L))
+      .map(it => ByteBuffer.wrap(it.value))
+      .map(it => ByteUtils.readVarlong(it))
       .getOrElse(-1L)
   }
 
