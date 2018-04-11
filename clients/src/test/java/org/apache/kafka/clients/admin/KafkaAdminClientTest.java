@@ -781,10 +781,10 @@ public class KafkaAdminClientTest {
 
             final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets("group-0");
 
-            assertEquals(3, result.partitions().get().size());
-            final TopicPartition topicPartition = result.partitions().get().iterator().next();
+            assertEquals(3, result.partitionsToOffsetAndMetadata().get().size());
+            final TopicPartition topicPartition = result.partitionsToOffsetAndMetadata().get().keySet().iterator().next();
             assertEquals("my_topic", topicPartition.topic());
-            final OffsetAndMetadata offsetAndMetadata = result.offsetsAndMetadata().get().iterator().next();
+            final OffsetAndMetadata offsetAndMetadata = result.partitionsToOffsetAndMetadata().get().values().iterator().next();
             assertEquals(10, offsetAndMetadata.offset());
         }
     }
@@ -817,7 +817,7 @@ public class KafkaAdminClientTest {
 
             final DeleteConsumerGroupsResult result = env.adminClient().deleteConsumerGroups(groupIds);
 
-            final Map<String, KafkaFuture<Void>> results = result.values().get();
+            final Map<String, KafkaFuture<Void>> results = result.deletedGroups().get();
             assertNull(results.get("group-0").get());
         }
     }

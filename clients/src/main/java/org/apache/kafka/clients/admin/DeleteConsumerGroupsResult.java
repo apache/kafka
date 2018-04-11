@@ -35,25 +35,7 @@ public class DeleteConsumerGroupsResult {
         this.futures = futures;
     }
 
-    public KafkaFuture<Map<String, KafkaFuture<Void>>> values() {
+    public KafkaFuture<Map<String, KafkaFuture<Void>>> deletedGroups() {
         return futures;
-    }
-
-    public KafkaFuture<Collection<String>> groups() {
-        return futures.thenApply(new KafkaFuture.Function<Map<String, KafkaFuture<Void>>, Collection<String>>() {
-            @Override
-            public Collection<String> apply(Map<String, KafkaFuture<Void>> results) {
-                return results.keySet();
-            }
-        });
-    }
-
-    public KafkaFuture<Collection<KafkaFuture<Void>>> all() {
-        return futures.thenApply(new KafkaFuture.Function<Map<String, KafkaFuture<Void>>, Collection<KafkaFuture<Void>>>() {
-            @Override
-            public Collection<KafkaFuture<Void>> apply(Map<String, KafkaFuture<Void>> stringKafkaFutureMap) {
-                return stringKafkaFutureMap.values();
-            }
-        });
     }
 }

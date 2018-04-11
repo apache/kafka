@@ -47,27 +47,4 @@ public class ListConsumerGroupOffsetsResult {
         return future;
     }
 
-    /**
-     * Return a future which yields a collection of OffsetAndMetadata objects.
-     */
-    public KafkaFuture<Collection<OffsetAndMetadata>> offsetsAndMetadata() {
-        return future.thenApply(new KafkaFuture.Function<Map<TopicPartition, OffsetAndMetadata>, Collection<OffsetAndMetadata>>() {
-            @Override
-            public Collection<OffsetAndMetadata> apply(Map<TopicPartition, OffsetAndMetadata> namesToDescriptions) {
-                return namesToDescriptions.values();
-            }
-        });
-    }
-
-    /**
-     * Return a future which yields a collection of topic partitions.
-     */
-    public KafkaFuture<Set<TopicPartition>> partitions() {
-        return future.thenApply(new KafkaFuture.Function<Map<TopicPartition, OffsetAndMetadata>, Set<TopicPartition>>() {
-            @Override
-            public Set<TopicPartition> apply(Map<TopicPartition, OffsetAndMetadata> namesToListings) {
-                return namesToListings.keySet();
-            }
-        });
-    }
 }

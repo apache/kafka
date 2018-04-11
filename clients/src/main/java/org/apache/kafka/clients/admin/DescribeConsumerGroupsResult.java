@@ -44,26 +44,4 @@ public class DescribeConsumerGroupsResult {
     public KafkaFuture<Map<String, KafkaFuture<ConsumerGroupDescription>>> values() {
         return futures;
     }
-
-    public KafkaFuture<Collection<String>> names() {
-        return futures.thenApply(new KafkaFuture.Function<Map<String, KafkaFuture<ConsumerGroupDescription>>, Collection<String>>() {
-            @Override
-            public Collection<String> apply(Map<String, KafkaFuture<ConsumerGroupDescription>> stringKafkaFutureMap) {
-                return stringKafkaFutureMap.keySet();
-            }
-        });
-    }
-
-    /**
-     * Return a future which succeeds only if all the consumer group descriptions succeed.
-     */
-    public KafkaFuture<Collection<KafkaFuture<ConsumerGroupDescription>>> all() {
-        return futures.thenApply(new KafkaFuture.Function<Map<String, KafkaFuture<ConsumerGroupDescription>>, Collection<KafkaFuture<ConsumerGroupDescription>>>() {
-            @Override
-            public Collection<KafkaFuture<ConsumerGroupDescription>> apply(Map<String, KafkaFuture<ConsumerGroupDescription>> stringKafkaFutureMap) {
-                return stringKafkaFutureMap.values();
-            }
-        });
-    }
-
 }
