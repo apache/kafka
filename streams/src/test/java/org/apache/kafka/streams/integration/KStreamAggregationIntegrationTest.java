@@ -69,7 +69,6 @@ import org.junit.experimental.categories.Category;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -233,7 +232,7 @@ public class KStreamAggregationIntegrationTest {
             15);
 
         // read from ConsoleConsumer
-        String resultFromConsoleConsumer = readWindowedKeyedMsgsFromConsoleConsumer(
+        String resultFromConsoleConsumer = readWindowedKeyedMessagesViaConsoleConsumer(
                 new TimeWindowedDeserializer<String>(),
                 new StringDeserializer(),
                 String.class,
@@ -355,7 +354,7 @@ public class KStreamAggregationIntegrationTest {
             15);
 
         // read from ConsoleConsumer
-        String resultFromConsoleConsumer = readWindowedKeyedMsgsFromConsoleConsumer(
+        String resultFromConsoleConsumer = readWindowedKeyedMessagesViaConsoleConsumer(
                 new TimeWindowedDeserializer<String>(),
                 new IntegerDeserializer(),
                 String.class,
@@ -762,7 +761,7 @@ public class KStreamAggregationIntegrationTest {
                 60 * 1000);
     }
 
-    private <K, V> String readWindowedKeyedMsgsFromConsoleConsumer(final Deserializer<K> keyDeserializer,
+    private <K, V> String readWindowedKeyedMessagesViaConsoleConsumer(final Deserializer<K> keyDeserializer,
                                                   final Deserializer<V> valueDeserializer,
                                                   final Class innerClass,
                                                   final int numMessages) {
@@ -773,7 +772,7 @@ public class KStreamAggregationIntegrationTest {
 
             String keySeparator = ", ";
             // manually construct the console consumer argument array
-            String[] args = new String[] {
+            String[] args = (String[])Arrays.asList(
                     "--bootstrap-server", CLUSTER.bootstrapServers(),
                     "--from-beginning",
                     "--property", "print.key=true",
@@ -783,7 +782,7 @@ public class KStreamAggregationIntegrationTest {
                     "--property", "value.deserializer=" + valueDeserializer.getClass().getName(),
                     "--property", "key.separator=" + keySeparator,
                     "--" + StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS, Serdes.serdeFrom(innerClass).getClass().getName()
-            };
+            ).toArray();
             ConsoleConsumer.messageCount_$eq(0); //reset the message count
             ConsoleConsumer.run(new ConsoleConsumer.ConsumerConfig(args));
             newStream.flush();
