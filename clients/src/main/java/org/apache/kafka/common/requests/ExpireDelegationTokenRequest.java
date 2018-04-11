@@ -88,9 +88,9 @@ public class ExpireDelegationTokenRequest extends AbstractRequest {
         private final ByteBuffer hmac;
         private final long expiryTimePeriod;
 
-        public Builder(ByteBuffer hmac, long expiryTimePeriod) {
+        public Builder(byte[] hmac, long expiryTimePeriod) {
             super(ApiKeys.EXPIRE_DELEGATION_TOKEN);
-            this.hmac = hmac;
+            this.hmac = ByteBuffer.wrap(hmac);
             this.expiryTimePeriod = expiryTimePeriod;
         }
 

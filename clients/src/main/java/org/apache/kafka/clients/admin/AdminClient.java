@@ -535,4 +535,158 @@ public abstract class AdminClient implements AutoCloseable {
      */
     public abstract DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete,
                                                       DeleteRecordsOptions options);
+
+    /**
+     * <p>Create a Delegation Token.</p>
+     *
+     * <p>This is a convenience method for {@link #createDelegationToken(CreateDelegationTokenOptions)} with default options.
+     * See the overload for more details.</p>
+     *
+     * @return                      The CreateDelegationTokenResult.
+     */
+    public CreateDelegationTokenResult createDelegationToken() {
+        return createDelegationToken(new CreateDelegationTokenOptions());
+    }
+
+
+    /**
+     * <p>Create a Delegation Token.</p>
+     *
+     * <p>This operation is supported by brokers with version 1.1.0 or higher.</p>
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link CreateDelegationTokenResult#delegationToken() delegationToken()} method of the returned {@code CreateDelegationTokenResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
+     *     If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidPrincipalTypeException}
+     *     if the renewers principal type is not supported.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenDisabledException}
+     *     if the delegation token feature is disabled.</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link CreateDelegationTokenOptions#timeoutMs()}.</li>
+     * </ul>
+     *
+     * @param options               The options to use when creating delegation token.
+     * @return                      The DeleteRecordsResult.
+     */
+    public abstract CreateDelegationTokenResult createDelegationToken(CreateDelegationTokenOptions options);
+
+
+    /**
+     * <p>Renew a Delegation Token.</p>
+     *
+     * <p>This is a convenience method for {@link #renewDelegationToken(byte[], RenewDelegationTokenOptions)} with default options.
+     * See the overload for more details.</p>
+     *
+     *
+     * @param hmac                  HMAC of the Delegation token
+     * @return                      The RenewDelegationTokenResult.
+     */
+    public RenewDelegationTokenResult renewDelegationToken(byte[] hmac) {
+        return renewDelegationToken(hmac, new RenewDelegationTokenOptions());
+    }
+
+    /**
+     * <p> Renew a Delegation Token.</p>
+     *
+     * <p>This operation is supported by brokers with version 1.1.0 or higher.</p>
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link RenewDelegationTokenResult#expiryTimestamp() expiryTimestamp()} method of the returned {@code RenewDelegationTokenResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
+     *     If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenDisabledException}
+     *     if the delegation token feature is disabled.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenNotFoundException}
+     *     if the delegation token is not found on server.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException}
+     *     if the authenticated user is not owner/renewer of the token.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenExpiredException}
+     *     if the delegation token is expired.</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link RenewDelegationTokenOptions#timeoutMs()}.</li>
+     * </ul>
+     *
+     * @param hmac                  HMAC of the Delegation token
+     * @param options               The options to use when renewing delegation token.
+     * @return                      The RenewDelegationTokenResult.
+     */
+    public abstract RenewDelegationTokenResult renewDelegationToken(byte[] hmac, RenewDelegationTokenOptions options);
+
+    /**
+     * <p>Expire a Delegation Token.</p>
+     *
+     * <p>This is a convenience method for {@link #expireDelegationToken(byte[], ExpireDelegationTokenOptions)} with default options.
+     * This will expire the token immediately. See the overload for more details.</p>
+     *
+     * @param hmac                  HMAC of the Delegation token
+     * @return                      The ExpireDelegationTokenResult.
+     */
+    public ExpireDelegationTokenResult expireDelegationToken(byte[] hmac) {
+        return expireDelegationToken(hmac, new ExpireDelegationTokenOptions());
+    }
+
+    /**
+     * <p>Expire a Delegation Token.</p>
+     *
+     * <p>This operation is supported by brokers with version 1.1.0 or higher.</p>
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link ExpireDelegationTokenResult#expiryTimestamp() expiryTimestamp()} method of the returned {@code ExpireDelegationTokenResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
+     *     If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenDisabledException}
+     *     if the delegation token feature is disabled.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenNotFoundException}
+     *     if the delegation token is not found on server.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException}
+     *     if the authenticated user is not owner/renewer of the requested token.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenExpiredException}
+     *     if the delegation token is expired.</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link ExpireDelegationTokenOptions#timeoutMs()}.</li>
+     * </ul>
+     *
+     * @param hmac                  HMAC of the Delegation token
+     * @param options               The options to use when expiring delegation token.
+     * @return                      The ExpireDelegationTokenResult.
+     */
+    public abstract ExpireDelegationTokenResult expireDelegationToken(byte[] hmac, ExpireDelegationTokenOptions options);
+
+    /**
+     *<p>Describe the Delegation Tokens.</p>
+     *
+     * <p>This is a convenience method for {@link #describeDelegationToken(DescribeDelegationTokenOptions)} with default options.
+     * This will return all the user owned tokens and tokens where user have Describe permission. See the overload for more details.</p>
+     *
+     * @return                      The DescribeDelegationTokenResult.
+     */
+    public DescribeDelegationTokenResult describeDelegationToken() {
+        return describeDelegationToken(new DescribeDelegationTokenOptions());
+    }
+
+    /**
+     * <p>Describe the Delegation Tokens.</p>
+     *
+     * <p>This operation is supported by brokers with version 1.1.0 or higher.</p>
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link DescribeDelegationTokenResult#delegationTokens() delegationTokens()} method of the returned {@code DescribeDelegationTokenResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
+     *     If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenDisabledException}
+     *     if the delegation token feature is disabled.</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link DescribeDelegationTokenOptions#timeoutMs()}.</li>
+     * </ul>
+     *
+     * @param options               The options to use when describing delegation tokens.
+     * @return                      The DescribeDelegationTokenResult.
+     */
+    public abstract DescribeDelegationTokenResult describeDelegationToken(DescribeDelegationTokenOptions options);
+
 }
