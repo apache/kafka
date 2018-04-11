@@ -2474,18 +2474,15 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options) {
-        final KafkaFutureImpl<Map<String, KafkaFuture<Void>>> deleteConsumerGroupsFuture = new KafkaFutureImpl<>();
-        final Map<String, KafkaFutureImpl<Void>> deleteConsumerGroupFutures = new HashMap<>(groupIds.size());
-        final Set<String> groupIdList = new HashSet<>();
-        for (String groupId : groupIds) {
-            if (!deleteConsumerGroupFutures.containsKey(groupId)) {
-                deleteConsumerGroupFutures.put(groupId, new KafkaFutureImpl<Void>());
-                groupIdList.add(groupId);
-            }
+
+        final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>(groupIds.size());
+        for (String groupId: groupIds) {
+            futures.put(groupId, new KafkaFutureImpl<Void>());
         }
 
-        for (final String groupId : groupIdList) {
-
+        // TODO: we should consider grouping the request per coordinator and send one request with a list of
+        // all consumer groups this coordinator host
+        for (final String groupId : groupIds) {
             final long nowFindCoordinator = time.milliseconds();
             final long deadline = calcDeadlineMs(nowFindCoordinator, options.timeoutMs());
 
@@ -2513,36 +2510,33 @@ public class KafkaAdminClient extends AdminClient {
                         @Override
                         void handleResponse(AbstractResponse abstractResponse) {
                             final DeleteGroupsResponse response = (DeleteGroupsResponse) abstractResponse;
-                            // Handle server responses for particular groupId.
-                            for (Map.Entry<String, KafkaFutureImpl<Void>> entry : deleteConsumerGroupFutures.entrySet()) {
-                                final String groupId = entry.getKey();
-                                final KafkaFutureImpl<Void> future = entry.getValue();
-                                final Errors groupError = response.get(groupId);
-                                if (groupError != Errors.NONE) {
-                                    future.completeExceptionally(groupError.exception());
-                                    continue;
-                                }
 
+                            KafkaFutureImpl<Void> future = futures.get(groupId);
+                            final Errors groupError = response.get(groupId);
+
+                            if (groupError != Errors.NONE) {
+                                future.completeExceptionally(groupError.exception());
+                            } else {
                                 future.complete(null);
                             }
                         }
 
                         @Override
                         void handleFailure(Throwable throwable) {
-                            completeAllExceptionally(deleteConsumerGroupFutures.values(), throwable);
+                            KafkaFutureImpl<Void> future = futures.get(groupId);
+                            future.completeExceptionally(throwable);
                         }
                     }, nowDeleteConsumerGroups);
-
-                    deleteConsumerGroupsFuture.complete(new HashMap<String, KafkaFuture<Void>>(deleteConsumerGroupFutures));
                 }
 
                 @Override
                 void handleFailure(Throwable throwable) {
-                    deleteConsumerGroupsFuture.completeExceptionally(throwable);
+                    KafkaFutureImpl<Void> future = futures.get(groupId);
+                    future.completeExceptionally(throwable);
                 }
             }, nowFindCoordinator);
         }
 
-        return new DeleteConsumerGroupsResult(deleteConsumerGroupsFuture);
+        return new DeleteConsumerGroupsResult(new HashMap<String, KafkaFuture<Void>>(futures));
     }
 }
