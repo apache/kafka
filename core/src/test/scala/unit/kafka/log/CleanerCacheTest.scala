@@ -20,6 +20,7 @@ package kafka.log
 import java.nio._
 
 import kafka.utils.Exit
+import org.apache.kafka.common.utils.ByteUtils
 import org.junit._
 import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._

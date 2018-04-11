@@ -24,20 +24,28 @@ import java.nio.charset.StandardCharsets
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.header.internals.RecordHeader
 import org.apache.kafka.common.record.{Record, TimestampType}
+import org.apache.kafka.common.utils.ByteUtils
 
-class FakeRecord(fakeKey: ByteBuffer, fakeOffset: Number, fakeVersion: Number) extends Record {
+class FakeRecord(fakeKey: ByteBuffer, fakeOffset: Number, fakeVersion: Long) extends Record {
 
   private var fakeHeaders: Array[Header] = _
 
   init()
 
   private def init(): Unit = {
-    if (fakeVersion == null)
+    if (Option(fakeVersion).isEmpty)
       fakeHeaders = new Array[Header](0)
     else
       fakeHeaders = Array[Header](
-        new RecordHeader("version", fakeVersion.toString.getBytes(StandardCharsets.UTF_8))
+        new RecordHeader("version", longToByte(fakeVersion))
       )
+  }
+
+  private def longToByte(value: Long): Array[Byte] = {
+    var buffer = ByteBuffer.allocate(8)
+    ByteUtils.writeVarlong(value, buffer)
+    buffer.flip
+    buffer.array
   }
 
   override def offset: Long = if (fakeOffset != null) fakeOffset.longValue else -1
