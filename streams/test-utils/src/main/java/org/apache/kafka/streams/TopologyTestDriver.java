@@ -177,7 +177,18 @@ public class TopologyTestDriver implements Closeable {
 
     private final StateDirectory stateDirectory;
     private final ProcessorTopology processorTopology;
-    private final MockProducer<byte[], byte[]> producer;
+    
+    /**
+     * Records sent with this {@link Producer} are streamed to the topology.
+     * <p>
+     * This is useful when testing processes that are also using "normal" kafka producer, typically in
+     * a different thread.<br>
+     * The main difference between using it instead of the {@link #pipeInput(ConsumerRecord)} method is 
+     * that with the producer we push data to a topic and eventually feed the stream
+     * while with {@link #pipeInput(ConsumerRecord)} we feed the stream but we only collect output from 
+     * the topology sinks. 
+     */
+    protected final MockProducer<byte[], byte[]> producer;
 
     private final Set<String> internalTopics = new HashSet<>();
     private final Map<String, TopicPartition> partitionsByTopic = new HashMap<>();
@@ -462,22 +473,6 @@ public class TopologyTestDriver implements Closeable {
         return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value);
     }
     
-    /**
-     * Records sent with this {@link Producer} are streamed to the topology.
-     * <p>
-     * This is useful when testing processes that are also using "normal" kafka producer, typically in
-     * a different thread.<br>
-     * The main difference between using it instead of the {@link #pipeInput(ConsumerRecord)} method is 
-     * that with the producer we push data to a topic and eventually feed the stream
-     * while with {@link #pipeInput(ConsumerRecord)} we feed the stream but we only collect output from 
-     * the topology sinks. 
-     * 
-     * @return the producer.
-     */
-    public final Producer<byte[], byte[]> getProducer() {
-        return producer;
-    }
-
     /**
      * Get all {@link StateStore StateStores} from the topology.
      * The stores can be a "regular" or global stores.
