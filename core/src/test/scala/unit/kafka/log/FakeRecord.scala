@@ -42,7 +42,7 @@ class FakeRecord(fakeKey: ByteBuffer, fakeOffset: Number, fakeVersion: Long) ext
   }
 
   private def longToByte(value: Long): Array[Byte] = {
-    var buffer = ByteBuffer.allocate(8)
+    var buffer = ByteBuffer.allocate(16)
     ByteUtils.writeVarlong(value, buffer)
     buffer.flip
     buffer.array
