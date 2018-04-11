@@ -16,7 +16,6 @@
  */
 package kafka.utils
 
-import com.fasterxml.jackson.core.JsonParseException
 import java.nio.charset.StandardCharsets
 
 import com.fasterxml.jackson.annotation.JsonProperty
