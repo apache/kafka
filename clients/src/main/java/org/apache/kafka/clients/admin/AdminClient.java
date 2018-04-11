@@ -689,4 +689,83 @@ public abstract class AdminClient implements AutoCloseable {
      */
     public abstract DescribeDelegationTokenResult describeDelegationToken(DescribeDelegationTokenOptions options);
 
+    /**
+     * Describe some group IDs in the cluster.
+     *
+     * @param groupIds The IDs of the groups to describe.
+     * @param options  The options to use when describing the groups.
+     * @return The DescribeConsumerGroupResult.
+     */
+    public abstract DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds,
+                                                                        DescribeConsumerGroupsOptions options);
+
+    /**
+     * Describe some group IDs in the cluster, with the default options.
+     * <p>
+     * This is a convenience method for
+     * #{@link AdminClient#describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)} with
+     * default options. See the overload for more details.
+     *
+     * @param groupIds The IDs of the groups to describe.
+     * @return The DescribeConsumerGroupResult.
+     */
+    public DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds) {
+        return describeConsumerGroups(groupIds, new DescribeConsumerGroupsOptions());
+    }
+
+    /**
+     * List the consumer groups available in the cluster.
+     *
+     * @param options           The options to use when listing the consumer groups.
+     * @return The ListGroupsResult.
+     */
+    public abstract ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options);
+
+    /**
+     * List the consumer groups available in the cluster with the default options.
+     *
+     * This is a convenience method for #{@link AdminClient#listConsumerGroups(ListConsumerGroupsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @return The ListGroupsResult.
+     */
+    public ListConsumerGroupsResult listConsumerGroups() {
+        return listConsumerGroups(new ListConsumerGroupsOptions());
+    }
+
+    /**
+     * List the consumer group offsets available in the cluster.
+     *
+     * @param options           The options to use when listing the consumer group offsets.
+     * @return The ListGroupOffsetsResult
+     */
+    public abstract ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options);
+
+    /**
+     * List the consumer group offsets available in the cluster with the default options.
+     *
+     * This is a convenience method for #{@link AdminClient#listConsumerGroupOffsets(String, ListConsumerGroupOffsetsOptions)} with default options.
+     *
+     * @return The ListGroupOffsetsResult.
+     */
+    public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId) {
+        return listConsumerGroupOffsets(groupId, new ListConsumerGroupOffsetsOptions());
+    }
+
+    /**
+     * Delete consumer groups from the cluster.
+     *
+     * @param options           The options to use when deleting a consumer group.
+     * @return The DeletConsumerGroupResult.
+     */
+    public abstract DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options);
+
+    /**
+     * Delete consumer groups from the cluster with the default options.
+     *
+     * @return The DeleteConsumerGroupResult.
+     */
+    public DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds) {
+        return deleteConsumerGroups(groupIds, new DeleteConsumerGroupsOptions());
+    }
 }
