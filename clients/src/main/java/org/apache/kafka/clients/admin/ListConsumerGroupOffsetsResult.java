@@ -22,9 +22,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Collection;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * The result of the {@link AdminClient#listConsumerGroupOffsets(String)} call.
