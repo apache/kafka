@@ -16,11 +16,16 @@
  */
 package org.apache.kafka.common.security.token.delegation;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.utils.Base64;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+/**
+ * A class representing a delegation token.
+ *
+ */
+@InterfaceStability.Evolving
 public class DelegationToken {
     private TokenInformation tokenInformation;
     private byte[] hmac;
@@ -40,10 +45,6 @@ public class DelegationToken {
 
     public String hmacAsBase64String() {
         return Base64.encoder().encodeToString(hmac);
-    }
-
-    public ByteBuffer hmacBuffer() {
-        return ByteBuffer.wrap(hmac);
     }
 
     @Override
