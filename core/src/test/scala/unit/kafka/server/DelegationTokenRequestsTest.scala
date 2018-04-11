@@ -55,7 +55,7 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
     props.map(KafkaConfig.fromProps)
   }
 
-  def createAdminConfig():util.Map[String, Object] = {
+  private def createAdminConfig():util.Map[String, Object] = {
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     val securityProps: util.Map[Object, Object] =
@@ -74,10 +74,9 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
     val tokenCreated = createResult1.delegationToken().get()
 
     //test describe token
-    var describeResult = adminClient.describeDelegationToken()
     var tokens = adminClient.describeDelegationToken().delegationTokens().get()
     assertTrue(tokens.size() == 1)
-    var token1 = describeResult.delegationTokens().get().get(0)
+    var token1 = tokens.get(0)
     assertEquals(token1, tokenCreated)
 
     // create token2 with renewer2
@@ -99,7 +98,7 @@ class DelegationTokenRequestsTest extends BaseRequestTest with SaslSetup {
     val renewResult = adminClient.renewDelegationToken(token1.hmac())
     var expiryTimestamp = renewResult.expiryTimestamp().get()
 
-    describeResult = adminClient.describeDelegationToken()
+    val describeResult = adminClient.describeDelegationToken()
     val tokenId = token1.tokenInfo().tokenId()
     token1 = describeResult.delegationTokens().get().asScala.filter(dt => dt.tokenInfo().tokenId() == tokenId).head
     assertEquals(expiryTimestamp, token1.tokenInfo().expiryTimestamp())
