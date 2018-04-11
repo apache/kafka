@@ -772,17 +772,18 @@ public class KStreamAggregationIntegrationTest {
 
             String keySeparator = ", ";
             // manually construct the console consumer argument array
-            String[] args = (String[]) Arrays.asList(
-                    "--bootstrap-server", CLUSTER.bootstrapServers(),
-                    "--from-beginning",
-                    "--property", "print.key=true",
-                    "--topic", outputTopic,
-                    "--max-messages", String.valueOf(numMessages),
-                    "--property", "key.deserializer=" + keyDeserializer.getClass().getName(),
-                    "--property", "value.deserializer=" + valueDeserializer.getClass().getName(),
-                    "--property", "key.separator=" + keySeparator,
-                    "--" + StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS, Serdes.serdeFrom(innerClass).getClass().getName()
-            ).toArray();
+            String[] args = new String[] {
+                "--bootstrap-server", CLUSTER.bootstrapServers(),
+                "--from-beginning",
+                "--property", "print.key=true",
+                "--topic", outputTopic,
+                "--max-messages", String.valueOf(numMessages),
+                "--property", "key.deserializer=" + keyDeserializer.getClass().getName(),
+                "--property", "value.deserializer=" + valueDeserializer.getClass().getName(),
+                "--property", "key.separator=" + keySeparator,
+                "--" + StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS, Serdes.serdeFrom(innerClass).getClass().getName()
+            };
+
             ConsoleConsumer.messageCount_$eq(0); //reset the message count
             ConsoleConsumer.run(new ConsoleConsumer.ConsumerConfig(args));
             newStream.flush();
