@@ -105,16 +105,17 @@ public class YahooBenchmark {
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
-        KafkaProducer<String, String> producer = new KafkaProducer<>(props);
-        for (int c = 0; c < numCampaigns; c++) {
-            String campaignID = UUID.randomUUID().toString();
-            for (int a = 0; a < adsPerCampaign; a++) {
-                String adId = UUID.randomUUID().toString();
-                String concat = adId + ":" + campaignID;
-                producer.send(new ProducerRecord<>(topic, adId, concat));
-                ads.add(adId);
-                parent.processedRecords++;
-                parent.processedBytes += concat.length() + adId.length();
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            for (int c = 0; c < numCampaigns; c++) {
+                final String campaignID = UUID.randomUUID().toString();
+                for (int a = 0; a < adsPerCampaign; a++) {
+                    final String adId = UUID.randomUUID().toString();
+                    final String concat = adId + ":" + campaignID;
+                    producer.send(new ProducerRecord<>(topic, adId, concat));
+                    ads.add(adId);
+                    parent.processedRecords++;
+                    parent.processedBytes += concat.length() + adId.length();
+                }
             }
         }
         return true;
@@ -126,8 +127,8 @@ public class YahooBenchmark {
                                        final int numRecords,
                                        final List<String> ads) {
         parent.resetStats();
-        String[] eventTypes = new String[]{"view", "click", "purchase"};
-        Random rand = new Random();
+        final String[] eventTypes = new String[]{"view", "click", "purchase"};
+        final Random rand = new Random();
         System.out.println("Initializing topic " + topic);
 
         final Properties props = new Properties();
@@ -136,27 +137,25 @@ public class YahooBenchmark {
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
 
-        KafkaProducer<String, byte[]> producer = new KafkaProducer<>(props);
-
         final long startTime = System.currentTimeMillis();
 
-        ProjectedEvent event = new ProjectedEvent();
+        try (KafkaProducer<String, byte[]> producer = new KafkaProducer<>(props)) {
+            final ProjectedEvent event = new ProjectedEvent();
+            final Map<String, Object> serdeProps = new HashMap<>();
+            final Serializer<ProjectedEvent> projectedEventSerializer = new JsonPOJOSerializer<>();
+            serdeProps.put("JsonPOJOClass", ProjectedEvent.class);
+            projectedEventSerializer.configure(serdeProps, false);
 
-        Map<String, Object> serdeProps = new HashMap<>();
-        final Serializer<ProjectedEvent> projectedEventSerializer = new JsonPOJOSerializer<>();
-        serdeProps.put("JsonPOJOClass", ProjectedEvent.class);
-        projectedEventSerializer.configure(serdeProps, false);
-
-        for (int i = 0; i < numRecords; i++) {
-            event.eventType = eventTypes[rand.nextInt(eventTypes.length - 1)];
-            event.adID = ads.get(rand.nextInt(ads.size() - 1));
-            event.eventTime = System.currentTimeMillis();
-            byte[] value = projectedEventSerializer.serialize(topic, event);
-            producer.send(new ProducerRecord<>(topic, event.adID, value));
-            parent.processedRecords++;
-            parent.processedBytes += value.length + event.adID.length();
+            for (int i = 0; i < numRecords; i++) {
+                event.eventType = eventTypes[rand.nextInt(eventTypes.length - 1)];
+                event.adID = ads.get(rand.nextInt(ads.size() - 1));
+                event.eventTime = System.currentTimeMillis();
+                final byte[] value = projectedEventSerializer.serialize(topic, event);
+                producer.send(new ProducerRecord<>(topic, event.adID, value));
+                parent.processedRecords++;
+                parent.processedBytes += value.length + event.adID.length();
+            }
         }
-        producer.close();
 
         long endTime = System.currentTimeMillis();
 

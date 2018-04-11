@@ -41,7 +41,7 @@ public class StreamsRepeatingIntegerKeyProducer {
     private static volatile boolean keepProducing = true;
     private volatile static int messageCounter = 0;
 
-    public static void main(String[] args) throws IOException {
+    public static void main(final String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("StreamsStandByReplicaTest are expecting two parameters: propFile, additionalConfigs; but only see " + args.length + " parameter");
             System.exit(1);
