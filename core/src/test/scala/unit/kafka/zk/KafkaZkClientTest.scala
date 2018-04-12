@@ -937,7 +937,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     // No controller
     assertEquals(None, zkClient.getControllerId)
     // Create controller
-    zkClient.registerControllerInZk(brokerId = 1, timestamp = 123456)
+    zkClient.registerControllerInZk(controllerId = 1, timestamp = 123456)
     assertEquals(Some(1), zkClient.getControllerId)
     zkClient.deleteController()
     assertEquals(None, zkClient.getControllerId)
