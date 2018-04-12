@@ -37,6 +37,7 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
 import org.apache.kafka.common.utils.Utils
 
+import scala.collection.JavaConversions
 import scala.collection.JavaConverters._
 
 /**
@@ -45,6 +46,11 @@ import scala.collection.JavaConverters._
 object ConsoleConsumer extends Logging {
 
   var messageCount = 0
+  // Keep same names with StreamConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS
+  // and StreamConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS
+  // visible for testing
+  private[tools] val innerKeySerdeName = "default.windowed.key.serde.inner"
+  private[tools] val innerValueSerdeName = "default.windowed.value.serde.inner"
 
   private val shutdownLatch = new CountDownLatch(1)
 
@@ -291,7 +297,17 @@ object ConsoleConsumer extends Logging {
       .describedAs("class")
       .ofType(classOf[String])
       .defaultsTo(classOf[DefaultMessageFormatter].getName)
-    val messageFormatterArgOpt = parser.accepts("property", "The properties to initialize the message formatter.")
+    val messageFormatterArgOpt = parser.accepts("property",
+      "The properties to initialize the message formatter. Default properties include:\n" +
+        "\tprint.timestamp=true|false\n" +
+        "\tprint.key=true|false\n" +
+        "\tprint.value=true|false\n" +
+        "\tkey.separator=<key.separator>\n" +
+        "\tline.separator=<line.separator>\n" +
+        "\tkey.deserializer=<key.deserializer>\n" +
+        "\tvalue.deserializer=<value.deserializer>\n" +
+        "\tdefault.windowed.key.serde.inner=<windowed.key.serde.inner>\n" +
+        "\tdefault.windowed.value.serde.inner=<windowed.value.serde.inner>")
       .withRequiredArg
       .describedAs("prop")
       .ofType(classOf[String])
@@ -327,6 +343,18 @@ object ConsoleConsumer extends Logging {
     val valueDeserializerOpt = parser.accepts("value-deserializer")
       .withRequiredArg
       .describedAs("deserializer for values")
+      .ofType(classOf[String])
+    val innerKeyDeserializerOpt = parser.accepts(innerKeySerdeName,
+      "inner serde for key when windowed deserialzier is used; would be ignored otherwise. " +
+        "For example: org.apache.kafka.common.serialization.Serdes\\$StringSerde")
+      .withRequiredArg
+      .describedAs("inner serde for key")
+      .ofType(classOf[String])
+    val innerValueDeserializerOpt = parser.accepts(innerValueSerdeName,
+      "inner serde for value when windowed deserialzier is used; would be ignored otherwise. " +
+        "For example: org.apache.kafka.common.serialization.Serdes\\$StringSerde")
+      .withRequiredArg
+      .describedAs("inner serde for values")
       .ofType(classOf[String])
     val enableSystestEventsLoggingOpt = parser.accepts("enable-systest-events",
                                                        "Log lifecycle events of the consumer in addition to logging consumed " +
@@ -372,6 +400,8 @@ object ConsoleConsumer extends Logging {
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
     val keyDeserializer = options.valueOf(keyDeserializerOpt)
     val valueDeserializer = options.valueOf(valueDeserializerOpt)
+    val innerKeyDeserializer = options.valueOf(innerKeyDeserializerOpt)
+    val innerValueDeserializer = options.valueOf(innerValueDeserializerOpt)
     val isolationLevel = options.valueOf(isolationLevelOpt).toString
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
 
@@ -381,6 +411,13 @@ object ConsoleConsumer extends Logging {
     if (valueDeserializer != null && !valueDeserializer.isEmpty) {
       formatterArgs.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer)
     }
+    if (innerKeyDeserializer != null && !innerKeyDeserializer.isEmpty) {
+      formatterArgs.setProperty(innerKeySerdeName, innerKeyDeserializer)
+    }
+    if (innerValueDeserializer != null && !innerValueDeserializer.isEmpty) {
+      formatterArgs.setProperty(innerValueSerdeName, innerValueDeserializer)
+    }
+
     formatter.init(formatterArgs)
 
     if (useOldConsumer) {
@@ -521,11 +558,15 @@ class DefaultMessageFormatter extends MessageFormatter {
     if (props.containsKey("line.separator"))
       lineSeparator = props.getProperty("line.separator").getBytes(StandardCharsets.UTF_8)
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
-    if (props.containsKey("key.deserializer"))
+    if (props.containsKey("key.deserializer")) {
       keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
+      keyDeserializer.get.configure(JavaConversions.propertiesAsScalaMap(props).asJava, true)
+    }
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
-    if (props.containsKey("value.deserializer"))
+    if (props.containsKey("value.deserializer")) {
       valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
+      valueDeserializer.get.configure(JavaConversions.propertiesAsScalaMap(props).asJava, false)
+    }
   }
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
