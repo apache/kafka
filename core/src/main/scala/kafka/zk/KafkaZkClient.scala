@@ -79,7 +79,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     createResponse.name
   }
 
-  def registerBrokerInZk(brokerInfo: BrokerInfo): Unit = {
+  def registerBroker(brokerInfo: BrokerInfo): Unit = {
     val path = brokerInfo.path
     checkedEphemeralCreate(path, brokerInfo.toJsonBytes)
     info(s"Registered broker ${brokerInfo.broker.id} at path $path with addresses: ${brokerInfo.broker.endPoints}")
@@ -91,12 +91,12 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * @param timestamp the timestamp of the controller election.
    * @throws KeeperException if an error is returned by ZooKeeper.
    */
-  def registerControllerInZk(controllerId: Int, timestamp: Long): Unit = {
+  def registerController(controllerId: Int, timestamp: Long): Unit = {
     val path = ControllerZNode.path
     checkedEphemeralCreate(path, ControllerZNode.encode(controllerId, timestamp))
   }
 
-  def updateBrokerInfoInZk(brokerInfo: BrokerInfo): Unit = {
+  def updateBrokerInfo(brokerInfo: BrokerInfo): Unit = {
     val brokerIdPath = brokerInfo.path
     val setDataRequest = SetDataRequest(brokerIdPath, brokerInfo.toJsonBytes, ZkVersion.NoVersion)
     val response = retryRequestUntilConnected(setDataRequest)
