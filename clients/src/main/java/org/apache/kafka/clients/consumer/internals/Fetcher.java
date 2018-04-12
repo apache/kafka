@@ -203,6 +203,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     .addListener(new RequestFutureListener<ClientResponse>() {
                         @Override
                         public void onSuccess(ClientResponse resp) {
+                            sensors.fetchLatency.record(resp.requestLatencyMs());
+                            if (!(resp.responseBody() instanceof FetchResponse))
+                                return;
+
                             FetchResponse response = (FetchResponse) resp.responseBody();
                             FetchSessionHandler handler = sessionHandlers.get(fetchTarget.id());
                             if (handler == null) {
@@ -227,8 +231,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                 completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator,
                                         resp.requestHeader().apiVersion()));
                             }
-
-                            sensors.fetchLatency.record(resp.requestLatencyMs());
                         }
 
                         @Override
