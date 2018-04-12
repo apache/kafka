@@ -378,9 +378,9 @@ public abstract class AbstractCoordinator implements Closeable {
                 RuntimeException exception = future.exception();
                 if (exception instanceof UnknownMemberIdException ||
                         exception instanceof RebalanceInProgressException ||
-                        exception instanceof IllegalGenerationException)
-                    ;
-                else if (!future.isRetriable())
+                        exception instanceof IllegalGenerationException) {
+
+                } else if (!future.isRetriable())
                     throw exception;
                 else
                     time.sleep(retryBackoffMs);
