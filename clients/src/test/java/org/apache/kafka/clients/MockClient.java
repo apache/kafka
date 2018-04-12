@@ -124,6 +124,11 @@ public class MockClient implements KafkaClient {
         return 0;
     }
 
+    @Override
+    public long pollDelayMs(Node node, long now) {
+        return connectionDelay(node, now);
+    }
+
     public void blackout(Node node, long duration) {
         blackedOut.put(node, time.milliseconds() + duration);
     }
@@ -477,7 +482,7 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public boolean hasReadyNodes() {
+    public boolean hasReadyNodes(long now) {
         return !ready.isEmpty();
     }
 

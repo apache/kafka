@@ -30,8 +30,14 @@ public class ApiVersionsRequest extends AbstractRequest {
     /* v1 request is the same as v0. Throttle time has been added to response */
     private static final Schema API_VERSIONS_REQUEST_V1 = API_VERSIONS_REQUEST_V0;
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling
+     * (KIP-219).
+     */
+    private static final Schema API_VERSIONS_REQUEST_V2 = API_VERSIONS_REQUEST_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{API_VERSIONS_REQUEST_V0, API_VERSIONS_REQUEST_V1};
+        return new Schema[]{API_VERSIONS_REQUEST_V0, API_VERSIONS_REQUEST_V1, API_VERSIONS_REQUEST_V2};
     }
 
     public static class Builder extends AbstractRequest.Builder<ApiVersionsRequest> {
@@ -92,6 +98,7 @@ public class ApiVersionsRequest extends AbstractRequest {
             case 0:
                 return new ApiVersionsResponse(Errors.forException(e), Collections.<ApiVersionsResponse.ApiVersion>emptyList());
             case 1:
+            case 2:
                 return new ApiVersionsResponse(throttleTimeMs, Errors.forException(e), Collections.<ApiVersionsResponse.ApiVersion>emptyList());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

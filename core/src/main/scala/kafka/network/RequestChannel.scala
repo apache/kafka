@@ -24,6 +24,7 @@ import java.util.concurrent._
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.metrics.KafkaMetricsGroup
+import kafka.server.ThrottledChannelEvent
 import kafka.utils.{Logging, NotNothing}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.network.Send
@@ -73,7 +74,8 @@ object RequestChannel extends Logging {
                 val startTimeNanos: Long,
                 memoryPool: MemoryPool,
                 @volatile private var buffer: ByteBuffer,
-                metrics: RequestChannel.Metrics) extends BaseRequest {
+                metrics: RequestChannel.Metrics,
+                val channelThrottlingCallback: (ThrottledChannelEvent) => Unit) extends BaseRequest {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
     @volatile var requestDequeueTimeNanos = -1L
@@ -234,7 +236,7 @@ object RequestChannel extends Logging {
     def processor: Int = request.processor
 
     override def toString =
-      s"Response(request=$request, responseSend=$responseSend, responseAction=$responseAction), responseAsString=$responseAsString"
+      s"Response(request=$request, responseSend=$responseSend, responseAction=$responseAction, responseAsString=$responseAsString)"
   }
 
   sealed trait ResponseAction

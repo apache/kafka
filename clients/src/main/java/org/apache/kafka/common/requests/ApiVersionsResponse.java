@@ -54,11 +54,17 @@ public class ApiVersionsResponse extends AbstractResponse {
             new Field(API_VERSIONS_KEY_NAME, new ArrayOf(API_VERSIONS_V0), "API versions supported by the broker."),
             THROTTLE_TIME_MS);
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling
+     * (KIP-219).
+     */
+    private static final Schema API_VERSIONS_RESPONSE_V2 = API_VERSIONS_RESPONSE_V1;
+
     // initialized lazily to avoid circular initialization dependence with ApiKeys
     private static volatile ApiVersionsResponse defaultApiVersionsResponse;
 
     public static Schema[] schemaVersions() {
-        return new Schema[]{API_VERSIONS_RESPONSE_V0, API_VERSIONS_RESPONSE_V1};
+        return new Schema[]{API_VERSIONS_RESPONSE_V0, API_VERSIONS_RESPONSE_V1, API_VERSIONS_RESPONSE_V2};
     }
 
     /**

@@ -59,6 +59,15 @@ public interface KafkaClient extends Closeable {
     long connectionDelay(Node node, long now);
 
     /**
+     * Returns the timeout for polling in milliseconds based on the connection state. If the connection has been
+     * established, return throttle delay. Otherwise, return connection delay.
+     *
+     * @param node the connection to check
+     * @param now the current time in ms
+     */
+    long pollDelayMs(Node node, long now);
+
+    /**
      * Check if the connection of the node has failed, based on the connection state. Such connection failure are
      * usually transient and can be resumed in the next {@link #ready(org.apache.kafka.common.Node, long)} }
      * call, but there are cases where transient failures needs to be caught and re-acted upon.
@@ -145,9 +154,12 @@ public interface KafkaClient extends Closeable {
     boolean hasInFlightRequests(String nodeId);
 
     /**
-     * Return true if there is at least one node with connection in ready state and false otherwise.
+     * Return true if there is at least one node with connection in the READY state and not throttled. Returns false
+     * otherwise.
+     *
+     * @param now the current time
      */
-    boolean hasReadyNodes();
+    boolean hasReadyNodes(long now);
 
     /**
      * Wake up the client if it is currently blocked waiting for I/O
