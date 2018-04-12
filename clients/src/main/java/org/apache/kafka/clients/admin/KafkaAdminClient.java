@@ -2356,12 +2356,12 @@ public class KafkaAdminClient extends AdminClient {
                                     Collection<ConsumerGroupListing> results;
                                     try {
                                         results = entry.getValue().get();
+                                        listings.addAll(results);
                                     } catch (Throwable e) {
-                                        // This should be unreachable, since the future returned by KafkaFuture#allOf should
-                                        // have failed if any Future failed.
-                                        throw new KafkaException("ListConsumerGroupsResult#listings(): internal error", e);
+                                        // This is possible if some of the node returns error, in this case we just log it and move on.
+                                        log.debug("{} returns error {} for ListConsumerRequest, skipping its results in the returned list of consumer groups",
+                                                entry.getKey(), e);
                                     }
-                                    listings.addAll(results);
                                 }
                                 return listings;
                             }
