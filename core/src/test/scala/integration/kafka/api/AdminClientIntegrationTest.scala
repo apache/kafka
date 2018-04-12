@@ -742,7 +742,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     sendRecords(producers.head, 10, topicPartition)
     var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
-    var lowWatermark:Option[Long] = Some(result.lowWatermarks.get(topicPartition).get.lowWatermark)
+    var lowWatermark: Option[Long] = Some(result.lowWatermarks.get(topicPartition).get.lowWatermark)
     assertEquals(Some(5), lowWatermark)
 
     for (i <- 0 until serverCount) {
