@@ -66,11 +66,11 @@ class StreamsSimpleBenchmarkTest(Test):
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
         self.zk.start()
         self.kafka = KafkaService(self.test_context, num_nodes=scale, zk=self.zk, version=DEV_BRANCH, topics={
-            'simpleBenchmarkSourceTopic1' : { 'partitions': scale, 'replication-factor': self.replication, "config": "message.timestamp.type=LogAppendTime" },
-            'simpleBenchmarkSourceTopic2' : { 'partitions': scale, 'replication-factor': self.replication, "config": "message.timestamp.type=LogAppendTime" },
-            'simpleBenchmarkSinkTopic' : { 'partitions': scale, 'replication-factor': self.replication, "config": "message.timestamp.type=LogAppendTime" },
-            'yahooCampaigns' : { 'partitions': 20, 'replication-factor': self.replication, "config": "message.timestamp.type=LogAppendTime" },
-            'yahooEvents' : { 'partitions': 20, 'replication-factor': self.replication, "config": "message.timestamp.type=LogAppendTime" }
+            'simpleBenchmarkSourceTopic1' : { 'partitions': scale, 'replication-factor': self.replication },
+            'simpleBenchmarkSourceTopic2' : { 'partitions': scale, 'replication-factor': self.replication },
+            'simpleBenchmarkSinkTopic' : { 'partitions': scale, 'replication-factor': self.replication },
+            'yahooCampaigns' : { 'partitions': 20, 'replication-factor': self.replication },
+            'yahooEvents' : { 'partitions': 20, 'replication-factor': self.replication }
         })
         self.kafka.log_level = "INFO"
         self.kafka.start()
