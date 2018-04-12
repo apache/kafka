@@ -742,8 +742,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     sendRecords(producers.head, 10, topicPartition)
     var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
-    var lowWatermark = Option(result.lowWatermarks.get(topicPartition).get.lowWatermark)
-    assertTrue(lowWatermark.contains(5L))
+    var lowWatermark:Option[Long] = Some(result.lowWatermarks.get(topicPartition).get.lowWatermark)
+    assertEquals(Some(5), lowWatermark)
 
     for (i <- 0 until serverCount) {
       killBroker(i)
@@ -761,7 +761,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       lowWatermark = None
       val future = result.lowWatermarks().get(topicPartition)
       try {
-        lowWatermark = Option(future.get.lowWatermark)
+        lowWatermark = Some(future.get.lowWatermark)
         lowWatermark.contains(5L)
       } catch {
         case e: ExecutionException if e.getCause.isInstanceOf[LeaderNotAvailableException] ||
