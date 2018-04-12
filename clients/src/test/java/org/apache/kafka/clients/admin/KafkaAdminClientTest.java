@@ -801,12 +801,12 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.NONE, responseData));
 
             final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets("group-0");
+            final Map<TopicPartition, OffsetAndMetadata> partitionToOffsetAndMetadata = result.partitionsToOffsetAndMetadata().get();
 
-            assertEquals(3, result.partitionsToOffsetAndMetadata().get().size());
-            final TopicPartition topicPartition = result.partitionsToOffsetAndMetadata().get().keySet().iterator().next();
-            assertEquals("my_topic", topicPartition.topic());
-            final OffsetAndMetadata offsetAndMetadata = result.partitionsToOffsetAndMetadata().get().values().iterator().next();
-            assertEquals(10, offsetAndMetadata.offset());
+            assertEquals(3, partitionToOffsetAndMetadata.size());
+            assertEquals(10, partitionToOffsetAndMetadata.get(myTopicPartition0).offset());
+            assertEquals(0, partitionToOffsetAndMetadata.get(myTopicPartition1).offset());
+            assertEquals(20, partitionToOffsetAndMetadata.get(myTopicPartition2).offset());
         }
     }
 
