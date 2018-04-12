@@ -742,8 +742,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     sendRecords(producers.head, 10, topicPartition)
     var result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(5L)).asJava)
-    var lowWatermark = result.lowWatermarks().get(topicPartition).get().lowWatermark()
-    assertEquals(5L, lowWatermark)
+    var lowWatermark = Option(result.lowWatermarks.get(topicPartition).get.lowWatermark)
+    assertTrue(lowWatermark.contains(5L))
 
     for (i <- 0 until serverCount) {
       killBroker(i)
@@ -758,18 +758,16 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       // Need to retry if leader is not available for the partition
       result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(0L)).asJava)
 
-      lowWatermark = Long.MinValue
+      lowWatermark = None
       val future = result.lowWatermarks().get(topicPartition)
       try {
-        lowWatermark = future.get().lowWatermark()
-        lowWatermark == 5L
+        lowWatermark = Option(future.get.lowWatermark)
+        lowWatermark.contains(5L)
       } catch {
         case e: ExecutionException if e.getCause.isInstanceOf[LeaderNotAvailableException] ||
           e.getCause.isInstanceOf[NotLeaderForPartitionException] => false
         }
-    }, "Expected low watermark of the partition to be 5 but got ".concat(
-      if (lowWatermark == Long.MinValue) "no response within the timeout" else lowWatermark.toString))
-
+    }, s"Expected low watermark of the partition to be 5 but got ${lowWatermark.getOrElse("no response within the timeout")}")
     client.close()
   }
 
