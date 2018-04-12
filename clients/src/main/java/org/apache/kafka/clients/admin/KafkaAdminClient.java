@@ -2371,7 +2371,8 @@ public class KafkaAdminClient extends AdminClient {
 
                 // we have to flatten the future here instead in the result, because we need to wait until the map of nodes
                 // are known from the listNode request.
-                flattenFuture.copyWith(KafkaFuture.allOf(futuresMap.values().toArray(new KafkaFuture[0])),
+                flattenFuture.copyWith(
+                        KafkaFuture.allOf(futuresMap.values().toArray(new KafkaFuture[0])),
                         new KafkaFuture.BaseFunction<Void, Collection<ConsumerGroupListing>>() {
                             @Override
                             public Collection<ConsumerGroupListing> apply(Void v) {
@@ -2389,8 +2390,7 @@ public class KafkaAdminClient extends AdminClient {
                                 }
                                 return listings;
                             }
-                        }
-                        );
+                        });
 
                 for (final Map.Entry<Node, KafkaFutureImpl<Collection<ConsumerGroupListing>>> entry : futuresMap.entrySet()) {
                     final long nowList = time.milliseconds();
