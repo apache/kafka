@@ -858,6 +858,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/config/*"
     include "**/org/apache/kafka/common/security/auth/*"
     include "**/org/apache/kafka/server/policy/*"
+    include "**/org/apache/kafka/common/security/token/delegation/*"
   }
 }
 
