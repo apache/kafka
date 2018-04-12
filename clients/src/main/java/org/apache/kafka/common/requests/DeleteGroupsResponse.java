@@ -44,8 +44,13 @@ public class DeleteGroupsResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             new Field(GROUP_ERROR_CODES_KEY_NAME, new ArrayOf(GROUP_ERROR_CODE), "An array of per group error codes."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DELETE_GROUPS_RESPONSE_V1 = DELETE_GROUPS_RESPONSE_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DELETE_GROUPS_RESPONSE_V0};
+        return new Schema[]{DELETE_GROUPS_RESPONSE_V0, DELETE_GROUPS_RESPONSE_V1};
     }
 
 
@@ -102,6 +107,7 @@ public class DeleteGroupsResponse extends AbstractResponse {
         return struct;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -125,5 +131,10 @@ public class DeleteGroupsResponse extends AbstractResponse {
 
     public static DeleteGroupsResponse parse(ByteBuffer buffer, short version) {
         return new DeleteGroupsResponse(ApiKeys.DELETE_GROUPS.responseSchema(version).read(buffer));
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
     }
 }

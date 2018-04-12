@@ -32,8 +32,13 @@ public class EndTxnResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             ERROR_CODE);
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema END_TXN_RESPONSE_V1 = END_TXN_RESPONSE_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{END_TXN_RESPONSE_V0};
+        return new Schema[]{END_TXN_RESPONSE_V0, END_TXN_RESPONSE_V1};
     }
 
     // Possible error codes:
@@ -58,6 +63,7 @@ public class EndTxnResponse extends AbstractResponse {
         this.error = Errors.forCode(struct.get(ERROR_CODE));
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -89,5 +95,10 @@ public class EndTxnResponse extends AbstractResponse {
                 "error=" + error +
                 ", throttleTimeMs=" + throttleTimeMs +
                 ')';
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
     }
 }

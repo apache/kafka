@@ -52,6 +52,8 @@ class RequestQuotaTest extends BaseRequestTest {
   private val tp = new TopicPartition(topic, 0)
   private val logDir = "logDir"
   private val unthrottledClientId = "unthrottled-client"
+  private val smallQuotaProducerClientId = "small-quota-producer-client"
+  private val smallQuotaConsumerClientId = "small-quota-consumer-client"
   private val brokerId: Integer = 0
   private var leaderNode: KafkaServer = null
 
@@ -81,9 +83,21 @@ class RequestQuotaTest extends BaseRequestTest {
     // Change default client-id request quota to a small value and a single unthrottledClient with a large quota
     val quotaProps = new Properties()
     quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "0.01")
+    quotaProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "2000")
+    quotaProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "2000")
     adminZkClient.changeClientIdConfig("<default>", quotaProps)
     quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "2000")
     adminZkClient.changeClientIdConfig(Sanitizer.sanitize(unthrottledClientId), quotaProps)
+
+    // Client ids with small producer and consumer (fetch) quotas. Quota values were picked so that both
+    // producer/consumer and request quotas are violated on the first produce/consume operation, and the delay due to
+    // producer/consumer quota violation will be longer than the delay due to request quota violation.
+    quotaProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1")
+    quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "0.01")
+    adminZkClient.changeClientIdConfig(Sanitizer.sanitize(smallQuotaProducerClientId), quotaProps)
+    quotaProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "1")
+    quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "0.01")
+    adminZkClient.changeClientIdConfig(Sanitizer.sanitize(smallQuotaConsumerClientId), quotaProps)
 
     TestUtils.retry(10000) {
       val quotaManager = servers.head.apis.quotas.request
@@ -103,6 +117,20 @@ class RequestQuotaTest extends BaseRequestTest {
     for (apiKey <- RequestQuotaTest.ClientActions)
       submitTest(apiKey, () => checkRequestThrottleTime(apiKey))
 
+    waitAndCheckResults()
+  }
+
+  @Test
+  def testResponseThrottleTimeWhenBothProduceAndRequestQuotasViolated() {
+    val apiKey = ApiKeys.PRODUCE;
+    submitTest(apiKey, () => checkSmallQuotaProducerRequestThrottleTime(apiKey))
+    waitAndCheckResults()
+  }
+
+  @Test
+  def testResponseThrottleTimeWhenBothFetchAndRequestQuotasViolated() {
+    val apiKey = ApiKeys.FETCH;
+    submitTest(apiKey, () => checkSmallQuotaConsumerRequestThrottleTime(apiKey))
     waitAndCheckResults()
   }
 
@@ -135,8 +163,12 @@ class RequestQuotaTest extends BaseRequestTest {
   def session(user: String): Session = Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user), null)
 
   private def throttleTimeMetricValue(clientId: String): Double = {
+    throttleTimeMetricValueForQuotaType(clientId, QuotaType.Request)
+  }
+
+  private def throttleTimeMetricValueForQuotaType(clientId: String, quotaType: QuotaType): Double = {
     val metricName = leaderNode.metrics.metricName("throttle-time",
-                                  QuotaType.Request.toString,
+                                  quotaType.toString,
                                   "",
                                   "user", "",
                                   "client-id", clientId)
@@ -380,7 +412,7 @@ class RequestQuotaTest extends BaseRequestTest {
 
   private def responseThrottleTime(apiKey: ApiKeys, response: Struct): Int = {
     apiKey match {
-      case ApiKeys.PRODUCE => new ProduceResponse(response).getThrottleTime
+      case ApiKeys.PRODUCE => new ProduceResponse(response).throttleTimeMs
       case ApiKeys.FETCH => new FetchResponse(response).throttleTimeMs
       case ApiKeys.LIST_OFFSETS => new ListOffsetResponse(response).throttleTimeMs
       case ApiKeys.METADATA => new MetadataResponse(response).throttleTimeMs
@@ -428,6 +460,32 @@ class RequestQuotaTest extends BaseRequestTest {
 
     assertTrue(s"Response not throttled: $client", throttled)
     assertTrue(s"Throttle time metrics not updated: $client" , throttleTimeMetricValue(clientId) > 0)
+  }
+
+  private def checkSmallQuotaProducerRequestThrottleTime(apiKey: ApiKeys) {
+
+    // Request until throttled using client-id with default small producer quota
+    val smallQuotaProducerClient = Client(smallQuotaProducerClientId, apiKey)
+    val throttled = smallQuotaProducerClient.runUntil(response => responseThrottleTime(apiKey, response) > 0)
+
+    assertTrue(s"Response not throttled: $smallQuotaProducerClient", throttled)
+    assertTrue(s"Throttle time metrics for produce quota not updated: $smallQuotaProducerClient",
+      throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Produce) > 0)
+    assertTrue(s"Throttle time metrics for request quota updated: $smallQuotaProducerClient",
+      throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Request) == 0)
+  }
+
+  private def checkSmallQuotaConsumerRequestThrottleTime(apiKey: ApiKeys) {
+
+    // Request until throttled using client-id with default small consumer quota
+    val smallQuotaConsumerClient =   Client(smallQuotaConsumerClientId, apiKey)
+    val throttled = smallQuotaConsumerClient.runUntil(response => responseThrottleTime(apiKey, response) > 0)
+
+    assertTrue(s"Response not throttled: $smallQuotaConsumerClientId", throttled)
+    assertTrue(s"Throttle time metrics for consumer quota not updated: $smallQuotaConsumerClientId",
+      throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Fetch) > 0)
+    assertTrue(s"Throttle time metrics for request quota updated: $smallQuotaConsumerClient",
+      throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Request) == 0)
   }
 
   private def checkUnthrottledClient(apiKey: ApiKeys) {

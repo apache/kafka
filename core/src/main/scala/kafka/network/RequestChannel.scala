@@ -234,13 +234,15 @@ object RequestChannel extends Logging {
     def processor: Int = request.processor
 
     override def toString =
-      s"Response(request=$request, responseSend=$responseSend, responseAction=$responseAction), responseAsString=$responseAsString"
+      s"Response(request=$request, responseSend=$responseSend, responseAction=$responseAction, responseAsString=$responseAsString)"
   }
 
   sealed trait ResponseAction
   case object SendAction extends ResponseAction
   case object NoOpAction extends ResponseAction
   case object CloseConnectionAction extends ResponseAction
+  case object StartThrottlingAction extends ResponseAction
+  case object EndThrottlingAction extends ResponseAction
 }
 
 class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
@@ -292,6 +294,10 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
           s"Not sending ${requestHeader.apiKey} response to client ${requestHeader.clientId} as it's not required."
         case CloseConnectionAction =>
           s"Closing connection for client ${requestHeader.clientId} due to error during ${requestHeader.apiKey}."
+        case StartThrottlingAction =>
+          s"Notifying channel throttling has started for client ${requestHeader.clientId} for ${requestHeader.apiKey}"
+        case EndThrottlingAction =>
+          s"Notifying channel throttling has ended for client ${requestHeader.clientId} for ${requestHeader.apiKey}"
       }
       trace(message)
     }

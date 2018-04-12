@@ -63,8 +63,13 @@ public class DescribeAclsResponse extends AbstractResponse {
             ERROR_MESSAGE,
             new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_ACLS_RESOURCE), "The resources and their associated ACLs."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DESCRIBE_ACLS_RESPONSE_V1 = DESCRIBE_ACLS_RESPONSE_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DESCRIBE_ACLS_RESPONSE_V0};
+        return new Schema[]{DESCRIBE_ACLS_RESPONSE_V0, DESCRIBE_ACLS_RESPONSE_V1};
     }
 
     private final int throttleTimeMs;
@@ -126,6 +131,7 @@ public class DescribeAclsResponse extends AbstractResponse {
         return struct;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -145,5 +151,10 @@ public class DescribeAclsResponse extends AbstractResponse {
 
     public static DescribeAclsResponse parse(ByteBuffer buffer, short version) {
         return new DescribeAclsResponse(ApiKeys.DESCRIBE_ACLS.responseSchema(version).read(buffer));
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
     }
 }

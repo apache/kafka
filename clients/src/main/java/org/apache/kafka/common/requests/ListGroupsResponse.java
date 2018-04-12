@@ -49,8 +49,14 @@ public class ListGroupsResponse extends AbstractResponse {
             ERROR_CODE,
             new Field(GROUPS_KEY_NAME, new ArrayOf(LIST_GROUPS_RESPONSE_GROUP_V0)));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema LIST_GROUPS_RESPONSE_V2 = LIST_GROUPS_RESPONSE_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[] {LIST_GROUPS_RESPONSE_V0, LIST_GROUPS_RESPONSE_V1};
+        return new Schema[] {LIST_GROUPS_RESPONSE_V0, LIST_GROUPS_RESPONSE_V1,
+            LIST_GROUPS_RESPONSE_V2};
     }
 
     /**
@@ -86,6 +92,7 @@ public class ListGroupsResponse extends AbstractResponse {
         }
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -142,4 +149,8 @@ public class ListGroupsResponse extends AbstractResponse {
         return new ListGroupsResponse(ApiKeys.LIST_GROUPS.parseResponse(version, buffer));
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
+    }
 }

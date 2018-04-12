@@ -435,7 +435,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
             return new UpdateMetadataResponse(Errors.forException(e));
         else
             throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    versionId, this.getClass().getSimpleName(), ApiKeys.UPDATE_METADATA.latestVersion()));
+                versionId, this.getClass().getSimpleName(), ApiKeys.UPDATE_METADATA.latestVersion()));
     }
 
     public int controllerId() {

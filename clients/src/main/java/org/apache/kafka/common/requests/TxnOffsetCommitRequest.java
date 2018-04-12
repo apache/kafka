@@ -59,8 +59,13 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                     new Field(PARTITIONS_KEY_NAME, new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0)))),
                     "The partitions to write markers for."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema TXN_OFFSET_COMMIT_REQUEST_V1 = TXN_OFFSET_COMMIT_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{TXN_OFFSET_COMMIT_REQUEST_V0};
+        return new Schema[]{TXN_OFFSET_COMMIT_REQUEST_V0, TXN_OFFSET_COMMIT_REQUEST_V1};
     }
 
     public static class Builder extends AbstractRequest.Builder<TxnOffsetCommitRequest> {

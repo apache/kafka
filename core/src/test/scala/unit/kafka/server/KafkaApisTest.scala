@@ -121,7 +121,7 @@ class KafkaApisTest {
       val (offsetCommitRequest, request) = buildRequest(new OffsetCommitRequest.Builder("groupId",
         Map(invalidTopicPartition -> partitionOffsetCommitData).asJava))
 
-      val capturedResponse = expectThrottleCallbackAndInvoke()
+      val capturedResponse = expectNoThrottling()
       EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel)
       createKafkaApis().handleOffsetCommitRequest(request)
 
@@ -147,7 +147,7 @@ class KafkaApisTest {
       val (offsetCommitRequest, request) = buildRequest(new TxnOffsetCommitRequest.Builder("txnlId", "groupId",
         15L, 0.toShort, Map(invalidTopicPartition -> partitionOffsetCommitData).asJava))
 
-      val capturedResponse = expectThrottleCallbackAndInvoke()
+      val capturedResponse = expectNoThrottling()
       EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel)
       createKafkaApis().handleTxnOffsetCommitRequest(request)
 
@@ -173,7 +173,7 @@ class KafkaApisTest {
       val (addPartitionsToTxnRequest, request) = buildRequest(new AddPartitionsToTxnRequest.Builder(
         "txnlId", 15L, 0.toShort, List(invalidTopicPartition).asJava))
 
-      val capturedResponse = expectThrottleCallbackAndInvoke()
+      val capturedResponse = expectNoThrottling()
       EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel)
       createKafkaApis().handleAddPartitionToTxnRequest(request)
 
@@ -373,7 +373,7 @@ class KafkaApisTest {
       EasyMock.expect(replica.lastStableOffset).andReturn(LogOffsetMetadata(messageOffset = limitOffset))
     EasyMock.expect(replicaManager.getLog(tp)).andReturn(Some(log))
     EasyMock.expect(log.fetchOffsetsByTimestamp(timestamp)).andReturn(Some(TimestampOffset(timestamp = timestamp, offset = limitOffset)))
-    val capturedResponse = expectThrottleCallbackAndInvoke()
+    val capturedResponse = expectNoThrottling()
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
 
     val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
@@ -414,7 +414,7 @@ class KafkaApisTest {
     EasyMock.expect(replicaManager.getLog(tp)).andReturn(Some(log))
     EasyMock.expect(log.fetchOffsetsByTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP))
       .andReturn(Some(TimestampOffset(timestamp = ListOffsetResponse.UNKNOWN_TIMESTAMP, offset = limitOffset)))
-    val capturedResponse = expectThrottleCallbackAndInvoke()
+    val capturedResponse = expectNoThrottling()
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
 
     val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
@@ -482,7 +482,7 @@ class KafkaApisTest {
   }
 
   private def sendMetadataRequestWithInconsistentListeners(requestListener: ListenerName): MetadataResponse = {
-    val capturedResponse = expectThrottleCallbackAndInvoke()
+    val capturedResponse = expectNoThrottling()
     EasyMock.replay(clientRequestQuotaManager, requestChannel)
 
     val (metadataRequest, requestChannelRequest) = buildRequest(MetadataRequest.Builder.allTopics, requestListener)
@@ -503,7 +503,8 @@ class KafkaApisTest {
     else
       EasyMock.expect(replica.lastStableOffset).andReturn(LogOffsetMetadata(messageOffset = latestOffset))
 
-    val capturedResponse = expectThrottleCallbackAndInvoke()
+    val capturedResponse = expectNoThrottling()
+
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
 
     val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
@@ -536,8 +537,8 @@ class KafkaApisTest {
     val header = RequestHeader.parse(buffer)
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
       listenerName, SecurityProtocol.PLAINTEXT)
-    (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos =  0,
-      MemoryPool.NONE, buffer, requestChannelMetrics))
+    (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos =  0, MemoryPool.NONE, buffer,
+      requestChannelMetrics))
   }
 
   private def readResponse(api: ApiKeys, request: AbstractRequest, capturedResponse: Capture[RequestChannel.Response]): AbstractResponse = {
@@ -551,17 +552,11 @@ class KafkaApisTest {
     AbstractResponse.parseResponse(api, struct)
   }
 
-  private def expectThrottleCallbackAndInvoke(): Capture[RequestChannel.Response] = {
-    val capturedThrottleCallback = EasyMock.newCapture[Int => Unit]()
-    EasyMock.expect(clientRequestQuotaManager.maybeRecordAndThrottle(
-      EasyMock.anyObject[RequestChannel.Request](),
-      EasyMock.capture(capturedThrottleCallback)))
-      .andAnswer(new IAnswer[Unit] {
-        override def answer(): Unit = {
-          val callback = capturedThrottleCallback.getValue
-          callback(0)
-        }
-      })
+  private def expectNoThrottling(): Capture[RequestChannel.Response] = {
+    EasyMock.expect(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(EasyMock.anyObject[RequestChannel.Request]()))
+      .andReturn(0)
+    EasyMock.expect(clientRequestQuotaManager.throttle(EasyMock.anyObject[RequestChannel.Request](), EasyMock.eq(0),
+      EasyMock.anyObject[RequestChannel.ResponseAction => Unit]()))
 
     val capturedResponse = EasyMock.newCapture[RequestChannel.Response]()
     EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
@@ -578,5 +573,4 @@ class KafkaApisTest {
       0, partitions.asJava, Set(broker).asJava).build()
     metadataCache.updateCache(correlationId = 0, updateMetadataRequest)
   }
-
 }
