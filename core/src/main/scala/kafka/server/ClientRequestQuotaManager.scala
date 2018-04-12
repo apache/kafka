@@ -40,23 +40,35 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
     exemptSensor.record(value)
   }
 
-  def maybeRecordAndThrottle(request: RequestChannel.Request, sendResponseCallback: Int => Unit): Unit = {
+  /**
+    * Records that a user/clientId changed some metric being throttled (produced/consumed bytes, request processing
+    * time, etc.) If quota has been violated, return throttle time in milliseconds. Throttle time calculation may be
+    * overridden by sub-classes.
+    * @param request client request
+    * @return Number of milliseconds to throttle in case of quota violation. Zero otherwise
+    */
+  def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request): Int = {
     if (request.apiRemoteCompleteTimeNanos == -1) {
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeNanos = time.nanoseconds
     }
 
     if (quotasEnabled) {
-      val quotaSensors = getOrCreateQuotaSensors(request.session, request.header.clientId)
-      request.recordNetworkThreadTimeCallback = Some(timeNanos => recordNoThrottle(quotaSensors, nanosToPercentage(timeNanos)))
-
-      recordAndThrottleOnQuotaViolation(
-          quotaSensors,
-          nanosToPercentage(request.requestThreadTimeNanos),
-          sendResponseCallback)
-    } else {
-      sendResponseCallback(0)
+      request.recordNetworkThreadTimeCallback = Some(timeNanos => recordNoThrottle(
+        getOrCreateQuotaSensors(request.session, request.header.clientId), nanosToPercentage(timeNanos)))
     }
+    super.maybeRecordAndGetThrottleTimeMs(request, nanosToPercentage(request.requestThreadTimeNanos))
+  }
+
+  /**
+    * A convenience method that calls maybeRecord() and maybeThrottle() if throttling is needed.
+    * @param request client request
+    * @return A tuple that consists of throttling delay in milliseconds and an optional ThrottledChannel object.
+    */
+  def maybeRecordAndThrottle(request: RequestChannel.Request): Int = {
+    val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
+    throttle(request, throttleTimeMs)
+    throttleTimeMs
   }
 
   def maybeRecordExempt(request: RequestChannel.Request): Unit = {

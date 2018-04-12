@@ -25,15 +25,19 @@ import org.apache.kafka.common.metrics.MetricConfig
 import org.apache.kafka.common.utils.MockTime
 import org.junit.{Assert, Before, Test}
 
-class ThrottledResponseExpirationTest {
+class ThrottledChannelExpirationTest {
   private val time = new MockTime
   private var numCallbacks: Int = 0
   private val metrics = new org.apache.kafka.common.metrics.Metrics(new MetricConfig(),
                                                                     Collections.emptyList(),
                                                                     time)
 
-  def callback(delayTimeMs: Int) {
-    numCallbacks += 1
+  def callback(throttledChannelEvent: ThrottledChannelEvent) {
+    // Count how many times this callback is called for tryUnmute().
+    throttledChannelEvent match {
+      case StartThrottling =>
+      case EndThrottling => numCallbacks += 1
+    }
   }
 
   @Before
@@ -42,23 +46,26 @@ class ThrottledResponseExpirationTest {
   }
 
   @Test
-  def testExpire() {
+  def testCallbackInvocationAfterExpiration() {
     val clientMetrics = new ClientQuotaManager(ClientQuotaManagerConfig(), metrics, QuotaType.Produce, time, "")
 
-    val delayQueue = new DelayQueue[ThrottledResponse]()
-    val reaper = new clientMetrics.ThrottledRequestReaper(delayQueue, "")
+    val delayQueue = new DelayQueue[ThrottledChannel]()
+    val reaper = new clientMetrics.ThrottledChannelReaper(delayQueue, "")
     try {
-      // Add 4 elements to the queue out of order. Add 2 elements with the same expire timestamp
-      delayQueue.add(new ThrottledResponse(time, 10, callback))
-      delayQueue.add(new ThrottledResponse(time, 30, callback))
-      delayQueue.add(new ThrottledResponse(time, 30, callback))
-      delayQueue.add(new ThrottledResponse(time, 20, callback))
+      // Add 4 elements to the queue out of order. Add 2 elements with the same expire timestamp.
+      val channel1 = new ThrottledChannel(time, 10, callback)
+      val channel2 = new ThrottledChannel(time, 30, callback)
+      val channel3 = new ThrottledChannel(time, 30, callback)
+      val channel4 = new ThrottledChannel(time, 20, callback)
+      delayQueue.add(channel1)
+      delayQueue.add(channel2)
+      delayQueue.add(channel3)
+      delayQueue.add(channel4)
 
       for(itr <- 1 to 3) {
         time.sleep(10)
         reaper.doWork()
         Assert.assertEquals(itr, numCallbacks)
-
       }
       reaper.doWork()
       Assert.assertEquals(4, numCallbacks)
@@ -71,10 +78,10 @@ class ThrottledResponseExpirationTest {
   }
 
   @Test
-  def testThrottledRequest() {
-    val t1: ThrottledResponse = new ThrottledResponse(time, 10, callback)
-    val t2: ThrottledResponse = new ThrottledResponse(time, 20, callback)
-    val t3: ThrottledResponse = new ThrottledResponse(time, 20, callback)
+  def testThrottledChannelDelay() {
+    val t1: ThrottledChannel = new ThrottledChannel(time, 10, callback)
+    val t2: ThrottledChannel = new ThrottledChannel(time, 20, callback)
+    val t3: ThrottledChannel = new ThrottledChannel(time, 20, callback)
     Assert.assertEquals(10, t1.throttleTimeMs)
     Assert.assertEquals(20, t2.throttleTimeMs)
     Assert.assertEquals(20, t3.throttleTimeMs)

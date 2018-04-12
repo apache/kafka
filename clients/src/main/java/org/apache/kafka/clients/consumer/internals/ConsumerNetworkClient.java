@@ -127,10 +127,10 @@ public class ConsumerNetworkClient implements Closeable {
         }
     }
 
-    public boolean hasReadyNodes() {
+    public boolean hasReadyNodes(long now) {
         lock.lock();
         try {
-            return client.hasReadyNodes();
+            return client.hasReadyNodes(now);
         } finally {
             lock.unlock();
         }
