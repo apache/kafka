@@ -68,7 +68,6 @@ public class AssignmentInfoTest {
         assertEquals(1, decoded.version());
     }
 
-
     /**
      * This is a clone of what the V1 encoding did. The encode method has changed for V2
      * so it is impossible to test compatibility without having this

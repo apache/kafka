@@ -67,12 +67,14 @@ public class StandaloneHerder extends AbstractHerder {
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
     }
 
+    @Override
     public synchronized void start() {
         log.info("Herder starting");
         startServices();
         log.info("Herder started");
     }
 
+    @Override
     public synchronized void stop() {
         log.info("Herder stopping");
 

@@ -14,18 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.token.delegation;
 
-import org.apache.kafka.common.security.scram.ScramCredentialCallback;
+package org.apache.kafka.clients.admin;
 
-public class DelegationTokenCredentialCallback extends ScramCredentialCallback {
-    private String tokenOwner;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
-    public void tokenOwner(String tokenOwner) {
-        this.tokenOwner = tokenOwner;
+/**
+ * Options for {@link AdminClient#expireDelegationToken(byte[], ExpireDelegationTokenOptions)}.
+ *
+ * The API of this class is evolving, see {@link AdminClient} for details.
+ */
+@InterfaceStability.Evolving
+public class ExpireDelegationTokenOptions extends AbstractOptions<ExpireDelegationTokenOptions> {
+    private long expiryTimePeriodMs = -1L;
+
+    public ExpireDelegationTokenOptions expiryTimePeriodMs(long expiryTimePeriodMs) {
+        this.expiryTimePeriodMs = expiryTimePeriodMs;
+        return this;
     }
 
-    public String tokenOwner() {
-        return tokenOwner;
+    public long expiryTimePeriodMs() {
+        return expiryTimePeriodMs;
     }
 }

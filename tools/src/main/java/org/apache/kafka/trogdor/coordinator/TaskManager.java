@@ -17,10 +17,14 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.ThreadUtils;
@@ -31,13 +35,15 @@ import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TaskStopping;
 import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
+import org.apache.kafka.trogdor.rest.WorkerDone;
+import org.apache.kafka.trogdor.rest.WorkerReceiving;
+import org.apache.kafka.trogdor.rest.WorkerState;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -172,16 +178,9 @@ public final class TaskManager {
         private Future<?> startFuture = null;
 
         /**
-         * The name of the worker nodes involved with this task.
-         * Null if the task is not running.
+         * The states of the workers involved with this task.
          */
-        private Set<String> workers = null;
-
-        /**
-         * The names of the worker nodes which are still running this task.
-         * Null if the task is not running.
-         */
-        private Set<String> activeWorkers = null;
+        public Map<String, WorkerState> workerStates = new TreeMap<>();
 
         /**
          * If this is non-empty, a message describing how this task failed.
@@ -241,13 +240,38 @@ public final class TaskManager {
                 case PENDING:
                     return new TaskPending(spec);
                 case RUNNING:
-                    return new TaskRunning(spec, startedMs);
+                    return new TaskRunning(spec, startedMs, getCombinedStatus(workerStates));
                 case STOPPING:
-                    return new TaskStopping(spec, startedMs);
+                    return new TaskStopping(spec, startedMs, getCombinedStatus(workerStates));
                 case DONE:
-                    return new TaskDone(spec, startedMs, doneMs, error, cancelled);
+                    return new TaskDone(spec, startedMs, doneMs, error, cancelled, getCombinedStatus(workerStates));
             }
             throw new RuntimeException("unreachable");
+        }
+
+        TreeSet<String> activeWorkers() {
+            TreeSet<String> workerNames = new TreeSet<>();
+            for (Map.Entry<String, WorkerState> entry : workerStates.entrySet()) {
+                if (!entry.getValue().done()) {
+                    workerNames.add(entry.getKey());
+                }
+            }
+            return workerNames;
+        }
+    }
+
+    private static final JsonNode getCombinedStatus(Map<String, WorkerState> states) {
+        if (states.size() == 1) {
+            return states.values().iterator().next().status();
+        } else {
+            ObjectNode objectNode = new ObjectNode(JsonNodeFactory.instance);
+            for (Map.Entry<String, WorkerState> entry : states.entrySet()) {
+                JsonNode node = entry.getValue().status();
+                if (node != null) {
+                    objectNode.set(entry.getKey(), node);
+                }
+            }
+            return objectNode;
         }
     }
 
@@ -349,10 +373,8 @@ public final class TaskManager {
             log.info("Running task {} on node(s): {}", task.id, Utils.join(nodeNames, ", "));
             task.state = ManagedTaskState.RUNNING;
             task.startedMs = time.milliseconds();
-            task.workers = nodeNames;
-            task.activeWorkers = new HashSet<>();
-            for (String workerName : task.workers) {
-                task.activeWorkers.add(workerName);
+            for (String workerName : nodeNames) {
+                task.workerStates.put(workerName, new WorkerReceiving(task.spec));
                 nodeManagers.get(workerName).createWorker(task.id, task.spec);
             }
             return null;
@@ -398,15 +420,16 @@ public final class TaskManager {
                     break;
                 case RUNNING:
                     task.cancelled = true;
-                    if (task.activeWorkers.size() == 0) {
+                    TreeSet<String> activeWorkers = task.activeWorkers();
+                    if (activeWorkers.isEmpty()) {
                         log.info("Task {} is now complete with error: {}", id, task.error);
                         task.doneMs = time.milliseconds();
                         task.state = ManagedTaskState.DONE;
                     } else {
-                        for (String workerName : task.activeWorkers) {
+                        for (String workerName : activeWorkers) {
                             nodeManagers.get(workerName).stopWorker(id);
                         }
-                        log.info("Cancelling task {} on worker(s): {}", id, Utils.join(task.activeWorkers, ", "));
+                        log.info("Cancelling task {} on worker(s): {}", id, Utils.join(activeWorkers, ", "));
                         task.state = ManagedTaskState.STOPPING;
                     }
                     break;
@@ -422,62 +445,76 @@ public final class TaskManager {
     }
 
     /**
-     * A callback NodeManager makes to indicate that a worker has completed.
-     * The task will transition to DONE once all workers are done.
+     * Update the state of a particular agent's worker.
      *
-     * @param nodeName      The node name.
+     * @param nodeName      The node where the agent is running.
      * @param id            The worker name.
-     * @param error         An empty string if there is no error, or an error string.
+     * @param state         The worker state.
      */
-    public void handleWorkerCompletion(String nodeName, String id, String error) {
-        executor.submit(new HandleWorkerCompletion(nodeName, id, error));
+    public void updateWorkerState(String nodeName, String id, WorkerState state) {
+        executor.submit(new UpdateWorkerState(nodeName, id, state));
     }
 
-    class HandleWorkerCompletion implements Callable<Void> {
+    class UpdateWorkerState implements Callable<Void> {
         private final String nodeName;
         private final String id;
-        private final String error;
+        private final WorkerState state;
 
-        HandleWorkerCompletion(String nodeName, String id, String error) {
+        UpdateWorkerState(String nodeName, String id, WorkerState state) {
             this.nodeName = nodeName;
             this.id = id;
-            this.error = error;
+            this.state = state;
         }
 
         @Override
         public Void call() throws Exception {
             ManagedTask task = tasks.get(id);
             if (task == null) {
-                log.error("Can't handle completion of unknown worker {} on node {}",
+                log.error("Can't update worker state unknown worker {} on node {}",
                     id, nodeName);
                 return null;
             }
-            if ((task.state == ManagedTaskState.PENDING) || (task.state == ManagedTaskState.DONE)) {
-                log.error("Task {} got unexpected worker completion from {} while " +
-                    "in {} state.", id, nodeName, task.state);
-                return null;
-            }
-            boolean broadcastStop = false;
-            if (task.state == ManagedTaskState.RUNNING) {
-                task.state = ManagedTaskState.STOPPING;
-                broadcastStop = true;
-            }
-            task.maybeSetError(error);
-            task.activeWorkers.remove(nodeName);
-            if (task.activeWorkers.size() == 0) {
-                task.doneMs = time.milliseconds();
-                task.state = ManagedTaskState.DONE;
-                log.info("Task {} is now complete on {} with error: {}", id,
-                    Utils.join(task.workers, ", "),
-                    task.error.isEmpty() ? "(none)" : task.error);
-            } else if (broadcastStop) {
-                log.info("Node {} stopped.  Stopping task {} on worker(s): {}",
-                    id, Utils.join(task.activeWorkers, ", "));
-                for (String workerName : task.activeWorkers) {
-                    nodeManagers.get(workerName).stopWorker(id);
-                }
+            WorkerState prevState = task.workerStates.get(nodeName);
+            log.debug("Task {}: Updating worker state for {} from {} to {}.",
+                id, nodeName, prevState, state);
+            task.workerStates.put(nodeName, state);
+            if (state.done() && (!prevState.done())) {
+                handleWorkerCompletion(task, nodeName, (WorkerDone) state);
             }
             return null;
+        }
+    }
+
+    /**
+     * Handle a worker being completed.
+     *
+     * @param task      The task that owns the worker.
+     * @param nodeName  The name of the node on which the worker is running.
+     * @param state     The worker state.
+     */
+    private void handleWorkerCompletion(ManagedTask task, String nodeName, WorkerDone state) {
+        if (state.error().isEmpty()) {
+            log.info("{}: Worker {} finished with status '{}'",
+                nodeName, task.id, JsonUtil.toJsonString(state.status()));
+        } else {
+            log.warn("{}: Worker {} finished with error '{}' and status '{}'",
+                nodeName, task.id, state.error(), JsonUtil.toJsonString(state.status()));
+            task.maybeSetError(state.error());
+        }
+        if (task.activeWorkers().isEmpty()) {
+            task.doneMs = time.milliseconds();
+            task.state = ManagedTaskState.DONE;
+            log.info("{}: Task {} is now complete on {} with error: {}",
+                nodeName, task.id, Utils.join(task.workerStates.keySet(), ", "),
+                task.error.isEmpty() ? "(none)" : task.error);
+        } else if ((task.state == ManagedTaskState.RUNNING) && (!task.error.isEmpty())) {
+            TreeSet<String> activeWorkers = task.activeWorkers();
+            log.info("{}: task {} stopped with error {}.  Stopping worker(s): {}",
+                nodeName, task.id, task.error, Utils.join(activeWorkers, ", "));
+            task.state = ManagedTaskState.STOPPING;
+            for (String workerName : activeWorkers) {
+                nodeManagers.get(workerName).stopWorker(task.id);
+            }
         }
     }
 

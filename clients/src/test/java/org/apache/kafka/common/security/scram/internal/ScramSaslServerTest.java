@@ -23,7 +23,7 @@ import java.util.HashMap;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
-import org.apache.kafka.common.security.token.delegation.DelegationTokenCache;
+import org.apache.kafka.common.security.token.delegation.internal.DelegationTokenCache;
 
 import org.junit.Before;
 import org.junit.Test;

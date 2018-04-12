@@ -238,6 +238,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         // implementing the java.sql.Driver interface.
         AccessController.doPrivileged(
                 new PrivilegedAction<Void>() {
+                    @Override
                     public Void run() {
                         ServiceLoader<Driver> loadedDrivers = ServiceLoader.load(
                                 Driver.class,

@@ -689,10 +689,13 @@ class SocketServerTest extends JUnitSuite {
   def testRequestMetricsAfterStop(): Unit = {
     server.stopProcessingRequests()
     val version = ApiKeys.PRODUCE.latestVersion
+    val version2 = (version - 1).toShort
     for (_ <- 0 to 1) server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).mark()
+    server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version2).mark()
     assertEquals(2, server.requestChannel.metrics(ApiKeys.PRODUCE.name).requestRate(version).count())
     server.requestChannel.updateErrorMetrics(ApiKeys.PRODUCE, Map(Errors.NONE -> 1))
     val nonZeroMeters = Map(s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version" -> 2,
+        s"kafka.network:type=RequestMetrics,name=RequestsPerSec,request=Produce,version=$version2" -> 1,
         "kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=Produce,error=NONE" -> 1)
 
     def requestMetricMeters = YammerMetrics

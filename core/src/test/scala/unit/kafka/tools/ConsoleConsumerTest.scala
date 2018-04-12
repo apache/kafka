@@ -25,6 +25,7 @@ import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.consumer.{ConsumerRecord, MockConsumer, OffsetResetStrategy}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -536,5 +537,23 @@ class ConsoleConsumerTest {
     assertEquals("group-from-arguments", props.getProperty("group.id"))
 
     Exit.resetExitProcedure()
+  }
+
+  @Test
+  def testCustomPropertyShouldBePassedToConfigureMethod(): Unit = {
+    val args = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--property", "print.key=true",
+      "--property", "key.deserializer=org.apache.kafka.common.serialization.ByteArrayDeserializer",
+      "--" + ConsoleConsumer.innerKeySerdeName, "org.apache.kafka.common.serialization.Serdes$StringSerde",
+      "--property", "my-test1=abc"
+    )
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+    assertTrue(config.formatter.isInstanceOf[DefaultMessageFormatter])
+    val formatter = config.formatter.asInstanceOf[DefaultMessageFormatter]
+    assertTrue(formatter.keyDeserializer.get.isInstanceOf[ByteArrayDeserializer])
+    assertTrue(config.formatterArgs.containsKey("my-test1"))
+    assertTrue(config.formatterArgs.containsKey(ConsoleConsumer.innerKeySerdeName))
   }
 }

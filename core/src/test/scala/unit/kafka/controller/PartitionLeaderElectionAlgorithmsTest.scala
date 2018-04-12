@@ -17,10 +17,17 @@
 package kafka.controller
 
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{Before, Test}
 import org.scalatest.junit.JUnitSuite
 
 class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
+  private var controllerContext: ControllerContext = null
+
+  @Before
+  def setUp(): Unit = {
+    controllerContext = new ControllerContext
+    controllerContext.stats.removeMetric("UncleanLeaderElectionsPerSec")
+  }
 
   @Test
   def testOfflinePartitionLeaderElection(): Unit = {
@@ -30,7 +37,8 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(assignment,
       isr,
       liveReplicas,
-      uncleanLeaderElectionEnabled = false)
+      uncleanLeaderElectionEnabled = false,
+      controllerContext)
     assertEquals(Option(4), leaderOpt)
   }
 
@@ -42,9 +50,12 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(assignment,
       isr,
       liveReplicas,
-      uncleanLeaderElectionEnabled = false)
+      uncleanLeaderElectionEnabled = false,
+      controllerContext)
     assertEquals(None, leaderOpt)
+    assertEquals(0, controllerContext.stats.uncleanLeaderElectionRate.count())
   }
+
   @Test
   def testOfflinePartitionLeaderElectionLastIsrOfflineUncleanLeaderElectionEnabled(): Unit = {
     val assignment = Seq(2, 4)
@@ -53,8 +64,10 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(assignment,
       isr,
       liveReplicas,
-      uncleanLeaderElectionEnabled = true)
+      uncleanLeaderElectionEnabled = true,
+      controllerContext)
     assertEquals(Option(4), leaderOpt)
+    assertEquals(1, controllerContext.stats.uncleanLeaderElectionRate.count())
   }
 
   @Test
@@ -62,10 +75,9 @@ class PartitionLeaderElectionAlgorithmsTest  extends JUnitSuite {
     val reassignment = Seq(2, 4)
     val isr = Seq(2, 4)
     val liveReplicas = Set(4)
-    val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(reassignment,
+    val leaderOpt = PartitionLeaderElectionAlgorithms.reassignPartitionLeaderElection(reassignment,
       isr,
-      liveReplicas,
-      uncleanLeaderElectionEnabled = false)
+      liveReplicas)
     assertEquals(Option(4), leaderOpt)
   }
 

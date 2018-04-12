@@ -90,6 +90,6 @@ public final class ConfigResource {
 
     @Override
     public String toString() {
-        return "ConfigResource{type=" + type + ", name='" + name + "'}";
+        return "ConfigResource(type=" + type + ", name='" + name + "')";
     }
 }

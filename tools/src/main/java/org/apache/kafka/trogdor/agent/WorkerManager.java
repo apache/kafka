@@ -22,6 +22,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.apache.kafka.trogdor.rest.WorkerDone;
@@ -29,6 +30,7 @@ import org.apache.kafka.trogdor.rest.WorkerRunning;
 import org.apache.kafka.trogdor.rest.WorkerStarting;
 import org.apache.kafka.trogdor.rest.WorkerStopping;
 import org.apache.kafka.trogdor.rest.WorkerState;
+import org.apache.kafka.trogdor.task.AgentWorkerStatusTracker;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.slf4j.Logger;
@@ -43,7 +45,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 public final class WorkerManager {
     private static final Logger log = LoggerFactory.getLogger(WorkerManager.class);
@@ -190,7 +191,7 @@ public final class WorkerManager {
         /**
          * The worker status.
          */
-        private final AtomicReference<String> status = new AtomicReference<>("");
+        private final AgentWorkerStatusTracker status = new AgentWorkerStatusTracker();
 
         /**
          * The time when this task was started.
@@ -293,6 +294,8 @@ public final class WorkerManager {
             haltFuture.thenApply(new KafkaFuture.BaseFunction<String, Void>() {
                 @Override
                 public Void apply(String errorString) {
+                    if (errorString == null)
+                        errorString = "";
                     if (errorString.isEmpty()) {
                         log.info("{}: Worker {} is halting.", nodeName, id);
                     } else {
@@ -306,8 +309,9 @@ public final class WorkerManager {
             try {
                 worker.taskWorker.start(platform, worker.status, haltFuture);
             } catch (Exception e) {
+                log.info("{}: Worker {} start() exception", nodeName, id, e);
                 stateChangeExecutor.submit(new HandleWorkerHalting(worker,
-                    "worker.start() exception: " + e.getMessage(), true));
+                    "worker.start() exception: " + Utils.stackTrace(e), true));
             }
             stateChangeExecutor.submit(new FinishCreatingWorker(worker));
         }

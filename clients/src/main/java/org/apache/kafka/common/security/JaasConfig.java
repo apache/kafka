@@ -81,6 +81,9 @@ class JaasConfig extends Configuration {
     }
 
     private LoginModuleControlFlag loginModuleControlFlag(String flag) {
+        if (flag == null)
+            throw new IllegalArgumentException("Login module control flag is not available in the JAAS config");
+
         LoginModuleControlFlag controlFlag;
         switch (flag.toUpperCase(Locale.ROOT)) {
             case "REQUIRED":
