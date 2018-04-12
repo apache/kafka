@@ -100,8 +100,8 @@ public class YahooBenchmark {
         System.out.println("Initializing topic " + topic);
 
         Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parent.props.get(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG));
         props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parent.kafka);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
@@ -128,12 +128,12 @@ public class YahooBenchmark {
                                        final List<String> ads) {
         parent.resetStats();
         final String[] eventTypes = new String[]{"view", "click", "purchase"};
-        final Random rand = new Random();
+        final Random rand = new Random(System.currentTimeMillis());
         System.out.println("Initializing topic " + topic);
 
         final Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parent.props.get(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG));
         props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parent.kafka);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
 
@@ -157,21 +157,21 @@ public class YahooBenchmark {
             }
         }
 
-        long endTime = System.currentTimeMillis();
+        final long endTime = System.currentTimeMillis();
 
         parent.printResults("Producer Performance [records/latency/rec-sec/MB-sec write]: ", endTime - startTime);
     }
 
 
     public void run() {
-        int numCampaigns = 100;
-        int adsPerCampaign = 10;
+        final int numCampaigns = 100;
+        final int adsPerCampaign = 10;
 
-        List<String> ads = new ArrayList<>(numCampaigns * adsPerCampaign);
+        final List<String> ads = new ArrayList<>(numCampaigns * adsPerCampaign);
         maybeSetupPhaseCampaigns(campaignsTopic, "simple-benchmark-produce-campaigns", false, numCampaigns, adsPerCampaign, ads);
         maybeSetupPhaseEvents(eventsTopic, "simple-benchmark-produce-events", parent.numRecords, ads);
 
-        CountDownLatch latch = new CountDownLatch(1);
+        final CountDownLatch latch = new CountDownLatch(1);
         parent.setStreamProperties("simple-benchmark-yahoo" + new Random().nextInt());
         //TODO remove this config or set to smaller value when KIP-91 is merged
         parent.props.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 60000);

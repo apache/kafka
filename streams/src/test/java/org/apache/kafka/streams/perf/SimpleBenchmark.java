@@ -128,8 +128,6 @@ public class SimpleBenchmark {
 
     /* ----------- benchmark variables that can be specified ----------- */
 
-    final String kafka;
-
     final String testName;
 
     final int numRecords;
@@ -144,14 +142,12 @@ public class SimpleBenchmark {
 
 
     private SimpleBenchmark(final Properties props,
-                            final String kafka,
                             final String testName,
                             final int numRecords,
                             final double keySkew,
                             final int valueSize) {
         super();
         this.props = props;
-        this.kafka = kafka;
         this.testName = testName;
         this.keySkew = keySkew;
         this.valueSize = valueSize;
@@ -233,19 +229,17 @@ public class SimpleBenchmark {
         System.out.println("StreamsTest instance started");
 
         System.out.println("testName=" + testName);
-        System.out.println("kafka=" + kafka);
         System.out.println("streamsProperties=" + props);
         System.out.println("numRecords=" + numRecords);
         System.out.println("keySkew=" + keySkew);
         System.out.println("valueSize=" + valueSize);
 
-        final SimpleBenchmark benchmark = new SimpleBenchmark(props, kafka, testName, numRecords, keySkew, valueSize);
+        final SimpleBenchmark benchmark = new SimpleBenchmark(props, testName, numRecords, keySkew, valueSize);
 
         benchmark.run();
     }
 
     public void setStreamProperties(final String applicationId) {
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         props.put(StreamsConfig.CLIENT_ID_CONFIG, "simple-benchmark");
         props.put(StreamsConfig.POLL_MS_CONFIG, POLL_MS);
@@ -268,8 +262,8 @@ public class SimpleBenchmark {
 
     private Properties setProduceConsumeProperties(final String clientId) {
         Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, props.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG));
         props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         // the socket buffer needs to be large, especially when running in AWS with
         // high latency. if running locally the default is fine.
         props.put(ProducerConfig.LINGER_MS_CONFIG, 5000);
@@ -313,7 +307,7 @@ public class SimpleBenchmark {
             // put some random values to increase entropy. Some devices
             // like SSDs do compression and if the array is all zeros
             // the performance will be too good.
-            new Random().nextBytes(value);
+            new Random(System.currentTimeMillis()).nextBytes(value);
 
             for (int i = 0; i < numRecords; i++) {
                 producer.send(new ProducerRecord<>(topic, keyGen.next(), value));
@@ -326,32 +320,31 @@ public class SimpleBenchmark {
         final Properties producerProps = setProduceConsumeProperties("simple-benchmark-producer");
 
         final long startTime = System.currentTimeMillis();
-        try (final KafkaConsumer<Integer, byte[]> consumer = new KafkaConsumer<>(consumerProps)) {
-            try (final KafkaProducer<Integer, byte[]> producer = new KafkaProducer<>(producerProps)) {
-                final List<TopicPartition> partitions = getAllPartitions(consumer, topic);
+        try (final KafkaConsumer<Integer, byte[]> consumer = new KafkaConsumer<>(consumerProps);
+             final KafkaProducer<Integer, byte[]> producer = new KafkaProducer<>(producerProps)) {
+            final List<TopicPartition> partitions = getAllPartitions(consumer, topic);
 
-                consumer.assign(partitions);
-                consumer.seekToBeginning(partitions);
+            consumer.assign(partitions);
+            consumer.seekToBeginning(partitions);
 
-                while (true) {
-                    final ConsumerRecords<Integer, byte[]> records = consumer.poll(POLL_MS);
-                    if (records.isEmpty()) {
-                        if (processedRecords == numRecords) {
-                            break;
-                        }
-                    } else {
-                        for (final ConsumerRecord<Integer, byte[]> record : records) {
-                            producer.send(new ProducerRecord<>(SINK_TOPIC, record.key(), record.value()));
-                            processedRecords++;
-                            processedBytes += record.value().length + Integer.SIZE;
-                            if (processedRecords == numRecords) {
-                                break;
-                            }
-                        }
-                    }
+            while (true) {
+                final ConsumerRecords<Integer, byte[]> records = consumer.poll(POLL_MS);
+                if (records.isEmpty()) {
                     if (processedRecords == numRecords) {
                         break;
                     }
+                } else {
+                    for (final ConsumerRecord<Integer, byte[]> record : records) {
+                        producer.send(new ProducerRecord<>(SINK_TOPIC, record.key(), record.value()));
+                        processedRecords++;
+                        processedBytes += record.value().length + Integer.SIZE;
+                        if (processedRecords == numRecords) {
+                            break;
+                        }
+                    }
+                }
+                if (processedRecords == numRecords) {
+                    break;
                 }
             }
         }
@@ -657,7 +650,7 @@ public class SimpleBenchmark {
     }
 
     private void yahooBenchmark(final String campaignsTopic, final String eventsTopic) {
-        YahooBenchmark benchmark = new YahooBenchmark(this, campaignsTopic, eventsTopic);
+        final YahooBenchmark benchmark = new YahooBenchmark(this, campaignsTopic, eventsTopic);
 
         benchmark.run();
     }
@@ -684,15 +677,15 @@ public class SimpleBenchmark {
             } else {
                 int rank;
                 double dice;
-                double friquency;
+                double frequency;
 
                 rank = rand.nextInt(size);
-                friquency = (1.0d / Math.pow(rank, this.skew)) / this.bottom;
+                frequency = (1.0d / Math.pow(rank, this.skew)) / this.bottom;
                 dice = rand.nextDouble();
 
-                while (!(dice < friquency)) {
+                while (!(dice < frequency)) {
                     rank = rand.nextInt(size);
-                    friquency = (1.0d / Math.pow(rank, this.skew)) / this.bottom;
+                    frequency = (1.0d / Math.pow(rank, this.skew)) / this.bottom;
                     dice = rand.nextDouble();
                 }
 
