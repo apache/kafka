@@ -609,6 +609,7 @@ public class SimpleBenchmark {
 
                     @Override
                     public void init(ProcessorContext context) {
+                        super.init(context);
                     }
 
                     @Override
