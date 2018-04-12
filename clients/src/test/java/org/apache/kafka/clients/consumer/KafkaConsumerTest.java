@@ -1192,6 +1192,37 @@ public class KafkaConsumerTest {
     }
 
     @Test
+    public void testPollWithAllBootstrapServersDown() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            final long pollTimeout = 1000;
+            final AtomicBoolean pollComplete = new AtomicBoolean();
+            executor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    Properties props = new Properties();
+                    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:29092");
+                    try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(props)) {
+                        consumer.subscribe(Arrays.asList(topic));
+                        try {
+                            consumer.poll(pollTimeout);
+                        } catch (Exception ex) {
+                            ex.printStackTrace();
+                        } finally {
+                            pollComplete.set(true);
+                        }
+                    }
+                }
+            });
+
+            Thread.sleep(pollTimeout * 2);
+            Assert.assertTrue("poll timeout not work when all servers down", pollComplete.get());
+        } finally {
+            executor.shutdown();
+        }
+    }
+
+    @Test
     public void testGracefulClose() throws Exception {
         Map<TopicPartition, Errors> response = new HashMap<>();
         response.put(tp0, Errors.NONE);
@@ -1306,7 +1337,7 @@ public class KafkaConsumerTest {
         }, fetchResponse(tp0, 1, 1), node);
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
-        final ConsumerRecords<String, String> records = consumer.poll(0);
+        final ConsumerRecords<String, String> records = consumer.poll(200);
         assertFalse(records.isEmpty());
         consumer.close(0, TimeUnit.MILLISECONDS);
     }
@@ -1336,7 +1367,7 @@ public class KafkaConsumerTest {
         // Poll with responses
         client.prepareResponseFrom(fetchResponse(tp0, 0, 1), node);
         client.prepareResponseFrom(fetchResponse(tp0, 1, 0), node);
-        consumer.poll(0);
+        consumer.poll(200);
 
         // Initiate close() after a commit request on another thread.
         // Kafka consumer is single-threaded, but the implementation allows calls on a

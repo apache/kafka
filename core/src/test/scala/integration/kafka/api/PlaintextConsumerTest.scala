@@ -158,7 +158,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer0.subscribe(List(topic).asJava, listener)
 
     // poll once to get the initial assignment
-    consumer0.poll(0)
+    consumer0.poll(100)
     assertEquals(1, listener.callsToAssigned)
     assertEquals(1, listener.callsToRevoked)
 
@@ -201,11 +201,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer0.subscribe(List(topic).asJava, listener)
 
     // poll once to join the group and get the initial assignment
-    consumer0.poll(0)
+    consumer0.poll(10)
 
     // force a rebalance to trigger an invocation of the revocation callback while in the group
     consumer0.subscribe(List("otherTopic").asJava, listener)
-    consumer0.poll(0)
+    consumer0.poll(10)
 
     assertEquals(0, committedPosition)
     assertTrue(commitCompleted)
@@ -231,7 +231,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer0.subscribe(List(topic).asJava, listener)
 
     // poll once to join the group and get the initial assignment
-    consumer0.poll(0)
+    consumer0.poll(10)
 
     // we should still be in the group after this invocation
     consumer0.poll(0)

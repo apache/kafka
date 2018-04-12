@@ -107,7 +107,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         // poll for io until the timeout expires
         final long start = time.milliseconds();
         long now = start;
-        long remaining;
+        long remaining = timeout;
 
         do {
             if (coordinatorUnknown()) {
@@ -116,7 +116,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
             }
 
             if (needRejoin()) {
-                ensureActiveGroup();
+                ensureActiveGroup(now, remaining);
                 now = time.milliseconds();
             }
 
