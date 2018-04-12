@@ -198,39 +198,26 @@ public abstract class AbstractCoordinator implements Closeable {
                                            ByteBuffer memberAssignment);
 
     /**
-     * Block until the coordinator for this group is known and is ready to receive requests.
-     */
-    public synchronized void ensureCoordinatorReady() {
-        // Using zero as current time since timeout is effectively infinite
-        ensureCoordinatorReady(0, Long.MAX_VALUE);
-    }
-
-    /**
      * Ensure that the coordinator is ready to receive requests.
      *
-     * @param startTimeMs Current time in milliseconds
      * @param timeoutMs   Maximum time to wait to discover the coordinator
      * @return true If coordinator discovery and initial connection succeeded, false otherwise
      */
-    protected synchronized boolean ensureCoordinatorReady(final long startTimeMs, final long timeoutMs) {
-        if (timeoutMs <= 0) {
-            return false;
-        }
-
-        long remainingMs = timeoutMs;
+    public synchronized boolean ensureCoordinatorReady(final long timeoutMs) {
+        final long startTimeMs = time.milliseconds();
 
         while (coordinatorUnknown()) {
-            RequestFuture<Void> future = lookupCoordinator();
-            client.poll(future, remainingMs);
+            if (remainingTimeMs(startTimeMs, timeoutMs) <= 0) break;
+
+            final RequestFuture<Void> future = lookupCoordinator();
+            client.poll(future, remainingTimeMs(startTimeMs, timeoutMs));
 
             if (future.failed()) {
                 if (future.isRetriable()) {
-                    remainingMs = timeoutMs - (time.milliseconds() - startTimeMs);
-                    if (remainingMs <= 0)
-                        break;
+                    if (remainingTimeMs(startTimeMs, timeoutMs) <= 0) break;
 
                     log.debug("Coordinator discovery failed, refreshing metadata");
-                    client.awaitMetadataUpdate(remainingMs);
+                    client.awaitMetadataUpdate(remainingTimeMs(startTimeMs, timeoutMs));
                 } else
                     throw future.exception();
             } else if (coordinator != null && client.isUnavailable(coordinator)) {
@@ -239,10 +226,6 @@ public abstract class AbstractCoordinator implements Closeable {
                 markCoordinatorUnknown();
                 time.sleep(retryBackoffMs);
             }
-
-            remainingMs = timeoutMs - (time.milliseconds() - startTimeMs);
-            if (remainingMs <= 0)
-                break;
         }
 
         return !coordinatorUnknown();
@@ -331,7 +314,7 @@ public abstract class AbstractCoordinator implements Closeable {
         final long startTime = time.milliseconds();
         // always ensure that the coordinator is ready because we may have been disconnected
         // when sending heartbeats and does not necessarily require us to rejoin the group.
-        if (!ensureCoordinatorReady(time.milliseconds(), timeoutMs)) {
+        if (!ensureCoordinatorReady(timeoutMs)) {
             return false;
         } else {
             startHeartbeatThreadIfNeeded();
@@ -385,7 +368,7 @@ public abstract class AbstractCoordinator implements Closeable {
         final long startTime = time.milliseconds();
         while (needRejoin() || rejoinIncomplete()) {
             final long remainingTime = timeoutMs - (time.milliseconds() - startTime);
-            if (!ensureCoordinatorReady(time.milliseconds(), remainingTime)) {
+            if (!ensureCoordinatorReady(remainingTime)) {
                 return false;
             }
 
@@ -757,9 +740,12 @@ public abstract class AbstractCoordinator implements Closeable {
                 // yet sent to the broker. Wait up to close timeout for these pending requests to be processed.
                 // If coordinator is not known, requests are aborted.
                 Node coordinator = checkAndGetCoordinator();
-                if (coordinator != null && !client.awaitPendingRequests(coordinator, timeoutMs))
-                    log.warn("Close timed out with {} pending requests to coordinator, terminating client connections",
-                            client.pendingRequestCount(coordinator));
+                if (coordinator != null && !client.awaitPendingRequests(coordinator, timeoutMs)) {
+                    log.warn(
+                        "Close timed out with {} pending requests to coordinator, terminating client connections",
+                        client.pendingRequestCount(coordinator)
+                    );
+                }
             }
         }
     }
@@ -1079,6 +1065,11 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private static class UnjoinedGroupException extends RetriableException {
 
+    }
+
+    private long remainingTimeMs(final long startTime, final long executionTimeBudget) {
+        final long now = time.milliseconds();
+        return executionTimeBudget - (now - startTime);
     }
 
 }

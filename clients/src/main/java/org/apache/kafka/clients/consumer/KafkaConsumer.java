@@ -37,6 +37,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -1135,24 +1136,32 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted") // because false => timed out, in which case we return early or throw.
+    private boolean internalUpdateAssignmentMetadataIfNeeded(final long timeoutMs) {
+        final long startMs = time.milliseconds();
+        if (!coordinator.poll(startMs, timeoutMs)) {
+            return false;
+        }
+
+        return updateFetchPositions(timeoutMs - (time.milliseconds() - startMs));
+    }
+
     /**
      * Do one round of polling. In addition to checking for new data, this does any needed offset commits
      * (if auto-commit is enabled), and offset resets (if an offset reset policy is defined).
      *
-     * @param timeout The maximum time to block.
+     * @param timeoutMs The maximum time to block.
      * @return The fetched records (may be empty)
      */
-    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(final long timeout) {
+    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(final long timeoutMs) {
+
+
         client.maybeTriggerWakeup();
 
-        final long startMs = time.milliseconds();
-        if (!coordinator.poll(startMs, timeout)) {
+        if (!internalUpdateAssignmentMetadataIfNeeded(Long.MAX_VALUE)) {
             // we ran out of time.
             return Collections.emptyMap();
         }
-
-        // Lookup positions of assigned partitions
-        final boolean hasAllFetchPositions = updateFetchPositions();
 
         // if data is available already, return it immediately
         final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
@@ -1164,12 +1173,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         fetcher.sendFetches();
 
         final long nowMs = time.milliseconds();
-        final long remainingTimeMs = Math.max(0, timeout - (nowMs - startMs));
+        final long remainingTimeMs = timeoutMs;
         long pollTimeout = Math.min(coordinator.timeToNextPoll(nowMs), remainingTimeMs);
 
         // We do not want to be stuck blocking in poll if we are missing some positions
         // since the offset lookup may be backing off after a failure
-        if (!hasAllFetchPositions && pollTimeout > retryBackoffMs)
+        if (!subscriptions.hasAllFetchPositions() && pollTimeout > retryBackoffMs)
             pollTimeout = retryBackoffMs;
 
         client.poll(pollTimeout, nowMs, new PollCondition() {
@@ -1432,7 +1441,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             Long offset = this.subscriptions.position(partition);
             while (offset == null) {
                 // batch update fetch positions for any partitions without a valid position
-                updateFetchPositions();
+                updateFetchPositions(Long.MAX_VALUE);
                 client.poll(retryBackoffMs);
                 offset = this.subscriptions.position(partition);
             }
@@ -1463,8 +1472,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public OffsetAndMetadata committed(TopicPartition partition) {
         acquireAndEnsureOpen();
         try {
-            Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition));
-            return offsets.get(partition);
+            final Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition), Long.MAX_VALUE);
+            if (offsets == null) {
+                // This shouldn't actually happen as long as the timeout is effectively infinite...
+                throw new TimeoutException("Fetching committed offsets timed out.");
+            } else {
+                return offsets.get(partition);
+            }
         } finally {
             release();
         }
@@ -1778,18 +1792,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no offset reset policy is
      *             defined
-     * @return true if all assigned positions have a position, false otherwise
+     * @return true iff the operation completed without timing out
      */
-    private boolean updateFetchPositions() {
-        if (subscriptions.hasAllFetchPositions())
-            return true;
+    private boolean updateFetchPositions(final long timeoutMs) {
+        if (subscriptions.hasAllFetchPositions()) return true;
 
         // If there are any partitions which do not have a valid position and are not
         // awaiting reset, then we need to fetch committed offsets. We will only do a
         // coordinator lookup if there are partitions which have missing positions, so
         // a consumer with manually assigned partitions can avoid a coordinator dependence
         // by always ensuring that assigned partitions have an initial position.
-        coordinator.refreshCommittedOffsetsIfNeeded();
+        if (!coordinator.refreshCommittedOffsetsIfNeeded(timeoutMs)) return false;
 
         // If there are partitions still needing a position and a reset policy is defined,
         // request reset using the default policy. If no reset strategy is defined and there
@@ -1800,7 +1813,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // partitions which are awaiting reset.
         fetcher.resetOffsetsIfNeeded();
 
-        return false;
+        return true;
     }
 
     /**

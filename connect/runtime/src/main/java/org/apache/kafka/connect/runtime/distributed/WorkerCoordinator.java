@@ -111,7 +111,9 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
 
         do {
             if (coordinatorUnknown()) {
-                ensureCoordinatorReady();
+                synchronized (this) {
+                    ensureCoordinatorReady(Long.MAX_VALUE);
+                }
                 now = time.milliseconds();
             }
 
