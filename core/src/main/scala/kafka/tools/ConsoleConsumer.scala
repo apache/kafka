@@ -46,11 +46,6 @@ import scala.collection.JavaConverters._
 object ConsoleConsumer extends Logging {
 
   var messageCount = 0
-  // Keep same names with StreamConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS
-  // and StreamConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS
-  // visible for testing
-  private[tools] val innerKeySerdeName = "default.windowed.key.serde.inner"
-  private[tools] val innerValueSerdeName = "default.windowed.value.serde.inner"
 
   private val shutdownLatch = new CountDownLatch(1)
 
@@ -305,9 +300,7 @@ object ConsoleConsumer extends Logging {
         "\tkey.separator=<key.separator>\n" +
         "\tline.separator=<line.separator>\n" +
         "\tkey.deserializer=<key.deserializer>\n" +
-        "\tvalue.deserializer=<value.deserializer>\n" +
-        "\tdefault.windowed.key.serde.inner=<windowed.key.serde.inner>\n" +
-        "\tdefault.windowed.value.serde.inner=<windowed.value.serde.inner>")
+        "\tvalue.deserializer=<value.deserializer>\n")
       .withRequiredArg
       .describedAs("prop")
       .ofType(classOf[String])
@@ -343,18 +336,6 @@ object ConsoleConsumer extends Logging {
     val valueDeserializerOpt = parser.accepts("value-deserializer")
       .withRequiredArg
       .describedAs("deserializer for values")
-      .ofType(classOf[String])
-    val innerKeyDeserializerOpt = parser.accepts(innerKeySerdeName,
-      "inner serde for key when windowed deserialzier is used; would be ignored otherwise. " +
-        "For example: org.apache.kafka.common.serialization.Serdes\\$StringSerde")
-      .withRequiredArg
-      .describedAs("inner serde for key")
-      .ofType(classOf[String])
-    val innerValueDeserializerOpt = parser.accepts(innerValueSerdeName,
-      "inner serde for value when windowed deserialzier is used; would be ignored otherwise. " +
-        "For example: org.apache.kafka.common.serialization.Serdes\\$StringSerde")
-      .withRequiredArg
-      .describedAs("inner serde for values")
       .ofType(classOf[String])
     val enableSystestEventsLoggingOpt = parser.accepts("enable-systest-events",
                                                        "Log lifecycle events of the consumer in addition to logging consumed " +
@@ -400,8 +381,6 @@ object ConsoleConsumer extends Logging {
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
     val keyDeserializer = options.valueOf(keyDeserializerOpt)
     val valueDeserializer = options.valueOf(valueDeserializerOpt)
-    val innerKeyDeserializer = options.valueOf(innerKeyDeserializerOpt)
-    val innerValueDeserializer = options.valueOf(innerValueDeserializerOpt)
     val isolationLevel = options.valueOf(isolationLevelOpt).toString
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
 
@@ -410,12 +389,6 @@ object ConsoleConsumer extends Logging {
     }
     if (valueDeserializer != null && !valueDeserializer.isEmpty) {
       formatterArgs.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer)
-    }
-    if (innerKeyDeserializer != null && !innerKeyDeserializer.isEmpty) {
-      formatterArgs.setProperty(innerKeySerdeName, innerKeyDeserializer)
-    }
-    if (innerValueDeserializer != null && !innerValueDeserializer.isEmpty) {
-      formatterArgs.setProperty(innerValueSerdeName, innerValueDeserializer)
     }
 
     formatter.init(formatterArgs)
