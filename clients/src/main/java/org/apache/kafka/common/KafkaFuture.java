@@ -83,46 +83,6 @@ public abstract class KafkaFuture<T> implements Future<T> {
         }
     }
 
-    private static class AnyOfAdapter<R> implements BiConsumer<R, Throwable> {
-        private Throwable exceptionToReturn;
-        private boolean returnException;
-        private int remainingResponses;
-        private KafkaFuture<?> future;
-
-        public AnyOfAdapter(int remainingResponses, KafkaFuture<?> future) {
-            this.remainingResponses = remainingResponses;
-            this.exceptionToReturn = null;
-            this.returnException = true;
-            this.future = future;
-            maybeComplete();
-        }
-
-        @Override
-        public synchronized void accept(R newValue, Throwable exception) {
-            if (remainingResponses <= 0)
-                return;
-
-            remainingResponses--;
-
-            if (exception != null) {
-                exceptionToReturn = exception;
-            } else {
-                returnException = false;
-            }
-
-            maybeComplete();
-        }
-
-        private void maybeComplete() {
-            if (remainingResponses <= 0) {
-                if (exceptionToReturn != null && returnException)
-                    future.completeExceptionally(exceptionToReturn);
-                else
-                    future.complete(null);
-            }
-        }
-    }
-
     /** 
      * Returns a new KafkaFuture that is already completed with the given value.
      */
@@ -144,20 +104,6 @@ public abstract class KafkaFuture<T> implements Future<T> {
             future.addWaiter(allOfWaiter);
         }
         return allOfFuture;
-    }
-
-    /**
-     * Returns a new KafkaFuture that is completed when all the given futures have completed or has failed.
-     * Only if all futures have failed then one exception gets chosen arbitrarily to return; otherwise
-     * the future will be completed successfully
-     */
-    public static KafkaFuture<Void> anyOf(KafkaFuture<?>... futures) {
-        KafkaFuture<Void> anyOfFuture = new KafkaFutureImpl<>();
-        AnyOfAdapter<Object> anyOfWaiter = new AnyOfAdapter<>(futures.length, anyOfFuture);
-        for (KafkaFuture<?> future : futures) {
-            future.addWaiter(anyOfWaiter);
-        }
-        return anyOfFuture;
     }
 
     /**

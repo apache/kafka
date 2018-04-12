@@ -35,7 +35,18 @@ public class DeleteConsumerGroupsResult {
         this.futures = futures;
     }
 
+    /**
+     * Return a map from group id to futures which can be used to check the status of
+     * individual deletions.
+     */
     public Map<String, KafkaFuture<Void>> deletedGroups() {
         return futures;
+    }
+
+    /**
+     * Return a future which succeeds only if all the consumer group deletions succeed.
+     */
+    public KafkaFuture<Void> all() {
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
     }
 }

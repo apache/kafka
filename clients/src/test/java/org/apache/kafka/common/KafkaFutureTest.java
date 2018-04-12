@@ -243,62 +243,6 @@ public class KafkaFutureTest {
         allFuture.get();
     }
 
-    @Test
-    public void testAnyOfFutures() throws Exception {
-        final int numThreads = 5;
-        final List<KafkaFutureImpl<Integer>> futures = new ArrayList<>();
-        for (int i = 0; i < numThreads; i++) {
-            futures.add(new KafkaFutureImpl<Integer>());
-        }
-        KafkaFuture<Void> allFuture = KafkaFuture.anyOf(futures.toArray(new KafkaFuture[0]));
-        final List<ThrowThread> throwThreads = new ArrayList<>();
-        final List<WaiterThread> waiterThreads = new ArrayList<>();
-        for (int i = 0; i < numThreads - 1; i++) {
-            throwThreads.add(new ThrowThread<>(futures.get(i), i));
-            waiterThreads.add(new WaiterThread<>(futures.get(i), i));
-        }
-        final CompleterThread completerThread = new CompleterThread<>(futures.get(numThreads - 1), numThreads - 1);
-        waiterThreads.add(new WaiterThread<>(futures.get(numThreads - 1), numThreads - 1));
-
-        assertFalse(allFuture.isDone());
-        for (int i = 0; i < numThreads; i++) {
-            waiterThreads.get(i).start();
-        }
-        for (int i = 0; i < numThreads - 1; i++) {
-            throwThreads.get(i).start();
-        }
-        assertFalse(allFuture.isDone());
-        completerThread.start();
-        allFuture.get();
-        assertTrue(allFuture.isDone());
-        for (int i = 0; i < numThreads - 1; i++) {
-            try {
-                futures.get(i).get();
-                fail("Except an exception to be thrown");
-            } catch (Exception e) {
-                // this is good
-            }
-        }
-        assertEquals(Integer.valueOf(numThreads - 1), futures.get(numThreads - 1).get());
-        for (int i = 0; i < numThreads - 1; i++) {
-            throwThreads.get(i).join();
-            waiterThreads.get(i).join();
-            assertEquals(null, throwThreads.get(i).testException);
-            assertNotNull(waiterThreads.get(i).testException);
-        }
-        assertEquals(null, completerThread.testException);
-        assertEquals(null, waiterThreads.get(numThreads - 1).testException);
-    }
-
-    @Test
-    public void testAnyOfFuturesHandlesZeroFutures() throws Exception {
-        KafkaFuture<Void> allFuture = KafkaFuture.anyOf();
-        assertTrue(allFuture.isDone());
-        assertFalse(allFuture.isCancelled());
-        assertFalse(allFuture.isCompletedExceptionally());
-        allFuture.get();
-    }
-
     @Test(expected = TimeoutException.class)
     public void testFutureTimeoutWithZeroWait() throws Exception {
         final KafkaFutureImpl<String> future = new KafkaFutureImpl<>();

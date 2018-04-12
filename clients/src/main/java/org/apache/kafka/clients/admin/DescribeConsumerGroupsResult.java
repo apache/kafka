@@ -39,9 +39,16 @@ public class DescribeConsumerGroupsResult {
     }
 
     /**
-     * Return a map from group name to futures which can be used to check the description of a consumer group.
+     * Return a map from group id to futures which can be used to check the description of a consumer group.
      */
     public Map<String, KafkaFuture<ConsumerGroupDescription>> describedGroups() {
         return futures;
+    }
+
+    /**
+     * Return a future which succeeds only if all the consumer group description succeed.
+     */
+    public KafkaFuture<Void> all() {
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
     }
 }

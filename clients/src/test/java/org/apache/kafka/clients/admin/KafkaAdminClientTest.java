@@ -41,6 +41,7 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsResponse;
@@ -79,6 +80,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -648,11 +650,14 @@ public class KafkaAdminClientTest {
 
     //Ignoring test to be fixed on follow-up PR
     @Test
-    public void testListConsumerGroups() throws Exception {
+    public void testListConsumerGroups() {
         final HashMap<Integer, Node> nodes = new HashMap<>();
-        nodes.put(0, new Node(0, "localhost", 8121));
-        nodes.put(1, new Node(1, "localhost", 8122));
-        nodes.put(2, new Node(2, "localhost", 8123));
+        Node node0 = new Node(0, "localhost", 8121);
+        Node node1 = new Node(1, "localhost", 8122);
+        Node node2 = new Node(2, "localhost", 8123);
+        nodes.put(0, node0);
+        nodes.put(1, node1);
+        nodes.put(2, node2);
 
         final Cluster cluster =
             new Cluster(
@@ -667,12 +672,20 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             env.kafkaClient().setNode(env.cluster().controller());
 
+            List<MetadataResponse.PartitionMetadata> partitionMetadata = new ArrayList<>();
+            partitionMetadata.add(new MetadataResponse.PartitionMetadata(Errors.NONE, 0, node0,
+                    Collections.singletonList(node0), Collections.singletonList(node0), Collections.<Node>emptyList()));
+            partitionMetadata.add(new MetadataResponse.PartitionMetadata(Errors.NONE, 0, node1,
+                    Collections.singletonList(node1), Collections.singletonList(node1), Collections.<Node>emptyList()));
+            partitionMetadata.add(new MetadataResponse.PartitionMetadata(Errors.NONE, 0, node2,
+                    Collections.singletonList(node2), Collections.singletonList(node2), Collections.<Node>emptyList()));
+
             env.kafkaClient().prepareResponse(
                     new MetadataResponse(
                             env.cluster().nodes(),
                             env.cluster().clusterResource().clusterId(),
                             env.cluster().controller().id(),
-                            new ArrayList<MetadataResponse.TopicMetadata>()));
+                            Collections.singletonList(new MetadataResponse.TopicMetadata(Errors.NONE, Topic.GROUP_METADATA_TOPIC_NAME, true, partitionMetadata))));
 
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
@@ -681,14 +694,14 @@ public class KafkaAdminClientTest {
                                     new ListGroupsResponse.Group("group-1", ConsumerProtocol.PROTOCOL_TYPE),
                                     new ListGroupsResponse.Group("group-connect-1", "connector")
                             )),
-                    new Node(0, "localhost", 8121));
+                    node0);
 
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
                             Errors.COORDINATOR_NOT_AVAILABLE,
                             Collections.<ListGroupsResponse.Group>emptyList()
                     ),
-                    new Node(1, "localhost", 8122));
+                    node1);
 
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
@@ -697,12 +710,34 @@ public class KafkaAdminClientTest {
                                     new ListGroupsResponse.Group("group-2", ConsumerProtocol.PROTOCOL_TYPE),
                                     new ListGroupsResponse.Group("group-connect-2", "connector")
                             )),
-                    new Node(2, "localhost", 8123));
+                    node2);
 
             final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups();
 
-            final Collection<ConsumerGroupListing> listings = result.listings().get();
-            assertEquals(2, listings.size());
+            try {
+                Collection<ConsumerGroupListing> listing = result.all().get();
+                fail("Expected to throw exception");
+            } catch (Exception e) {
+                // this is good
+            }
+
+            Iterator<KafkaFuture<ConsumerGroupListing>> iterator = result.iterator();
+            int numListing = 0;
+            int numFailure = 0;
+
+            while (iterator.hasNext()) {
+                KafkaFuture<ConsumerGroupListing> future = iterator.next();
+                try {
+                    ConsumerGroupListing listing = future.get();
+                    numListing++;
+                    assertTrue(listing.groupId().equals("group-1") || listing.groupId().equals("group-2"));
+                } catch (Exception e) {
+                    numFailure++;
+                }
+            }
+
+            assertEquals(2, numListing);
+            assertEquals(1, numFailure);
         }
     }
 
@@ -771,7 +806,6 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    @Ignore
     public void testDescribeConsumerGroupOffsets() throws Exception {
         final HashMap<Integer, Node> nodes = new HashMap<>();
         nodes.put(0, new Node(0, "localhost", 8121));
