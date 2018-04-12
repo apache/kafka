@@ -609,6 +609,7 @@ public class SimpleBenchmark {
 
                     @Override
                     public void init(ProcessorContext context) {
+                        super.init(context);
                     }
 
                     @Override
@@ -648,6 +649,7 @@ public class SimpleBenchmark {
                 return new AbstractProcessor<Integer, byte[]>() {
                     @Override
                     public void init(ProcessorContext context) {
+                        super.init(context);
                     }
 
                     @Override
@@ -756,6 +758,7 @@ public class SimpleBenchmark {
                     @SuppressWarnings("unchecked")
                     @Override
                     public void init(ProcessorContext context) {
+                        super.init(context);
                         store = (KeyValueStore<Integer, byte[]>) context.getStateStore("store");
                     }
 
