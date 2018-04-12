@@ -32,16 +32,16 @@ import java.util.Map;
 @InterfaceStability.Evolving
 public class DescribeConsumerGroupsResult {
 
-    private final KafkaFuture<Map<String, KafkaFuture<ConsumerGroupDescription>>> futures;
+    private final Map<String, KafkaFuture<ConsumerGroupDescription>> futures;
 
-    public DescribeConsumerGroupsResult(KafkaFuture<Map<String, KafkaFuture<ConsumerGroupDescription>>> futures) {
+    public DescribeConsumerGroupsResult(final Map<String, KafkaFuture<ConsumerGroupDescription>> futures) {
         this.futures = futures;
     }
 
     /**
      * Return a map from group name to futures which can be used to check the description of a consumer group.
      */
-    public KafkaFuture<Map<String, KafkaFuture<ConsumerGroupDescription>>> describedGroups() {
+    public Map<String, KafkaFuture<ConsumerGroupDescription>> describedGroups() {
         return futures;
     }
 }

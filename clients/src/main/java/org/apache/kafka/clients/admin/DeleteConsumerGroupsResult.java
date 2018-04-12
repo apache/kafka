@@ -31,7 +31,7 @@ import java.util.Map;
 public class DeleteConsumerGroupsResult {
     final Map<String, KafkaFuture<Void>> futures;
 
-    DeleteConsumerGroupsResult(Map<String, KafkaFuture<Void>> futures) {
+    DeleteConsumerGroupsResult(final Map<String, KafkaFuture<Void>> futures) {
         this.futures = futures;
     }
 

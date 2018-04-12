@@ -918,6 +918,7 @@ public class KafkaAdminClient extends AdminClient {
         **/
         private void handleResponses(long now, List<ClientResponse> responses, Map<String, List<Call>> callsInFlight,
                 Map<Integer, Call> correlationIdToCall) {
+
             for (ClientResponse response : responses) {
                 int correlationId = response.requestHeader().correlationId();
 
@@ -938,6 +939,8 @@ public class KafkaAdminClient extends AdminClient {
                 if ((calls == null) || (!calls.remove(call))) {
                     log.error("Internal server error on {}: ignoring call {} in correlationIdToCall " +
                         "that did not exist in callsInFlight", response.destination(), call);
+
+                    System.exit(1);
                     continue;
                 }
 
@@ -1951,6 +1954,7 @@ public class KafkaAdminClient extends AdminClient {
         return new DescribeReplicaLogDirsResult(new HashMap<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>>(futures));
     }
 
+    @Override
     public CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions,
                                                    final CreatePartitionsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>(newPartitions.size());
@@ -1989,6 +1993,7 @@ public class KafkaAdminClient extends AdminClient {
         return new CreatePartitionsResult(new HashMap<String, KafkaFuture<Void>>(futures));
     }
 
+    @Override
     public DeleteRecordsResult deleteRecords(final Map<TopicPartition, RecordsToDelete> recordsToDelete,
                                              final DeleteRecordsOptions options) {
 
@@ -2228,18 +2233,15 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DescribeConsumerGroupsResult describeConsumerGroups(final Collection<String> groupIds,
                                                                final DescribeConsumerGroupsOptions options) {
-        final KafkaFutureImpl<Map<String, KafkaFuture<ConsumerGroupDescription>>> resultFutures = new KafkaFutureImpl<>();
-        final Map<String, KafkaFutureImpl<ConsumerGroupDescription>> consumerGroupFutures = new HashMap<>(groupIds.size());
-        final ArrayList<String> groupIdList = new ArrayList<>();
-        for (String groupId : groupIds) {
-            if (!consumerGroupFutures.containsKey(groupId)) {
-                consumerGroupFutures.put(groupId, new KafkaFutureImpl<ConsumerGroupDescription>());
-                groupIdList.add(groupId);
-            }
+
+        final Map<String, KafkaFutureImpl<ConsumerGroupDescription>> futures = new HashMap<>(groupIds.size());
+        for (String groupId: groupIds) {
+            futures.put(groupId, new KafkaFutureImpl<ConsumerGroupDescription>());
         }
 
-        for (final String groupId : groupIdList) {
-
+        // TODO: we should consider grouping the request per coordinator and send one request with a list of
+        // all consumer groups this coordinator host
+        for (final String groupId : groupIds) {
             final long nowFindCoordinator = time.milliseconds();
             final long deadline = calcDeadlineMs(nowFindCoordinator, options.timeoutMs());
 
@@ -2261,23 +2263,20 @@ public class KafkaAdminClient extends AdminClient {
 
                         @Override
                         AbstractRequest.Builder createRequest(int timeoutMs) {
-                            return new DescribeGroupsRequest.Builder(groupIdList);
+                            return new DescribeGroupsRequest.Builder(Collections.singletonList(groupId));
                         }
 
                         @Override
                         void handleResponse(AbstractResponse abstractResponse) {
                             final DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
-                            // Handle server responses for particular groupId.
-                            for (Map.Entry<String, KafkaFutureImpl<ConsumerGroupDescription>> entry : consumerGroupFutures.entrySet()) {
-                                final String groupId = entry.getKey();
-                                final KafkaFutureImpl<ConsumerGroupDescription> future = entry.getValue();
-                                final DescribeGroupsResponse.GroupMetadata groupMetadata = response.groups().get(groupId);
-                                final Errors groupError = groupMetadata.error();
-                                if (groupError != Errors.NONE) {
-                                    future.completeExceptionally(groupError.exception());
-                                    continue;
-                                }
 
+                            KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
+                            final DescribeGroupsResponse.GroupMetadata groupMetadata = response.groups().get(groupId);
+
+                            final Errors groupError = groupMetadata.error();
+                            if (groupError != Errors.NONE) {
+                                future.completeExceptionally(groupError.exception());
+                            } else {
                                 final String protocolType = groupMetadata.protocolType();
                                 if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
                                     final List<DescribeGroupsResponse.GroupMember> members = groupMetadata.members();
@@ -2306,27 +2305,26 @@ public class KafkaAdminClient extends AdminClient {
 
                         @Override
                         void handleFailure(Throwable throwable) {
-                            completeAllExceptionally(consumerGroupFutures.values(), throwable);
+                            KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
+                            future.completeExceptionally(throwable);
                         }
                     }, nowDescribeConsumerGroups);
-
-                    resultFutures.complete(new HashMap<String, KafkaFuture<ConsumerGroupDescription>>(consumerGroupFutures));
                 }
 
                 @Override
                 void handleFailure(Throwable throwable) {
-                    resultFutures.completeExceptionally(throwable);
+                    KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
+                    future.completeExceptionally(throwable);
                 }
             }, nowFindCoordinator);
         }
 
-        return new DescribeConsumerGroupsResult(resultFutures);
+        return new DescribeConsumerGroupsResult(new HashMap<String, KafkaFuture<ConsumerGroupDescription>>(futures));
     }
 
     @Override
     public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
-        //final KafkaFutureImpl<Map<Node, KafkaFuture<Collection<ConsumerGroupListing>>>> nodeAndConsumerGroupListing = new KafkaFutureImpl<>();
-        final KafkaFutureImpl<Collection<ConsumerGroupListing>> future = new KafkaFutureImpl<Collection<ConsumerGroupListing>>();
+        final KafkaFutureImpl<Collection<ConsumerGroupListing>> flattenedFuture = new KafkaFutureImpl<>();
 
         final long nowMetadata = time.milliseconds();
         final long deadline = calcDeadlineMs(nowMetadata, options.timeoutMs());
@@ -2341,16 +2339,18 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse metadataResponse = (MetadataResponse) abstractResponse;
 
+                // only after the list node request has been returned we can then construct the elements within the collection;
+                // we will flatten the map into a collection in order to abstract the internal implementation details from users
                 final Map<Node, KafkaFutureImpl<Collection<ConsumerGroupListing>>> futures = new HashMap<>();
 
                 for (final Node node : metadataResponse.brokers()) {
                     futures.put(node, new KafkaFutureImpl<Collection<ConsumerGroupListing>>());
                 }
 
-                future.combine(futures.values().toArray(new KafkaFuture[0])).thenApply(
-                        new KafkaFuture.BaseFunction<Collection<ConsumerGroupListing>, Collection<ConsumerGroupListing>>() {
+                flattenedFuture.copyWith(KafkaFuture.anyOf(futures.values().toArray(new KafkaFuture[0])),
+                        new KafkaFuture.BaseFunction<Void, Collection<ConsumerGroupListing>>() {
                             @Override
-                            public Collection<ConsumerGroupListing> apply(Collection<ConsumerGroupListing> v) {
+                            public Collection<ConsumerGroupListing> apply(Void v) {
                                 List<ConsumerGroupListing> listings = new ArrayList<>();
                                 for (Map.Entry<Node, KafkaFutureImpl<Collection<ConsumerGroupListing>>> entry : futures.entrySet()) {
                                     Collection<ConsumerGroupListing> results;
@@ -2365,17 +2365,16 @@ public class KafkaAdminClient extends AdminClient {
                                 }
                                 return listings;
                             }
-                        });
-
+                        }
+                );
 
                 for (final Map.Entry<Node, KafkaFutureImpl<Collection<ConsumerGroupListing>>> entry : futures.entrySet()) {
                     final long nowList = time.milliseconds();
 
                     final int brokerId = entry.getKey().id();
+                    final KafkaFutureImpl<Collection<ConsumerGroupListing>> future = entry.getValue();
 
                     runnable.call(new Call("listConsumerGroups", deadline, new ConstantNodeIdProvider(brokerId)) {
-
-                        private final KafkaFutureImpl<Collection<ConsumerGroupListing>> future = entry.getValue();
 
                         @Override
                         AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -2399,7 +2398,7 @@ public class KafkaAdminClient extends AdminClient {
 
                         @Override
                         void handleFailure(Throwable throwable) {
-                            completeAllExceptionally(futures.values(), throwable);
+                            future.completeExceptionally(throwable);
                         }
                     }, nowList);
 
@@ -2408,11 +2407,11 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             void handleFailure(Throwable throwable) {
-                future.completeExceptionally(throwable);
+                flattenedFuture.completeExceptionally(throwable);
             }
         }, nowMetadata);
 
-        return new ListConsumerGroupsResult(future);
+        return new ListConsumerGroupsResult(flattenedFuture);
     }
 
     @Override

@@ -647,11 +647,12 @@ public class KafkaAdminClientTest {
     }
 
     //Ignoring test to be fixed on follow-up PR
-    @Ignore
     @Test
     public void testListConsumerGroups() throws Exception {
         final HashMap<Integer, Node> nodes = new HashMap<>();
         nodes.put(0, new Node(0, "localhost", 8121));
+        nodes.put(1, new Node(1, "localhost", 8122));
+        nodes.put(2, new Node(2, "localhost", 8123));
 
         final Cluster cluster =
             new Cluster(
@@ -667,26 +668,41 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNode(env.cluster().controller());
 
             env.kafkaClient().prepareResponse(
-                new MetadataResponse(
-                    env.cluster().nodes(),
-                    env.cluster().clusterResource().clusterId(),
-                    env.cluster().controller().id(),
-                    new ArrayList<MetadataResponse.TopicMetadata>()));
+                    new MetadataResponse(
+                            env.cluster().nodes(),
+                            env.cluster().clusterResource().clusterId(),
+                            env.cluster().controller().id(),
+                            new ArrayList<MetadataResponse.TopicMetadata>()));
 
-            env.kafkaClient().prepareResponse(
-                new ListGroupsResponse(
-                    Errors.NONE,
-                    Arrays.asList(
-                        new ListGroupsResponse.Group("group-1", ConsumerProtocol.PROTOCOL_TYPE),
-                        new ListGroupsResponse.Group("group-connect-1", "connector")
-                    )));
+            env.kafkaClient().prepareResponseFrom(
+                    new ListGroupsResponse(
+                            Errors.NONE,
+                            Arrays.asList(
+                                    new ListGroupsResponse.Group("group-1", ConsumerProtocol.PROTOCOL_TYPE),
+                                    new ListGroupsResponse.Group("group-connect-1", "connector")
+                            )),
+                    new Node(0, "localhost", 8121));
+
+            env.kafkaClient().prepareResponseFrom(
+                    new ListGroupsResponse(
+                            Errors.COORDINATOR_NOT_AVAILABLE,
+                            Collections.<ListGroupsResponse.Group>emptyList()
+                    ),
+                    new Node(1, "localhost", 8122));
+
+            env.kafkaClient().prepareResponseFrom(
+                    new ListGroupsResponse(
+                            Errors.NONE,
+                            Arrays.asList(
+                                    new ListGroupsResponse.Group("group-2", ConsumerProtocol.PROTOCOL_TYPE),
+                                    new ListGroupsResponse.Group("group-connect-2", "connector")
+                            )),
+                    new Node(2, "localhost", 8123));
 
             final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups();
-            final List<ConsumerGroupListing> consumerGroups = new ArrayList<>();
 
-            final KafkaFuture<Collection<ConsumerGroupListing>> listings = result.listings();
-            consumerGroups.addAll(listings.get());
-            assertEquals(1, consumerGroups.size());
+            final Collection<ConsumerGroupListing> listings = result.listings().get();
+            assertEquals(2, listings.size());
         }
     }
 
@@ -746,10 +762,9 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(groupMetadataMap));
 
             final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(Collections.singletonList("group-0"));
-            final KafkaFuture<ConsumerGroupDescription> groupDescriptionFuture = result.describedGroups().get().get("group-0");
-            final ConsumerGroupDescription groupDescription = groupDescriptionFuture.get();
+            final ConsumerGroupDescription groupDescription = result.describedGroups().get("group-0").get();
 
-            assertEquals(1, result.describedGroups().get().size());
+            assertEquals(1, result.describedGroups().size());
             assertEquals("group-0", groupDescription.groupId());
             assertEquals(2, groupDescription.members().size());
         }
@@ -823,8 +838,8 @@ public class KafkaAdminClientTest {
 
             final DeleteConsumerGroupsResult result = env.adminClient().deleteConsumerGroups(groupIds);
 
-            final Map<String, KafkaFuture<Void>> results = result.deletedGroups().get();
-            assertNull(results.get("group-0").get());
+            final KafkaFuture<Void> results = result.deletedGroups().get("group-0");
+            assertNull(results.get());
         }
     }
 

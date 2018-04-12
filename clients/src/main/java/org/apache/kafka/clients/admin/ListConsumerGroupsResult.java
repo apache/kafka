@@ -31,7 +31,7 @@ import java.util.Collection;
 public class ListConsumerGroupsResult {
     private final KafkaFuture<Collection<ConsumerGroupListing>> future;
 
-    ListConsumerGroupsResult(KafkaFuture<Collection<ConsumerGroupListing>> future) {
+    ListConsumerGroupsResult(final KafkaFuture<Collection<ConsumerGroupListing>> future) {
         this.future = future;
     }
 
