@@ -225,7 +225,7 @@ public class WorkerCoordinatorTest {
             }
         }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.singletonList(connectorId1),
                 Collections.<ConnectorTaskId>emptyList(), Errors.NONE));
-        coordinator.ensureActiveGroup();
+        coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
 
         assertFalse(coordinator.needRejoin());
         assertEquals(0, rebalanceListener.revokedCount);
@@ -262,7 +262,7 @@ public class WorkerCoordinatorTest {
             }
         }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.<String>emptyList(),
                 Collections.singletonList(taskId1x0), Errors.NONE));
-        coordinator.ensureActiveGroup();
+        coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
 
         assertFalse(coordinator.needRejoin());
         assertEquals(0, rebalanceListener.revokedCount);
@@ -307,7 +307,7 @@ public class WorkerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE));
         client.prepareResponse(matcher, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L,
                 Collections.<String>emptyList(), Collections.singletonList(taskId1x0), Errors.NONE));
-        coordinator.ensureActiveGroup();
+        coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
 
         PowerMock.verifyAll();
     }
@@ -326,7 +326,7 @@ public class WorkerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.<String>emptyList(),
                 Collections.singletonList(taskId1x0), Errors.NONE));
-        coordinator.ensureActiveGroup();
+        coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
 
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
@@ -340,7 +340,7 @@ public class WorkerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));
         client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.singletonList(connectorId1),
                 Collections.<ConnectorTaskId>emptyList(), Errors.NONE));
-        coordinator.ensureActiveGroup();
+        coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
 
         assertEquals(1, rebalanceListener.revokedCount);
         assertEquals(Collections.emptyList(), rebalanceListener.revokedConnectors);

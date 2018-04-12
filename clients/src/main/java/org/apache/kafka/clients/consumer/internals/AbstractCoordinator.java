@@ -308,12 +308,15 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Ensure that the group is active (i.e. joined and synced)
      */
-    public void ensureActiveGroup() {
+    public void ensureActiveGroup(long now, long remainingMs) {
         // always ensure that the coordinator is ready because we may have been disconnected
         // when sending heartbeats and does not necessarily require us to rejoin the group.
-        ensureCoordinatorReady();
+        ensureCoordinatorReady(now, remainingMs);
         startHeartbeatThreadIfNeeded();
-        joinGroupIfNeeded();
+
+        remainingMs = Math.max(0, remainingMs - (time.milliseconds() - now));
+        now = time.milliseconds();
+        joinGroupIfNeeded(now, remainingMs);
     }
 
     private synchronized void startHeartbeatThreadIfNeeded() {
@@ -346,9 +349,9 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     // visible for testing. Joins the group without starting the heartbeat thread.
-    void joinGroupIfNeeded() {
+    void joinGroupIfNeeded(long now, long remainingMs) {
         while (needRejoin() || rejoinIncomplete()) {
-            ensureCoordinatorReady();
+            ensureCoordinatorReady(now, remainingMs);
 
             // call onJoinPrepare if needed. We set a flag to make sure that we do not call it a second
             // time if the client is woken up before a pending rebalance completes. This must be called
@@ -375,12 +378,18 @@ public abstract class AbstractCoordinator implements Closeable {
                 RuntimeException exception = future.exception();
                 if (exception instanceof UnknownMemberIdException ||
                         exception instanceof RebalanceInProgressException ||
-                        exception instanceof IllegalGenerationException)
-                    continue;
-                else if (!future.isRetriable())
+                        exception instanceof IllegalGenerationException) {
+
+                } else if (!future.isRetriable())
                     throw exception;
-                time.sleep(retryBackoffMs);
+                else
+                    time.sleep(retryBackoffMs);
             }
+
+            remainingMs = Math.max(0, remainingMs - (time.milliseconds() - now));
+            if (remainingMs == 0)
+                break;
+            now = time.milliseconds();
         }
     }
 

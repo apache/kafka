@@ -91,6 +91,7 @@ public class InternalTopicIntegrationTest {
         streamsProp.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
         streamsProp.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         streamsProp.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        streamsProp.put(StreamsConfig.POLL_MS_CONFIG, "5000");
     }
 
     @After

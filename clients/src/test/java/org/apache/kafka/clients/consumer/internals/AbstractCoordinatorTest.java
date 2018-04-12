@@ -129,7 +129,7 @@ public class AbstractCoordinatorTest {
         }, heartbeatResponse(Errors.UNKNOWN_SERVER_ERROR));
 
         try {
-            coordinator.ensureActiveGroup();
+            coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
             mockTime.sleep(HEARTBEAT_INTERVAL_MS);
             long startMs = System.currentTimeMillis();
             while (System.currentTimeMillis() - startMs < 1000) {
@@ -150,7 +150,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
 
-        coordinator.ensureActiveGroup();
+        coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
 
         final CountDownLatch heartbeatDone = new CountDownLatch(1);
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
@@ -208,7 +208,7 @@ public class AbstractCoordinatorTest {
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
         try {
-            coordinator.ensureActiveGroup();
+            coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
             fail("Should have woken up from ensureActiveGroup()");
         } catch (WakeupException e) {
         }
@@ -217,7 +217,7 @@ public class AbstractCoordinatorTest {
         assertEquals(0, coordinator.onJoinCompleteInvokes);
         assertFalse(heartbeatReceived.get());
 
-        coordinator.ensureActiveGroup();
+        coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(1, coordinator.onJoinCompleteInvokes);
@@ -246,7 +246,7 @@ public class AbstractCoordinatorTest {
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
         try {
-            coordinator.ensureActiveGroup();
+            coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
             fail("Should have woken up from ensureActiveGroup()");
         } catch (WakeupException e) {
         }
@@ -257,7 +257,7 @@ public class AbstractCoordinatorTest {
 
         // the join group completes in this poll()
         consumerClient.poll(0);
-        coordinator.ensureActiveGroup();
+        coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(1, coordinator.onJoinCompleteInvokes);
@@ -284,7 +284,7 @@ public class AbstractCoordinatorTest {
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
         try {
-            coordinator.ensureActiveGroup();
+            coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
             fail("Should have woken up from ensureActiveGroup()");
         } catch (WakeupException e) {
         }
@@ -293,7 +293,7 @@ public class AbstractCoordinatorTest {
         assertEquals(0, coordinator.onJoinCompleteInvokes);
         assertFalse(heartbeatReceived.get());
 
-        coordinator.ensureActiveGroup();
+        coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(1, coordinator.onJoinCompleteInvokes);
@@ -320,7 +320,7 @@ public class AbstractCoordinatorTest {
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
         try {
-            coordinator.ensureActiveGroup();
+            coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
             fail("Should have woken up from ensureActiveGroup()");
         } catch (WakeupException e) {
         }
@@ -331,7 +331,7 @@ public class AbstractCoordinatorTest {
 
         // the join group completes in this poll()
         consumerClient.poll(0);
-        coordinator.ensureActiveGroup();
+        coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(1, coordinator.onJoinCompleteInvokes);
@@ -360,7 +360,7 @@ public class AbstractCoordinatorTest {
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
         try {
-            coordinator.ensureActiveGroup();
+            coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
             fail("Should have woken up from ensureActiveGroup()");
         } catch (WakeupException e) {
         }
@@ -369,7 +369,7 @@ public class AbstractCoordinatorTest {
         assertEquals(0, coordinator.onJoinCompleteInvokes);
         assertFalse(heartbeatReceived.get());
 
-        coordinator.ensureActiveGroup();
+        coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(1, coordinator.onJoinCompleteInvokes);
@@ -398,7 +398,7 @@ public class AbstractCoordinatorTest {
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
         try {
-            coordinator.ensureActiveGroup();
+            coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
             fail("Should have woken up from ensureActiveGroup()");
         } catch (WakeupException e) {
         }
@@ -409,7 +409,7 @@ public class AbstractCoordinatorTest {
 
         // the join group completes in this poll()
         consumerClient.poll(0);
-        coordinator.ensureActiveGroup();
+        coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(1, coordinator.onJoinCompleteInvokes);
@@ -436,7 +436,7 @@ public class AbstractCoordinatorTest {
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
         try {
-            coordinator.ensureActiveGroup();
+            coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
             fail("Should have woken up from ensureActiveGroup()");
         } catch (WakeupException e) {
         }
@@ -445,7 +445,7 @@ public class AbstractCoordinatorTest {
         assertEquals(0, coordinator.onJoinCompleteInvokes);
         assertFalse(heartbeatReceived.get());
 
-        coordinator.ensureActiveGroup();
+        coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(1, coordinator.onJoinCompleteInvokes);
@@ -472,7 +472,7 @@ public class AbstractCoordinatorTest {
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
         try {
-            coordinator.ensureActiveGroup();
+            coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
             fail("Should have woken up from ensureActiveGroup()");
         } catch (WakeupException e) {
         }
@@ -481,7 +481,7 @@ public class AbstractCoordinatorTest {
         assertEquals(0, coordinator.onJoinCompleteInvokes);
         assertFalse(heartbeatReceived.get());
 
-        coordinator.ensureActiveGroup();
+        coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(1, coordinator.onJoinCompleteInvokes);
@@ -500,7 +500,7 @@ public class AbstractCoordinatorTest {
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
         try {
-            coordinator.ensureActiveGroup();
+            coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
             fail("Should have woken up from ensureActiveGroup()");
         } catch (WakeupException e) {
         }
@@ -512,7 +512,7 @@ public class AbstractCoordinatorTest {
         // the join group completes in this poll()
         coordinator.wakeupOnJoinComplete = false;
         consumerClient.poll(0);
-        coordinator.ensureActiveGroup();
+        coordinator.ensureActiveGroup(0, Long.MAX_VALUE);
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(1, coordinator.onJoinCompleteInvokes);
