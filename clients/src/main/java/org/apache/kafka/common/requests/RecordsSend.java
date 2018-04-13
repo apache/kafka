@@ -73,9 +73,6 @@ public class RecordsSend implements Send {
         return records.sizeInBytes();
     }
 
-    public void onComplete(Send send) {
-    }
-
     /**
      * Get processing statistics of underlying records.
      * @return Processing statistics of records enclosed in this send

@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.RecordsProcessingStats;
 import org.apache.kafka.common.TopicPartitionRecordsStats;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;

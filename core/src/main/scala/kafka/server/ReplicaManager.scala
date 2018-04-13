@@ -31,7 +31,7 @@ import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{RecordsProcessingStats, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics

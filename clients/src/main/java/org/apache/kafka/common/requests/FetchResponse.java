@@ -18,8 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.ByteBufferSend;
-import org.apache.kafka.common.network.MultiRecordsSend;
-import org.apache.kafka.common.network.MultiSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;

@@ -32,4 +32,5 @@ abstract class AbstractRecordBatch implements RecordBatch {
     public boolean isCompressed() {
         return compressionType() != CompressionType.NONE;
     }
+
 }
